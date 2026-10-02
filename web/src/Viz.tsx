@@ -5,7 +5,7 @@
 //
 // The frame runs the file's scripts but has no origin of the page's: it cannot reach the page, its storage or the
 // station, and its CSP lets it load scripts and styles from a few public CDNs only, with no requests of its own. The
-// page hands it ember's tokens for the theme it shows (viz/ember-viz.css maps them to the names agents write against),
+// page hands it still.fail's tokens for the theme it shows (viz/ember-viz.css maps them to the names agents write against),
 // sizes it to its content (on its own, beside the chat, it is a web service's preview: Preview.tsx), keeps what the widget asks to keep (widgetState, on the station, whose model part reaches
 // the agent with the next message), and puts what it asks to send (sendFollowUpMessage, on a click) in the chat's
 // composer for the person to send.
@@ -27,7 +27,7 @@ import * as css from "./Viz.css.ts";
  */
 export const OpenFile = createContext<((sessionKey: string, file: Attachment) => void) | null>(null);
 
-/** ember's tokens a frame is given, as --e-<name> (tokens.css.ts names them). */
+/** still.fail's tokens a frame is given, as --e-<name> (tokens.css.ts names them). */
 const TOKENS = [
   "canvas", "raised", "text", "muted", "subtle", "line", "line-strong", "hover", "selected", "paper", "accent",
   "accent-text", "accent-bg", "blue", "blue-bg", "code-inline", "green", "green-bg", "amber", "amber-bg", "red",
@@ -269,7 +269,7 @@ export function VizFile({ sessionKey, file, failed }: { sessionKey: string; file
 
 const MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
 
-/** A mermaid chart's document: the source, drawn by mermaid in ember's colours, drawn again when the theme changes. */
+/** A mermaid chart's document: the source, drawn by mermaid in still.fail's colours, drawn again when the theme changes. */
 function mermaidDocument(code: string): string {
   return `<pre class="mermaid-src" hidden>${code.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre><div id="chart" style="display:flex;justify-content:center"></div>
 <script type="module">
@@ -277,7 +277,7 @@ function mermaidDocument(code: string): string {
   const source = document.querySelector(".mermaid-src").textContent;
   let mermaid;
   try { mermaid = (await import("${MERMAID}")).default; } catch (e) { post({ type: "failed", message: "mermaid 没能加载" }); }
-  // Mermaid reads hex and rgb only: ember's oklch tokens are resolved to rgb through a canvas pixel.
+  // Mermaid reads hex and rgb only: still.fail's oklch tokens are resolved to rgb through a canvas pixel.
   const pixel = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   const rgb = (color) => { pixel.clearRect(0, 0, 1, 1); pixel.fillStyle = "#000"; pixel.fillStyle = color; pixel.fillRect(0, 0, 1, 1); const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data; return "rgb(" + r + ", " + g + ", " + b + ")"; };
   const v = (name) => { const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return name === "--font-sans" ? value : rgb(value); };

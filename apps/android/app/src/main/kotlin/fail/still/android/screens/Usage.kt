@@ -62,7 +62,7 @@ import fail.still.android.ui.Seg
 private val DAYS = listOf(7 to "7 天", 30 to "30 天")
 
 // The people a day's bar is split by, as the web draws them (web/src/Usage.css.ts): checked for colour-blind readers
-// on both grounds; the first is ember's accent, stepped down in dark.
+// on both grounds; the first is still.fail's accent, stepped down in dark.
 private val LIGHT = listOf(Color(0xFFEF6A3C), Color(0xFF2A78D6), Color(0xFF1BAF7A), Color(0xFF4A3AA7))
 private val DARK = listOf(Color(0xFFE0602F), Color(0xFF3987E5), Color(0xFF199E70), Color(0xFF9085E9))
 

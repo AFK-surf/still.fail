@@ -228,10 +228,10 @@ function Pill({ text, tone }: { text: string; tone: "blue" | "red" | "accent" })
   return <span className={historyCss.mPill} data-tone={tone}>{text}</span>;
 }
 
-/** A place, as the core names it: its platform's mark and its name; a chat on ember's page leads to it. */
+/** A place, as the core names it: its platform's mark and its name; a chat on still.fail's page leads to it. */
 function PlaceMark({ station, chat, place }: { station: string; chat: string; place: Place }) {
   const app = useApp();
-  // An ember chat is its agent's item: opened by the session it is bound to.
+  // A still.fail chat is its agent's item: opened by the session it is bound to.
   // A Slack thread opens in Slack.
   const open = place.url ? () => { window.open(place.url!, "_blank", "noopener"); }
     : place.session ? () => { if (place.session !== chat) app.push(`${stationBase(station)}/chats/${encodeURIComponent(place.session!)}`); else app.pop(); } : undefined;

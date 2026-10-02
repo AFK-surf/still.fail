@@ -650,7 +650,7 @@ export function NewConnectScreen() {
 }
 
 /**
- * A new app's look, as the desktop's AppFields (../pages/SlackApp.tsx) has it: an avatar picked from ember's buddies or
+ * A new app's look, as the desktop's AppFields (../pages/SlackApp.tsx) has it: an avatar picked from still.fail's buddies or
  * the model makers, or uploaded, on its colour; the colour follows the avatar until it is set by hand (and can go back).
  * It starts as the general helper.
  */

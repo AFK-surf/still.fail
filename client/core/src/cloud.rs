@@ -13,7 +13,7 @@ use crate::host::{Host, HttpRequest};
 use crate::status::{Place, Status, cloud_what};
 use crate::trace::{Kind, Tracer, route};
 
-/// A member's credential for this device (POST /v1/workspaces/:ws/credential {device}): every station of the
+/// A mstill.fail's credential for this device (POST /v1/workspaces/:ws/credential {device}): every station of the
 /// workspace takes it, checking it offline, until `expires_at` (30 days; seconds).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Credential {

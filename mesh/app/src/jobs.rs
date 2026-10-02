@@ -58,7 +58,7 @@ const FORMER_JOB_COMMAND_NAME: &str = "ember-job";
 
 /// Tells a session's agent something (Hub::notify).
 pub type Notify = Arc<dyn Fn(&str, String) + Send + Sync>;
-/// A session's web service as members open it: its link (ember cloud's /o/ link of the session, naming the service),
+/// A session's web service as members open it: its link (still.fail cloud's /o/ link of the session, naming the service),
 /// when the station is in a workspace.
 pub type Link = Arc<dyn Fn(&str, &str) -> Option<String> + Send + Sync>;
 

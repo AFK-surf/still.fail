@@ -108,7 +108,7 @@ export interface ErrorBody {
   status?: number;
 }
 
-/** A call or topic that failed; `code` is the core's (ember cloud's codes pass through). */
+/** A call or topic that failed; `code` is the core's (still.fail cloud's codes pass through). */
 export class CoreError extends Error {
   readonly code: string;
   readonly status: number | undefined;

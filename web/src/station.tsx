@@ -12,7 +12,7 @@ export interface Station {
   base: string;
   /** How the client core names it: "<workspace>/<station>". */
   address: string;
-  /** False when ember cloud has not heard from it lately. */
+  /** False when still.fail cloud has not heard from it lately. */
   online: boolean;
   /** Where settings live: the workspace's settings. */
   settings: string;
@@ -64,7 +64,7 @@ export function useChatFilter(): [ChatFilter, (value: ChatFilter) => void] {
   return [filter, (value) => setPrefs({ onlyMine: value === "mine", onlyWatching: value === "watching" })];
 }
 
-/** People by email, from ember cloud's member list. */
+/** People by email, from still.fail cloud's member list. */
 export interface Person { name: string; email: string; picture: string }
 export const PeopleContext = createContext<ReadonlyMap<string, Person>>(new Map());
 

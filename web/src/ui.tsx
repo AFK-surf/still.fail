@@ -1,5 +1,5 @@
 // Shared controls on Radix primitives (focus, keyboard, layering and
-// dismissal come from Radix), styled with ember's tokens. Pages compose these
+// dismissal come from Radix), styled with still.fail's tokens. Pages compose these
 // instead of styling their own buttons, fields or menus.
 import { Mark } from "./brand.tsx";
 import { shortcutOf, useKeymap, type Action } from "./keymap.ts";

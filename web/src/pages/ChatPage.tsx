@@ -1,4 +1,4 @@
-// A chat: a thread (a Slack thread or a chat on ember's page) with its people
+// A chat: a thread (a Slack thread or a chat on still.fail's page) with its people
 // and agents. The messages are the page; each agent's execution history can
 // be opened beside them, one tab per agent.
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
@@ -210,9 +210,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     setSearch((now) => { now.delete("service"); return now; }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
-  // ember's own links (/o/<workspace>/<station>/<session>, as agents post them): one of this chat's agents' web services
+  // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them): one of this chat's agents' web services
   // opens beside the chat; another session of the workspace opens here, in the page, not through the desktop app. In
-  // the desktop app (at app://ember) ember cloud's links are its own too.
+  // the desktop app (at app://ember) still.fail cloud's links are its own too.
   const root = useHref("/").replace(/\/$/, "");
   const opens = useRef({ agents, openTab, root });
   opens.current = { agents, openTab, root };

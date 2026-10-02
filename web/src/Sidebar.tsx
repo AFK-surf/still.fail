@@ -78,7 +78,7 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   const trouble = view.trouble;
   const waiting = !trouble && status?.state ? status : undefined;
   const text = trouble?.text ?? waiting?.text ?? view.glyph?.summary ?? "";
-  // A station down offers no retry here (it may stay down for long; the stations' page is where to): only ember cloud not reached.
+  // A station down offers no retry here (it may stay down for long; the stations' page is where to): only still.fail cloud not reached.
   const retry = waiting?.state === "trouble";
   const row = (
     <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble?.state ?? waiting?.state} data-retry={retry || undefined} aria-label={`Station：${trouble?.text ?? waiting?.text ?? view.glyph?.label ?? ""}`}>

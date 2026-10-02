@@ -181,7 +181,7 @@ export const MAKERS: Avatar[] = [
 ];
 
 /**
- * ember's buddy at the jobs a bot is made for, so people tell bots apart by what they do: the list is the core's
+ * still.fail's buddy at the jobs a bot is made for, so people tell bots apart by what they do: the list is the core's
  * (`buddies`, from web/public/avatars/index.json), each drawn from <id>.webp (1024 px, for the icon) with a small
  * <id>.thumb.webp (128 px, for the list). A core from before it has none to offer.
  */
@@ -279,7 +279,7 @@ export const NEW_APP: SlackAppSettings = {
 
 /**
  * An app's look and permissions, by how often each is changed: its avatar and name up front (an avatar picked from
- * ember's buddies or the model makers, or uploaded), then its colour, which follows the avatar until it is set by
+ * still.fail's buddies or the model makers, or uploaded), then its colour, which follows the avatar until it is set by
  * hand (and can go back); the description on a line; permissions folded. One name, which is the name in messages too.
  * `fresh`: a new app, which starts as the general helper.
  */

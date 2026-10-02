@@ -79,7 +79,7 @@ function NewWorkspaceSheet() {
   const accounts = useAccounts() ?? [];
   const [name, setName] = useState("");
   const [owner, setOwner] = useState<string | null>(null);
-  // Sent every time: ember cloud looks at it only for an account not let in yet, and then asks for it when it is missing or wrong.
+  // Sent every time: still.fail cloud looks at it only for an account not let in yet, and then asks for it when it is missing or wrong.
   const [code, setCode] = useState("");
   const sub = accounts.find((a) => a.sub === owner)?.sub ?? accounts[0]?.sub;
   const create = useAction(async () => {

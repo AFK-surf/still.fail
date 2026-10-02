@@ -4,7 +4,7 @@
 //! `run` runs the station: its app (stillfail-app) in this process; a loopback port that sends links to the page it once
 //! had on to still.fail cloud (local.rs); and, once the station is in a workspace, its way into still.fail cloud. It
 //! holds a presence socket to the cloud (connected is online) while the app is up — which also brings what the cloud
-//! revokes — accepts iroh connections from clients that present a member's credential signed by the cloud (checked
+//! revokes — accepts iroh connections from clients that present a mstill.fail's credential signed by the cloud (checked
 //! offline: the cloud need not be reachable), and hands each stream's request to the app's admin API with the verified
 //! identity. `enroll` redeems a one-time token from a workspace admin, proving this station holds its iroh key.
 //! `status` says where the station is.
@@ -224,19 +224,19 @@ impl Admitted {
     }
 }
 
-/// What a member's credential says it is, and who issued it: the cloud's names for them, and those of before the
+/// What a mstill.fail's credential says it is, and who issued it: the cloud's names for them, and those of before the
 /// rename (credentials already out, clouds that still issue them).
 const MEMBER_TYPES: [&str; 2] = ["stillfail-member+jwt", "ember-member+jwt"];
 const ISSUERS: [&str; 2] = ["stillfail-cloud", "ember-cloud"];
 
-/// Verifies a member's credential (still.fail cloud's, for this station's workspace, 30 days) for the connecting device,
+/// Verifies a mstill.fail's credential (still.fail cloud's, for this station's workspace, 30 days) for the connecting device,
 /// offline: with the key pinned at enrollment, and what was revoked since.
 fn verify_member(credential: &str, keys: &Value, workspace: &str, device: &str, revocations: &[Revocation]) -> Result<Admitted> {
     let mut parts = credential.split('.');
     let (Some(head), Some(body), Some(sig), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else { bail!("malformed credential") };
     let header: Value = serde_json::from_slice(&B64.decode(head)?)?;
     if header["alg"] != "EdDSA" || !MEMBER_TYPES.contains(&header["typ"].as_str().unwrap_or_default()) {
-        bail!("not a member's credential");
+        bail!("not a mstill.fail's credential");
     }
     let kid = header["kid"].as_str();
     let jwk = keys["keys"]

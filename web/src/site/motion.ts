@@ -142,6 +142,6 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   for (const el of title.querySelectorAll<HTMLElement>(`.${css.word}`)) el.style.removeProperty("clip-path");
   // The demo under it waits for this to start playing (demo/mount.tsx), and for the stage it rises on (site.css.ts).
   await wait(1.4);
-  window.dispatchEvent(new Event("ember-site-opened"));
+  window.dispatchEvent(new Event("stillfail-site-opened"));
 }
 

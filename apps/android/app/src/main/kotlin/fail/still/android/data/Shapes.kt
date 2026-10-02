@@ -659,7 +659,7 @@ data class Message (
 	val time: Map<String, Stamp>? = null
 )
 
-/// A thread: a Slack thread or a chat on ember's page.
+/// A thread: a Slack thread or a chat on still.fail's page.
 @Serializable
 data class ChatThread (
 	val id: Long,
@@ -1021,7 +1021,7 @@ data class MessageDecision (
 	val text: String? = null
 )
 
-/// A message of a chat, with what the core decides of it: the viewer's (their bubble), ember's own notice, who said
+/// A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said
 /// it, and whether its agents have yet to take it.
 @Serializable
 data class ChatMessage (
@@ -1045,7 +1045,7 @@ data class ChatMessage (
 	val editedAt: Long? = null,
 	val mine: Boolean,
 	val system: Boolean,
-	/// ember's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it.
+	/// still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it.
 	val profile: String? = null,
 	val by: MessageBy,
 	val waiting: Boolean,
@@ -1267,7 +1267,7 @@ data class SlackAppLinks (
 	val oauth: String
 )
 
-/// A Slack app ember made that no connect has taken yet, as its maker sees it (never its secrets or tokens).
+/// A Slack app still.fail made that no connect has taken yet, as its maker sees it (never its secrets or tokens).
 @Serializable
 data class MadeSlackApp (
 	val appId: String,
@@ -1741,10 +1741,10 @@ data class HistoryMark (
 	val wait: HistoryWait? = null
 )
 
-/// A place a message came from or went to: a chat on ember's page (`session`: the agent it opens), or a Slack thread.
+/// A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread.
 @Serializable
 data class Place (
-	/// An ember chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
+	/// A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
 	val name: String,
 	/// ember | slack
 	val surface: String,
@@ -1777,7 +1777,7 @@ data class HistoryPost (
 	val failed: Boolean
 )
 
-/// What a prompt carried: ember's own words around them (`note`), then the messages.
+/// What a prompt carried: still.fail's own words around them (`note`), then the messages.
 @Serializable
 data class HistoryReceived (
 	val note: String? = null,
@@ -1962,7 +1962,7 @@ data class LongJobsView (
 	val groups: List<LongJobsGroup>
 )
 
-/// Who the station machine's own Claude Code or Codex is signed in as (only read: ember never takes the login over).
+/// Who the station machine's own Claude Code or Codex is signed in as (only read: still.fail never takes the login over).
 @Serializable
 data class MachineLogin (
 	val runtime: RuntimeKind,

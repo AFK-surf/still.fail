@@ -1,6 +1,6 @@
 # vendor
 
-Crates taken from crates.io and changed for ember; `[patch.crates-io]` in mesh/ and client/ points at them. Each
+Crates taken from crates.io and changed for still.fail; `[patch.crates-io]` in mesh/ and client/ points at them. Each
 change is marked `ember:` in the source. Drop a crate here once upstream has the same.
 
 - **swarm-discovery 0.6.3**

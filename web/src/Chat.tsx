@@ -1,4 +1,4 @@
-// ember's own chat with a session, after Zork's: your messages sit right in a
+// still.fail's own chat with a session, after Zork's: your messages sit right in a
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
@@ -820,7 +820,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
       </MineMessage>
     );
   }
-  // What ember itself says (a limit hit, a failure): a notice across the chat, not someone's message.
+  // What still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message.
   if (m.system) return <SystemNotice text={m.text} profile={m.profile} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = agentHere ? m.by.agent : undefined;
@@ -908,7 +908,7 @@ export function PersonWords({ text }: { text: string }) {
 }
 
 /**
- * What ember itself says: a pill across the chat, in one line and no time. A click opens it: all its words, wrapped,
+ * What still.fail itself says: a pill across the chat, in one line and no time. A click opens it: all its words, wrapped,
  * and its time under it. The station begins its failures with ⚠️ (Slack shows it so); here a failure is the pill in
  * red instead. In one about a profile (its sign-in failed), what went wrong (after its ：) links to that profile's page.
  */

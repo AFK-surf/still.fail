@@ -1,4 +1,4 @@
-// ember's own links (/o/<workspace>/<station>/<session>, as agents post them), read back into what they name: a session
+// still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them), read back into what they name: a session
 // of a workspace's station, maybe one of its web services (`?service=<job>`). The desktop's chat reads them the same way
 // (pages/ChatPage.tsx); the narrow pages (mobile/Chat.tsx) open them in the app instead of loading the page again.
 import type { MouseEvent as ReactMouseEvent } from "react";

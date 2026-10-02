@@ -1,7 +1,7 @@
 //! A thread's entries merged into its messages: the one place edits are
 //! applied (docs/station-storage.md, Append-only threads). A message shows its
 //! latest edit's text, attachments and quotes, marked edited. Nothing is taken
-//! back: ember has no delete.
+//! back: still.fail has no delete.
 
 use std::collections::BTreeMap;
 
@@ -31,7 +31,7 @@ pub fn merge(entries: &[Value]) -> Vec<Value> {
                 if let Some(ending) = entry.get("ending").filter(|e| e.is_string()) {
                     message["ending"] = ending.clone();
                 }
-                // ember's notice about a profile (its sign-in failed): which one. Stations before it say none.
+                // still.fail's notice about a profile (its sign-in failed): which one. Stations before it say none.
                 if let Some(profile) = entry.get("profile").filter(|p| p.is_string()) {
                     message["profile"] = profile.clone();
                 }

@@ -173,7 +173,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
   const quoting = useSelectionQuote(list, stable.quote);
   const hold = useHold(list, rows.messages, stable.hold);
   const askedFile = useAskedFile(list, rows.messages, (f) => ownerIn(view, f));
-  // ember's own links (/o/<workspace>/<station>/<session>, as agents post them) open here, as pages over this one (the
+  // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them) open here, as pages over this one (the
   // chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
   // link to an agent's execution history opens it.
   const onClick = (event: React.MouseEvent) => {

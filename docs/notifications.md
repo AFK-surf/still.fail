@@ -113,7 +113,7 @@ with `notice.claim`, so it is shown once however many pages are open; one not ta
   ```
 
   → `{ "sent": n }`. The cloud makes the body as the table above says, and
-  pushes to each member's registrations. A device its push service answers
+  pushes to each mstill.fail's registrations. A device its push service answers
   404/410 (gone) for is dropped, with every account it was registered with.
 
 Push payload (Web Push: the encrypted body, `aes128gcm`; FCM: a data message,

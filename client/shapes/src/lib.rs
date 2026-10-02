@@ -391,7 +391,7 @@ pub struct Message {
     pub time: Option<HashMap<String, Stamp>>,
 }
 
-/// A message of a chat, with what the core decides of it: the viewer's (their bubble), ember's own notice, who said
+/// A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said
 /// it, and whether its agents have yet to take it.
 #[typeshare]
 #[skip_serializing_none]
@@ -422,7 +422,7 @@ pub struct ChatMessage {
     pub edited_at: Option<i64>,
     pub mine: bool,
     pub system: bool,
-    /// ember's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it.
+    /// still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it.
     pub profile: Option<String>,
     pub by: MessageBy,
     pub waiting: bool,
@@ -551,7 +551,7 @@ pub struct DecisionItem {
     pub text: String,
 }
 
-/// A thread: a Slack thread or a chat on ember's page.
+/// A thread: a Slack thread or a chat on still.fail's page.
 #[typeshare]
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -941,7 +941,7 @@ pub struct SlackAppLinks {
     pub oauth: String,
 }
 
-/// A Slack app ember made that no connect has taken yet, as its maker sees it (never its secrets or tokens).
+/// A Slack app still.fail made that no connect has taken yet, as its maker sees it (never its secrets or tokens).
 #[typeshare]
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -986,7 +986,7 @@ pub struct PendingLogin {
     pub error: Option<String>,
 }
 
-/// Who the station machine's own Claude Code or Codex is signed in as (only read: ember never takes the login over).
+/// Who the station machine's own Claude Code or Codex is signed in as (only read: still.fail never takes the login over).
 #[typeshare]
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -2799,13 +2799,13 @@ pub struct ConnectsView {
 
 // ── the execution history ────────────────────────────────────────────────
 
-/// A place a message came from or went to: a chat on ember's page (`session`: the agent it opens), or a Slack thread.
+/// A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread.
 #[typeshare]
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Place {
-    /// An ember chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
+    /// A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
     pub name: String,
     /// ember | slack
     pub surface: String,
@@ -2857,7 +2857,7 @@ pub struct HistoryStep {
     pub result: Option<String>,
 }
 
-/// What a prompt carried: ember's own words around them (`note`), then the messages.
+/// What a prompt carried: still.fail's own words around them (`note`), then the messages.
 #[typeshare]
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
