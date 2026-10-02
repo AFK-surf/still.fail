@@ -494,10 +494,14 @@ private fun AppContent(app: AppState) {
             signedIn.isEmpty() -> SignInScreen()
             else -> {
                 val entries = workspaces.value?.entries()
-                val current = entries?.firstOrNull { it.workspace.id == app.workspace } ?: entries?.firstOrNull()
-                LaunchedEffect(current?.workspace?.id) { current?.let { if (it.workspace.id != app.workspace) app.pickWorkspace(it.workspace.id) } }
                 // Only once every account has answered does "no workspace" mean none: not before, not after a failure.
                 val all = workspaces.value
+                // The one last open, or one just joined, may not be in what was kept yet: until the accounts answer (or
+                // fail), it is waited for rather than another put in its place.
+                val answered = all != null && all.all { it.loaded || it.error != null }
+                val current = entries?.firstOrNull { it.workspace.id == app.workspace }
+                    ?: entries?.firstOrNull()?.takeIf { app.workspace == null || answered }
+                LaunchedEffect(current?.workspace?.id) { current?.let { if (it.workspace.id != app.workspace) app.pickWorkspace(it.workspace.id) } }
                 // The beta app, and an account not let into the beta (the core says so): said, with a way out.
                 val blocked = all?.firstOrNull { it.blocked != null }
                 if (current == null && blocked != null) fail.still.android.screens.Blocked(blocked)

@@ -224,6 +224,9 @@ function WorkspaceRoute() {
   if (!workspaces) return <Splash label="正在打开 workspace…"><StatusLine /></Splash>;
   const owner = workspaces.find((a) => a.workspaces.some((w) => w.id === ws));
   const found = owner?.workspaces.find((w) => w.id === ws);
+  // One just joined (or kept from before) may not be in what was kept yet: until every account has answered (or failed),
+  // it is waited for, not said to be out of reach.
+  if ((!owner || !found) && !workspaces.every((a) => a.loaded || a.error)) return <Splash label="正在打开 workspace…"><StatusLine /></Splash>;
   if (!owner || !found) return <div className={shellCss.gate}><h1>打不开这个 workspace</h1><p>你登录的账号都不在里面。</p><a className={`${controlsCss.btn} btn-secondary`} href="/">回到 {NAME}</a></div>;
   const entry = { id: ws, name: found.name, account: owner.account };
   // A narrow screen is the Android app's (../mobile).
