@@ -20,3 +20,8 @@ station being the released binary on the same data:
   TS run as .ts idle 99 MB (Node's type stripper), built 62–63 MB; peak 300–313 MB (V8's heap grows), 172 MB with
   `--max-old-space-size=96 --max-semi-space-size=2`; 37–38/s; p50 135–260 ms, p95 400–520 ms: one thread, so a heavy
   request holds the rest up (Rust answers the light ones meanwhile on other threads).
+
+At the Rust station's size (`scale.mjs 32`: the ported code copied into 32 module trees, 41 410 lines, 97 files, all
+used by one entry): tsgo check 165 ms, esbuild 38 ms, rolldown 110 ms, oxc-transform 81 ms, the same again after a
+one-line change (none of them keeps state between runs); bundle 1.2 MB; Node loading it 55 MB against 41.5 MB for
+Node alone. Copies share their types, so a real station's check (more and different types) would be slower than this.
