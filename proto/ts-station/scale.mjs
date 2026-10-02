@@ -9,6 +9,7 @@ const lines = [];
 for (let k = 1; k <= n; k++) {
   mkdirSync(`gen/c${k}`, { recursive: true });
   cpSync("src/admin", `gen/c${k}/admin`, { recursive: true });
+  cpSync("src/credential.ts", `gen/c${k}/credential.ts`);
   lines.push(`import { chats as chats${k}, entries as entries${k} } from "./c${k}/admin/views.ts";`);
 }
 lines.push(`export const all = [${Array.from({ length: n }, (_, i) => `[chats${i + 1}, entries${i + 1}]`).join(", ")}];`);
