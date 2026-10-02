@@ -210,6 +210,7 @@ export const dialogHead = style({
 export const dialogTitle = style({});
 export const dialogBody = style({
   display: "grid", gap: "18px", padding: "20px 32px 4px", overflowY: "auto", minHeight: "0",
+  selectors: { "&:last-child": { paddingBottom: "32px" } },
 });
 export const dialogFoot = style({
   display: "flex", justifyContent: "flex-end", gap: "8px", padding: "20px 32px 32px",
