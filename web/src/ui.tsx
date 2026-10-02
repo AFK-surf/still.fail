@@ -343,10 +343,10 @@ export function CopyCommand({ text }: { text: string }) {
  * A choice that opens a menu of what it can be (a model, an account): not the browser's own select, so each option can
  * show what matters about it. `trigger` draws the chosen one; the class is the look of the button.
  */
-export function Chooser({ label, children, side = "bottom", className = chatCss.chooser, disabled }: { label: ReactNode; children: ReactNode; side?: "top" | "bottom"; className?: string; disabled?: boolean }) {
+export function Chooser({ label, children, side = "bottom", className = chatCss.chooser }: { label: ReactNode; children: ReactNode; side?: "top" | "bottom"; className?: string }) {
   return (
     <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger className={className} disabled={disabled}>{label}<ChevronDown size={12} className={chatCss.chooserChevron} /></DropdownMenu.Trigger>
+      <DropdownMenu.Trigger className={className}>{label}<ChevronDown size={12} className={chatCss.chooserChevron} /></DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} side={side} align="start" sideOffset={6} collisionPadding={8}>{children}</DropdownMenu.Content>
       </DropdownMenu.Portal>

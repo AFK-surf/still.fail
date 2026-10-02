@@ -77,7 +77,7 @@ export function SettingsScreen() {
         <GoRow title="Station" value={stations ? <>{troubled && <Presence state="error" />}{t("web-mobile.settings.stationsOnline", { online, n: stations.length })}</> : undefined} onClick={at("/settings/stations")} />
         <GoRow title={t("web-mobile.settings.connects")} bad={failing > 0} value={connects ? (failing ? t("web-mobile.settings.connectsFailing", { n: failing }) : t("web-mobile.settings.connectsCount", { n: connects.items.length })) : undefined} onClick={at("/settings/connects")} />
         <GoRow title="Profile" bad={short > 0} value={stations ? (short ? t("web-mobile.settings.profilesShort", { n: short }) : t("web-mobile.settings.profilesCount", { n: profiles.length })) : undefined} onClick={at("/settings/profiles")} />
-        <GoRow title="自动决策" onClick={at("/settings/automatic-decisions")} />
+        <GoRow title={t("web-pages.automaticDecisions.title")} onClick={at("/settings/automatic-decisions")} />
         <GoRow title={t("web-mobile.settings.memory")} onClick={at("/settings/memory")} />
         <GoRow title={t("web-mobile.settings.usage")} onClick={at("/settings/usage")} />
       </ListCard>

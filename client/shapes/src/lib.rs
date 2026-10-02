@@ -3346,7 +3346,12 @@ pub struct AutomaticDecisionModel { pub id: String, pub name: String, pub profil
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct AutomaticDecisionDraft { pub enabled: bool, pub model: String, pub dirty: bool, pub pending: bool }
+pub struct AutomaticDecisionDraft {
+    pub enabled: bool, pub model: String, pub dirty: bool, pub pending: bool,
+    /// The shared model selector, restricted to verified decision candidates.
+    #[serde(default)]
+    pub pick: Option<PickView>,
+}
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]

@@ -177,11 +177,167 @@ export interface AutomaticDecisionCheck {
 	error?: string;
 }
 
+/** Who made a model, for its mark; absent when the marks do not know it (the runtime's stands in). */
+export interface Maker {
+	id: string;
+	name: string;
+}
+
+/** Used up until a time (or no one knows when), in words. */
+export interface Spent {
+	until?: number;
+	text: string;
+	back?: string;
+}
+
+export interface QuotaCredits {
+	hasCredits: boolean;
+	unlimited: boolean;
+	balance?: string;
+}
+
+/** A quota window, as drawn: its mark (5H, W), what is left, how full (ok | amber | red), when it refills in words. */
+export interface QuotaWindow {
+	label: string;
+	usedPercent: number;
+	resetsAt?: number;
+	mark: string;
+	left: number;
+	level: Level;
+	refills?: string;
+	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
+	time?: Record<string, Stamp>;
+}
+
+/** An allowance: its windows shortest first. */
+export interface Quota {
+	credits?: QuotaCredits;
+	resetCount?: number;
+	creditsText?: string;
+	resetText?: string;
+	/** ok | unsupported | unavailable | blocked (the provider refuses the account) */
+	state: string;
+	windows: QuotaWindow[];
+	detail?: string;
+	checkedAt: number;
+	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
+	time?: Record<string, Stamp>;
+}
+
+/**
+ * What is left of an account's allowance, in a few words: every window in gray, or only the one running low, with
+ * its level.
+ */
+export interface QuotaLine {
+	text: string;
+	level?: Level;
+}
+
+/** A profile that can run a model: `current` it runs on it now. */
+export interface RunnableProfile {
+	/** The chosen model’s reasoning levels on this account. */
+	efforts?: string[];
+	id: string;
+	name: string;
+	current: boolean;
+	spent?: Spent;
+	kind?: AccessKind;
+	runtime?: RuntimeKind;
+	quota?: Quota;
+	/** What is left of its allowance, in a few words (a core from before it says nothing). */
+	quotaLine?: QuotaLine;
+}
+
+/** A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it. */
+export interface ModelOption {
+	/** The spelling a client sends: the one that is its key when a profile has that, else the first. */
+	model: string;
+	/** As people call it (Opus 5.5). */
+	name: string;
+	/** Its series (Opus, GPT), what a list groups it under; none when not known. Lists come by series, newest first. */
+	family?: string;
+	/** Every spelling of it the station's profiles have enabled (openai/gpt-6-astra, gpt-6-astra): one model. */
+	ids: string[];
+	maker?: Maker;
+	runtimes: RuntimeKind[];
+	efforts: Record<string, string[]>;
+	accounts: Record<string, RunnableProfile[]>;
+	spent?: Spent;
+}
+
+/**
+ * What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
+ * station's pick.
+ */
+export interface Picked {
+	model?: string;
+	runtime: RuntimeKind;
+	effort?: string;
+	fast?: boolean;
+	profile?: string;
+}
+
+/** The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low. */
+export interface PickAccount {
+	text: string;
+	auto: boolean;
+	level?: Level;
+	profile?: RunnableProfile;
+}
+
+/**
+ * A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
+ * until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
+ * station's pick, said so (`dropped`, `force`).
+ */
+export interface PickView {
+	fastAvailable?: boolean;
+	fastText?: string;
+	options: ModelOption[];
+	runtimeFixed: boolean;
+	value: Picked;
+	valueOption?: ModelOption;
+	/** The account the control names; none: it names none (a new chat's, while the station's pick is fine). */
+	account?: PickAccount;
+	draft: Picked;
+	/** The option picked in the panel, by its `model`. */
+	option?: string;
+	/** The runtimes offered for it (none: not asked), how hard it can think there, who can run it. */
+	runtimes: RuntimeKind[];
+	efforts: string[];
+	accounts: RunnableProfile[];
+	dropped?: string;
+	/**
+	 * The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
+	 * station's pick runs low.
+	 */
+	who: string;
+	whoLevel?: Level;
+	/** The station's pick, said: who it is on now, or what it does. */
+	autoNote: string;
+	changed: boolean;
+	/**
+	 * Full screen (the phone's): the model, depth and account as they were and as they become; why the account
+	 * must change; the model and account picked in words; what the button says.
+	 */
+	was: string[];
+	becomes: string[];
+	force?: string;
+	modelText: string;
+	maker?: Maker;
+	accountText: string;
+	accountNote: string;
+	accountWarn: boolean;
+	saveText: string;
+}
+
 export interface AutomaticDecisionDraft {
 	enabled: boolean;
 	model: string;
 	dirty: boolean;
 	pending: boolean;
+	/** The shared model selector, restricted to verified decision candidates. */
+	pick?: PickView;
 }
 
 export interface AutomaticDecisionModel {
@@ -325,12 +481,6 @@ export type Tone = "accent" | "green" | "blue" | "red" | "amber" | "neutral";
 
 /** An agent's mark: at work, blocked, failed. */
 export type Badge = "run" | "block" | "failed";
-
-/** Who made a model, for its mark; absent when the marks do not know it (the runtime's stands in). */
-export interface Maker {
-	id: string;
-	name: string;
-}
 
 /**
  * What a session keeps watch with (its watches running): their names, oldest first; since when the first runs; when
@@ -514,40 +664,6 @@ export interface LoginJob {
 	expiresAt: number;
 }
 
-export interface QuotaCredits {
-	hasCredits: boolean;
-	unlimited: boolean;
-	balance?: string;
-}
-
-/** A quota window, as drawn: its mark (5H, W), what is left, how full (ok | amber | red), when it refills in words. */
-export interface QuotaWindow {
-	label: string;
-	usedPercent: number;
-	resetsAt?: number;
-	mark: string;
-	left: number;
-	level: Level;
-	refills?: string;
-	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
-	time?: Record<string, Stamp>;
-}
-
-/** An allowance: its windows shortest first. */
-export interface Quota {
-	credits?: QuotaCredits;
-	resetCount?: number;
-	creditsText?: string;
-	resetText?: string;
-	/** ok | unsupported | unavailable | blocked (the provider refuses the account) */
-	state: string;
-	windows: QuotaWindow[];
-	detail?: string;
-	checkedAt: number;
-	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
-	time?: Record<string, Stamp>;
-}
-
 export interface ProfileTrouble {
 	title: string;
 	detail: string;
@@ -609,54 +725,6 @@ export interface Profile {
 	modelsText: string;
 	/** What can be enabled on it: what its provider lists, then whatever is enabled already, each once. */
 	available?: string[];
-}
-
-/** Used up until a time (or no one knows when), in words. */
-export interface Spent {
-	until?: number;
-	text: string;
-	back?: string;
-}
-
-/**
- * What is left of an account's allowance, in a few words: every window in gray, or only the one running low, with
- * its level.
- */
-export interface QuotaLine {
-	text: string;
-	level?: Level;
-}
-
-/** A profile that can run a model: `current` it runs on it now. */
-export interface RunnableProfile {
-	/** The chosen model’s reasoning levels on this account. */
-	efforts?: string[];
-	id: string;
-	name: string;
-	current: boolean;
-	spent?: Spent;
-	kind?: AccessKind;
-	runtime?: RuntimeKind;
-	quota?: Quota;
-	/** What is left of its allowance, in a few words (a core from before it says nothing). */
-	quotaLine?: QuotaLine;
-}
-
-/** A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it. */
-export interface ModelOption {
-	/** The spelling a client sends: the one that is its key when a profile has that, else the first. */
-	model: string;
-	/** As people call it (Opus 5.5). */
-	name: string;
-	/** Its series (Opus, GPT), what a list groups it under; none when not known. Lists come by series, newest first. */
-	family?: string;
-	/** Every spelling of it the station's profiles have enabled (openai/gpt-6-astra, gpt-6-astra): one model. */
-	ids: string[];
-	maker?: Maker;
-	runtimes: RuntimeKind[];
-	efforts: Record<string, string[]>;
-	accounts: Record<string, RunnableProfile[]>;
-	spent?: Spent;
 }
 
 export interface TurnRecord {
@@ -1369,72 +1437,6 @@ export interface MadeSlackApp {
 	state?: string;
 	installed: boolean;
 	installedTeam?: string;
-}
-
-/**
- * What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
- * station's pick.
- */
-export interface Picked {
-	model?: string;
-	runtime: RuntimeKind;
-	effort?: string;
-	fast?: boolean;
-	profile?: string;
-}
-
-/** The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low. */
-export interface PickAccount {
-	text: string;
-	auto: boolean;
-	level?: Level;
-	profile?: RunnableProfile;
-}
-
-/**
- * A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
- * until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
- * station's pick, said so (`dropped`, `force`).
- */
-export interface PickView {
-	fastAvailable?: boolean;
-	fastText?: string;
-	options: ModelOption[];
-	runtimeFixed: boolean;
-	value: Picked;
-	valueOption?: ModelOption;
-	/** The account the control names; none: it names none (a new chat's, while the station's pick is fine). */
-	account?: PickAccount;
-	draft: Picked;
-	/** The option picked in the panel, by its `model`. */
-	option?: string;
-	/** The runtimes offered for it (none: not asked), how hard it can think there, who can run it. */
-	runtimes: RuntimeKind[];
-	efforts: string[];
-	accounts: RunnableProfile[];
-	dropped?: string;
-	/**
-	 * The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
-	 * station's pick runs low.
-	 */
-	who: string;
-	whoLevel?: Level;
-	/** The station's pick, said: who it is on now, or what it does. */
-	autoNote: string;
-	changed: boolean;
-	/**
-	 * Full screen (the phone's): the model, depth and account as they were and as they become; why the account
-	 * must change; the model and account picked in words; what the button says.
-	 */
-	was: string[];
-	becomes: string[];
-	force?: string;
-	modelText: string;
-	maker?: Maker;
-	accountText: string;
-	accountNote: string;
-	accountWarn: boolean;
-	saveText: string;
 }
 
 /** One transient connect wizard. Decisions and navigation come from the core on every client. */

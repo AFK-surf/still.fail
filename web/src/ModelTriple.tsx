@@ -35,7 +35,7 @@ export function modelName(options: { model: string; name?: string; ids?: string[
  * The control of a model pick (pick.ts `usePick`): the core says what it runs on, what the panel has picked and
  * what that means; this draws it and says what is picked. `onConfirm`: 确定 with something changed (the owner saves).
  */
-export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Picking; onConfirm(): void; side?: "top" | "bottom" }) {
+export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = false }: { pick: Picking; onConfirm(): void; side?: "top" | "bottom"; modelOnly?: boolean }) {
   const [open, setOpen] = useState(false);
   const v = pick.view;
   const options = v?.options ?? [];
@@ -86,10 +86,10 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
           {options.length === 0 ? <span className={css2.tripleModel}>{t("web-main.model.none")}</span> : (
             <>
               <Tip label={value.model || null}><span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : t("web-main.model.pick")}</span></span></Tip>
-              {!v.runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={14} />{RUNTIME_LABEL[value.runtime]}</span>}
-              <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={!value.effort || undefined}>{value.effort ?? t("web-main.model.defaultEffort")}</span>
-              {v.fastText && <span className={`${css2.triplePart} ${css2.tripleEffort}`}>{v.fastText}</span>}
-              {account && (
+              {!modelOnly && !v.runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={14} />{RUNTIME_LABEL[value.runtime]}</span>}
+              {!modelOnly && <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={!value.effort || undefined}>{value.effort ?? t("web-main.model.defaultEffort")}</span>}
+              {!modelOnly && v.fastText && <span className={`${css2.triplePart} ${css2.tripleEffort}`}>{v.fastText}</span>}
+              {!modelOnly && account && (
                 <span className={`${css2.triplePart} ${css2.tripleAccount}`} data-level={account.level}>
                   {account.profile && <ProviderLogo runtime={value.runtime} kind={account.profile.kind ?? "env"} size={14} />}
                   <span className={css2.tripleAccountName}>{account.text}</span>
@@ -130,7 +130,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
               ))}
               {listed.length === 0 && <p className={`${shellCss.muted} ${css2.runPickerEmpty}`}>{t("web-main.model.noMatch")}</p>}
             </div>
-            {v.runtimes.length > 0 && (
+            {!modelOnly && v.runtimes.length > 0 && (
               <div className={css2.runPickerColumn}>
                 <h4>{t("web-main.model.runtime")}</h4>
                 {v.runtimes.map((r) => (
@@ -140,7 +140,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
                 ))}
               </div>
             )}
-            <div className={`${css2.runPickerColumn} ${css2.runPickerEfforts}`}>
+            {!modelOnly && <div className={`${css2.runPickerColumn} ${css2.runPickerEfforts}`}>
               <h4>{t("web-main.model.effort")}</h4>
               {[null, ...v.efforts].map((e) => (
                 <button key={e ?? ""} type="button" className={css2.runPickerOption} aria-pressed={(draft.effort ?? null) === e} onClick={() => pick.set({ effort: e })}>{e ?? t("web-main.model.default")}</button>
@@ -152,15 +152,15 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
                 ))}
                 <small>{t("web-main.model.fastNote")}</small>
               </>}
-            </div>
+            </div>}
           </div>
           <div className={css2.runPickerFoot}>
               {/* In the room the columns leave: a long name is cut short rather than widening the panel. */}
-              <span className={css2.runPickerWhoRoom}><Popover.Trigger className={css2.runPickerWho} data-level={v.whoLevel}>
+              {!modelOnly && <span className={css2.runPickerWhoRoom}><Popover.Trigger className={css2.runPickerWho} data-level={v.whoLevel}>
                 {/* Short, in the room it has: the account kept to by its name before the @; amber says the station's pick runs low, or the one kept to gave way (its panel says which). */}
                 <span className={css2.runOptionName}>{v.who}</span>
                 <ChevronRight size={12} className={css2.runPickerWhoChevron} />
-              </Popover.Trigger></span>
+              </Popover.Trigger></span>}
             {/* Not a Popover.Close: within the accounts' Root, that would close theirs. */}
             <button type="button" className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css2.btnSm}`} onClick={() => setOpen(false)}>{t("common.cancel")}</button>
             {/* Nothing changed: it says so, and only closes. */}
