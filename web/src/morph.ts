@@ -92,7 +92,7 @@ export function useMorph(box: RefObject<HTMLElement | null>, laidOut: string, pa
     const paged = shown.current.page !== page;
     from.current = null;
     shown.current = { laidOut, page };
-    if (!el || !was || paged || movingBy(el) === "page" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!el || !was || el.hasAttribute("data-send-held") || paged || movingBy(el) === "page" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     stop(el);
     const height = el.getBoundingClientRect().height;
     // Its size unchanged (a letter more on the same line), nothing moves.

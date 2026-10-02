@@ -31,7 +31,7 @@ const EASE = "cubic-bezier(.2, .8, .2, 1)";
 
 /** A first message on its way: the words sent, where they were, until the chat's page takes them. */
 interface Picture { key: string; rect: DOMRect; stand: HTMLElement }
-interface Sending { field: HTMLElement; from: Typed; top: number; stand: HTMLElement | null; pictures: Picture[] }
+interface Sending { field: HTMLElement; from: Typed; top: number; stand: HTMLElement | null; pictures: Picture[]; release?: (() => void) | undefined }
 let sending: Sending | null = null;
 
 /**
@@ -41,6 +41,9 @@ let sending: Sending | null = null;
  */
 export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElement, z: string): void {
   notSent();
+  // The PC dock holds its geometry while clearing the draft and waiting for the destination page.
+  const hold = new CustomEvent<{ release?: () => void }>("hold-first-composer", { bubbles: true, detail: {} });
+  field.dispatchEvent(hold);
   const stand = standIn(field, text, layer, z);
   // What follows the message comes out of the composer's top edge, as it was when sent.
   const composer = field.closest("[data-made-composer]") ?? field;
@@ -63,7 +66,7 @@ export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElemen
     layer.append(picture);
     pictures.push({ key: source.dataset.sendImage!, rect, stand: picture });
   }
-  sending = { field, from: textAt(field), top: composer.getBoundingClientRect().top, stand, pictures };
+  sending = { field, from: textAt(field), top: composer.getBoundingClientRect().top, stand, pictures, release: hold.detail.release };
   field.dataset.madeField = "";
   document.documentElement.dataset.madeHint = "hidden";
 }
@@ -90,6 +93,7 @@ function standIn(field: HTMLElement, text: string, layer: HTMLElement, z: string
 /** The first message did not go (no chat could be made): the composer is as it was. */
 export function notSent(): void {
   if (!sending) return;
+  sending.release?.();
   sending.stand?.remove();
   for (const picture of sending.pictures) picture.stand.remove();
   delete sending.field.dataset.madeField;
@@ -231,6 +235,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     await Promise.allSettled(moves);
     for (const { el, original, visibility } of leaving) { el.remove(); original.style.visibility = visibility; }
     ghost?.remove();
+    now?.release?.();
     now?.stand?.remove();
     for (const picture of now?.pictures ?? []) picture.stand.remove();
     if (now) delete now.field.dataset.madeField;

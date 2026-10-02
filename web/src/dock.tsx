@@ -45,7 +45,9 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   const slot = useRef<HTMLElement | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const carry = useRef<string | null>(null);
+  const held = useRef<{ shape: Shape; release(): void } | null>(null);
   const put = () => {
+    if (held.current && variant.current === "new") return false;
     const el = box.current;
     const at = slot.current;
     if (!el || !at || !at.isConnected) return false;
@@ -136,7 +138,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   const seen = () => {
     const b = inner();
     // Not while it is put away (no page held a place): it would start from nowhere, off the page's corner.
-    if (b && b.getClientRects().length && b.getBoundingClientRect().width > 0) was.current = shapeOf(b);
+    if (b && b.getClientRects().length && b.getBoundingClientRect().width > 0) was.current = held.current?.shape ?? shapeOf(b);
   };
   const variant = useRef(spec?.variant);
   // Laid out for another page, its new height is taken at once, not when the observer tells of it: a new chat becoming
@@ -159,6 +161,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     // From where it was to where its place is now (read without the move under way), its shape and what it holds with
     // it (morph.ts).
     const animate = () => {
+      held.current?.release();
       stop(b);
       // Its place keeps the height it has now (read with the next page's draft in it), and it goes to where that
       // place is laid out then: kept at the height it had before, a centred place moved it once it was over.
@@ -222,6 +225,30 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   }, [spec?.variant]); // eslint-disable-line react-hooks/exhaustive-deps
   // Its height, for its place to keep: watched once it is there (the first page to hold a place makes it).
   const made = spec !== null;
+  useLayoutEffect(() => {
+    const dock = box.current;
+    if (!dock) return;
+    const hold = (event: Event) => {
+      const b = inner();
+      if (!b || variant.current !== "new" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      held.current?.release();
+      const shape = shapeOf(b);
+      const before = { height: b.style.height, width: b.style.width, borderRadius: b.style.borderRadius };
+      stop(b);
+      Object.assign(b.style, { height: `${shape.rect.height}px`, width: `${shape.rect.width}px`, borderRadius: `${shape.radius}px` });
+      b.dataset.sendHeld = "";
+      const hold = { shape, release: () => {
+        if (held.current !== hold) return;
+        Object.assign(b.style, before);
+        delete b.dataset.sendHeld;
+        held.current = null;
+      } };
+      held.current = hold;
+      (event as CustomEvent<{ release?: () => void }>).detail.release = hold.release;
+    };
+    dock.addEventListener("hold-first-composer", hold);
+    return () => { dock.removeEventListener("hold-first-composer", hold); held.current?.release(); };
+  }, [made]);
   useLayoutEffect(() => {
     const el = box.current;
     if (!made || !el) return;
