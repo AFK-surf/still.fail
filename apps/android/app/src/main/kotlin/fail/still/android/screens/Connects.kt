@@ -132,7 +132,7 @@ fun ConnectRow(station: String, c: Connect) {
             Text(c.name + (c.team?.let { " · $it" } ?: ""), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(listOfNotNull(c.modeText, c.runtimeText, c.bind.model?.let { c.modelName ?: it }).joinToString(" · "), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) { PresenceDot(c.presence); Text(c.statusText, fontSize = 12.sp, color = C.muted) }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) { PresenceDot(c.presence); fail.still.android.ui.StatusText(c.statusText, fontSize = 12.sp, color = C.muted) }
     }
 }
 
@@ -198,7 +198,7 @@ fun ConnectScreen(station: String, id: String) {
     val connect = item.connect
     val c = connect.connection
     Column(Modifier.fillMaxSize()) {
-        NavBar("连接", app::pop, connect.name, sub = { PresenceDot(connect.presence); Text(connect.statusText, fontSize = 11.sp, color = C.muted) },
+        NavBar("连接", app::pop, connect.name, sub = { PresenceDot(connect.presence); fail.still.android.ui.StatusText(connect.statusText, fontSize = 11.sp, color = C.muted) },
             trailing = { NavButton(Icons.More, { openConnectMenu(app, station, connect) }) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             // Who it is in Slack: its bot's picture, its Slack workspace, whose it is.
@@ -260,7 +260,7 @@ fun ConnectScreen(station: String, id: String) {
                 item.sessions.forEach { s ->
                     ListRow(onClick = { app.push(Screen.Chat(station, fail.still.android.data.ChatOf.Session(s.key))) }) {
                         Text(s.titleText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        Text(s.statusText, fontSize = 13.sp, color = C.muted)
+                        fail.still.android.ui.StatusText(s.statusText, fontSize = 13.sp, color = C.muted)
                     }
                 }
             }

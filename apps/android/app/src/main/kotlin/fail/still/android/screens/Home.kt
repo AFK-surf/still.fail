@@ -683,6 +683,15 @@ internal fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
  */
 @Composable
 private fun StateLine(state: String, modifier: Modifier = Modifier) {
+    if (state == "做完了" || state.startsWith("做完了：")) {
+        fail.still.android.ui.StatusText(
+            state, modifier, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+            )),
+        )
+        return
+    }
     val decide = state.startsWith("奏")
     val text = androidx.compose.ui.text.buildAnnotatedString {
         if (decide) { pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)); append("奏"); pop(); append(state.substring(1)) }
