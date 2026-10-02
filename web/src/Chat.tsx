@@ -423,11 +423,6 @@ function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: (
   };
 }
 
-/**
- * Tells the list (scroll.ts) when messages leave its ends as the core's window moves along the chat (a page in at one
- * end, as many out at the other): it lets go of the room it held at its foot. Told as the change is laid out, before
- * the list puts the reader's message back in place.
- */
 /** New historical rows share one short opacity fade; existing rows never replay when their status changes. */
 function useHistoryFade(list: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
   const seen = useRef(new WeakSet<HTMLElement>());
@@ -440,6 +435,11 @@ function useHistoryFade(list: RefObject<HTMLElement | null>, messages: ChatMessa
   }, [list, messages]);
 }
 
+/**
+ * Tells the list (scroll.ts) when messages leave its ends as the core's window moves along the chat (a page in at one
+ * end, as many out at the other): it lets go of the room it held at its foot. Told as the change is laid out, before
+ * the list puts the reader's message back in place.
+ */
 function useWindowMoves(list: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
   const first = messages[0]?.seq;
   const last = messages.at(-1)?.seq;
