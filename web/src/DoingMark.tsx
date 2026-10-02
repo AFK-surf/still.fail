@@ -6,6 +6,7 @@ import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { Tip } from "./ui.tsx";
 import * as css from "./DoingMark.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
+import { t } from "./i18n.ts";
 
 type Words = Record<string, string | number | boolean | null | undefined>;
 
@@ -18,7 +19,7 @@ export function useDoingState(calls: string | readonly string[], on: Words = {})
   const failing = list.findLast(failed);
   // A write its station went quiet on is asked again once it is back: the spinner says so.
   const note = list.find((item) => item.stage === "rechecking")?.note;
-  return { running: list.some((item) => !failed(item)), error: failing ? (failing.error ?? "失败了") : undefined, note };
+  return { running: list.some((item) => !failed(item)), error: failing ? (failing.error ?? t("web-main.doing.failed")) : undefined, note };
 }
 
 interface MarkProps {
@@ -44,7 +45,7 @@ export function DoingShown({ state, className, size = 12, idle = null, label, si
     return state.note && !bare ? <Tip label={state.note} {...(side ? { side } : {})}>{spinner}</Tip> : spinner;
   }
   if (state.error !== undefined) {
-    const mark = <span className={css.failedMark} style={{ width: size, height: size, fontSize: size - 4 }} role="img" aria-label={`失败：${state.error}`}>!</span>;
+    const mark = <span className={css.failedMark} style={{ width: size, height: size, fontSize: size - 4 }} role="img" aria-label={t("web-main.doing.failedWhy", { error: state.error })}>!</span>;
     return bare ? mark : <Tip label={state.error} {...(side ? { side } : {})}>{mark}</Tip>;
   }
   return <>{idle}</>;

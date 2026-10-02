@@ -15,6 +15,7 @@ import { isChatLink } from "./chatRefs.ts";
 import { Tip } from "./ui.tsx";
 import { failure, useToast } from "./toast.tsx";
 import { Mermaid } from "./Viz.tsx";
+import { t } from "./i18n.ts";
 
 let highlighter: Promise<HighlighterCore> | null = null;
 /** Light and dark at once (Shiki's dual themes): light inline, dark as `--shiki-dark` vars the dark page picks (Prose.css.ts). */
@@ -80,15 +81,15 @@ export function Code({ text, language }: { text: string; language?: string | und
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    }, (e: unknown) => toast(`没能复制：${failure(e)}`));
+    }, (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) })));
   };
   const current = html && cache.get(`${language}\n${text}`) === html ? html : null;
   return (
     <div className={css.codeBlock}>
       <div className={css.codeBar}>
         <span className={css.codeLang}>{language ?? "text"}</span>
-        <button type="button" className={css.codeCopy} onClick={copy} aria-label="复制代码">
-          {copied ? <Check size={12} /> : <Copy size={12} />}{copied ? "已复制" : "复制"}
+        <button type="button" className={css.codeCopy} onClick={copy} aria-label={t("web-main.prose.copyCode")}>
+          {copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("common.copy")}
         </button>
       </div>
       {current ? <div className={css.codeShiki} dangerouslySetInnerHTML={{ __html: current }} /> : <pre><code>{text}</code></pre>}

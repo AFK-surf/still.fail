@@ -6,6 +6,7 @@ import { useCall, useTopic } from "./core/react.ts";
 import { useDoing, useDoingFailed } from "./doing.ts";
 import { failure, useToast } from "./toast.tsx";
 import type { NewChatView, PickView, RuntimeKind } from "./core/shapes.ts";
+import { t } from "./i18n.ts";
 
 /** A pick: each field given changes only that; null is the default depth, the station's pick of account. */
 export interface PickPatch { model?: string; runtime?: RuntimeKind; effort?: string | null; fast?: boolean | null; profile?: string | null }
@@ -17,7 +18,7 @@ export function useNewChat(scope: string) {
   const toast = useToast();
   const actions = useMemo(() => ({
     /** The station it starts on (its id) and what it runs there, kept for next time. */
-    pick: (p: PickPatch & { station?: string }) => void call("newChat.pick", { scope, ...p }).catch((e: unknown) => toast(`没能选上：${failure(e)}`)),
+    pick: (p: PickPatch & { station?: string }) => void call("newChat.pick", { scope, ...p }).catch((e: unknown) => toast(t("web-main.pick.failed", { error: failure(e) }))),
     /** The chat, made on `station` with what is picked there (as `chat.create` makes it). */
     create: (station: string) => call("newChat.create", { station }) as Promise<{ key: string; runtime: RuntimeKind; model: string; effort?: string }>,
   }), [call, scope, toast]);
@@ -48,7 +49,7 @@ export function usePick(station: string, of: string, page?: NewChatView): Pickin
   const saving = useDoing("pick.save", { station, of });
   const saveFailed = useDoingFailed("pick.save", { station, of });
   const actions = useMemo(() => ({
-    set: (patch: PickPatch & { open?: boolean; clear?: boolean }) => void call("pick.set", { station, of, ...patch }).catch((e: unknown) => toast(`没能选上：${failure(e)}`)),
+    set: (patch: PickPatch & { open?: boolean; clear?: boolean }) => void call("pick.set", { station, of, ...patch }).catch((e: unknown) => toast(t("web-main.pick.failed", { error: failure(e) }))),
     save: () => call("pick.save", { station, of }) as Promise<{ saved: boolean }>,
   }), [call, station, of, toast]);
   return useMemo(() => ({ view: value, saving, saveFailed, ...actions }), [value, saving, saveFailed, actions]);

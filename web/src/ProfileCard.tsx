@@ -14,6 +14,7 @@ import * as css from "./ProfileCard.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as baseCss from "./styles/base.css.ts";
+import { t } from "./i18n.ts";
 
 /**
  * A profile: its name and runtimes, what it is and who uses it (`uses`, said by the page), its quota and its check.
@@ -27,7 +28,7 @@ export function ProfileCard({ profile, uses, to, action, framed }: { profile: Pr
     <Card
       mark={<ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={18} />}
       title={<>{profile.name}<RuntimeTags runtimes={profile.runtimes} /></>}
-      sub={[profile.machine ? "本机登录" : ACCESS[profile.access.kind].label, profile.modelsText, uses]}
+      sub={[profile.machine ? t("web-main.profile.machine") : ACCESS[profile.access.kind].label, profile.modelsText, uses]}
       quota={quota ? <QuotaBars quota={quota} compact /> : null}
       state={profile.checkTone !== "green" ? <State pill={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>} why={trouble} /> : null}
       action={action ?? (to ? <ChevronRight {...ICON} className={css.profileCardChevron} /> : null)}
@@ -52,9 +53,9 @@ export function MachineLoginCard({ login, action, framed = true }: { login: Mach
         title={<>
           {RUNTIME[login.runtime]}
           {plan && <span className={waitingCss.runtimeTags}><span className={waitingCss.runtimeTag}>{plan}</span></span>}
-          <State pill={<Pill tone={blocked ? "red" : "green"}>{blocked ? "被停用" : "本机已登录"}</Pill>} why={trouble} />
+          <State pill={<Pill tone={blocked ? "red" : "green"}>{blocked ? t("web-main.profile.blocked") : t("web-main.profile.machineSignedIn")}</Pill>} why={trouble} />
         </>}
-        sub={[login.email ? <Tip key="email" label={login.email} cut><span className={css.profileCardEmail}>{login.email}</span></Tip> : "已登录"]}
+        sub={[login.email ? <Tip key="email" label={login.email} cut><span className={css.profileCardEmail}>{login.email}</span></Tip> : t("web-main.profile.signedIn")]}
         quota={quota ? <QuotaBars quota={quota} compact /> : null}
         state={null}
         action={action ?? null}

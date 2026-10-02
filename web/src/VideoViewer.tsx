@@ -10,6 +10,7 @@ import * as css from "./VideoViewer.css.ts";
 import * as fpCss from "./FilePreview.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import { Tip } from "./ui.tsx";
+import { t } from "./i18n.ts";
 
 type Canvas = HTMLCanvasElement | OffscreenCanvas;
 
@@ -306,13 +307,13 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
   const seek = (t: number) => go(() => (decoded ? decoded.at(t) : Math.round(t / GUESSED_STEP)));
   const now = decoded ? decoded.starts[at]! : time;
   const facts = decoded ? [
-    { key: "frame", text: <><b className={css.vvNow}>{at + 1}</b><span className={css.vvDim}> / {count} 帧</span></> },
+    { key: "frame", text: <><b className={css.vvNow}>{at + 1}</b><span className={css.vvDim}> / {t("web-main.video.frames", { n: count })}</span></> },
     { key: "time", text: clock(now) },
-    { key: "held", text: <Tip label="这一帧在屏幕上停留的时间"><span>{`停留 ${(decoded.held(at) * 1000).toFixed(1)} ms`}</span></Tip> },
-    ...(rateInfo ? [{ key: "fps", text: <span className={css.vvDim}>{rateInfo.steady ? `${Math.round(rateInfo.fps)} fps` : `可变帧率 · 均 ${Math.round(rateInfo.fps)} fps`}</span> }] : []),
+    { key: "held", text: <Tip label={t("web-main.video.heldTip")}><span>{t("web-main.video.held", { ms: (decoded.held(at) * 1000).toFixed(1) })}</span></Tip> },
+    ...(rateInfo ? [{ key: "fps", text: <span className={css.vvDim}>{rateInfo.steady ? `${Math.round(rateInfo.fps)} fps` : t("web-main.video.variableRate", { fps: Math.round(rateInfo.fps) })}</span> }] : []),
   ] : [
     { key: "time", text: <><b className={css.vvNow}>{clock(time)}</b><span className={css.vvDim}> / {clock(duration)}</span></> },
-    { key: "note", text: <span className={css.vvDim}>{frames === null ? "正在读取帧…" : "没法逐帧解码，按 60 fps 估算"}</span> },
+    { key: "note", text: <span className={css.vvDim}>{frames === null ? t("web-main.video.readingFrames") : t("web-main.video.guessed")}</span> },
   ];
   // Beside the pointer, on the side with room.
   const left = pixel && pixel.clientX > window.innerWidth - 220;
@@ -332,7 +333,7 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
           style={zoom.place ?? { visibility: "hidden" }}
           onLoadedMetadata={(e) => { const v = e.currentTarget; setNatural({ w: v.videoWidth, h: v.videoHeight }); setDuration(v.duration); }}
           onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
-        <canvas ref={picture} className={css.vvPicture} data-pixelated={pixelated} aria-label={decoded ? `第 ${at + 1} 帧` : undefined}
+        <canvas ref={picture} className={css.vvPicture} data-pixelated={pixelated} aria-label={decoded ? t("web-main.video.frame", { n: at + 1 }) : undefined}
           style={{ ...(zoom.place ?? {}), visibility: still && zoom.place ? "visible" : "hidden" }} />
       </div>
       {pixel && (
@@ -348,21 +349,21 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
         <Timeline start={decoded?.starts[0] ?? 0} end={decoded ? decoded.starts.at(-1)! + decoded.lastDuration : duration} now={now} onSeek={seek} />
         <div className={css.vvRow}>
           <span className={css.vvGroup}>
-            <Tip label="上一帧（← 或 ,；Shift 一次 10 帧）"><button type="button" className={pagesCss.iconBtn} aria-label="上一帧" onClick={() => go((i) => i - 1)}><ChevronLeft size={18} /></button></Tip>
-            <Tip label={playing ? "暂停（空格）" : "播放（空格）"}><button type="button" className={pagesCss.iconBtn} aria-label={playing ? "暂停" : "播放"} onClick={toggle}>
+            <Tip label={t("web-main.video.prevKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.video.prev")} onClick={() => go((i) => i - 1)}><ChevronLeft size={18} /></button></Tip>
+            <Tip label={playing ? t("web-main.video.pauseKey") : t("web-main.video.playKey")}><button type="button" className={pagesCss.iconBtn} aria-label={playing ? t("web-main.video.pause") : t("web-main.video.play")} onClick={toggle}>
               {playing ? <Pause size={18} /> : <Play size={18} />}
             </button></Tip>
-            <Tip label="下一帧（→ 或 .；Shift 一次 10 帧）"><button type="button" className={pagesCss.iconBtn} aria-label="下一帧" onClick={() => go((i) => i + 1)}><ChevronRight size={18} /></button></Tip>
+            <Tip label={t("web-main.video.nextKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.video.next")} onClick={() => go((i) => i + 1)}><ChevronRight size={18} /></button></Tip>
           </span>
           <span className={css.vvInfo}>
             {facts.map((f) => <span key={f.key} className={css.vvFact} data-fact={f.key}>{f.text}</span>)}
           </span>
           <span className={css.vvGroup}>
             {zoomTools}
-            <Tip label="播放速度（点一下换一档）"><button type="button" className={css.vvRate}
+            <Tip label={t("web-main.video.rate")}><button type="button" className={css.vvRate}
               onClick={() => setRate((r) => RATES[(RATES.indexOf(r) + RATES.length - 1) % RATES.length]!)}>{rate}×</button></Tip>
-            <Tip label="把这一帧存成 PNG"><button type="button" className={pagesCss.iconBtn} aria-label="保存这一帧" disabled={!still} onClick={save}><Camera size={18} /></button></Tip>
-            {canTurn() && <button type="button" className={`${pagesCss.iconBtn} ${css.vvTurn}`} aria-label={turned ? "退出横屏" : "横屏"} aria-pressed={turned}
+            <Tip label={t("web-main.video.saveTip")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.video.save")} disabled={!still} onClick={save}><Camera size={18} /></button></Tip>
+            {canTurn() && <button type="button" className={`${pagesCss.iconBtn} ${css.vvTurn}`} aria-label={turned ? t("web-main.video.unturn") : t("web-main.video.turn")} aria-pressed={turned}
               onClick={() => void turn().catch((e: unknown) => console.warn("full screen:", e))}><Landscape size={18} /></button>}
           </span>
         </div>
@@ -382,7 +383,7 @@ function Timeline({ start, end, now, onSeek }: { start: number; end: number; now
   const dragging = useRef(false);
   const where = `${Math.min(100, Math.max(0, ((now - start) / span) * 100))}%`;
   return (
-    <div ref={box} className={css.vvTimeline} role="slider" aria-label="位置" aria-valuemin={0} aria-valuemax={Math.round(span * 1000)} aria-valuenow={Math.round((now - start) * 1000)}
+    <div ref={box} className={css.vvTimeline} role="slider" aria-label={t("web-main.video.position")} aria-valuemin={0} aria-valuemax={Math.round(span * 1000)} aria-valuenow={Math.round((now - start) * 1000)}
       onPointerDown={(e) => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); dragging.current = true; onSeek(at(e.clientX)); }}
       onPointerMove={(e) => { if (dragging.current) onSeek(at(e.clientX)); }}
       onPointerUp={() => { dragging.current = false; }} onPointerCancel={() => { dragging.current = false; }}>

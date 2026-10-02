@@ -9,6 +9,7 @@ import * as sidebarCss from "./styles/sidebar.css.ts";
 import { moveState } from "./motion.ts";
 import { Tip } from "./ui.tsx";
 import { NAME } from "./channel.ts";
+import { t } from "./i18n.ts";
 // still.fail's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
 // picked by the OS theme like the rest of the app; the illustrations switch themselves.
@@ -113,7 +114,7 @@ function SidebarBuddy() {
   // On the page itself, not in the sidebar: a closed sidebar clips what is in it, and the desktop app's window would
   // then take a click on the buddy for a drag of the window.
   const buddy = (
-    <Tip label={`${closed ? "展开侧边栏" : "收起侧边栏"}${keys ? `  ${keys}` : ""}`}><button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? "展开侧边栏" : "收起侧边栏"}>
+    <Tip label={`${closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}${keys ? `  ${keys}` : ""}`}><button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}>
       <Themed name={`buddy/${pose}`} width={28} height={28} />
     </button></Tip>
   );
@@ -142,9 +143,9 @@ function UpdateButton() {
   const updates = window.stillfailDesktop?.appUpdate;
   const state = useAppUpdate();
   if (!updates || !state) return null;
-  const label = state.phase === "downloading" ? `下载中 ${state.percent}%` : state.phase === "installing" ? "正在重启…" : state.phase === "failed" ? "更新失败，重试" : "更新";
+  const label = state.phase === "downloading" ? t("web-main.appUpdate.downloading", { percent: state.percent }) : state.phase === "installing" ? t("web-main.appUpdate.restarting") : state.phase === "failed" ? t("web-main.appUpdate.failed") : t("web-main.versions.update");
   const busy = state.phase === "downloading" || state.phase === "installing";
-  const title = state.phase === "failed" ? state.message : `更新到 ${state.version}：下载后 ${NAME} 会重启`;
+  const title = state.phase === "failed" ? state.message : t("web-main.appUpdate.title", { version: state.version, app: NAME });
   return onPage(
     <Tip label={title}><button type="button" className={css.sidebarUpdate} disabled={busy} aria-busy={busy} onClick={() => updates.start()}>
       {label}

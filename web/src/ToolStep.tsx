@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Code, Prose } from "./Prose.tsx";
 import * as css from "./ToolStep.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
+import { t } from "./i18n.ts";
 
 type Args = Record<string, unknown>;
 
@@ -136,7 +137,7 @@ function Plan({ items }: { items: { text: string; status: string }[] }) {
 /** Fields one to a row: short ones inline, long text as a block, nested data as compact JSON. */
 function Fields({ a, skip = [] }: { a: Args; skip?: string[] }) {
   const rows = Object.entries(a).filter(([k, v]) => !skip.includes(k) && v !== null && v !== undefined && v !== "");
-  if (!rows.length) return <div className={css.none}>没有参数</div>;
+  if (!rows.length) return <div className={css.none}>{t("web-main.tool.noArgs")}</div>;
   return (
     <dl className={css.fields}>
       {rows.map(([k, v]) => (
@@ -167,7 +168,7 @@ export function ToolCall({ name, call, said }: { name: string; call: string; sai
     return <><Block text={command} language="sh" /><Facts a={a} skip={[...skip, "command", "cmd"]} /></>;
   }
   if (file && typeof a.old_string === "string" && typeof a.new_string === "string") {
-    return <><Path path={file} extra={a.replace_all ? "全部替换" : undefined} /><Diff from={a.old_string} to={a.new_string} /></>;
+    return <><Path path={file} extra={a.replace_all ? t("web-main.tool.replaceAll") : undefined} /><Diff from={a.old_string} to={a.new_string} /></>;
   }
   if (file && Array.isArray(a.edits)) {
     return (
@@ -190,7 +191,8 @@ export function ToolCall({ name, call, said }: { name: string; call: string; sai
   if (file && Object.keys(a).every((k) => ["file_path", "path", "notebook_path", "offset", "limit", ...skip].includes(k))) {
     const from = typeof a.offset === "number" ? a.offset : undefined;
     const count = typeof a.limit === "number" ? a.limit : undefined;
-    const range = from !== undefined || count !== undefined ? `${from !== undefined ? `第 ${from} 行起` : ""}${count !== undefined ? `${from !== undefined ? "，" : ""}${count} 行` : ""}` : undefined;
+    const range = from !== undefined && count !== undefined ? t("web-main.tool.linesFromCount", { from, n: count })
+      : from !== undefined ? t("web-main.tool.linesFrom", { from }) : count !== undefined ? t("web-main.tool.lines", { n: count }) : undefined;
     return <Path path={file} extra={range} />;
   }
   if (typeof a.pattern === "string" || typeof a.query === "string" || typeof a.url === "string") {
@@ -205,7 +207,7 @@ export function ToolCall({ name, call, said }: { name: string; call: string; sai
 function commandOutput(text: string): { facts: string[]; output: string } | null {
   const m = /^(?:Chunk ID: .*\n)?(?:Wall time: (.*)\n)?(?:Process exited with code (-?\d+)\n)?(?:Original token count: .*\n)?Output:\n?/.exec(text);
   if (!m || (!m[1] && !m[2])) return null;
-  return { facts: [m[2] !== undefined ? `退出码 ${m[2]}` : "", m[1] ? `用时 ${m[1]}` : ""].filter(Boolean), output: text.slice(m[0].length) };
+  return { facts: [m[2] !== undefined ? t("web-main.tool.exitCode", { code: m[2] }) : "", m[1] ? t("web-main.tool.took", { time: m[1] }) : ""].filter(Boolean), output: text.slice(m[0].length) };
 }
 
 /**
@@ -223,7 +225,7 @@ function readLines(text: string): string | null {
 
 /** What a call gave back. */
 export function ToolResult({ name, call, result, failed }: { name: string; call: string; result: string; failed: boolean }) {
-  if (!result.trim()) return <div className={css.none}>没有输出</div>;
+  if (!result.trim()) return <div className={css.none}>{t("web-main.tool.noOutput")}</div>;
   const args = parse(call);
   const file = isArgs(args) ? str(args.file_path) ?? str(args.path) : undefined;
   const codex = commandOutput(result);
@@ -231,7 +233,7 @@ export function ToolResult({ name, call, result, failed }: { name: string; call:
     return (
       <div className={css.result} data-failed={failed || undefined}>
         {codex.facts.length > 0 && <div className={css.facts}>{codex.facts.map((f) => <span key={f} className={css.fact}>{f}</span>)}</div>}
-        {codex.output.trim() ? <pre className={css.output}>{codex.output}</pre> : <div className={css.none}>没有输出</div>}
+        {codex.output.trim() ? <pre className={css.output}>{codex.output}</pre> : <div className={css.none}>{t("web-main.tool.noOutput")}</div>}
       </div>
     );
   }

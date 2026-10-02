@@ -14,6 +14,7 @@ import { useNarrow } from "../mobile/app.tsx";
 import { NoteBox, NoteCard, type NoteView } from "../mobile/Notes.tsx";
 import * as annotateCss from "../mobile/Annotate.css.ts";
 import * as rootCss from "../mobile/styles/root.css.ts";
+import { t } from "../i18n.ts";
 
 type Tool = "select" | "rect" | "arrow" | "pen" | "text";
 interface P { x: number; y: number }
@@ -27,22 +28,23 @@ type Shape = { id: number; color: string; w: number } & (
   | { tool: "text"; at: P; text: string });
 type Box = { x: number; y: number; w: number; h: number };
 
-const TOOLS: { tool: Tool; label: string; key: string; icon: ReactNode }[] = [
-  { tool: "select", label: "选择", key: "V", icon: <Cursor size={18} /> },
-  { tool: "rect", label: "框", key: "R", icon: <Square size={18} /> },
-  { tool: "arrow", label: "箭头", key: "A", icon: <ArrowUpRight size={18} /> },
-  { tool: "pen", label: "画笔", key: "P", icon: <Scribble size={18} /> },
-  { tool: "text", label: "文字", key: "T", icon: <Text size={18} /> },
+/** The tools (each named by web-main.annotate.tool.<tool>). */
+const TOOLS: { tool: Tool; key: string; icon: ReactNode }[] = [
+  { tool: "select", key: "V", icon: <Cursor size={18} /> },
+  { tool: "rect", key: "R", icon: <Square size={18} /> },
+  { tool: "arrow", key: "A", icon: <ArrowUpRight size={18} /> },
+  { tool: "pen", key: "P", icon: <Scribble size={18} /> },
+  { tool: "text", key: "T", icon: <Text size={18} /> },
 ];
-/** The colours to draw in; words get an edge of `halo` to stand out on any picture. */
+/** The colours to draw in (each named by web-main.annotate.color.<name>); words get an edge of `halo` to stand out on any picture. */
 const COLORS: { color: string; name: string; halo: string }[] = [
-  { color: css.INK, name: "橙", halo: "#fff" },
-  { color: "#e5484d", name: "红", halo: "#fff" },
-  { color: "#f5c518", name: "黄", halo: "#111" },
-  { color: "#30a46c", name: "绿", halo: "#fff" },
-  { color: "#3e7bfa", name: "蓝", halo: "#fff" },
-  { color: "#ffffff", name: "白", halo: "#111" },
-  { color: "#111111", name: "黑", halo: "#fff" },
+  { color: css.INK, name: "orange", halo: "#fff" },
+  { color: "#e5484d", name: "red", halo: "#fff" },
+  { color: "#f5c518", name: "yellow", halo: "#111" },
+  { color: "#30a46c", name: "green", halo: "#fff" },
+  { color: "#3e7bfa", name: "blue", halo: "#fff" },
+  { color: "#ffffff", name: "white", halo: "#111" },
+  { color: "#111111", name: "black", halo: "#fff" },
 ];
 const haloOf = (color: string) => COLORS.find((c) => c.color === color)?.halo ?? "#fff";
 /** On the screen, whatever the zoom: a line's width, a text's size, how near the pointer picks a mark (px). */
@@ -198,7 +200,7 @@ async function render(url: string, natural: { w: number; h: number }, shapes: Sh
     g.textBaseline = "middle";
     g.fillText(String(n), x + size / 2, y + size / 2 + 0.5 * k);
   }
-  return new Promise((done, fail) => canvas.toBlob((b) => (b ? done(b) : fail(new Error("没能画出图片"))), "image/png"));
+  return new Promise((done, fail) => canvas.toBlob((b) => (b ? done(b) : fail(new Error(t("web-main.annotate.renderFailed")))), "image/png"));
 }
 
 /** What the zoom does with a pointer (FilePreview.tsx useZoom): two fingers on the marks pinch, as anywhere else. */
@@ -456,21 +458,21 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
       setNote(null);
       const png = await render(url, natural, all);
       const stamp = new Date().toTimeString().slice(0, 8).replaceAll(":", "");
-      const fileName = `${name.replace(/\.[^.]+$/, "")}-标注-${stamp}.png`;
+      const fileName = t("web-main.annotate.pageFile", { name: name.replace(/\.[^.]+$/, ""), stamp });
       if (how === "draft") {
         // A quote per numbered mark: where it is, for the agent (the first line is also what the composer shows), and what was said.
         const quotes: DraftQuote[] = [...numbersOf(all)].map(([id, n]) => {
           const s = all.find((x) => x.id === id)!, r = (v: number) => Math.round(v);
           const what = s.tool === "rect"
-            ? (({ x, y, w, h }) => `框 · 左上角 (${r(x)}, ${r(y)})，${r(w)}×${r(h)}`)(boxOf(s))
-            : s.tool === "arrow" ? `箭头 · 从 (${r(s.a.x)}, ${r(s.a.y)}) 指向 (${r(s.b.x)}, ${r(s.b.y)})` : "";
+            ? (({ x, y, w, h }) => t("web-main.annotate.image.rect", { x: r(x), y: r(y), w: r(w), h: r(h) }))(boxOf(s))
+            : s.tool === "arrow" ? t("web-main.annotate.image.arrow", { ax: r(s.a.x), ay: r(s.a.y), bx: r(s.b.x), by: r(s.b.y) }) : "";
           return {
-            id: `image-${stamp}-${n}-${Math.random().toString(36).slice(2, 8)}`, author: `图片 ${name} 标注 ${n}`, role: "image",
-            text: `${what}\n在图片 ${fileName}（${natural.w}×${natural.h}，原图 ${name}）上，编号 ${n}`, comment: comments.get(id)?.trim() ?? "",
+            id: `image-${stamp}-${n}-${Math.random().toString(36).slice(2, 8)}`, author: t("web-main.annotate.image.author", { name, n }), role: "image",
+            text: `${what}\n${t("web-main.annotate.image.where", { file: fileName, w: natural.w, h: natural.h, name, n })}`, comment: comments.get(id)?.trim() ?? "",
           };
         });
         if (!draftKey || !offerToDraft(draftKey, { files: [new File([png], fileName, { type: "image/png" })], quotes })) {
-          throw new Error("这个对话现在不能发消息");
+          throw new Error(t("web-main.annotate.chatLocked"));
         }
         leave();
         onDone();
@@ -498,7 +500,7 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     const a = () => act.current;
     if (!on) {
       return url ? (
-        <Tip label="标注图片"><button type="button" className={pagesCss.iconBtn} aria-label="标注图片" onClick={() => { setOn(true); setError(null); }}>
+        <Tip label={t("web-main.annotate.image")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.annotate.image")} onClick={() => { setOn(true); setError(null); }}>
           <Edit size={18} />
         </button></Tip>
       ) : null;
@@ -506,12 +508,12 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     return (
       <span className={css.actions}>
         {error && <span className={css.error}>{error}</span>}
-        <button type="button" className={css.cancel} onClick={() => a().leave()}>取消</button>
-        <Tip label="下载标注后的图片"><button type="button" className={pagesCss.iconBtn} aria-label="下载标注后的图片" disabled={busy || !any}
+        <button type="button" className={css.cancel} onClick={() => a().leave()}>{t("common.cancel")}</button>
+        <Tip label={t("web-main.annotate.download")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.annotate.download")} disabled={busy || !any}
           onClick={() => void a().finish("download")}><Download size={18} /></button></Tip>
         {canDraft && (
           <button type="button" className={css.done} disabled={busy || !any} onClick={() => void a().finish("draft")}>
-            <Send size={12} strokeWidth={2} />{busy ? "正在生成…" : "放进对话"}
+            <Send size={12} strokeWidth={2} />{busy ? t("web-main.annotate.rendering") : t("web-main.annotate.offer")}
           </button>
         )}
       </span>
@@ -522,34 +524,34 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
   const shownColor = writing?.color ?? pickedShape?.color ?? color;
   const toolbar = on ? (
     <div className={css.toolbar} data-floats={phone ? undefined : true} data-in-foot={phone || undefined} onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-      {TOOLS.map((t) => (
-        <Tip key={t.tool} label={`${t.label}（${t.key}）`}><button type="button" className={pagesCss.iconBtn} aria-label={t.label}
-          aria-pressed={tool === t.tool} onClick={() => pickTool(t.tool)}>{t.icon}</button></Tip>
+      {TOOLS.map((x) => (
+        <Tip key={x.tool} label={t("web-main.annotate.toolKey", { tool: t(`web-main.annotate.tool.${x.tool}`), key: x.key })}><button type="button" className={pagesCss.iconBtn} aria-label={t(`web-main.annotate.tool.${x.tool}`)}
+          aria-pressed={tool === x.tool} onClick={() => pickTool(x.tool)}>{x.icon}</button></Tip>
       ))}
       <span className={css.gap} aria-hidden="true" />
       <div className={css.swatchWrap}>
-        <Tip label="颜色"><button type="button" className={pagesCss.iconBtn} aria-label="颜色" aria-expanded={palette} onClick={() => setPalette(!palette)}>
+        <Tip label={t("web-main.annotate.color")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.annotate.color")} aria-expanded={palette} onClick={() => setPalette(!palette)}>
           <span className={css.swatch} style={{ background: shownColor }} />
         </button></Tip>
         {palette && (
-          <div className={css.palette} role="listbox" aria-label="颜色">
+          <div className={css.palette} role="listbox" aria-label={t("web-main.annotate.color")}>
             {COLORS.map((c) => (
-              <button key={c.color} type="button" role="option" aria-selected={c.color === shownColor} aria-label={c.name} className={css.paletteItem}
+              <button key={c.color} type="button" role="option" aria-selected={c.color === shownColor} aria-label={t(`web-main.annotate.color.${c.name}`)} className={css.paletteItem}
                 onClick={() => pickColor(c.color)}><span className={css.swatch} style={{ background: c.color }} /></button>
             ))}
           </div>
         )}
       </div>
       {pickedShape && (
-        <Tip label="删除（Delete）"><button type="button" className={pagesCss.iconBtn} aria-label="删除" onClick={() => remove(pickedShape.id)}>
+        <Tip label={t("web-main.annotate.deleteKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("common.delete")} onClick={() => remove(pickedShape.id)}>
           <Trash size={18} />
         </button></Tip>
       )}
       <span className={css.gap} aria-hidden="true" />
-      <Tip label="撤销（⌘Z）"><button type="button" className={pagesCss.iconBtn} aria-label="撤销" disabled={!doc.past.length} onClick={undo}>
+      <Tip label={t("web-main.annotate.undoKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.annotate.undo")} disabled={!doc.past.length} onClick={undo}>
         <Retry size={18} />
       </button></Tip>
-      <Tip label="重做（⌘⇧Z）"><button type="button" className={pagesCss.iconBtn} aria-label="重做" disabled={!doc.future.length} onClick={redo}>
+      <Tip label={t("web-main.annotate.redoKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.annotate.redo")} disabled={!doc.future.length} onClick={redo}>
         <Redo size={18} />
       </button></Tip>
     </div>
@@ -576,17 +578,17 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
         return (
           <div key={s.id} className={css.pinAt} style={{ left: p.x, top: p.y, transform: `scale(${1 / scale})` }}
             onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-            <Tip label={open || phone ? undefined : comment || "写点什么"}><button type="button" className={marksCss.pin} data-open={open || undefined}
-              style={{ left: 0, top: 0, background: s.color, borderColor: halo, color: halo }} aria-label={`标注 ${n}`}
+            <Tip label={open || phone ? undefined : comment || t("web-main.annotate.write")}><button type="button" className={marksCss.pin} data-open={open || undefined}
+              style={{ left: 0, top: 0, background: s.color, borderColor: halo, color: halo }} aria-label={t("web-main.annotate.markN", { n })}
               onClick={() => { putDown(); setPicked(null); setNote(open ? null : s.id); }}>{n}</button></Tip>
             {phone ? null : open
               ? <div className={css.note} style={right ? { left: 28, top: -28 } : { right: 8, top: -28 }}>
-                  <input className={marksCss.noteInput} autoFocus value={comment} placeholder="对这处说点什么" aria-label={`标注 ${n} 的说明`}
+                  <input className={marksCss.noteInput} autoFocus value={comment} placeholder={t("web-main.annotate.commentHere")} aria-label={t("web-main.annotate.markComment", { n })}
                     onChange={(e) => { const v = e.target.value; setComments((all) => new Map(all).set(s.id, v)); }}
                     // Keys typed here are the comment's (not the viewer's zoom or steps).
                     onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); setNote(null); } }} />
                   <span className={marksCss.noteKey} aria-hidden="true">↵</span>
-                  <Tip label="删掉这处标注"><button type="button" className={marksCss.noteRemove} aria-label="删掉这处标注" onClick={() => remove(s.id)}>
+                  <Tip label={t("web-main.annotate.removeMark")}><button type="button" className={marksCss.noteRemove} aria-label={t("web-main.annotate.removeMark")} onClick={() => remove(s.id)}>
                     <Trash size={14} strokeWidth={1.75} />
                   </button></Tip>
                 </div>
@@ -632,7 +634,7 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
       {writing && (
         <foreignObject x={writing.at.x} y={writing.at.y} width={Math.max(measure(writing.text, writing.w) + writing.w * 2, writing.w * 6)}
           height={writing.w * LINE_HEIGHT}>
-          <input className={css.typing} autoFocus value={writing.text} placeholder="写点什么" aria-label="标注文字"
+          <input className={css.typing} autoFocus value={writing.text} placeholder={t("web-main.annotate.write")} aria-label={t("web-main.annotate.textLabel")}
             style={{ fontSize: writing.w, fontFamily: FONT, lineHeight: `${writing.w * LINE_HEIGHT}px`, color: writing.color, caretColor: writing.color,
               ["--halo" as string]: haloOf(writing.color) }}
             onPointerDown={(e) => e.stopPropagation()}
@@ -652,7 +654,7 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
   // over the keyboard, else the notes as cards over the tools (a tap opens one again). In the narrow screen's dark.
   const notes: (NoteView & { id: number })[] = shapes.flatMap((s) => {
     const n = numbers.get(s.id);
-    return n === undefined ? [] : [{ id: s.id, n, text: s.tool === "rect" ? "框" : "箭头", comment: comments.get(s.id) ?? "", color: s.color }];
+    return n === undefined ? [] : [{ id: s.id, n, text: s.tool === "rect" ? t("web-main.annotate.tool.rect") : t("web-main.annotate.tool.arrow"), comment: comments.get(s.id) ?? "", color: s.color }];
   }).sort((a, b) => a.n - b.n);
   const openNote = notes.find((x) => x.id === note);
   const keyboard = useKeyboard(phone && openNote !== undefined);

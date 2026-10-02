@@ -12,6 +12,7 @@ import { track } from "./telemetry.ts";
 import { useStation } from "./station.tsx";
 import { keepSentImage } from "./sentImages.ts";
 import { useToast } from "./toast.tsx";
+import { t } from "./i18n.ts";
 
 export const MAX_FILE = 50 * 1024 * 1024;
 
@@ -233,11 +234,11 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
       const tooBig = file.size > MAX_FILE;
       // Images show at once from the local file; the picture lives until the file leaves the draft.
       const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
-      setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null, ...(preview ? { preview, image: file } : {}) }]);
+      setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? t("web-main.draft.tooBig") : null, ...(preview ? { preview, image: file } : {}) }]);
       if (tooBig) continue;
       sender.current(file).then(
         (done) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, done } : f))),
-        (error: unknown) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, error: error instanceof Error ? error.message : "上传失败" } : f))),
+        (error: unknown) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, error: error instanceof Error ? error.message : t("web-main.draft.uploadFailed") } : f))),
       );
     }
   };
@@ -292,7 +293,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
         track("message_sent", { ...counts, ok: false });
         // One the station did not take waits in the outbox, which says so; one that never got there comes back to the
         // composer (unless something new is written there), and says why.
-        const why = `没发出去：${failure instanceof Error ? failure.message : String(failure)}`;
+        const why = t("web-main.draft.notSent", { error: failure instanceof Error ? failure.message : String(failure) });
         const { text: written, files: held, quotes: kept } = now.current;
         if (refused(failure) && (shown.current === from || from === undefined) && !written.trim() && !held.length && !kept.length) {
           restore(back);

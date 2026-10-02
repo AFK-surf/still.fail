@@ -11,9 +11,13 @@ import { Avatar, Segmented, Tip } from "./ui.tsx";
 import * as css from "./Usage.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as proseCss from "./Prose.css.ts";
+import { t } from "./i18n.ts";
 
 export type UsageDays = "7" | "30";
-export const DAYS: { value: UsageDays; label: string }[] = [{ value: "7", label: "7 天" }, { value: "30", label: "30 天" }];
+export const DAYS: { value: UsageDays; label: string }[] = [
+  { value: "7", get label() { return t("web-main.usage.days", { n: 7 }); } },
+  { value: "30", get label() { return t("web-main.usage.days", { n: 30 }); } },
+];
 
 export function useUsage(scope: string, days: UsageDays) {
   return useTopic<UsageView>({ topic: "usage", scope, days: Number(days) });
@@ -35,10 +39,10 @@ export function chatPath(item: UsageItem): string | null {
 export function Tiles({ view, pricesPath }: { view: UsageView; pricesPath?: string | undefined }) {
   return (
     <div className={css.tiles}>
-      {view.tiles.map((t, i) => {
-        const content = <><span className={css.tileLabel}>{t.label}</span><span className={css.tileValue}>{t.value}</span><span className={css.tileSub}>{i === 0 && pricesPath ? "查看价目表 →" : t.sub}</span></>;
-        return i === 0 && pricesPath ? <Link key={t.label} className={`${css.tile} ${css.tileLink}`} to={pricesPath} aria-label="折合费用，查看价目表">{content}</Link>
-          : <div key={t.label} className={css.tile}>{content}</div>;
+      {view.tiles.map((tile, i) => {
+        const content = <><span className={css.tileLabel}>{tile.label}</span><span className={css.tileValue}>{tile.value}</span><span className={css.tileSub}>{i === 0 && pricesPath ? t("web-main.usage.seePrices") : tile.sub}</span></>;
+        return i === 0 && pricesPath ? <Link key={tile.label} className={`${css.tile} ${css.tileLink}`} to={pricesPath} aria-label={t("web-main.usage.costPrices")}>{content}</Link>
+          : <div key={tile.label} className={css.tile}>{content}</div>;
       })}
     </div>
   );
@@ -56,7 +60,7 @@ export function DaysChart({ view }: { view: UsageView }) {
             {view.series.map((s, i) => <span key={s.key} className={css.legendItem}><span className={`${css.swatch} ${seriesClass(view.series, i)}`} />{s.name}</span>)}
           </div>
         )}
-        {view.max > 0 && <span className={css.top}>最多一天 {view.daily.find((d) => d.cost === view.max)?.costText}</span>}
+        {view.max > 0 && <span className={css.top}>{t("web-main.usage.top", { cost: view.daily.find((d) => d.cost === view.max)?.costText ?? "" })}</span>}
       </div>
       <div className={css.plot} data-many={many || undefined}>
         {view.max > 0 && <span className={css.ceiling} />}
@@ -65,7 +69,7 @@ export function DaysChart({ view }: { view: UsageView }) {
       <div className={css.labels} data-many={many || undefined}>
         {view.daily.map((d, i) => (
           <span key={d.day} className={css.label} data-today={d.today || undefined}>
-            {!many || d.today || (view.daily.length - 1 - i) % 7 === 0 ? (d.today ? "今天" : d.label) : ""}
+            {!many || d.today || (view.daily.length - 1 - i) % 7 === 0 ? (d.today ? t("web-main.usage.today") : d.label) : ""}
           </span>
         ))}
       </div>
@@ -77,7 +81,7 @@ function Day({ day, view }: { day: UsageDay; view: UsageView }) {
   const height = view.max > 0 ? (day.cost / view.max) * 100 : 0;
   const tip = (
     <span>
-      <span className={css.tipHead}>{day.today ? "今天" : day.label} · {day.costText}</span>
+      <span className={css.tipHead}>{day.today ? t("web-main.usage.today") : day.label} · {day.costText}</span>
       <span>{day.callsText}</span>
       {view.series.length > 1 && day.cost > 0 && view.series.map((s, i) => (day.parts[i] ?? 0) > 0 && (
         <span key={s.key} className={css.tipRow}><span className={`${css.swatch} ${seriesClass(view.series, i)}`} />{s.name}<span className={css.tipValue}>{day.partsText[i]}</span></span>
@@ -102,7 +106,7 @@ export function Ranking({ list, first = 8, open }: { list: UsageList; first?: nu
   return (
     <div className={css.rows}>
       {shown.map((item, i) => <Row key={item.key} item={item} rank={i + 1} kind={list.key} open={open} />)}
-      {list.items.length > first && <button type="button" className={css.more} onClick={() => setAll(!all)}>{all ? "收起" : `显示全部 ${list.items.length} 个`}</button>}
+      {list.items.length > first && <button type="button" className={css.more} onClick={() => setAll(!all)}>{all ? t("web-main.fold") : t("web-main.usage.showAll", { n: list.items.length })}</button>}
     </div>
   );
 }
@@ -138,7 +142,7 @@ export function Rankings({ view }: { view: UsageView }) {
   return (
     <div>
       <div className={css.listHead}>
-        <Segmented className={css.pickLists} label="按什么排" value={list.key} onChange={setShown} options={view.lists.map((l) => ({ value: l.key, label: l.title }))} />
+        <Segmented className={css.pickLists} label={t("web-main.usage.rankBy")} value={list.key} onChange={setShown} options={view.lists.map((l) => ({ value: l.key, label: l.title }))} />
       </div>
       <Ranking key={list.key} list={list} />
     </div>
@@ -159,7 +163,7 @@ export function UsageBody({ view, pricesPath }: { view: UsageView; pricesPath?: 
   return (
     <div className={css.usage}>
       <Tiles view={view} pricesPath={pricesPath} />
-      {view.empty ? <p className={css.empty}>{view.loading ? "正在读取…" : "这段时间没有用量"}</p> : (
+      {view.empty ? <p className={css.empty}>{view.loading ? t("web-main.reading") : t("web-main.usage.none")}</p> : (
         <>
           <DaysChart view={view} />
           <Rankings view={view} />
@@ -174,13 +178,13 @@ export function UsageBody({ view, pricesPath }: { view: UsageView; pricesPath?: 
 export function PriceTables({ view }: { view: UsageView }) {
   const tables = view.prices ?? [];
   return <div className={css.usage}>
-    {tables.length === 0 && <p className={css.empty}>暂时没有价目表</p>}
+    {tables.length === 0 && <p className={css.empty}>{t("web-main.usage.noPrices")}</p>}
     {tables.map((table, i) => <section className={css.card} key={i}>
       <h2 className={css.priceStation}>{table.station}</h2>
       <p className={css.priceNote}>{table.note}</p>
-      {table.rows.length === 0 ? <p className={css.priceNote}>这段时间没有模型用量</p> : <div className={conversationCss.markdown} style={{ paddingTop: 8 }}><div className={proseCss.tableScroll} style={{ width: "100%" }}>
+      {table.rows.length === 0 ? <p className={css.priceNote}>{t("web-main.usage.noModelUsage")}</p> : <div className={conversationCss.markdown} style={{ paddingTop: 8 }}><div className={proseCss.tableScroll} style={{ width: "100%" }}>
         <table style={{ width: "100%" }}>
-          <thead><tr><th scope="col">模型</th>{table.rows[0]?.rates.map((r) => <th scope="col" key={r.label}>{r.label}</th>)}</tr></thead>
+          <thead><tr><th scope="col">{t("web-main.model.models")}</th>{table.rows[0]?.rates.map((r) => <th scope="col" key={r.label}>{r.label}</th>)}</tr></thead>
           <tbody>{table.rows.map((row) => <tr key={row.model}><td>{row.model}</td>{row.rates.map((rate) => <td key={rate.label}>{rate.value}</td>)}</tr>)}</tbody>
         </table>
       </div></div>}

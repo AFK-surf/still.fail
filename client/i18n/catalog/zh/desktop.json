@@ -1,1 +1,27 @@
-{}
+{
+  "desktop.core.callFailed": "调用失败",
+  "desktop.core.exited": "核心进程退出了",
+  "desktop.core.exitedCode": "核心进程退出了（{code}）",
+  "desktop.menu.about": "关于 {app}",
+  "desktop.menu.checkUpdates": "检查更新…",
+  "desktop.menu.hide": "隐藏 {app}",
+  "desktop.menu.hideOthers": "隐藏其他",
+  "desktop.menu.quit": "退出 {app}",
+  "desktop.menu.services": "服务",
+  "desktop.menu.showAll": "全部显示",
+  "desktop.preview.badMessage": "看不懂这条消息",
+  "desktop.preview.fetchFailed": "没能从 station 取到：{error}",
+  "desktop.preview.gone": "预览已经失效：在 {app} 里重新打开它。",
+  "desktop.preview.redirectedAway": "这个网页跳到了别的地址：{location}",
+  "desktop.preview.tooManyRedirects": "跳转太多次了",
+  "desktop.station.enrolled": "这台 Mac 已经在一个 workspace 里",
+  "desktop.station.joining": "正在加入，稍等",
+  "desktop.station.notCarried": "这个版本的 app 没有带 station",
+  "desktop.update.available": "有新版本 {version}",
+  "desktop.update.availableDetail": "当前是 {current}。更新会下载新版本，然后重启 {app}",
+  "desktop.update.checkFailed": "检查更新失败",
+  "desktop.update.dev": "开发版不检查更新",
+  "desktop.update.later": "稍后",
+  "desktop.update.latest": "已是最新版本",
+  "desktop.update.update": "更新"
+}

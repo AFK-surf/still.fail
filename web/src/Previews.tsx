@@ -18,6 +18,7 @@ import { Tip } from "./ui.tsx";
 import { previewKey, viewportOf } from "./viewport.ts";
 import { follower, type Follower } from "./motion.ts";
 import * as css from "./Previews.css.ts";
+import { t } from "./i18n.ts";
 
 export { previewKey };
 
@@ -430,7 +431,7 @@ export function Previews() {
       {/* Over a small one's page (which lets the pointer through): its name, and a click goes back. */}
       {all.map((entry) => (
         <div key={entry.key} ref={(el) => { if (el) cards.current.set(entry.key, el); else cards.current.delete(entry.key); }} className={css.card} data-mode="hidden"
-          role="button" tabIndex={0} aria-label={`回到「${entry.name}」`} onPointerEnter={enter} onPointerLeave={leave}
+          role="button" tabIndex={0} aria-label={t("web-main.previews.back", { name: entry.name })} onPointerEnter={enter} onPointerLeave={leave}
           onClick={() => navigate(entry.back)} onKeyDown={(e) => { if (e.key === "Enter" && e.target === e.currentTarget) navigate(entry.back); }}>
           <span className={css.name}>
             <span className={css.dot} data-restarting={entry.restarting ? true : undefined} />
@@ -444,14 +445,14 @@ export function Previews() {
           <svg ref={shapeGrip} className={css.grip} aria-hidden><path /></svg>
           <span className={css.actions}>
             {!tucked && (
-              <Tip label="收起">
-                <button type="button" className={css.action} aria-label="收起成胶囊" onClick={(e) => { e.stopPropagation(); tuck(true); }}>
+              <Tip label={t("web-main.fold")}>
+                <button type="button" className={css.action} aria-label={t("web-main.previews.tuck")} onClick={(e) => { e.stopPropagation(); tuck(true); }}>
                   <Minus size={12} strokeWidth={2} />
                 </button>
               </Tip>
             )}
-            <Tip label="关闭">
-              <button type="button" className={css.action} aria-label={`关闭「${entry.name}」`} onClick={(e) => { e.stopPropagation(); closePreview(entry.key); }}>
+            <Tip label={t("common.close")}>
+              <button type="button" className={css.action} aria-label={t("web-main.previews.close", { name: entry.name })} onClick={(e) => { e.stopPropagation(); closePreview(entry.key); }}>
                 <Close size={12} strokeWidth={2} />
               </button>
             </Tip>
@@ -461,7 +462,7 @@ export function Previews() {
       {tucked && shown.length > 0 && (
         <button ref={capsule} type="button" className={css.capsule} onPointerEnter={enter} onPointerLeave={leave} onClick={() => tuck(false)}>
           <Web size={14} strokeWidth={1.75} />
-          {shown.length === 1 ? shown[0]!.name : `${shown.length} 个服务`}
+          {shown.length === 1 ? shown[0]!.name : t("web-main.previews.count", { n: shown.length })}
         </button>
       )}
     </div>

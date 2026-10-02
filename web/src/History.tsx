@@ -25,6 +25,7 @@ import * as shellCss from "./styles/shell.css.ts";
 import * as additionsCss from "./styles/additions.css.ts";
 
 import { NAME } from "./channel.ts";
+import { t } from "./i18n.ts";
 /**
  * The session as it ran: the main view of a session. `summary` says who it is (in the head), `actions` what can be done
  * to it right now (stop a turn, release the process), `details` unfolds under the head.
@@ -84,14 +85,14 @@ export function History({ station, sessionKey, summary, actions, details, focus 
   const usage = history?.usage;
 
   return (
-    <section className={css.history} aria-label="执行历史">
+    <section className={css.history} aria-label={t("web-main.history.label")}>
       <header className={css.historyHead}>
         <div className={css.historyIdentity}>{summary}</div>
         <div className={css.historyTools}>
           {actions}
           {(usage || details) && (
             <button type="button" className={controlsCss.textToggle} aria-expanded={usageOpen} onClick={() => setUsageOpen(!usageOpen)}>
-              详情 <ChevronDown {...ICON} size={14} className={usageOpen ? css.flip : undefined} />
+              {t("web-main.history.details")} <ChevronDown {...ICON} size={14} className={usageOpen ? css.flip : undefined} />
             </button>
           )}
         </div>
@@ -101,7 +102,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
         <dl className={css.usage}>{usage.map((u) => <div key={u.label}><dt>{u.label}</dt><dd>{u.value}</dd></div>)}</dl>
       )}
       <div className={css.historyBody} ref={body}>
-        {!history ? <p className={css.historyEdge}>正在读取执行历史…</p> : history.empty ? <p className={css.historyEdge}>{history.edge}</p> : (
+        {!history ? <p className={css.historyEdge}>{t("web-main.history.reading")}</p> : history.empty ? <p className={css.historyEdge}>{history.edge}</p> : (
           <>
             <p className={css.historyEdge}>{history.edge}</p>
             {items.map((item, i) => (
@@ -141,9 +142,9 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
         <div className={`${css.hReceived} ${css.hPost}`} data-failed={body.content.failed}>
           <div className={css.hLabel}>
             <Send {...ICON} size={14} />
-            发送到 {where(body.content.place ?? null) ?? <span className={css.hPlace}><SlackLogo size={12} />Slack</span>}
+            {t("web-main.history.sentTo")}{where(body.content.place ?? null) ?? <span className={css.hPlace}><SlackLogo size={12} />Slack</span>}
             {body.content.block && <Pill tone="blue">Block</Pill>}
-            {body.content.failed && <Pill tone="red">发送失败</Pill>}
+            {body.content.failed && <Pill tone="red">{t("web-main.history.sendFailed")}</Pill>}
           </div>
           <Fold className={`${css.hQuote} ${css.hQuoteMd} ${conversationCss.markdown}`}><Prose>{body.content.text}</Prose></Fold>
         </div>
@@ -151,7 +152,7 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
     case "mark":
       // A wait: how long it waited, said by the core once it is over; still waiting, it counts on here.
       return body.content.wait
-        ? <div className={css.hLabel}><Hourglass {...ICON} size={14} />{body.content.wait.until == null ? <span>等待中 <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}</div>
+        ? <div className={css.hLabel}><Hourglass {...ICON} size={14} />{body.content.wait.until == null ? <span>{t("web-main.activity.waiting")} <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}</div>
         : <div className={css.hMark}>{body.content.text}</div>;
     case "group":
       return <Group group={body.content} />;
@@ -175,7 +176,7 @@ function SlackName({ user, name, bound }: { user: string; name: string; bound: b
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} align="start" sideOffset={4} collisionPadding={8}>
-          <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => void api.slackIdentity(user, !bound).catch((error: unknown) => toast(`${bound ? "解除" : "绑定"}没有成功：${failure(error)}`))}>{bound ? "不是我" : "这是我"}</DropdownMenu.Item>
+          <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => void api.slackIdentity(user, !bound).catch((error: unknown) => toast(t(bound ? "web-main.history.unbindFailed" : "web-main.history.bindFailed", { error: failure(error) })))}>{bound ? t("web-main.history.notMe") : t("web-main.history.isMe")}</DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
@@ -185,7 +186,7 @@ function SlackName({ user, name, bound }: { user: string; name: string; bound: b
 function Received({ from, text, place }: { from: ReactNode; text: string; place?: ReactNode }) {
   return (
     <div className={css.hReceived}>
-      <div className={css.hLabel}><ReceivedIcon {...ICON} size={14} />收到来自 <strong>{from === "ember" ? NAME : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <> · {place}</>}</div>
+      <div className={css.hLabel}><ReceivedIcon {...ICON} size={14} />{t(from === "ember" ? "web-main.history.reminder.before" : "web-main.history.message.before")}<strong>{from === "ember" ? NAME : from}</strong>{t(from === "ember" ? "web-main.history.reminder.after" : "web-main.history.message.after")}{place && <> · {place}</>}</div>
       <Fold className={css.hQuote}>{text}</Fold>
     </div>
   );
@@ -199,17 +200,17 @@ function Group({ group }: { group: HistoryGroup }) {
       <Tip label={group.title || undefined}><button type="button" className={css.hGroupHead} aria-expanded={open} onClick={() => setOpen(!open)}>
         {open ? <ChevronDown {...ICON} size={14} /> : <ChevronRight {...ICON} size={14} />}
         <span>{group.summary}</span>
-        {failures > 0 && <Pill tone="red">{failures} 项失败</Pill>}
-        {pending > 0 && <Pill tone="accent">{pending} 项进行中</Pill>}
+        {failures > 0 && <Pill tone="red">{t("web-main.history.failures", { n: failures })}</Pill>}
+        {pending > 0 && <Pill tone="accent">{t("web-main.history.pending", { n: pending })}</Pill>}
       </button></Tip>
       {open && (
         <div className={css.hSteps}>
-          {thinking.map((t, i) => steps.length ? (
+          {thinking.map((thought, i) => steps.length ? (
             <details key={`t${i}`} className={css.hStep}>
-              <summary><span className={css.hStepName}>思考</span><span className={css.hStepHint}>{t.first}</span></summary>
-              <div className={`${css.hStepBody} ${shellCss.muted}`}>{t.text}</div>
+              <summary><span className={css.hStepName}>{t("web-main.history.thinking")}</span><span className={css.hStepHint}>{thought.first}</span></summary>
+              <div className={`${css.hStepBody} ${shellCss.muted}`}>{thought.text}</div>
             </details>
-          ) : <div key={`t${i}`} className={css.hThinking}>{t.text}</div>)}
+          ) : <div key={`t${i}`} className={css.hThinking}>{thought.text}</div>)}
           {steps.map((step, i) => (
             <details key={i} className={css.hStep} data-failed={step.failed}>
               <summary>
@@ -272,7 +273,7 @@ function Fold({ children, className }: { children: ReactNode; className?: string
   return (
     <div className={css.fold}>
       <div ref={box} className={`${css.foldBody}${className ? ` ${className}` : ""}`} data-folded={long && !open ? true : undefined}>{children}</div>
-      {long && <button type="button" className={`${controlsCss.textToggle} ${css.foldToggle}`} onClick={toggle}>{open ? "收起" : "展开"}</button>}
+      {long && <button type="button" className={`${controlsCss.textToggle} ${css.foldToggle}`} onClick={toggle}>{open ? t("web-main.fold") : t("web-main.unfold")}</button>}
     </div>
   );
 }

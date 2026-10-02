@@ -22,6 +22,7 @@ import * as waitingCss from "./styles/waiting.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
+import { t } from "./i18n.ts";
 
 export function fileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -400,9 +401,9 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
     body = <ImageViewer key={file.path} url={loaded.state === "ready" ? loaded.url : thumb!} file={file} setControls={setControls} swipe={swipe}
       waiting={loaded.state === "loading"} onMarking={setMarking} onClose={onClose} />;
   } else if (loaded.state === "loading" || (kind === null && loaded.state === "ready")) {
-    body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <Progress got={loaded.got} size={file.size} /> : <><span className={waitingCss.spinner} aria-hidden="true" />正在载入…</>}</div>;
+    body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <Progress got={loaded.got} size={file.size} /> : <><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.preview.loading")}</>}</div>;
   }
-  else if (loaded.state === "error") body = <div className={css2.fpNote}>载入失败：{loaded.message}</div>;
+  else if (loaded.state === "error") body = <div className={css2.fpNote}>{t("web-main.preview.loadFailed", { error: loaded.message })}</div>;
   else {
     const { url, blob } = loaded;
     switch (kind) {
@@ -412,7 +413,7 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
       case "pdf": body = <PdfViewer blob={blob} />; break;
       case "markdown": case "csv": case "html": case "code": case "text":
         body = <TextViewer blob={blob} kind={kind} language={known.language} name={file.name} setControls={setControls} onMove={wake} />; break;
-      default: body = <div className={css2.fpNote}>这种文件没法在这里预览<a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />下载</a></div>;
+      default: body = <div className={css2.fpNote}>{t("web-main.preview.unsupported")}<a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />{t("web-main.preview.download")}</a></div>;
     }
   }
   return (
@@ -433,15 +434,15 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
         onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onBar.current = false; wake(); }}>
         <div className={css2.fpTitle}>
           <Tip label={file.path}><RDialog.Title className={css2.fpName}>{file.name}</RDialog.Title></Tip>
-          <span className={css2.fpMeta}>{images.length > 1 && at >= 0 ? `${at + 1} / ${images.length} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${KIND_LABEL[kind as PreviewKind]}` : ""}</span>
+          <span className={css2.fpMeta}>{images.length > 1 && at >= 0 ? `${at + 1} / ${images.length} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}</span>
         </div>
         {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
         {controls}
         {marking ? null : loaded.state === "ready"
-          ? <Tip label="下载"><a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label="下载"><Download size={18} /></a></Tip>
+          ? <Tip label={t("web-main.preview.download")}><a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label={t("web-main.preview.download")}><Download size={18} /></a></Tip>
           // Its place kept until it comes.
           : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Download size={18} /></span>}
-        <Tip label="关闭（Esc）"><RDialog.Close className={pagesCss.iconBtn} aria-label="关闭"><Close size={18} /></RDialog.Close></Tip>
+        <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pagesCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
       </header>
       <div className={css2.fpBody}>
         <div ref={slide} className={css2.fpSlide}>
@@ -451,8 +452,8 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
           {known.kind === "image" && !marking && after && <Peek key={after.file.path} shown={after} side={1} />}
         </div>
         {images.length > 1 && at >= 0 && !marking && <>
-          <Tip label="上一张（←）"><button type="button" className={css2.fpStep} data-side="before" aria-label="上一张" disabled={!before} onClick={() => go(-1)}><ChevronLeft size={22} /></button></Tip>
-          <Tip label="下一张（→）"><button type="button" className={css2.fpStep} data-side="after" aria-label="下一张" disabled={!after} onClick={() => go(1)}><ChevronRight size={22} /></button></Tip>
+          <Tip label={t("web-main.preview.prevKey")}><button type="button" className={css2.fpStep} data-side="before" aria-label={t("web-main.preview.prev")} disabled={!before} onClick={() => go(-1)}><ChevronLeft size={22} /></button></Tip>
+          <Tip label={t("web-main.preview.nextKey")}><button type="button" className={css2.fpStep} data-side="after" aria-label={t("web-main.preview.next")} disabled={!after} onClick={() => go(1)}><ChevronRight size={22} /></button></Tip>
         </>}
       </div>
     </RDialog.Content>
@@ -472,7 +473,9 @@ async function looksLikeText(blob: Blob): Promise<boolean> {
   }
 }
 
-const KIND_LABEL: Partial<Record<PreviewKind, string>> = { image: "图片", video: "视频", audio: "音频", pdf: "PDF", markdown: "Markdown", csv: "表格", html: "网页", code: "代码", text: "文本" };
+const KIND_LABEL: Partial<Record<PreviewKind, string>> = { image: "web-main.preview.kind.image", video: "web-main.preview.kind.video", audio: "web-main.preview.kind.audio", pdf: "PDF", markdown: "Markdown", csv: "web-main.preview.kind.csv", html: "web-main.preview.kind.html", code: "web-main.preview.kind.code", text: "web-main.preview.kind.text" };
+/** A kind's name: its key's words (PDF and Markdown are their own names). */
+const kindLabel = (kind: PreviewKind) => { const k = KIND_LABEL[kind] ?? ""; return k.startsWith("web-main.") ? t(k) : k; };
 
 // ── images: zoom and pan ───────────────────────────────────────────────
 
@@ -540,8 +543,8 @@ function Progress({ got, size, inBar = false }: { got: FileProgress | null | und
   const total = got?.total ?? (size > 0 ? size : null);
   const part = got && total ? Math.min(1, got.loaded / total) : null;
   return (
-    <div className={inBar ? css2.fpHeadProgress : css2.fpProgress} role="progressbar" aria-label="正在载入" aria-valuemin={0} aria-valuemax={100} aria-valuenow={part === null ? undefined : Math.round(part * 100)}>
-      <span className={css2.fpProgressText}>{got && total ? <>正在载入 <b>{fileSize(got.loaded)}</b> / {fileSize(total)}</> : "正在载入…"}</span>
+    <div className={inBar ? css2.fpHeadProgress : css2.fpProgress} role="progressbar" aria-label={t("web-main.preview.loadingLabel")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={part === null ? undefined : Math.round(part * 100)}>
+      <span className={css2.fpProgressText}>{got && total ? <>{t("web-main.preview.loadingLabel")} <b>{fileSize(got.loaded)}</b> / {fileSize(total)}</> : t("web-main.preview.loading")}</span>
       <span className={css2.fpProgressTrack}><span className={css2.fpProgressBar} style={part === null ? undefined : { width: `${part * 100}%` }} data-unknown={part === null || undefined} /></span>
     </div>
   );
@@ -743,10 +746,10 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
   useEffect(() => {
     setControls(
       <span className={css2.fpZoom}>
-        <Tip label="缩小（-）"><button type="button" className={pagesCss.iconBtn} aria-label="缩小" disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}><Minus size={18} /></button></Tip>
-        <Tip label="适应窗口（0）"><button type="button" className={`${css2.fpToolText} ${css2.fpPercent}`} onClick={reset}>{Math.round(scale * 100)}%</button></Tip>
-        <Tip label="放大（+）"><button type="button" className={pagesCss.iconBtn} aria-label="放大" disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}><Plus size={18} /></button></Tip>
-        <Tip label="原始大小（1）"><button type="button" className={css2.fpToolText} onClick={() => zoomTo(1)}>1:1</button></Tip>
+        <Tip label={t("web-main.preview.zoomOutKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.preview.zoomOut")} disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}><Minus size={18} /></button></Tip>
+        <Tip label={t("web-main.preview.fitKey")}><button type="button" className={`${css2.fpToolText} ${css2.fpPercent}`} onClick={reset}>{Math.round(scale * 100)}%</button></Tip>
+        <Tip label={t("web-main.preview.zoomInKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.preview.zoomIn")} disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}><Plus size={18} /></button></Tip>
+        <Tip label={t("web-main.preview.actualKey")}><button type="button" className={css2.fpToolText} onClick={() => zoomTo(1)}>1:1</button></Tip>
       </span>,
     );
   }, [scale, minScale, zoomTo, reset, setControls]);
@@ -796,7 +799,7 @@ function PdfViewer({ blob }: { blob: Blob }) {
   }, []);
   return (
     <div ref={page} className={`${css2.fpPage} ${css2.fpPdf}`}>
-      {error ? <div className={css2.fpPlain}>这个 PDF 打不开：{error}</div>
+      {error ? <div className={css2.fpPlain}>{t("web-main.preview.pdfFailed", { error })}</div>
         : !doc || width <= 0 ? <div className={css2.fpPlain}><span className={waitingCss.spinner} aria-hidden="true" /></div>
         : Array.from({ length: doc.numPages }, (_, i) => <PdfPage key={i} doc={doc} number={i + 1} width={width} />)}
     </div>
@@ -840,7 +843,7 @@ function PdfPage({ doc, number, width }: { doc: PDFDocumentProxy; number: number
     return () => { live = false; task?.cancel(); };
   }, [doc, number, near, size, width]);
   const shown = size ? { width, aspectRatio: `${size.w} / ${size.h}` } : { width, aspectRatio: "210 / 297" };
-  return <canvas ref={canvas} className={css2.fpPdfPage} style={shown} aria-label={`第 ${number} 页`} />;
+  return <canvas ref={canvas} className={css2.fpPdfPage} style={shown} aria-label={t("web-main.preview.page", { n: number })} />;
 }
 
 // ── text ───────────────────────────────────────────────────────────────
@@ -878,12 +881,12 @@ function TextViewer({ blob, kind, language, name, setControls, onMove }: {
   useEffect(() => {
     if (!rendered) return;
     setControls(
-      <Segmented label="显示方式" value={source ? "source" : "view"} onChange={(v) => setSource(v === "source")}
-        options={[{ value: "view", label: "预览" }, { value: "source", label: "源码" }]} />,
+      <Segmented label={t("web-main.preview.showAs")} value={source ? "source" : "view"} onChange={(v) => setSource(v === "source")}
+        options={[{ value: "view", label: t("web-main.preview.rendered") }, { value: "source", label: t("web-main.preview.source") }]} />,
     );
     return () => setControls(null);
   }, [rendered, source, setControls]);
-  if (text === null) return <div className={css2.fpNote}><span className={waitingCss.spinner} aria-hidden="true" />正在载入…</div>;
+  if (text === null) return <div className={css2.fpNote}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.preview.loading")}</div>;
   let content: ReactNode;
   if (kind === "html" && !source) {
     // Its scripts run, but in an origin of its own: nothing of still.fail's is reachable from it.
@@ -903,7 +906,7 @@ function TextViewer({ blob, kind, language, name, setControls, onMove }: {
   }
   return (
     <div className={css2.fpPage}>
-      {cut && <div className={css2.fpCut}>文件较大，只显示前 {fileSize(SHOW_LIMIT)}，完整内容请下载。</div>}
+      {cut && <div className={css2.fpCut}>{t("web-main.preview.cut", { size: fileSize(SHOW_LIMIT) })}</div>}
       {content}
     </div>
   );
@@ -939,11 +942,11 @@ function CsvTable({ text, tab }: { text: string; tab: boolean }) {
     <>
       <div className={css2.fpTableWrap}>
         <table className={css2.fpTable}>
-          <thead><tr><th aria-label="行号" />{head.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
+          <thead><tr><th aria-label={t("web-main.preview.lineNumber")} />{head.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
           <tbody>{body.slice(0, TABLE_ROWS).map((r, i) => <tr key={i}><td className={css2.fpRow}>{i + 1}</td>{head.map((_, j) => <td key={j}>{r[j] ?? ""}</td>)}</tr>)}</tbody>
         </table>
       </div>
-      {more && <div className={css2.fpCut}>只显示前 {TABLE_ROWS} 行，完整内容请下载。</div>}
+      {more && <div className={css2.fpCut}>{t("web-main.preview.rowsCut", { n: TABLE_ROWS })}</div>}
     </>
   );
 }

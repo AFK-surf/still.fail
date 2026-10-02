@@ -25,6 +25,7 @@ import { MobileComposer, type HostComposer } from "./mobile/ChatHost.tsx";
 import * as css from "./Decisions.css.ts";
 import * as chatCss from "./Chat.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
+import { t } from "./i18n.ts";
 
 /** How far (of its width) the decision is swiped before letting go takes it, and how fast a fling has to be (px/ms). */
 const TAKES = 0.35;
@@ -44,10 +45,10 @@ export function DecisionOptions({ station, thread, seq, options, onPick, classNa
   const pick = (o: DecisionOption) => {
     if (sending) return;
     onPick?.(o);
-    act(call("decision.answer", { station, thread, seq, option: o.label }), `回复「${o.label}」`);
+    act(call("decision.answer", { station, thread, seq, option: o.label }), t("web-main.decisions.answerWhat", { option: o.label }));
   };
   return (
-    <div className={`${css.options} ${className ?? ""}`} role="group" aria-label="选项">
+    <div className={`${css.options} ${className ?? ""}`} role="group" aria-label={t("web-main.decisions.options")}>
       {options.map((o) => {
         const busy = sending?.params.option === o.label;
         return (
@@ -96,10 +97,10 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
       attachments: written.files.flatMap((f) => f.done ? [f.done] : []),
       quotes: written.quotes.map(({ id: _, ...q }) => q),
     });
-    act(reply, "回复");
+    act(reply, t("web-main.decisions.replyWhat"));
     reply.then(() => { written.take(); onSent?.(); }, () => undefined).finally(() => { replying.current = false; setAsked(false); onSending?.(false); });
   };
-  const spec: HostComposer = { station, session, placeholder: placeholder || "发消息", offline: false, send };
+  const spec: HostComposer = { station, session, placeholder: placeholder || t("web-main.composer.placeholder"), offline: false, send };
   const latest = useRef<HostComposer | null>(spec);
   latest.current = spec;
   const now = useRef(draft);
@@ -296,8 +297,8 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
     <div ref={host} className={`${css.deck} ${className ?? ""}`}>
       {front && (
         <div ref={under} className={css.under} aria-hidden="true">
-          <span className={css.underSide} data-side="right">不再提醒</span>
-          <span className={css.underSide} data-side="left">待定</span>
+          <span className={css.underSide} data-side="right">{t("web-main.decisions.dismiss")}</span>
+          <span className={css.underSide} data-side="left">{t("web-main.decisions.defer")}</span>
         </div>
       )}
       {body}

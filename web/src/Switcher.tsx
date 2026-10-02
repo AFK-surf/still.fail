@@ -12,6 +12,7 @@ import { ModelLogo, Time } from "./ui.tsx";
 import * as css from "./Switcher.css.ts";
 
 import { NAME } from "./channel.ts";
+import { t } from "./i18n.ts";
 /** Mounted once under a scope's pages (a workspace's): its new chat and settings are at these paths. */
 export function GlobalShortcuts({ scope, newChat, settings }: { scope: string; newChat: string; settings: string }) {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ function ChatSwitcher({ scope, open, onClose }: { scope: string; open: boolean; 
       <RDialog.Portal>
         <RDialog.Overlay className={css.overlay} />
         <RDialog.Content className={css.switcher} aria-describedby={undefined}>
-          <RDialog.Title className={css.hidden}>切换对话</RDialog.Title>
+          <RDialog.Title className={css.hidden}>{t("web-main.switcher.title")}</RDialog.Title>
           {open && <Finder scope={scope} onClose={onClose} />}
         </RDialog.Content>
       </RDialog.Portal>
@@ -65,7 +66,7 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
   };
   return (
     <>
-      <input className={css.search} autoFocus placeholder="搜索对话" aria-label="搜索对话" value={query} spellCheck={false}
+      <input className={css.search} autoFocus placeholder={t("web-main.switcher.search")} aria-label={t("web-main.switcher.search")} value={query} spellCheck={false}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
           if (e.nativeEvent.isComposing) return;
@@ -73,9 +74,9 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
           if (step) { e.preventDefault(); setAt((a) => Math.max(0, Math.min(found.length - 1, a + step))); }
           else if (e.key === "Enter") { e.preventDefault(); go(found[at]); }
         }} />
-      <div className={css.results} ref={list} role="listbox" aria-label="对话">
-        {search.error && !view && <p className={css.none}>更新 {NAME} 后才能搜索对话</p>}
-        {view && found.length === 0 && <p className={css.none}>{query ? "没有找到对话" : "还没有对话"}</p>}
+      <div className={css.results} ref={list} role="listbox" aria-label={t("web-main.chat.label")}>
+        {search.error && !view && <p className={css.none}>{t("web-main.switcher.update", { app: NAME })}</p>}
+        {view && found.length === 0 && <p className={css.none}>{query ? t("web-main.switcher.noMatch") : t("web-main.switcher.none")}</p>}
         {found.map((item, i) => (
           <div key={`${item.station}/${item.id}`} className={css.row} role="option" aria-selected={i === at} data-at={i}
             onMouseMove={() => { if (i !== at) setAt(i); }} onClick={() => go(item)}>

@@ -5,6 +5,7 @@
 
 import { useTopic } from "./core/react.ts";
 import type { DoingItem, DoingView } from "./core/shapes.ts";
+import { t } from "./i18n.ts";
 
 type Words = Record<string, string | number | boolean | null | undefined>;
 
@@ -34,5 +35,5 @@ export function useDoing(calls: string | readonly string[], on: Words = {}): boo
 /** Why one of `calls` about what `on` names failed a moment ago (shown a few seconds); undefined when none did. */
 export function useDoingFailed(calls: string | readonly string[], on: Words = {}): string | undefined {
   const item = useDoingList().findLast((i) => failed(i) && doingMatches(i, calls, on));
-  return item ? (item.error ?? "失败了") : undefined;
+  return item ? (item.error ?? t("web-main.doing.failed")) : undefined;
 }

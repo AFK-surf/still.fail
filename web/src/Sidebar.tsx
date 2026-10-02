@@ -27,6 +27,7 @@ import * as decisionsCss from "./Decisions.css.ts";
 import { openedAt } from "./DecisionDesk.tsx";
 import * as chatCss from "./styles/chat.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
+import { t } from "./i18n.ts";
 
 /**
  * The chats of a workspace, newest first and
@@ -49,9 +50,9 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
   return (
     <>
       <div className={nav.navNew}>
-        <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Compose {...ICON} />新建对话</NavLink>
+        <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Compose {...ICON} />{t("web-main.sidebar.newChat")}</NavLink>
         {/* The filter, and the archive under it: nothing to narrow or look back on with no station at all. */}
-        {!(all.value && !all.value.loading && all.value.stations.length === 0) && <MineFilter label="会话" mine="我参与的" compact archive={archive} watching />}
+        {!(all.value && !all.value.loading && all.value.stations.length === 0) && <MineFilter compact archive={archive} watching />}
       </div>
       <div className={nav.navSlider}>
         <div className={nav.navTrack} data-filter={filter}>
@@ -105,7 +106,7 @@ export function DecisionsEntry({ scope, to }: { scope: string; to: string }) {
   return (
     <NavLink className={`${nav.navRow} ${decisionsCss.sideEntry}`} to={to} onClick={(e) => openedAt(e.currentTarget)} aria-label={`奏：${n} 件等你决定`}>
       <span className={decisionsCss.sideEntryLead}>奏</span>
-      <span className={decisionsCss.sideEntryCount}>{n} 件等你决定</span>
+      <span className={decisionsCss.sideEntryCount}>{t("web-main.decisions.count", { n })}</span>
     </NavLink>
   );
 }
@@ -132,10 +133,10 @@ function ChatPane({ chats, scope, filter, stationsPage, hidden }: { chats: Retur
       {days.length === 0 && note.failing.map((s) => <Tip key={s.station} label={s.message ?? undefined}><p className={`${nav.navEmpty} ${nav.navError}`}>{s.text}</p></Tip>)}
       {days.length === 0 && note.reading && !chats.error && <SkeletonRows />}
       {days.length === 0 && view && note.empty && (
-        <p className={nav.navEmpty}>{filter === "mine" ? "没有你参与的会话。"
-          : filter === "watching" ? "没有在监控的会话。"
-          : stations.length ? "还没有会话。"
-          : <>还没有 station，到 <NavLink className={chatCss.inlineLink} to={stationsPage}>设置 → Station</NavLink> 添加。</>}</p>
+        <p className={nav.navEmpty}>{filter === "mine" ? t("web-main.sidebar.noneMine")
+          : filter === "watching" ? t("web-main.sidebar.noneWatching")
+          : stations.length ? t("web-main.sidebar.none")
+          : <>{t("web-main.sidebar.noStation.before")}<NavLink className={chatCss.inlineLink} to={stationsPage}>{t("web-main.sidebar.noStation.link")}</NavLink>{t("web-main.sidebar.noStation.after")}</>}</p>
       )}
       {days.map((day) => (
         <section key={day.daysAgo} aria-label={day.label}>
@@ -216,7 +217,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
           {editing
             ? <TitleInput value={item.title} onDone={(title) => { setEditing(false); rename(item, title); }} />
             : <span className={nav.navSessionTitle}>{renamingTo ?? item.title}</span>}
-          {(saving.running || saving.error !== undefined) && !editing && <span className={nav.sessionKind}><DoingShown state={saving} className={nav.rowSpinner} label="正在保存" side="right" /></span>}
+          {(saving.running || saving.error !== undefined) && !editing && <span className={nav.sessionKind}><DoingShown state={saving} className={nav.rowSpinner} label={t("web-main.saving")} side="right" /></span>}
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Slack is the only kind of connect there is. */}
           {/* Its station offline, or its link coming back: marked unplugged there (the core says which, row by row). A
@@ -245,15 +246,15 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         <ContextMenu.Portal>
           <ContextMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} collisionPadding={8} onCloseAutoFocus={(e) => e.preventDefault()}>
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
-            {item.pinned != null && <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => void pin()}><Pin size={14} />{item.pinned ? "取消固定" : "固定"}</ContextMenu.Item>}
-            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setEditing(true)}><Edit size={14} />重命名</ContextMenu.Item>
-            <ContextMenu.Item className={controlsCss.menuItem} onSelect={archiveAsked}><Archive size={14} />归档</ContextMenu.Item>
+            {item.pinned != null && <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => void pin()}><Pin size={14} />{item.pinned ? t("web-main.chat.unpin") : t("web-main.chat.pin")}</ContextMenu.Item>}
+            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setEditing(true)}><Edit size={14} />{t("web-main.chat.rename")}</ContextMenu.Item>
+            <ContextMenu.Item className={controlsCss.menuItem} onSelect={archiveAsked}><Archive size={14} />{t("web-main.chat.archive")}</ContextMenu.Item>
           </ContextMenu.Content>
         </ContextMenu.Portal>
       </ContextMenu.Root>
     ) : row}
     {menu && !editing && (item.archivable ? <ArchiveChip item={item} archive={archiveAsked} /> : <ArchiveButton item={item} archive={archiveAsked} />)}
-    {item.watch && <Confirm open={asking} title={`归档「${item.title}」？`} description={item.watch.ask} action="归档"
+    {item.watch && <Confirm open={asking} title={t("web-main.chat.archiveAsk", { title: item.title })} description={item.watch.ask} action={t("web-main.chat.archive")}
       onConfirm={() => { setAsking(false); void archive(); }} onClose={() => setAsking(false)} />}
     </div>
   );
@@ -274,9 +275,9 @@ function useArchive(item: ChatItem, to: string) {
     if (decodeURIComponent(path) === decodeURIComponent(to) && !goToNeighbour(1) && !goToNeighbour(-1)) navigate(`${stationBase(item.station)}/chats`);
     try {
       await api.archive(item, true);
-      toast("已归档");
+      toast(t("web-main.chat.archived"));
     } catch (error) {
-      toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
+      toast(t("web-main.chat.archiveFailed", { error: error instanceof Error ? error.message : String(error) }));
     }
   };
 }
@@ -310,7 +311,7 @@ function usePin(item: ChatItem) {
     try {
       await api.pin(item, !item.pinned);
     } catch (error) {
-      toast(`没能${item.pinned ? "取消固定" : "固定"}：${failure(error)}`);
+      toast(t(item.pinned ? "web-main.chat.unpinFailed" : "web-main.chat.pinFailed", { error: failure(error) }));
     }
   };
 }
@@ -318,8 +319,8 @@ function usePin(item: ChatItem) {
 /** Beside a chat's row while pointed at: puts it in the archive. */
 function ArchiveButton({ item, archive }: { item: ChatItem; archive: () => void }) {
   return (
-    <Tip label="归档" side="right">
-      <button type="button" className={`${pagesCss.iconBtn} ${nav.rowArchive}`} aria-label={`归档「${item.title}」`} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
+    <Tip label={t("web-main.chat.archive")} side="right">
+      <button type="button" className={`${pagesCss.iconBtn} ${nav.rowArchive}`} aria-label={t("web-main.chat.archiveNamed", { title: item.title })} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
         <Archive size={16} />
       </button>
     </Tip>
@@ -329,8 +330,8 @@ function ArchiveButton({ item, archive }: { item: ChatItem; archive: () => void 
 /** Nothing left in its chat (the core's `archivable`): 归档 in words at the row's end while it is pointed at. */
 function ArchiveChip({ item, archive }: { item: ChatItem; archive: () => void }) {
   return (
-    <button type="button" className={nav.rowArchiveChip} aria-label={`归档「${item.title}」`} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
-      归档
+    <button type="button" className={nav.rowArchiveChip} aria-label={t("web-main.chat.archiveNamed", { title: item.title })} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
+      {t("web-main.chat.archive")}
     </button>
   );
 }

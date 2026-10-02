@@ -8,6 +8,7 @@ import { Check, Devices, Landscape, Minus, Plus } from "./icons.tsx";
 import { Tip } from "./ui.tsx";
 import { LIMIT, PRESETS, presetOf, setViewport, type Viewport } from "./viewport.ts";
 import * as css from "./ViewportSize.css.ts";
+import { t } from "./i18n.ts";
 
 const TOUCH = "(hover: none) and (pointer: coarse)";
 export function useTouch(): boolean {
@@ -19,7 +20,7 @@ export function useTouch(): boolean {
 }
 
 /** `390 × 844`, with `×` a little apart. */
-export const dims = (w: number, h: number | null) => `${Math.round(w)} × ${h === null ? "自动" : Math.round(h)}`;
+export const dims = (w: number, h: number | null) => `${Math.round(w)} × ${h === null ? t("web-main.viewport.auto") : Math.round(h)}`;
 
 /** How the page is drawn now, and moving it on: zooming in and out (about `at` in the stage, else its middle), and back
  * to fitted. */
@@ -36,7 +37,7 @@ export function ViewportButton({ viewKey, viewport, zoom, turn, compact = false,
   const [open, setOpen] = useState(false);
   if (touch) {
     return folded ? (
-      <button type="button" className={css.button} data-sized={viewport ? true : undefined} aria-label="页面尺寸" onClick={unfold}>
+      <button type="button" className={css.button} data-sized={viewport ? true : undefined} aria-label={t("web-main.viewport.title")} onClick={unfold}>
         <Devices size={14} strokeWidth={1.75} />
         {viewport && <span className={css.buttonText}>{dims(viewport.width, viewport.height)}</span>}
       </button>
@@ -46,9 +47,9 @@ export function ViewportButton({ viewKey, viewport, zoom, turn, compact = false,
   return (
     <>
       <Popover.Root open={open} onOpenChange={setOpen}>
-        <Tip label={open ? null : "页面尺寸"}>
+        <Tip label={open ? null : t("web-main.viewport.title")}>
           <Popover.Trigger asChild>
-            <button type="button" className={css.button} data-sized={viewport && !compact ? true : undefined} aria-label="页面尺寸">
+            <button type="button" className={css.button} data-sized={viewport && !compact ? true : undefined} aria-label={t("web-main.viewport.title")}>
               <Devices size={14} strokeWidth={1.75} />
               {viewport && !compact && (
                 <span className={css.buttonText}>
@@ -66,8 +67,8 @@ export function ViewportButton({ viewKey, viewport, zoom, turn, compact = false,
         </Popover.Portal>
       </Popover.Root>
       {turnable && (
-        <Tip label="横竖互换">
-          <button type="button" className={css.turnBar} aria-label="横竖互换" onClick={turn}><Landscape size={15} strokeWidth={1.75} /></button>
+        <Tip label={t("web-main.viewport.turn")}>
+          <button type="button" className={css.turnBar} aria-label={t("web-main.viewport.turn")} onClick={turn}><Landscape size={15} strokeWidth={1.75} /></button>
         </Tip>
       )}
     </>
@@ -83,7 +84,7 @@ export function ViewportSheet({ open, onOpenChange, viewKey, viewport, turn }:
         <Dialog.Overlay className={css.sheetShade} />
         <Dialog.Content className={css.sheet} aria-describedby={undefined} onOpenAutoFocus={(e) => e.preventDefault()}>
           <span className={css.sheetGrab} aria-hidden />
-          <Dialog.Title className={css.sheetTitle}>页面尺寸</Dialog.Title>
+          <Dialog.Title className={css.sheetTitle}>{t("web-main.viewport.title")}</Dialog.Title>
           <Panel viewKey={viewKey} viewport={viewport} turn={turn} touch done={() => onOpenChange(false)} />
         </Dialog.Content>
       </Dialog.Portal>
@@ -100,7 +101,7 @@ function Panel({ viewKey, viewport, zoom, turn, touch = false, done }:
   const choose = (v: Viewport | null) => { set(v); done(); };
   return (
     <div className={css.panel} data-touch={touch || undefined}>
-      <Option checked={!viewport} name="自适应" note="跟随预览区" onChoose={() => choose(null)} />
+      <Option checked={!viewport} name={t("web-main.viewport.fluid")} note={t("web-main.viewport.fluidNote")} onChoose={() => choose(null)} />
       {PRESETS.map((p) => (
         // Each as it is made (a phone upright, a laptop wide); the one chosen stays as it was turned.
         <Option key={p.name} checked={preset === p.name} name={p.name} note={dims(p.width, p.height)}
@@ -112,15 +113,15 @@ function Panel({ viewKey, viewport, zoom, turn, touch = false, done }:
         <>
           <div className={css.sep} />
           <div className={css.row}>
-            <span className={css.label}>缩放</span>
+            <span className={css.label}>{t("web-main.viewport.zoom")}</span>
             <div className={css.zoom}>
-              <button type="button" className={css.turn} aria-label="缩小" disabled={!viewport} onClick={() => zoom.zoom(1 / 1.25)}><Minus size={14} strokeWidth={2} /></button>
+              <button type="button" className={css.turn} aria-label={t("web-main.preview.zoomOut")} disabled={!viewport} onClick={() => zoom.zoom(1 / 1.25)}><Minus size={14} strokeWidth={2} /></button>
               <span className={css.zoomValue}>{viewport ? `${Math.round(zoom.scale * 100)}%` : "—"}</span>
-              <button type="button" className={css.turn} aria-label="放大" disabled={!viewport} onClick={() => zoom.zoom(1.25)}><Plus size={14} strokeWidth={2} /></button>
+              <button type="button" className={css.turn} aria-label={t("web-main.preview.zoomIn")} disabled={!viewport} onClick={() => zoom.zoom(1.25)}><Plus size={14} strokeWidth={2} /></button>
             </div>
-            <button type="button" className={css.fit} disabled={!viewport || !zoom.free} onClick={zoom.fit}>适应</button>
+            <button type="button" className={css.fit} disabled={!viewport || !zoom.free} onClick={zoom.fit}>{t("web-main.viewport.fit")}</button>
           </div>
-          <p className={css.hint}>拖灰底或按住空格拖页面来移动，⌘/Ctrl + 滚轮缩放，双击灰底适应</p>
+          <p className={css.hint}>{t("web-main.viewport.hint")}</p>
         </>
       )}
     </div>
@@ -154,8 +155,9 @@ function Custom({ viewport, set, turn }: { viewport: Viewport | null; set(v: Vie
     if (viewport && width === viewport.width && height === viewport.height) return;
     set({ width, height });
   };
-  const field = (value: string, change: (v: string) => void, label: string, placeholder: string) => (
-    <input className={css.field} value={value} inputMode="numeric" aria-label={label} placeholder={placeholder}
+  const field = (value: string, change: (v: string) => void, which: "width" | "height") => (
+    <input className={css.field} value={value} inputMode="numeric" aria-label={t(`web-main.viewport.${which}`)}
+      placeholder={which === "width" ? t("web-main.viewport.width") : t("web-main.viewport.auto")}
       onChange={(e) => change(e.target.value.replace(/\D/g, "").slice(0, 4))}
       onFocus={(e) => { setTyping(true); e.currentTarget.select(); }}
       onBlur={() => { setTyping(false); commit(); }}
@@ -164,7 +166,7 @@ function Custom({ viewport, set, turn }: { viewport: Viewport | null; set(v: Vie
         else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
           // Up and down step it (by 10 with shift), as a number field would.
           e.preventDefault();
-          const now = parseInt(value, 10) || (label === "宽" ? viewport?.width ?? 390 : 800);
+          const now = parseInt(value, 10) || (which === "width" ? viewport?.width ?? 390 : 800);
           const next = Math.max(LIMIT.min, Math.min(LIMIT.max, now + (e.key === "ArrowUp" ? 1 : -1) * (e.shiftKey ? 10 : 1)));
           change(String(next));
         }
@@ -173,14 +175,14 @@ function Custom({ viewport, set, turn }: { viewport: Viewport | null; set(v: Vie
   const turnable = viewport !== null && viewport.height !== null;
   return (
     <div className={css.row}>
-      <span className={css.label}>自定义</span>
+      <span className={css.label}>{t("web-main.viewport.custom")}</span>
       <div className={css.fields}>
-        {field(w, setW, "宽", "宽")}
+        {field(w, setW, "width")}
         <span className={css.times} aria-hidden>×</span>
-        {field(h, setH, "高", "自动")}
+        {field(h, setH, "height")}
       </div>
-      <Tip label={turnable ? "横竖互换" : null}>
-        <button type="button" className={css.turn} aria-label="横竖互换" disabled={!turnable} onClick={turn}>
+      <Tip label={turnable ? t("web-main.viewport.turn") : null}>
+        <button type="button" className={css.turn} aria-label={t("web-main.viewport.turn")} disabled={!turnable} onClick={turn}>
           <Landscape size={15} strokeWidth={1.75} />
         </button>
       </Tip>

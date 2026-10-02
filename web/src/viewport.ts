@@ -1,15 +1,16 @@
 // How big a web service's page is laid out in its preview (Preview.tsx): as big as the preview (none chosen), or a
 // window of its own size, a phone's or a desktop's, drawn scaled down to fit. Kept per service, in this browser.
 import { useSyncExternalStore } from "react";
+import { t } from "./i18n.ts";
 
 /** A window `width` wide and `height` high (null: as high as the preview leaves it, at its scale). */
 export interface Viewport { width: number; height: number | null }
 
 export const PRESETS: { name: string; width: number; height: number }[] = [
-  { name: "手机", width: 390, height: 844 },
-  { name: "平板", width: 820, height: 1180 },
-  { name: "笔记本", width: 1280, height: 800 },
-  { name: "桌面", width: 1440, height: 900 },
+  { get name() { return t("web-main.viewport.phone"); }, width: 390, height: 844 },
+  { get name() { return t("web-main.viewport.tablet"); }, width: 820, height: 1180 },
+  { get name() { return t("web-main.viewport.laptop"); }, width: 1280, height: 800 },
+  { get name() { return t("web-main.viewport.desktop"); }, width: 1440, height: 900 },
 ];
 export const LIMIT = { min: 240, max: 3840 };
 

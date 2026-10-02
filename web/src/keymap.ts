@@ -4,6 +4,7 @@
 // (a tooltip, the list of them) reads it from here too.
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { onPrefs, prefs, setPrefs } from "./prefs.ts";
+import { t } from "./i18n.ts";
 
 export type Action =
   | "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings"
@@ -18,8 +19,8 @@ export type Action =
 export type Binding = string;
 
 interface Spec {
-  label: string;
-  group: "全局" | "对话";
+  /** Where it works: anywhere in the app, or in a chat. */
+  group: "global" | "chat";
   keys: Binding[];
   /** Only in the desktop app, where the browser takes no keys for itself. */
   desktop?: Binding[];
@@ -31,25 +32,35 @@ interface Spec {
 }
 
 export const ACTIONS: Record<Action, Spec> = {
-  "chat.switch": { label: "快速切换对话", group: "全局", keys: ["Mod+K"], typing: "yes" },
-  "chat.new": { label: "新建对话", group: "全局", keys: ["Mod+Alt+N"], desktop: ["Mod+N"], typing: "yes" },
-  "chat.prev": { label: "上一个对话", group: "全局", keys: ["Alt+Up"], typing: "yes" },
-  "chat.next": { label: "下一个对话", group: "全局", keys: ["Alt+Down"], typing: "yes" },
-  "sidebar.toggle": { label: "收起/展开侧边栏", group: "全局", keys: ["Mod+\\"], typing: "yes" },
-  "nav.back": { label: "后退", group: "全局", keys: [], desktop: ["Mod+["], typing: "yes" },
-  "nav.forward": { label: "前进", group: "全局", keys: [], desktop: ["Mod+]"], typing: "yes" },
-  "settings": { label: "设置", group: "全局", keys: [], desktop: ["Mod+,"], typing: "yes" },
-  "shortcuts": { label: "快捷键一览", group: "全局", keys: ["Mod+/"], typing: "yes" },
-  "composer.focus": { label: "回到输入框", group: "对话", keys: ["Space"], typing: "no" },
-  "composer.file": { label: "发送文件", group: "对话", keys: ["Mod+U"], typing: "yes" },
-  "chat.stop": { label: "停止当前任务", group: "对话", keys: ["Mod+."], typing: "yes" },
-  "chat.history": { label: "执行历史", group: "对话", keys: ["Mod+Shift+H"], typing: "yes" },
-  "chat.jobs": { label: "服务和后台任务", group: "对话", keys: ["Mod+Shift+J"], typing: "yes" },
-  "chat.latest": { label: "跳到最新", group: "对话", keys: ["Mod+Down"], typing: "empty" },
-  "chat.archive": { label: "归档对话", group: "对话", keys: ["Mod+Shift+E"], typing: "yes" },
-  "chat.rename": { label: "重命名对话", group: "对话", keys: ["F2"], typing: "yes" },
-  "panel.close": { label: "收起侧栏", group: "对话", keys: ["Escape"], typing: "yes" },
+  "chat.switch": { group: "global", keys: ["Mod+K"], typing: "yes" },
+  "chat.new": { group: "global", keys: ["Mod+Alt+N"], desktop: ["Mod+N"], typing: "yes" },
+  "chat.prev": { group: "global", keys: ["Alt+Up"], typing: "yes" },
+  "chat.next": { group: "global", keys: ["Alt+Down"], typing: "yes" },
+  "sidebar.toggle": { group: "global", keys: ["Mod+\\"], typing: "yes" },
+  "nav.back": { group: "global", keys: [], desktop: ["Mod+["], typing: "yes" },
+  "nav.forward": { group: "global", keys: [], desktop: ["Mod+]"], typing: "yes" },
+  "settings": { group: "global", keys: [], desktop: ["Mod+,"], typing: "yes" },
+  "shortcuts": { group: "global", keys: ["Mod+/"], typing: "yes" },
+  "composer.focus": { group: "chat", keys: ["Space"], typing: "no" },
+  "composer.file": { group: "chat", keys: ["Mod+U"], typing: "yes" },
+  "chat.stop": { group: "chat", keys: ["Mod+."], typing: "yes" },
+  "chat.history": { group: "chat", keys: ["Mod+Shift+H"], typing: "yes" },
+  "chat.jobs": { group: "chat", keys: ["Mod+Shift+J"], typing: "yes" },
+  "chat.latest": { group: "chat", keys: ["Mod+Down"], typing: "empty" },
+  "chat.archive": { group: "chat", keys: ["Mod+Shift+E"], typing: "yes" },
+  "chat.rename": { group: "chat", keys: ["F2"], typing: "yes" },
+  "panel.close": { group: "chat", keys: ["Escape"], typing: "yes" },
 };
+
+/** What an action does, in words. */
+export function labelOf(action: Action): string {
+  return t(`web-main.keymap.${action}`);
+}
+
+/** A group's name, as the list of shortcuts heads it. */
+export function groupLabel(group: Spec["group"]): string {
+  return t(`web-main.keymap.group.${group}`);
+}
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -105,7 +116,7 @@ export function bindingOf(e: KeyboardEvent): Binding | null {
   return [...mods, key].join("+");
 }
 
-const SHOWN: Record<string, string> = { Up: "↑", Down: "↓", Left: "←", Right: "→", Space: "空格", Escape: "Esc", Enter: "↩" };
+const SHOWN: Record<string, string> = { Up: "↑", Down: "↓", Left: "←", Right: "→", Escape: "Esc", Enter: "↩" };
 
 interface Parsed { mod: boolean; shift: boolean; alt: boolean; ctrl: boolean; code: string }
 
@@ -130,7 +141,7 @@ function matches(binding: Binding, e: KeyboardEvent): boolean {
 export function keyLabel(binding: Binding): string {
   const parts = binding.split("+");
   const key = parts.pop()!;
-  const shown = SHOWN[key] ?? key;
+  const shown = key === "Space" ? t("web-main.keymap.space") : SHOWN[key] ?? key;
   if (MAC) {
     const marks = { Ctrl: "⌃", Alt: "⌥", Shift: "⇧", Mod: "⌘" } as const;
     return (["Ctrl", "Alt", "Shift", "Mod"] as const).filter((m) => parts.includes(m)).map((m) => marks[m]).join("") + shown;

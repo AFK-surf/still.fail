@@ -7,6 +7,7 @@ import { DoingMark } from "./DoingMark.tsx";
 import { EdgeChip } from "./components.tsx";
 import { Switch, Tip } from "./ui.tsx";
 import * as css from "./Versions.css.ts";
+import { t } from "./i18n.ts";
 
 /**
  * `updates`: the station's overview's (none from a station older than them: nothing shows); `manager`: may update;
@@ -19,27 +20,27 @@ export function Versions({ station, updates, manager, beta = false, rows = false
   const checked = updates[0]?.checkedAt;
   const on = onBeta(updates, channel);
   const autoOn = autoUpdating(updates, auto);
-  const error = update.error ?? channel.error ?? auto.error ?? (check.error && new Error(`没能检查更新：${check.error.message}`));
+  const error = update.error ?? channel.error ?? auto.error ?? (check.error && new Error(t("web-main.versions.checkFailedWhy", { error: check.error.message })));
   return (
     <div className={`${css.versions}${rows ? ` ${css.rows}` : ""}`}>
       {updates.map((v) => <Item key={v.id} v={v} manager={manager} busy={batch || (update.busy && update.args?.[0] === v.id)} onUpdate={() => void update.run(v.id)} />)}
       {beta && manager && on != null && (
         <label className={css.channel}>
-          {rows ? "接收 station 测试版" : "测试版"}
-          <Switch small checked={on} disabled={batch || channel.busy} label="测试版" onChange={(next) => void channel.run(next ? "beta" : "stable")} />
+          {rows ? t("web-main.versions.betaStation") : t("web-main.versions.beta")}
+          <Switch small checked={on} disabled={batch || channel.busy} label={t("web-main.versions.beta")} onChange={(next) => void channel.run(next ? "beta" : "stable")} />
         </label>
       )}
       {manager && autoOn != null && (
-        <Tip label="有新版本时 station 自己更新，agent 不中断">
+        <Tip label={t("web-main.versions.autoTip")}>
           <label className={css.channel}>
-            自动更新
-            <Switch small checked={autoOn} disabled={batch || auto.busy} label="自动更新" onChange={(next) => void auto.run(next)} />
+            {t("web-main.versions.auto")}
+            <Switch small checked={autoOn} disabled={batch || auto.busy} label={t("web-main.versions.auto")} onChange={(next) => void auto.run(next)} />
           </label>
         </Tip>
       )}
-      {checked == null ? <span>正在检查版本…</span>
-        : <Tip label={`上次检查：${new Date(checked).toLocaleString()}`}>
-          <button type="button" className={css.check} disabled={check.busy} onClick={() => void check.run()}>{check.busy ? "正在检查…" : "检查更新"}</button>
+      {checked == null ? <span>{t("web-main.versions.checkingVersions")}</span>
+        : <Tip label={t("web-main.versions.lastChecked", { time: new Date(checked).toLocaleString() })}>
+          <button type="button" className={css.check} disabled={check.busy} onClick={() => void check.run()}>{check.busy ? t("web-main.versions.checking") : t("web-main.versions.check")}</button>
         </Tip>}
       {error && <span className={css.failed}>{error.message}</span>}
     </div>
@@ -57,13 +58,13 @@ export function UpdateSummary({ station, updates, manager }: { station: string; 
   if (!visible.length && !busy && !update.error) return null;
   return <div className={css.summary}>
     <span className={css.summaryText}>
-      {updating ? visible.map((v) => <span key={v.id} className={v.state === "failed" ? css.failed : undefined}>{v.name} {v.state === "updating" ? describe(v).updating : v.state === "failed" ? "更新失败" : "待更新"}</span>)
-        : <span>{visible.map((v) => v.name).join("、")} {failed ? "更新失败" : busy ? "正在更新…" : visible.length ? "可更新" : ""}</span>}
+      {updating ? visible.map((v) => <span key={v.id} className={v.state === "failed" ? css.failed : undefined}>{t("web-main.versions.nameState", { name: v.name, state: v.state === "updating" ? describe(v).updating : v.state === "failed" ? t("web-main.versions.updateFailed") : t("web-main.versions.pending") })}</span>)
+        : <span>{t("web-main.versions.nameState", { name: visible.map((v) => v.name).join(t("web-main.list.separator")), state: failed ? t("web-main.versions.updateFailed") : busy ? t("web-main.versions.updating") : visible.length ? t("web-main.versions.available") : "" })}</span>}
       {update.error && <span className={css.failed} role="alert">{update.error.message}</span>}
     </span>
     {manager && <span className={css.summaryAction}>
       <DoingMark calls={["software.updateAll", "software.update"]} on={{ station }} size={14} />
-      <button type="button" className={css.action} disabled={busy || updating || !visible.some((v) => v.updatable)} onClick={() => void update.run()}>{busy || updating ? "正在更新…" : failed ? "重试" : "更新"}</button>
+      <button type="button" className={css.action} disabled={busy || updating || !visible.some((v) => v.updatable)} onClick={() => void update.run()}>{busy || updating ? t("web-main.versions.updating") : failed ? t("common.retry") : t("web-main.versions.update")}</button>
     </span>}
   </div>;
 }
@@ -103,32 +104,33 @@ export function useSoftware(station: string) {
  * whether it is the test channel's (a 测试版 tag beside its version), and while it updates where that is (the station
  * says; one older than that, nothing more than 正在更新).
  */
-export function describe(v: SoftwareVersion): { shown: string; verb: string; tip: string; updating: string; beta: boolean } {
+export function describe(v: SoftwareVersion): { shown: string; verb: string; failed: string; tip: string; updating: string; beta: boolean } {
   return {
-    shown: v.installed ? (v.version ?? (v.id === "station" ? "开发版" : "版本未知")) : "未安装",
-    verb: v.installed ? "更新" : "安装",
-    tip: [v.note, v.installed && !v.newer && !v.downgrade && v.latest ? "已是最新" : null, v.installed && !v.latest && v.checkedAt ? "检查更新失败，点「检查更新」重试" : null].filter(Boolean).join("；"),
+    shown: v.installed ? (v.version ?? (v.id === "station" ? t("web-main.versions.dev") : t("web-main.versions.unknown"))) : t("web-main.versions.notInstalled"),
+    verb: v.installed ? t("web-main.versions.update") : t("web-main.versions.install"),
+    failed: v.installed ? t("web-main.versions.updateFailed") : t("web-main.versions.installFailed"),
+    tip: [v.note, v.installed && !v.newer && !v.downgrade && v.latest ? t("web-main.versions.latest") : null, v.installed && !v.latest && v.checkedAt ? t("web-main.versions.checkFailedRetry") : null].filter(Boolean).join(t("web-main.list.semicolon")),
     beta: v.channel === "beta",
-    updating: v.progress ?? (v.installed ? "正在更新…" : "正在安装…"),
+    updating: v.progress ?? (v.installed ? t("web-main.versions.updating") : t("web-main.versions.installing")),
   };
 }
 
 function Item({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: boolean; busy: boolean; onUpdate(): void }) {
-  const { shown, verb, tip, updating, beta } = describe(v);
+  const { shown, failed, tip, updating, beta } = describe(v);
   const button = (label: string) => manager && v.updatable && (
     <button type="button" className={css.action} disabled={busy} onClick={onUpdate}>{label}</button>
   );
   let rest;
   if (v.state === "updating") rest = <>{v.percent != null && <DownloadChip percent={v.percent} />}<span className={css.newer}>{updating}</span></>;
-  else if (v.state === "failed") rest = <><Tip label={v.message ?? ""}><span className={css.failed}>{verb}失败</span></Tip>{button("重试")}</>;
-  else if (!v.installed) rest = button("安装");
-  else if (v.newer && v.latest) rest = <><span className={css.newer}>→ {v.latest}</span>{button("更新")}</>;
-  else if (v.downgrade && v.latest) rest = <><span className={css.newer}>→ {v.latest}</span>{button("回到正式版")}</>;
+  else if (v.state === "failed") rest = <><Tip label={v.message ?? ""}><span className={css.failed}>{failed}</span></Tip>{button(t("common.retry"))}</>;
+  else if (!v.installed) rest = button(t("web-main.versions.install"));
+  else if (v.newer && v.latest) rest = <><span className={css.newer}>→ {v.latest}</span>{button(t("web-main.versions.update"))}</>;
+  else if (v.downgrade && v.latest) rest = <><span className={css.newer}>→ {v.latest}</span>{button(t("web-main.versions.backToStable"))}</>;
   else if (v.done) rest = <span className={css.newer}>{v.done}</span>;
   return (
     <span className={css.item}>
       <Tip label={tip}><span>{v.name} <span className={css.version}>{shown}</span></span></Tip>
-      {beta && <span className={css.betaTag}>测试版</span>}
+      {beta && <span className={css.betaTag}>{t("web-main.versions.beta")}</span>}
       {rest}
     </span>
   );
@@ -136,5 +138,5 @@ function Item({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: boo
 
 /** How much of what a runtime's install downloads is in: the allowance's rounded box, its edge going round as it comes. */
 export function DownloadChip({ percent }: { percent: number }) {
-  return <EdgeChip fill={percent} level="progress" label={`已下载 ${percent}%`} bare />;
+  return <EdgeChip fill={percent} level="progress" label={t("web-main.versions.downloaded", { percent })} bare />;
 }

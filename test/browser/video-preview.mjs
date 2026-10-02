@@ -29,7 +29,7 @@ try {
   madeHtml = true;
   execFileSync('ffmpeg', ['-v','error','-f','lavfi','-i','color=c=blue:s=320x180:d=2','-c:v','libx264','-pix_fmt','yuv420p',join(temp,'sample.mp4')]);
   browser = await chromium.launch({headless:true, ...(process.env.CHROMIUM_EXECUTABLE ? {executablePath:process.env.CHROMIUM_EXECUTABLE} : {})});
-  const page=await browser.newPage();
+  const page=await browser.newPage({locale:'zh-CN'}); // the words asserted are the Chinese ones
   page.on("pageerror",e=>console.error(e));
   page.on("console",m=>console.log(m.type(),m.text()));
   const bytes=readFileSync(join(temp,'sample.mp4')).toString('base64');

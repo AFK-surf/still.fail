@@ -22,6 +22,7 @@ import * as chatCss from "./styles/chat.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import * as doingCss from "./DoingMark.css.ts";
 import { failure, useToast } from "./toast.tsx";
+import { t } from "./i18n.ts";
 
 
 export const ICON = { size: 16, strokeWidth: 1.7 } as const;
@@ -54,7 +55,7 @@ export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTM
         <button ref={ref} type="button" aria-label={label} {...rest} aria-busy={busy || undefined} disabled={rest.disabled || busy}
           className={`${pagesCss.iconBtn}${className ? ` ${className}` : ""}`}>
           {busy ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" />
-            : failed !== undefined ? <span className={doingCss.failedMark} style={{ width: 14, height: 14, fontSize: 10 }} role="img" aria-label={`失败：${failed}`}>!</span>
+            : failed !== undefined ? <span className={doingCss.failedMark} style={{ width: 14, height: 14, fontSize: 10 }} role="img" aria-label={t("web-main.doing.failedWhy", { error: failed })}>!</span>
             : <Icon {...ICON} />}
         </button>
       </Tip>
@@ -100,7 +101,7 @@ function isCut(el: Element): boolean {
 export function About({ children, side = "bottom" }: { children: ReactNode; side?: "top" | "bottom" | "left" | "right" }) {
   return (
     <Tip label={<span className={css.aboutText}>{children}</span>} side={side}>
-      <button type="button" className={css.about} aria-label="说明"><Info size={14} strokeWidth={1.8} /></button>
+      <button type="button" className={css.about} aria-label={t("web-main.about")}><Info size={14} strokeWidth={1.8} /></button>
     </Tip>
   );
 }
@@ -163,7 +164,7 @@ export function Choices<T extends string>({ options, value, onChange, label }:
 export function Switch({ checked, onChange, label, disabled, id, small = false, busy }: { checked: boolean; onChange(checked: boolean): void; label?: string; disabled?: boolean | undefined; id?: string; small?: boolean; busy?: boolean | undefined }) {
   return (
     <>
-      {busy && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label="正在保存" />}
+      {busy && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-main.saving")} />}
       <RSwitch.Root id={id} className={small ? `${css.switch_} ${css.switchSmall}` : css.switch_} checked={checked} onCheckedChange={onChange} disabled={(disabled || busy) ?? false} aria-busy={busy || undefined} aria-label={label}>
         <RSwitch.Thumb className={small ? `${css.switchThumb} ${css.switchThumbSmall}` : css.switchThumb} />
       </RSwitch.Root>
@@ -220,12 +221,15 @@ export function Select({ value, onChange, options, id, placeholder, disabled, la
 
 export type Tone = "neutral" | "green" | "blue" | "amber" | "red" | "accent";
 
-/** Keep a completed state compact while retaining its explanation and accessible name. */
+/**
+ * Keep a completed state compact while retaining its explanation and accessible name. The core says it in words, in
+ * either language (client/core present.rs: 做完了, 做完了：<why>; Done, Done: <why>).
+ */
 export function StatusText({ text }: { text: string }) {
-  const done = text === "做完了" || text.startsWith("做完了：");
+  const done = /^(?:做完了(?:：|$)|Done(?:: |$))/.exec(text);
   if (!done) return <>{text}</>;
-  const reason = text.slice("做完了".length).replace(/^：/, "");
-  return <><Tip label="做完了"><span className={css.doneMark} role="img" aria-label="做完了"><Check size={14} strokeWidth={1.7} /></span></Tip>{reason && <> {reason}</>}</>;
+  const reason = text.slice(done[0].length);
+  return <><Tip label={t("web-main.status.done")}><span className={css.doneMark} role="img" aria-label={t("web-main.status.done")}><Check size={14} strokeWidth={1.7} /></span></Tip>{reason && <> {reason}</>}</>;
 }
 
 export function Pill({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
@@ -267,7 +271,7 @@ export function Dialog({ open, title, description, onClose, children, footer, wi
           onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}>
           <div className={css.dialogHead}>
             <RDialog.Title className={css.dialogTitle}>{title}</RDialog.Title>
-            <RDialog.Close asChild><IconButton label="关闭" icon={Close} /></RDialog.Close>
+            <RDialog.Close asChild><IconButton label={t("common.close")} icon={Close} /></RDialog.Close>
           </div>
           {description ? <RDialog.Description className={css.dialogLead}>{description}</RDialog.Description> : <RDialog.Description className={css.srOnly}>{title}</RDialog.Description>}
           <div className={css.dialogBody}>{children}</div>
@@ -292,7 +296,7 @@ export function Confirm({ open, title, description, action, onConfirm, onClose, 
           <RAlert.Description className={css.dialogLead}>{description}</RAlert.Description>
           {error && <p className={css.dialogError} role="alert">{error}</p>}
           <div className={css.dialogFoot}>
-            <RAlert.Cancel asChild><Button variant="ghost">取消</Button></RAlert.Cancel>
+            <RAlert.Cancel asChild><Button variant="ghost">{t("common.cancel")}</Button></RAlert.Cancel>
             <Button variant="danger-solid" busy={busy ?? false} onClick={onConfirm}>{action}</Button>
           </div>
         </RAlert.Content>
@@ -304,7 +308,7 @@ export function Confirm({ open, title, description, action, onConfirm, onClose, 
 export interface MenuItem { label: string; icon?: IconType; danger?: boolean; disabled?: boolean | undefined; onSelect(): void }
 
 /** "…" menu: a list of actions on the thing it sits beside. */
-export function Menu({ label = "更多操作", items }: { label?: string; items: (MenuItem | "separator")[] }) {
+export function Menu({ label = t("web-main.menu.more"), items }: { label?: string; items: (MenuItem | "separator")[] }) {
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger asChild><IconButton label={label} icon={More} /></DropdownMenu.Trigger>
@@ -329,8 +333,8 @@ export function CopyCommand({ text }: { text: string }) {
   return (
     <div className={css.command}>
       <code>{text}</code>
-      <IconButton label={copied ? "已复制" : "复制"} icon={copied ? Check : Copy}
-        onClick={() => void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }, (e: unknown) => toast(`没能复制：${failure(e)}`))} />
+      <IconButton label={copied ? t("common.copied") : t("common.copy")} icon={copied ? Check : Copy}
+        onClick={() => void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }, (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) })))} />
     </div>
   );
 }
@@ -468,7 +472,7 @@ export function SlackLogo({ size = 16 }: { size?: number; strokeWidth?: number }
  * Waiting on something, said in words. Appears after a short delay, so fast
  * answers do not flash it; `fill` centres it in the page.
  */
-export function Loading({ label = "正在加载…", fill = true, detail }: { label?: string; fill?: boolean; detail?: ReactNode }) {
+export function Loading({ label = t("common.loading"), fill = true, detail }: { label?: string; fill?: boolean; detail?: ReactNode }) {
   return (
     <div className={fill ? `${css.loading} ${css.loadingFill}` : css.loading} role="status" aria-live="polite">
       <span className={waitingCss.spinner} aria-hidden="true" />

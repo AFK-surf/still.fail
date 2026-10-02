@@ -27,6 +27,7 @@ import { ViewportButton } from "./ViewportSize.tsx";
 import { PreviewLoad } from "./PreviewLoad.tsx";
 import { PreviewStage, useStage } from "./PreviewStage.tsx";
 import { useVizFile, useVizMessages, vizDocument } from "./Viz.tsx";
+import { t } from "./i18n.ts";
 
 declare const __PREVIEW_ORIGIN__: string;
 const ORIGIN = __PREVIEW_ORIGIN__;
@@ -105,7 +106,7 @@ function FileFrame({ station, file, ...shown }: Shown & { file: FileSource }) {
     const doc = vizDocument(html, kept.current ? kept.current.state : state);
     return { status: 200, headers: [["content-type", "text/html; charset=utf-8"], ["cache-control", "no-store"]], body: new TextEncoder().encode(doc) };
   }, [html, state]);
-  if (viz?.failed) return <div className={css.preview}><p className={css.previewMissing}>读不到「{file.name}」。</p></div>;
+  if (viz?.failed) return <div className={css.preview}><p className={css.previewMissing}>{t("web-main.preview.unreadable", { name: file.name })}</p></div>;
   if (!viz) return <div className={css.preview} />;
   return <WebPreview {...shown} station={station} port={0} serve={serve} frame={frame} fixed />;
 }
@@ -142,20 +143,20 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
   const icon = { size: 14, strokeWidth: 1.75 };
   return (
     <form className={css.previewBar} onSubmit={(e) => { e.preventDefault(); go(typed.startsWith("/") ? typed : `/${typed}`); (document.activeElement as HTMLElement | null)?.blur(); }}>
-      {back && <Tip label="后退"><button type="button" className={pagesCss.iconBtn} aria-label="后退" disabled={!canBack} onClick={back}><ArrowLeft {...icon} /></button></Tip>}
-      {forward && <Tip label="前进"><button type="button" className={pagesCss.iconBtn} aria-label="前进" disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button></Tip>}
-      <Tip label="刷新"><button type="button" className={pagesCss.iconBtn} aria-label="刷新" onClick={reload}><Refresh {...icon} /></button></Tip>
+      {back && <Tip label={t("web-main.keymap.nav.back")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.keymap.nav.back")} disabled={!canBack} onClick={back}><ArrowLeft {...icon} /></button></Tip>}
+      {forward && <Tip label={t("web-main.keymap.nav.forward")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.keymap.nav.forward")} disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button></Tip>}
+      <Tip label={t("web-main.preview.reload")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.preview.reload")} onClick={reload}><Refresh {...icon} /></button></Tip>
       {loading}
       {instead ?? (
         <label className={css.previewAddress}>
           <Web size={14} strokeWidth={1.75} />
           <span className={css.previewHost}>{name}</span>
-          {!fixed && <input className={css.previewPath} value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label="路径" spellCheck={false} />}
+          {!fixed && <input className={css.previewPath} value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label={t("web-main.preview.path")} spellCheck={false} />}
         </label>
       )}
       {size}
       {extra}
-      {external && <Tip label="在新窗口打开"><a className={pagesCss.iconBtn} href={external} target="_blank" rel="noopener" aria-label="在新窗口打开"><External {...icon} /></a></Tip>}
+      {external && <Tip label={t("web-main.preview.openWindow")}><a className={pagesCss.iconBtn} href={external} target="_blank" rel="noopener" aria-label={t("web-main.preview.openWindow")}><External {...icon} /></a></Tip>}
     </form>
   );
 }
@@ -171,7 +172,7 @@ function Restart({ name, restarting, reload }: { name: string; restarting: Resta
   return (
     <div className={css.previewRestart} role="status">
       <span className={css.previewRestartDot} aria-hidden="true" />
-      <span><b>{name}正在重启</b><span>{restarting.restarts ? `第 ${restarting.restarts} 次 · ` : ""}起来后自动刷新</span></span>
+      <span><b>{t("web-main.preview.restarting", { name })}</b><span>{restarting.restarts ? t("web-main.preview.restartAgain", { n: restarting.restarts }) : t("web-main.preview.restartNote")}</span></span>
     </div>
   );
 }
@@ -275,8 +276,8 @@ export function ServicePage({ station, service }: { station: string; service: st
   const job = found.value ?? null;
   const error = job ? null : found.error?.message ?? null;
   useEffect(() => { if (job) document.title = job.name; }, [job?.name]);
-  if (error) return <div className={`${css.previewPage} ${css.previewMissing}`}>找不到这个服务：{error}</div>;
+  if (error) return <div className={`${css.previewPage} ${css.previewMissing}`}>{t("web-main.preview.noService", { error })}</div>;
   if (!job) return <div className={css.previewPage} />;
-  if (!job.open || job.port == null) return <div className={`${css.previewPage} ${css.previewMissing}`}>「{job.name}」已经停了。</div>;
+  if (!job.open || job.port == null) return <div className={`${css.previewPage} ${css.previewMissing}`}>{t("web-main.preview.stopped", { name: job.name })}</div>;
   return <div className={css.previewPage}><StationPreview station={station} port={job.port} name={job.name} service={service} alone /></div>;
 }

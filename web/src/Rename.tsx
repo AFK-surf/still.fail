@@ -5,6 +5,7 @@ import { stationApi, useStationCall } from "./api.ts";
 import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { failure, useToast } from "./toast.tsx";
 import * as css from "./Rename.css.ts";
+import { t } from "./i18n.ts";
 
 export function TitleInput({ value, onDone, className }: { value: string; onDone: (title: string | null) => void; className?: string }) {
   const input = useRef<HTMLInputElement>(null);
@@ -20,8 +21,8 @@ export function TitleInput({ value, onDone, className }: { value: string; onDone
     onDone(title === null || title.trim() === value.trim() ? null : title.trim());
   };
   return (
-    <input ref={input} className={`${css.titleInput} ${className ?? ""}`} defaultValue={value} maxLength={80} aria-label="对话名称"
-      placeholder="留空则自动起名"
+    <input ref={input} className={`${css.titleInput} ${className ?? ""}`} defaultValue={value} maxLength={80} aria-label={t("web-main.rename.label")}
+      placeholder={t("web-main.rename.placeholder")}
       // Inside a chat's row (a link): pressing and clicking here stay in the field.
       onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
       onKeyDown={(e) => {
@@ -40,7 +41,7 @@ export function useRename(station: string) {
   const toast = useToast();
   return (of: { thread?: number | null; session: string }, title: string | null) => {
     if (title === null) return;
-    api.rename(of, title).catch((error: unknown) => toast(`没能改名：${failure(error)}`));
+    api.rename(of, title).catch((error: unknown) => toast(t("web-main.rename.failed", { error: failure(error) })));
   };
 }
 

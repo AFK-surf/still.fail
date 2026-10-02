@@ -17,23 +17,24 @@ import * as uiCss from "./ui.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 
 import { NAME } from "./channel.ts";
+import { t } from "./i18n.ts";
 // Times in words, still worked out here (they were the job lists' until those moved into the core).
 
-/** A time span in words: 12 秒, 4 分钟, 3 小时, 2 天. */
-function span(ms: number): string {
+/** A time span in words, as long ago: 12 秒前, 4 分钟前, 3 小时前, 2 天前. */
+function spanAgo(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s} 秒`;
-  if (s < 3600) return `${Math.floor(s / 60)} 分钟`;
-  if (s < 86400) return `${Math.floor(s / 3600)} 小时`;
-  return `${Math.floor(s / 86400)} 天`;
+  if (s < 60) return t("web-main.ago.seconds", { n: s });
+  if (s < 3600) return t("web-main.ago.minutes", { n: Math.floor(s / 60) });
+  if (s < 86400) return t("web-main.ago.hours", { n: Math.floor(s / 3600) });
+  return t("web-main.ago.days", { n: Math.floor(s / 86400) });
 }
 
 /** How long ago: 刚刚, 12 秒前, 4 分钟前, 3 小时前, 昨天, 2 天前. */
 function ago(at: number, now: number): string {
   const s = Math.round((now - at) / 1000);
-  if (s < 5) return "刚刚";
-  if (s >= 86400 && s < 2 * 86400) return "昨天";
-  return `${span(now - at)}前`;
+  if (s < 5) return t("web-main.ago.now");
+  if (s >= 86400 && s < 2 * 86400) return t("web-main.ago.yesterday");
+  return spanAgo(now - at);
 }
 
 /** A clock time: 13:04 today, 9/27 13:04 before. */
@@ -84,19 +85,19 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
   const meta = (s: MachineSession) => s.meta ?? "";
   return (
     <>
-      <button type="button" className={css.offer} onClick={() => setOpen(true)}><Monitor size={14} />接着 {name || "本机"} 终端里的会话</button>
+      <button type="button" className={css.offer} onClick={() => setOpen(true)}><Monitor size={14} />{t("web-main.machine.offer", { name: name || t("web-main.machine.this") })}</button>
       {looking ? (
         <Dialog open={open} wide onClose={close} title={looking.title ?? looking.first} description={meta(looking)}
           footer={<>
-            <Button variant="ghost" icon={ArrowLeft} disabled={busy} onClick={() => { setLooking(null); setError(null); }}>返回</Button>
-            <Button variant="primary" busy={busy} onClick={() => void go(looking)}>{looking.session ? "打开它的对话" : "接着这个会话"}</Button>
+            <Button variant="ghost" icon={ArrowLeft} disabled={busy} onClick={() => { setLooking(null); setError(null); }}>{t("common.back")}</Button>
+            <Button variant="primary" busy={busy} onClick={() => void go(looking)}>{looking.session ? t("web-main.machine.openChat") : t("web-main.machine.continue")}</Button>
           </>}>
           {error && <p className={uiCss.dialogError} role="alert">{error}</p>}
           <Preview runtime={looking.runtime} id={looking.id} models={models} />
         </Dialog>
       ) : (
-        <Dialog open={open} wide onClose={close} title={`接着 ${name || "本机"} 上的会话`}
-          description="这台机器上的 Claude Code 和 Codex 在终端里跑过的会话。点一个先看看内容，再决定要不要在它原来的目录里接着聊；终端里的那个不受影响。">
+        <Dialog open={open} wide onClose={close} title={t("web-main.machine.title", { name: name || t("web-main.machine.this") })}
+          description={t("web-main.machine.description")}>
           <ul className={css.list}>
             {sessions.map((s) => (
               <li key={`${s.runtime}:${s.id}`}>
@@ -106,7 +107,7 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
                     <span className={css.title}>{s.title ?? s.first}</span>
                     <span className={css.meta}>{meta(s)}</span>
                   </span>
-                  {s.session ? <span className={css.already}>已在 {NAME} 里</span> : null}
+                  {s.session ? <span className={css.already}>{t("web-main.machine.already", { app: NAME })}</span> : null}
                 </button></Tip>
               </li>
             ))}
@@ -135,7 +136,7 @@ function Preview({ runtime, id, models }: { runtime: RuntimeKind; id: string; mo
   }, [api, runtime, id]);
   useLayoutEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [shown]);
   if (error) return <p className={uiCss.dialogError} role="alert">{error}</p>;
-  if (!shown) return <div className={css.previewWait}><span className={waitingCss.spinner} aria-hidden="true" />正在读取…</div>;
+  if (!shown) return <div className={css.previewWait}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.reading")}</div>;
   const left = shown.total - shown.said.length;
   const model = shown.session.model;
   const option = optionOf(models, model);
@@ -143,7 +144,7 @@ function Preview({ runtime, id, models }: { runtime: RuntimeKind; id: string; mo
   const stamp = (at: number | null): Stamp | undefined => at == null ? undefined : { at, ago: ago(at, now), full: clock(at, now), until: "", past: true };
   return (
     <div className={css.preview}>
-      {left > 0 && <p className={css.previewMore}>更早的 {left} 条没有列出</p>}
+      {left > 0 && <p className={css.previewMore}>{t("web-main.machine.more", { n: left })}</p>}
       {shown.said.map((m, i) => m.person
         ? <MineMessage key={i}><MineBubble text={m.text} /><Time className={conversationCss.msgTime} stamp={stamp(m.at)} /></MineMessage>
         : (

@@ -1,6 +1,7 @@
 import { Toast } from "radix-ui";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import * as css from "./toast.css.ts";
+import { t } from "./i18n.ts";
 
 const ToastContext = createContext<(message: string) => void>(() => {});
 
@@ -47,11 +48,11 @@ export function failure(e: unknown): string {
 
 /**
  * Lets what a person did go on by itself, and says how it ended: `没能<what>：<why>` when it failed, `done` (if any)
- * when it went through. What it does shows while under way where it is (doing.ts); this says only how it ended.
+ * when it went through. `what` is said after "Couldn't" in English: a verb phrase, lowercase ("pin the chat"). What it does shows while under way where it is (doing.ts); this says only how it ended.
  */
 export function useAct(): (doing: Promise<unknown>, what: string, done?: string) => void {
   const toast = useToast();
   return useCallback((doing, what, done) => {
-    doing.then(() => { if (done) toast(done); }, (e) => toast(`没能${what}：${failure(e)}`));
+    doing.then(() => { if (done) toast(done); }, (e) => toast(t((e as { code?: unknown } | null)?.code === "unconfirmed" ? "web-main.act.unconfirmed" : "web-main.act.failed", { what, error: failure(e) })));
   }, [toast]);
 }

@@ -12,6 +12,7 @@ import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
 import type { ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
+import { t } from "./i18n.ts";
 
 export type { TopicState };
 export { CoreError };
@@ -193,7 +194,7 @@ function toBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve((reader.result as string).slice((reader.result as string).indexOf(",") + 1));
-    reader.onerror = () => reject(reader.error ?? new Error("读不了这个文件"));
+    reader.onerror = () => reject(reader.error ?? new Error(t("web-main.file.unreadable")));
     reader.readAsDataURL(file);
   });
 }

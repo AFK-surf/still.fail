@@ -20,6 +20,7 @@ import { DraftKey, offerToDraft } from "./draft.ts";
 import { useToast } from "./toast.tsx";
 import { Tip } from "./ui.tsx";
 import * as css from "./Viz.css.ts";
+import { t } from "./i18n.ts";
 
 /**
  * Where a visualization opens on its own, beside its chat: the chat page's side panel (a tab of its own) on a wide
@@ -174,7 +175,7 @@ export function useVizMessages(wins: () => Window[], { origin = "*", draftKey: g
       // A click in the widget asks to send words: they go in the composer, for the person to send (or not).
       if (data.type === "followup" && typeof data.prompt === "string" && data.prompt.trim()) {
         const offered = draftKey !== undefined && offerToDraft(draftKey, { files: [], quotes: [], text: data.prompt.trim().slice(0, 4000) });
-        toast(offered ? "已放进输入框，确认后发送" : "这个对话现在不能发消息");
+        toast(offered ? t("web-main.viz.offered") : t("web-main.annotate.chatLocked"));
       }
     };
     addEventListener("message", onMessage);
@@ -253,11 +254,11 @@ export function VizFile({ sessionKey, file, failed }: { sessionKey: string; file
     <div className={css.viz}>
       <Frame html={viz.html} title={file.name} heightKey={heightKey} state={viz.state} onState={viz.keep} />
       <div className={css.vizBar}>
-        <Tip label="全屏打开"><button type="button" className={css.vizOpen} aria-label="全屏打开" onClick={() => setPreviewing(true)}>
+        <Tip label={t("web-main.viz.fullscreen")}><button type="button" className={css.vizOpen} aria-label={t("web-main.viz.fullscreen")} onClick={() => setPreviewing(true)}>
           <Expand size={14} strokeWidth={1.75} />
         </button></Tip>
         {open && (
-          <Tip label="在侧边打开"><button type="button" className={css.vizOpen} aria-label="在侧边打开" onClick={() => open(sessionKey, file)}>
+          <Tip label={t("web-main.viz.side")}><button type="button" className={css.vizOpen} aria-label={t("web-main.viz.side")} onClick={() => open(sessionKey, file)}>
             <PanelOpen size={14} strokeWidth={1.75} />
           </button></Tip>
         )}
@@ -276,7 +277,7 @@ function mermaidDocument(code: string): string {
   const post = (m) => parent.postMessage({ emberViz: true, ...m }, "*");
   const source = document.querySelector(".mermaid-src").textContent;
   let mermaid;
-  try { mermaid = (await import("${MERMAID}")).default; } catch (e) { post({ type: "failed", message: "mermaid 没能加载" }); }
+  try { mermaid = (await import("${MERMAID}")).default; } catch (e) { post({ type: "failed", message: ${JSON.stringify(t("web-main.viz.mermaidFailed"))} }); }
   // Mermaid reads hex and rgb only: still.fail's oklch tokens are resolved to rgb through a canvas pixel.
   const pixel = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   const rgb = (color) => { pixel.clearRect(0, 0, 1, 1); pixel.fillStyle = "#000"; pixel.fillStyle = color; pixel.fillRect(0, 0, 1, 1); const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data; return "rgb(" + r + ", " + g + ", " + b + ")"; };

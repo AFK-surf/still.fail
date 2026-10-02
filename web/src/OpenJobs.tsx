@@ -11,6 +11,7 @@ import { stationBase } from "./station.tsx";
 import { JobDot, JobStop } from "./Jobs.tsx";
 import { Tip } from "./ui.tsx";
 import * as css from "./OpenJobs.css.ts";
+import { t } from "./i18n.ts";
 
 /** Rows shown before the rest folds under「还有 N 个」. */
 export const SHOWN = 3;
@@ -26,7 +27,7 @@ export function useLongJobs(scope: string, toast: (text: string) => void) {
   const call = useCall();
   // The core puts the job in place as it is now: gone from here, stopped in its chat.
   const stop = (job: Job) => void (call("job.stop", { station: job.station, id: job.id }) as Promise<unknown>)
-    .catch((e: unknown) => toast(`没能停下「${job.name}」：${failure(e)}`));
+    .catch((e: unknown) => toast(t("web-main.jobs.stopFailed", { name: job.name, error: failure(e) })));
   return { groups, stop };
 }
 
@@ -54,8 +55,8 @@ export function OpenJobs({ scope }: { scope: string }) {
     return (
       <div key={`${job.station}/${job.id}`} className={css.openJob}>
         {chat ? <NavLink className={css.openJobRow} to={chat}>{body}</NavLink> : <div className={css.openJobRow}>{body}</div>}
-        <Tip label="停止" side="top">
-          <JobStop station={job.station ?? ""} job={job} stop={stop} className={css.openJobStop} label={`停止「${job.name}」`} />
+        <Tip label={t("web-main.jobs.stop")} side="top">
+          <JobStop station={job.station ?? ""} job={job} stop={stop} className={css.openJobStop} label={t("web-main.jobs.stopNamed", { name: job.name })} />
         </Tip>
       </div>
     );
@@ -67,12 +68,12 @@ export function OpenJobs({ scope }: { scope: string }) {
       <div key={key} className={css.openJobsGroup}>
         <div className={css.openJobsHead}>{head}</div>
         {shown.map(row)}
-        {shown.length < list.length && <button type="button" className={css.openJobsMore} onClick={() => setAll({ ...all, [key]: true })}>还有 {list.length - shown.length} 个</button>}
+        {shown.length < list.length && <button type="button" className={css.openJobsMore} onClick={() => setAll({ ...all, [key]: true })}>{t("web-main.jobs.more", { n: list.length - shown.length })}</button>}
       </div>
     );
   };
   return (
-    <section className={css.openJobs} aria-label="开了很久的服务和任务">
+    <section className={css.openJobs} aria-label={t("web-main.jobs.long")}>
       {groups.map((g) => group(g.key, g.head, g.jobs))}
     </section>
   );

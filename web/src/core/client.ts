@@ -9,6 +9,7 @@ import { BUILT_AT } from "./built.ts";
 import { BETA } from "../channel.ts";
 import { applyDelta, type DeltaOp } from "./delta.ts";
 import { captureException } from "../telemetry.ts";
+import { t } from "../i18n.ts";
 
 /** What a UI can subscribe to (`Topic` in client/core/src/protocol.rs). */
 export type Topic =
@@ -212,8 +213,8 @@ export class CoreClient {
 
   /** `signal` stops the call while it is under way; it then fails with `cancelled`. */
   call(name: string, params: unknown = {}, onProgress?: (value: unknown) => void, signal?: AbortSignal): Promise<unknown> {
-    if (this.#closed) return Promise.reject(new CoreError({ code: "closed", message: "连接已关闭" }));
-    if (signal?.aborted) return Promise.reject(new CoreError({ code: "cancelled", message: "已取消" }));
+    if (this.#closed) return Promise.reject(new CoreError({ code: "closed", message: t("web-main.core.closed") }));
+    if (signal?.aborted) return Promise.reject(new CoreError({ code: "cancelled", message: t("web-main.core.cancelled") }));
     const id = this.#nextId++;
     const promise = new Promise<unknown>((resolve, reject) => {
       this.#calls.set(id, { resolve, reject, onProgress });
@@ -226,7 +227,7 @@ export class CoreClient {
         } else {
           this.#calls.delete(id);
           this.#queue = this.#queue.filter((m) => (m as { id?: number }).id !== id);
-          reject(new CoreError({ code: "cancelled", message: "已取消" }));
+          reject(new CoreError({ code: "cancelled", message: t("web-main.core.cancelled") }));
         }
       }, { once: true });
     });
@@ -268,7 +269,7 @@ export class CoreClient {
    * subscribe again. Calls in flight were lost with the old client.
    */
   resume(): void {
-    this.#rejectCalls("页面已恢复，请重试");
+    this.#rejectCalls(t("web-main.core.resumed"));
     if (this.#channel) for (const [id, sub] of this.#subs) this.#post({ id, subscribe: sub.topic });
     this.#refocus();
   }
@@ -289,7 +290,7 @@ export class CoreClient {
       if (this.#channel !== channel || this.#heard !== heard) return;
       // A worker only frozen longer than this, not gone, drops this page's client rather than keep it.
       this.#post({ bye: true });
-      this.#restart("回到前台后核心没有回应");
+      this.#restart(t("web-main.core.wakeSilent"));
     });
   }
 
@@ -315,7 +316,7 @@ export class CoreClient {
 
   close(): void {
     this.#closed = true;
-    this.#rejectCalls("连接已关闭");
+    this.#rejectCalls(t("web-main.core.closed"));
     this.#subs.clear();
     this.#channel?.close();
     this.#channel = null;
@@ -357,7 +358,7 @@ export class CoreClient {
     this.#channel?.close();
     this.#channel = null;
     // Whether they ran is unknown: the caller decides whether to try again.
-    this.#rejectCalls("核心已重启，请重试");
+    this.#rejectCalls(t("web-main.core.restarted"));
     this.#retry();
   }
 
@@ -461,12 +462,12 @@ export function workerOpener(): Opener {
     if (typeof SharedWorker !== "undefined") {
       const worker = new SharedWorker(new URL("./worker.ts", import.meta.url), { type: "module", name: workerName });
       worker.port.onmessage = receive;
-      worker.onerror = () => onFail("共享 worker 没有启动");
+      worker.onerror = () => onFail(t("web-main.core.sharedWorkerFailed"));
       return { post: (message) => worker.port.postMessage(message), close: () => worker.port.close() };
     }
     const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: workerName });
     worker.onmessage = receive;
-    worker.onerror = (event) => onFail(event.message || "worker 出错");
+    worker.onerror = (event) => onFail(event.message || t("web-main.core.workerFailed"));
     return { post: (message) => worker.postMessage(message), close: () => worker.terminate() };
   };
 }
@@ -515,6 +516,8 @@ export interface StillFailDesktop {
   onResume?(listener: (away: number) => void): () => void;
   /** The computer's network became another; the returned function stops listening. An app from before this has none. */
   onNetwork?(listener: () => void): () => void;
+  /** Says which language the page speaks, for the app's menus and dialogs. An app from before languages has none. */
+  language?(lang: "zh" | "en"): void;
 }
 
 /**
@@ -559,7 +562,7 @@ export function desktopOpener(desktop: StillFailDesktop): Opener {
       if (event.source !== window) return;
       const data = event.data as { stillfailCore?: string; id?: number; reason?: string } | null;
       if (data?.stillfailCore === "exit") {
-        onFail(data.reason ?? "核心进程退出了");
+        onFail(data.reason ?? t("web-main.core.exited"));
       } else if (data?.stillfailCore === "port" && data.id === id && !port && event.ports[0]) {
         port = event.ports[0];
         port.onmessage = (message) => onMessage(JSON.parse(message.data as string));

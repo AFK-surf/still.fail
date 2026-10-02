@@ -9,6 +9,7 @@ import { Landscape, Move } from "./icons.tsx";
 import { LIMIT, PRESETS, presetOf, setViewport, type Viewport } from "./viewport.ts";
 import { dims, useTouch, ViewportSheet, type Zoom } from "./ViewportSize.tsx";
 import * as css from "./PreviewStage.css.ts";
+import { t } from "./i18n.ts";
 
 /** The page's box in the stage: its top-left, how much it is drawn at, and the size it is laid out at. */
 export interface Placed { x: number; y: number; scale: number; width: number; height: number }
@@ -419,20 +420,20 @@ function Toolbar({ stage, moving, setMoving }: { stage: Stage; moving: boolean; 
       onPointerCancel={() => { if (press.current) { clearTimeout(press.current.timer); press.current = null; } }}
       onContextMenu={(e) => e.preventDefault()}>
       <div className={css.chips}>
-        <button type="button" className={css.chip} aria-pressed={!viewport} onClick={() => set(null)}>自适应</button>
+        <button type="button" className={css.chip} aria-pressed={!viewport} onClick={() => set(null)}>{t("web-main.viewport.fluid")}</button>
         {PRESETS.map((p) => (
           <button key={p.name} type="button" className={css.chip} aria-pressed={preset === p.name}
             onClick={() => set(preset === p.name ? viewport : { width: p.width, height: p.height })}>{p.name}</button>
         ))}
         <button type="button" className={css.chip} aria-pressed={custom} onClick={() => setSheet(true)}>
-          {custom ? dims(viewport.width, viewport.height) : "自定义"}
+          {custom ? dims(viewport.width, viewport.height) : t("web-main.viewport.custom")}
         </button>
       </div>
       {viewport && (
         <div className={css.tools}>
-          {turnable && <button type="button" className={css.tool} aria-label="横竖互换" onClick={stage.turn}><Landscape size={18} strokeWidth={1.75} /></button>}
-          <button type="button" className={css.tool} aria-label="用手指移动和缩放页面" aria-pressed={moving} onClick={() => setMoving(!moving)}><Move size={18} strokeWidth={1.75} /></button>
-          {stage.zoom.free && <button type="button" className={css.fitTool} onClick={() => { stage.zoom.fit(); setMoving(false); }}>适应</button>}
+          {turnable && <button type="button" className={css.tool} aria-label={t("web-main.viewport.turn")} onClick={stage.turn}><Landscape size={18} strokeWidth={1.75} /></button>}
+          <button type="button" className={css.tool} aria-label={t("web-main.viewport.move")} aria-pressed={moving} onClick={() => setMoving(!moving)}><Move size={18} strokeWidth={1.75} /></button>
+          {stage.zoom.free && <button type="button" className={css.fitTool} onClick={() => { stage.zoom.fit(); setMoving(false); }}>{t("web-main.viewport.fit")}</button>}
         </div>
       )}
       <ViewportSheet open={sheet} onOpenChange={setSheet} viewKey={viewKey} viewport={viewport} turn={stage.turn} />

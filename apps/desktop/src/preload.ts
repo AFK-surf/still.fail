@@ -22,6 +22,8 @@ const desktop = {
   beta: ipcRenderer.sendSync("app:beta") as boolean,
   /** The scheme a sign-in comes back to the app on (stillfail, or the beta app's stillfail-beta). */
   scheme: ipcRenderer.sendSync("app:scheme") as string,
+  /** The language the page speaks (zh or en), for the app's menus and dialogs (main.ts). */
+  language: (lang: string) => ipcRenderer.send("app:language", lang),
   /** A newer build of the app: what there is of it now, each change after, and downloading and installing it (main.ts). */
   appUpdate: {
     state: (): Promise<unknown> => ipcRenderer.invoke("update:state"),

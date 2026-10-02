@@ -10,6 +10,7 @@ import type { Picked } from "./frame.ts";
 import * as css from "./Marks.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import { Tip } from "../ui.tsx";
+import { t } from "../i18n.ts";
 
 interface Mark { picked: Picked; comment: string }
 interface Box { x: number; y: number; width: number; height: number }
@@ -109,13 +110,13 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
       const id = ++shot.current;
       // The page may never answer (gone, or busy): given up on after a while, said as any failure.
       const got = await new Promise<Shot>((done, fail) => {
-        const timer = setTimeout(() => { shots.current.delete(id); fail(new Error("截图超时：网页一直没有回应")); }, SHOT_TIMEOUT_MS);
+        const timer = setTimeout(() => { shots.current.delete(id); fail(new Error(t("web-main.annotate.shotTimeout"))); }, SHOT_TIMEOUT_MS);
         shots.current.set(id, (shot) => { clearTimeout(timer); done(shot); });
         tell({ capture: id, each: true });
       });
       const stamp = new Date().toTimeString().slice(0, 8).replaceAll(":", "");
       const quote = (m: Mark, text: string): DraftQuote => ({
-        id: `mark-${nonce}-${stamp}-${m.picked.n}`, author: `网页 ${name} 标注 ${m.picked.n}`, role: "page", text, comment: m.comment,
+        id: `mark-${nonce}-${stamp}-${m.picked.n}`, author: t("web-main.annotate.pageAuthor", { name, n: m.picked.n }), role: "page", text, comment: m.comment,
       });
       let offer: { files: File[]; quotes: DraftQuote[] };
       if (got.shots) {
@@ -123,26 +124,26 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
         const files: File[] = [], quotes: DraftQuote[] = [];
         for (const m of marks) {
           const png = got.shots.find((s) => s.n === m.picked.n)?.png;
-          if (!png) throw new Error(`标注 ${m.picked.n} 没有截到图`);
-          const file = new File([png], `${name}-标注${m.picked.n}-${stamp}.png`, { type: "image/png" });
+          if (!png) throw new Error(t("web-main.annotate.markNoShot", { n: m.picked.n }));
+          const file = new File([png], t("web-main.annotate.markFile", { name, n: m.picked.n, stamp }), { type: "image/png" });
           files.push(file);
           quotes.push({ ...quote(m, where(m.picked, file.name)), file: file.name });
         }
         offer = { files, quotes };
       } else if (got.png) {
-        offer = { files: [new File([got.png], `${name}-标注-${stamp}.png`, { type: "image/png" })], quotes: marks.map((m) => quote(m, where(m.picked, null))) };
-      } else throw new Error(got.error ?? "没有截到图");
-      if (!offerToDraft(draftKey, offer)) throw new Error("这个对话现在不能发消息");
+        offer = { files: [new File([got.png], t("web-main.annotate.pageFile", { name, stamp }), { type: "image/png" })], quotes: marks.map((m) => quote(m, where(m.picked, null))) };
+      } else throw new Error(got.error ? frameError(got.error) : t("web-main.annotate.noShot"));
+      if (!offerToDraft(draftKey, offer)) throw new Error(t("web-main.annotate.chatLocked"));
       leave();
     } catch (e) {
-      setError(`没能放进对话：${e instanceof Error ? e.message : String(e)}`);
+      setError(t("web-main.annotate.offerFailed", { error: e instanceof Error ? e.message : String(e) }));
     } finally {
       setBusy(false);
     }
   };
 
   const button = on ? (
-    <Tip label={marking ? "停止点选（Esc）" : "标注页面上的元素，发给 agent"}><button type="button" className={pagesCss.iconBtn} aria-pressed={marking} aria-label="标注"
+    <Tip label={marking ? t("web-main.annotate.stopPicking") : t("web-main.annotate.pageTip")}><button type="button" className={pagesCss.iconBtn} aria-pressed={marking} aria-label={t("web-main.annotate.mark")}
       onClick={() => mark(!marking)}>
       <Edit size={14} strokeWidth={1.75} />
     </button></Tip>
@@ -156,12 +157,12 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
       {error
         ? <Tip label={error} cut><span className={css.modeError}>{error}</span></Tip>
         : <span className={css.modeText}>
-            {marks.length ? `已标注 ${marks.length} 处` : "点选页面上的元素"}
-            {marking && <span>{marks.length ? "可以继续点选" : "↑ ↓ 换一层 · Esc 停止"}</span>}
+            {marks.length ? t("web-main.annotate.marked", { n: marks.length }) : t("web-main.annotate.pick")}
+            {marking && <span>{marks.length ? t("web-main.annotate.pickMore") : t("web-main.annotate.pickKeys")}</span>}
           </span>}
-      <Tip label="取消标注"><button type="button" className={css.modeBtn} onClick={leave} disabled={busy} aria-label="取消标注"><Close size={12} strokeWidth={2} /></button></Tip>
+      <Tip label={t("web-main.annotate.cancel")}><button type="button" className={css.modeBtn} onClick={leave} disabled={busy} aria-label={t("web-main.annotate.cancel")}><Close size={12} strokeWidth={2} /></button></Tip>
       <button type="button" className={css.modeSend} onClick={() => void send()} disabled={busy || !marks.length} aria-busy={busy}>
-        <Send size={12} strokeWidth={2} />{busy ? "截图中…" : "放进对话"}
+        <Send size={12} strokeWidth={2} />{busy ? t("web-main.annotate.shooting") : t("web-main.annotate.offer")}
       </button>
     </div>
   ) : null;
@@ -177,8 +178,8 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
         return (
           <div key={m.picked.n}>
             <div className={css.outline} data-open={open || undefined} style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />
-            <Tip label={m.comment || m.picked.kind}><button type="button" className={css.pin} data-open={open || undefined} style={{ left: pin.x, top: pin.y }}
-              aria-label={`标注 ${m.picked.n}`} onClick={() => setEditing(open ? null : m.picked.n)}>{m.picked.n}</button></Tip>
+            <Tip label={m.comment || kindName(m.picked.kind)}><button type="button" className={css.pin} data-open={open || undefined} style={{ left: pin.x, top: pin.y }}
+              aria-label={t("web-main.annotate.markN", { n: m.picked.n })} onClick={() => setEditing(open ? null : m.picked.n)}>{m.picked.n}</button></Tip>
             {open
               ? <Note mark={m} x={pin.x} y={pin.y}
                   onComment={(comment) => setMarks((all) => all.map((x) => (x.picked.n === m.picked.n ? { ...x, comment } : x)))}
@@ -203,14 +204,14 @@ function Note({ mark, x, y, onComment, onDone, onRemove }:
   { mark: Mark; x: number; y: number; onComment(comment: string): void; onDone(): void; onRemove(): void }) {
   return (
     <div className={css.note} style={{ left: `clamp(8px, ${x + 28}px, calc(100% - 288px))`, top: `clamp(8px, ${y - 28}px, calc(100% - 44px))` }}>
-      <input className={css.noteInput} autoFocus value={mark.comment} placeholder={`对这个${mark.picked.kind}说点什么`} aria-label={`标注 ${mark.picked.n} 的说明`}
+      <input className={css.noteInput} autoFocus value={mark.comment} placeholder={t("web-main.annotate.commentOn", { kind: kindName(mark.picked.kind) })} aria-label={t("web-main.annotate.markComment", { n: mark.picked.n })}
         onChange={(e) => onComment(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); onDone(); }
           else if (e.key === "Escape") { e.preventDefault(); if (mark.comment) onDone(); else onRemove(); }
         }} />
       <span className={css.noteKey} aria-hidden="true">↵</span>
-      <Tip label="删掉这处标注"><button type="button" className={css.noteRemove} aria-label="删掉这处标注" onClick={onRemove}><Trash size={14} strokeWidth={1.75} /></button></Tip>
+      <Tip label={t("web-main.annotate.removeMark")}><button type="button" className={css.noteRemove} aria-label={t("web-main.annotate.removeMark")} onClick={onRemove}><Trash size={14} strokeWidth={1.75} /></button></Tip>
     </div>
   );
 }
@@ -221,12 +222,25 @@ function Note({ mark, x, y, onComment, onDone, onRemove }:
  */
 function where(p: Picked, shot: string | null): string {
   const lines = [
-    `${p.kind ?? p.label}${p.text ? `「${p.text}」` : ""}`,
-    `元素：${p.label} · 选择器：${p.selector}`,
+    p.text ? t("web-main.annotate.where.said", { kind: p.kind ? kindName(p.kind) : p.label, text: p.text }) : p.kind ? kindName(p.kind) : p.label,
+    t("web-main.annotate.where.element", { label: p.label, selector: p.selector }),
     shot
-      ? `页面：${p.path}（视口 ${p.viewport.width}×${p.viewport.height}），截图 ${shot} 是窗口里看到的样子，只画了这一处`
-      : `页面：${p.path}（视口 ${p.viewport.width}×${p.viewport.height}），在整页截图的 (${p.page.x}, ${p.page.y}) 处，${p.page.width}×${p.page.height}`,
+      ? t("web-main.annotate.where.shot", { path: p.path, width: p.viewport.width, height: p.viewport.height, shot })
+      : t("web-main.annotate.where.page", { path: p.path, width: p.viewport.width, height: p.viewport.height, x: p.page.x, y: p.page.y, w: p.page.width, h: p.page.height }),
   ];
-  if (p.component) lines.push(`组件：${p.component}`);
+  if (p.component) lines.push(t("web-main.annotate.where.component", { component: p.component }));
   return lines.join("\n");
+}
+
+/** The kinds of thing the frame names (frame.ts kindOf); a frame from before says them in words, shown as they are. */
+const KINDS = new Set(["button", "link", "image", "icon", "video", "input", "select", "label", "heading", "paragraph", "listItem", "list", "nav", "header", "footer", "table", "tableRow", "cell", "tableHeader", "form", "aside", "dialog", "code", "checkbox", "text", "block"]);
+
+/** What sort of thing a mark is on, in words. */
+function kindName(kind: string): string {
+  return KINDS.has(kind) ? t(`web-main.annotate.kind.${kind}`) : kind;
+}
+
+/** Why the frame could not take the pictures, in words (a frame from before says it in its own). */
+function frameError(error: string): string {
+  return error === "no-page" ? t("web-main.annotate.noPage") : error === "no-picture" ? t("web-main.annotate.noPicture") : error;
 }

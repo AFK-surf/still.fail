@@ -12,6 +12,7 @@ import { useAct } from "./toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import * as css from "./Jobs.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
+import { t } from "./i18n.ts";
 
 // What a job's dot says, its word, the line under its name and every time in words are the core's (client/core/src/
 // jobs.rs): `tone` (up, live, restart, fail, off), `meta`, `detail`, a notice's `ago` and `clock`; a chat's all
@@ -58,7 +59,7 @@ export function useJobLog(station: string, id: string | null, lines: number): Jo
 export function useStopJob(station: string): (job: Job) => void {
   const call = useStationCall(station);
   const act = useAct();
-  return (job) => act(stationApi(call).stopJob(job.id), `停下「${job.name}」`);
+  return (job) => act(stationApi(call).stopJob(job.id), t("web-main.jobs.stopWhat", { name: job.name }));
 }
 
 /** Clears a chat's jobs that are over from the page (each session's, as the station keeps them: `clear`). */
@@ -66,7 +67,7 @@ export function useClearEnded(station: string): (sessions: string[]) => void {
   const call = useStationCall(station);
   const act = useAct();
   return (sessions) => {
-    act(Promise.all(sessions.map((s) => stationApi(call).clearEndedJobs(s))), "清掉已结束的任务");
+    act(Promise.all(sessions.map((s) => stationApi(call).clearEndedJobs(s))), t("web-main.jobs.clearWhat"));
   };
 }
 
@@ -112,7 +113,7 @@ function LastOutput({ station, job }: { station: string; job: Job }) {
 /** What a job said, newest first, each with when. */
 function Notices({ job, limit, clockTimes = false }: { job: Job; limit?: number; clockTimes?: boolean }) {
   const notices = (job.notices ?? []).slice(0, limit);
-  if (notices.length === 0) return <p className={css.jobNoticesNone}>还没有通知。它用 <code>stillfail-job notify</code> 说的话会列在这里。</p>;
+  if (notices.length === 0) return <p className={css.jobNoticesNone}>{t("web-main.jobs.noNotices.before")}<code>stillfail-job notify</code>{t("web-main.jobs.noNotices.after")}</p>;
   return (
     <ol className={css.jobNotices} data-clock={clockTimes || undefined}>
       {notices.map((n, i) => <li key={`${n.at}-${i}`}><time dateTime={new Date(n.at).toISOString()}>{clockTimes ? n.clock : n.ago}</time><span>{n.text}</span></li>)}
@@ -131,7 +132,7 @@ export function JobsPopover({ station, view, onService, onTab }:
   const [open, setOpen] = useState<string | null>(null);
   const { jobs } = view;
   if (jobs.length === 0) {
-    return <div className={css.jobsEmpty}><b>还没有服务或后台任务</b><span>agent 开网页、或挂上长期盯着的任务时，会列在这里。</span></div>;
+    return <div className={css.jobsEmpty}><b>{t("web-main.jobs.none")}</b><span>{t("web-main.jobs.noneNote")}</span></div>;
   }
   const shown = jobs.filter((j) => j.current);
   const services = shown.filter((j) => j.service);
@@ -140,7 +141,7 @@ export function JobsPopover({ station, view, onService, onTab }:
     <>
       {services.length > 0 && (
         <section className={css.jobsGroup}>
-          <div className={css.jobsHead}>服务{view.servicesNote && <span>{view.servicesNote}</span>}</div>
+          <div className={css.jobsHead}>{t("web-main.jobs.services")}{view.servicesNote && <span>{view.servicesNote}</span>}</div>
           {services.map((j) => (
             <JobRow key={j.id} job={j} onClick={j.tone === "fail" ? () => onTab(j.id) : () => onService(j.id)}
               end={j.tone === "fail" ? <ChevronRight size={16} /> : <ArrowRight size={16} />} />
@@ -149,7 +150,7 @@ export function JobsPopover({ station, view, onService, onTab }:
       )}
       {plain.length > 0 && (
         <section className={css.jobsGroup}>
-          <div className={css.jobsHead}>后台任务{view.jobsNote && <span>{view.jobsNote}</span>}</div>
+          <div className={css.jobsHead}>{t("web-main.jobs.jobs")}{view.jobsNote && <span>{view.jobsNote}</span>}</div>
           {plain.map((j) => (
             <div key={j.id} className={css.jobFold} data-open={open === j.id || undefined}>
               <JobRow job={j} expanded={open === j.id} onClick={() => setOpen(open === j.id ? null : j.id)}
@@ -159,8 +160,8 @@ export function JobsPopover({ station, view, onService, onTab }:
                   <Notices job={j} limit={3} />
                   <LastOutput station={station} job={j} />
                   <div className={css.jobActions}>
-                    {j.state === "running" && <JobStop station={station} job={j} stop={stop} className={css.jobAction}>停止</JobStop>}
-                    <button type="button" className={css.jobAction} onClick={() => onTab(j.id)}><PanelOpen size={14} />在侧栏看</button>
+                    {j.state === "running" && <JobStop station={station} job={j} stop={stop} className={css.jobAction}>{t("web-main.jobs.stop")}</JobStop>}
+                    <button type="button" className={css.jobAction} onClick={() => onTab(j.id)}><PanelOpen size={14} />{t("web-main.jobs.inPanel")}</button>
                   </div>
                 </div>
               )}
@@ -168,10 +169,10 @@ export function JobsPopover({ station, view, onService, onTab }:
           ))}
         </section>
       )}
-      {shown.length === 0 && <p className={css.jobsQuiet}>眼下没有在跑的服务或任务。</p>}
+      {shown.length === 0 && <p className={css.jobsQuiet}>{t("web-main.jobs.quiet")}</p>}
       <div className={css.jobsFoot}>
         <button type="button" className={css.jobsAll} onClick={() => onTab()}>
-          {view.allText} · 在侧栏看
+          {view.allText} · {t("web-main.jobs.inPanel")}
         </button>
         {/* What the popover leaves out is all over: the button to clear them says how many. */}
         {view.ended > 0 && <ClearEnded station={station} view={view} clear={clear} />}
@@ -193,13 +194,13 @@ export function JobsTab({ station, view, picked, onPick, onService }:
   const services = all.filter((j) => j.service);
   const plain = all.filter((j) => !j.service);
   const job = plain.find((j) => j.id === picked) ?? plain[0] ?? null;
-  if (all.length === 0) return <Empty><p>这个对话里还没有服务或后台任务。</p></Empty>;
+  if (all.length === 0) return <Empty><p>{t("web-main.jobs.noneInChat")}</p></Empty>;
   return (
     <div className={css.jobsTab}>
       <div className={css.jobsTabList}>
         {services.length > 0 && (
           <section className={css.jobsGroup}>
-            <div className={css.jobsHead}>服务</div>
+            <div className={css.jobsHead}>{t("web-main.jobs.services")}</div>
             {services.map((j) => (
               <JobRow key={j.id} job={j} onClick={j.tone === "up" || j.tone === "restart" ? () => onService(j.id) : undefined}
                 end={j.tone === "up" || j.tone === "restart" ? <ArrowRight size={16} /> : undefined} />
@@ -208,7 +209,7 @@ export function JobsTab({ station, view, picked, onPick, onService }:
         )}
         {plain.length > 0 && (
           <section className={css.jobsGroup}>
-            <div className={css.jobsHead}>后台任务</div>
+            <div className={css.jobsHead}>{t("web-main.jobs.jobs")}</div>
             {plain.map((j) => <JobRow key={j.id} job={j} selected={j.id === job?.id} onClick={() => onPick(j.id)} />)}
           </section>
         )}
@@ -221,8 +222,8 @@ export function JobsTab({ station, view, picked, onPick, onService }:
             <b>{job.name}</b>
             <span className={css.jobDetailState}>{job.detail}</span>
             <span className={css.jobDetailGrow} />
-            <Segmented<"notices" | "output"> label="看什么" value={tab} onChange={setTab} options={[{ value: "notices", label: "通知" }, { value: "output", label: "输出" }]} />
-            {job.state === "running" && <Tip label="停止"><JobStop station={station} job={job} stop={stop} className={`${pagesCss.iconBtn} ${css.jobDetailStop}`} label="停止" size={16} /></Tip>}
+            <Segmented<"notices" | "output"> label={t("web-main.jobs.show")} value={tab} onChange={setTab} options={[{ value: "notices", label: t("web-main.jobs.notices") }, { value: "output", label: t("web-main.jobs.output") }]} />
+            {job.state === "running" && <Tip label={t("web-main.jobs.stop")}><JobStop station={station} job={job} stop={stop} className={`${pagesCss.iconBtn} ${css.jobDetailStop}`} label={t("web-main.jobs.stop")} size={16} /></Tip>}
           </div>
           {job.command && <Tip label={job.command} cut><div className={css.jobDetailCommand}>{job.command}</div></Tip>}
           {tab === "notices"
@@ -245,7 +246,7 @@ function Output({ station, job }: { station: string; job: Job }) {
   }, [log?.text]);
   return (
     <pre ref={box} className={css.jobOutput} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
-      {log === null ? "正在读取…" : log.text || "（还没有输出）"}
+      {log === null ? t("web-main.reading") : log.text || t("web-main.jobs.noOutput")}
     </pre>
   );
 }

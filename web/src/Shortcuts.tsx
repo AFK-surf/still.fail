@@ -2,47 +2,48 @@
 // (kept on this device, keymap.ts).
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { ACTIONS, CHANGEABLE, bindingOf, boundTo, changed, keyLabel, keysOf, setKeys, useKeymap, type Action } from "./keymap.ts";
+import { ACTIONS, CHANGEABLE, bindingOf, boundTo, changed, groupLabel, keyLabel, keysOf, labelOf, setKeys, useKeymap, type Action } from "./keymap.ts";
 import { useToast } from "./toast.tsx";
 import { Dialog, MobileBack, Section } from "./ui.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as css from "./Shortcuts.css.ts";
+import { t } from "./i18n.ts";
 
-const GROUPS = ["全局", "对话"] as const;
+const GROUPS = ["global", "chat"] as const;
 
 /** Keys that belong to one place, not changed here: said in the list so that it is all of them. */
-const FIXED: { group: string; rows: [string, string][] }[] = [
-  { group: "输入框", rows: [["发送", "↩"], ["换行", "⇧↩"], ["上一个/下一个对话（输入框为空时）", "↑ / ↓"]] },
-  { group: "文件预览", rows: [["上一张/下一张", "← / →"], ["放大/缩小", "+ / -"], ["适应窗口/原始大小", "0 / 1"], ["关闭", "Esc"]] },
+const fixed = (): { group: string; rows: [string, string][] }[] => [
+  { group: t("web-main.shortcuts.group.composer"), rows: [[t("web-main.shortcuts.send"), "↩"], [t("web-main.shortcuts.newline"), "⇧↩"], [t("web-main.shortcuts.prevNextChat"), "↑ / ↓"]] },
+  { group: t("web-main.shortcuts.group.preview"), rows: [[t("web-main.shortcuts.prevNextImage"), "← / →"], [t("web-main.shortcuts.zoom"), "+ / -"], [t("web-main.shortcuts.fitActual"), "0 / 1"], [t("common.close"), "Esc"]] },
 ];
 
 /** A group's actions here: those only the desktop app has are not shown elsewhere. */
-const actionsOf = (group: string) => (Object.keys(ACTIONS) as Action[])
+const actionsOf = (group: (typeof GROUPS)[number]) => (Object.keys(ACTIONS) as Action[])
   .filter((a) => ACTIONS[a].group === group && (window.stillfailDesktop || ACTIONS[a].keys.length > 0));
 
 /** What an action's keys are here, in words. */
 function keysText(action: Action): string {
   const keys = keysOf(action);
-  return keys.length ? keys.map(keyLabel).join(" / ") : "未设置";
+  return keys.length ? keys.map(keyLabel).join(" / ") : t("web-main.shortcuts.unset");
 }
 
 /** Every shortcut, by where it works; the way to change them at its foot. */
 export function ShortcutsDialog({ open, onClose, settings }: { open: boolean; onClose(): void; settings: string }) {
   useKeymap();
   return (
-    <Dialog open={open} onClose={onClose} title="快捷键"
-      footer={CHANGEABLE ? <Link className={`${controlsCss.btn} ${controlsCss.btnGhost}`} to={settings} onClick={onClose}>修改快捷键</Link> : undefined}>
+    <Dialog open={open} onClose={onClose} title={t("web-main.shortcuts.title")}
+      footer={CHANGEABLE ? <Link className={`${controlsCss.btn} ${controlsCss.btnGhost}`} to={settings} onClick={onClose}>{t("web-main.shortcuts.change")}</Link> : undefined}>
       <div className={css.sheet}>
         {GROUPS.map((group) => (
           <section key={group} className={css.group}>
-            <h3 className={css.groupTitle}>{group}</h3>
+            <h3 className={css.groupTitle}>{groupLabel(group)}</h3>
             {actionsOf(group).map((a) => (
-              <div key={a} className={css.line}><span>{ACTIONS[a].label}</span><span className={css.keys}>{keysText(a)}</span></div>
+              <div key={a} className={css.line}><span>{labelOf(a)}</span><span className={css.keys}>{keysText(a)}</span></div>
             ))}
           </section>
         ))}
-        {FIXED.map(({ group, rows }) => (
+        {fixed().map(({ group, rows }) => (
           <section key={group} className={css.group}>
             <h3 className={css.groupTitle}>{group}</h3>
             {rows.map(([label, keys]) => <div key={label} className={css.line}><span>{label}</span><span className={css.keys}>{keys}</span></div>)}
@@ -74,7 +75,7 @@ export function ShortcutsPage({ back }: { back: string }) {
       const other = boundTo(binding, recording);
       if (other) {
         setKeys(other, keysOf(other).filter((k) => k !== binding));
-        toast(`${keyLabel(binding)} 已从「${ACTIONS[other].label}」移到这里`);
+        toast(t("web-main.shortcuts.moved", { keys: keyLabel(binding), action: labelOf(other) }));
       }
       setKeys(recording, [binding]);
       setRecording(null);
@@ -85,20 +86,20 @@ export function ShortcutsPage({ back }: { back: string }) {
   const any = (Object.keys(ACTIONS) as Action[]).some(changed);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <MobileBack to={back} label="设置" />
-      <header className={pagesCss.pageHead}><div><h1>快捷键</h1></div></header>
+      <MobileBack to={back} label={t("web-main.nav.settings")} />
+      <header className={pagesCss.pageHead}><div><h1>{t("web-main.shortcuts.title")}</h1></div></header>
       {GROUPS.map((group, i) => (
-        <Section key={group} title={group}
-          description={i === 0 ? <>点一个快捷键，再按下新的组合；Esc 取消，⌫ 清除。只对这个设备生效。</> : undefined}
-          actions={i === 0 && any ? <button type="button" className={controlsCss.textToggle} onClick={() => { for (const a of Object.keys(ACTIONS) as Action[]) setKeys(a, null); }}>全部恢复默认</button> : undefined}>
+        <Section key={group} title={groupLabel(group)}
+          description={i === 0 ? <>{t("web-main.shortcuts.hint")}</> : undefined}
+          actions={i === 0 && any ? <button type="button" className={controlsCss.textToggle} onClick={() => { for (const a of Object.keys(ACTIONS) as Action[]) setKeys(a, null); }}>{t("web-main.shortcuts.resetAll")}</button> : undefined}>
           <div className={css.rows}>
             {actionsOf(group).map((a) => (
               <div key={a} className={css.row}>
-                <span className={css.rowLabel}>{ACTIONS[a].label}</span>
-                {changed(a) && <button type="button" className={controlsCss.textToggle} onClick={() => setKeys(a, null)}>恢复默认</button>}
+                <span className={css.rowLabel}>{labelOf(a)}</span>
+                {changed(a) && <button type="button" className={controlsCss.textToggle} onClick={() => setKeys(a, null)}>{t("web-main.shortcuts.reset")}</button>}
                 <button type="button" className={css.record} data-recording={recording === a || undefined} data-none={keysOf(a).length === 0 || undefined}
                   onClick={() => setRecording(recording === a ? null : a)}>
-                  {recording === a ? "按下新的快捷键…" : keysText(a)}
+                  {recording === a ? t("web-main.shortcuts.recording") : keysText(a)}
                 </button>
               </div>
             ))}

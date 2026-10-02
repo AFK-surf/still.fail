@@ -15,6 +15,7 @@ import * as chatCss from "./styles/chat.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import { DoingShown } from "./DoingMark.tsx";
+import { t } from "./i18n.ts";
 
 /** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
 const DROPS = ["", "name", "name account", "name account runtime", "name account runtime effort"];
@@ -50,7 +51,8 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
   const listed = options.filter((o) => [o.name, o.model, ...o.ids].some((s) => s.toLowerCase().includes(words)));
   // By series, in the core's order (Claude's biggest first, the rest by name; newest first in each).
   const bySeries = new Map<string, ModelOption[]>();
-  for (const o of listed) bySeries.set(o.family ?? "其他", [...(bySeries.get(o.family ?? "其他") ?? []), o]);
+  const other = t("web-main.model.otherSeries");
+  for (const o of listed) bySeries.set(o.family ?? other, [...(bySeries.get(o.family ?? other) ?? []), o]);
   const groups = [...bySeries];
   // Shown within the room it has: the most it can say that fits, dropping what matters least first.
   const fit = useRef<HTMLSpanElement>(null);
@@ -81,24 +83,24 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
     <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) { pick.set({ open: true }); setFilter(""); setModelsWidth(null); setShowAccounts(false); } }}>
       <span className={css2.modelTripleFit} ref={fit}>
         <Popover.Trigger className={css2.modelTriple} disabled={options.length === 0 || pick.saving} aria-busy={pick.saving || undefined} data-drop={DROPS[drop]}>
-          {options.length === 0 ? <span className={css2.tripleModel}>没有可用模型</span> : (
+          {options.length === 0 ? <span className={css2.tripleModel}>{t("web-main.model.none")}</span> : (
             <>
-              <Tip label={value.model || null}><span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : "选模型"}</span></span></Tip>
+              <Tip label={value.model || null}><span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : t("web-main.model.pick")}</span></span></Tip>
               {!v.runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={14} />{RUNTIME_LABEL[value.runtime]}</span>}
-              <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={!value.effort || undefined}>{value.effort ?? "默认深度"}</span>
+              <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={!value.effort || undefined}>{value.effort ?? t("web-main.model.defaultEffort")}</span>
               {v.fastText && <span className={`${css2.triplePart} ${css2.tripleEffort}`}>{v.fastText}</span>}
               {account && (
                 <span className={`${css2.triplePart} ${css2.tripleAccount}`} data-level={account.level}>
                   {account.profile && <ProviderLogo runtime={value.runtime} kind={account.profile.kind ?? "env"} size={14} />}
                   <span className={css2.tripleAccountName}>{account.text}</span>
-                  {account.auto && <span className={css2.tripleAccountShort}>自动</span>}
+                  {account.auto && <span className={css2.tripleAccountShort}>{t("web-main.model.auto")}</span>}
                   {account.profile && <span className={css2.tripleRings}><QuotaBars quota={account.profile.quota} compact small bare /></span>}
                 </span>
               )}
             </>
           )}
           {/* What was picked on its way: a ring in place of the chevron, not opened again meanwhile; failed, a red mark there a few seconds. */}
-          <DoingShown state={{ running: !!pick.saving, error: pick.saveFailed }} className={css2.tripleSpinner} label="正在保存" side="top"
+          <DoingShown state={{ running: !!pick.saving, error: pick.saveFailed }} className={css2.tripleSpinner} label={t("web-main.saving")} side="top"
             idle={<ChevronDown size={12} className={chatCss.chooserChevron} />} />
         </Popover.Trigger>
       </span>
@@ -110,10 +112,10 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
           <div className={css2.runPicker}>
             <div className={`${css2.runPickerColumn} ${css2.runPickerModels}`} style={modelsWidth === null ? undefined : { width: modelsWidth }}
               ref={(el) => { if (el && modelsWidth === null) setModelsWidth(Math.ceil(parseFloat(getComputedStyle(el).width))); }}>
-              <h4>模型</h4>
+              <h4>{t("web-main.model.models")}</h4>
               {/* Many models: a filter; the models by series. */}
               {options.length > 8 && (
-                <input className={`${controlsCss.input} ${css2.runPickerFilter}`} placeholder="搜索模型" value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
+                <input className={`${controlsCss.input} ${css2.runPickerFilter}`} placeholder={t("web-main.model.search")} value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
               )}
               {groups.map(([who, list]) => (
                 <div key={who} className={`${css2.runPickerGroup} ${css.series}`}>
@@ -126,11 +128,11 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
                   ))}
                 </div>
               ))}
-              {listed.length === 0 && <p className={`${shellCss.muted} ${css2.runPickerEmpty}`}>没有叫这个的模型</p>}
+              {listed.length === 0 && <p className={`${shellCss.muted} ${css2.runPickerEmpty}`}>{t("web-main.model.noMatch")}</p>}
             </div>
             {v.runtimes.length > 0 && (
               <div className={css2.runPickerColumn}>
-                <h4>运行时</h4>
+                <h4>{t("web-main.model.runtime")}</h4>
                 {v.runtimes.map((r) => (
                   <button key={r} type="button" className={css2.runPickerOption} aria-pressed={draft.runtime === r} onClick={() => pick.set({ runtime: r })}>
                     <RuntimeLogo runtime={r} size={14} />{RUNTIME_LABEL[r]}
@@ -139,16 +141,16 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
               </div>
             )}
             <div className={`${css2.runPickerColumn} ${css2.runPickerEfforts}`}>
-              <h4>思考深度</h4>
+              <h4>{t("web-main.model.effort")}</h4>
               {[null, ...v.efforts].map((e) => (
-                <button key={e ?? ""} type="button" className={css2.runPickerOption} aria-pressed={(draft.effort ?? null) === e} onClick={() => pick.set({ effort: e })}>{e ?? "默认"}</button>
+                <button key={e ?? ""} type="button" className={css2.runPickerOption} aria-pressed={(draft.effort ?? null) === e} onClick={() => pick.set({ effort: e })}>{e ?? t("web-main.model.default")}</button>
               ))}
               {v.fastAvailable && <>
-                <h4>速度</h4>
+                <h4>{t("web-main.model.speed")}</h4>
                 {([null, false, true] as const).map((fast) => (
-                  <button key={String(fast)} type="button" className={css2.runPickerOption} aria-pressed={(draft.fast ?? null) === fast} onClick={() => pick.set({ fast })}>{fast === null ? "跟随订阅" : fast ? "Fast" : "标准"}</button>
+                  <button key={String(fast)} type="button" className={css2.runPickerOption} aria-pressed={(draft.fast ?? null) === fast} onClick={() => pick.set({ fast })}>{fast === null ? t("web-main.model.fastSubscription") : fast ? "Fast" : t("web-main.model.standard")}</button>
                 ))}
-                <small>Fast 消耗更多额度或积分</small>
+                <small>{t("web-main.model.fastNote")}</small>
               </>}
             </div>
           </div>
@@ -160,20 +162,20 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
                 <ChevronRight size={12} className={css2.runPickerWhoChevron} />
               </Popover.Trigger></span>
             {/* Not a Popover.Close: within the accounts' Root, that would close theirs. */}
-            <button type="button" className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css2.btnSm}`} onClick={() => setOpen(false)}>取消</button>
+            <button type="button" className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css2.btnSm}`} onClick={() => setOpen(false)}>{t("common.cancel")}</button>
             {/* Nothing changed: it says so, and only closes. */}
             <button type="button" className={v.changed ? `${controlsCss.btn} ${controlsCss.btnPrimary} ${css2.btnSm}` : `${controlsCss.btn} btn-secondary ${css2.btnSm}`} disabled={!v.option}
-              onClick={() => { setOpen(false); if (v.changed) onConfirm(); }}>{v.changed ? "确定" : "不变"}</button>
+              onClick={() => { setOpen(false); if (v.changed) onConfirm(); }}>{v.changed ? t("common.confirm") : t("web-main.model.unchanged")}</button>
           </div>
           </div></Popover.Anchor>
               <Popover.Portal>
                 {/* The accounts: a panel beside this one, its foot on this one's foot. */}
                 <Popover.Content className={`${controlsCss.popover} ${css2.runPickerPanel} ${css2.runPickerAccounts}`} side="right" align="end" sideOffset={14} alignOffset={-6} collisionPadding={8}
                   onOpenAutoFocus={(e) => e.preventDefault()}>
-                  <h4>账号</h4>
+                  <h4>{t("web-main.model.account")}</h4>
                   {v.dropped && <p className={css2.runPickerNote}>{v.dropped}</p>}
                   <button type="button" className={css2.runPickerOption} aria-pressed={!draft.profile} onClick={() => pick.set({ profile: null })}>
-                    <span className={css2.runOptionText}><span className={css2.runOptionName}>自动</span>
+                    <span className={css2.runOptionText}><span className={css2.runOptionName}>{t("web-main.model.auto")}</span>
                     <span className={css2.runAccountNote}>{v.autoNote}</span></span>
                   </button>
                   {v.accounts.map((a) => (

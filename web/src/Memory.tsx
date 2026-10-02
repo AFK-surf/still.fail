@@ -10,6 +10,7 @@ import { ChevronDown, ChevronRight } from "./icons.tsx";
 import * as css from "./Memory.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
+import { t } from "./i18n.ts";
 
 export type { SkillFile, StationMemory as Memory } from "./api.ts";
 
@@ -23,22 +24,22 @@ export function SkillRow({ skill }: { skill: SkillFile }) {
       <button type="button" className={css.memorySkillRow} onClick={() => setOpen(!open)} aria-expanded={open}>
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         <span className={css.memorySkillText}>
-          <b>{skill.name}{skill.builtin && <span className={css.memorySkillOwn}>station 自带</span>}</b>
-          <span>{about || "（没写什么时候用）"}</span>
+          <b>{skill.name}{skill.builtin && <span className={css.memorySkillOwn}>{t("web-main.memory.builtin")}</span>}</b>
+          <span>{about || t("web-main.memory.noWhen")}</span>
         </span>
       </button>
-      {open && <div className={`${css.memoryDoc} ${conversationCss.markdown}`}><Prose>{(skill.body ?? skill.text) || "（空的）"}</Prose></div>}
+      {open && <div className={`${css.memoryDoc} ${conversationCss.markdown}`}><Prose>{(skill.body ?? skill.text) || t("web-main.memory.empty")}</Prose></div>}
     </div>
   );
 }
 
-/** What each part of the memory is, as both screens say it (the phone's page is ./mobile/Memory.tsx). */
+/** What each part of the memory is, as both screens say it (the phone's page is ./mobile/Memory.tsx); read as shown. */
 export const MEMORY_TEXT = {
-  global: "每个会话开始时都会读。只放跨项目都适用的：团队怎么协作、怎么回复。",
-  projects: "每个项目一份，是一个 skill：会话开始时只读「什么时候用」那句，做到相关的事才读全文。项目不一定是代码仓库。",
-  none: "还没有项目记忆。agent 学到只跟某个项目有关的东西时，会自己建一个。",
-  others: "团队共用的技能说明，agent 做到相关的事时读。",
-  failed: (error: string) => `读不到这台 station 的记忆：${error}。更早的 station 还没有这一页，更新后就有。`,
+  get global() { return t("web-main.memory.global.about"); },
+  get projects() { return t("web-main.memory.projects.about"); },
+  get none() { return t("web-main.memory.projects.none"); },
+  get others() { return t("web-main.memory.others.about"); },
+  failed: (error: string) => t("web-main.memory.failed", { error }),
 };
 
 /** A station's memory, read once (it changes as agents write it, not while it is looked at), or why it could not be. */
@@ -54,20 +55,20 @@ export function useMemory(station: string): { memory: Memory | null; error: stri
 export function MemoryView({ station }: { station: string }) {
   const { memory, error } = useMemory(station);
   if (error) return <p className={shellCss.muted}>{MEMORY_TEXT.failed(error)}</p>;
-  if (!memory) return <p className={shellCss.muted}>正在读取…</p>;
+  if (!memory) return <p className={shellCss.muted}>{t("web-main.reading")}</p>;
   const projects = memory.skills.filter((s) => s.project);
   const others = memory.skills.filter((s) => !s.project);
   return (
     <>
-      <Section title="全局记忆" description={MEMORY_TEXT.global}>
-        <div className={`${css.memoryDoc} ${conversationCss.markdown}`}><Prose>{memory.global.text.trim() || "（空的）"}</Prose></div>
+      <Section title={t("web-main.memory.global")} description={MEMORY_TEXT.global}>
+        <div className={`${css.memoryDoc} ${conversationCss.markdown}`}><Prose>{memory.global.text.trim() || t("web-main.memory.empty")}</Prose></div>
       </Section>
-      <Section title="项目记忆" description={MEMORY_TEXT.projects}>
+      <Section title={t("web-main.memory.projects")} description={MEMORY_TEXT.projects}>
         {projects.length === 0 && <p className={`${shellCss.muted} ${css.memoryNone}`}>{MEMORY_TEXT.none}</p>}
         {projects.map((s) => <SkillRow key={s.name} skill={s} />)}
       </Section>
       {others.length > 0 && (
-        <Section title="其他 skill" description={MEMORY_TEXT.others}>
+        <Section title={t("web-main.memory.others")} description={MEMORY_TEXT.others}>
           {others.map((s) => <SkillRow key={s.name} skill={s} />)}
         </Section>
       )}

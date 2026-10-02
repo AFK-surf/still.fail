@@ -28,7 +28,10 @@ export interface Picked {
   viewport: { width: number; height: number };
   /** tag#id.class, as a person reads it. */
   label: string;
-  /** What sort of thing it is, in words (按钮, 链接, 图片…). */
+  /**
+   * What sort of thing it is: a word the client says in its language (button, link, image…: Marks.tsx kindName); in
+   * words (按钮, 链接, 图片…) from a frame before that.
+   */
   kind: string;
   /** A CSS selector that finds it in the page. */
   selector: string;
@@ -267,7 +270,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
    * or, for a mark out of sight, the page scrolled to it (as it would show there).
    */
   async function shootEach(shown: typeof marks): Promise<{ n: number; png: ArrayBuffer }[]> {
-    if (!doc) throw new Error("页面还没打开");
+    if (!doc) throw new Error("no-page");
     const win = doc.defaultView!;
     const root = doc.documentElement;
     const w = win.innerWidth, h = win.innerHeight;
@@ -297,7 +300,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
       g.scale(scale, scale);
       drawMark(g, place.n, place.page.x - left, place.page.y - place.y, place.page.width, place.page.height);
       const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, "image/png"));
-      if (!blob) throw new Error("截图没能生成");
+      if (!blob) throw new Error("no-picture");
       out.push({ n: place.n, png: await blob.arrayBuffer() });
     }
     return out;
@@ -352,7 +355,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
 
   /** The whole page (as tall as MAX_HEIGHT), with each mark boxed and numbered. */
   async function shoot(shown: typeof marks): Promise<ArrayBuffer> {
-    if (!doc) throw new Error("页面还没打开");
+    if (!doc) throw new Error("no-page");
     const win = doc.defaultView!;
     const root = doc.documentElement;
     const width = Math.max(root.scrollWidth, win.innerWidth);
@@ -370,7 +373,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
       drawMark(g, mark.n, r.left + win.scrollX, r.top + win.scrollY, r.width, r.height);
     }
     const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, "image/png"));
-    if (!blob) throw new Error("截图没能生成");
+    if (!blob) throw new Error("no-picture");
     return blob.arrayBuffer();
   }
 }
@@ -419,23 +422,23 @@ function label(el: Element): string {
 }
 
 const KINDS: Record<string, string> = {
-  button: "按钮", a: "链接", img: "图片", svg: "图标", picture: "图片", video: "视频", input: "输入框", textarea: "输入框",
-  select: "下拉框", label: "标签", h1: "标题", h2: "标题", h3: "标题", h4: "标题", h5: "标题", h6: "标题", p: "段落",
-  li: "列表项", ul: "列表", ol: "列表", nav: "导航", header: "页头", footer: "页脚", table: "表格", tr: "表格行", td: "单元格",
-  th: "表头", form: "表单", aside: "侧栏", dialog: "对话框", code: "代码", pre: "代码",
+  button: "button", a: "link", img: "image", svg: "icon", picture: "image", video: "video", input: "input", textarea: "input",
+  select: "select", label: "label", h1: "heading", h2: "heading", h3: "heading", h4: "heading", h5: "heading", h6: "heading", p: "paragraph",
+  li: "listItem", ul: "list", ol: "list", nav: "nav", header: "header", footer: "footer", table: "table", tr: "tableRow", td: "cell",
+  th: "tableHeader", form: "form", aside: "aside", dialog: "dialog", code: "code", pre: "code",
 };
 
-/** What sort of thing it is, in words. */
+/** What sort of thing it is, as a word the client says in its language (Picked.kind). */
 function kindOf(el: Element): string {
   const role = el.getAttribute("role");
-  if (role === "button") return "按钮";
-  if (role === "link") return "链接";
-  if (el instanceof HTMLInputElement && ["button", "submit", "reset"].includes(el.type)) return "按钮";
-  if (el instanceof HTMLInputElement && ["checkbox", "radio"].includes(el.type)) return "选框";
+  if (role === "button") return "button";
+  if (role === "link") return "link";
+  if (el instanceof HTMLInputElement && ["button", "submit", "reset"].includes(el.type)) return "button";
+  if (el instanceof HTMLInputElement && ["checkbox", "radio"].includes(el.type)) return "checkbox";
   if (KINDS[el.localName]) return KINDS[el.localName]!;
   // A block with words of its own reads as text, one with nothing but others inside as a block.
   const own = [...el.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim());
-  return own ? "文字" : "区块";
+  return own ? "text" : "block";
 }
 
 function selector(el: Element): string {

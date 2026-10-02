@@ -4,6 +4,7 @@ import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { StatusDot, Tip } from "./ui.tsx";
 import * as nav from "./Sidebar.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
+import { t } from "./i18n.ts";
 
 /** What the core is waiting on (see StationTrouble); down, it offers to try again at once (client/core/src/wake.rs). */
 export function Waiting({ status }: { status: StatusView }) {
@@ -43,7 +44,7 @@ export function Retry({ inTip = false }: { inTip?: boolean }) {
   const trying = state.running;
   return (
     <button type="button" className={nav.waitingRetry} disabled={trying} aria-busy={trying || undefined} onClick={() => core().retry()}>
-      {trying ? <><DoingShown state={state} className={nav.rowSpinner} />正在重试</> : <><DoingShown state={state} size={12} bare={inTip} />重试</>}
+      {trying ? <><DoingShown state={state} className={nav.rowSpinner} />{t("web-main.retrying")}</> : <><DoingShown state={state} size={12} bare={inTip} />{t("common.retry")}</>}
     </button>
   );
 }

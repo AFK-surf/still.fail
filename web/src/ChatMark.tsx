@@ -5,6 +5,7 @@ import { reducedMotion } from "./motion.ts";
 import { StatusText } from "./ui.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
+import { t } from "./i18n.ts";
 
 export type ChatTone = "busy" | "done" | "alert" | "wait" | "other";
 
@@ -22,7 +23,6 @@ export function chatTone(item: ChatItem): ChatTone | undefined {
   return item.unread ? "done" : undefined;
 }
 
-const LABEL: Record<ChatTone, string> = { busy: "工作中", done: "做完了，有新消息", alert: "需要处理", wait: "在等你", other: "在等别人" };
 
 /**
  * The mark each chat has and since when, to know one that has just come: every list the chat is in pops it (all and
@@ -46,7 +46,7 @@ export function ChatMark({ item, inline }: { item: ChatItem; inline?: boolean })
     if (!tone || performance.now() - had.since > 300 || !mark.current || reducedMotion()) return;
     mark.current.animate([{ transform: "scale(0)" }, { transform: "scale(1.3)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 320, easing: "ease-out" });
   }, [key, tone]);
-  return tone ? <span ref={mark} className={inline ? css.chatMarkInline : css.chatMark} data-tone={tone} role="img" aria-label={LABEL[tone]} /> : null;
+  return tone ? <span ref={mark} className={inline ? css.chatMarkInline : css.chatMark} data-tone={tone} role="img" aria-label={t(`web-main.chatMark.${tone}`)} /> : null;
 }
 
 /**

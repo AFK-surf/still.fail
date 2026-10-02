@@ -13,19 +13,20 @@ import * as css from "./slack.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 
 import { NAME } from "./channel.ts";
+import { t } from "./i18n.ts";
 export function CreateAppSteps({ name }: { name: string }) {
   const api = useApi();
   const open = useAction(() => api.createAppUrl(name.trim() || NAME), ({ url }) => window.open(url, "_blank", "noopener"));
   return (
     <ol className={controlsCss.steps}>
       <li>
-        <span>用 {NAME} 的配置在 Slack 新建一个 app，名字是「{name.trim() || NAME}」。</span>
-        <Button icon={External} onClick={() => void open.run()} busy={open.busy}>在 Slack 创建 app</Button>
-        {open.error && <p className={controlsCss.fieldError} role="alert">没能打开 Slack：{open.error.message}</p>}
+        <span>{t("web-main.slack.step.create", { app: NAME, name: name.trim() || NAME })}</span>
+        <Button icon={External} onClick={() => void open.run()} busy={open.busy}>{t("web-main.slack.create")}</Button>
+        {open.error && <p className={controlsCss.fieldError} role="alert">{t("web-main.slack.openFailed", { error: open.error.message })}</p>}
       </li>
-      <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>
-      <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
-      <li>把两个 token 填在下面。</li>
+      <li>{t("web-main.slack.step.appToken")}</li>
+      <li>{t("web-main.slack.step.install")}</li>
+      <li>{t("web-main.slack.step.fill")}</li>
     </ol>
   );
 }
@@ -126,16 +127,16 @@ export function TokenFields({ value, onChange, masked, install, check }: {
       <Field label="App-Level Token" htmlFor="app-token">
         <input id="app-token" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" value={value.appToken}
           onChange={(e) => edit({ appToken: e.target.value.trim() })}
-          placeholder={masked?.appToken ? `已保存 ${masked.appToken}，留空保持不变` : "xapp-…"} />
+          placeholder={masked?.appToken ? t("web-main.slack.saved", { token: masked.appToken }) : "xapp-…"} />
       </Field>
       {!install && (
         <Field label="Bot Token" htmlFor="bot-token">
           <input id="bot-token" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" value={value.botToken}
             onChange={(e) => edit({ botToken: e.target.value.trim() })}
-            placeholder={masked?.botToken ? `已保存 ${masked.botToken}，留空保持不变` : "xoxb-…"} />
+            placeholder={masked?.botToken ? t("web-main.slack.saved", { token: masked.botToken }) : "xoxb-…"} />
         </Field>
       )}
-      {value.verified && <span className={controlsCss.verifyOk}><CheckCircle {...ICON} />连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>}
+      {value.verified && <span className={controlsCss.verifyOk}><CheckCircle {...ICON} />{t("web-main.slack.verified", { team: value.verified.team, bot: value.verified.botName })}</span>}
       {check.errors.length > 0 && <ul className={css.fieldErrorList} role="alert">{check.errors.map((e) => <li key={e}>{e}</li>)}</ul>}
       {check.error && <p className={controlsCss.fieldError} role="alert">{check.error}</p>}
     </div>

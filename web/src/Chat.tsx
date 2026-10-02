@@ -44,6 +44,7 @@ import { MessageDecision } from "./Decisions.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
 import { jumped, useJump } from "./jumpTo.ts";
+import { t } from "./i18n.ts";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
@@ -107,7 +108,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
 
   return (
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
-    <section className={sessionCss.chat} aria-label="对话" data-under-composer="" data-avoid-previews="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
+    <section className={sessionCss.chat} aria-label={t("web-main.chat.label")} data-under-composer="" data-avoid-previews="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
       <div className={sessionCss.chatPane}>
       {rows.away && <ToLatest station={station.address} thread={id} waiting={rows.waiting} onClick={rows.toEnd} />}
       <Gallery.Provider value={stable.images}>
@@ -127,10 +128,10 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {quoting.pop}
       {askedFile}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
-      {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
+      {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused}
-        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? "还原对话后才能发送" : "发消息"} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
+        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
 }
@@ -170,11 +171,11 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
       {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
       {messages.length === 0 && chat.outbox.length === 0 && (
         <div className={css.chatEmpty}>
-          <p>在这里发消息，这个对话里的 agent 会在这里回复。</p>
+          <p>{t("web-main.chat.empty")}</p>
         </div>
       )}
       {messages.map((m) => {
-        const line = m.seq === divider ? <div className={css.chatUnreadLine} data-unread-line role="separator"><span>以下是新消息</span></div> : null;
+        const line = m.seq === divider ? <div className={css.chatUnreadLine} data-unread-line role="separator"><span>{t("web-main.chat.unreadLine")}</span></div> : null;
         const { enter, emitted, caught } = rowOf(m);
         // Keyed as a whole: a bare [line, row] pair is placed by its index, and an older page coming in above would
         // shift every index and draw every message anew.
@@ -208,11 +209,11 @@ function ToLatest({ station, thread, waiting, onClick }: { station: string; thre
   const state = thread === null ? { running: false } : asked;
   const coming = state.running;
   return (
-    <Tip label={state.error ?? "跳到最新"} shortcut="chat.latest" side="top">
-      <button type="button" className={css.chatToBottom} aria-label="跳到最新" data-count={waiting > 0 || undefined}
+    <Tip label={state.error ?? t("web-main.chat.toLatest")} shortcut="chat.latest" side="top">
+      <button type="button" className={css.chatToBottom} aria-label={t("web-main.chat.toLatest")} data-count={waiting > 0 || undefined}
         disabled={coming} aria-busy={coming || undefined} onClick={onClick}>
         <DoingShown state={state} className={controlsCss.iconSpinner} size={16} idle={<ArrowDown size={16} strokeWidth={2} />} bare />
-        {waiting > 0 && <span>{waiting} 条新消息</span>}
+        {waiting > 0 && <span>{t("web-main.chat.newMessages", { n: waiting })}</span>}
       </button>
     </Tip>
   );
@@ -236,22 +237,22 @@ function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; l
   const showsAt = o.createdAt + SENDING_SHOWS_MS;
   const [delay] = useState(() => `${Math.max(0, showsAt - Date.now())}ms`);
   return (
-    <MineMessage data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
+    <MineMessage data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
       <MineWords message={o} owner={owner} />
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
-            <Tip label={o.error ? `没发出去：${o.error}` : "没发出去"}>
-              <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />未发送</span>
+            <Tip label={o.error ? t("web-main.draft.notSent", { error: o.error }) : t("web-main.chat.notSent")}>
+              <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />{t("web-main.chat.unsent")}</span>
             </Tip>
             <button type="button" className={css.msgUnsentBtn} disabled={locked || busy} aria-busy={retrying || undefined}
-              onClick={() => { if (to !== null) sending.retry(to, o.id).catch((e: unknown) => toast(`没能重新发送：${failure(e)}`)); }}>
-              <DoingShown state={retry} className={css.msgUnsentSpinner} idle={<Retry size={12} strokeWidth={2} />} />重试</button>
+              onClick={() => { if (to !== null) sending.retry(to, o.id).catch((e: unknown) => toast(t("web-main.chat.resendFailed", { error: failure(e) }))); }}>
+              <DoingShown state={retry} className={css.msgUnsentSpinner} idle={<Retry size={12} strokeWidth={2} />} />{t("common.retry")}</button>
             <button type="button" className={css.msgUnsentBtn} disabled={busy} aria-busy={dropping || undefined}
-              onClick={() => { if (to !== null) sending.discard(to, o.id).catch((e: unknown) => toast(`没能删除：${failure(e)}`)); }}>
-              <DoingShown state={drop} className={css.msgUnsentSpinner} idle={<Trash size={12} strokeWidth={2} />} />删除</button>
+              onClick={() => { if (to !== null) sending.discard(to, o.id).catch((e: unknown) => toast(t("web-main.chat.deleteFailed", { error: failure(e) }))); }}>
+              <DoingShown state={drop} className={css.msgUnsentSpinner} idle={<Trash size={12} strokeWidth={2} />} />{t("common.delete")}</button>
           </div>
-        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
+        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.chat.sending")}</span>}
     </MineMessage>
   );
 }
@@ -280,7 +281,7 @@ export function useSelectionQuote(list: RefObject<HTMLElement | null>, onQuote: 
       <button type="button" className={css.quotePop} style={{ left: picked.x, top: picked.y }}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => { onQuote(picked.quote); setPicked(null); window.getSelection()?.removeAllRanges(); }}>
-        <QuoteIcon size={12} strokeWidth={2.2} />引用
+        <QuoteIcon size={12} strokeWidth={2.2} />{t("web-main.chat.quote")}
       </button>
     ),
   };
@@ -419,7 +420,7 @@ function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: (
       return;
     }
     going.current = true;
-    latest().catch((e: unknown) => { going.current = false; toast(`没能跳到最新：${failure(e)}`); });
+    latest().catch((e: unknown) => { going.current = false; toast(t("web-main.chat.toLatestFailed", { error: failure(e) })); });
   };
 }
 
@@ -825,11 +826,11 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
 }) {
   if (m.mine) {
     return (
-      <MineMessage data-author="你" data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
+      <MineMessage data-author={t("web-main.chat.you")} data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
         <MineWords message={m} owner={owner} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
         {m.waiting
-          ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />等待 agent 接收</span>
+          ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.chat.waitingAgent")}</span>
           : <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />}
       </MineMessage>
     );
@@ -871,13 +872,13 @@ function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () =>
   return (
     <div className={decisionsCss.archiveOptions}>
       <button type="button" className={decisionsCss.option} data-busy={keeping || undefined} disabled={busy || keeping}
-        aria-busy={keeping || undefined} onClick={() => act(api.keepChat(thread), "停止归档提醒", "已保留，不再提醒归档")}>
-        <span className={decisionsCss.optionLabel}>不再提醒归档</span>
+        aria-busy={keeping || undefined} onClick={() => act(api.keepChat(thread), t("web-main.chat.keep.what"), t("web-main.chat.keep.done"))}>
+        <span className={decisionsCss.optionLabel}>{t("web-main.chat.keep")}</span>
         <DoingShown state={keepState} className={decisionsCss.optionSpinner} />
       </button>
       <button type="button" className={decisionsCss.option} data-recommended="" data-busy={busy || undefined} disabled={busy || keeping}
         aria-busy={busy || undefined} onClick={onArchive}>
-        <span className={decisionsCss.optionLabel}>归档这个 chat</span>
+        <span className={decisionsCss.optionLabel}>{t("web-main.chat.archiveThis")}</span>
         {busy && <span className={`${waitingCss.spinner} ${decisionsCss.optionSpinner}`} aria-hidden="true" />}
       </button>
     </div>
@@ -1050,14 +1051,14 @@ function QuoteCard({ quote, onJump, comment, onRemove, picture }: { quote: Quote
   const pin = quote.role === "page" || quote.role === "image" ? /(\d+)$/.exec(quote.author)?.[1] : undefined;
   return (
     <div className={css.quoteCard}>
-      <Tip label={onJump ? "跳到原消息" : pin ? quote.text : undefined}><button type="button" className={css.quoteCardSource} onClick={onJump ? (e) => onJump(e.currentTarget) : undefined} disabled={!onJump}>
+      <Tip label={onJump ? t("web-main.quote.jump") : pin ? quote.text : undefined}><button type="button" className={css.quoteCardSource} onClick={onJump ? (e) => onJump(e.currentTarget) : undefined} disabled={!onJump}>
         {pin
           ? <span className={css.quoteCardText}><span className={css.quoteCardPin}>{pin}</span>{quote.text.split("\n")[0]}</span>
-          : <span className={css.quoteCardText}><QuoteIcon size={11} strokeWidth={2.4} aria-hidden="true" /><span className={css.quoteCardWho}>{quote.author}：</span>{quote.text}</span>}
+          : <span className={css.quoteCardText}><QuoteIcon size={11} strokeWidth={2.4} aria-hidden="true" /><span className={css.quoteCardWho}>{t("web-main.quote.author", { author: quote.author })}</span>{quote.text}</span>}
       </button></Tip>
       {picture && <div className={css.quoteCardPicture}>{picture}</div>}
       {comment ?? (quote.comment ? <div className={css.quoteCardComment}>{quote.comment}</div> : null)}
-      {onRemove && <button type="button" className={css.quoteCardRemove} aria-label="移除引用" onClick={onRemove}><Close size={12} /></button>}
+      {onRemove && <button type="button" className={css.quoteCardRemove} aria-label={t("web-main.quote.remove")} onClick={onRemove}><Close size={12} /></button>}
     </div>
   );
 }
@@ -1150,10 +1151,10 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (video && sessionKey !== null) {
     return (
       <>
-        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={thumbId(station.address, sessionKey, file.path)} onClick={() => setOpen(true)} aria-label={`${videoFailed ? "查看" : "播放"} ${file.name}`} style={look.box(file)} data-unavailable={videoFailed || undefined}>
+        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={thumbId(station.address, sessionKey, file.path)} onClick={() => setOpen(true)} aria-label={t(videoFailed ? "web-main.file.view" : "web-main.file.play", { name: file.name })} style={look.box(file)} data-unavailable={videoFailed || undefined}>
           {url && !videoFailed && <video src={url} muted playsInline preload="auto" aria-hidden="true" onError={() => setVideoFailed(true)} />}
           <span className={videoFailed ? css.msgVideoUnavailable : css.msgVideoPlay} aria-hidden="true">
-            {videoFailed ? <><Read size={24} /><span>暂时无法预览</span><small>{fileSize(file.size)}</small></> : "▶"}
+            {videoFailed ? <><Read size={24} /><span>{t("web-main.file.noPreview")}</span><small>{fileSize(file.size)}</small></> : "▶"}
           </span>
           <span className={css.msgVideoName}>{file.name}</span>
         </button></Tip>
@@ -1164,11 +1165,11 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <button ref={box} type="button" className={look.image} data-send-image={sentImageKey(file.path)} onClick={() => (url || failed) && setOpen(true)} aria-label={`查看 ${file.name}`} style={look.box(file)}
+        <button ref={box} type="button" className={look.image} data-send-image={sentImageKey(file.path)} onClick={() => (url || failed) && setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={look.box(file)}
           data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
           data-loaded={loaded ?? undefined} data-failed={failed || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} />}
-          {failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>暂时无法预览</span></span>}
+          {failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>{t("web-main.file.noPreview")}</span></span>}
           {url && <img src={url} alt={file.name} onLoad={shown} />}
         </button>
         {preview}
@@ -1178,7 +1179,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (sessionKey === null) return look.card(file);
   return (
     <>
-      <button type="button" className={look.open} onClick={() => setOpen(true)} aria-label={`查看 ${file.name}`}>{look.card(file)}</button>
+      <button type="button" className={look.open} onClick={() => setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })}>{look.card(file)}</button>
       {preview}
     </>
   );
@@ -1217,9 +1218,9 @@ function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "
       {pending ? <span className={waitingCss.spinner} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
       <span className={css.fileCardText}>
         <span className={css.fileCardName}>{file.name}</span>
-        <span className={css.fileCardMeta}>{error ?? (pending ? "正在上传…" : fileSize(file.size))}</span>
+        <span className={css.fileCardMeta}>{error ?? (pending ? t("web-main.file.uploading") : fileSize(file.size))}</span>
       </span>
-      {onRemove && <button type="button" className={css.fileCardRemove} aria-label={`移除 ${file.name}`} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
+      {onRemove && <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: file.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span></Tip>
   );
 }
@@ -1269,7 +1270,7 @@ export function Composer(props: ComposerProps) {
 }
 
 /** The chat's composer, also used where a page sends its draft as a reply to a decision. */
-export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = "发消息", locked = false, roomy = false, draftKey }: ComposerProps & {
+export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
   draft: Draft; submitDraft?: (draft: Draft) => void;
 }) {
   const api = useApi();
@@ -1341,14 +1342,14 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
         {field}
         <div className={css.composerToolbar}>
           <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
-          <Tip label="发送文件" shortcut="composer.file">
-            <button type="button" className={css.attachBtn} aria-label="发送文件" disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
+          <Tip label={t("web-main.composer.attach")} shortcut="composer.file">
+            <button type="button" className={css.attachBtn} aria-label={t("web-main.composer.attach")} disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
               <Plus size={18} />
             </button>
           </Tip>
           {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
-          <Tip label={draft.uploading ? "文件还在上传" : "发送"}>
-            <button type="submit" className={css.sendBtn} disabled={!ready} aria-label="发送" aria-busy={draft.starting || undefined}>
+          <Tip label={draft.uploading ? t("web-main.composer.stillUploading") : t("web-main.composer.send")}>
+            <button type="submit" className={css.sendBtn} disabled={!ready} aria-label={t("web-main.composer.send")} aria-busy={draft.starting || undefined}>
               {draft.starting ? <span className={waitingCss.spinner} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
             </button>
           </Tip>
@@ -1377,7 +1378,7 @@ function useSpaceHint(locked: boolean): string | null {
   }, []);
   const key = shortcutOf("composer.focus");
   if (!away || locked || !key) return null;
-  return /^[\u4e00-\u9fff]+$/.test(key) ? `按${key}输入` : `按 ${key} 输入`;
+  return t(/^[\u4e00-\u9fff]+$/.test(key) ? "web-main.composer.pressToTypeCjk" : "web-main.composer.pressToType", { key });
 }
 
 /**
@@ -1433,7 +1434,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
       if (now[start] !== "@") return;
       caretAt.current = start + mark.length + 1;
       setText(`${now.slice(0, start)}${mark} ${now.slice(end)}`);
-    }, (e: unknown) => toast(`没能引用「${item.title}」：${failure(e)}`));
+    }, (e: unknown) => toast(t("web-main.composer.refFailed", { title: item.title, error: failure(e) })));
   };
   // Where the caret goes once the text changed by hand is drawn (before anything more is typed).
   const caretAt = useRef<number | null>(null);
@@ -1513,7 +1514,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
   const field = (
     <>
       {marked && <RefMirror text={text} className={className} mirror={mirror} />}
-      <textarea ref={input} className={`${className}${marked ? ` ${refCss.refTextSeeThrough}` : ""}`} rows={1} value={text} placeholder={placeholder} aria-label="消息" readOnly={draft.starting}
+      <textarea ref={input} className={`${className}${marked ? ` ${refCss.refTextSeeThrough}` : ""}`} rows={1} value={text} placeholder={placeholder} aria-label={t("web-main.composer.label")} readOnly={draft.starting}
         onChange={(e) => { setText(e.target.value); onType(); lookForReference(e.target); }}
         onSelect={(e) => lookForReference(e.currentTarget)}
         onBlur={() => setReference(null)}
@@ -1570,7 +1571,7 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
               <QuoteCard quote={q} picture={own && <PendingFile file={own} />}
                 onRemove={() => { setQuotes((all) => all.filter((x) => x.id !== q.id)); if (own) draft.remove(own.id); }} comment={
                 <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
-                  className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder="对这段说点什么（可以不写）" aria-label={`对 ${q.author} 这段的批注`}
+                  className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder={t("web-main.quote.commentPlaceholder")} aria-label={t("web-main.quote.commentLabel", { author: q.author })}
                   onChange={(e) => { const v = e.target.value; setQuotes((all) => all.map((x) => (x.id === q.id ? { ...x, comment: v } : x))); }}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); onDone(); } }} />
               } />
@@ -1594,7 +1595,7 @@ function PendingFile({ file: f, onRemove }: { file: Pending; onRemove?: () => vo
     <Tip label={f.error ?? f.name}><span className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : undefined} data-error={f.error ? true : undefined}>
       <img src={f.preview} alt={f.name} />
       {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
-      {onRemove && <button type="button" className={css.composerThumbRemove} aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
+      {onRemove && <button type="button" className={css.composerThumbRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span></Tip>
   ) : <FileCard file={f.done ?? f} pending={!f.done && !f.error} error={f.error} {...(onRemove ? { onRemove } : {})} />;
 }
@@ -1958,7 +1959,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
  */
 function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
   const wait = agent.wait;
-  const now = useSteady(wait ? { key: "wait", text: wait.text ?? "等待中" } : agent.activity?.now ?? { key: "busy", text: "处理中" });
+  const now = useSteady(wait ? { key: "wait", text: wait.text ?? t("web-main.activity.waiting") } : agent.activity?.now ?? { key: "busy", text: t("web-main.activity.busy") });
   const row = useRef<HTMLDivElement>(null);
   const line = useRef<HTMLButtonElement>(null);
   const tail = useRef<HTMLSpanElement>(null);

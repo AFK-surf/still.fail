@@ -89,7 +89,8 @@ let where = "";
 let account;
 const pw = await playwright();
 const launch = { headless: opt.headless && !opt.login, executablePath: chromium(), args: ["--disable-renderer-backgrounding", "--disable-background-timer-throttling"] };
-const view = { viewport: { width: 1512, height: 900 }, deviceScaleFactor: 2 };
+// In Chinese, as the page's words looked for below are (section[aria-label="对话"]).
+const view = { viewport: { width: 1512, height: 900 }, deviceScaleFactor: 2, locale: "zh-CN" };
 // With --profile one signed-in context serves every run (each on a page of its own); else each run is a new context,
 // signed in through the dev cloud.
 const kept = opt.profile ? await pw.chromium.launchPersistentContext(opt.profile, { ...launch, ...view }) : null;

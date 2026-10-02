@@ -1,1 +1,27 @@
-{}
+{
+  "desktop.core.callFailed": "Call failed",
+  "desktop.core.exited": "The core process exited",
+  "desktop.core.exitedCode": "The core process exited ({code})",
+  "desktop.menu.about": "About {app}",
+  "desktop.menu.checkUpdates": "Check for Updates…",
+  "desktop.menu.hide": "Hide {app}",
+  "desktop.menu.hideOthers": "Hide Others",
+  "desktop.menu.quit": "Quit {app}",
+  "desktop.menu.services": "Services",
+  "desktop.menu.showAll": "Show All",
+  "desktop.preview.badMessage": "Can't read this message",
+  "desktop.preview.fetchFailed": "Couldn't fetch from the station: {error}",
+  "desktop.preview.gone": "This preview has expired. Open it again in {app}.",
+  "desktop.preview.redirectedAway": "This page redirected to another address: {location}",
+  "desktop.preview.tooManyRedirects": "Too many redirects",
+  "desktop.station.enrolled": "This Mac is already in a workspace",
+  "desktop.station.joining": "Joining. One moment…",
+  "desktop.station.notCarried": "This version of the app doesn't include a station",
+  "desktop.update.available": "Version {version} is available",
+  "desktop.update.availableDetail": "You have {current}. Updating downloads the new version, then restarts {app}",
+  "desktop.update.checkFailed": "Couldn't check for updates",
+  "desktop.update.dev": "Development builds don't check for updates",
+  "desktop.update.later": "Later",
+  "desktop.update.latest": "You're up to date",
+  "desktop.update.update": "Update"
+}

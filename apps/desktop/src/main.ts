@@ -18,6 +18,8 @@ import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
 import { LocalStation, type Place } from "./station";
 import { moveUserData } from "./moves.mts";
 import { exportOriginStorage, importOriginStorage, type OriginSnapshot } from "./origin-storage";
+import zhWords from "../../../client/i18n/catalog/zh/desktop.json" with { type: "json" };
+import enWords from "../../../client/i18n/catalog/en/desktop.json" with { type: "json" };
 
 const CLOUD_ORIGIN = (process.env.STILLFAIL_CLOUD_ORIGIN ?? process.env.EMBER_CLOUD_ORIGIN ?? "https://app.still.fail").replace(/\/+$/, "");
 /**
@@ -43,6 +45,22 @@ const NAME = BETA ? "youdid.wtf" : "still.fail";
  * the beta app's only stillfail-beta://, so a sign-in or a link comes back to the app that asked for it.
  */
 const SCHEMES = BETA ? ["stillfail-beta"] : ["stillfail", "ember"];
+
+// The words the app says itself (menus, dialogs, errors), from the same catalog as the page's (client/i18n/catalog,
+// web/src/i18n.ts `tr`), in the language the page says it speaks (preload.ts `language`), else the system's.
+type Lang = "zh" | "en";
+type Words = Record<string, string | { one?: string; other: string }>;
+const WORDS: Record<Lang, Words> = { zh: zhWords as Words, en: enWords as Words };
+let chosenLang: Lang | null = null;
+const langOf = (locale: string): Lang => !locale || locale.toLowerCase().startsWith("zh") ? "zh" : "en";
+
+/** The words for `key` in the app's language, with `args` put in for `{name}`. */
+function t(key: string, args?: Record<string, string | number>): string {
+  const lang = chosenLang ?? (app.isReady() ? langOf(app.getLocale()) : "zh");
+  const found = WORDS[lang][key] ?? WORDS.zh[key];
+  const text = found === undefined ? key : typeof found === "string" ? found : (args && Number(args.n) === 1 ? found.one : undefined) ?? found.other;
+  return args ? text.replace(/\{(\w+)\}/g, (all, name: string) => (name in args ? String(args[name]) : all)) : text;
+}
 /** build/ (apps/desktop/build.sh) when run from the source, the app's Resources when packaged: web/, stillfail_core.node and station/. */
 const resources = app.isPackaged ? process.resourcesPath : join(__dirname, "..");
 const web = join(resources, "web");
@@ -115,10 +133,10 @@ function coreProcess(): UtilityProcess {
   const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, join(resources, "stillfail_core.node"), BETA ? "beta" : ""], { serviceName: `${NAME} core` });
   child.on("exit", (code) => {
     if (core === child) core = null;
-    dropOwnLink("核心进程退出了");
+    dropOwnLink(t("desktop.core.exited"));
     // Its ports are dead with it: every page opens a new one.
     for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) window.webContents.send("core:exit", `核心进程退出了（${code}）`);
+      if (!window.isDestroyed()) window.webContents.send("core:exit", t("desktop.core.exitedCode", { code: String(code) }));
     }
   });
   core = child;
@@ -139,6 +157,12 @@ ipcMain.on("app:version", (event) => { event.returnValue = app.getVersion(); });
 // The beta app or not, and the scheme its sign-in comes back on (web/src/cloud/accounts.ts).
 ipcMain.on("app:beta", (event) => { event.returnValue = BETA; });
 ipcMain.on("app:scheme", (event) => { event.returnValue = SCHEMES[0]; });
+// The language the page speaks (web/src/main.tsx): the app's menus and dialogs speak it too.
+ipcMain.on("app:language", (event, lang: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || (lang !== "zh" && lang !== "en") || lang === chosenLang) return;
+  chosenLang = lang;
+  if (app.isReady()) setMenu();
+});
 
 // The app's own way to the core, for what it serves itself (previews): a client of the core as a page is, making calls.
 interface OwnLink {
@@ -182,7 +206,7 @@ function ownLink(): OwnLink {
         return;
       }
       link.waiting.delete(message.id!);
-      if (message.error) waiting.reject(new Error(message.error.message ?? "调用失败"));
+      if (message.error) waiting.reject(new Error(message.error.message ?? t("desktop.core.callFailed")));
       else waiting.resolve(message.ok);
     });
     port2.start();
@@ -338,7 +362,7 @@ async function previewSocket(request: Request, url: URL, station: string, port: 
       : kind === 2 ? { binary: payload.toString("base64") }
       : kind === 8 ? { close: [payload.length >= 2 ? payload.readUInt16BE(0) : 1000, payload.subarray(2).toString("utf8")] }
       : null;
-    if (!message) return plain(400, "看不懂这条消息");
+    if (!message) return plain(400, t("desktop.preview.badMessage"));
     try {
       await coreCall("preview.socket.send", { socket: sid, ...message });
       return new Response(null, { status: 204 });
@@ -379,7 +403,7 @@ async function preview(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const host = /^p(\d{1,5})-([0-9a-f]{12})$/.exec(url.hostname);
   const station = host ? previewStations.get(host[2]!) : undefined;
-  if (!host || !station) return plain(404, `预览已经失效：在 ${NAME} 里重新打开它。`);
+  if (!host || !station) return plain(404, t("desktop.preview.gone", { app: NAME }));
   if (url.pathname === "/_ember/frame") return new Response(FRAME, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
   if (url.pathname === "/_ember/annotate.js") return new Response(await readFile(join(__dirname, "annotate.js")).catch(() => ""), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } });
   if (url.pathname === "/_ember/socket.js") return new Response(SOCKET, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } });
@@ -405,11 +429,11 @@ async function preview(request: Request): Promise<Response> {
       if (!location) { answer = got; break; }
       void got.body.cancel();
       const next = new URL(location, `http://localhost:${host[1]}${path}`);
-      if (next.hostname !== "localhost" && next.hostname !== "127.0.0.1") return plain(502, `这个网页跳到了别的地址：${location}`);
+      if (next.hostname !== "localhost" && next.hostname !== "127.0.0.1") return plain(502, t("desktop.preview.redirectedAway", { location }));
       path = next.pathname + next.search;
       if (page) return new Response(`<!doctype html><meta charset="utf-8"><meta name="stillfail-redirect"><script>location.replace(${JSON.stringify(path)})</script>`, { headers: { "content-type": "text/html; charset=utf-8" } });
     }
-    if (!answer) return plain(508, "跳转太多次了");
+    if (!answer) return plain(508, t("desktop.preview.tooManyRedirects"));
     const empty = request.method === "HEAD" || [101, 204, 205, 304].includes(answer.status);
     if (empty) {
       void answer.body.cancel();
@@ -419,7 +443,7 @@ async function preview(request: Request): Promise<Response> {
     const html = (answer.headers.find(([k]) => k.toLowerCase() === "content-type")?.[1] ?? "").startsWith("text/html");
     return new Response(page && html ? withSocketTag(answer.body) : answer.body, { status: answer.status, headers: answer.headers });
   } catch (error) {
-    return plain(502, `没能从 station 取到：${error instanceof Error ? error.message : String(error)}`);
+    return plain(502, t("desktop.preview.fetchFailed", { error: error instanceof Error ? error.message : String(error) }));
   }
 }
 
@@ -446,9 +470,9 @@ ipcMain.handle("station:state", (event) => event.senderFrame?.url.startsWith(`${
 // Asked for (「添加这台 Mac」): joins whether or not it joined a workspace before, but not over one it is in.
 ipcMain.handle("station:join", async (event, account: unknown, workspace: unknown) => {
   if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof account !== "string" || typeof workspace !== "string") return null;
-  if (!station.carried) return { error: "这个版本的 app 没有带 station" };
-  if (station.enrolled) return { error: "这台 Mac 已经在一个 workspace 里" };
-  if (joining) return { error: "正在加入，稍等" };
+  if (!station.carried) return { error: t("desktop.station.notCarried") };
+  if (station.enrolled) return { error: t("desktop.station.enrolled") };
+  if (joining) return { error: t("desktop.station.joining") };
   try {
     await joinHere(account, workspace);
     return { station: carriedStation() };
@@ -530,7 +554,7 @@ ipcMain.on("update:start", (event) => {
 type UpdateCheck = { current: string; latest?: string; error?: string };
 
 /** Asks the feed now, not waiting for the next check (set by keepUpdated; run from the source, there is no feed). */
-let checkNow = async (): Promise<UpdateCheck> => ({ current: app.getVersion(), error: "开发版不检查更新" });
+let checkNow = async (): Promise<UpdateCheck> => ({ current: app.getVersion(), error: t("desktop.update.dev") });
 
 ipcMain.handle("update:check", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? checkNow() : null);
 
@@ -540,13 +564,13 @@ async function checkFromMenu(): Promise<void> {
   const window = BrowserWindow.getFocusedWindow();
   const show = (options: Electron.MessageBoxOptions) => window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options);
   if (found.error) {
-    await show({ type: "warning", message: "检查更新失败", detail: found.error });
+    await show({ type: "warning", message: t("desktop.update.checkFailed"), detail: found.error });
   } else if (!found.latest) {
-    await show({ message: "已是最新版本", detail: `${NAME} ${found.current}` });
+    await show({ message: t("desktop.update.latest"), detail: `${NAME} ${found.current}` });
   } else {
     const { response } = await show({
-      message: `有新版本 ${found.latest}`, detail: `当前是 ${found.current}。更新会下载新版本，然后重启 ${NAME}`,
-      buttons: ["更新", "稍后"], defaultId: 0, cancelId: 1,
+      message: t("desktop.update.available", { version: found.latest }), detail: t("desktop.update.availableDetail", { current: found.current, app: NAME }),
+      buttons: [t("desktop.update.update"), t("desktop.update.later")], defaultId: 0, cancelId: 1,
     });
     if (response === 0) startUpdate();
   }
@@ -561,16 +585,16 @@ function setMenu(): void {
     {
       label: app.name,
       submenu: [
-        { role: "about", label: `关于 ${app.name}` },
-        { label: "检查更新…", click: () => void checkFromMenu() },
+        { role: "about", label: t("desktop.menu.about", { app: app.name }) },
+        { label: t("desktop.menu.checkUpdates"), click: () => void checkFromMenu() },
         { type: "separator" },
-        { role: "services", label: "服务" },
+        { role: "services", label: t("desktop.menu.services") },
         { type: "separator" },
-        { role: "hide", label: `隐藏 ${app.name}` },
-        { role: "hideOthers", label: "隐藏其他" },
-        { role: "unhide", label: "全部显示" },
+        { role: "hide", label: t("desktop.menu.hide", { app: app.name }) },
+        { role: "hideOthers", label: t("desktop.menu.hideOthers") },
+        { role: "unhide", label: t("desktop.menu.showAll") },
         { type: "separator" },
-        { role: "quit", label: `退出 ${app.name}` },
+        { role: "quit", label: t("desktop.menu.quit", { app: app.name }) },
       ],
     },
     { role: "fileMenu" },

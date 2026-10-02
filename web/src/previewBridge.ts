@@ -10,6 +10,7 @@
 // code, reason, failed}`. An older frame gets the answer whole, `{id, status, headers, body}`, and asks for no socket.
 
 import { PreviewCache } from "./previewCache.ts";
+import { t } from "./i18n.ts";
 
 type Call = (name: string, params?: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal) => Promise<unknown>;
 
@@ -26,7 +27,7 @@ function toBase64(bytes: Uint8Array): string {
 
 const fromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
 
-const failure = (error: unknown) => `没能从 station 取到：${error instanceof Error ? error.message : String(error)}`;
+const failure = (error: unknown) => t("web-main.preview.fetchFailed", { error: error instanceof Error ? error.message : String(error) });
 
 /**
  * Serves `port` (the frame's) until the returned function is called, which stops whatever is still under way.

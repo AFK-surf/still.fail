@@ -13,19 +13,23 @@ import * as chatCss from "./styles/chat.css.ts";
 import * as css from "./components.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
+import { t } from "./i18n.ts";
 
 /**
  * A filter: 全部 or only the viewer's (我参与的 for chats, 我创建的 for connects), from a menu; for chats (`watching`)
  * also the watching ones (监控中). `compact`: a filter button alone, marked while it filters; else the filter's name
- * beside it. `archive`: the archive's page, the menu's last item under a line.
+ * beside it. `archive`: the archive's page, the menu's last item under a line. Its words are the chats' with `watching`,
+ * else the connects' (`label` and `mine`, which named them, are no longer read).
  */
-export function MineFilter({ label = "筛选", mine = "我创建的", compact, archive, watching }: { label?: string; mine?: string; compact?: boolean; archive?: string | undefined; watching?: boolean }) {
+export function MineFilter({ compact, archive, watching }: { label?: string; mine?: string; compact?: boolean; archive?: string | undefined; watching?: boolean }) {
   const [onlyMine, setOnlyMine] = useOnlyMine();
   const [chatFilter, setChatFilter] = useChatFilter();
   // Chats: one of three (the core keeps 我参与的 and 监控中 apart); connects: all or mine.
   const filter: ChatFilter = watching ? chatFilter : onlyMine ? "mine" : "all";
   const setFilter = (value: ChatFilter) => watching ? setChatFilter(value) : setOnlyMine(value === "mine");
-  const named = filter === "mine" ? mine : filter === "watching" ? "监控中" : "全部";
+  const of = watching ? "chats" : "connects";
+  const mine = t(`web-main.filter.${of}.mine`);
+  const named = filter === "mine" ? mine : filter === "watching" ? t("web-main.filter.watching") : t("web-main.filter.all");
   const navigate = useNavigate();
   // Gone to the archive, the focus is not brought back to the button (it would be ringed there, over the page left).
   const leaving = useRef(false);
@@ -36,19 +40,19 @@ export function MineFilter({ label = "筛选", mine = "我创建的", compact, a
   );
   return (
     <DropdownMenu.Root modal={false}>
-      <Tip label={`筛选${label}`}><DropdownMenu.Trigger className={compact ? css.mineFilterBtn : `${css.mineFilterBtn} ${css.mineFilterWide}`} aria-label={`筛选${label}：${named}`} data-on={filter !== "all" || undefined}>
+      <Tip label={t(`web-main.filter.${of}`)}><DropdownMenu.Trigger className={compact ? css.mineFilterBtn : `${css.mineFilterBtn} ${css.mineFilterWide}`} aria-label={t(`web-main.filter.${of}.named`, { named })} data-on={filter !== "all" || undefined}>
         <Filter size={16} strokeWidth={1.8} />{!compact && <span>{named}</span>}
       </DropdownMenu.Trigger></Tip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}
           onCloseAutoFocus={(e) => { if (leaving.current) { leaving.current = false; e.preventDefault(); } }}>
-          {item("all", `全部${label}`)}
+          {item("all", t(`web-main.filter.${of}.all`))}
           {item("mine", mine)}
-          {watching && item("watching", "监控中")}
+          {watching && item("watching", t("web-main.filter.watching"))}
           {archive && <>
             <DropdownMenu.Separator className={controlsCss.menuSep} />
             <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => { leaving.current = true; navigate(archive); }}>
-              <span className={chatCss.chooserCheck}><Archive size={14} /></span>已归档
+              <span className={chatCss.chooserCheck}><Archive size={14} /></span>{t("web-main.filter.archived")}
             </DropdownMenu.Item>
           </>}
         </DropdownMenu.Content>
@@ -57,23 +61,26 @@ export function MineFilter({ label = "筛选", mine = "我创建的", compact, a
   );
 }
 
-/** "由 X 创建": the person as the core names them (你 for the viewer). */
-export function CreatorText({ creator, verb = "创建" }: { creator: { via?: string | null; shown?: PersonShown } | null | undefined; verb?: string }) {
+/**
+ * "由 X 创建": the person as the core names them (你 for the viewer). `verb`: created (a connect), or started (a chat;
+ * "发起", as it was given before).
+ */
+export function CreatorText({ creator, verb = "created" }: { creator: { via?: string | null; shown?: PersonShown } | null | undefined; verb?: "created" | "started" | "发起" }) {
   if (!creator?.shown) return null;
-  const where = creator.via === "slack" ? "（Slack）" : "";
-  return <span className={css.creator}>由 {creator.shown.display}{where} {verb}</span>;
+  const said = verb === "created" ? "created" : "started";
+  return <span className={css.creator}>{t(`web-main.creator.${said}${creator.via === "slack" ? ".slack" : ""}`, { name: creator.shown.display })}</span>;
 }
 
 /** Who a connect belongs to: avatar and name as the core names them. */
 export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown } | null | undefined }) {
-  if (!owner?.shown) return <span className={`${css.owner} ${css.ownerNone}`}>未设置所属用户</span>;
+  if (!owner?.shown) return <span className={`${css.owner} ${css.ownerNone}`}>{t("web-main.owner.none")}</span>;
   const { name, picture, mine } = owner.shown;
   return (
     <Tip label={owner.id === "local" ? undefined : owner.id}><span className={css.owner}>
       {picture
         ? <img className={cloudCss.person} src={picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
         : <span className={`${cloudCss.person} ${cloudCss.personLetter}`} style={{ width: 16, height: 16, fontSize: 9 }} aria-hidden="true">{([...name][0] ?? "?").toUpperCase()}</span>}
-      {mine ? `${name}（你）` : name}
+      {mine ? t("web-main.owner.you", { name }) : name}
     </span></Tip>
   );
 }
@@ -84,16 +91,16 @@ export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown
  * `small`: where a line is lower than a row (the model control).
  */
 export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null | undefined; compact?: boolean; small?: boolean; bare?: boolean }) {
-  if (!quota) return compact ? null : <p className={`${shellCss.muted} ${css.quotaNote}`}>还没查过额度。</p>;
-  if (quota.state !== "ok" || quota.windows.length === 0) return compact ? null : <p className={`${shellCss.muted} ${css.quotaNote}`}>{quota.detail ?? "查不到额度。"}</p>;
+  if (!quota) return compact ? null : <p className={`${shellCss.muted} ${css.quotaNote}`}>{t("web-main.quota.unchecked")}</p>;
+  if (quota.state !== "ok" || quota.windows.length === 0) return compact ? null : <p className={`${shellCss.muted} ${css.quotaNote}`}>{quota.detail ?? t("web-main.quota.unknown")}</p>;
   if (compact) {
     const lone = quota.windows.length === 1;
     return (
       <span className={css.quotaChips}>
         {quota.windows.map((w) => (
           // Bare: inside a control, so not a stop of their own for the keyboard; the tip still shows on hover.
-          <Tip key={w.label} label={<>{w.label}剩余 {w.left}%{w.refills && <><br />{w.refills}</>}</>}>
-            <EdgeChip fill={w.left} level={w.level} mark={lone ? null : w.mark} label={`${w.label}剩余 ${w.left}%`} small={small} bare={bare} />
+          <Tip key={w.label} label={<>{t("web-main.quota.left", { label: w.label, left: w.left })}{w.refills && <><br />{w.refills}</>}</>}>
+            <EdgeChip fill={w.left} level={w.level} mark={lone ? null : w.mark} label={t("web-main.quota.left", { label: w.label, left: w.left })} small={small} bare={bare} />
           </Tip>
         ))}
       </span>
@@ -105,7 +112,7 @@ export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null
       {quota.windows.map((w) => (
         <div key={w.label} className={css.quotaDial} data-level={w.level}>
           <span className={css.quotaDialNumber}>{w.left}<small>%</small></span>
-          <span className={css.quotaDialCells} role="img" aria-label={`${w.label}剩余 ${w.left}%`}>
+          <span className={css.quotaDialCells} role="img" aria-label={t("web-main.quota.left", { label: w.label, left: w.left })}>
             {Array.from({ length: 10 }, (_, i) => <i key={i} data-on={i < Math.round(w.left / 10) || undefined} />)}
           </span>
           <span className={css.quotaDialLabel}>{w.label}</span>
@@ -156,7 +163,7 @@ export function QuotaRing({ left, level, size = 26 }: { left: number; level: Lev
   const r = c - stroke / 2 - 0.5;
   const around = 2 * Math.PI * r;
   return (
-    <span className={css.quotaRing} data-level={level} style={{ width: size, height: size }} role="img" aria-label={`剩余 ${left}%`}>
+    <span className={css.quotaRing} data-level={level} style={{ width: size, height: size }} role="img" aria-label={t("web-main.quota.leftAlone", { left })}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ strokeWidth: stroke }}>
         <circle className={css.quotaRingTrack} cx={c} cy={c} r={r} />
         {left > 0 && <circle className={css.quotaRingFill} cx={c} cy={c} r={r} strokeDasharray={`${(around * left) / 100} ${around}`} transform={`rotate(${-90 + used * 3.6} ${c} ${c})`} />}
@@ -170,7 +177,7 @@ export function QuotaRing({ left, level, size = 26 }: { left: number; level: Lev
 export function PeopleStack({ people, max = 3 }: { people: { id: string; shown: PersonShown }[] | undefined; max?: number }) {
   if (!people?.length) return null;
   return (
-    <Tip label={`参与：${people.map((p) => p.shown.display).join("、")}`}><span className={css.peopleStack}>
+    <Tip label={t("web-main.people.in", { names: people.map((p) => p.shown.display).join(t("web-main.list.separator")) })}><span className={css.peopleStack}>
       {people.slice(0, max).map((p) => p.shown.picture
         ? <img key={p.id} className={cloudCss.person} src={p.shown.picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
         : <span key={p.id} className={`${cloudCss.person} ${cloudCss.personLetter}`} aria-hidden="true">{([...p.shown.display][0] ?? "?").toUpperCase()}</span>)}
@@ -201,7 +208,7 @@ export function Ring({ percent, level, size = 28, label, title }: { percent: num
 export function AppearanceSetting() {
   const [appearance, setAppearance] = useAppearance();
   return (
-    <Segmented label="外观" value={appearance} onChange={setAppearance}
-      options={[{ value: "system", label: "跟随系统" }, { value: "light", label: "浅色" }, { value: "dark", label: "深色" }]} />
+    <Segmented label={t("web-main.appearance")} value={appearance} onChange={setAppearance}
+      options={[{ value: "system", label: t("web-main.appearance.system") }, { value: "light", label: t("web-main.appearance.light") }, { value: "dark", label: t("web-main.appearance.dark") }]} />
   );
 }

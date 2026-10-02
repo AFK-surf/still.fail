@@ -2,9 +2,9 @@ import "./renamed.ts";
 import "./styles/index.ts";
 import { followAppearance } from "./theme.ts";
 import { startScrollbars } from "./scrollbars.ts";
-import { StrictMode } from "react";
+import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { I18nRoot } from "./i18n.ts";
+import { I18nRoot, useLang } from "./i18n.ts";
 import "@fontsource-variable/inter";
 import { CloudApp } from "./cloud/CloudApp.tsx";
 import { nameTitle } from "./cloud/beta.tsx";
@@ -20,4 +20,11 @@ startScrollbars();
 // station serves no page of its own.
 startTelemetry("cloud");
 nameTitle();
-createRoot(document.getElementById("app")!).render(<StrictMode><I18nRoot><CloudApp /></I18nRoot></StrictMode>);
+/** The desktop app's menus and dialogs speak the page's language (apps/desktop/src/main.ts). */
+function SayLanguage() {
+  const lang = useLang();
+  useEffect(() => { window.stillfailDesktop?.language?.(lang); }, [lang]);
+  return null;
+}
+
+createRoot(document.getElementById("app")!).render(<StrictMode><SayLanguage /><I18nRoot><CloudApp /></I18nRoot></StrictMode>);

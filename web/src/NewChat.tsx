@@ -27,6 +27,7 @@ import { MachineSessions } from "./MachineSessions.tsx";
 import { composerText } from "./Chat.css.ts";
 import { notSent, sendingFirst } from "./madeChat.ts";
 import { OVER_DOCK } from "./Chat.tsx";
+import { t } from "./i18n.ts";
 
 /** A new chat in a workspace; `onCreated` gets the station's address and the new item's session (its address). */
 export function NewChat({ scope, onCreated }: { scope: string; onCreated(station: string, session: string): void }) {
@@ -45,16 +46,16 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
     // Laid out as the page will be (the composer's place held, the words under it), so nothing moves when it comes.
     return (
       <div className={css.newChat}><div className={css.newChatInner}>
-        <Illustration name="new-chat" /><h1 className={css.newChatTitle}>新对话</h1><p className={css.newChatSub}>说要做什么。它会在选好的 station 上用选好的模型开一个新会话。</p>
+        <Illustration name="new-chat" /><h1 className={css.newChatTitle}>{t("web-main.newChat.title")}</h1><p className={css.newChatSub}>{t("web-main.newChat.subChosen")}</p>
         {/* The composer itself (dock.tsx), locked until there is a station to write to: it goes on from the page before
             without leaving the screen for as long as the stations take to come (the first time the page is opened). */}
-        <ComposerSlot variant="new" station={held} draftKey={`new:${held.address}`} thread={null} sessionKey={null} placeholder="做任何事" locked roomy />
-        <p className={`${css.newChatStatus}${error ? ` ${controlsCss.fieldError}` : ""}`}>{error ?? "正在读取 station…"}</p>
+        <ComposerSlot variant="new" station={held} draftKey={`new:${held.address}`} thread={null} sessionKey={null} placeholder={t("web-main.newChat.placeholder")} locked roomy />
+        <p className={`${css.newChatStatus}${error ? ` ${controlsCss.fieldError}` : ""}`}>{error ?? t("web-main.newChat.readingStation")}</p>
       </div></div>
     );
   }
   if (!view) {
-    return <div className={css.newChat}><div className={css.newChatInner}><Illustration name="station-offline" /><h1 className={css.newChatTitle}>新对话</h1><p className={shellCss.muted}>没有在线的 station。到设置里添加一台，或者启动已添加的 station。</p></div></div>;
+    return <div className={css.newChat}><div className={css.newChatInner}><Illustration name="station-offline" /><h1 className={css.newChatTitle}>{t("web-main.newChat.title")}</h1><p className={shellCss.muted}>{t("web-main.newChat.noStation")}</p></div></div>;
   }
   // The composer's files and links belong to the station the chat goes to.
   const station: Station = { id: view.id, name: view.name, base: stationBase(view.station), address: view.station, online: true, settings: `/w/${scope}/settings` };
@@ -88,9 +89,9 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
       )}
       {!runtime || !model ? (
         // Nothing to choose from: the chooser leads to where models are enabled.
-        <Link className={chatCss.chooser} to={profilesPage(station)}>没有可用模型 · 去勾选</Link>
+        <Link className={chatCss.chooser} to={profilesPage(station)}>{t("web-main.newChat.noModels")}</Link>
       ) : (
-        <ModelTriple side="top" pick={pick} onConfirm={() => act(pick.save(), "改模型")} />
+        <ModelTriple side="top" pick={pick} onConfirm={() => act(pick.save(), t("web-main.newChat.changeModelWhat"))} />
       )}
     </>
   ), [stations, station, runtime, model, pick, act]);
@@ -100,7 +101,7 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
   // where that message already waits for the chat to be made.
   const composer = (
     <ComposerSlot variant="new" station={station} draftKey={`new:${station.address}`} thread={null} sessionKey={null} ensureChat={ensureChat}
-      placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
+      placeholder={t("web-main.newChat.placeholder")} toolbar={toolbar} locked={!runtime || !model} roomy
       // Its words stay where they were until the chat's page takes them (../madeChat.ts), over the composer.
       onSending={(text) => {
         const field = document.querySelector<HTMLElement>(`[data-made-composer] .${composerText}`);
@@ -123,11 +124,11 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
     return (
       <div className={css.newChat}>
         <div className={css.newChatInner}>
-          <FirstOne art={<Illustration name="no-profile" />} title={blocked === "profile" ? `给 ${station.name || "这台机器"} 添加一个 Profile` : "勾选要用的模型"}
-            lead={blocked === "profile" ? PROFILE_LEAD : `${station.name || "这台机器"} 的 Profile 还没有启用模型，勾选之后就能开始对话。`}>
+          <FirstOne art={<Illustration name="no-profile" />} title={blocked === "profile" ? t("web-main.newChat.addProfileFor", { name: station.name || t("web-main.newChat.thisMachine") }) : t("web-main.newChat.pickModels")}
+            lead={blocked === "profile" ? PROFILE_LEAD : t("web-main.newChat.noModelsLead", { name: station.name || t("web-main.newChat.thisMachine") })}>
             {blocked === "profile"
-              ? <Button variant="primary" icon={Plus} onClick={() => { setProfileKind("claude-sub"); setAddingProfile(true); }}>添加 Profile</Button>
-              : <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} to={profilesPage(station)}>去勾选模型</Link>}
+              ? <Button variant="primary" icon={Plus} onClick={() => { setProfileKind("claude-sub"); setAddingProfile(true); }}>{t("web-main.newChat.addProfile")}</Button>
+              : <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} to={profilesPage(station)}>{t("web-main.newChat.goPickModels")}</Link>}
             {stations.length > 1 && (
               <Chooser side="bottom" label={<><Server size={14} />{station.name}</>}>
                 {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={14} />{s.name}</Item>)}
@@ -145,8 +146,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
       <div className={css.newChatInner}>
         {/* What leaves as the chat comes (../madeChat.ts): the scene above the composer out of view, what is by it where it is. */}
         <Illustration name="new-chat" data-made-leave="up" />
-        <h1 className={css.newChatTitle} data-made-leave="up">新对话</h1>
-        <p className={css.newChatSub} data-made-leave="up">说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
+        <h1 className={css.newChatTitle} data-made-leave="up">{t("web-main.newChat.title")}</h1>
+        <p className={css.newChatSub} data-made-leave="up">{t("web-main.newChat.sub", { name: station.name || t("web-main.newChat.thisMachine") })}</p>
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
         {choice.spent && <p className={css.spentNotice} role="status" data-made-leave="up">{choice.spent}</p>}
         {composer}
