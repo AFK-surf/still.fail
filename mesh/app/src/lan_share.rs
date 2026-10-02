@@ -12,7 +12,7 @@
 //! after the station's own, with a home of their own under <data>/lan for the runtime's files.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::sync::{Mutex, OnceLock, Weak};
 use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
@@ -218,6 +218,7 @@ async fn round(settings: &Settings) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     fn settings(dir: &std::path::Path, profiles: Value) -> Arc<Settings> {
         std::fs::write(dir.join("config.json"), json!({"profiles": profiles}).to_string()).unwrap();

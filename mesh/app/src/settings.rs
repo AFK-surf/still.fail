@@ -22,7 +22,8 @@ pub struct Settings {
 
 /// The config as written, with the borrowed profiles after its own (whose ids they never take).
 fn with_lent(mut config: Config, lent: &[Profile]) -> Config {
-    config.profiles.extend(lent.iter().filter(|l| !config.profiles.iter().any(|p| p.id == l.id)).cloned());
+    let more: Vec<Profile> = lent.iter().filter(|l| !config.profiles.iter().any(|p| p.id == l.id)).cloned().collect();
+    config.profiles.extend(more);
     config
 }
 
