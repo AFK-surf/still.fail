@@ -438,7 +438,16 @@ export interface EnvVar {
 	value: string;
 }
 
+/** Discovered on the existing profile; credentials and transport settings never enter this view. */
+export interface DecisionCapability {
+	state: string;
+	detail: string;
+	model?: string;
+	provider?: string;
+}
+
 export interface ProfileCheck {
+	decision?: DecisionCapability;
 	/** Runtime → model → supported reasoning levels; absent on older stations. */
 	modelEfforts?: Record<string, Record<string, string[]>>;
 	/** ok | login | failed | unknown */

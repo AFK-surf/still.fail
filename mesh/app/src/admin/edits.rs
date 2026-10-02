@@ -405,6 +405,11 @@ impl AdminApi {
                 }
             }
         }
+        check.decision = Some(crate::decision::profiles::discover(&profile, &check).await);
+        // A profile edited during the probe must not inherit the previous account's capabilities.
+        if self.config().profiles.iter().find(|p| p.id == id).is_none_or(|p| crate::decision::profiles::fingerprint(p) != crate::decision::profiles::fingerprint(&profile)) {
+            return Err(http_error(409, "Profile 已修改，请重新检查"));
+        }
         self.checks.lock().unwrap().insert(id.to_string(), check.clone());
         self.deps.store.set_profile_check(id, &serde_json::to_value(&check)?)?;
         self.events.overview_changed();
@@ -570,6 +575,10 @@ impl AdminApi {
             });
             Ok(())
         })?;
+        let mut check = check;
+        if let Some(profile) = self.config().profiles.iter().find(|p| p.id == id) {
+            check.decision = Some(crate::decision::profiles::discover(profile, &check).await);
+        }
         self.checks.lock().unwrap().insert(id.clone(), check.clone());
         self.deps.store.set_profile_check(&id, &serde_json::to_value(&check)?)?;
         self.events.overview_changed();

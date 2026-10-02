@@ -444,7 +444,7 @@ async fn setup_with(o: Setup) -> Rig {
         mesh,
         quota,
         reset_quota: o.reset_quota,
-        check_profile: Arc::new(|_r| Box::pin(async { ProfileCheck { model_efforts: None, state: "ok".into(), detail: "fake".into(), models: Some(vec![]), checked_at: now_ms() } })),
+        check_profile: Arc::new(|_r| Box::pin(async { ProfileCheck { decision: None, model_efforts: None, state: "ok".into(), detail: "fake".into(), models: Some(vec![]), checked_at: now_ms() } })),
         codex_models: None,
         slack_apps: Some(slack.clone()),
         check_on_start: false,
