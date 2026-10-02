@@ -186,12 +186,169 @@ data class AutomaticDecisionCheck (
 	val error: String? = null
 )
 
+/// Who made a model, for its mark; absent when the marks do not know it (the runtime's stands in).
+@Serializable
+data class Maker (
+	val id: String,
+	val name: String
+)
+
+/// Used up until a time (or no one knows when), in words.
+@Serializable
+data class Spent (
+	val until: Double? = null,
+	val text: String,
+	val back: String? = null
+)
+
+@Serializable
+data class QuotaCredits (
+	val hasCredits: Boolean,
+	val unlimited: Boolean,
+	val balance: String? = null
+)
+
+/// A quota window, as drawn: its mark (5H, W), what is left, how full (ok | amber | red), when it refills in words.
+@Serializable
+data class QuotaWindow (
+	val label: String,
+	val usedPercent: Double,
+	val resetsAt: Long? = null,
+	val mark: String,
+	val left: Long,
+	val level: Level,
+	val refills: String? = null,
+	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
+	val time: Map<String, Stamp>? = null
+)
+
+/// An allowance: its windows shortest first.
+@Serializable
+data class Quota (
+	val credits: QuotaCredits? = null,
+	val resetCount: Long? = null,
+	val creditsText: String? = null,
+	val resetText: String? = null,
+	/// ok | unsupported | unavailable | blocked (the provider refuses the account)
+	val state: String,
+	val windows: List<QuotaWindow>,
+	val detail: String? = null,
+	val checkedAt: Long,
+	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
+	val time: Map<String, Stamp>? = null
+)
+
+/// What is left of an account's allowance, in a few words: every window in gray, or only the one running low, with
+/// its level.
+@Serializable
+data class QuotaLine (
+	val text: String,
+	val level: Level? = null
+)
+
+/// A profile that can run a model: `current` it runs on it now.
+@Serializable
+data class RunnableProfile (
+	/// The chosen model’s reasoning levels on this account.
+	val efforts: List<String>? = null,
+	val id: String,
+	val name: String,
+	val current: Boolean,
+	val spent: Spent? = null,
+	val kind: AccessKind? = null,
+	val runtime: RuntimeKind? = null,
+	val quota: Quota? = null,
+	/// What is left of its allowance, in a few words (a core from before it says nothing).
+	val quotaLine: QuotaLine? = null
+)
+
+/// A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it.
+@Serializable
+data class ModelOption (
+	/// The spelling a client sends: the one that is its key when a profile has that, else the first.
+	val model: String,
+	/// As people call it (Opus 5.5).
+	val name: String,
+	/// Its series (Opus, GPT), what a list groups it under; none when not known. Lists come by series, newest first.
+	val family: String? = null,
+	/// Every spelling of it the station's profiles have enabled (openai/gpt-6-astra, gpt-6-astra): one model.
+	val ids: List<String>,
+	val maker: Maker? = null,
+	val runtimes: List<RuntimeKind>,
+	val efforts: Map<String, List<String>>,
+	val accounts: Map<String, List<RunnableProfile>>,
+	val spent: Spent? = null
+)
+
+/// What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
+/// station's pick.
+@Serializable
+data class Picked (
+	val model: String? = null,
+	val runtime: RuntimeKind,
+	val effort: String? = null,
+	val fast: Boolean? = null,
+	val profile: String? = null
+)
+
+/// The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low.
+@Serializable
+data class PickAccount (
+	val text: String,
+	val auto: Boolean,
+	val level: Level? = null,
+	val profile: RunnableProfile? = null
+)
+
+/// A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
+/// until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
+/// station's pick, said so (`dropped`, `force`).
+@Serializable
+data class PickView (
+	val fastAvailable: Boolean? = null,
+	val fastText: String? = null,
+	val options: List<ModelOption>,
+	val runtimeFixed: Boolean,
+	val value: Picked,
+	val valueOption: ModelOption? = null,
+	/// The account the control names; none: it names none (a new chat's, while the station's pick is fine).
+	val account: PickAccount? = null,
+	val draft: Picked,
+	/// The option picked in the panel, by its `model`.
+	val option: String? = null,
+	/// The runtimes offered for it (none: not asked), how hard it can think there, who can run it.
+	val runtimes: List<RuntimeKind>,
+	val efforts: List<String>,
+	val accounts: List<RunnableProfile>,
+	val dropped: String? = null,
+	/// The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
+	/// station's pick runs low.
+	val who: String,
+	val whoLevel: Level? = null,
+	/// The station's pick, said: who it is on now, or what it does.
+	val autoNote: String,
+	val changed: Boolean,
+	/// Full screen (the phone's): the model, depth and account as they were and as they become; why the account
+	/// must change; the model and account picked in words; what the button says.
+	val was: List<String>,
+	val becomes: List<String>,
+	val force: String? = null,
+	val modelText: String,
+	val maker: Maker? = null,
+	val accountText: String,
+	val accountNote: String,
+	val accountWarn: Boolean,
+	val saveText: String
+)
+
 @Serializable
 data class AutomaticDecisionDraft (
 	val enabled: Boolean,
 	val model: String,
 	val dirty: Boolean,
-	val pending: Boolean
+	val pending: Boolean,
+	/// The shared model selector, restricted to verified decision candidates.
+	val pick: PickView? = null
 )
 
 @Serializable
@@ -337,13 +494,6 @@ typealias Tone = String
 
 /// An agent's mark: at work, blocked, failed.
 typealias Badge = String
-
-/// Who made a model, for its mark; absent when the marks do not know it (the runtime's stands in).
-@Serializable
-data class Maker (
-	val id: String,
-	val name: String
-)
 
 /// What a session keeps watch with (its watches running): their names, oldest first; since when the first runs; when
 /// one last gave word (a notice, else its start).
@@ -531,43 +681,6 @@ data class LoginJob (
 )
 
 @Serializable
-data class QuotaCredits (
-	val hasCredits: Boolean,
-	val unlimited: Boolean,
-	val balance: String? = null
-)
-
-/// A quota window, as drawn: its mark (5H, W), what is left, how full (ok | amber | red), when it refills in words.
-@Serializable
-data class QuotaWindow (
-	val label: String,
-	val usedPercent: Double,
-	val resetsAt: Long? = null,
-	val mark: String,
-	val left: Long,
-	val level: Level,
-	val refills: String? = null,
-	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
-	val time: Map<String, Stamp>? = null
-)
-
-/// An allowance: its windows shortest first.
-@Serializable
-data class Quota (
-	val credits: QuotaCredits? = null,
-	val resetCount: Long? = null,
-	val creditsText: String? = null,
-	val resetText: String? = null,
-	/// ok | unsupported | unavailable | blocked (the provider refuses the account)
-	val state: String,
-	val windows: List<QuotaWindow>,
-	val detail: String? = null,
-	val checkedAt: Long,
-	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
-	val time: Map<String, Stamp>? = null
-)
-
-@Serializable
 data class ProfileTrouble (
 	val title: String,
 	val detail: String,
@@ -627,56 +740,6 @@ data class Profile (
 	val modelsText: String,
 	/// What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
 	val available: List<String>? = null
-)
-
-/// Used up until a time (or no one knows when), in words.
-@Serializable
-data class Spent (
-	val until: Double? = null,
-	val text: String,
-	val back: String? = null
-)
-
-/// What is left of an account's allowance, in a few words: every window in gray, or only the one running low, with
-/// its level.
-@Serializable
-data class QuotaLine (
-	val text: String,
-	val level: Level? = null
-)
-
-/// A profile that can run a model: `current` it runs on it now.
-@Serializable
-data class RunnableProfile (
-	/// The chosen model’s reasoning levels on this account.
-	val efforts: List<String>? = null,
-	val id: String,
-	val name: String,
-	val current: Boolean,
-	val spent: Spent? = null,
-	val kind: AccessKind? = null,
-	val runtime: RuntimeKind? = null,
-	val quota: Quota? = null,
-	/// What is left of its allowance, in a few words (a core from before it says nothing).
-	val quotaLine: QuotaLine? = null
-)
-
-/// A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it.
-@Serializable
-data class ModelOption (
-	/// The spelling a client sends: the one that is its key when a profile has that, else the first.
-	val model: String,
-	/// As people call it (Opus 5.5).
-	val name: String,
-	/// Its series (Opus, GPT), what a list groups it under; none when not known. Lists come by series, newest first.
-	val family: String? = null,
-	/// Every spelling of it the station's profiles have enabled (openai/gpt-6-astra, gpt-6-astra): one model.
-	val ids: List<String>,
-	val maker: Maker? = null,
-	val runtimes: List<RuntimeKind>,
-	val efforts: Map<String, List<String>>,
-	val accounts: Map<String, List<RunnableProfile>>,
-	val spent: Spent? = null
 )
 
 @Serializable
@@ -1380,67 +1443,6 @@ data class MadeSlackApp (
 	val state: String? = null,
 	val installed: Boolean,
 	val installedTeam: String? = null
-)
-
-/// What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
-/// station's pick.
-@Serializable
-data class Picked (
-	val model: String? = null,
-	val runtime: RuntimeKind,
-	val effort: String? = null,
-	val fast: Boolean? = null,
-	val profile: String? = null
-)
-
-/// The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low.
-@Serializable
-data class PickAccount (
-	val text: String,
-	val auto: Boolean,
-	val level: Level? = null,
-	val profile: RunnableProfile? = null
-)
-
-/// A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
-/// until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
-/// station's pick, said so (`dropped`, `force`).
-@Serializable
-data class PickView (
-	val fastAvailable: Boolean? = null,
-	val fastText: String? = null,
-	val options: List<ModelOption>,
-	val runtimeFixed: Boolean,
-	val value: Picked,
-	val valueOption: ModelOption? = null,
-	/// The account the control names; none: it names none (a new chat's, while the station's pick is fine).
-	val account: PickAccount? = null,
-	val draft: Picked,
-	/// The option picked in the panel, by its `model`.
-	val option: String? = null,
-	/// The runtimes offered for it (none: not asked), how hard it can think there, who can run it.
-	val runtimes: List<RuntimeKind>,
-	val efforts: List<String>,
-	val accounts: List<RunnableProfile>,
-	val dropped: String? = null,
-	/// The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
-	/// station's pick runs low.
-	val who: String,
-	val whoLevel: Level? = null,
-	/// The station's pick, said: who it is on now, or what it does.
-	val autoNote: String,
-	val changed: Boolean,
-	/// Full screen (the phone's): the model, depth and account as they were and as they become; why the account
-	/// must change; the model and account picked in words; what the button says.
-	val was: List<String>,
-	val becomes: List<String>,
-	val force: String? = null,
-	val modelText: String,
-	val maker: Maker? = null,
-	val accountText: String,
-	val accountNote: String,
-	val accountWarn: Boolean,
-	val saveText: String
 )
 
 /// One transient connect wizard. Decisions and navigation come from the core on every client.

@@ -21,18 +21,18 @@ fun AutomaticDecisionsScreen(current: WorkspaceEntry) {
     val app = LocalApp.current
     val topic by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("设置", app::pop)
-        LargeTitle("", "自动决策")
+        TopBack(t("android-settings.title"), app::pop)
+        LargeTitle("", t("web-pages.automaticDecisions.title"))
         topic.value?.forEach { station -> key(station.station) {
             val view = station.overview?.automaticDecisions
             when {
-                !station.online -> PageNote("station 上线后可配置和查看记录")
-                station.overview == null -> PageNote("正在连接…")
-                view == null -> PageNote("更新这台 station 后可使用自动决策")
-                !view.canEdit -> PageNote("只有 workspace 管理员可以配置自动决策和查看记录")
+                !station.online -> PageNote(t("web-pages.automaticDecisions.offlineNote"))
+                station.overview == null -> PageNote(t("web-pages.automaticDecisions.connecting"))
+                view == null -> PageNote(t("web-pages.automaticDecisions.upgrade"))
+                !view.canEdit -> PageNote(t("web-pages.automaticDecisions.adminOnly"))
                 else -> AutomaticDecisionPanel(station.station, station.name, view)
             }
-        } } ?: PageNote(topic.error?.message ?: "正在读取…")
+        } } ?: PageNote(topic.error?.message ?: t("web-pages.automaticDecisions.reading"))
         Spacer(Modifier.height(30.dp))
     }
 }
@@ -43,7 +43,7 @@ private fun AutomaticDecisionPanel(station: String, name: String, view: Automati
     val form = remember(station) { java.util.UUID.randomUUID().toString() }
     val topic by rememberTopic<AutomaticDecisionDraft>(app.core, buildJsonObject { put("topic", "decisionForm"); put("station", station); put("form", form) })
     fun act(action: String, input: JsonObject = buildJsonObject {}) {
-        app.act("自动决策配置", if (action == "save") "已保存自动决策" else null) {
+        app.act(t("web-pages.automaticDecisions.configAction"), if (action == "save") t("web-pages.automaticDecisions.saved") else null) {
             app.core.call("automaticDecisions.form.$action", buildJsonObject { put("station", station); put("form", form); put("input", input) })
         }
     }
@@ -51,7 +51,7 @@ private fun AutomaticDecisionPanel(station: String, name: String, view: Automati
     LaunchedEffect(station, form) { act("open") }
     DisposableEffect(station, form) { onDispose { act("drop") } }
     val d = topic.value
-    if (d == null) { PageNote(topic.error?.message ?: "正在读取配置…"); return }
+    if (d == null) { PageNote(topic.error?.message ?: t("web-pages.automaticDecisions.readingConfig")); return }
     val saving = app.isDoing("automaticDecisions.form.save", "station" to station, "form" to form)
     val refreshing = app.isDoing("automaticDecisions.refresh", "station" to station)
     val busy = d.pending || saving
@@ -59,7 +59,7 @@ private fun AutomaticDecisionPanel(station: String, name: String, view: Automati
     Row(Modifier.fillMaxWidth().padding(end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) { SectionHeader(name, start = 24.dp) }
         if (refreshing) Spinner(16.dp) else NavButton(Icons.Refresh, onClick = {
-            app.act("刷新决策模型", "已刷新模型") { app.core.call("automaticDecisions.refresh", buildJsonObject { put("station", station) }) }
+            app.act(t("web-pages.automaticDecisions.refreshAction"), t("web-pages.automaticDecisions.refreshed")) { app.core.call("automaticDecisions.refresh", buildJsonObject { put("station", station) }) }
         })
     }
     val refreshFailed = app.failedOf("automaticDecisions.refresh", "station" to station)
@@ -67,29 +67,26 @@ private fun AutomaticDecisionPanel(station: String, name: String, view: Automati
     ListCard {
         ListRow(onClick = if (busy) null else ({ edit("enabled", JsonPrimitive(!d.enabled)) })) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("完成检查", color = C.ink, fontSize = 15.sp)
-                Text("结束前检查遗漏和待处理事项", fontSize = 13.sp, color = C.muted)
+                Text(t("web-pages.automaticDecisions.completion"), color = C.ink, fontSize = 15.sp)
+                Text(t("web-pages.automaticDecisions.completionShort"), fontSize = 13.sp, color = C.muted)
             }
             Switch(d.enabled)
         }
-        GoRow("决策模型", model?.name ?: if (d.model.isEmpty()) "选择模型" else "${d.model} · 暂不可用") {
+        GoRow(t("web-pages.automaticDecisions.model"), model?.name ?: if (d.model.isEmpty()) t("web-pages.automaticDecisions.pickModel") else t("web-pages.automaticDecisions.unavailable", "model" to d.model)) {
             if (!busy) app.sheet = SheetSpec(0.5f) {
-                SheetGrab(); SheetHead("决策模型")
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                    if (view.models.isEmpty()) PageNote("现有 Profile 暂无可用决策模型")
-                    view.models.forEach { m -> PickRow(m.name, m.profiles.joinToString("、"), checked = m.id == d.model) { app.sheet = null; edit("model", JsonPrimitive(m.id)) } }
-                }
+                SheetGrab(); SheetHead(t("web-pages.automaticDecisions.model"))
+                d.pick?.let { pick -> ModelList(pick.options, "codex", d.model) { model -> app.sheet = null; edit("model", JsonPrimitive(model)) } }
             }
         }
     }
 
     if (d.dirty) Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Button("保存修改", primary = true, busy = saving, enabled = !busy) { act("save") }
+        Button(t("web-pages.automaticDecisions.save"), primary = true, busy = saving, enabled = !busy) { act("save") }
         DoingMark(false, app.failedOf("automaticDecisions.form.save", "station" to station, "form" to form))
     }
-    SectionHeader("最近检查", start = 24.dp)
+    SectionHeader(t("web-pages.automaticDecisions.recent"), start = 24.dp)
     ListCard {
-        if (view.recent.isEmpty()) ListRow { Text("还没有记录", fontSize = 13.sp, color = C.muted) }
+        if (view.recent.isEmpty()) ListRow { Text(t("web-pages.automaticDecisions.noRecords"), fontSize = 13.sp, color = C.muted) }
         view.recent.forEach { row -> ListRow(onClick = { app.push(Screen.Chat(station, ChatOf.Session(row.session))) }) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

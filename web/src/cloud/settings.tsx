@@ -77,7 +77,7 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
       <NavLink className={nav.navRow} to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
       {some && <NavLink className={nav.navRow} to={`${base}/connects`}><Plug {...ICON} />{t("web-pages.settings.nav.connects")}</NavLink>}
       {some && <NavLink className={nav.navRow} to={`${base}/profiles`}><Key {...ICON} />Profile</NavLink>}
-      {some && <NavLink className={nav.navRow} to={`${base}/automatic-decisions`}><Check {...ICON} />自动决策</NavLink>}
+      {some && <NavLink className={nav.navRow} to={`${base}/automatic-decisions`}><Check {...ICON} />{t("web-pages.automaticDecisions.title")}</NavLink>}
       {some && <NavLink className={nav.navRow} to={`${base}/memory`}><Brain {...ICON} />{t("web-pages.settings.nav.memory")}</NavLink>}
       {some && <NavLink className={nav.navRow} to={`${base}/usage`}><Chart {...ICON} />{t("web-pages.settings.nav.usage")}</NavLink>}
       <div className={nav.navHeading}>Cloud</div>
@@ -640,5 +640,5 @@ function AddDialog({ view, account, onClose }: { view: WorkspaceView; account: A
 }
 
 export function AutomaticDecisionsSettings({entry}:{entry:WorkspaceEntry}) {
-  return <Page title="自动决策" lead="选择需要自动判断的事项，并为每项指定模型" back={`/w/${entry.id}/settings`}><AutomaticDecisions workspace={entry.id} /></Page>;
+  return <Page title={t("web-pages.automaticDecisions.title")} lead={t("web-pages.automaticDecisions.lead")} back={`/w/${entry.id}/settings`}><AutomaticDecisions workspace={entry.id} /></Page>;
 }
