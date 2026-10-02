@@ -9,6 +9,7 @@ import { routes as usage } from "./routes/usage.ts";
 import { routes as sessions } from "./routes/sessions.ts";
 import { routes as events } from "./routes/events.ts";
 import { routes as marks } from "./routes/marks.ts";
+import { routes as updates } from "./routes/updates.ts";
 import { routes as hub } from "./routes/hub.ts";
 import type { AgentsParts } from "../sessions/agents.ts";
 import type { Store } from "../store/store.ts";
@@ -52,7 +53,10 @@ export class Admin {
 
   readonly host: Host;
 
+  private deps: AdminDeps;
+
   constructor(readers: Readers, deps: AdminDeps = {}) {
+    this.deps = deps;
     this.readers = readers;
     this.host = deps.host ?? new Host(readers);
     const tools: Tools = {
@@ -69,12 +73,14 @@ export class Admin {
       store: deps.store,
       agents: deps.agents,
     };
-    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools)];
+    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : [])];
   }
 
   async handle(r: Request): Promise<Answer> {
     // Who asks is remembered by name, as the cloud's names (`deps.names`): what chats show of people who wrote.
     if (r.viewer.name !== "") this.readers.names.set(r.viewer.email, r.viewer.name);
+    // Someone uses the station: an automatic update waits for a quiet moment.
+    this.deps.agents?.updates?.used();
     // A write with a key is done once, however often it is asked (once.rs); the key is the viewer's own.
     const key = Object.entries(r.headers).find(([k]) => k.toLowerCase() === ONCE_KEY)?.[1];
     const keyed = key !== undefined && key !== "" && key.length <= 200 && r.method !== "GET" && r.method !== "HEAD";
