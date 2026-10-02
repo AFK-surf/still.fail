@@ -1,4 +1,4 @@
-import { AutomaticDecisions } from "../AutomaticDecisions.tsx";
+import { AutomaticDecisions, AutomaticDecisionCompletion, AutomaticDecisionLogs } from "../AutomaticDecisions.tsx";
 // Settings in still.fail cloud, in two parts: the account the current workspace
 // is reached through (who you are, where you are signed in), and the
 // workspace itself (its name, members, stations, connects and the stations'
@@ -7,7 +7,7 @@ import { Illustration } from "../brand.tsx";
 import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
-import { ArrowLeft, Bell, Brain, Chart, Check, Info, Key, LogOut, Monitor, Plug, Plus, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
+import { ArrowLeft, Bell, Brain, Chart, Check, Info, Key, LogOut, Monitor, Plug, Plus, Read, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useNavigate, useSearchParams } from "react-router";
 import { useStations, type Profile, type StationView } from "../api.ts";
@@ -23,7 +23,7 @@ import { DAYS, PriceTables, UsageBody, usageCss, useUsage, type UsageDays } from
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
 import { failure, useToast } from "../toast.tsx";
-import { About, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time } from "../ui.tsx";
+import { About, BackLink, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time } from "../ui.tsx";
 import { useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
@@ -87,10 +87,10 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-function Page({ title, lead, back, actions, children }: { title: string; lead?: string; back: string; actions?: React.ReactNode; children: React.ReactNode }) {
+function Page({ title, lead, back, backLabel, actions, children }: { title: string; lead?: string; back: string; backLabel?: string; actions?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <MobileBack to={back} label={t("web-pages.settings.title")} />
+      {backLabel ? <BackLink to={back} label={backLabel} /> : <MobileBack to={back} label={t("web-pages.settings.title")} />}
       <header className={pagesCss.pageHead}><div><h1>{title}{lead && <About>{lead}</About>}</h1></div>{actions}</header>
       {children}
     </div>
@@ -640,5 +640,19 @@ function AddDialog({ view, account, onClose }: { view: WorkspaceView; account: A
 }
 
 export function AutomaticDecisionsSettings({entry}:{entry:WorkspaceEntry}) {
-  return <Page title={t("web-pages.automaticDecisions.title")} lead={t("web-pages.automaticDecisions.lead")} back={`/w/${entry.id}/settings`}><AutomaticDecisions workspace={entry.id} /></Page>;
+  return <Page title={t("web-pages.automaticDecisions.title")} lead={t("web-pages.automaticDecisions.choosePoint")} back={`/w/${entry.id}/settings`}><AutomaticDecisions workspace={entry.id} /></Page>;
+}
+
+export function AutomaticDecisionCompletionSettings({entry}:{entry:WorkspaceEntry}) {
+  const navigate=useNavigate();
+  const base=`/w/${entry.id}/settings/automatic-decisions`;
+  return <Page title={t("web-pages.automaticDecisions.completion")} lead={t("web-pages.automaticDecisions.completionNote")} back={base} backLabel={t("web-pages.automaticDecisions.title")}
+    actions={<IconButton label={t("web-pages.automaticDecisions.logs")} icon={Read} onClick={()=>navigate(`${base}/completion/logs`)} />}>
+    <AutomaticDecisionCompletion workspace={entry.id} />
+  </Page>;
+}
+export function AutomaticDecisionLogsSettings({entry}:{entry:WorkspaceEntry}) {
+  return <Page title={t("web-pages.automaticDecisions.logsTitle")} back={`/w/${entry.id}/settings/automatic-decisions/completion`} backLabel={t("web-pages.automaticDecisions.completion")}>
+    <AutomaticDecisionLogs workspace={entry.id} />
+  </Page>;
 }
