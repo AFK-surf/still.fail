@@ -1,7 +1,8 @@
 //! Prototype: a Rust shell that holds what must outlive the logic (the iroh endpoint and its connections, SQLite)
 //! and offers it as primitives to logic written in TypeScript (../logic/main.ts, on Node), one JSON object a line
-//! over the logic's stdin/stdout. SIGHUP restarts the logic: the next one starts at once and takes new streams,
-//! the old one finishes what it has and exits. No connection notices.
+//! over the logic's stdin/stdout. SIGHUP restarts the logic: the next one starts while the old one keeps answering;
+//! once the next is ready it takes new streams and the old one finishes what it has and exits. A logic that dies
+//! has its unanswered streams handed to the next. No connection notices.
 //!
 //! shell → logic: {t:"stream",s,conn,peer} {t:"data",s,b} {t:"end",s} {t:"sql",r,rows|changes|error} {t:"drain"}
 //! logic → shell: {t:"ready"} {t:"write",s,b} {t:"finish",s} {t:"sql",r,sql,params}
@@ -203,26 +204,28 @@ impl Hub {
         }
     }
 
-    /// Hands the current logic, once ready, every stream nobody (alive) has and nobody answered yet.
+    /// The logic that takes new streams: the current one once ready, until then the one before it.
+    fn taker(&self) -> Option<u64> {
+        self.logics.iter().filter(|(_, l)| l.ready && !l.draining).map(|(g, _)| *g).max()
+    }
+
+    /// Hands the taker every stream no live logic has and none answered yet.
     async fn assign(&mut self) {
-        let current = self.current;
-        if !self.logics.get(&current).is_some_and(|l| l.ready && !l.draining) {
-            return;
-        }
+        let Some(taker) = self.taker() else { return };
         let mut handed = Vec::new();
         for (s, stream) in &mut self.streams {
             let held = stream.logic.is_some_and(|g| self.logics.contains_key(&g));
             if !held && !stream.wrote {
-                stream.logic = Some(current);
+                stream.logic = Some(taker);
                 handed.push((*s, stream.told.clone()));
             }
         }
         for (s, told) in handed {
             if told.len() > 1 {
-                eprintln!("shell: stream {s} handed to logic #{current}");
+                eprintln!("shell: stream {s} handed to logic #{taker} after {} messages", told.len());
             }
             for message in told {
-                self.tell(current, &message).await;
+                self.tell(taker, &message).await;
             }
         }
     }
@@ -273,13 +276,9 @@ impl Hub {
                     self.assign().await;
                 }
             }
+            // The next logic starts; the one running keeps taking streams until it is ready (`ready` below).
             Event::Restart => {
-                let old = self.current;
-                eprintln!("shell: restart: logic #{old} drains");
-                if let Some(logic) = self.logics.get_mut(&old) {
-                    logic.draining = true;
-                }
-                self.tell(old, &json!({ "t": "drain" })).await;
+                eprintln!("shell: restart");
                 if let Err(error) = self.start().await {
                     eprintln!("shell: {error:#}");
                 }
@@ -294,6 +293,17 @@ impl Hub {
                 if let Some(logic) = self.logics.get_mut(&generation) {
                     logic.ready = true;
                     eprintln!("shell: logic #{generation} ready in {} ms", logic.started.elapsed().as_millis());
+                }
+                // The current one ready: the ones before it finish what they have and go.
+                if generation == self.current {
+                    let older: Vec<u64> = self.logics.iter().filter(|(g, l)| **g < generation && !l.draining).map(|(g, _)| *g).collect();
+                    for old in older {
+                        eprintln!("shell: logic #{old} drains");
+                        if let Some(logic) = self.logics.get_mut(&old) {
+                            logic.draining = true;
+                        }
+                        self.tell(old, &json!({ "t": "drain" })).await;
+                    }
                 }
                 self.assign().await;
             }
@@ -405,7 +415,7 @@ async fn client(addr: &Path, count: u64, interval: Duration) -> Result<()> {
             last = Some(who);
         }
     }
-    for failure in &failed {
+    for failure in failed.iter().take(10) {
         println!("client: failed {failure}");
     }
     println!(

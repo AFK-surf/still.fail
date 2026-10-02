@@ -23,7 +23,7 @@ echo "== restart, same code"; kill -HUP $serving
 sleep 1.5
 echo "== change the logic to v2, restart (no cargo)"; perl -pi -e 's/const VERSION = "v1"/const VERSION = "v2"/' "$work/logic/main.ts"; kill -HUP $serving
 sleep 1.5
-echo "== kill -9 the logic"; pkill -9 -f "$work/logic/main.ts"
+echo "== kill -9 the logic"; pkill -9 -f "^$node $work/logic/main.ts"
 status=0
 wait $asking || status=$?
 echo "== client"; cat "$work/client.log"
