@@ -144,8 +144,7 @@ impl Telemetry {
     }
 }
 
-/// Posts one batch, signed over "ember-station-telemetry-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>" (the
-/// signed words keep the old name, as the presence socket's do), its headers under both names.
+/// Posts one batch with a canonical proof and a separate legacy proof for pre-rename clouds.
 async fn send(client: &reqwest::Client, station: &Station, key: &SecretKey, batch: Vec<(&'static str, Value)>) -> anyhow::Result<()> {
     let (origin, id) = {
         let s = station.state.lock().unwrap();
@@ -166,7 +165,8 @@ async fn send(client: &reqwest::Client, station: &Station, key: &SecretKey, batc
     }))?;
     let ts = now();
     let digest = hex::encode(Sha256::digest(&body));
-    let signature = hex::encode(key.sign(format!("ember-station-telemetry-v1:{origin}:{id}:{ts}:{digest}").as_bytes()).to_bytes());
+    let signature = hex::encode(key.sign(format!("stillfail-station-telemetry-v1:{origin}:{id}:{ts}:{digest}").as_bytes()).to_bytes());
+    let former_signature = hex::encode(key.sign(format!("ember-station-telemetry-v1:{origin}:{id}:{ts}:{digest}").as_bytes()).to_bytes());
     let response = client
         .post(format!("{origin}/v1/telemetry/traces"))
         .header("content-type", "application/json")
@@ -175,7 +175,7 @@ async fn send(client: &reqwest::Client, station: &Station, key: &SecretKey, batc
         .header("x-stillfail-signature", &signature)
         .header("x-ember-station", &id)
         .header("x-ember-ts", ts.to_string())
-        .header("x-ember-signature", signature)
+        .header("x-ember-signature", former_signature)
         .body(body)
         .send()
         .await?;
