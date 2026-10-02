@@ -16,7 +16,7 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
   if (!notice) return null;
   return <Popover.Root open={notice.open ?? false} onOpenChange={(open) => control(open ? "open" : "close")}>
     <Popover.Trigger className={css.trigger} data-tone={notice.tone} aria-label={notice.text}>
-      <span className={css.dot} />{notice.label ?? notice.text}
+      <Popover.Anchor asChild><span className={css.dot} /></Popover.Anchor>{notice.label ?? notice.text}
     </Popover.Trigger>
     <Popover.Portal>
       <Popover.Content className={css.popover} side="bottom" align="end" sideOffset={10} collisionPadding={12} onOpenAutoFocus={(e) => e.preventDefault()}>

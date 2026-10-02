@@ -48,10 +48,11 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
     val gap = with(density) { (-4).dp.roundToPx() }
     val margin = with(density) { 12.dp.roundToPx() }
     val arrowX = remember { mutableFloatStateOf(0f) }
-    val position = remember(gap, margin) { object : PopupPositionProvider {
+    val dotCenter = with(density) { 3.dp.toPx() }
+    val position = remember(gap, margin, dotCenter) { object : PopupPositionProvider {
         override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
             val left = (windowSize.width - popupContentSize.width - margin).coerceAtLeast(0)
-            arrowX.floatValue = (anchorBounds.center.x - left).toFloat()
+            arrowX.floatValue = (if (layoutDirection == LayoutDirection.Ltr) anchorBounds.left + dotCenter else anchorBounds.right - dotCenter) - left
             return IntOffset(left, anchorBounds.bottom + gap)
         }
     } }
