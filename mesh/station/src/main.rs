@@ -1039,6 +1039,20 @@ fn apply_state(station: &Station, text: &str) {
     let _ = save_state(&station.data, s);
 }
 
+// Keep old clients admitted until protocol-2 clients have reached the stable channel.
+// The canonical-write migration raises this to 2 in the same release that changes writes.
+const MIN_CLIENT_PROTOCOL: u64 = 1;
+
+fn protocol_rejection(hello: &Value, minimum: u64) -> Option<Value> {
+    let protocol = hello.get("protocol").and_then(Value::as_u64).unwrap_or(1);
+    (protocol < minimum).then(|| json!({
+        "code": "client_upgrade_required",
+        "error": "Please update still.fail to the latest version, or reload the web page, before connecting to this station.",
+        "required_protocol": minimum,
+        "update_url": "https://still.fail",
+    }))
+}
+
 async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
     if station.removed() {
         conn.close(2u32.into(), b"station_removed");
@@ -1066,6 +1080,13 @@ async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
             return Err(error);
         }
     };
+    if let Some(rejection) = protocol_rejection(&first, MIN_CLIENT_PROTOCOL) {
+        write_line(&mut send, &rejection).await?;
+        send.finish().ok();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        conn.close(4u32.into(), b"client_upgrade_required");
+        bail!("client upgrade required");
+    }
     let station_name = station.state.lock().unwrap().name.clone();
     write_line(&mut send, &json!({ "ok": true, "station": station_name, "expires_at": admitted.exp })).await?;
     info!(email = %admitted.viewer.email, device = %&device[..12], "client connected");
@@ -1488,6 +1509,19 @@ mod tests {
     use super::*;
 
     /// Run on a machine with LAN multicast; ordinary CI networks may suppress it.
+    #[test]
+    fn protocol_upgrade_gate_is_staged_and_old_clients_receive_an_actionable_error() {
+        assert!(protocol_rejection(&json!({}), 1).is_none());
+        for hello in [json!({}), json!({"protocol": 1}), json!({"protocol": "2"})] {
+            let answer = protocol_rejection(&hello, 2).unwrap();
+            assert_eq!(answer["code"], "client_upgrade_required");
+            assert_eq!(answer["required_protocol"], 2);
+            assert!(answer["error"].as_str().unwrap().contains("update"));
+        }
+        assert!(protocol_rejection(&json!({"protocol": 2}), 2).is_none());
+        assert!(protocol_rejection(&json!({"protocol": 3}), 2).is_none());
+    }
+
     #[tokio::test]
     #[ignore = "requires LAN multicast; run in an isolated Studio test process"]
     async fn mdns_canonical_and_legacy_names_can_advertise_the_same_station() {
