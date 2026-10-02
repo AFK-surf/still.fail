@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- station 数据库改名：持有 station.lock 的新进程打开 Store 前，SQLite 排他锁、WAL checkpoint、VACUUM INTO 私有 backups/ember-before-rename.db 并 integrity_check，再将 ember.db 原子改名 stillfail.db；旧路径留符号链接给维护脚本与回滚二进制。发现两份独立数据库或旧库仍在使用即拒绝改名，不覆盖。云端不用配合；需 station 更新生效，本会话所在 station 不在自己的轮次中更新。
+
 - 桌面 origin 迁移：首次启动在无 preload 的空白窗口中将 app://ember 的 localStorage 与 core IndexedDB 复制到 app://stillfail，全部成功才写完成标记并开应用；已有新值优先，旧 origin 留作回退副本。失败本次继续使用旧 origin，下次重试。原生 core 的 userData/core 路径不变。需真实 Electron 隔离 userData 验证二进制记录、设置、重试与失败恢复；迁移中收到的深链等初始化完成再处理。
 
 - 旧名称迁移第一阶段：新 access JWT issuer 和成员凭证 issuer/type 改用 stillfail，云端继续验证已有 ember issuer；部署前确认在用 station 已支持双 issuer/type（此次之前的版本已有支持）。新启动的 agent MCP namespace 为 stillfail，交接中的老进程仍用 ember；历史 transcript 两种都识别，迁移提示第 10 条告知老会话。官网主题新写 stillfail.site.theme，迁移旧选择。IndexedDB 旧库读取出错时终止新库创建并重试，防止空库盖过迁移机会。部署后验证新登录、老 access token、老成员凭证、新/交接会话各一次。
