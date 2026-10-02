@@ -4,7 +4,7 @@
 import { Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { presence } from "../cloud/presence.ts";
 import { log } from "../ops/log.ts";
-import { AdminApi, Cloud, Key, MeshNative, Up } from "../services.ts";
+import { AdbShares, AdminApi, Cloud, Key, MeshNative, Up } from "../services.ts";
 import { Agents } from "../sessions/agents.ts";
 import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
 import { SubscriptionRef } from "effect";
@@ -19,6 +19,7 @@ export const MeshLive = Layer.effectDiscard(
     const admin = yield* AdminApi;
     const up = yield* Up;
     const agents = yield* Agents;
+    const shares = yield* AdbShares;
     const run = Effect.gen(function* () {
       // Not in a workspace yet: on the mesh once `enroll` writes cloud.json.
       if (!cloud.state.state) yield* cloud.changes.pipe(Stream.filter(() => cloud.state.state !== null), Stream.runHead);
@@ -42,7 +43,7 @@ export const MeshLive = Layer.effectDiscard(
         (stop) => Effect.sync(stop),
       );
       const connections = yield* FiberSet.make();
-      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up) };
+      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), shares };
       for (;;) {
         const conn = yield* Effect.promise(() => endpoint.accept());
         if (!conn) return;

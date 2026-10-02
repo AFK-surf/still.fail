@@ -15,7 +15,7 @@ import { Remote } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
-import { Cloud, Events, Key, Paths, Readers, Store } from "../services.ts";
+import { AdbShares, Cloud, Events, Key, Paths, Readers, Store } from "../services.ts";
 import { Notifier } from "../cloud/notify.ts";
 import { adbTools } from "../tools/adb.ts";
 import { feedbackTools, tellFixed } from "../tools/feedback.ts";
@@ -83,6 +83,7 @@ export const AgentsLive = (control: Control) =>
       const readers = yield* Readers;
       const events = yield* Events;
       const key = yield* Key;
+      const shares = yield* AdbShares;
       const run = join(data, "run");
       const config = new ConfigFile(data);
       const place = () => {
@@ -135,7 +136,7 @@ export const AgentsLive = (control: Control) =>
       const tools = [
         ...chatTools(hub),
         ...remoteTools(remote),
-        ...adbTools(() => [], () => {
+        ...adbTools(() => shares.list(), () => {
           const s = place();
           return s ? `${s.origin}/w/${s.workspace}/s/${s.station}/adb` : null;
         }),

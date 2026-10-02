@@ -4,6 +4,7 @@
 import { Context, Effect, Layer, Queue, Stream, SubscriptionRef } from "effect";
 import { join } from "node:path";
 import { Admin } from "./api/admin.ts";
+import { Shares } from "./mesh/adb.ts";
 import { Events as EventStreams } from "./api/events.ts";
 import { Host } from "./api/host.ts";
 import { outputAt, tail } from "./read/jobs.ts";
@@ -112,6 +113,17 @@ export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/Admi
     AdminApi,
     Effect.gen(function* () {
       return new Admin(yield* Readers, { store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents });
+    }),
+  );
+}
+
+/// Phones lent to the agents over members' links (src/mesh/adb.ts): offered on the mesh, listed to the agents.
+export class AdbShares extends Context.Service<AdbShares, Shares>()("stillfail/AdbShares") {
+  static readonly layer = Layer.effect(
+    AdbShares,
+    Effect.gen(function* () {
+      const cloud = (yield* Cloud).state;
+      return yield* Effect.acquireRelease(Effect.sync(() => new Shares({ cloud })), (s) => Effect.promise(() => s.close()));
     }),
   );
 }

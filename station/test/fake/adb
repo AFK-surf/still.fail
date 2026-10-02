@@ -1,0 +1,3 @@
+#!/bin/sh
+# The fake adb (adb.mjs), found as the real one is: by name on PATH.
+exec node "$(dirname "$0")/adb.mjs" "$@"

@@ -10,6 +10,7 @@ import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { type Admitted, revoked, verifyMember } from "./credential.ts";
 import type { Connection, Stream } from "./native.ts";
+import { answerAdb, type Shares } from "./adb.ts";
 import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
 
 export const ALPN = Buffer.from("stillfail/admin/1");
@@ -67,6 +68,8 @@ export type Members = {
   admin: Admin;
   /// Whether the station answers now (its parts started; not handing over).
   up(): boolean;
+  /// Phones lent to the agents.
+  shares: Shares;
 };
 
 /// One member's connection: the credential first, nothing served before it checks out; then a request a stream.
@@ -151,7 +154,7 @@ export async function serve(m: Members, conn: Connection) {
 }
 
 /// One request: to the admin API in this process.
-async function request(m: Members, stream: Stream, viewer: Admitted["viewer"], _conn: Connection) {
+async function request(m: Members, stream: Stream, viewer: Admitted["viewer"], conn: Connection) {
   const reader = new Reader(stream);
   const head = await reader.line();
   if (head === null) return;
@@ -165,6 +168,8 @@ async function request(m: Members, stream: Stream, viewer: Admitted["viewer"], _
   if (!path.startsWith("/admin/api/") || path.includes("..")) {
     return answer(404, '{"error":"only the admin API is reachable over the mesh"}');
   }
+  // A phone lent to the agents, or asked about (adb.ts): its send side came finished, what it hears goes down the stream.
+  if (head.adb !== null && typeof head.adb === "object" && !Array.isArray(head.adb)) return answerAdb(m.shares, conn, viewer, head, stream, reader);
   // A preview page's WebSocket (`"socket": true`): no body to wait for, the stream carries its messages both ways.
   if (head.socket === true) return socket(m, stream, reader, head, path);
   const body = await reader.rest();
