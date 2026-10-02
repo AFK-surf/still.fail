@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -425,7 +427,7 @@ class DecisionsTest {
 
     @Test fun inChatTapOnAnOptionAnswers() {
         val h = chat()
-        tap(option(change).center)
+        rule.onNodeWithText(change.label, substring = false).performTouchInput { click() }
         assertOneCall(h, "decision.answer", gap.copy(seq = 5))
         assertEquals(change.label, h.acted()[0].second["option"]!!.jsonPrimitive.content)
     }
@@ -447,11 +449,11 @@ class DecisionsTest {
 
     private fun answerMotion(dark: Boolean) {
         val h = chat(dark)
-        val p = option(both).center
+        val button = rule.onNodeWithText(both.label, substring = false)
         val rec = h.record("decision-answer-${if (dark) "dark" else "light"}")
-        press(p)
+        button.performTouchInput { down(center) }
         rec.frames(18)
-        send(MotionEvent.ACTION_UP, p)
+        button.performTouchInput { up() }
         rec.frames(8)
         h.deliver()
         assertEquals("one answer", 1, h.acted().size)
