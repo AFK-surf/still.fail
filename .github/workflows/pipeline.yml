@@ -1,4 +1,4 @@
-# still.fail's pipeline (docs/operations.md, "CI"), on AFK-surf's GitHub-hosted runners:
+# still.fail's pipeline (docs/operations.md, "CI"), on AFK-surf's Linux runners and self-hosted Macs:
 #   a branch: the full check (scripts/check.sh) of what it changes from main, and every part it touches built and
 #             bundled (deploy.py --dry-run): evidence for its merge; nothing deployed, no secrets.
 #   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
@@ -74,9 +74,24 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android desktop=$desktop relay=$relay"
 
+  mac-runner:
+    runs-on: [self-hosted, tartelet]
+    timeout-minutes: 5
+    steps:
+      - name: Check organization Mac capabilities
+        run: |
+          uname -sm
+          sw_vers
+          for tool in brew rustup cargo node python3; do command -v "$tool" || true; done
+          if security find-identity -v -p codesigning | grep -Fq 'Apple Development: zuozijian1994@gmail.com (9C49UVFRK3)'; then
+            echo 'Existing still.fail signing identity is available'
+          else
+            echo 'Existing still.fail signing identity needs provisioning'
+          fi
+
   check:
     needs: plan
-    runs-on: macos-15
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
@@ -99,7 +114,7 @@ jobs:
   bundle:
     needs: [plan, check]
     if: github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true')
-    runs-on: macos-15
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -133,7 +148,7 @@ jobs:
     needs: [plan, check, api]
     # After the API (a page may need what it adds), or without it when it did not change.
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: macos-15
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: production
     timeout-minutes: 30
     steps:
@@ -155,7 +170,7 @@ jobs:
   station:
     needs: [plan, check, api]
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: macos-15
+    runs-on: [self-hosted, tartelet]
     environment: production
     timeout-minutes: 60
     steps:
@@ -184,7 +199,7 @@ jobs:
   android:
     needs: [plan, check, api]
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: macos-15
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: production
     timeout-minutes: 60
     steps:
