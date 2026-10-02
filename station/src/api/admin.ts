@@ -31,7 +31,7 @@ export type Tools = {
 };
 
 /// What the admin API answers with besides the readers: the write side, once there.
-export type AdminDeps = { events?: Events; store?: Store };
+export type AdminDeps = { events?: Events; store?: Store; host?: Host };
 
 export class Admin {
   private routes: Route[];
@@ -41,7 +41,7 @@ export class Admin {
 
   constructor(readers: Readers, deps: AdminDeps = {}) {
     this.readers = readers;
-    this.host = new Host(readers);
+    this.host = deps.host ?? new Host(readers);
     const tools: Tools = {
       read: async (r, op, args) => {
         try {
