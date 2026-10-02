@@ -1,7 +1,7 @@
 // The workspace sheet, opened from its name on Home: the invitations waiting, the one in use and the others to switch
 // to, and a new one; a new workspace in a sheet of its own. The workspace's settings are in 设置 (./Settings.tsx).
 import { useState } from "react";
-import { signIn, useAccounts } from "../cloud/accounts.ts";
+import { signIn, useAccounts, useSignIn } from "../cloud/accounts.ts";
 import { cloud, errorText, needsInviteCode, useAction, useWorkspaces, type AccountWorkspaces, type PendingInvitation } from "../cloud/api.ts";
 import type { Account } from "../cloud/accounts.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
@@ -12,6 +12,7 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as css from "./Workspaces.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 
+import { LogIn, Plus } from "../icons.tsx";
 import { NAME } from "../channel.ts";
 export function openWorkspaces(app: MobileApp) {
   app.sheet({ height: 0.7, draggable: true, content: () => <WorkspacesSheet /> });
@@ -19,6 +20,7 @@ export function openWorkspaces(app: MobileApp) {
 
 function WorkspacesSheet() {
   const app = useApp();
+  const login = useSignIn();
   const byAccount: AccountWorkspaces[] = useWorkspaces().value ?? [];
   const pending = byAccount.flatMap((a) => a.invitations.map((invite) => ({ account: a.account, invite })));
   const currentOf = byAccount.find((a) => a.workspaces.some((w) => w.id === app.entry.id));
@@ -41,8 +43,14 @@ function WorkspacesSheet() {
   return (
     <>
       <SheetGrab />
-      <SheetHead title="Workspace" />
+      <SheetHead title="切换 workspace" />
       <div className={sheetsCss.mSheetScroll}>
+        {current && <>
+          <div className={css.mSheetLabel}>当前使用</div>
+          <div className={css.mCurrent}>
+            <PickRow label={current.name} sub={currentOf!.account.email} checked onClick={() => app.sheet(null)} />
+          </div>
+        </>}
         {pending.length > 0 && (
           <>
             <div className={css.mSheetLabel}>邀请</div>
@@ -56,19 +64,16 @@ function WorkspacesSheet() {
             {respond.error && <p className={`${partsCss.mError} ${partsCss.mPad}`}>{errorText(respond.error)}</p>}
           </>
         )}
-        <div className={css.mSheetLabel}>切换到</div>
-        {/* The one in use first, checked; its settings are in 设置 (the gear on Home), not here. */}
-        {current && <PickRow label={current.name} sub={byAccount.length > 1 ? currentOf!.account.email : undefined} checked
-          aside={[`${current.stations} 台 station`, `${current.members} 人`]} onClick={() => app.sheet(null)} />}
-        {/* With more than one account signed in, each workspace says whose it is under its name (a heading per account read as something to tap); what it holds goes at the row's end. */}
-        {/* One with something waiting says so after its name: a dot and a count for each kind. */}
+        {others.length > 0 && <div className={css.mSheetLabel}>其它 workspace</div>}
         {others.flatMap(({ account, workspaces }) => workspaces.map((w) => (
-          <PickRow key={w.id} label={w.name} sub={byAccount.length > 1 ? account.email : undefined}
+          <PickRow key={w.id} label={w.name} sub={account.email}
             mark={marks?.workspaces[w.id]?.tone && <MarkCounts mark={marks.workspaces[w.id]} />}
-            aside={[`${w.stations} 台 station`, `${w.members} 人`]}
             onClick={() => { app.sheet(null); app.replace(`/w/${w.id}`); }} />
         )))}
-        <PickRow label="＋ 新建 workspace" accent onClick={() => app.sheet({ height: 0.8, content: () => <NewWorkspaceSheet /> })} />
+      </div>
+      <div className={css.mActions}>
+        <PickRow label="登录其它账号" sub="保留已登录账号，添加另一个 Google 账号" leading={<LogIn size={20} />} busy={login.busy} onClick={() => { void login.signIn(); }} />
+        <PickRow label="新建 workspace" leading={<Plus size={20} />} onClick={() => app.sheet({ height: 0.8, content: () => <NewWorkspaceSheet /> })} />
       </div>
     </>
   );

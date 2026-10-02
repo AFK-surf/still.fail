@@ -11,3 +11,6 @@ globalStyle(`${mInvite} small`, { fontSize: "12px", color: "var(--m-muted)" });
 globalStyle(`${mHPhase} small`, { fontSize: "12px", color: "var(--m-subtle)" });
 /** Here rather than with its class: it comes after .m-invite small, and wins over it. */
 globalStyle(`${mSettingText} small`, { fontSize: "12px" });
+
+export const mCurrent = style({ margin: "4px 12px 16px", borderRadius: "16px", background: "var(--m-bg)" });
+export const mActions = style({ flexShrink: 0, padding: "8px 0 16px" });

@@ -239,6 +239,8 @@ fun openWorkspaces(app: AppState) {
  */
 @Composable
 private fun ColumnScope.WorkspacesSheet(app: AppState) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val all by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
     val byAccount = all.value.orEmpty()
     val respond = remember { Write(app) }
@@ -249,8 +251,14 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     // What each of the others has waiting, as the core counts it.
     val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(app.workspace.orEmpty()))
     SheetGrab()
-    SheetHead("Workspace")
+    SheetHead("切换 workspace")
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+        if (current != null) {
+            Label("当前使用")
+            Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp).clip(RoundedCornerShape(16.dp)).background(C.bg)) {
+                PickRow(current.name, sub = currentOf.account.email, checked = true) { app.sheet = null }
+            }
+        }
         if (pending.isNotEmpty()) {
             Label("邀请")
             pending.forEach { (account, invite) ->
@@ -269,37 +277,28 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
             }
             respond.error?.let { Box(Modifier.padding(horizontal = 20.dp)) { Error(it.message) } }
         }
-        Label("切换到")
-        // The one in use first, checked; its settings are in 设置 (the gear on Home), not here.
-        if (current != null) AsideRow(current.name, if (byAccount.size > 1) currentOf.account.email else null, "${current.stations} 台 station", "${current.members} 人", checked = true) { app.sheet = null }
-        // One with something waiting says so after its name: a dot and a count for each kind.
+        if (others.isNotEmpty()) Label("其它 workspace")
         others.forEach { (account, w) ->
-            AsideRow(w.name, if (byAccount.size > 1) account.email else null, "${w.stations} 台 station", "${w.members} 人", mark = marks.value?.workspaces?.get(w.id)) { app.pickWorkspace(w.id); app.home() }
+            WorkspaceRow(w.name, account.email, marks.value?.workspaces?.get(w.id)) { app.pickWorkspace(w.id); app.home() }
         }
-        PickRow("＋ 新建 workspace", color = C.accent) { openNewWorkspace(app) }
-        PickRow("＋ 用邀请链接加入", color = C.accent) { openInviteLink(app) }
+    }
+    Column(Modifier.padding(top = 8.dp, bottom = 16.dp)) {
+        PickRow("登录其它账号", sub = "保留已登录账号，添加另一个 Google 账号", busy = app.isDoing("auth.begin"), leading = { IconIn(Icons.LogIn, 20.dp) }) { scope.launch { signIn(app, context) } }
+        PickRow("新建 workspace", leading = { IconIn(Icons.Plus, 20.dp) }) { openNewWorkspace(app) }
+        PickRow("用邀请链接加入", leading = { IconIn(Icons.Ticket, 20.dp) }) { openInviteLink(app) }
     }
 }
 
-/** A row of the sheet with two short notes at its end, each by one of its lines (the name, and whose it is); a check on the one in use. */
+/** Workspace identity and its waiting work; membership counts belong in settings. */
 @Composable
-private fun AsideRow(label: String, sub: String?, first: String, second: String, checked: Boolean = false, mark: WorkspaceMark? = null, onClick: () -> Unit) {
+private fun WorkspaceRow(label: String, email: String, mark: WorkspaceMark?, onClick: () -> Unit) {
     Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.weight(1f).alignByBaseline(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(label, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (mark != null) MarkCounts(mark)
-                }
-                Text(first, fontSize = 12.sp, color = C.muted, maxLines = 1, modifier = Modifier.alignByBaseline())
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(sub ?: "", fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alignByBaseline())
-                Text(second, fontSize = 12.sp, color = C.muted, maxLines = 1, modifier = Modifier.alignByBaseline())
-            }
+            Text(label, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(email, fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (checked) IconIn(Icons.Check, 14.dp, C.accent)
+        if (mark != null) MarkCounts(mark)
     }
 }
 
