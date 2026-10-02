@@ -13,3 +13,5 @@ station 启动、Profile 修改/检查以及自动决策页「刷新模型」都
 检查覆盖 session 的全部会话、待决定卡片和拟发文字/done。每段历史超过 200 条或总请求超过 96 KB 不静默截断。模型概率不是校准后的正确率；模拟供应商只验证接线和拦截流程，不证明真实模型准确率。样例集位于 tests/fixtures/completion-decisions.jsonl，decision_eval 可使用测试 station 配置中的 Profile 跑真实提供商评估。
 
 配置及 Overview 新字段可选，旧站/旧客户端兼容；设置权限在 station 校验，core 保存草稿并驱动具名操作，web/Android 只渲染。station 的 decision_checks 事件刷新 Overview，无客户端轮询。
+
+Jev 也可以作为「API 服务商」Profile 添加（只填 key）：只用于自动决策，不接 Claude Code、Codex；它没有模型列表，key 在发现决策能力时才被试。

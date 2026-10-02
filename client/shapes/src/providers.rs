@@ -70,6 +70,8 @@ pub struct Source {
     pub chat: Option<&'static str>,
     pub responses: Option<&'static str>,
     pub anthropic: Option<&'static str>,
+    /// A native decision endpoint (Jev's): where the automatic decisions ask it for probabilities, and nothing else.
+    pub decision: Option<&'static str>,
     /// The address is the person's (cloudflare, azure, custom), not the provider's.
     pub endpoint_required: bool,
     /// For one at the reader's own address: the protocols it can speak there, one chosen when it is added (more than
@@ -85,7 +87,7 @@ pub struct Source {
 }
 
 const fn source(id: &'static str, name: &'static str, group: Group, mark: Option<&'static str>) -> Source {
-    Source { id, name, group, mark, chat: None, responses: None, anthropic: None, endpoint_required: false, protocols: &[], key_optional: false, auth: ClaudeAuth::Bearer, session_header: false, legacy: None }
+    Source { id, name, group, mark, chat: None, responses: None, anthropic: None, decision: None, endpoint_required: false, protocols: &[], key_optional: false, auth: ClaudeAuth::Bearer, session_header: false, legacy: None }
 }
 
 const ALL: &[Protocol] = &[Protocol::Chat, Protocol::Responses, Protocol::Anthropic];
@@ -106,6 +108,8 @@ pub static SOURCES: &[Source] = &[
     Source { anthropic: Some("https://api.minimax.io/anthropic"), ..source("minimax", "MiniMax", Group::Labs, Some("minimax")) },
     Source { chat: Some("https://api.xiaomimimo.com/v1"), ..source("xiaomi", "Xiaomi MiMo", Group::Labs, Some("xiaomi")) },
     Source { chat: Some("https://api.ant-ling.com/v1"), ..source("ant-ling", "Ant Ling", Group::Labs, Some("ant-ling")) },
+    // Only the automatic decisions use it: it answers a question with probabilities and has no chat.
+    Source { decision: Some("https://api.typesafe.ai/v1"), ..source("jev", "Jev", Group::Labs, None) },
     Source { chat: Some("https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"), ..source("qwen-cn", "Qwen (China)", Group::Labs, Some("qwen")) },
     Source { chat: Some("https://api.moonshot.cn/v1"), ..source("moonshotai-cn", "Kimi (China)", Group::Labs, Some("kimi")) },
     Source { chat: Some("https://open.bigmodel.cn/api/coding/paas/v4"), ..source("zai-coding-cn", "Z.ai Coding (China)", Group::Labs, Some("zhipu")) },
@@ -186,6 +190,8 @@ pub struct Endpoints {
     pub chat: Option<String>,
     pub responses: Option<String>,
     pub anthropic: Option<String>,
+    /// Native decisions (Jev).
+    pub decision: Option<String>,
 }
 
 /// The endpoints of a source; for one at the person's own address, derived from it and the protocol chosen for it
@@ -194,7 +200,7 @@ pub struct Endpoints {
 pub fn endpoints(source: &Source, endpoint: Option<&str>, protocol: Option<&str>) -> Option<Endpoints> {
     if !source.endpoint_required {
         let own = |v: Option<&str>| v.map(String::from);
-        return Some(Endpoints { chat: own(source.chat), responses: own(source.responses), anthropic: own(source.anthropic) });
+        return Some(Endpoints { chat: own(source.chat), responses: own(source.responses), anthropic: own(source.anthropic), decision: own(source.decision) });
     }
     let base = clean_endpoint(endpoint?)?;
     let chosen = protocol.and_then(Protocol::parse);
@@ -205,7 +211,7 @@ pub fn endpoints(source: &Source, endpoint: Option<&str>, protocol: Option<&str>
         // The gateway's address (…/v1/<account>/<gateway>): each protocol under its own path.
         "cloudflare-ai-gateway" => {
             let root = ["/compat", "/openai", "/anthropic"].iter().find_map(|s| base.strip_suffix(s)).unwrap_or(&base).to_string();
-            Endpoints { chat: Some(format!("{root}/compat")), responses: Some(format!("{root}/openai")), anthropic: Some(format!("{root}/anthropic")) }
+            Endpoints { chat: Some(format!("{root}/compat")), responses: Some(format!("{root}/openai")), anthropic: Some(format!("{root}/anthropic")), decision: None }
         }
         // The resource's v1 address (https://<resource>.openai.azure.com/openai/v1): the Responses API.
         "azure-openai" => Endpoints { responses: Some(base), ..Default::default() },
@@ -217,7 +223,7 @@ pub fn endpoints(source: &Source, endpoint: Option<&str>, protocol: Option<&str>
             Some(Protocol::Chat) => Endpoints { chat: Some(base), ..Default::default() },
             Some(Protocol::Responses) => Endpoints { responses: Some(base), ..Default::default() },
             Some(Protocol::Anthropic) => Endpoints { anthropic: Some(base), ..Default::default() },
-            None => Endpoints { anthropic: base.strip_suffix("/v1").map(String::from), chat: Some(base.clone()), responses: Some(base) },
+            None => Endpoints { anthropic: base.strip_suffix("/v1").map(String::from), chat: Some(base.clone()), responses: Some(base), decision: None },
         },
     };
     if let (Some(p), true) = (chosen, source.id == "cloudflare-ai-gateway") {
@@ -238,7 +244,7 @@ pub struct Uses {
 }
 
 pub fn uses(endpoints: &Endpoints) -> Uses {
-    Uses { claude: endpoints.anthropic.is_some(), codex: endpoints.responses.is_some(), decision: endpoints.chat.is_some() }
+    Uses { claude: endpoints.anthropic.is_some(), codex: endpoints.responses.is_some(), decision: endpoints.chat.is_some() || endpoints.decision.is_some() }
 }
 
 impl Uses {
@@ -253,6 +259,13 @@ mod tests {
 
     fn uses_of(id: &str, endpoint: Option<&str>) -> Uses {
         uses(&endpoints(find(id).unwrap(), endpoint, None).unwrap())
+    }
+
+    #[test]
+    fn jev_serves_the_automatic_decisions_and_nothing_else() {
+        let u = uses_of("jev", None);
+        assert_eq!((u.claude, u.codex, u.decision), (false, false, true));
+        assert!(u.runtimes().is_empty());
     }
 
     #[test]

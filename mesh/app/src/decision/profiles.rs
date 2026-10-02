@@ -43,6 +43,10 @@ fn connection(profile: &Profile) -> Option<Connection> {
     };
     if profile.access_kind == AccessKind::OpencodeGo || profile.access_kind == AccessKind::ApiProvider {
         let (source, at) = source?;
+        // Jev answers a question with probabilities at its own path.
+        if let Some(base) = at.decision.clone() {
+            return Some(Connection { base, key: profile.key.clone(), provider: Provider::Jev, session_header: false });
+        }
         return Some(Connection { base: at.chat?, key: profile.key.clone(), provider: Provider::ChatLogprobs, session_header: source.session_header });
     }
     if !profile.runtimes.contains(&RuntimeKind::Codex) { return None; }
@@ -270,6 +274,10 @@ mod tests {
         let groq = connection(&provider_profile(json!({"kind": "api-provider", "provider": "groq", "key": "k"}))).unwrap();
         assert!(!groq.session_header);
         assert!(transport(&groq, "m".into()).api_key == "k");
+        // Jev answers at its own path, with probabilities of its own.
+        let jev = connection(&provider_profile(json!({"kind": "api-provider", "provider": "jev", "key": "k"}))).unwrap();
+        assert!(jev.provider == Provider::Jev && !jev.session_header);
+        assert_eq!(transport(&jev, "jev-latest".into()).endpoint, "https://api.typesafe.ai/v1/systemone");
         // Azure speaks Responses only: nothing to ask for probabilities.
         assert!(connection(&provider_profile(json!({"kind": "api-provider", "provider": "azure-openai", "endpoint": "https://x.openai.azure.com/openai/v1", "key": "k"}))).is_none());
     }
