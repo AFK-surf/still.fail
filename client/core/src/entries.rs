@@ -76,9 +76,12 @@ mod tests {
 
     #[test]
     fn edits_merge_into_their_messages() {
-        let entries = [message(1, "一"), message(2, "二"), change(3, "edit", 1, Some("一（改）")), message(4, "三"), change(5, "edit", 1, Some("一（再改）")), message(6, "四")];
+        let mut first = message(1, "一");
+        first["agentIdentity"] = json!({"model": "gpt-6-sol"});
+        let entries = [first, message(2, "二"), change(3, "edit", 1, Some("一（改）")), message(4, "三"), change(5, "edit", 1, Some("一（再改）")), message(6, "四")];
         let merged = merge(&entries);
         assert_eq!(merged.iter().map(|m| (m["seq"].as_u64().unwrap(), m["text"].as_str().unwrap())).collect::<Vec<_>>(), vec![(1, "一（再改）"), (2, "二"), (4, "三"), (6, "四")]);
+        assert_eq!(merged[0]["agentIdentity"]["model"], "gpt-6-sol");
         assert_eq!(merged[0]["editedAt"], 50);
         assert_eq!(merged[0]["createdAt"], 10);
         assert_eq!(merged[0]["attachments"], json!([{"name": "b.png"}]), "an edit gives the message's whole new version");

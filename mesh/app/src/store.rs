@@ -846,6 +846,8 @@ CREATE TABLE IF NOT EXISTS usage (
   output INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS usage_at ON usage (at);
+CREATE INDEX IF NOT EXISTS usage_message_model ON usage (session, turn, at);
+CREATE INDEX IF NOT EXISTS turns_message_model ON turns (session_key, started_at);
 -- How far each transcript has been read for it.
 CREATE TABLE IF NOT EXISTS usage_files (
   path TEXT PRIMARY KEY,

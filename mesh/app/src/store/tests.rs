@@ -518,3 +518,34 @@ fn a_message_keeps_its_model_after_switching_editing_and_archiving() {
     check();
     assert!(store.message_identity("a", 0, None).is_none(), "unknown history must not use today's model");
 }
+
+
+#[test]
+fn old_message_models_use_only_their_own_turns_main_agent_calls() {
+    use super::usage::{UsageCall, UsageFile, UsageFor};
+    let store = memory();
+    session(&store, "a");
+    store.start_turn("old", "a", "input").unwrap();
+    store.start_turn("new", "a", "input").unwrap();
+    store.with(|i, _| {
+        i.db.execute("UPDATE turns SET started_at = CASE id WHEN 'old' THEN 100 ELSE 300 END", [])?;
+        Ok(())
+    }).unwrap();
+    let call = |id: &str, at, model: &str, turn: &str, subagent| (
+        UsageCall { id: id.into(), at, model: Some(model.into()), subagent, ..Default::default() },
+        UsageFor { turn: Some(turn.into()), ..Default::default() }
+    );
+    store.record_usage("log", &UsageFile { session: Some("a".into()), ..Default::default() }, "codex", &[
+        call("first", 120, "gpt-6-sol", "old", false),
+        call("child", 140, "gpt-6-luna", "old", true),
+        call("future", 220, "gpt-6-astra", "old", false),
+        call("next", 350, "gpt-6-astra", "new", false),
+    ]).unwrap();
+    store.set_session_model("a", Some("gpt-6-astra"), None).unwrap();
+    assert_eq!(store.message_identity("a", 180, None).unwrap()["model"], "gpt-6-sol");
+    assert!(store.message_identity("a", 110, None).is_none());
+    assert!(store.message_identity("a", 310, None).is_none(), "never borrow a previous turn's model");
+    assert_eq!(store.message_identity("a", 400, None).unwrap()["model"], "gpt-6-astra");
+    let frozen = serde_json::json!({"model": "saved", "effort": "high", "runtime": "claude"});
+    assert_eq!(store.message_identity("a", 180, Some(&frozen)), Some(frozen));
+}
