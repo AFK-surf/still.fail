@@ -4120,6 +4120,7 @@ dependencies = [
  "iroh-mdns-address-lookup",
  "iroh-relay",
  "libc",
+ "netdev 0.46.3",
  "noq-proto",
  "reqwest 0.12.28",
  "serde",
