@@ -32,8 +32,8 @@ test("each host's old name serves the same: static sites, the API, the relay, th
     assert.deepEqual(await text(await h.fetchOld("main", "/sw.js")), [200, "// the notifications' worker"]);
     assert.deepEqual(await text(await h.fetchOld("admin", "/codes")), [200, "<title>still.fail 管理后台</title>"]);
     assert.deepEqual(await text(await h.fetchOld("preview", "/_ember/frame")), [200, "<title>still.fail preview (old path)</title>"]);
-    assert.equal(((await (await h.fetchOld("main", "/healthz")).json()) as { service: string }).service, "ember-cloud");
-    assert.equal(((await (await h.fetchOld("main", "/ping")).json()) as { service: string }).service, "ember-relay");
+    assert.equal(((await (await h.fetchOld("main", "/healthz")).json()) as { service: string }).service, "stillfail-cloud");
+    assert.equal(((await (await h.fetchOld("main", "/ping")).json()) as { service: string }).service, "stillfail-relay");
     assert.match((await h.fetchOld("main", "/install.sh")).headers.get("content-type") ?? "", /shellscript/);
 
     // A signed-in account's calls, on the old host and the old console host.

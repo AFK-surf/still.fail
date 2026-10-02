@@ -135,6 +135,6 @@ export async function recordCall(env: Env, parent: TraceParent, request: Request
     status: { code: response.status >= 500 ? 2 : 1 },
   };
   // Named after the Worker (ember-cloud, which keeps its name), as the queries in docs/telemetry.md know it.
-  const body = JSON.stringify({ resourceSpans: [{ resource: { attributes: [attribute("service.name", "ember-cloud")] }, scopeSpans: [{ scope: { name: "ember-cloud" }, spans: [span] }] }] });
+  const body = JSON.stringify({ resourceSpans: [{ resource: { attributes: [attribute("service.name", "stillfail-cloud")] }, scopeSpans: [{ scope: { name: "stillfail-cloud" }, spans: [span] }] }] });
   await toAxiom(env, body).catch(() => false);
 }

@@ -42,7 +42,7 @@ export default {
     const path = url.pathname;
     if (!publicOrigins(env).includes(url.origin)) return reply({ error: "invalid_origin" }, 421);
     // Readable from any page (as iroh-relay's own /ping is): a browser times it to pick the nearest relay.
-    if (path === "/ping" && request.method === "GET") return reply({ service: "ember-relay", relay: "iroh-relay-1.1.0" }, 200, { "access-control-allow-origin": "*" });
+    if (path === "/ping" && request.method === "GET") return reply({ service: "stillfail-relay", relay: "iroh-relay-1.1.0" }, 200, { "access-control-allow-origin": "*" });
     if (path === "/generate_204" && request.method === "GET") {
       const challenge = request.headers.get("x-iroh-challenge");
       return new Response(null, { status: 204, headers: challenge && CHALLENGE.test(challenge) ? { "x-iroh-response": `response ${challenge}` } : {} });

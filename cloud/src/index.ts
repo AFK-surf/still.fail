@@ -63,7 +63,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
   const path = url.pathname;
   if (path === "/healthz" && request.method === "GET") {
     // The Worker's name, which it keeps (Cloudflare knows it by it).
-    return Response.json({ service: "ember-cloud", google_login: authConfigured(env) });
+    return Response.json({ service: "stillfail-cloud", google_login: authConfigured(env) });
   }
   const onPublic = publicOrigins(env).includes(url.origin);
   const onBeta = url.origin === betaOrigin(env);

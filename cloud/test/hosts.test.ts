@@ -23,9 +23,9 @@ test("each host serves its own static site, the API and the relay on their paths
     assert.equal((await h.fetchPreview("/_stillfail/sw.js")).headers.get("service-worker-allowed"), "/");
     assert.equal((await h.fetchPreview("/anything")).status, 404);
     // The API's and the relay's paths are theirs on the main host.
-    assert.equal(((await (await h.fetch("/healthz")).json()) as { service: string }).service, "ember-cloud");
+    assert.equal(((await (await h.fetch("/healthz")).json()) as { service: string }).service, "stillfail-cloud");
     const ping = await h.fetch("/ping");
-    assert.equal(((await ping.json()) as { service: string }).service, "ember-relay");
+    assert.equal(((await ping.json()) as { service: string }).service, "stillfail-relay");
     assert.equal(ping.headers.get("access-control-allow-origin"), "*", "a browser times it to pick the nearest relay");
     assert.equal((await h.fetch("/generate_204", { headers: { "x-iroh-challenge": "abc" } })).headers.get("x-iroh-response"), "response abc");
     assert.equal((await h.fetch("/v1/nothing-here")).status, 404);

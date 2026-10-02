@@ -8,7 +8,7 @@ still.fail 的执行节点叫 **station**：就是现在这套东西（连接、
                         relay 或 n0 的 relay)┘
             │ 登录、workspace、成员凭证（30 天，缓存在设备上）
             ▼
-Cloudflare：still.fail cloud（ember-cloud API、ember-relay、ember-web / ember-admin / ember-preview 静态站点，官网 still-fail-site）
+Cloudflare：still.fail cloud（stillfail-cloud API、stillfail-relay、stillfail-web / stillfail-admin / stillfail-preview 静态站点，官网 still-fail-site）
 ```
 
 still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线也是设备自己连出来的（不靠 still.fail cloud 推送）。still.fail cloud 只管"人"：账号、workspace、成员，以及签发成员凭证；登录过一次之后，局域网里没有 still.fail cloud 也能用。代码参照 zork 的做法（`deploy/cloudflare`）分出来，和 zork 同一个 Cloudflare 账号。
@@ -74,7 +74,7 @@ station 端由 `stillfail-station`（Rust，iroh 1.0.3，mesh/station）负责�
 
 ## relay 与发现
 
-relay 沿用 zork 的做法：Cloudflare Container 里跑官方 `iroh-relay`，前面由 Worker（`ember-relay`，`cloud/src/relay-worker.ts`）转发 WebSocket。总量限制（RelayBudget）只在建连接时放行，不在帧的路径上：流量按 iroh-relay 自己的 metrics 每分钟读一次，当天超额就重启容器、拒绝新连接；单个客户端的速率由 iroh-relay 自己限。以前每一帧都经过 RelayBudget，它被连接一直占着、每条消息多算一次 DO 请求（2026-09-30 改掉）。它是单独的 Worker，部署 API 不会断开任何 relay 连接。station 平时只以 still.fail 的 relay 为家（浏览器只认它）；still.fail 的 relay 连不上时才临时加入 iroh 官方的公共 relay，恢复后撤掉（`relay_fallback`）。
+relay 沿用 zork 的做法：Cloudflare Container 里跑官方 `iroh-relay`，前面由 Worker（`stillfail-relay`，`cloud/src/relay-worker.ts`）转发 WebSocket。总量限制（RelayBudget）只在建连接时放行，不在帧的路径上：流量按 iroh-relay 自己的 metrics 每分钟读一次，当天超额就重启容器、拒绝新连接；单个客户端的速率由 iroh-relay 自己限。以前每一帧都经过 RelayBudget，它被连接一直占着、每条消息多算一次 DO 请求（2026-09-30 改掉）。它是单独的 Worker，部署 API 不会断开任何 relay 连接。station 平时只以 still.fail 的 relay 为家（浏览器只认它）；still.fail 的 relay 连不上时才临时加入 iroh 官方的公共 relay，恢复后撤掉（`relay_fallback`）。
 
 station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 
@@ -104,11 +104,11 @@ still.fail cloud 由以下 Worker 组成（`cloud/wrangler*.jsonc`）：
 
 | Worker | 是什么 | 在哪 |
 |---|---|---|
-| `ember-cloud` | API（`cloud/src/index.ts`） | `app.still.fail/v1/*`、`admin.still.fail/v1/*`、`/healthz`、`/install.sh`、`/releases/*`、`/.well-known/*` |
-| `ember-relay` | relay 及其容器 | `app.still.fail/relay`、`/ping`、`/generate_204`、`/v1/admin/relay/*` |
-| `ember-web` | 网页版，纯静态 | `app.still.fail`（Custom Domain） |
-| `ember-admin` | 管理后台，纯静态 | `admin.still.fail`（Custom Domain） |
-| `ember-preview` | 预览页，纯静态 | `preview.still.fail`（Custom Domain） |
+| `stillfail-cloud` | API（`cloud/src/index.ts`） | `app.still.fail/v1/*`、`admin.still.fail/v1/*`、`/healthz`、`/install.sh`、`/releases/*`、`/.well-known/*` |
+| `stillfail-relay` | relay 及其容器 | `app.still.fail/relay`、`/ping`、`/generate_204`、`/v1/admin/relay/*` |
+| `stillfail-web` | 网页版，纯静态 | `app.still.fail`（Custom Domain） |
+| `stillfail-admin` | 管理后台，纯静态 | `admin.still.fail`（Custom Domain） |
+| `stillfail-preview` | 预览页，纯静态 | `preview.still.fail`（Custom Domain） |
 | `still-fail-site` | 官网，纯静态（`pnpm build:site`，`python3 cloud/deploy.py site`） | `still.fail`（Custom Domain）；youdid.wtf 买了、接到 Cloudflare 后加进 `cloud/wrangler.site.jsonc` |
 
 同一个域名上，路由优先于 Custom Domain，所以 API 和 relay 的路径到各自的 Worker，其余都是静态站点。域名没变，客户端不用改。

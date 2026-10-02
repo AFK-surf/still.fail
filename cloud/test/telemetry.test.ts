@@ -147,7 +147,7 @@ test("a call in a recorded trace is a span of still.fail cloud's, without ids", 
     for (let i = 0; i < 100 && axiom.got.length === 0; i++) await new Promise((r) => setTimeout(r, 10));
     assert.equal(axiom.got.length, 1);
     const resource = axiom.got[0]!.body.resourceSpans[0];
-    assert.deepEqual(resource.resource.attributes, [{ key: "service.name", value: { stringValue: "ember-cloud" } }]);
+    assert.deepEqual(resource.resource.attributes, [{ key: "service.name", value: { stringValue: "stillfail-cloud" } }]);
     const span = resource.scopeSpans[0].spans[0];
     assert.equal(span.traceId, trace);
     assert.equal(span.parentSpanId, "00f067aa0ba902b7");

@@ -94,7 +94,7 @@ no query), `http.response.status_code`, sizes (`http.request.body.size`,
 `ember.cancelled` (the span's task ended before it did: the chat was closed
 before it opened), `error.type`. Never message content, titles, file names or
 emails. `service.name` says which hop: `ember-web`, `ember-native`,
-`ember-cloud`, `ember-mesh`; a station's spans also carry the
+`stillfail-cloud`, `ember-mesh` (historical cloud spans use `ember-cloud`); a station's spans also carry the
 resource attribute `ember.station`.
 
 Times: the web core times with `performance.now()`, native with a monotonic
@@ -153,7 +153,7 @@ hop in them:
 | summarize
     open_ms = maxif(duration / 1ms, name == "chat.open"),
     link_ms = maxif(duration / 1ms, name == "mesh.connect"),
-    cloud_ms = maxif(duration / 1ms, ['service.name'] == "ember-cloud"),
+    cloud_ms = maxif(duration / 1ms, ['service.name'] in ("stillfail-cloud", "ember-cloud")),
     mesh_ms = maxif(duration / 1ms, ['service.name'] == "ember-mesh")
     by trace_id
 | where open_ms > 0
