@@ -26,8 +26,12 @@ def main():
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--copy', action='store_true')
     modes.add_argument('--verify-only', action='store_true')
+    modes.add_argument('--reconcile', action='store_true', help='copy late source writes without replacing post-cutover target changes')
+    parser.add_argument('--baseline', type=Path, help='immutable verified copy report from before cutover')
     parser.add_argument('--report', type=Path, required=True)
     args = parser.parse_args()
+    if args.reconcile and (not args.baseline or not args.baseline.is_file() or args.baseline.resolve() == args.report.resolve()):
+        parser.error('--reconcile requires a separate --baseline report')
     account = deploy.account_id()
     auth = json.loads(deploy.wrangler('auth', 'token', '--json', capture=True))
     headers = {'user-agent': 'stillfail-resource-migration', 'content-type': 'application/json'}
@@ -48,7 +52,7 @@ def main():
     if 'ember-releases' not in buckets: raise RuntimeError('source bucket is missing')
     if 'stillfail-releases' not in buckets:
         if args.copy: api('r2/buckets', {'name': 'stillfail-releases'})
-        elif args.verify_only: raise RuntimeError('target bucket is missing')
+        elif args.verify_only or args.reconcile: raise RuntimeError('target bucket is missing')
     token = secrets.token_urlsafe(32)
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
@@ -58,7 +62,7 @@ def main():
         config = root / 'wrangler.json'
         bindings = [{'binding': 'SOURCE', 'bucket_name': 'ember-releases', 'preview_bucket_name': 'ember-releases'}]
         # Inventory does not need a target and must not create one.
-        if args.copy or args.verify_only:
+        if args.copy or args.verify_only or args.reconcile:
             bindings.append({'binding': 'TARGET', 'bucket_name': 'stillfail-releases', 'preview_bucket_name': 'stillfail-releases'})
         deploy.write_private(config, {
             'name': 'stillfail-r2-migration', 'main': str(deploy.ROOT / 'migrations/release-bucket.ts'),
@@ -96,16 +100,19 @@ def main():
                         break
                     except (OSError, ValueError): time.sleep(1)
                 else: raise RuntimeError('Wrangler migration proxy did not become ready')
-                report = {'source': 'ember-releases', 'target': 'stillfail-releases', 'mode': 'copy' if args.copy else 'verify' if args.verify_only else 'inventory', 'complete': False, 'objects': []}
+                report = {'source': 'ember-releases', 'target': 'stillfail-releases', 'mode': 'reconcile' if args.reconcile else 'copy' if args.copy else 'verify' if args.verify_only else 'inventory', 'complete': False, 'objects': []}
                 previous = {}
-                if args.copy and args.report.exists():
-                    saved = json.loads(args.report.read_text())
+                prior = args.baseline if args.reconcile else args.report
+                if (args.copy or args.reconcile) and prior.exists():
+                    saved = json.loads(prior.read_text())
+                    if args.reconcile and (not saved.get('complete') or saved.get('mode') != 'copy' or saved.get('source') != report['source'] or saved.get('target') != report['target']):
+                        raise RuntimeError('reconciliation needs a completed copy baseline')
                     if saved.get('source') == report['source'] and saved.get('target') == report['target']:
                         previous = {o['key']: o for o in saved['objects'] if all(k in o for k in ('sourceEtag', 'targetEtag', 'sha256'))}
                 while True:
                     for obj in page['objects']:
-                        if args.copy or args.verify_only:
-                            obj = call('/copy', {'key': obj['key'], 'etag': obj['etag'], 'verifyOnly': args.verify_only, 'resume': previous.get(obj['key'])})
+                        if args.copy or args.verify_only or args.reconcile:
+                            obj = call('/copy', {'key': obj['key'], 'etag': obj['etag'], 'verifyOnly': args.verify_only, 'reconcile': args.reconcile, 'resume': previous.get(obj['key'])})
                         report['objects'].append(obj)
                         deploy.write_private(args.report, report)
                         if len(report['objects']) % 25 == 0: print('verified objects:', len(report['objects']), flush=True)
