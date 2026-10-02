@@ -23,7 +23,7 @@ pub fn merge(entries: &[Value]) -> Vec<Value> {
             Some("message") => {
                 let mut message = json!({
                     "seq": n, "thread": field("thread"), "ts": field("ts"), "authorKind": field("authorKind"), "author": field("author"),
-                    "authorName": field("authorName"), "text": entry.get("text").cloned().unwrap_or(json!("")),
+                    "agentIdentity": field("agentIdentity"), "authorName": field("authorName"), "text": entry.get("text").cloned().unwrap_or(json!("")),
                     "attachments": entry.get("attachments").cloned().unwrap_or(json!([])), "quotes": entry.get("quotes").cloned().unwrap_or(json!([])),
                     "declared": field("declared"), "createdAt": field("at"), "editedAt": null,
                 });

@@ -7,6 +7,7 @@ use crate::store::{Attachment, AuthorKind, Quote};
 
 fn message(n: i64, ts: &str, author: &str, rich: bool, kind: AuthorKind) -> MessageRow {
     MessageRow {
+        agent_identity: None,
         thread: 1,
         n,
         ts: ts.into(),

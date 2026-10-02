@@ -321,12 +321,13 @@ pub fn last_by(row: &Value, me: &Value, slack_users: &[String], members: &[Value
     Some(match kind {
         "agent" => {
             let agent = row.get("agents").and_then(Value::as_array).and_then(|a| a.iter().find(|a| a.get("key").and_then(Value::as_str) == Some(author)));
-            let model = agent.and_then(|a| a.get("model")).and_then(Value::as_str);
+            let identity = last.get("agentIdentity").unwrap_or(&Value::Null);
+            let model = identity.get("model").and_then(Value::as_str);
             json!({
                 "kind": "agent",
-                "name": model.map(stillfail_shapes::model::name).or(said_name.map(str::to_string)).unwrap_or_else(|| "agent".into()),
+                "name": model.map(stillfail_shapes::model::name).unwrap_or_else(|| "agent".into()),
                 "model": model,
-                "runtime": agent.and_then(|a| a.get("runtime")).cloned().unwrap_or(json!("claude")),
+                "runtime": identity.get("runtime"),
                 "mine": false,
                 "state": agent.and_then(mark_of),
             })
@@ -999,8 +1000,8 @@ mod tests {
         let me = json!({"id": "a@x.com", "email": "a@x.com"});
         let members = [json!({"email": "b@x.com", "name": "阿二", "picture": "https://p/b"})];
         let row = |kind: &str, author: &str| json!({
-            "agents": [{"key": "k", "model": "deepseek-flash", "runtime": "claude", "lastTurn": {"declared": "block"}}],
-            "last": {"authorKind": kind, "author": author, "authorName": null, "text": "hi"},
+            "agents": [{"key": "k", "model": "gpt-6-astra", "runtime": "codex", "lastTurn": {"declared": "block"}}],
+            "last": {"authorKind": kind, "author": author, "authorName": null, "text": "hi", "agentIdentity": {"model": "deepseek-flash", "runtime": "claude"}},
         });
         let agent = last_by(&row("agent", "k"), &me, &[], &members).unwrap();
         assert_eq!((agent["name"].as_str(), agent["state"].as_str()), (Some("DeepSeek Flash"), Some("block")));

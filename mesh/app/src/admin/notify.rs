@@ -167,7 +167,7 @@ mod tests {
     }
 
     fn said(kind: AuthorKind, author: &str, at: i64) -> MessageRow {
-        MessageRow { thread: 1, n: 3, ts: "1.1".into(), author_kind: kind, author: author.into(), text: "修好了".into(), attachments: vec![], quotes: vec![], declared: None, client: None, created_at: at, edited_at: None }
+        MessageRow { agent_identity: None, thread: 1, n: 3, ts: "1.1".into(), author_kind: kind, author: author.into(), text: "修好了".into(), attachments: vec![], quotes: vec![], declared: None, client: None, created_at: at, edited_at: None }
     }
 
     #[test]

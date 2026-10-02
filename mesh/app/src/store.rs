@@ -255,6 +255,9 @@ pub struct Attachment {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct EntryRow {
+    /// Identity at posting time, never read from the current session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_identity: Option<Value>,
     pub thread: i64,
     /// 1, 2, 3 … within the thread, no gaps.
     pub n: i64,
@@ -311,6 +314,7 @@ fn card_of(card: Option<String>, options: Option<String>) -> Option<Value> {
 /// A message as it reads now: its latest edit's words, files and quotes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MessageRow {
+    pub agent_identity: Option<Value>,
     pub thread: i64,
     /// Its entry's n.
     pub n: i64,
@@ -971,7 +975,7 @@ const MERGED: &str = "CREATE VIEW merged AS
     CASE WHEN e.n IS NULL THEN m.text ELSE e.text END AS text,
     CASE WHEN e.n IS NULL THEN m.attachments ELSE e.attachments END AS attachments,
     CASE WHEN e.n IS NULL THEN m.quotes ELSE e.quotes END AS quotes,
-    m.declared, m.client, m.at AS created_at, e.at AS edited_at
+    m.declared, m.client, m.agent_identity, m.at AS created_at, e.at AS edited_at
   FROM entries m
   LEFT JOIN entries e ON e.thread = m.thread
     AND e.n = (SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n)
@@ -984,6 +988,9 @@ fn add_client_column(db: &Connection) -> Result<()> {
         let mut stmt = db.prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?"))?;
         Ok(stmt.exists([column])?)
     };
+    if !has("entries", "agent_identity")? {
+        db.execute_batch("ALTER TABLE entries ADD COLUMN agent_identity TEXT")?;
+    }
     if !has("entries", "client")? {
         db.execute_batch("ALTER TABLE entries ADD COLUMN client TEXT")?;
     }
@@ -1047,6 +1054,7 @@ fn to_membership(r: &Row) -> rusqlite::Result<Membership> {
 
 fn to_entry(r: &Row) -> rusqlite::Result<EntryRow> {
     Ok(EntryRow {
+        agent_identity: r.get::<_, Option<String>>("agent_identity")?.and_then(|v| serde_json::from_str(&v).ok()),
         thread: r.get("thread")?,
         n: r.get("n")?,
         kind: if r.get::<_, String>("kind")? == "edit" { EntryKind::Edit } else { EntryKind::Message },
@@ -1068,6 +1076,7 @@ fn to_entry(r: &Row) -> rusqlite::Result<EntryRow> {
 
 fn to_message(r: &Row) -> rusqlite::Result<MessageRow> {
     Ok(MessageRow {
+        agent_identity: r.get::<_, Option<String>>("agent_identity")?.and_then(|v| serde_json::from_str(&v).ok()),
         thread: r.get("thread")?,
         n: r.get("n")?,
         ts: r.get::<_, Option<String>>("ts")?.unwrap_or_default(),
@@ -1092,6 +1101,7 @@ fn merge_entries(entries: &[EntryRow]) -> Vec<MessageRow> {
                 messages.insert(
                     e.n,
                     MessageRow {
+                        agent_identity: e.agent_identity.clone(),
                         thread: e.thread,
                         n: e.n,
                         ts: e.ts.clone().unwrap_or_default(),
@@ -1637,6 +1647,24 @@ impl Store {
         })
     }
 
+    /// Recover old posts only from calls in the turn that was running then, never today's session.
+    pub fn message_identity(&self, author: &str, at: i64, snapshot: Option<&Value>) -> Option<Value> {
+        if snapshot.and_then(|s| s.get("model")).and_then(Value::as_str).is_some() {
+            return snapshot.cloned();
+        }
+        self.with(|i, _| {
+            Ok(i.db.query_row(
+                "SELECT model, runtime FROM usage
+                 WHERE session = ?1 AND subagent = 0 AND model IS NOT NULL AND at <= ?2
+                   AND turn = (SELECT id FROM turns WHERE session_key = ?1 AND started_at <= ?2
+                               ORDER BY started_at DESC, rowid DESC LIMIT 1)
+                 ORDER BY at DESC, id DESC LIMIT 1",
+                params![author, at],
+                |r| Ok(serde_json::json!({"model": r.get::<_, String>(0)?, "runtime": r.get::<_, String>(1)?}))
+            ).optional()?)
+        }).ok().flatten().or_else(|| snapshot.cloned())
+    }
+
     /// The thread's latest message as merged, for lists.
     pub fn last_message(&self, thread: i64) -> Result<Option<MessageRow>> {
         self.with(|i, _| i.last_message(thread))
@@ -1661,6 +1689,7 @@ impl Store {
             }
             let entry = i.append(
                 EntryRow {
+                    agent_identity: None,
                     thread: m.thread,
                     n: 0,
                     kind: EntryKind::Message,
@@ -1698,6 +1727,7 @@ impl Store {
             }
             i.append(
                 EntryRow {
+                    agent_identity: None,
                     thread: message.thread,
                     n: 0,
                     kind: EntryKind::Edit,
@@ -2709,6 +2739,13 @@ impl Inner {
 
     /// Appends an entry as the thread's next, bringing an archived thread back first.
     fn append(&mut self, mut entry: EntryRow, changes: &mut Changes) -> Result<EntryRow> {
+        if entry.kind == EntryKind::Message && entry.author_kind == AuthorKind::Agent {
+            entry.agent_identity = self.db.query_row(
+                "SELECT model, effort, runtime FROM sessions WHERE key = ?", [&entry.author],
+                |r| Ok(serde_json::json!({"model": r.get::<_, Option<String>>(0)?, "effort": r.get::<_, Option<String>>(1)?, "runtime": r.get::<_, String>(2)?}))
+            ).optional()?;
+        }
+
         if self.is_archived(entry.thread)? {
             self.restore_thread(entry.thread)?;
         }
@@ -2893,7 +2930,7 @@ impl Inner {
 
 fn insert_entry(db: &Connection, e: &EntryRow) -> Result<()> {
     db.execute(
-        "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, options, card, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, options, card, at, agent_identity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             e.thread,
             e.n,
@@ -2910,7 +2947,8 @@ fn insert_entry(db: &Connection, e: &EntryRow) -> Result<()> {
             e.profile,
             e.options.as_ref().map(Value::to_string),
             e.card.as_ref().map(Value::to_string),
-            e.at
+            e.at,
+            e.agent_identity.as_ref().map(Value::to_string)
         ],
     )?;
     Ok(())

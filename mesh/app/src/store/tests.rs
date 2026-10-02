@@ -397,7 +397,7 @@ fn a_database_made_before_clients_gains_the_column_and_a_message_keeps_its_app_t
         assert!(!old.contains("client"));
         db.execute_batch(&old).unwrap();
         // The view as it was made before.
-        db.execute_batch(&MERGED.replace("m.declared, m.client,", "m.declared,")).unwrap();
+        db.execute_batch(&MERGED.replace("m.declared, m.client, m.agent_identity,", "m.declared,")).unwrap();
         db.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}")).unwrap();
     }
     let store = Store::open(path.to_str().unwrap(), Some(&dir.path().join("archive"))).unwrap();
@@ -489,4 +489,32 @@ fn the_latest_turn_is_the_last_inserted_when_start_times_tie() {
     assert_eq!(latest.kind, "resume");
     assert_eq!(latest.outcome.as_deref(), Some("completed"));
     assert_eq!(latest.detail, None);
+}
+
+
+#[test]
+fn a_message_keeps_its_model_after_switching_editing_and_archiving() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path().join("ember.db").to_str().unwrap(), Some(&dir.path().join("archive"))).unwrap();
+    session(&store, "a");
+    let thread = store.open_thread("ember", "EMBER", "1.1", None, None).unwrap();
+    store.join_thread(thread.id, "a", "ember").unwrap();
+    store.set_session_model("a", Some("gpt-6-sol"), Some("high")).unwrap();
+    say(&store, thread.id, "1.2", AuthorKind::Agent, "a", "first");
+    store.set_session_model("a", Some("gpt-6-astra"), Some("medium")).unwrap();
+    say(&store, thread.id, "1.3", AuthorKind::Agent, "a", "second");
+    store.edit_message("ember", "EMBER", "1.1", "1.2", "edited").unwrap();
+    let check = || {
+        let messages = store.messages_before(thread.id, None, 10).unwrap();
+        assert_eq!(messages[0].agent_identity.as_ref().unwrap()["model"], "gpt-6-sol");
+        assert_eq!(messages[0].agent_identity.as_ref().unwrap()["effort"], "high");
+        assert_eq!(messages[1].agent_identity.as_ref().unwrap()["model"], "gpt-6-astra");
+        assert_eq!(messages[0].text, "edited");
+    };
+    check();
+    store.set_archived("a", true, MANUAL).unwrap();
+    check();
+    store.set_archived("a", false, MANUAL).unwrap();
+    check();
+    assert!(store.message_identity("a", 0, None).is_none(), "unknown history must not use today's model");
 }
