@@ -291,7 +291,7 @@ private fun Idle(view: DecisionsView, modifier: Modifier) {
                 Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                     Figure(today.count.toString(), "今天批了")
                     today.waited?.let { Figure(it, "平均等你") }
-                    Figure(today.working.toString(), "在干活")
+                    Figure(today.working.toString(), "正在办")
                 }
             }
         }

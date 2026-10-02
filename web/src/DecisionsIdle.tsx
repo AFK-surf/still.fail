@@ -23,7 +23,7 @@ export function DecisionsIdle({ view, onOpen }: { view: DecisionsView; onOpen: (
             <div className={css.stats}>
               <div className={css.stat}><span className={css.figure}>{today.count}</span><span className={css.figureWords}>今天批了</span></div>
               {today.waited && <div className={css.stat}><span className={css.figure}>{today.waited}</span><span className={css.figureWords}>平均等你</span></div>}
-              <div className={css.stat}><span className={css.figure}>{today.working}</span><span className={css.figureWords}>在干活</span></div>
+              <div className={css.stat}><span className={css.figure}>{today.working}</span><span className={css.figureWords}>正在办</span></div>
             </div>
           )}
         </div>
