@@ -38,6 +38,14 @@ async function handle(s: number, body: string) {
   inFlight++;
   try {
     const request = JSON.parse(body);
+    if (request.op === "ping") {
+      reply(s, { ok: true, i: request.i });
+      return;
+    }
+    if (request.op === "chats") {
+      reply(s, { ok: true, chats: chats(request.n ?? 2000) });
+      return;
+    }
     // Some work, so that requests are in flight when a restart comes.
     await new Promise((resolve) => setTimeout(resolve, 30));
     await sql("INSERT INTO hits (i, generation, version) VALUES (?, ?, ?)", [request.i, generation, VERSION]);
@@ -49,6 +57,27 @@ async function handle(s: number, body: string) {
     inFlight--;
     if (draining && inFlight === 0) stop();
   }
+}
+
+// A station's chat list, made up but shaped like the real one (for the client prototype, proto/client-shell).
+function chats(n: number) {
+  const words = ["部署", "安卓", "登录", "中继", "截图", "合并", "通知", "预览", "设置", "迁移", "Slack", "station", "core", "web"];
+  const states = ["running", "waiting", "need_human", "all_done", "idle"];
+  let seed = 7;
+  const random = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const pick = <T,>(list: T[]) => list[Math.floor(random() * list.length)];
+  const now = Date.now();
+  return Array.from({ length: n }, (_, i) => ({
+    id: `c-${i.toString(16).padStart(8, "0")}`,
+    title: `${pick(words)}${pick(words)}：${pick(words)}的问题 ${i}`,
+    station: `station-${i % 7}`,
+    updated: now - Math.floor(random() * 30 * 86400000),
+    unread: random() < 0.2 ? Math.floor(random() * 9) + 1 : 0,
+    pinned: random() < 0.03,
+    state: pick(states),
+    last: Array.from({ length: 12 }, () => pick(words)).join(" "),
+    people: Array.from({ length: 1 + Math.floor(random() * 3) }, () => `user${Math.floor(random() * 20)}@example.com`),
+  }));
 }
 
 // Exits once stdout is flushed: nothing left to listen to.

@@ -1,0 +1,30 @@
+[package]
+name = "proto-client-shell"
+edition = "2024"
+version = "0.1.0"
+publish = false
+description = "Prototype: the client's Rust shell (iroh) running a TypeScript core in QuickJS, as it would on Android"
+
+[dependencies]
+anyhow = "1"
+iroh = { version = "=1.0.3" }
+rquickjs = { version = "0.14", features = ["futures"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+
+# A workspace of its own: not part of mesh/ or client/.
+[workspace]
+
+[patch.crates-io]
+swarm-discovery = { path = "../../vendor/swarm-discovery" }
+noq-udp = { path = "../../vendor/noq-udp" }
+iroh = { path = "../../vendor/iroh" }
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.release]
+strip = true
