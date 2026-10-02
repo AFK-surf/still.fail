@@ -104,7 +104,7 @@ export function DecisionsEntry({ scope, to }: { scope: string; to: string }) {
   const n = useWorkspaceMarks(scope)?.workspaces[scope]?.decisions ?? 0;
   if (n <= 0) return null;
   return (
-    <NavLink className={`${nav.navRow} ${decisionsCss.sideEntry}`} to={to} onClick={(e) => openedAt(e.currentTarget)} aria-label={`奏：${n} 件等你决定`}>
+    <NavLink className={`${nav.navRow} ${decisionsCss.sideEntry}`} to={to} onClick={(e) => openedAt(e.currentTarget)} aria-label={t("web-main.decisions.entry", { n })}>
       <span className={decisionsCss.sideEntryLead}>奏</span>
       <span className={decisionsCss.sideEntryCount}>{t("web-main.decisions.count", { n })}</span>
     </NavLink>

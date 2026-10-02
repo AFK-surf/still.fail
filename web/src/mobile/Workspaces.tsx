@@ -44,10 +44,10 @@ function WorkspacesSheet() {
   return (
     <>
       <SheetGrab />
-      <SheetHead title="切换 workspace" />
+      <SheetHead title={t("web-mobile.workspaces.title")} />
       <div className={sheetsCss.mSheetScroll}>
         {current && <>
-          <div className={css.mSheetLabel}>当前使用</div>
+          <div className={css.mSheetLabel}>{t("web-mobile.workspaces.current")}</div>
           <div className={css.mCurrent}>
             <PickRow label={current.name} sub={currentOf!.account.email} checked onClick={() => app.sheet(null)} />
           </div>
@@ -65,7 +65,7 @@ function WorkspacesSheet() {
             {respond.error && <p className={`${partsCss.mError} ${partsCss.mPad}`}>{errorText(respond.error)}</p>}
           </>
         )}
-        {others.length > 0 && <div className={css.mSheetLabel}>其它 workspace</div>}
+        {others.length > 0 && <div className={css.mSheetLabel}>{t("web-mobile.workspaces.others")}</div>}
         {others.flatMap(({ account, workspaces }) => workspaces.map((w) => (
           <PickRow key={w.id} label={w.name} sub={account.email}
             mark={marks?.workspaces[w.id]?.tone && <MarkCounts mark={marks.workspaces[w.id]} />}
@@ -73,8 +73,8 @@ function WorkspacesSheet() {
         )))}
       </div>
       <div className={css.mActions}>
-        <PickRow label="登录其它账号" sub="保留已登录账号，添加另一个 Google 账号" leading={<LogIn size={20} />} busy={login.busy} onClick={() => { void login.signIn(); }} />
-        <PickRow label="新建 workspace" leading={<Plus size={20} />} onClick={() => app.sheet({ height: 0.8, content: () => <NewWorkspaceSheet /> })} />
+        <PickRow label={t("web-mobile.workspaces.addAccount")} sub={t("web-mobile.workspaces.addAccountNote")} leading={<LogIn size={20} />} busy={login.busy} onClick={() => { void login.signIn(); }} />
+        <PickRow label={t("web-mobile.workspaces.new")} leading={<Plus size={20} />} onClick={() => app.sheet({ height: 0.8, content: () => <NewWorkspaceSheet /> })} />
       </div>
     </>
   );

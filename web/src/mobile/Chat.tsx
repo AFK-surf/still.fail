@@ -75,7 +75,7 @@ export function ChatScreen() {
       <div className={chatCss.mChat}>
         <BarFrame title="" more={false} />
         {/* Read from its station meanwhile, over the messages to come (./Loading.tsx); what is wrong in red, over faded ones. */}
-        <LoadingPill text={chat.error ? `读不到这个对话：${chat.error.message}` : station.name ? `正在从 ${station.name} 读取对话` : "正在读取对话"} error={!!chat.error} />
+        <LoadingPill text={chat.error ? t("web-mobile.chat.failed", { error: chat.error.message }) : station.name ? t("web-mobile.chat.readingFrom", { station: station.name }) : t("web-mobile.chat.reading")} error={!!chat.error} />
         <PlaceholderMessages still={!!chat.error} />
       </div>
     );
@@ -323,7 +323,7 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
   const bar = (
     <div className={css.mComposerBar} data-expanded={expanded || undefined}
       onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}>
-      <button type="button" className={css.mPlus} onClick={onPlus} disabled={locked} aria-label="添加文件"><Plus size={18} /></button>
+      <button type="button" className={css.mPlus} onClick={onPlus} disabled={locked} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
       {field}
       <button type="button" className={css.mSend} data-ready={ready || undefined} disabled={!ready} onClick={onSend} aria-label={t("web-mobile.chat.send")}>
         {draft.starting ? <Spinner size={16} color="var(--m-surface)" /> : <ArrowUp size={18} />}

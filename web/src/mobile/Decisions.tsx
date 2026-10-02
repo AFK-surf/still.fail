@@ -11,7 +11,7 @@ export function DecisionsScreen() {
   const app = useApp();
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back="会话" onBack={app.pop} title="奏" />
+      <NavBar back={t("web-mobile.nav.chats")} onBack={app.pop} title={t("web-mobile.decisions.title")} />
       <DecisionDeck workspace={app.entry.id} inline className={rootCss.wide} onOpen={(path) => app.push(path)} />
     </div>
   );

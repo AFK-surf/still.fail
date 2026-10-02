@@ -103,9 +103,9 @@ export function Recent() {
         <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Edit size={17} /></button>
       </div>
       <div className={css.mRecentRows}>
-        {!view ? <Note text={chats.error?.message ?? "正在读取会话…"} error={!!chats.error} />
+        {!view ? <Note text={chats.error?.message ?? t("web-mobile.home.reading")} error={!!chats.error} />
           // No rows: what the list says in their place (the core's `note`), as the home list does.
-          : !items.length ? <Note text={view.note?.reading ? view.note.text ?? "正在读取会话" : view.note?.failing[0]?.text ?? "还没有会话"} error={!view.note?.reading && !!view.note?.failing.length} />
+          : !items.length ? <Note text={view.note?.reading ? view.note.text ?? t("web-mobile.home.loading") : view.note?.failing[0]?.text ?? t("web-mobile.home.none")} error={!view.note?.reading && !!view.note?.failing.length} />
           : items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead={view.leading ?? "agents"} />)}
       </div>
       <button type="button" className={css.mRecentAll} onClick={app.home}>{t("web-mobile.home.allChats")}<ChevronRight size={16} /></button>
@@ -160,11 +160,11 @@ function ChatPane({ chats, filter }: { chats: TopicState<ChatsView>; filter: Cha
       {/* What the last update brought (./Changelog.tsx), until it is seen: even while the list is being read. */}
       <ChangelogNews />
       {/* Not even the stations known yet: the rows to come, and what is wrong if the list cannot be read (./Loading.tsx). */}
-      {!view ? <><LoadingPill text={chats.error?.message ?? "正在读取会话"} error={!!chats.error} /><PlaceholderRows count={7} still={!!chats.error} /></> : (
+      {!view ? <><LoadingPill text={chats.error?.message ?? t("web-mobile.home.loading")} error={!!chats.error} /><PlaceholderRows count={7} still={!!chats.error} /></> : (
         <>
           {/* A station's link coming back is said on its rows; only with no rows to show does the list say it (the core's
               `note`): what it waits on over the rows to come, or the stations it cannot read over faded ones. */}
-          {view.note?.reading && <LoadingPill text={view.note.text ?? "正在读取会话"} />}
+          {view.note?.reading && <LoadingPill text={view.note.text ?? t("web-mobile.home.loading")} />}
           {view.note?.failing.map((s) => <LoadingPill key={`e/${s.station}`} text={s.text} error />)}
           {(view.note?.reading || !!view.note?.failing.length) && <PlaceholderRows count={view.note.reading ? 7 : 4} still={!view.note.reading} />}
           {view.note?.empty && <Empty view={view} filter={filter} />}

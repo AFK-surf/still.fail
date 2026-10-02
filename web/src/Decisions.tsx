@@ -166,11 +166,11 @@ export function useDecisionQueue(workspace: string) {
     defer(d: DecisionItem) {
       const key = keyOf(d);
       setAside((was) => [...was.filter((k) => k !== key), key]);
-      act(call("decision.defer", where(d)), "待定");
+      act(call("decision.defer", where(d)), t("web-main.decisions.deferWhat"));
     },
     dismiss(d: DecisionItem) {
       drop(d);
-      act(call("decision.dismiss", where(d)).catch((e: unknown) => { back(d); throw e; }), "不再提醒");
+      act(call("decision.dismiss", where(d)).catch((e: unknown) => { back(d); throw e; }), t("web-main.decisions.dismissWhat"));
     },
     /** Answered here (its option or reply sent): gone. */
     answered: drop,
@@ -266,7 +266,7 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
   if (!front) {
     body = view.value && !view.value.loading ? <DecisionsIdle view={view.value} onOpen={onOpen} />
       : view.value || view.error
-        ? <p className={css.empty}>{view.error && !view.value ? view.error.message : "正在读取…"}</p>
+        ? <p className={css.empty}>{view.error && !view.value ? view.error.message : t("web-main.reading")}</p>
         : null;
   } else {
     const d = front;
@@ -286,7 +286,7 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
           <div className={css.foot}>
             <div className={css.footColumn}>
               <DecisionAnswer d={d} mobile onAnswered={() => answered(d)} onReplying={(sending) => setReplying(sending ? d : null)} onOpen={() => onOpen(path)} />
-              <div className={css.hint} aria-hidden="true"><span>← 待定</span><span>不再提醒 →</span></div>
+              <div className={css.hint} aria-hidden="true"><span>← {t("web-main.decisions.defer")}</span><span>{t("web-main.decisions.dismiss")} →</span></div>
             </div>
           </div>
         </div>
@@ -333,7 +333,7 @@ export function DecisionAnswer({ d, mobile, onAnswered, onReplying, onOpen }: {
     {reply()}
   </>;
   if (type === "text") return reply(d.card?.placeholder);
-  return <button type="button" className={css.elsewhere} onClick={onOpen}>去 chat 里回</button>;
+  return <button type="button" className={css.elsewhere} onClick={onOpen}>{t("web-main.decisions.elsewhere")}</button>;
 }
 
 /**

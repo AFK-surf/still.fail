@@ -25,6 +25,7 @@ import * as deckCss from "./Decisions.css.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
+import { t } from "./i18n.ts";
 
 /** Where 奏 was in the sidebar's foot when it was pressed, for the list to come out of (DecisionsEntry). */
 let openedFrom: { top: number; at: number } | null = null;
@@ -32,8 +33,8 @@ export function openedAt(el: HTMLElement): void {
   openedFrom = { top: el.getBoundingClientRect().top, at: performance.now() };
 }
 
-/** The question a decision asks: its post's first line (its line without 奏 · ). */
-const question = (d: DecisionItem) => d.text.replace(/^奏 · /, "") || d.title;
+/** The question a decision asks: its post's first line (its line without 奏 · , or Decision · in English). */
+const question = (d: DecisionItem) => d.text.replace(/^(?:奏|Decision) · /, "") || d.title;
 
 export function DecisionDesk({ workspace, back, onOpen }: { workspace: string; back: string; onOpen: (path: string) => void }) {
   const queue = useDecisionQueue(workspace);
@@ -102,23 +103,23 @@ export function DecisionDesk({ workspace, back, onOpen }: { workspace: string; b
 
   const firstAside = items.findIndex((x) => queue.isAside(x));
   const path = d ? `${stationBase(d.station)}/chats/${encodeURIComponent(d.session)}` : "";
-  const empty = view.value || view.error ? (view.error && !view.value ? view.error.message : "正在读取…") : null;
+  const empty = view.value || view.error ? (view.error && !view.value ? view.error.message : t("web-main.reading")) : null;
   return (
     <>
-      <nav className={nav.sidebar} aria-label="奏">
-        <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
+      <nav className={nav.sidebar} aria-label={t("web-main.decisions.title")}>
+        <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-main.sidebar.resize")} />
         <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
         <div className={css.backRow}>
-          <NavLink className={`${nav.navRow} ${css.back}`} to={back} end><ChevronLeft {...ICON} />对话</NavLink>
+          <NavLink className={`${nav.navRow} ${css.back}`} to={back} end><ChevronLeft {...ICON} />{t("web-main.decisions.back")}</NavLink>
         </div>
         <div className={css.title}>
-          <span className={css.titleWord}>奏</span>
-          {items.length > 0 && <span className={css.titleCount}>{items.length} 件等你决定</span>}
+          <span className={css.titleWord}>{t("web-main.decisions.title")}</span>
+          {items.length > 0 && <span className={css.titleCount}>{t("web-main.decisions.count", { n: items.length })}</span>}
         </div>
         <div ref={list} className={nav.navScroll} role="list">
           {items.map((x, i) => (
             <div key={keyOf(x)} data-flip={keyOf(x)} role="listitem">
-              {i === firstAside && <div className={css.group}>待定</div>}
+              {i === firstAside && <div className={css.group}>{t("web-main.decisions.defer")}</div>}
               <button type="button" className={css.row} aria-current={x === d || undefined} data-aside={queue.isAside(x) || undefined}
                 onMouseDown={(e) => e.preventDefault()} onClick={() => pick(x)}>
                 <span className={css.question}>{question(x)}</span>
@@ -129,7 +130,7 @@ export function DecisionDesk({ workspace, back, onOpen }: { workspace: string; b
               </button>
             </div>
           ))}
-          {view.value && !view.value.loading && items.length === 0 && <div className={css.group}>暂无</div>}
+          {view.value && !view.value.loading && items.length === 0 && <div className={css.group}>{t("web-main.decisions.empty")}</div>}
         </div>
       </nav>
       <main className={shellCss.main}>
@@ -137,14 +138,14 @@ export function DecisionDesk({ workspace, back, onOpen }: { workspace: string; b
           <header className={sidebarCss.pageBar}>
             <div className={css.barLead}>
               {d && <>
-                <button type="button" className={css.barChat} onClick={() => onOpen(path)} title="打开 chat">{d.title}</button>
+                <button type="button" className={css.barChat} onClick={() => onOpen(path)} title={t("web-main.decisions.openChat")}>{d.title}</button>
                 <span className={css.barStation}>{d.stationName}</span>
               </>}
             </div>
             <div className={css.barActions}>
               {d && <>
-                <button type="button" className={css.barButton} onClick={defer} disabled={!!replying}>待定</button>
-                <button type="button" className={css.barButton} onClick={dismiss} disabled={!!replying}>不再提醒</button>
+                <button type="button" className={css.barButton} onClick={defer} disabled={!!replying}>{t("web-main.decisions.defer")}</button>
+                <button type="button" className={css.barButton} onClick={dismiss} disabled={!!replying}>{t("web-main.decisions.dismiss")}</button>
               </>}
             </div>
           </header>
