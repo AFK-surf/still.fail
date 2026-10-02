@@ -2,32 +2,36 @@
 // Android app's ui/StationGlyph.kt draws the same):
 // a circle cut into one equal arc per station with the bottom slot left open, the still.fail robot in the middle.
 // Online arcs are ink and the rest a faint track; past six stations the arcs join into one bar filled to the share
-// online. A station failing drops out of the ring into the open slot as a red dot (two at most). The robot blinks one
+// online. A station whose link is on its way follows the online ones, its arc pulsing. A station failing drops out of the ring into the open slot as a red dot (two at most). The robot blinks one
 // eye while one station works and both while more do; with the phone itself offline it sleeps and the whole fades.
 import { useId } from "react";
 import type { ChatsView } from "./api.ts";
 import * as css from "./StationGlyph.css.ts";
 
-export interface GlyphCounts { online: number; dim: number; failing: number; working: number; asleep: boolean }
+/** `connecting` is of `dim`: those whose link is on its way. */
+export interface GlyphCounts { online: number; dim: number; failing: number; working: number; asleep: boolean; connecting?: number }
 
 const CX = 12, CY = 12, R = 9.7, W = 1.8, GAP = 1.7, MAX_ARCS = 6, TRACK = 0.18, MAX_DOTS = 2;
 const GAP_DEG = ((GAP + W) / R) * 180 / Math.PI;
 
-/** An arc on the ring, angles in degrees clockwise from 12 o'clock; `lit` is ink, otherwise the track. */
-export interface GlyphArc { from: number; to: number; lit: boolean }
+/** An arc on the ring, angles in degrees clockwise from 12 o'clock; `lit` is ink, otherwise the track; `pulse` connecting. */
+export interface GlyphArc { from: number; to: number; lit: boolean; pulse?: boolean }
 
 /** Where every part goes, shared in shape with the Android app so the two draw the same thing. */
 export function glyphLayout(c: GlyphCounts): { arcs: GlyphArc[]; dots: number[] } {
   const ring = c.online + c.dim, arcs: GlyphArc[] = [];
+  const connecting = Math.max(0, Math.min(c.connecting ?? 0, c.dim));
   if (ring > MAX_ARCS) {
     const slot = 360 / (MAX_ARCS + 1), from = 180 + slot / 2 + GAP_DEG / 2, to = 540 - slot / 2 - GAP_DEG / 2;
     arcs.push({ from, to, lit: false });
-    if (c.online) arcs.push({ from, to: from + (to - from) * c.online / ring, lit: true });
+    const lit = from + (to - from) * c.online / ring;
+    if (connecting) arcs.push({ from: lit, to: from + (to - from) * (c.online + connecting) / ring, lit: false, pulse: true });
+    if (c.online) arcs.push({ from, to: lit, lit: true });
   } else if (ring) {
     const slot = 360 / (ring + 1);
     for (let i = 0; i < ring; i++) {
       const mid = 180 + slot * (i + 1);
-      arcs.push({ from: mid - slot / 2 + GAP_DEG / 2, to: mid + slot / 2 - GAP_DEG / 2, lit: i < c.online });
+      arcs.push({ from: mid - slot / 2 + GAP_DEG / 2, to: mid + slot / 2 - GAP_DEG / 2, lit: i < c.online, pulse: i >= c.online && i < c.online + connecting });
     }
   }
   const k = Math.min(c.failing, MAX_DOTS), step = (3.1 / R) * 180 / Math.PI;
@@ -38,7 +42,7 @@ export function glyphLayout(c: GlyphCounts): { arcs: GlyphArc[]; dots: number[] 
 /** What the glyph draws: the core's counts for the list (its `glyph`), asleep while the core reaches nothing at all. */
 export function glyphCounts(view: ChatsView | undefined, asleep: boolean): GlyphCounts {
   const g = view?.glyph;
-  return { online: g?.online ?? 0, dim: g?.dim ?? 0, failing: g?.failing ?? 0, working: g?.working ?? 0, asleep };
+  return { online: g?.online ?? 0, dim: g?.dim ?? 0, failing: g?.failing ?? 0, working: g?.working ?? 0, asleep, connecting: g?.connecting ?? 0 };
 }
 
 const at = (deg: number, r = R) => [CX + r * Math.sin(deg * Math.PI / 180), CY - r * Math.cos(deg * Math.PI / 180)] as const;
@@ -65,8 +69,8 @@ export function StationGlyph({ counts, size = 24 }: { counts: GlyphCounts; size?
         </mask>
       </defs>
       <g className={css.glyphPart} opacity={counts.asleep ? 0.4 : 1}>
-        {arcs.map((a, i) => <path key={i} className={css.glyphPart} d={arcPath(a.from, a.to)} fill="none" stroke="currentColor"
-          strokeWidth={W} strokeLinecap="round" strokeOpacity={a.lit ? 1 : TRACK} />)}
+        {arcs.map((a, i) => <path key={i} className={a.pulse ? css.glyphPulse : css.glyphPart} d={arcPath(a.from, a.to)} fill="none" stroke="currentColor"
+          strokeWidth={W} strokeLinecap="round" strokeOpacity={a.lit ? 1 : a.pulse ? undefined : TRACK} />)}
         {dots.map((d) => { const [x, y] = at(d); return <circle key={d} cx={n(x)} cy={n(y)} r="1.25" className={css.glyphDot} />; })}
         <rect x="7.1" y="7.9" width="9.8" height="8.2" rx="3" fill="currentColor" mask={`url(#${mask})`} />
       </g>

@@ -1,14 +1,17 @@
 // The stations at a glance, for the corner of the home bar, drawn as the web's (web/src/StationGlyph.tsx):
 // a circle cut into one equal arc per station with the bottom slot left open, the still.fail robot in the middle.
 // Online arcs are ink and the rest a faint track; past six stations the arcs join into one bar filled to the share
-// online. A station failing drops out of the ring into the open slot as a red dot (two at most). The robot blinks one
+// online. A station whose link is on its way follows the online ones, its arc pulsing. A station failing drops out of the ring into the open slot as a red dot (two at most). The robot blinks one
 // eye while one station works and both while more do; with the phone itself offline it sleeps and the whole fades.
 package fail.still.android.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -29,10 +32,11 @@ import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 
-data class GlyphCounts(val online: Int, val dim: Int, val failing: Int, val working: Int, val asleep: Boolean)
+/** `connecting` is of `dim`: those whose link is on its way. */
+data class GlyphCounts(val online: Int, val dim: Int, val failing: Int, val working: Int, val asleep: Boolean, val connecting: Int = 0)
 
-/** An arc on the ring, angles in degrees clockwise from 12 o'clock; `lit` is ink, otherwise the track. */
-data class GlyphArc(val from: Float, val to: Float, val lit: Boolean)
+/** An arc on the ring, angles in degrees clockwise from 12 o'clock; `lit` is ink, otherwise the track; `pulse` connecting. */
+data class GlyphArc(val from: Float, val to: Float, val lit: Boolean, val pulse: Boolean = false)
 
 // All in the web's 24-unit box.
 private const val CX = 12f
@@ -48,18 +52,21 @@ private val GAP_DEG = ((GAP + W) / R) * 180f / PI.toFloat()
 /** Where every part goes: the same as the web's glyphLayout. */
 fun glyphLayout(c: GlyphCounts): Pair<List<GlyphArc>, List<Float>> {
     val ring = c.online + c.dim
+    val connecting = c.connecting.coerceIn(0, c.dim)
     val arcs = mutableListOf<GlyphArc>()
     if (ring > MAX_ARCS) {
         val slot = 360f / (MAX_ARCS + 1)
         val from = 180f + slot / 2 + GAP_DEG / 2
         val to = 540f - slot / 2 - GAP_DEG / 2
         arcs += GlyphArc(from, to, false)
-        if (c.online > 0) arcs += GlyphArc(from, from + (to - from) * c.online / ring, true)
+        val lit = from + (to - from) * c.online / ring
+        if (connecting > 0) arcs += GlyphArc(lit, from + (to - from) * (c.online + connecting) / ring, false, pulse = true)
+        if (c.online > 0) arcs += GlyphArc(from, lit, true)
     } else if (ring > 0) {
         val slot = 360f / (ring + 1)
         for (i in 0 until ring) {
             val mid = 180f + slot * (i + 1)
-            arcs += GlyphArc(mid - slot / 2 + GAP_DEG / 2, mid + slot / 2 - GAP_DEG / 2, i < c.online)
+            arcs += GlyphArc(mid - slot / 2 + GAP_DEG / 2, mid + slot / 2 - GAP_DEG / 2, i < c.online, pulse = i >= c.online && i < c.online + connecting)
         }
     }
     val k = min(c.failing, MAX_DOTS)
@@ -70,7 +77,7 @@ fun glyphLayout(c: GlyphCounts): Pair<List<GlyphArc>, List<Float>> {
 /** What the glyph draws: the core's counts for the list (its `glyph`), asleep while the core reaches nothing at all. */
 fun glyphCounts(view: ChatsView?, asleep: Boolean): GlyphCounts {
     val g = view?.glyph
-    return GlyphCounts(g?.online?.toInt() ?: 0, g?.dim?.toInt() ?: 0, g?.failing?.toInt() ?: 0, g?.working?.toInt() ?: 0, asleep)
+    return GlyphCounts(g?.online?.toInt() ?: 0, g?.dim?.toInt() ?: 0, g?.failing?.toInt() ?: 0, g?.working?.toInt() ?: 0, asleep, g?.connecting?.toInt() ?: 0)
 }
 
 @Composable
@@ -84,12 +91,16 @@ fun StationGlyph(counts: GlyphCounts, size: Dp = 24.dp) {
     val eye = if (blinking > 0 && !still) rememberInfiniteTransition(label = "blink").animateFloat(
         1f, 1f, infiniteRepeatable(keyframes { durationMillis = 2600; 1f at 2288; 0.1f at 2418; 1f at 2600 }), label = "eye",
     ).value else 1f
+    // A link on its way: its arc breathes between the track and ink (the web's 1.4s); held halfway with motion reduced.
+    val pulse = if (arcs.any { it.pulse } && !still) rememberInfiniteTransition(label = "pulse").animateFloat(
+        TRACK, 0.85f, infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse",
+    ).value else 0.5f
     Canvas(Modifier.size(size).graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen; alpha = if (counts.asleep) 0.4f else 1f }) {
         val u = this.size.width / 24f
         val stroke = Stroke(W * u, cap = StrokeCap.Round)
         val box = Size(2 * R * u, 2 * R * u)
         val topLeft = Offset((CX - R) * u, (CY - R) * u)
-        for (a in arcs) drawArc(ink.copy(alpha = if (a.lit) 1f else TRACK), a.from - 90f, a.to - a.from, false, topLeft, box, style = stroke)
+        for (a in arcs) drawArc(ink.copy(alpha = if (a.lit) 1f else if (a.pulse) pulse else TRACK), a.from - 90f, a.to - a.from, false, topLeft, box, style = stroke)
         for (d in dots) {
             val r = d * PI.toFloat() / 180f
             drawCircle(red, 1.25f * u, Offset((CX + R * sin(r)) * u, (CY - R * cos(r)) * u))

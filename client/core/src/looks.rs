@@ -16,6 +16,8 @@ pub fn glyph(stations: &[Value], days: &[Value]) -> Value {
         .collect();
     let online: Vec<&Value> = stations.iter().filter(|s| state(s) == "online").collect();
     let dim = stations.iter().filter(|s| matches!(state(s).as_str(), "offline" | "connecting")).count();
+    // Of the dim, those whose link is on its way (drawn after the online, pulsing); `dim` keeps them for clients before.
+    let connecting = stations.iter().filter(|s| state(s) == "connecting").count();
     let failing = stations.iter().filter(|s| state(s) == "error").count();
     let working = online.iter().filter(|s| s.get("station").and_then(Value::as_str).is_some_and(|a| running.contains(&a))).count();
     let n = online.len() + dim + failing;
@@ -31,13 +33,16 @@ pub fn glyph(stations: &[Value], days: &[Value]) -> Value {
     if working > 0 {
         label.push(format!("{working} 台在干活"));
     }
-    if dim > 0 {
-        label.push(format!("{dim} 台离线"));
+    if connecting > 0 {
+        label.push(format!("{connecting} 台正在连接"));
+    }
+    if dim > connecting {
+        label.push(format!("{} 台离线", dim - connecting));
     }
     if failing > 0 {
         label.push(format!("{failing} 台出错"));
     }
-    json!({ "online": online.len(), "dim": dim, "failing": failing, "working": working, "summary": summary, "label": label.join("，") })
+    json!({ "online": online.len(), "dim": dim, "connecting": connecting, "failing": failing, "working": working, "summary": summary, "label": label.join("，") })
 }
 
 /// What a list says with no rows to show, in their place: that it is still reading (a station loading or its link
@@ -126,6 +131,10 @@ mod tests {
         // One station goes by its name.
         assert_eq!(glyph(&[station("w/a", "Studio", "online")], &days)["summary"], "Studio · 在干活");
         assert_eq!(glyph(&[], &[])["label"], "0 台 station，0 台在线");
+        // A link on its way is still dim, and said apart from the offline.
+        let g = glyph(&[station("w/a", "A", "connecting"), station("w/b", "B", "offline")], &[]);
+        assert_eq!((g["dim"].as_u64(), g["connecting"].as_u64()), (Some(2), Some(1)));
+        assert_eq!(g["label"], "2 台 station，0 台在线，1 台正在连接，1 台离线");
     }
 
     #[test]

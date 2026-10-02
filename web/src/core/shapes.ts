@@ -1206,6 +1206,8 @@ export type Lead = "agents" | "people";
 export interface StationsGlyph {
 	online: number;
 	dim: number;
+	/** Of `dim`, those whose link is on its way: they pulse. Absent from a core before it. */
+	connecting?: number;
 	failing: number;
 	working: number;
 	summary: string;

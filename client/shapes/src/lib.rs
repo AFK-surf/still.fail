@@ -1342,6 +1342,9 @@ pub struct StationsGlyph {
     pub online: i64,
     #[typeshare(serialized_as = "I54")]
     pub dim: i64,
+    /// Of `dim`, those whose link is on its way: they pulse. Absent from a core before it.
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub connecting: Option<i64>,
     #[typeshare(serialized_as = "I54")]
     pub failing: i64,
     #[typeshare(serialized_as = "I54")]
