@@ -4,6 +4,7 @@ import type { Store } from "./store.ts";
 import { chats, entries } from "./views.ts";
 import { usageOps } from "./ops-usage.ts";
 import { sessionOps } from "./ops-sessions.ts";
+import { saidNotices, turnNotices } from "./notices.ts";
 
 export type ReadOp = (store: Store, args: any) => unknown;
 
@@ -12,4 +13,6 @@ export const ops: Record<string, ReadOp> = {
   entries: (store, a) => entries(store, a.viewer, a.thread, a.params),
   ...usageOps,
   ...sessionOps,
+  turnNotices: (store, a) => turnNotices(store, a.key, a.since, a.ended, a.lang),
+  saidNotices: (store, a) => saidNotices(store, a.thread, a.entries, a.since, a.lang),
 };

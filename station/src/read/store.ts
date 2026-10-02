@@ -315,6 +315,11 @@ export function getThread(s: Store, id: number): ThreadRow | null {
   return r ? toThread(r) : null;
 }
 
+/// The threads a session is in, the one it joined last first (store.rs session_threads).
+export function sessionThreads(s: Store, session: string): ThreadRow[] {
+  return all(s, "SELECT t.* FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC", session).map(toThread);
+}
+
 export function threadSessions(s: Store, thread: number): Membership[] {
   return all(s, "SELECT * FROM thread_sessions WHERE thread = ? ORDER BY joined_at, rowid", thread).map(toMembership);
 }
