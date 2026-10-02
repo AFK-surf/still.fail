@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 安卓通知落点（notification-memorial）：需发 Android；点本地通知或 FCM 推送进入该 workspace 的「奏」页，返回到会话列表。普通聊天链接保持原行为。沿用现有通知 URL，无 cloud/station 接口变更；更新前已经显示的通知仍可能打开聊天。上线后验：新通知分别从应用关闭和后台状态点入，确认 workspace、奏页及返回路径。
+
 - Preview 资源加载圆环：发 web（含新版 wasm core）、桌面和 Android；无 station/cloud 协议改动。统计在各客户端 core，旧客户端维持原样，新 UI 遇到旧 core 不显示圆环。上线后打开服务预览，刷新并 hover 圆环（手机点开），核对加载中、完成和 404 明细；百分比按已发现的服务请求完成数，外部 CDN 请求不在统计内。
 - 奏折按 agent 指定的 `card.assignee`（邮箱）筛选：先发 station，再发 web/桌面和 Android 的新 core/UI。旧 station 会丢弃归属字段，新 core 将其视为未指定；旧客户端仍可能显示所有人的卡片。历史未指定卡片保留在 chat，显示「尚未指定决策人」，由 agent 重发带负责人卡片后进入对应人的奏折。上线用两账号检查各自奏折列表/计数和对方 chat 代答；迁移说明 6 提醒老 agent。
 
