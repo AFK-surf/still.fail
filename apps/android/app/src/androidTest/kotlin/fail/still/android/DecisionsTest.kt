@@ -121,7 +121,6 @@ class DecisionsTest {
 
     private var origin: IntArray? = null
     private fun at(p: Offset): Offset {
-        InstrumentationRegistry.getInstrumentation().uiAutomation.syncInputTransactions()
         val o = origin ?: IntArray(2).also { a ->
             rule.runOnUiThread { rule.activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0).getLocationOnScreen(a) }
             origin = a
@@ -139,6 +138,9 @@ class DecisionsTest {
     }
 
     private fun press(p: Offset) {
+        // The Compose clock can settle before the system finishes focusing the test window.
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        Thread.sleep(350)
         // A pointer left down by a gesture cut short would have every DOWN after it refused.
         send(MotionEvent.ACTION_CANCEL, p); Thread.sleep(50)
         downAt = SystemClock.uptimeMillis()
