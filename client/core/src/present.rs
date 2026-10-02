@@ -185,6 +185,10 @@ pub fn row_state_line(row: &Value) -> Option<(String, Option<u64>)> {
         // One that said what it leaves the chat with (`session`: its words beside 做完了).
         let done = agents.iter().find(|a| a.get("lastTurn").and_then(|t| t.get("need")).and_then(Value::as_str).is_some_and(|n| !n.trim().is_empty()));
         let text = done.and_then(text_of).unwrap_or_else(|| t!("core-views.present.done"));
+        // The decision looked at it and found nothing left to do (unless the viewer chose to keep it).
+        let text = if row.get("archiveRecommended").and_then(Value::as_bool) == Some(true) && row.get("archiveReminderDismissed").and_then(Value::as_bool) != Some(true) {
+            t!("core-views.present.recommended", state = text)
+        } else { text };
         let about = done.and_then(|a| state_about(a, thread)).or_else(|| agents.iter().find_map(|a| state_about(a, thread)));
         (text, about)
     })
@@ -1181,6 +1185,12 @@ mod tests {
         assert!(pinned(&kept), "pinned: kept for the long run, not drawn as finished");
         assert!(!pinned(&row(vec![done.clone()], false)));
         assert_eq!(row_state_text(&row(vec![done.clone()], false)).as_deref(), Some("做完了"));
+        // The decision found nothing left in it: recommended for the archive, unless the viewer keeps it.
+        let mut recommended = row(vec![done.clone()], false);
+        recommended["archiveRecommended"] = json!(true);
+        assert_eq!(row_state_text(&recommended).as_deref(), Some("推荐归档 · 做完了"));
+        recommended["archiveReminderDismissed"] = json!(true);
+        assert_eq!(row_state_text(&recommended).as_deref(), Some("做完了"));
         let merged = agent(json!({"declared": "final", "ending": "all_done", "need": "已合并所有代码", "outcome": "completed"}), "warm");
         assert_eq!(merged["statusText"], "做完了：已合并所有代码");
         assert_eq!(row_state_text(&row(vec![merged], false)).as_deref(), Some("做完了：已合并所有代码"));

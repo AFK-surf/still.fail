@@ -26,6 +26,7 @@ pub const NOTES: &[(i64, &str)] = &[
     (18, "When completion checking is enabled in Automatic Decisions, station reviews all_done with the configured model (including legacy final) before posting or recording it. A rejected completion returns evidence to reconcile; continue authorized work or ask only a real outstanding question. Review uncertainty is not a request for invented approval."),
     (19, "New tool session_send: write to another session's agent (its chat link or session key), on this station or another of the workspace; it shows in that chat. A message headed 来自/From <a chat's link> is from one: answer with session_send to that link."),
     (20, "In still.fail chats, write lists in Markdown (- or 1., an item per line): • is Slack's, and there it runs into one paragraph."),
+    (21, "all_done is no longer reviewed before it is posted or recorded (the earlier notes about a review that could reject it are void): a chat marked all done may be assessed afterwards, in the background, and recommended for the archive when nothing is left in it. It never holds an agent back."),
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

@@ -531,6 +531,8 @@ impl AdminApi {
                 "people": people,
             });
             row["archiveReminderDismissed"] = json!(kept.contains(&t.thread.id));
+            // The decision looked at it (after its agent said all done) and found nothing left to do.
+            row["archiveRecommended"] = json!(!archived && store.archive_suggested(t.thread.id).unwrap_or(false));
             if let Some(client) = key.as_str().and_then(|k| self.deps.hub.client_key(k)) {
                 row["clientKey"] = json!(client);
             }

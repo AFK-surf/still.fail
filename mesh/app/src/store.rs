@@ -624,6 +624,11 @@ pub enum StoreChange {
 // ── schema ─────────────────────────────────────────────────────────────────
 
 const SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS archive_suggestions (
+  thread INTEGER PRIMARY KEY,
+  version INTEGER NOT NULL,
+  at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS decision_checks (
   id INTEGER PRIMARY KEY,
   session TEXT NOT NULL,
@@ -1760,6 +1765,40 @@ impl Store {
                 params![session, now_ms(), result.to_string()])?;
             changes.push(StoreChange::DecisionChecks);
             Ok(())
+        })
+    }
+
+    /// The decision found nothing left to do in this thread as it stood at `version` (its last entry then).
+    pub fn suggest_archive(&self, session: &str, thread: i64, version: i64) -> Result<()> {
+        self.with(|i, changes| {
+            i.db.execute(
+                "INSERT INTO archive_suggestions(thread, version, at) VALUES (?, ?, ?) ON CONFLICT(thread) DO UPDATE SET version = excluded.version, at = excluded.at",
+                params![thread, version, now_ms()],
+            )?;
+            changes.push(StoreChange::Session(session.to_string()));
+            Ok(())
+        })
+    }
+
+    /// The decision no longer says so (it found something left, or could not tell).
+    pub fn clear_archive_suggestion(&self, session: &str, thread: i64) -> Result<()> {
+        self.with(|i, changes| {
+            if i.db.execute("DELETE FROM archive_suggestions WHERE thread = ?", [thread])? > 0 {
+                changes.push(StoreChange::Session(session.to_string()));
+            }
+            Ok(())
+        })
+    }
+
+    /// Whether the archive is recommended for the thread: the decision looked at it as it stands now (any entry since
+    /// makes the recommendation stale, so it goes by itself when anyone says anything).
+    pub fn archive_suggested(&self, thread: i64) -> Result<bool> {
+        self.with(|i, _| {
+            let version: Option<i64> = i.db.query_row("SELECT version FROM archive_suggestions WHERE thread = ?", [thread], |r| r.get(0)).ok();
+            Ok(match version {
+                Some(version) => version == i.last_entry(thread)?,
+                None => false,
+            })
         })
     }
 

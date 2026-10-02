@@ -2469,44 +2469,6 @@ async fn completion_provider(complete: bool) -> (String, tokio::task::JoinHandle
     (url, task)
 }
 
-#[tokio::test]
-async fn completion_review_precedes_posts_and_states_and_covers_legacy_final() {
-    let r = setup();
-    let m = say("<@UBOT> ship the requested fix");
-    r.accept(&m).await; settle().await;
-    let key = format!("cl:C1:{}",m.thread_ts);
-    let to = format!("C1/{}",m.thread_ts);
-    let (endpoint, server) = completion_provider(false).await;
-    install_decision_profile(&r, &endpoint);
-    let before = r.chat.texts().len();
-    for tool in ["chat_post", "chat_state"] {
-        for kind in ["all_done", "final"] {
-            let err = r.call(&key,tool,json!({"to":to,"text":"Ready, approve merging?","kind":kind,"done":"Branch is ready and tests passed"})).await.unwrap_err();
-            assert!(err.to_string().contains("human_needed"),"{err}");
-        }
-    }
-    assert_eq!(r.chat.texts().len(),before,"rejected completion must not post");
-    assert_ne!(r.store.last_turn(&key).unwrap().unwrap().ending.as_deref(),Some("all_done"));
-    server.abort();
-}
-
-#[tokio::test]
-async fn completion_review_allows_answers_and_does_not_turn_outages_into_done() {
-    let r=setup(); let m=say("<@UBOT> what does this setting do?");
-    r.accept(&m).await; settle().await;
-    let key=format!("cl:C1:{}",m.thread_ts); let to=format!("C1/{}",m.thread_ts);
-    let (endpoint, server)=completion_provider(true).await;
-    install_decision_profile(&r, &endpoint);
-    r.call(&key,"chat_post",json!({"to":to,"text":"This setting controls retention.","kind":"all_done","done":"Explained the setting and its effect"})).await.unwrap();
-    server.abort();
-    install_decision_profile(&r, "http://127.0.0.1:1/systemone");
-    let before=r.chat.texts().len();
-    assert!(r.call(&key,"chat_post",json!({"to":to,"text":"done","kind":"all_done","done":"The release has been confirmed"})).await.unwrap_err().to_string().contains("request failed"));
-    assert_eq!(r.chat.texts().len(),before);
-    // An outage must not stop progress or a real request for human help.
-    r.call(&key,"chat_post",json!({"to":to,"text":"Which retention period do you want?","kind":"need_human","need":"Choose the retention period"})).await.unwrap();
-}
-
 fn install_decision_profile(r: &Rig, endpoint: &str) {
     use crate::decision::{Provider, profiles::{Capability, fingerprint}};
     r.edit(|config| {
@@ -2526,19 +2488,80 @@ fn install_decision_profile(r: &Rig, endpoint: &str) {
     }));
 }
 
+/// The decision runs on its own after all_done: wait for what it found (a recommendation is kept per thread).
+async fn recommended(r: &Rig, channel: &str, thread_ts: &str) -> bool {
+    let id = r.thread(channel, thread_ts).id;
+    for _ in 0..60 {
+        if r.store.archive_suggested(id).unwrap() { return true; }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    false
+}
+
 #[tokio::test]
-async fn completion_review_obeys_rule_switch_and_selected_model() {
-    let r=setup();let m=say("<@UBOT> explain retention");r.accept(&m).await;settle().await;
-    let key=format!("cl:C1:{}",m.thread_ts);let to=format!("C1/{}",m.thread_ts);
-    let (endpoint,server)=completion_provider(true).await; install_decision_profile(&r,&endpoint);
-    r.edit(|c|c.automatic_decisions.completion.model=Some("not-the-verified-model".into()));
-    let args=json!({"to":to,"text":"Here is the answer","kind":"all_done","done":"The factual question was answered"});
-    let before=r.chat.texts().len();
-    assert!(r.call(&key,"chat_post",args.clone()).await.unwrap_err().to_string().contains("unavailable"));
-    assert_eq!(r.chat.texts().len(),before);
-    r.edit(|c|c.automatic_decisions.completion.enabled=false);
-    r.call(&key,"chat_post",args).await.unwrap();
-    assert_eq!(r.chat.texts().len(),before+1);server.abort();
+async fn a_chat_the_decision_finds_finished_is_recommended_for_the_archive_until_anyone_speaks() {
+    let r = setup();
+    let m = say("<@UBOT> what does this setting do?");
+    r.accept(&m).await; settle().await;
+    let key = format!("cl:C1:{}", m.thread_ts);
+    let to = format!("C1/{}", m.thread_ts);
+    let (endpoint, server) = completion_provider(true).await;
+    install_decision_profile(&r, &endpoint);
+    let before = r.chat.texts().len();
+    // The agent's word is taken at once: it posts, its turn ends all_done, and nothing waited for the model.
+    r.call(&key, "chat_post", json!({"to": to, "text": "It controls retention.", "kind": "all_done", "done": "Explained the setting and its effect"})).await.unwrap();
+    assert_eq!(r.chat.texts().len(), before + 1);
+    assert!(recommended(&r, "C1", &m.thread_ts).await, "the decision found nothing left to do");
+    // Anyone saying anything since makes the recommendation stale: it goes by itself.
+    r.accept(&reply(&m, "9999.0001", "and the default?")).await; settle().await;
+    assert!(!r.store.archive_suggested(r.thread("C1", &m.thread_ts).id).unwrap());
+    server.abort();
+}
+
+#[tokio::test]
+async fn an_all_done_is_never_held_back_and_a_chat_with_something_left_is_not_recommended() {
+    let r = setup();
+    let m = say("<@UBOT> ship the requested fix");
+    r.accept(&m).await; settle().await;
+    let key = format!("cl:C1:{}", m.thread_ts);
+    let to = format!("C1/{}", m.thread_ts);
+    // The model says a person is needed: all_done and final both post and record all the same.
+    let (endpoint, server) = completion_provider(false).await;
+    install_decision_profile(&r, &endpoint);
+    for (tool, kind) in [("chat_post", "all_done"), ("chat_post", "final"), ("chat_state", "all_done")] {
+        let before = r.chat.texts().len();
+        r.call(&key, tool, json!({"to": to, "text": "Ready, approve merging?", "kind": kind, "done": "Branch is ready and tests passed"})).await.unwrap();
+        assert_eq!(r.chat.texts().len(), before + (tool == "chat_post") as usize);
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    assert!(!r.store.archive_suggested(r.thread("C1", &m.thread_ts).id).unwrap());
+    server.abort();
+    // An outage of the model does not stop an agent either, and recommends nothing.
+    install_decision_profile(&r, "http://127.0.0.1:1/systemone");
+    r.call(&key, "chat_post", json!({"to": to, "text": "done", "kind": "all_done", "done": "The release has been confirmed"})).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    assert!(!r.store.archive_suggested(r.thread("C1", &m.thread_ts).id).unwrap());
+}
+
+#[tokio::test]
+async fn nothing_is_recommended_while_the_rule_is_off_or_its_model_is_not_verified() {
+    let r = setup();
+    let m = say("<@UBOT> explain retention");
+    r.accept(&m).await; settle().await;
+    let key = format!("cl:C1:{}", m.thread_ts);
+    let to = format!("C1/{}", m.thread_ts);
+    let (endpoint, server) = completion_provider(true).await;
+    install_decision_profile(&r, &endpoint);
+    let args = json!({"to": to, "text": "Here is the answer", "kind": "all_done", "done": "The factual question was answered"});
+    r.edit(|c| c.automatic_decisions.completion.model = Some("not-the-verified-model".into()));
+    r.call(&key, "chat_post", args.clone()).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    assert!(!r.store.archive_suggested(r.thread("C1", &m.thread_ts).id).unwrap());
+    r.edit(|c| { c.automatic_decisions.completion.model = Some("test-jev".into()); c.automatic_decisions.completion.enabled = false; });
+    r.call(&key, "chat_post", args).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    assert!(!r.store.archive_suggested(r.thread("C1", &m.thread_ts).id).unwrap());
+    server.abort();
 }
 
 #[tokio::test]

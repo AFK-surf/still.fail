@@ -1472,7 +1472,14 @@ impl Hub {
                     "required": ["to"],
                     "additionalProperties": false,
                 }),
-                run: run(|hub, key, args| Box::pin(async move { hub.chat_post(&key, &args).await })),
+                run: run(|hub, key, args| Box::pin(async move {
+                    let said = hub.chat_post(&key, &args).await?;
+                    // A turn ended all_done (or final from before): whether the chat is finished is asked in the background.
+                    if matches!(args.get("kind").and_then(Value::as_str), Some("all_done" | "final")) {
+                        tokio::spawn(hub.clone().suggest_archive(key.clone()));
+                    }
+                    Ok(said)
+                })),
             },
             Tool {
                 name: "slack_api".into(),
@@ -1536,9 +1543,6 @@ impl Hub {
                         if kind == DeclaredState::NeedHelp && about.is_none() && args.get("kind").and_then(Value::as_str) != Some("block") {
                             bail!("need_human requires a visible question: post what you need with chat_post kind=need_human, or give about pointing to your question (a pending answer card is used by default). need alone is not a message to the person");
                         }
-                        if kind == DeclaredState::AllDone {
-                            hub.review_completion(&key, &args).await?;
-                        }
                         match (kind, &words) {
                             (DeclaredState::Waiting(_), Some(what)) => hub.wait_for(&key, what),
                             (_, Some(need)) => hub.need(&key, need),
@@ -1546,6 +1550,9 @@ impl Hub {
                         }
                         hub.about(&key, about.as_ref().map(|(thread, n, ts)| (*thread, *n, ts.as_str())));
                         hub.declare(&key, kind);
+                        if kind == DeclaredState::AllDone {
+                            tokio::spawn(hub.clone().suggest_archive(key.clone()));
+                        }
                         Ok(match kind {
                             DeclaredState::Waiting(seconds) => format!("Recorded state waiting: you are asked again in {seconds} seconds unless something brings you back first."),
                             _ => format!("Recorded state {}.", said_as(kind)),
@@ -1674,10 +1681,14 @@ impl Hub {
     }
 
     /// Review before any post, attachment or ending mutation, including legacy `final`.
-    async fn review_completion(&self, key: &str, args: &Map<String, Value>) -> Result<()> {
-        use crate::decision::{Mode, completion_question, decide};
+    /// After an agent ends a turn all_done (or final): whether the chat has nothing left to do, asked of the decision
+    /// model with the latest messages that fit, newest first. It runs on its own: the agent's state is already
+    /// recorded and nothing waits for it. A chat it finds finished is recommended for the archive (until anyone says
+    /// anything in it again); one it finds unfinished, or cannot tell, is not.
+    pub async fn suggest_archive(self: Arc<Self>, key: String) {
+        use crate::decision::{archive_question, decide};
         let rule = self.config().automatic_decisions.completion.clone();
-        if !rule.enabled { return Ok(()); }
+        if !rule.enabled { return; }
         let profiles = self.config().profiles.clone();
         let mut candidates = Vec::new();
         for profile in &profiles {
@@ -1688,63 +1699,62 @@ impl Hub {
                 candidates.push((profile.id.clone(), config));
             }
         }
+        let record = |detail: Value| { let _ = self.store.record_decision(&key, &detail); };
         if candidates.is_empty() {
-            self.store.record_decision(key, &json!({"purpose":"completion","version":1,"mode":"enforce",
-                "model":rule.model.as_deref().unwrap_or(""),"accepted":false,"elapsedMs":0,
-                "error":"配置的模型在现有 Profile 中暂不可用"}))?;
-            bail!("The configured completion decision model is unavailable on existing profiles. No completion was recorded; retry when its profile is available.");
+            record(json!({"purpose":"archive","version":2,"model":rule.model.as_deref().unwrap_or(""),"accepted":false,"elapsedMs":0,
+                "error":"配置的模型在现有 Profile 中暂不可用"}));
+            return;
         }
-        let mut selected = 0;
-        let config = candidates[0].1.clone();
         let started = std::time::Instant::now();
         let mut versions = Vec::new();
+        let mut selected = 0;
         let reviewed: Result<crate::decision::ChoiceResult> = async {
+            // The chat as it is now: each thread this agent closes, its latest messages while they fit.
             let mut conversations = Vec::new();
-            // An ending belongs to the session, so review every thread it would close.
-            for thread in self.store.session_threads(key)? {
+            for thread in self.store.session_threads(&key)? {
                 let id = thread.thread.id;
                 let version = self.store.last_entry(id)?;
-                let messages = self.store.messages_before(id, None, 201)?;
-                if messages.len() > 200 { bail!("completion history exceeds review limit; evidence was not truncated"); }
-                let history: Vec<_> = messages.iter().map(|m| json!({
-                    "authorKind":m.author_kind,"author":m.author,"text":m.text,"ts":m.ts,
-                    "hasAttachments":!m.attachments.is_empty()
-                })).collect();
-                conversations.push(json!({"thread":id,"messages":history,
+                let mut messages = self.store.messages_before(id, None, ARCHIVE_REVIEW_MESSAGES + 1)?;
+                let omitted = messages.len() > ARCHIVE_REVIEW_MESSAGES;
+                if omitted { messages.remove(0); }
+                let shown = |m: &crate::store::MessageRow| json!({"authorKind":m.author_kind,"author":m.author,"text":m.text,"ts":m.ts,"hasAttachments":!m.attachments.is_empty()});
+                // Newest first, as many as fit; the ones that did not are older, and said so.
+                let mut kept = Vec::new();
+                let mut size = 0;
+                for m in messages.iter().rev() {
+                    let view = shown(m);
+                    size += view.to_string().len();
+                    if size > ARCHIVE_REVIEW_BYTES && !kept.is_empty() { break; }
+                    kept.push(view);
+                }
+                let older = messages.len() - kept.len();
+                kept.reverse();
+                conversations.push(json!({"thread":id,"messages":kept,"olderMessagesLeftOut":older > 0 || omitted,
                     "pendingCard":self.store.pending_card(id)?.map(|(m, _)| json!({"ts":m.ts,"text":m.text}))}));
                 versions.push((id, version));
             }
-            if conversations.is_empty() { bail!("completion review has no conversation evidence"); }
-            let state = json!({"agent":key,"conversations":conversations,
-                "proposedPost":args.get("text"),"done":args.get("done"),"hasNewCard":args.get("card").is_some(),
-                "attachmentContentsAvailable":false});
+            if conversations.is_empty() { bail!("archive review has no conversation evidence"); }
+            let state = json!({"agent":key,"conversations":conversations,"attachmentContentsAvailable":false});
             let mut answer = Err(anyhow!("no decision profile available"));
             for (i, (_, candidate)) in candidates.iter().enumerate() {
                 selected = i;
-                answer = decide(candidate, &completion_question(), &state).await;
+                answer = decide(candidate, &archive_question(), &state).await;
                 if answer.is_ok() { break; }
             }
-            let result = answer?;
-            if self.config().automatic_decisions.completion != rule { bail!("completion review settings changed; retry using the current settings"); }
-            for (id, version) in &versions {
-                if self.store.last_entry(*id)? != *version { bail!("conversation changed during completion review; read the new messages and try again"); }
-            }
-            Ok(result)
+            answer
         }.await;
+        let config = &candidates[selected].1;
         let accepted = reviewed.as_ref().is_ok_and(|r| r.accepts_completion(config.threshold));
-        let error = reviewed.as_ref().err().map(ToString::to_string);
-        self.store.record_decision(key, &json!({"purpose":"completion","version":1,
-            "mode":config.mode,"profile":candidates[selected].0,"provider":candidates[selected].1.provider,"model":candidates[selected].1.model,"threshold":config.threshold,
-            "elapsedMs":started.elapsed().as_millis(),"threads":versions,"accepted":accepted,
-            "result":reviewed.as_ref().ok(),"error":error}))?;
-        if config.mode == Mode::Enforce && !accepted {
-            let detail = match reviewed {
-                Ok(result) => format!("status={}, probabilities={}", result.selected, serde_json::to_string(&result.probabilities)?),
-                Err(error) => error.to_string(),
-            };
-            bail!("Completion review did not accept all_done ({detail}). Nothing was posted or marked done. Reconcile this with the conversation: continue authorized work, or visibly ask a real outstanding question and use need_human. Do not invent a question or repeat the same completion claim. Provider failure or uncertainty is not evidence of unfinished work; explain an unavailable check if it prevents finishing.");
+        // Said while the chat stood still: anything said since makes it a question for another review.
+        let unchanged = versions.iter().all(|(id, version)| self.store.last_entry(*id).is_ok_and(|now| now == *version))
+            && self.config().automatic_decisions.completion == rule;
+        record(json!({"purpose":"archive","version":2,"profile":candidates[selected].0,"provider":config.provider,"model":config.model,
+            "threshold":config.threshold,"elapsedMs":started.elapsed().as_millis(),"threads":versions,"accepted":accepted && unchanged,
+            "result":reviewed.as_ref().ok(),"error":reviewed.as_ref().err().map(ToString::to_string)}));
+        if !unchanged { return; }
+        for (id, version) in &versions {
+            let _ = if accepted { self.store.suggest_archive(&key, *id, *version) } else { self.store.clear_archive_suggestion(&key, *id) };
         }
-        Ok(())
     }
 
     fn declare(&self, key: &str, kind: DeclaredState) {
@@ -1823,9 +1833,6 @@ impl Hub {
             })?),
             None => None,
         };
-        if kind == Some(DeclaredState::AllDone) {
-            self.review_completion(key, args).await?;
-        }
         // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
         // them in still.fail instead.
         let text = if thread.thread.surface == STILLFAIL_SURFACE {
@@ -2190,6 +2197,10 @@ fn js_number(value: &Value) -> Option<f64> {
 }
 
 /// How long an agent may say it waits (chat_state "waiting").
+/// The decision reads the latest messages of a chat that fit these: how many it is given, and how many bytes of them.
+const ARCHIVE_REVIEW_MESSAGES: usize = 400;
+const ARCHIVE_REVIEW_BYTES: usize = 80_000;
+
 const MIN_WAIT_SECONDS: u64 = 10;
 const MAX_WAIT_SECONDS: u64 = 3600;
 

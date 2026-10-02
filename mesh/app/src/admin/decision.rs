@@ -43,7 +43,7 @@ impl AdminApi {
         let recent: Vec<_> = rows.iter().map(|row| {
             let d=&row["detail"];
             let status=d["result"]["selected"].as_str().unwrap_or("unavailable");
-            let label=match status {"complete"=>"已确认完成", "agent_work"=>"还有工作未完成", "human_needed"=>"仍需人处理", "uncertain"=>"完成证据不足", _=>"检查失败"};
+            let label=match status {"complete"=>"没有后续事项，推荐归档", "agent_work"=>"还有工作可以继续", "human_needed"=>"仍需人处理", "uncertain"=>"证据不足，不推荐", _=>"检查失败"};
             let session=row["session"].as_str().unwrap_or("");
             let title=self.deps.store.get_session(session).ok().flatten().and_then(|s| s.title).unwrap_or_else(|| session.into());
             json!({"id":row["id"],"session":session,"title":title,"at":row["at"],"label":label,

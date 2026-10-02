@@ -2085,6 +2085,22 @@ async fn keeping_a_chat_suppresses_only_this_viewers_archive_reminder() {
 }
 
 #[tokio::test]
+async fn a_chat_the_decision_found_finished_says_so_in_its_row_until_something_is_said_in_it() {
+    let t = setup().await;
+    let made = t.call("POST", "/sessions", Some(json!({"runtime": "claude"}))).await.1;
+    let thread = made["thread"]["id"].as_i64().unwrap();
+    let row = |rows: Value| rows.as_array().unwrap().iter().find(|r| r["thread"] == thread).unwrap().clone();
+    let first = row(t.get("/chats").await);
+    assert_eq!(first["archiveRecommended"], false);
+    let session = first["session"].as_str().unwrap().to_string();
+    t.store.suggest_archive(&session, thread, t.store.last_entry(thread).unwrap()).unwrap();
+    assert_eq!(row(t.get("/chats").await)["archiveRecommended"], true);
+    // Anything said since: the recommendation is of a chat that is no longer as it was.
+    t.store.insert_message(crate::store::NewMessage::new(thread, "9999.1", crate::store::AuthorKind::Person, "U1", "one more thing")).unwrap();
+    assert_eq!(row(t.get("/chats").await)["archiveRecommended"], false);
+}
+
+#[tokio::test]
 async fn openai_reset_keeps_its_redemption_key_and_refreshes_even_without_a_reset() {
     let keys = Arc::new(Mutex::new(Vec::<String>::new()));
     let seen = keys.clone();
