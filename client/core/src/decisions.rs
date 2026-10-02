@@ -105,18 +105,23 @@ pub fn label_assignee(card: &mut Value, me: &Value, members: &[Value]) {
 
 /// A card's line: 奏 · its post's first line, without mentions or markup, cut to about 40 characters.
 pub fn line(text: &str) -> String {
+    let cut = first_line(text);
+    if cut.is_empty() { t!("core-logic.decisions.line.empty") } else { t!("core-logic.decisions.line", text = cut) }
+}
+
+/// A card's post's first line, as its line shows it.
+fn first_line(text: &str) -> String {
     let first = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
     let clean = crate::format::clean_text(first).replace("**", "").replace("__", "").replace('`', "");
     let clean = clean.trim_start_matches(['#', '>', '-', '*', ' ']).trim();
     let cut: String = clean.chars().take(LINE_CHARS).collect();
-    let cut = if clean.chars().count() > LINE_CHARS { format!("{}…", cut.trim_end()) } else { cut };
-    if cut.is_empty() { t!("core-logic.decisions.line.empty") } else { t!("core-logic.decisions.line", text = cut) }
+    if clean.chars().count() > LINE_CHARS { format!("{}…", cut.trim_end()) } else { cut }
 }
 
 /// What a card asks, for a list: its post's first line, as its line has it, without 奏 · .
 pub fn question(text: &str) -> String {
-    let line = line(text);
-    line.strip_prefix("奏 · ").map(str::to_string).unwrap_or(line)
+    let cut = first_line(text);
+    if cut.is_empty() { line(text) } else { cut }
 }
 
 /// How the viewer answered a card (a row's `answered`, the station's): the option they picked (their words are an
@@ -128,21 +133,21 @@ pub fn answer_text(a: &Value) -> String {
     if a.get("closed").and_then(Value::as_bool) == Some(true) {
         let closing: Vec<&str> = labels().filter(|o| o["action"] == "close").filter_map(|o| o["label"].as_str()).collect();
         return match closing.as_slice() {
-            [one] => format!("选了「{}」", one.trim()),
-            _ => "已处理".to_string(),
+            [one] => t!("core-logic.decisions.answer.chose", label = one.trim()),
+            _ => t!("core-logic.decisions.answer.handled"),
         };
     }
     let reply = a.get("reply").and_then(Value::as_str).unwrap_or("").trim();
     if a.get("quoted").and_then(Value::as_bool) == Some(true)
         && let Some(label) = labels().filter_map(|o| o["label"].as_str()).find(|l| l.trim() == reply)
     {
-        return format!("选了「{}」", label.trim());
+        return t!("core-logic.decisions.answer.chose", label = label.trim());
     }
     let first = crate::format::clean_text(reply.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or(""));
     let cut: String = first.chars().take(LINE_CHARS / 2).collect();
-    if cut.is_empty() { "回复了".to_string() }
-    else if first.chars().count() > LINE_CHARS / 2 { format!("回复：{}…", cut.trim_end()) }
-    else { format!("回复：{cut}") }
+    if cut.is_empty() { t!("core-logic.decisions.answer.replied") }
+    else if first.chars().count() > LINE_CHARS / 2 { t!("core-logic.decisions.answer.reply", text = format!("{}…", cut.trim_end())) }
+    else { t!("core-logic.decisions.answer.reply", text = cut) }
 }
 
 /// The 奏 page's day, as the viewer's clock has it: of the cards answered lately (`answered`), only today's, each
@@ -175,10 +180,10 @@ pub fn today(view: &mut Value, c: crate::present::Clock) {
 pub fn waited_text(ms: f64) -> String {
     let minutes = (ms / 60_000.0).round() as i64;
     match minutes {
-        m if m < 1 => "不到 1 分钟".to_string(),
-        m if m < 60 => format!("{m} 分钟"),
-        m if m < 24 * 60 => if m % 60 == 0 { format!("{} 小时", m / 60) } else { format!("{} 小时 {} 分", m / 60, m % 60) },
-        m => format!("{} 天", m / (24 * 60)),
+        m if m < 1 => t!("core-logic.decisions.waited.under_minute"),
+        m if m < 60 => t!("core-logic.jobs.span.minutes", n = m),
+        m if m < 24 * 60 => if m % 60 == 0 { t!("core-logic.jobs.span.hours", n = m / 60) } else { t!("core-logic.format.duration.hm", h = m / 60, m = m % 60) },
+        m => t!("core-logic.jobs.span.days", n = m / (24 * 60)),
     }
 }
 

@@ -66,9 +66,9 @@ pub fn list_note(stations: &[Value], days: &[Value], loading: bool, unread: &[St
     // What it waits on, in the pill over the placeholder rows: the stations whose link is on its way (by name for one).
     let on_way: Vec<&str> = stations.iter().filter(|s| is(s, "connecting")).map(|s| s.get("name").and_then(Value::as_str).unwrap_or("")).collect();
     let text = match on_way.as_slice() {
-        [] => "正在读取会话".to_string(),
-        [one] => format!("正在连接 {one}"),
-        all => format!("正在连接 {} 台 station", all.len()),
+        [] => t!("core-logic.looks.reading"),
+        [one] => t!("core-logic.looks.reading.connecting_one", name = one),
+        all => t!("core-logic.looks.reading.connecting", n = all.len()),
     };
     json!({ "reading": loading || connecting, "text": text, "failing": failing, "empty": empty })
 }

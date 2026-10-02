@@ -12,6 +12,7 @@ use futures::channel::oneshot;
 use futures::future::LocalBoxFuture;
 use iroh::endpoint::{RecvStream, SendStream};
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::error::{CoreError, Result};
 use crate::host::Host;
@@ -61,7 +62,7 @@ pub fn parse(name: &str, params: &Value) -> Option<Result<Call>> {
         "adb.share" => {
             let station = text("station");
             if StationAddr::parse(&station).is_err() {
-                return Some(Err(CoreError::invalid("参数不对：缺少 station")));
+                return Some(Err(CoreError::invalid(t!("core-misc.params.missing", field = "station"))));
             }
             let minutes = params.get("minutes").and_then(Value::as_u64).map_or(MINUTES, |m| m.clamp(1, MAX_MINUTES as u64) as u32);
             Ok(Call::Share(Offer { station, connect: port("connect"), pair: port("pair"), device: text("device"), android: text("android"), package: text("package"), minutes }))
@@ -132,7 +133,7 @@ impl Adb {
         match call {
             Call::Share(offer) => {
                 if !tcp::CAN {
-                    return Err(CoreError::new("unsupported", "这里不能共享调试：只有安卓 app 可以"));
+                    return Err(CoreError::new("unsupported", t!("core-misc.adb.unsupported")));
                 }
                 self.share(offer);
                 Ok(Value::Null)
@@ -144,7 +145,7 @@ impl Adb {
             Call::Pair { code } => {
                 let code: String = code.chars().filter(char::is_ascii_digit).collect();
                 if code.len() != 6 {
-                    return Err(CoreError::invalid("配对码是 6 位数字"));
+                    return Err(CoreError::invalid(t!("core-misc.adb.pair_code")));
                 }
                 self.ask(json!({ "op": "pair", "code": code })).await
             }
@@ -240,7 +241,7 @@ impl Adb {
             }
             match ended {
                 Ended::Changed => return,
-                Ended::Expired => return self.stop(Some("一小时到了，共享已停止".into())),
+                Ended::Expired => return self.stop(Some(t!("core-misc.adb.expired"))),
                 Ended::Refused(why) => return self.stop(Some(why)),
                 Ended::Lost { why, pause: wait } => {
                     {
@@ -283,11 +284,11 @@ impl Adb {
             Err(error) => return Ended::Lost { why: Some(error.message), pause: true },
         };
         if reply.status == 404 || reply.status == 405 {
-            return Ended::Refused("这台 station 还不支持共享调试：先在设置里把它更新到最新".into());
+            return Ended::Refused(t!("core-misc.adb.station_too_old"));
         }
         if reply.status != 200 {
             let said = String::from_utf8(reply.body().await.unwrap_or_default()).unwrap_or_default();
-            return Ended::Lost { why: Some(message(&said).unwrap_or_else(|| "station 没接受共享".into())), pause: true };
+            return Ended::Lost { why: Some(message(&said).unwrap_or_else(|| t!("core-misc.adb.not_accepted"))), pause: true };
         }
         if self.current(run).is_none() {
             return Ended::Changed;
@@ -314,7 +315,7 @@ impl Adb {
                     }
                 }
             }
-            Ended::Lost { why: Some("station 断开了共享".into()), pause: true }
+            Ended::Lost { why: Some(t!("core-misc.adb.station_ended")), pause: true }
         };
         let tunnels = async {
             while let Some((send, recv)) = link.accept().await {
@@ -322,7 +323,7 @@ impl Adb {
                     self.host.spawn(me.tunnel(run, send, recv).boxed_local());
                 }
             }
-            Ended::Lost { why: Some(link.closed().unwrap_or_else(|| "和 station 的连接断了".into())), pause: true }
+            Ended::Lost { why: Some(link.closed().unwrap_or_else(|| t!("core-misc.adb.link_lost"))), pause: true }
         };
         let replaced = mesh.replaced(&station_id(&offer.station), &link).map(|_| Ended::Lost { why: None, pause: false });
         let changed = changed.map(|_| Ended::Changed);
@@ -377,7 +378,7 @@ impl Adb {
 
     /// An ask about the offer (`pair`, `grant`) on the station's link now: what it answers.
     async fn ask(&self, ask: Value) -> Result<Value> {
-        let Some(offer) = self.state.borrow().offer.clone() else { return Err(CoreError::invalid("还没有在共享调试")) };
+        let Some(offer) = self.state.borrow().offer.clone() else { return Err(CoreError::invalid(t!("core-misc.adb.not_sharing"))) };
         let (mesh, link) = self.link(&offer.station).await?;
         let mut ask = ask;
         ask["phone"] = json!(mesh.device_id());
@@ -388,7 +389,7 @@ impl Adb {
         if status == 200 {
             Ok(json!({ "message": said }))
         } else {
-            Err(CoreError::invalid(if said.is_empty() { format!("station 没做成（{status}）") } else { said }))
+            Err(CoreError::invalid(if said.is_empty() { t!("core-misc.adb.failed", status = status) } else { said }))
         }
     }
 }

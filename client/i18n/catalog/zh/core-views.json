@@ -180,6 +180,8 @@
   "core-views.present.watch_ask": "{names}还在监控。归档后它照常运行，有新消息时对话会回到列表。",
   "core-views.present.watching": "监控中",
   "core-views.present.watching_names": "监控中：{names}",
+  "core-views.present.working": "在做",
+  "core-views.present.working.last": "在做 · {last}",
   "core-views.present.you": "你",
   "core-views.quoted": "「{text}」",
   "core-views.spent.back": "{when}恢复",
