@@ -25,7 +25,7 @@ use tracing::{debug, info};
 use super::process::{GroupProcess, HandedProcess, Spawn, adopt_group, spawn_group};
 use super::{AgentDriver, AgentSession, Events, FailureReason, LiveEvent, LiveField, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, clean_env, uuid};
 use crate::config::expand_route;
-use crate::lan_share::Borrowed;
+use crate::lan_share::Lan;
 use crate::machine_logins::{CLAUDE_TOKEN_MARGIN_MS, machine_claude_token, process_env};
 use crate::store::{Store, now_ms};
 
@@ -84,7 +84,7 @@ pub struct ClaudeDriver {
     store: Arc<Store>,
     command: String,
     live: Mutex<Vec<Arc<ClaudeSession>>>,
-    lan: Arc<Borrowed>,
+    lan: Arc<Lan>,
 }
 
 impl ClaudeDriver {
@@ -93,7 +93,7 @@ impl ClaudeDriver {
     }
 
     /// Where the accounts other stations lend this one are (lan_share.rs).
-    pub fn with_lan(mut self, lan: Arc<Borrowed>) -> ClaudeDriver {
+    pub fn with_lan(mut self, lan: Arc<Lan>) -> ClaudeDriver {
         self.lan = lan;
         self
     }
@@ -158,7 +158,7 @@ pub struct ClaudeSession {
     /// The machine login's token this process runs on (machine profiles, and borrowed ones): when it runs out.
     machine_expires: Option<i64>,
     /// A borrowed profile's (lan_share.rs): runs a next turn only while its station is on the LAN.
-    lan: Option<(Arc<Borrowed>, String)>,
+    lan: Option<(Arc<Lan>, String)>,
 }
 
 #[async_trait]
@@ -210,7 +210,9 @@ impl AgentDriver for ClaudeDriver {
         // A machine profile runs on the machine's own login, handed over as its current token (machine_logins.rs).
         // A borrowed one, on the token its own station hands over (lan_share.rs), the same way.
         let machine = match &options.profile.lent {
-            Some(lent) => Some(self.lan.token(lent).await?),
+            Some(lent) if options.profile.access_kind == stillfail_shapes::AccessKind::Subscription => Some(self.lan.token(lent).await?),
+            // A key it was lent is in its environment already.
+            Some(_) => None,
             None if options.profile.machine => Some(machine_claude_token(&process_env()).await?),
             None => None,
         };

@@ -218,6 +218,12 @@ impl App {
             }),
         );
         let codex = Arc::new(CodexDriver::new(store.clone(), "codex").with_settings(settings.clone()));
+        // A Codex login lent over the LAN is renewed by its own app-server (lan_share.rs).
+        let renewing = Arc::downgrade(&codex);
+        settings.lan.on_renew_codex(Arc::new(move |profile| {
+            let renewing = renewing.clone();
+            Box::pin(async move { renewing.upgrade().ok_or_else(|| anyhow::anyhow!("station is shutting down"))?.renew(&profile).await })
+        }));
         let claude = Arc::new(ClaudeDriver::new(store.clone(), "claude").with_lan(settings.lan.clone()));
         let mesh = MeshFile::new(&options.data);
         let (read, chats, link, people) = (settings.clone(), connections.clone(), mesh.clone(), names.clone());

@@ -17,7 +17,7 @@ pub struct Settings {
     /// Profiles other stations lend this one over the LAN (lan_share.rs): in the config after its own, never written.
     lent: Mutex<Vec<Profile>>,
     /// What the lending stations last said of them, and how to reach them.
-    pub lan: Arc<crate::lan_share::Borrowed>,
+    pub lan: Arc<crate::lan_share::Lan>,
 }
 
 /// The config as written, with the borrowed profiles after its own (whose ids they never take).

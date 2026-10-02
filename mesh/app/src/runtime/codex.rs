@@ -284,6 +284,11 @@ impl CodexDriver {
         Ok(host)
     }
 
+    /// Has the profile's app-server renew its ChatGPT login now (a login lent over the LAN, lan_share.rs).
+    pub async fn renew(&self, profile: &Profile) -> Result<()> {
+        self.host(profile).await?.request("account/read", json!({ "refreshToken": true })).await.map(drop)
+    }
+
     /// The account's rate-limit windows, as the profile's app-server reports them (ChatGPT subscriptions).
     pub async fn rate_limits(&self, profile: &Profile) -> Result<Value> {
         self.host(profile).await?.request("account/rateLimits/read", json!({})).await
@@ -544,6 +549,12 @@ impl AgentSession for CodexSession {
 
     async fn prompt(&self, text: &str) -> Result<()> {
         let fast = self.store.codex_session_fast(&self.thread_id)?;
+        // A borrowed profile (lan_share.rs) runs a next turn only while its station is on the LAN.
+        if let Some(settings) = &self.settings {
+            if settings.config().profiles.iter().any(|p| p.id == self.host.profile && p.lent.is_some()) && !settings.lan.on_lan(&self.host.profile) {
+                bail!("{}", crate::lan_share::NOT_ON_LAN);
+            }
+        }
         {
             let mut s = self.state.lock().unwrap();
             if s.closed {
