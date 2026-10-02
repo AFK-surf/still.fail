@@ -569,7 +569,8 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
     // height off its top and bottom: faded or not, the picture stays clear of them.
     const root = el.closest(`.${css2.fp}`) ?? el;
     const measure = () => {
-      const r = el.getBoundingClientRect();
+      // Its parent's box, which it fills: its own may be moved and scaled (opening out of a thumbnail, viewerFlight.ts).
+      const r = (el.parentElement ?? el).getBoundingClientRect();
       // Where it is in place: stepping through images moves it sideways (the strip; the one beside, a peek's place).
       let slid = 0;
       for (let n = el.parentElement; n && n !== root; n = n.parentElement) {
