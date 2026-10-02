@@ -3161,9 +3161,9 @@ mod tests {
             let t = setup();
             let views = t.router.views();
             let mut list = Ui::default();
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
             t.set(workspace(), one_station());
             t.host.settle().await;
-            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
             let now = t.host.now_ms();
             t.set(rows("ws/st"), json!([row("7", now - 1000.0), row("8", now - 2000.0)]));
             t.read(&mut list, 1).await;
