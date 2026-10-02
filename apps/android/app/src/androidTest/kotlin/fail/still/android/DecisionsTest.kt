@@ -85,7 +85,7 @@ class DecisionsTest {
     private val first = item(gap, talk, "侧栏和设置的几处间距", "ember:c-1")
 
     private val keyAsked = "Stripe 的测试 key 还没配，发我一个 sk_test_ 开头的 key，我配到 dev 环境里跑一遍支付流程。"
-    private val keyPost = Fixtures.agent(12, keyAsked).copy(card = MessageCard("text", placeholder = "sk_test_…"), decision = MessageDecision(resolved = false))
+    private val keyPost = Fixtures.agent(12, keyAsked).copy(card = MessageCard(type = "text", placeholder = "sk_test_…"), decision = MessageDecision(resolved = false))
     private val keyItem = DecisionItem(
         station = Fixtures.STATION, stationName = "studio", session = "ember:c-7", thread = keyPost.thread, title = "支付流程接 Stripe", seq = keyPost.seq,
         message = keyPost, before = listOf(Fixtures.mine(11, "支付那块先在 dev 上跑通")), options = emptyList(), card = keyPost.card, text = "奏 · Stripe 的测试 key 还没配",
@@ -397,7 +397,7 @@ class DecisionsTest {
     }
 
     @Test fun unknownCardGoesToItsChat() {
-        val h = textPage(card = MessageCard("date"))
+        val h = textPage(card = MessageCard(type = "date"))
         rule.onNodeWithText("去 chat 里回").assertExists()
         tap(bounds("去 chat 里回").center)
         h.settle()
