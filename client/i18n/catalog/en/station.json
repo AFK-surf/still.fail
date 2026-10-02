@@ -198,6 +198,7 @@
   "station.session.continued": "Continues the local {runtime} session in {cwd} · [See earlier conversation]({link})",
   "station.session.cwdGone": "Its directory {cwd} is gone",
   "station.session.fastOpenAiOnly": "Fast is only for OpenAI subscriptions",
+  "station.session.from": "From {from}:",
   "station.session.modelOff": "“{profile}” doesn't have {model} turned on: pick another model, or turn it on in its Profile first",
   "station.session.noProfile": "No Profile can run {runtime}",
   "station.session.noProfileForModel": "No {runtime} Profile can run {model}: turn it on in a Profile first",

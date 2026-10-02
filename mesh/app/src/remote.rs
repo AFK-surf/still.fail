@@ -23,6 +23,8 @@ use std::{
 
 pub type Notify = Arc<dyn Fn(&str, String) -> Result<()> + Send + Sync>;
 pub type Call = Arc<dyn Fn(String, Value) -> BoxFuture<'static, Result<Value>> + Send + Sync>;
+/// Takes a message a session of another station sent here (Hub::receive): from which station, the request.
+pub type Inbox = Arc<dyn Fn(String, Value) -> BoxFuture<'static, Result<Value>> + Send + Sync>;
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
 pub struct Refused(pub String);
@@ -41,6 +43,7 @@ pub struct Remote {
     notify: Notify,
     root: PathBuf,
     call: Mutex<Option<Call>>,
+    inbox: Mutex<Option<Inbox>>,
     serial: tokio::sync::Mutex<()>,
     watching: Mutex<HashSet<PathBuf>>,
     /// Read-modify-write of the source's record of stations a session used (remote/used).
@@ -104,6 +107,7 @@ impl Remote {
             notify,
             root,
             call: Mutex::new(None),
+            inbox: Mutex::new(None),
             serial: tokio::sync::Mutex::new(()),
             watching: Mutex::new(HashSet::new()),
             used: Mutex::new(()),
@@ -329,6 +333,17 @@ impl Remote {
         });
     }
 
+    /// Where messages from other stations' sessions go (session.message): any station of the workspace may send them,
+    /// trusted for tasks or not.
+    pub fn set_inbox(&self, inbox: Inbox) {
+        *self.inbox.lock().unwrap() = Some(inbox);
+    }
+
+    /// A request to another station of the workspace (session_send's messages).
+    pub async fn ask(&self, station: &str, request: Value) -> Result<Value> {
+        self.call(station, request).await
+    }
+
     async fn call(&self, station: &str, request: Value) -> Result<Value> {
         let call = self
             .call
@@ -353,8 +368,13 @@ impl Remote {
         let method = text(&request, "method");
         if method == "describe" {
             return Ok(
-                json!({"protocol":1,"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"tasks":self.allowed(peer),"sessions":true,"fileChunkBytes":CHUNK,"maxFileBytes":MAX_FILE}),
+                json!({"protocol":1,"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"tasks":self.allowed(peer),"sessions":true,"messages":true,"fileChunkBytes":CHUNK,"maxFileBytes":MAX_FILE}),
             );
+        }
+        // A message, not execution: workspace membership (checked by the transport) is enough.
+        if method == "session.message" {
+            let inbox = self.inbox.lock().unwrap().clone().ok_or_else(|| anyhow!("station is starting"))?;
+            return inbox(peer.to_string(), request).await;
         }
         if !self.allowed(peer) {
             bail!(

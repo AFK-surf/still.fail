@@ -273,6 +273,17 @@ impl App {
             told.upgrade().ok_or_else(|| anyhow::anyhow!("station is shutting down"))?.notify(session,text)
         }))?;
         hub.set_jobs(&jobs);
+        // session_send between stations: out through the station transport, in to the hub.
+        let asking = Arc::downgrade(&remote);
+        hub.on_peer(Arc::new(move |station, request| {
+            let asking = asking.clone();
+            Box::pin(async move { asking.upgrade().ok_or_else(|| anyhow::anyhow!("station is shutting down"))?.ask(&station, request).await })
+        }));
+        let receiving = Arc::downgrade(&hub);
+        remote.set_inbox(Arc::new(move |peer, request| {
+            let receiving = receiving.clone();
+            Box::pin(async move { receiving.upgrade().ok_or_else(|| anyhow::anyhow!("station is shutting down"))?.receive(&peer, &request).await })
+        }));
         let closing = Arc::downgrade(&remote);
         hub.on_close(Arc::new(move |session| {
             if let Some(remote) = closing.upgrade() { remote.close_session(session); }

@@ -195,6 +195,7 @@
   "station.session.continued": "接着本机 {runtime} 在 {cwd} 的会话 · [查看之前的对话]({link})",
   "station.session.cwdGone": "它原来的目录 {cwd} 已经不在了",
   "station.session.fastOpenAiOnly": "Fast 只适用于 OpenAI 订阅",
+  "station.session.from": "来自 {from}：",
   "station.session.modelOff": "「{profile}」没有启用 {model}：换一个模型，或先在它的 Profile 里启用",
   "station.session.noProfile": "没有能跑 {runtime} 的 Profile",
   "station.session.noProfileForModel": "没有能跑 {model} 的 {runtime} Profile：先在一个 Profile 上启用它",

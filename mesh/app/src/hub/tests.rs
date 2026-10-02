@@ -2540,3 +2540,65 @@ async fn completion_review_obeys_rule_switch_and_selected_model() {
     r.call(&key,"chat_post",args).await.unwrap();
     assert_eq!(r.chat.texts().len(),before+1);server.abort();
 }
+
+#[tokio::test]
+async fn an_agent_writes_to_another_sessions_chat_which_sees_who_it_is_from() {
+    let r = setup_with(Setup { link: true, ..Setup::default() });
+    let (a, b) = (say("<@UBOT> build it"), say("<@UBOT> test it"));
+    r.accept(&a).await;
+    r.accept(&b).await;
+    settle().await;
+    let (key_a, key_b) = (session_key("cl", "C1", &a.thread_ts), session_key("cl", "C1", &b.thread_ts));
+    let link_b = format!("https://ember.test/o/ws/st/{}", key_b.replace(':', "%3A"));
+    let sent = r.call(&key_a, "session_send", json!({ "to": link_b, "text": "the build is at /tmp/out" })).await.unwrap();
+    assert!(sent.contains(&format!("C1/{}", b.thread_ts)) && sent.contains(&key_b), "{sent}");
+    // Posted in B's thread for people to see, headed with A's chat, and handed to B.
+    let (place, said) = r.chat.posts.lock().unwrap().last().cloned().unwrap();
+    assert_eq!(place, ThreadRef::new("C1", &b.thread_ts));
+    let link_a = format!("https://ember.test/o/ws/st/{}", key_a.replace(':', "%3A"));
+    assert!(matches(&said, &[&format!("<{link_a}|"), ">", "\n\nthe build is at /tmp/out"]), "{said}");
+    let thread = r.thread("C1", &b.thread_ts);
+    let last = r.said(thread.id).pop().unwrap();
+    assert_eq!((last.author_kind, last.author.as_str(), last.text.as_str()), (AuthorKind::Agent, key_a.as_str(), said.as_str()));
+    let pending = r.store.pending_messages(&key_b).unwrap();
+    assert_eq!(pending.iter().map(|p| p.message.text.as_str()).collect::<Vec<_>>(), vec![said.as_str()]);
+    assert!(r.store.pending_messages(&key_a).unwrap().is_empty(), "not handed back to its sender");
+    // By session key too; not to itself, nor into a conversation it is in.
+    r.call(&key_b, "session_send", json!({ "to": key_a, "text": "tests pass" })).await.unwrap();
+    let e = r.call(&key_a, "session_send", json!({ "to": key_a, "text": "hi" })).await.unwrap_err().to_string();
+    assert!(e.contains("chat_post"), "{e}");
+    let e = r.call(&key_a, "session_send", json!({ "to": format!("C1/{}", a.thread_ts), "text": "hi" })).await.unwrap_err().to_string();
+    assert!(e.contains("chat_post"), "{e}");
+}
+
+#[tokio::test]
+async fn a_message_to_another_stations_session_goes_through_the_station_transport_and_arrives_there() {
+    let r = setup_with(Setup { link: true, ..Setup::default() });
+    let (a, b) = (say("<@UBOT> build it"), say("<@UBOT> test it"));
+    r.accept(&a).await;
+    r.accept(&b).await;
+    settle().await;
+    let (key_a, key_b) = (session_key("cl", "C1", &a.thread_ts), session_key("cl", "C1", &b.thread_ts));
+    let asked: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
+    let seen = asked.clone();
+    r.hub.on_peer(Arc::new(move |station, request| {
+        seen.lock().unwrap().push((station, request));
+        Box::pin(async { Ok(json!({ "thread": "EMBER/2.000001" })) })
+    }));
+    let sent = r.call(&key_a, "session_send", json!({ "to": "https://ember.test/o/ws/far/s%3A1", "text": "ready?" })).await.unwrap();
+    assert!(sent.contains("station far") && sent.contains("EMBER/2.000001"), "{sent}");
+    let (station, request) = asked.lock().unwrap().pop().unwrap();
+    assert_eq!(station, "far");
+    assert_eq!((request["method"].as_str(), request["to"].as_str(), request["session"].as_str(), request["text"].as_str()), (Some("session.message"), Some("s:1"), Some(key_a.as_str()), Some("ready?")));
+    assert_eq!(request["from"]["link"], json!(format!("https://ember.test/o/ws/st/{}", key_a.replace(':', "%3A"))));
+    // The other way: what a session there sent arrives in B's chat, from that station's session.
+    let from = json!({ "title": "部署", "link": "https://ember.test/o/ws/far/s%3A1" });
+    let got = r.hub.receive("far", &json!({ "method": "session.message", "session": "s:1", "to": key_b, "text": "yes", "from": from })).await.unwrap();
+    assert_eq!(got["thread"], json!(format!("C1/{}", b.thread_ts)));
+    let thread = r.thread("C1", &b.thread_ts);
+    let last = r.said(thread.id).pop().unwrap();
+    assert_eq!((last.author_kind, last.author.as_str()), (AuthorKind::Agent, "far/s:1"));
+    assert!(matches(&last.text, &["<https://ember.test/o/ws/far/s%3A1|部署>", "\n\nyes"]), "{}", last.text);
+    assert_eq!(r.store.pending_messages(&key_b).unwrap().len(), 1);
+    assert!(r.hub.receive("far", &json!({ "session": "s:1", "to": "nobody", "text": "yes" })).await.is_err());
+}

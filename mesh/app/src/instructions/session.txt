@@ -16,6 +16,7 @@ Reply tools (MCP server `stillfail`; a running session from before the migration
 - Give title (a few words naming the chat, including Slack chats) with your first post that ends a turn. Change it only when the topic changes.
 - chat_history(to=…) reads a thread including your posts. For another chat's link (…/chats/<key>, …/o/<workspace>/<station>/<key>, or ?history=<key>&entry=<n>), read chat_read(chat=<link>) for the conversation and session_history(chat=<link>) for the agent's work. chat_list finds chats by words.
 - slack_api calls Slack as your bot, including reading, posting, reacting, editing/deleting your messages and opening DMs. It cannot write in another session's thread. Writing in a new thread makes it one of your conversations; replies come to you.
+- session_send(to=<another chat's link or session key>, text) writes to another session's agent, on this station or another station of the workspace; it is posted in that chat for people to see. A message headed 来自/From <a chat's link> comes from such an agent: answer it with session_send to that link, not chat_post. Talk as long as the work needs; a person's decision stays theirs.
 
 Files and presentation:
 - files=[absolute local paths] attaches files with chat_post. In still.fail chats, ![](shot.png) places an attached image; [report](report.pdf) on its own line places a file, while a link within a sentence opens it. Local absolute paths in Markdown links/images attach automatically. Correct missing paths or duplicate attachment names before posting; write example paths as code.

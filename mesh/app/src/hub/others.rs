@@ -19,7 +19,7 @@ pub(super) enum Named {
 
 /// A session key a reference holds, in whichever form people pass chats around: a chat's page
 /// (…/chats/<key>), a still.fail link (…/o/<workspace>/<station>/<key>), a link to execution history (?history=<key>&entry=<n>).
-fn linked_session(reference: &str) -> Option<(String, Option<usize>)> {
+pub(super) fn linked_session(reference: &str) -> Option<(String, Option<usize>)> {
     let end = |s: &str| s.find(|c: char| matches!(c, '/' | '?' | '#' | ')' | '>' | '|' | '"' | '\'') || c.is_whitespace()).unwrap_or(s.len());
     if let Some(at) = reference.find("history=") {
         let rest = &reference[at + "history=".len()..];
@@ -106,7 +106,7 @@ impl Hub {
     }
 
     /// The conversation a session is best read in: its own chat on the pages, else the one it last heard from.
-    fn session_thread_of(&self, key: &str) -> Result<crate::store::SessionThread> {
+    pub(super) fn session_thread_of(&self, key: &str) -> Result<crate::store::SessionThread> {
         let threads = self.store.session_threads(key)?;
         if let Some(home) = threads.iter().find(|t| t.thread.home.as_deref() == Some(key)) {
             return Ok(home.clone());

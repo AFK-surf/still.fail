@@ -183,6 +183,8 @@ pub struct Hub {
     jobs: Mutex<Weak<crate::jobs::Jobs>>,
     /// Told when a session is archived or deleted, so what it left on other stations (remote.rs) is removed too.
     closed: Mutex<Option<Arc<dyn Fn(&str) + Send + Sync>>>,
+    /// Calls another station of the workspace (Remote::ask): how session_send reaches a session there.
+    peers: Mutex<Option<messages::PeerCall>>,
     me: Weak<Hub>,
 }
 
@@ -238,6 +240,7 @@ impl Hub {
             thread_gates: Mutex::default(),
             jobs: Mutex::new(Weak::new()),
             closed: Mutex::default(),
+            peers: Mutex::default(),
             me: me.clone(),
         })
     }
@@ -1594,6 +1597,20 @@ impl Hub {
                 run: run(|hub, key, args| Box::pin(async move { hub.chat_read(&key, &args).await })),
             },
             Tool {
+                name: "session_send".into(),
+                description: "Send a message to another session's agent: a chat on this station, or on another station of the workspace. It is posted in that chat for people to see, headed with a link to your chat, and its agent takes it like any message; it answers you the same way, so to wait for the answer end your turn waiting. Use chat_post for your own conversations.".into(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "to": { "type": "string", "description": "The other chat: its link (…/chats/<key>, …/o/<workspace>/<station>/<key>, the link a message from it is headed with), its session key, or a thread address CHANNEL/THREAD_TS on this station; chat_list lists this station's." },
+                        "text": { "type": "string", "description": "The message, standing on its own: what you need or found, with what the other agent needs to act on it. Markdown; to a Slack thread, mrkdwn. Files: name their paths (same station) or move them with station_file." },
+                    },
+                    "required": ["to", "text"],
+                    "additionalProperties": false,
+                }),
+                run: run(|hub, key, args| Box::pin(async move { hub.session_send(&key, &args).await })),
+            },
+            Tool {
                 name: "session_history".into(),
                 description: "Read a session's execution history, as the pages show it: what its agent thought, the tools it called and what they returned, numbered #0 onwards. The latest entries unless before is given.".into(),
                 input_schema: json!({
@@ -2484,6 +2501,7 @@ pub fn post_entries(posts: &[Post]) -> Vec<TimelineEntry> {
         .collect()
 }
 
+mod messages;
 mod others;
 mod titles;
 
