@@ -856,15 +856,15 @@ function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () =>
   const act = useAct();
   return (
     <div className={decisionsCss.archiveOptions}>
-      <button type="button" className={decisionsCss.option} data-recommended="" data-busy={busy || undefined} disabled={busy || keeping}
-        aria-busy={busy || undefined} onClick={onArchive}>
-        <span className={decisionsCss.optionLabel}>归档这个 chat</span>
-        {busy && <span className={`${waitingCss.spinner} ${decisionsCss.optionSpinner}`} aria-hidden="true" />}
-      </button>
       <button type="button" className={decisionsCss.option} data-busy={keeping || undefined} disabled={busy || keeping}
         aria-busy={keeping || undefined} onClick={() => act(api.keepChat(thread), "停止归档提醒", "已保留，不再提醒归档")}>
         <span className={decisionsCss.optionLabel}>不再提醒归档</span>
         <DoingShown state={keepState} className={decisionsCss.optionSpinner} />
+      </button>
+      <button type="button" className={decisionsCss.option} data-recommended="" data-busy={busy || undefined} disabled={busy || keeping}
+        aria-busy={busy || undefined} onClick={onArchive}>
+        <span className={decisionsCss.optionLabel}>归档这个 chat</span>
+        {busy && <span className={`${waitingCss.spinner} ${decisionsCss.optionSpinner}`} aria-hidden="true" />}
       </button>
     </div>
   );

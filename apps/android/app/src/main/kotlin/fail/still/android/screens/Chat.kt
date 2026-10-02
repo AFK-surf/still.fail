@@ -1090,14 +1090,14 @@ private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
     val keeping = app.isDoing("chat.keep", "station" to ctx.station, "thread" to thread)
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         DecisionOptions(
-            listOf(fail.still.android.data.DecisionOption(label, recommended = true)), Modifier.weight(1f),
-            enabled = enabled && !ctx.view.offline && !keeping, busy = if (busy) label else null,
-        ) { archiveChat(app, ctx.station, ctx.view, session) }
-        DecisionOptions(
             listOf(fail.still.android.data.DecisionOption(keep)), Modifier.weight(1f),
             enabled = enabled && !ctx.view.offline && !busy, busy = if (keeping) keep else null,
             failed = app.failedOf("chat.keep", "station" to ctx.station, "thread" to thread),
         ) { app.act("停止归档提醒") { app.api(ctx.station).keepChat(thread); app.toast = "已保留，不再提醒归档" } }
+        DecisionOptions(
+            listOf(fail.still.android.data.DecisionOption(label, recommended = true)), Modifier.weight(1f),
+            enabled = enabled && !ctx.view.offline && !keeping, busy = if (busy) label else null,
+        ) { archiveChat(app, ctx.station, ctx.view, session) }
     }
 }
 
