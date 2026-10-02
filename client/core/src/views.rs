@@ -1375,15 +1375,25 @@ fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &
         "agent" => {
             let agent = agents.iter().find(|a| a["session"].get("key").and_then(Value::as_str) == Some(&author));
             let session = agent.map(|a| &a["session"]);
-            let identity = m.get("agentIdentity").unwrap_or(&Value::Null);
+            let identity = m.get("agentIdentity").cloned().unwrap_or(Value::Null);
             let model = identity.get("model").and_then(Value::as_str);
-            json!({
+            // Another chat's agent writing here (session_send): by that chat's name, its header line left out, which
+            // only says the same.
+            let sent = agent.is_none().then(|| sent_from(m.get("text").and_then(Value::as_str).unwrap_or(""))).flatten();
+            if let Some((title, link, rest)) = sent {
+                m["text"] = json!(rest);
+                json!({
+                    "name": title,
+                    "from": link,
+                    "maker": model.map(|m| crate::present::maker(Some(m))),
+                })
+            } else { json!({
                 "name": model.map(|m| crate::format::agent_label(Some(m), identity.get("effort").and_then(Value::as_str)))
                     .or_else(|| session.and_then(|s| s.get("agentText")).and_then(Value::as_str).map(str::to_string)).or(said_name).unwrap_or_else(|| "agent".into()),
                 "agent": agent.map(|_| author.clone()),
                 "maker": model.map(|m| crate::present::maker(Some(m))).or_else(|| session.map(|s| s["maker"].clone())),
                 "runtime": session.and_then(|s| s.get("runtime")),
-            })
+            }) }
         }
         "ember" | "stillfail" => json!({ "name": crate::brand::name() }),
         _ => {
@@ -1398,6 +1408,25 @@ fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &
         let text = m.get("text").and_then(Value::as_str).unwrap_or("").to_string();
         m["text"] = json!(crate::present::mentions(&text, bots, members));
     }
+}
+
+/// What a message another chat's agent sent (session_send) is headed with, as its station writes it in either
+/// language: `来自 [title](link)：` (`<link|title>` in a Slack thread), a blank line, then the message. Its chat's
+/// title and link, and the message.
+fn sent_from(text: &str) -> Option<(String, String, String)> {
+    let (head, rest) = text.split_once("\n\n")?;
+    let named = head.strip_prefix("来自 ").and_then(|h| h.strip_suffix('：')).or_else(|| head.strip_prefix("From ").and_then(|h| h.strip_suffix(':')))?;
+    let (title, link) = if let Some(md) = named.strip_prefix('[').and_then(|n| n.strip_suffix(')')) {
+        let (title, link) = md.split_once("](")?;
+        (title, link)
+    } else {
+        let (link, title) = named.strip_prefix('<').and_then(|n| n.strip_suffix('>'))?.split_once('|')?;
+        (title, link)
+    };
+    if title.is_empty() || !link.starts_with("http") || link.contains(char::is_whitespace) {
+        return None;
+    }
+    Some((title.to_string(), link.to_string(), rest.to_string()))
 }
 
 impl Views {
@@ -2023,6 +2052,23 @@ mod tests {
             presentations.push(message["by"].clone());
         }
         assert_eq!(presentations[0], presentations[1]);
+    }
+
+    #[test]
+    fn another_chats_agent_goes_by_that_chats_name_without_the_header_line() {
+        let agents = [json!({"session": {"key": "k", "agentText": "Opus", "runtime": "claude"}})];
+        for (text, title) in [
+            ("来自 [发版 0.1.1780](https://x/o/w/s/a)：\n\n回归过了吗？", "发版 0.1.1780"),
+            ("From <https://x/o/w/s/a|Release>:\n\n回归过了吗？", "Release"),
+        ] {
+            let mut message = json!({"authorKind": "agent", "author": "far/a", "text": text, "agentIdentity": {"model": "claude-opus-5-5"}});
+            shown_message(&mut message, &agents, &Value::Null, &[], &[], &[], None);
+            assert_eq!((message["text"].as_str(), message["by"]["name"].as_str(), message["by"]["from"].as_str()), (Some("回归过了吗？"), Some(title), Some("https://x/o/w/s/a")));
+        }
+        // An agent of the chat itself writing the same words is shown as it wrote them.
+        let mut own = json!({"authorKind": "agent", "author": "k", "text": "来自 [a](https://x/o/w/s/a)：\n\nhi"});
+        shown_message(&mut own, &agents, &Value::Null, &[], &[], &[], None);
+        assert_eq!((own["text"].as_str(), own["by"]["name"].as_str()), (Some("来自 [a](https://x/o/w/s/a)：\n\nhi"), Some("Opus")));
     }
 
     #[test]
