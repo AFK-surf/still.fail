@@ -1192,7 +1192,7 @@ typealias Lead = String
 data class StationsGlyph (
 	val online: Long,
 	val dim: Long,
-	/** Of `dim`, those whose link is on its way: they pulse. Absent from a core before it. */
+	/// Of `dim`, those whose link is on its way: they pulse. Absent from a core before it.
 	val connecting: Long? = null,
 	val failing: Long,
 	val working: Long,
