@@ -253,7 +253,14 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
         // What the composer's glass frosts, as the messages are once read: with nothing under it, it would blur what is
         // outside any source and smear it into the capsule (Glass.kt floatingStill).
         Column(Modifier.fillMaxSize().hazeSource(host.haze).background(C.bg)) {
-            BarFrame("", more = false, modifier = Modifier.background(C.bg).onSizeChanged { topBar = it.height }) {}
+            // The read chat's bar is glass over its messages, with a hairline under it (Glass.kt glass); this one is
+            // plain paper, the same line under it so the bar does not change as the chat comes.
+            val line = C.line
+            BarFrame("", more = false, modifier = Modifier.background(C.bg).drawWithContent {
+                drawContent()
+                val y = size.height - 0.25.dp.toPx()
+                drawLine(line, Offset(0f, y), Offset(size.width, y), strokeWidth = 0.5.dp.toPx())
+            }.onSizeChanged { topBar = it.height }) {}
             val error = chat.error
             // Read from its station meanwhile, over the messages to come (Loading.kt); what is wrong in red, over faded ones.
             Column(Modifier.weight(1f).fillMaxWidth()) {
