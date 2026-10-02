@@ -1,8 +1,7 @@
 // What the agents spent, the machine's own sessions, the agents' memory, the machine itself, and the retired footprint
 // (admin/mod.rs: GET /usage, /machine-sessions, /machine-sessions/:runtime/:id, /memory, /host, /footprint).
-import { type Request, type Answer, json, param, percentDecode } from "../request.ts";
+import { type Request, type Answer, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
-import type { Seen } from "../../read/host.ts";
 
 const I64_MIN = -9223372036854775808n;
 const I64_MAX = 9223372036854775807n;
@@ -33,12 +32,7 @@ const RETIRED = JSON.stringify({
   processes: [],
 });
 
-export const routes = ({ read }: Tools): Route[] => {
-  // host.rs CACHED and TICKS: the last answer (given again within ten seconds) and the CPU ticks last seen, kept here
-  // as readers come and go.
-  let cached: { at: number; text: string } | null = null;
-  let seen: Seen = null;
-
+export const routes = ({ read, host }: Tools): Route[] => {
   return [
     // What the agents spent from `from` until `to` (ms), by day as the asker's clock has them (`tz`: minutes east of
     // UTC), with whom, where and on what.
@@ -70,14 +64,11 @@ export const routes = ({ read }: Tools): Route[] => {
       method: "GET",
       pattern: /^\/host$/,
       handle: async (r: Request): Promise<Answer> => {
-        if (cached !== null && Date.now() - cached.at < 10_000) return json(200, cached.text);
-        const answer = await read(r, "host", { seen });
-        if (answer.status !== 200) return answer;
-        const { info, seen: now } = JSON.parse(String(answer.body));
-        seen = now;
-        const text = JSON.stringify(info);
-        cached = { at: info.checkedAt, text };
-        return json(200, text);
+        try {
+          return json(200, JSON.stringify(await host.sample(r.lang)));
+        } catch (e) {
+          return error(500, (e as Error).message);
+        }
       },
     },
     // Retired: old clients' route kept, without scanning.
