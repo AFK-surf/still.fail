@@ -16,7 +16,7 @@ use anyhow::{Context as _, Result, anyhow, bail};
 use iroh::endpoint::{Connection, presets::Minimal};
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode};
 use rquickjs::prelude::Async;
-use rquickjs::{AsyncContext, AsyncRuntime, CatchResultExt, Function, Object, Promise, async_with};
+use rquickjs::{AsyncContext, AsyncRuntime, CatchResultExt, Function, Object, Promise};
 use serde_json::json;
 
 const ALPN: &[u8] = b"stillfail/proto-shell/1";
@@ -45,7 +45,7 @@ async fn run(source: String, addr: String, chats: u32, save: Option<String>) -> 
     let emitted = Rc::new(Cell::new((0usize, 0usize)));
     let result: Rc<RefCell<Option<String>>> = Rc::default();
 
-    let outcome: std::result::Result<(), String> = async_with!(context => |ctx| {
+    let outcome: std::result::Result<(), String> = context.async_with(async |ctx| {
         let setup = || -> rquickjs::Result<()> {
             let host = Object::new(ctx.clone())?;
             host.set("now", Function::new(ctx.clone(), move || started.elapsed().as_secs_f64() * 1000.0)?)?;
