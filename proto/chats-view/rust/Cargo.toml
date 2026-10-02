@@ -1,0 +1,23 @@
+[package]
+name = "chats-view-bench"
+edition = "2024"
+version = "0.1.0"
+publish = false
+description = "Prototype: the core's chat list (views.rs `chats`), as the Rust core computes it, timed, for the TypeScript port to match"
+
+[dependencies]
+serde_json = "1"
+stillfail-core = { path = "../../../client/core" }
+stillfail-i18n = { path = "../../../client/i18n" }
+
+# A workspace of its own: not part of client/.
+[workspace]
+
+[patch.crates-io]
+swarm-discovery = { path = "../../../vendor/swarm-discovery" }
+iroh-mdns-address-lookup = { path = "../../../vendor/iroh-mdns-address-lookup" }
+noq-udp = { path = "../../../vendor/noq-udp" }
+iroh = { path = "../../../vendor/iroh" }
+
+[profile.release]
+strip = true
