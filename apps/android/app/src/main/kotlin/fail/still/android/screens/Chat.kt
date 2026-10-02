@@ -263,8 +263,11 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
                 drawLine(line, Offset(0f, y), Offset(size.width, y), strokeWidth = 0.5.dp.toPx())
             }.onSizeChanged { topBar = it.height }) {}
             val error = chat.error
+            // A chat just made here from a new chat (its scene leaving, its first words on their way) is the core's own:
+            // nothing to read from a station, so no reading over it for the frames until the core's view of it comes.
+            val made = host.leaving || host.flight?.carried == true
             // Read from its station meanwhile, over the messages to come (Loading.kt); what is wrong in red, over faded ones.
-            Column(Modifier.weight(1f).fillMaxWidth()) {
+            if (error != null || !made) Column(Modifier.weight(1f).fillMaxWidth()) {
                 LoadingPill(if (error != null) t("android-chat.chat.unreadable", "error" to error.message) else t("android-chat.chat.loadingFrom", "name" to rememberStationName(station)), error = error != null)
                 PlaceholderMessages(still = error != null)
             }

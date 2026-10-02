@@ -305,6 +305,8 @@ class ChatMotionTest {
             val now = ground()
             assertTrue("composer glass flashed at frame ${it + 2}: $before → $now",
                 abs(before.red - now.red) < 0.035f && abs(before.green - now.green) < 0.035f && abs(before.blue - now.blue) < 0.035f)
+            // The chat made here is the core's at once: no station's reading flashes under the scene as it leaves.
+            assertTrue("reading shown at frame ${it + 2}", rule.onAllNodes(hasText("读取对话", substring = true)).fetchSemanticsNodes().isEmpty())
         }
         r.frames(8)
         // Its station makes it and takes the message, which becomes the chat's first.
