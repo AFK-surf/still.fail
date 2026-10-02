@@ -7,6 +7,7 @@
 //   exit          exits 3 in the middle of the turn
 //   …post:<text>  (anywhere in a message the station hands it) calls chat_post through the MCP endpoint of --mcp-config
 //                 with its token, to the message's thread, ending the turn all_done; then a reply with what it answered
+//                 (`slow:<n> post:<text>`: n deltas, 100 ms apart, before it)
 // Input while busy is read into the turn (a delta "steer:<text>"); "queue:<text>" becomes a turn after it.
 // FAKE_DUMP: its argv and env are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin.
 import fs from "node:fs";
@@ -76,6 +77,9 @@ async function turn(text) {
     const server = JSON.parse(flag("--mcp-config")).mcpServers.stillfail;
     const to = /thread="([^"]+)"/.exec(text)?.[1] ?? "";
     const said = text.slice(text.indexOf("post:") + 5).split("\n")[0];
+    // `slow:<n>` before it: n deltas, 100 ms apart, first (a turn long enough to hand over in the middle of).
+    const slow = /slow:(\d+)/.exec(text.slice(0, text.indexOf("post:")));
+    if (slow) await message(Array.from({ length: Number(slow[1]) }, (_, i) => `d${i} `), 100);
     const call = (id, method, params) =>
       fetch(server.url, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${process.env.STILLFAIL_MCP_TOKEN}` }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) }).then((r) => r.json());
     await call(1, "initialize", { protocolVersion: "2025-06-18" });
