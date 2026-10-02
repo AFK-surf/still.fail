@@ -460,7 +460,7 @@ class DecisionsTest {
             title = "侧栏和设置的几处间距",
         ))
         h.deliver()
-        rec.frames(32)
+        rec.frames(60)
         rec.end()
         rule.onNodeWithText(both.label, substring = false).assertDoesNotExist()
         rule.onNodeWithText("左子健 选了「两处一起改」").assertExists()

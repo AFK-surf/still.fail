@@ -16,6 +16,11 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -168,10 +173,15 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
     val still = reducedMotion()
     val busy = options.firstOrNull { app.isDoing("decision.answer", "station" to station, "thread" to m.thread, "seq" to m.seq, "option" to it.label) }?.label
     Column {
-        // Keep the actual buttons until their height reaches zero; topic updates used to remove them in one frame.
+        // Match chat-list archive: the whole group shrinks/fades, then a delayed spring closes its space.
         AnimatedVisibility(
             visible = !resolved, enter = EnterTransition.None,
-            exit = shrinkVertically(tween(if (still) 0 else 240, easing = Ease.Out), shrinkTowards = Alignment.Top),
+            exit = fadeOut(tween(if (still) 0 else LEAVE_MS, easing = CssEaseOut)) +
+                scaleOut(tween(if (still) 0 else LEAVE_MS, easing = CssEaseOut), targetScale = 0.9f) +
+                shrinkVertically(
+                    if (still) tween(0) else closeGap(IntSize.VisibilityThreshold),
+                    shrinkTowards = Alignment.Top, clip = false,
+                ),
         ) {
             Column {
                 card?.assigneeText?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
@@ -183,7 +193,8 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
         }
         AnimatedVisibility(
             visible = resolved && decision?.text != null,
-            enter = expandVertically(tween(if (still) 0 else 240, easing = Ease.Out), expandFrom = Alignment.Top),
+            enter = fadeIn(tween(if (still) 0 else LEAVE_MS, delayMillis = if (still) 0 else LEAVE_MS, easing = CssEaseOut)) +
+                expandVertically(if (still) tween(0) else closeGap(IntSize.VisibilityThreshold), expandFrom = Alignment.Top),
         ) {
             Text(decision?.text.orEmpty(), fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp))
         }

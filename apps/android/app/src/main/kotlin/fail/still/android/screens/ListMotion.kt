@@ -35,6 +35,10 @@ private const val MOVE_STIFFNESS = 350f
 internal val ArriveEasing = CubicBezierEasing(0.2f, 0.7f, 0.2f, 1f)
 internal val CssEaseOut = CubicBezierEasing(0f, 0f, 0.58f, 1f)
 
+/** Close the space left by departing content with the same delayed spring as archived chat rows. */
+internal fun <T> closeGap(threshold: T): FiniteAnimationSpec<T> =
+    Delayed(spring(dampingRatio = 1f, stiffness = MOVE_STIFFNESS, visibilityThreshold = threshold)) { CLOSE_DELAY_MS }
+
 /** A row or day heading gone from the list, drawn where it was while it goes. */
 internal class Ghost(val key: String, val y: Float, val item: ChatItem?, val label: String?, val at: Long)
 
