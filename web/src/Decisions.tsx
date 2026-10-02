@@ -3,7 +3,7 @@
 // last; once answered (or replaced), a quiet line saying how. On the decisions page (奏): one at a time, the post and
 // what came just before it drawn as the chat draws them, its options pinned at the foot; 待定 puts it at the back of the
 // queue on this device, 不再提醒 stops asking this viewer. The phone swipes for those two (left, right); the wide
-// screen has them as words in the hint line, and ← →.
+// screen lists them all and shows the one picked (DecisionDesk.tsx), with those two as buttons.
 //
 // A text card (`card.type` text) has a field to write in and a send button where the options would be
 // (decision.reply); a card of a type this page does not know, only a way to its chat, to answer there.
@@ -131,34 +131,23 @@ export function MessageDecision({ message: m, thread }: { message: ChatMessage; 
   return d?.text ? <p className={css.settledLine}>{d.text}</p> : null;
 }
 
-const keyOf = (d: DecisionItem) => `${d.station}/${d.thread}/${d.seq}`;
+export const keyOf = (d: DecisionItem) => `${d.station}/${d.thread}/${d.seq}`;
 
 /**
- * The decisions waiting for the viewer in a workspace, one at a time (the core's `decisions` view: those set aside last).
- * `swipe`: the phone's (left 待定, right 不再提醒); otherwise those two are words in the hint line, and ← → on the
- * keyboard. `inline`: the messages' avatars in line with their names (the phone's). `onOpen` opens the decision's chat.
+ * The decisions waiting for the viewer in a workspace (the core's `decisions` view: those set aside last), as both
+ * pages go through them: one answered or dismissed here goes at once, before the core's list says so (back if the call
+ * failed); one set aside goes to the back at once, as the core will have it; one whose written reply is on its way
+ * stays (`replying`). `empty` once the core says nothing remains.
  */
-export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, className }: {
-  workspace: string; swipe: boolean; inline: boolean; onOpen: (path: string) => void; onEmpty?: (() => void) | undefined; className?: string;
-}) {
+export function useDecisionQueue(workspace: string) {
   const view = useTopic<DecisionsView>({ topic: "decisions", workspace });
   // Let the core confirm that nothing remains: a locally hidden card can still come back on failure.
   const empty = !!view.value && !view.value.loading && view.value.count === 0 && !view.error;
-  const returned = useRef(false);
-  const [leaving, setLeaving] = useState(0);
   const [replying, setReplying] = useState<DecisionItem | null>(null);
-  useEffect(() => {
-    if (empty && !leaving && !replying && onEmpty && !returned.current) {
-      returned.current = true;
-      onEmpty();
-    }
-  }, [empty, leaving, replying, onEmpty]);
   const stations = useStations(workspace).value;
   const call = useCall();
   const act = useAct();
-  // Answered or dismissed here: gone at once, before the core's list says so (back if the call failed).
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
-  // Set aside here: at the back at once, as the core will have them.
   const [aside, setAside] = useState<readonly string[]>([]);
   const items = useMemo(() => {
     const source = view.value?.items ?? [];
@@ -167,6 +156,81 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
     const at = (d: DecisionItem) => aside.indexOf(keyOf(d));
     return [...left.filter((d) => at(d) < 0), ...left.filter((d) => at(d) >= 0).sort((a, b) => at(a) - at(b))];
   }, [view.value, gone, aside, replying]);
+  const drop = (d: DecisionItem) => setGone((was) => new Set(was).add(keyOf(d)));
+  const back = (d: DecisionItem) => setGone((was) => { const now = new Set(was); now.delete(keyOf(d)); return now; });
+  const where = (d: DecisionItem) => ({ station: d.station, thread: d.thread, seq: d.seq });
+  return {
+    view, empty, items, replying, setReplying,
+    /** Whether it was set aside (待定), here or by the core. */
+    isAside: (d: DecisionItem) => aside.includes(keyOf(d)) || !!d.deferred,
+    defer(d: DecisionItem) {
+      const key = keyOf(d);
+      setAside((was) => [...was.filter((k) => k !== key), key]);
+      act(call("decision.defer", where(d)), "待定");
+    },
+    dismiss(d: DecisionItem) {
+      drop(d);
+      act(call("decision.dismiss", where(d)).catch((e: unknown) => { back(d); throw e; }), "不再提醒");
+    },
+    /** Answered here (its option or reply sent): gone. */
+    answered: drop,
+    /** The station a decision is on, for its messages (StationContext). */
+    station(d: DecisionItem): Station {
+      const s = stations?.find((x) => x.station === d.station);
+      return { id: s?.id ?? d.station.split("/")[1] ?? "", name: s?.name ?? d.stationName, online: s?.online ?? true,
+        address: d.station, base: stationBase(d.station), settings: `/w/${workspace}/settings` };
+    },
+  };
+}
+
+/**
+ * A decision on its way off (answered: up; set aside: left; dismissed: right): a copy of `el` flies from where it is
+ * now over what `place` shows next, then goes. Answered, it draws in to about 88% and is pulled up, faster and faster.
+ * `done` once the copy is gone.
+ */
+export function flyOff(el: HTMLElement, place: HTMLElement, to: "left" | "right" | "up", scroller: string, done?: () => void): void {
+  if (reducedMotion()) { done?.(); return; }
+  const ghost = el.cloneNode(true) as HTMLElement;
+  ghost.classList.add(css.ghost);
+  ghost.classList.remove(css.arriving);
+  ghost.setAttribute("aria-hidden", "true");
+  ghost.inert = true;
+  place.append(ghost);
+  // A copy starts at its top: scrolled as the one it copies.
+  const from = el.querySelector<HTMLElement>(scroller);
+  const copy = ghost.querySelector<HTMLElement>(scroller);
+  if (from && copy) copy.scrollTop = from.scrollTop;
+  const start = el.style.transform || "translateX(0px)";
+  const w = place.offsetWidth;
+  const end = to === "up" ? `translateY(${-place.offsetHeight}px)` : `translateX(${to === "right" ? w + 24 : -(w + 24)}px)`;
+  const frames = to === "up" ? [
+    { transform: "translateY(0px) scale(1)", offset: 0 },
+    { transform: `translateY(${-place.offsetHeight * 0.4}px) scale(.88)`, offset: 0.4 },
+    { transform: `${end} scale(.88)`, offset: 1 },
+  ] : [{ transform: start }, { transform: end }];
+  if (to === "up") ghost.style.transformOrigin = "50% 0%";
+  const finish = () => { ghost.remove(); done?.(); };
+  void ghost.animate(frames, { duration: to === "up" ? 360 : 260, easing: to === "up" ? "cubic-bezier(.55, 0, .85, .35)" : "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
+    .finished.then(finish, finish);
+}
+
+/**
+ * The decisions waiting for the viewer in a workspace, one at a time (the phone's 奏): left 待定, right 不再提醒, by
+ * swiping. `inline`: the messages' avatars in line with their names. `onOpen` opens the decision's chat.
+ */
+export function DecisionDeck({ workspace, inline, onOpen, onEmpty, className }: {
+  workspace: string; inline: boolean; onOpen: (path: string) => void; onEmpty?: (() => void) | undefined; className?: string;
+}) {
+  const queue = useDecisionQueue(workspace);
+  const { view, empty, items, replying, setReplying } = queue;
+  const returned = useRef(false);
+  const [leaving, setLeaving] = useState(0);
+  useEffect(() => {
+    if (empty && !leaving && !replying && onEmpty && !returned.current) {
+      returned.current = true;
+      onEmpty();
+    }
+  }, [empty, leaving, replying, onEmpty]);
   const front = items[0];
   // Each time one leaves another comes, even the same again (set aside, the only one).
   const [turn, setTurn] = useState(0);
@@ -188,122 +252,52 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
     const place = host.current;
     if (under.current) delete under.current.dataset.side;
     if (el && place && !reducedMotion()) {
-      const ghost = el.cloneNode(true) as HTMLElement;
-      ghost.classList.add(css.ghost);
-      ghost.classList.remove(css.arriving);
-      ghost.setAttribute("aria-hidden", "true");
-      ghost.inert = true;
-      place.append(ghost);
-      // A copy starts at its top: scrolled as the one it copies.
-      const from = el.querySelector<HTMLElement>(`.${css.scroll}`);
-      const copy = ghost.querySelector<HTMLElement>(`.${css.scroll}`);
-      if (from && copy) copy.scrollTop = from.scrollTop;
-      const start = el.style.transform || "translateX(0px)";
-      const w = place.offsetWidth;
-      const end = to === "up" ? `translateY(${-place.offsetHeight}px)` : `translateX(${to === "right" ? w + 24 : -(w + 24)}px)`;
       setLeaving((n) => n + 1);
-      const frames = to === "up" ? [
-        { transform: "translateY(0px) scale(1)", offset: 0 },
-        { transform: `translateY(${-place.offsetHeight * 0.4}px) scale(.88)`, offset: 0.4 },
-        { transform: `${end} scale(.88)`, offset: 1 },
-      ] : [{ transform: start }, { transform: end }];
-      if (to === "up") ghost.style.transformOrigin = "50% 0%";
-      void ghost.animate(frames, { duration: to === "up" ? 360 : 260, easing: to === "up" ? "cubic-bezier(.55, 0, .85, .35)" : "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
-        .finished.then(() => { ghost.remove(); setLeaving((n) => n - 1); }, () => { ghost.remove(); setLeaving((n) => n - 1); });
+      flyOff(el, place, to, `.${css.scroll}`, () => setLeaving((n) => n - 1));
     }
     if (el) { el.style.transform = ""; delete el.dataset.dragging; }
     setArriving(to !== "up");
     setTurn((t) => t + 1);
   };
 
-  const drop = (d: DecisionItem) => setGone((was) => new Set(was).add(keyOf(d)));
-  const back = (d: DecisionItem) => setGone((was) => { const now = new Set(was); now.delete(keyOf(d)); return now; });
-  const where = (d: DecisionItem) => ({ station: d.station, thread: d.thread, seq: d.seq });
-
   const defer = () => {
     if (!front || replying) return;
     leave("left");
-    const key = keyOf(front);
-    setAside((was) => [...was.filter((k) => k !== key), key]);
-    act(call("decision.defer", where(front)), "待定");
+    queue.defer(front);
   };
   const dismiss = () => {
-    const d = front;
-    if (!d || replying) return;
+    if (!front || replying) return;
     leave("right");
-    drop(d);
-    act(call("decision.dismiss", where(d)).catch((e: unknown) => { back(d); throw e; }), "不再提醒");
+    queue.dismiss(front);
   };
-  const answered = (d: DecisionItem) => { leave("up"); drop(d); };
-
-  // The wide screen's keys: ← 待定, → 不再提醒 (not while writing somewhere).
-  const latest = useRef({ defer, dismiss });
-  latest.current = { defer, dismiss };
-  useEffect(() => {
-    if (swipe) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.closest("input, textarea, select, [contenteditable=\"\"], [contenteditable=\"true\"]"))) return;
-      if (e.key === "ArrowLeft") { e.preventDefault(); latest.current.defer(); }
-      else if (e.key === "ArrowRight") { e.preventDefault(); latest.current.dismiss(); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [swipe]);
+  const answered = (d: DecisionItem) => { leave("up"); queue.answered(d); };
 
   const drag = useSwipe(card, under, { left: defer, right: dismiss });
 
-  const station = useMemo<Station | null>(() => {
-    if (!front) return null;
-    const s = stations?.find((x) => x.station === front.station);
-    return { id: s?.id ?? front.station.split("/")[1] ?? "", name: s?.name ?? front.stationName, online: s?.online ?? true,
-      address: front.station, base: stationBase(front.station), settings: `/w/${workspace}/settings` };
-  }, [front, stations, workspace]);
-
   let body: ReactNode;
-  if (!front || !station) {
+  if (!front) {
     body = view.value || view.error
       ? <p className={css.empty}>{view.error && !view.value ? view.error.message : view.value?.loading ? "正在读取…" : "没有等你决定的事"}</p>
       : null;
   } else {
     const d = front;
     const path = `${stationBase(d.station)}/chats/${encodeURIComponent(d.session)}`;
-    const owner = () => d.message.by.agent ?? d.session;
     body = (
-      <StationContext.Provider value={station}>
-        <div key={`${keyOf(d)}#${turn}`} ref={card} className={`${css.card} ${arriving ? css.arriving : ""}`} {...(swipe ? drag : {})}>
+      <StationContext.Provider value={queue.station(d)}>
+        <div key={`${keyOf(d)}#${turn}`} ref={card} className={`${css.card} ${arriving ? css.arriving : ""}`} {...drag}>
           <div className={css.scroll}>
             <div className={css.column}>
               <div className={css.head}>
                 <button type="button" className={css.chatLink} onClick={() => onOpen(path)}>{d.title}</button>
                 <span className={css.count}>1 / {items.length}</span>
               </div>
-              {d.card?.assigneeText && <p className={css.settledLine}>{d.card.assigneeText}</p>}
-              <div className={`${chatCss.chatMessages} ${inline ? chatCss.inlineHeads : ""}`} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                {[...d.before, d.message].map((m) => <StaticMessage key={m.seq} message={m} owner={owner} />)}
-              </div>
+              <DecisionMessages d={d} inline={inline} />
             </div>
           </div>
           <div className={css.foot}>
             <div className={css.footColumn}>
-              {(() => {
-                const type = cardType(d.card, d.options);
-                if (type === "options") return <>
-                  <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={() => answered(d)} />
-                  <DecisionReply key={keyOf(d)} session={d.session} mobile={swipe} station={d.station} thread={d.thread} seq={d.seq} onSent={() => answered(d)} onSending={(sending) => setReplying(sending ? d : null)} />
-                </>;
-                if (type === "text") return <DecisionReply key={keyOf(d)} session={d.session} mobile={swipe} station={d.station} thread={d.thread} seq={d.seq} placeholder={d.card?.placeholder} onSent={() => answered(d)} onSending={(sending) => setReplying(sending ? d : null)} />;
-                return <button type="button" className={css.elsewhere} onClick={() => onOpen(path)}>去 chat 里回</button>;
-              })()}
-              {swipe
-                ? <div className={css.hint} aria-hidden="true"><span>← 待定</span><span>不再提醒 →</span></div>
-                : (
-                  <div className={css.hint}>
-                    <button type="button" className={css.hintButton} onClick={defer} title="←">待定</button>
-                    <button type="button" className={css.hintButton} onClick={dismiss} title="→">不再提醒</button>
-                  </div>
-                )}
+              <DecisionAnswer d={d} mobile onAnswered={() => answered(d)} onReplying={(sending) => setReplying(sending ? d : null)} onOpen={() => onOpen(path)} />
+              <div className={css.hint} aria-hidden="true"><span>← 待定</span><span>不再提醒 →</span></div>
             </div>
           </div>
         </div>
@@ -312,7 +306,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
   }
   return (
     <div ref={host} className={`${css.deck} ${className ?? ""}`}>
-      {swipe && front && (
+      {front && (
         <div ref={under} className={css.under} aria-hidden="true">
           <span className={css.underSide} data-side="right">不再提醒</span>
           <span className={css.underSide} data-side="left">待定</span>
@@ -321,6 +315,36 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
       {body}
     </div>
   );
+}
+
+/** Who has to decide, then the decision's post and what came just before it, as its chat draws them. */
+export function DecisionMessages({ d, inline }: { d: DecisionItem; inline: boolean }) {
+  const owner = () => d.message.by.agent ?? d.session;
+  return <>
+    {d.card?.assigneeText && <p className={css.settledLine}>{d.card.assigneeText}</p>}
+    <div className={`${chatCss.chatMessages} ${inline ? chatCss.inlineHeads : ""}`} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      {[...d.before, d.message].map((m) => <StaticMessage key={m.seq} message={m} owner={owner} />)}
+    </div>
+  </>;
+}
+
+/**
+ * How a decision is answered, by its card: its options and a reply to write (options), the reply alone (text), or a way
+ * to its chat (a type this page does not know). `onAnswered` once an option is picked or the reply sent; `onReplying`
+ * while the reply is on its way.
+ */
+export function DecisionAnswer({ d, mobile, onAnswered, onReplying, onOpen }: {
+  d: DecisionItem; mobile: boolean; onAnswered: () => void; onReplying: (sending: boolean) => void; onOpen: () => void;
+}) {
+  const type = cardType(d.card, d.options);
+  const reply = (placeholder?: string) => <DecisionReply key={keyOf(d)} session={d.session} mobile={mobile} station={d.station} thread={d.thread} seq={d.seq}
+    placeholder={placeholder} onSent={onAnswered} onSending={onReplying} />;
+  if (type === "options") return <>
+    <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={onAnswered} />
+    {reply()}
+  </>;
+  if (type === "text") return reply(d.card?.placeholder);
+  return <button type="button" className={css.elsewhere} onClick={onOpen}>去 chat 里回</button>;
 }
 
 /**

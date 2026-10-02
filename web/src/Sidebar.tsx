@@ -24,6 +24,7 @@ import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
 import { useWorkspaceMarks } from "./lastChat.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as decisionsCss from "./Decisions.css.ts";
+import { openedAt } from "./DecisionDesk.tsx";
 import * as chatCss from "./styles/chat.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 
@@ -102,7 +103,7 @@ export function DecisionsEntry({ scope, to }: { scope: string; to: string }) {
   const n = useWorkspaceMarks(scope)?.workspaces[scope]?.decisions ?? 0;
   if (n <= 0) return null;
   return (
-    <NavLink className={`${nav.navRow} ${decisionsCss.sideEntry}`} to={to} aria-label={`奏：${n} 件等你决定`}>
+    <NavLink className={`${nav.navRow} ${decisionsCss.sideEntry}`} to={to} onClick={(e) => openedAt(e.currentTarget)} aria-label={`奏：${n} 件等你决定`}>
       <span className={decisionsCss.sideEntryLead}>奏</span>
       <span className={decisionsCss.sideEntryCount}>{n} 件等你决定</span>
     </NavLink>

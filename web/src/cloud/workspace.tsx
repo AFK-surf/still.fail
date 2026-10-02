@@ -15,7 +15,7 @@ import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, DecisionsEntry, StationTrouble } from "../Sidebar.tsx";
-import { DecisionsPage } from "../pages/Decisions.tsx";
+import { DecisionDesk } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
 import { OpenJobs } from "../OpenJobs.tsx";
 import { GlobalShortcuts } from "../Switcher.tsx";
@@ -67,6 +67,8 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   const detail = /\/(s\/[^/]+\/.+|settings|new$|archive$|decisions$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
+  // 奏: the page takes the sidebar's place too (DecisionDesk.tsx).
+  const decisions = /^\/w\/[^/]+\/decisions$/.test(path);
   const people = useMemo(() => new Map((view?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view]);
   useEffect(() => identify(entry.account), [entry.account]);
   useEffect(() => window.stillfailDesktop?.inWorkspace(entry.account.sub, entry.id), [entry.account.sub, entry.id]);
@@ -89,41 +91,44 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   return (
     <PeopleContext.Provider value={people}>
       <div className={shellCss.shell} data-detail={detail}>
-        {settings
-          ? <nav className={nav.sidebar} aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></nav>
-          : <WorkspaceSidebar entry={entry} />}
         <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
-        <main className={shellCss.main}>
-          <ComposerDock>
-          <Routes>
-            <Route index element={<WorkspaceHome id={entry.id} stations={found.value && stations} />} />
-            <Route path="settings" element={<Navigate to="stations" replace />} />
-            <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
-            <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} />} />
-            {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
-            {HAS_VERSION && <Route path="settings/version" element={<AppVersionPage back={`/w/${entry.id}/settings`} />} />}
-            <Route path="settings/changelog" element={<ChangelogPage back={`/w/${entry.id}/settings`} />} />
-            <Route path="settings/account" element={<AccountSettings entry={entry} />} />
-            <Route path="settings/workspace" element={<WorkspaceSettings entry={entry} />} />
-            {/* Pages the workspace page took in: links to them still land there. */}
-            <Route path="settings/general" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
-            <Route path="settings/members" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
-            <Route path="settings/stations" element={<StationsSettings entry={entry} />} />
-            <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
-            <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
-            <Route path="settings/memory" element={<MemorySettings entry={entry} />} />
-            <Route path="settings/usage/prices" element={<UsagePricesSettings entry={entry} />} />
-            <Route path="settings/usage" element={<UsageSettings entry={entry} />} />
-            <Route path="settings/stations/:station/footprint" element={<Navigate to={`/w/${entry.id}/settings/stations`} replace />} />
-            <Route path="settings/leave" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
-            <Route path="s/:station/*" element={<StationPages stations={found.value && stations} />} />
-            <Route path="archive" element={<ArchivePage scope={entry.id} back={`/w/${entry.id}`} />} />
-            <Route path="decisions" element={<DecisionsPage scope={entry.id} back={`/w/${entry.id}`} />} />
-            <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
-            <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
-          </Routes>
-          </ComposerDock>
-        </main>
+        {decisions
+          ? <DecisionDesk workspace={entry.id} back={`/w/${entry.id}`} onOpen={(to) => navigate(to)} />
+          : <>
+          {settings
+            ? <nav className={nav.sidebar} aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></nav>
+            : <WorkspaceSidebar entry={entry} />}
+          <main className={shellCss.main}>
+            <ComposerDock>
+            <Routes>
+              <Route index element={<WorkspaceHome id={entry.id} stations={found.value && stations} />} />
+              <Route path="settings" element={<Navigate to="stations" replace />} />
+              <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
+              <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} />} />
+              {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
+              {HAS_VERSION && <Route path="settings/version" element={<AppVersionPage back={`/w/${entry.id}/settings`} />} />}
+              <Route path="settings/changelog" element={<ChangelogPage back={`/w/${entry.id}/settings`} />} />
+              <Route path="settings/account" element={<AccountSettings entry={entry} />} />
+              <Route path="settings/workspace" element={<WorkspaceSettings entry={entry} />} />
+              {/* Pages the workspace page took in: links to them still land there. */}
+              <Route path="settings/general" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
+              <Route path="settings/members" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
+              <Route path="settings/stations" element={<StationsSettings entry={entry} />} />
+              <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
+              <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
+              <Route path="settings/memory" element={<MemorySettings entry={entry} />} />
+              <Route path="settings/usage/prices" element={<UsagePricesSettings entry={entry} />} />
+              <Route path="settings/usage" element={<UsageSettings entry={entry} />} />
+              <Route path="settings/stations/:station/footprint" element={<Navigate to={`/w/${entry.id}/settings/stations`} replace />} />
+              <Route path="settings/leave" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
+              <Route path="s/:station/*" element={<StationPages stations={found.value && stations} />} />
+              <Route path="archive" element={<ArchivePage scope={entry.id} back={`/w/${entry.id}`} />} />
+              <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
+              <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
+            </Routes>
+            </ComposerDock>
+          </main>
+          </>}
         <Previews />
       </div>
     </PeopleContext.Provider>
