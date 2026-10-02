@@ -294,3 +294,72 @@ export function resolvedModel(profile: Profile, capability: Capability, chosen: 
   if (!(capability.models ?? []).includes(chosen) && capability.model !== chosen) return undefined;
   return transport(c, chosen);
 }
+
+// ── what a profile can decide with (decision/profiles.rs `discover`), found when the profile is checked ──
+
+/// Stable preference: a native decision model, then small models that answer without thinking (the probe asks for one
+/// token, and a model that thinks first has none to spare): qwen's flash, deepseek's flash, other small ones; the rest
+/// next, and models that always think last. Every chosen model must pass a probe.
+export function decisionPriority(model: string): number {
+  const name = model.toLowerCase();
+  const flash = name.includes("flash");
+  if (name.includes("jev")) return 0;
+  if (name.includes("qwen") && flash) return 1;
+  if (name.includes("deepseek") && flash) return 2;
+  if (flash || name.includes("nano") || name.includes("mini") || name.includes("lite")) return 3;
+  // Thinking cannot be turned off on these, so the token the probe allows goes to the thought.
+  if (name.includes("glm") || name.includes("thinking") || name.includes("reasoner")) return 5;
+  return 4;
+}
+
+/// By priority, then name (as Rust sorts `(u8, &str)`).
+export const byDecisionPriority = (a: string, b: string) => decisionPriority(a) - decisionPriority(b) || (a < b ? -1 : a > b ? 1 : 0);
+
+/// Probes which of a profile's models answer a decision with real probabilities (synthetic evidence only; no
+/// conversation, tools or agent). `check` is the profile's check: its listed models are the first candidates.
+export async function discover(profile: Profile, check: { state: string; models?: string[] | null }): Promise<Capability> {
+  const capability: Capability = { state: "unsupported", detail: "当前登录未提供决策概率接口", model: null, provider: null, models: [], fingerprint: fingerprint(profile) };
+  if (check.state === "login" || check.state === "failed") return { ...capability, state: "unavailable", detail: "账号恢复后自动检查决策能力" };
+  const c = connection(profile);
+  if (!c) return capability;
+  let models: string[] = [...(check.models ?? []), ...profile.models, ...(profile.model !== undefined ? [profile.model] : [])];
+  if (c.provider === "jev") models.push("jev-latest");
+  try {
+    validate(transport(c, "discovery"));
+  } catch {
+    return { ...capability, detail: "Profile 的接口地址不支持决策检查" };
+  }
+  // Env profiles are not listed by their coding runtime. Discover using that profile's own API.
+  if (models.length === 0) {
+    try {
+      const headers: Record<string, string> = { authorization: `Bearer ${c.key}` };
+      if (c.sessionHeader) headers["x-opencode-session"] = randomUUID();
+      const response = await fetch(`${c.base.replace(/\/+$/, "")}/models`, { headers, redirect: "manual", signal: AbortSignal.timeout(8000) });
+      if (response.ok) {
+        const body: Json = await response.json();
+        if (Array.isArray(body?.data)) for (const m of body.data) if (typeof m?.id === "string") models.push(m.id);
+      }
+    } catch {}
+  }
+  // Sorted, then equal neighbours dropped (Rust's sort_by + dedup).
+  models = models.sort(byDecisionPriority).filter((m, i, all) => i === 0 || all[i - 1] !== m);
+  const verified: string[] = [];
+  const until = Date.now() + 25_000;
+  const evidence = { user: "What is 2 + 2?", proposedPost: "4", done: "Answered the arithmetic question" };
+  const probe = (async () => {
+    for (const model of models.slice(0, 8)) {
+      if (Date.now() >= until) return;
+      const config = transport(c, model);
+      try {
+        const result = await decide(config, completionQuestion(), evidence);
+        if (acceptsCompletion(result, config.threshold)) verified.push(config.model);
+      } catch {}
+    }
+  })();
+  // Bound discovery work.
+  await Promise.race([probe, new Promise((resolve) => setTimeout(resolve, 25_000).unref())]);
+  if (verified.length > 0) {
+    return { ...capability, state: "ready", detail: `已识别 ${verified.length} 个决策模型`, model: verified[0]!, provider: c.provider, models: [...verified] };
+  }
+  return { ...capability, state: "unavailable", detail: "尚未验证可用的决策模型" };
+}

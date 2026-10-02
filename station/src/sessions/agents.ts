@@ -27,6 +27,10 @@ import { jobTools } from "../tools/jobs.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { UsageCounter } from "../usage/counter.ts";
+import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
+import { overview } from "../api/overview.ts";
+import type { Viewer } from "../mesh/credential.ts";
+import type { Lang } from "../ops/i18n.ts";
 import { type Updates, makeUpdates } from "../updates/updates.ts";
 import { hubConfig } from "./config.ts";
 import { Hub } from "./hub.ts";
@@ -44,7 +48,18 @@ const DRAINED_LIMIT_MS = 300_000;
 /// How long the previous station process is waited for before its sessions are taken up all the same.
 const PREVIOUS_LIMIT_MS = 40_000;
 
-export type AgentsParts = { hub: Hub; jobs: Jobs; remote: Remote; mcp: McpEndpoint; config: ConfigFile; usage: UsageCounter; updates: Updates };
+export type AgentsParts = {
+  hub: Hub;
+  jobs: Jobs;
+  remote: Remote;
+  mcp: McpEndpoint;
+  config: ConfigFile;
+  usage: UsageCounter;
+  updates: Updates;
+  accounts: Accounts;
+  /// GET /overview as `viewer` sees it.
+  overview(viewer: Viewer, lang: Lang): Promise<unknown>;
+};
 
 export class Agents extends Context.Service<Agents, AgentsParts>()("stillfail/Agents") {}
 
@@ -87,6 +102,8 @@ export const AgentsLive = (control: Control) =>
       const shares = yield* AdbShares;
       const run = join(data, "run");
       const config = new ConfigFile(data);
+      // An edit is taken only if it checks out as config.rs `parse_config` would have it.
+      config.check = checkConfig;
       const place = () => {
         const s = cloud.state;
         return s && s.workspace && !cloud.removed() ? s : null;
@@ -98,14 +115,15 @@ export const AgentsLive = (control: Control) =>
       };
 
       const settings = () => hubConfig(config.raw(), data);
+      const codex = new CodexDriver({ data, currentProfile: (id) => settings().profiles.find((p) => p.id === id) });
       const hub = new Hub({
         config: settings,
         store,
         // Slack and the other chat platforms: phase 4. The station's own chat is the hub's.
         chats: () => undefined,
         drivers: [
-          new ClaudeDriver({ data }),
-          new CodexDriver({ data, currentProfile: (id) => settings().profiles.find((p) => p.id === id) }),
+          new ClaudeDriver({ data, machineToken: (env) => accounts.machineToken(env) }),
+          codex,
         ],
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),
@@ -172,13 +190,32 @@ export const AgentsLive = (control: Control) =>
       // Outside a workspace its agents do not reach out of it: their outward tools are refused.
       const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, tools, () => (bound() ? undefined : UNBOUND_REFUSAL));
 
+      // Profiles, sign-ins, allowances and the machine's own logins; the Claude driver's machine token renewed by it.
+      const accounts: Accounts = makeAccounts({ data, store, config, hub, codex: () => codex as any, following: () => events.inUse(), checkOnStart: true });
+      accounts.start();
+      const view = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates }, viewer, lang);
+
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
       readers.clientKeys = () => hub.clientKeys();
-      events.followLive((key, from, last, send) => {
-        const id = hub.live.subscribe(key, from, last, send);
-        return () => hub.live.unsubscribe(key, id);
+      events.follow({
+        live: (key, from, last, send) => {
+          const id = hub.live.subscribe(key, from, last, send);
+          return () => hub.live.unsubscribe(key, id);
+        },
+        overview: view,
+        processState: (key) => hub.processState(key),
+        followed: () => accounts.followed(),
       });
+      // A runtime installed or updated from the pages: the machine's logins read again.
+      updates.onRuntimeChanged(() => void accounts.machine?.refresh());
+      // What the overview shows changes: told on the event streams.
+      const unlistenOverview = [
+        accounts.onChange(() => events.overviewChanged()),
+        updates.changes(() => events.overviewChanged()),
+        config.listen(() => (events.overviewChanged(), events.rowsChanged(null))),
+        cloud.listen(() => events.overviewChanged()),
+      ];
 
       // In a workspace, or out of it, as cloud.json says, from now on.
       let inWorkspace = bound();
@@ -310,6 +347,8 @@ export const AgentsLive = (control: Control) =>
           await jobs.shutdown();
           await usage.stop();
           await updates.close();
+          await accounts.close();
+          for (const stop of unlistenOverview) stop();
           if (existsSync(join(run, "hub.json"))) {
             try {
               if (JSON.parse(readFileSync(join(run, "hub.json"), "utf8")).pid === process.pid) rmSync(join(run, "hub.json"), { force: true });
@@ -317,6 +356,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates });
+      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates, accounts, overview: view });
     }),
   );
