@@ -4,8 +4,10 @@
 # and is removed after: POSTHOG_JSON (the key the station reports errors with), ANDROID_DEBUG_KEYSTORE_B64 (the key
 # every Android release is signed with: studio's ~/.android/debug.keystore; another would stop installed apps updating),
 # CLOUDFLARE_API_TOKEN (the bucket; without it, the machine's own `wrangler login`).
-#   sh .github/release.sh station|android
+#   sh .github/release.sh [--stable] station|android
 set -eu
+beta=--beta
+if [ "${1:-}" = --stable ]; then beta=""; shift; fi
 cd "$(dirname "$0")/.."
 pnpm install --frozen-lockfile --prefer-offline > /dev/null
 (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
@@ -22,7 +24,7 @@ case "${1:?usage: release.sh station|android}" in
     mkdir -p mesh/target/release
     cp "$CARGO_TARGET_DIR/release/stillfail-station" mesh/target/release/
     export LINUX_TARGET_DIR="$HOME/stillfail-ci/linux-${RUNNER_NAME:-local}"
-    sh scripts/release.sh --beta
+    sh scripts/release.sh ${beta:+$beta}
     ;;
   android)
     [ -n "${ANDROID_DEBUG_KEYSTORE_B64:-}" ] || { echo "ANDROID_DEBUG_KEYSTORE_B64 is not set: not releasing an app installed ones could not update to"; exit 1; }
@@ -30,7 +32,7 @@ case "${1:?usage: release.sh station|android}" in
     mkdir -p "$dir/android"
     printf '%s' "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > "$dir/android/debug.keystore"
     export ANDROID_USER_HOME="$dir/android"
-    sh scripts/release.sh --beta android
+    sh scripts/release.sh ${beta:+$beta} android
     apk=apps/android/app/build/outputs/apk/release/app-release.apk
     # The certificate it was signed with: the same SHA-256 every time (studio's key).
     "${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools/36.0.0/apksigner" verify --print-certs "$apk" | grep -i "SHA-256" || true

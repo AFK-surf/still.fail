@@ -1,0 +1,115 @@
+# Stable is never triggered by a push. Run workflow after reviewing the release notes.
+name: Publish stable
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: 'Optional full main SHA; empty selects the latest reviewed release notes'
+        required: false
+        type: string
+concurrency:
+  group: publish-stable
+  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: read
+jobs:
+  plan:
+    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.plan.outputs.sha }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, fetch-tags: true }
+      - uses: ./.github/actions/setup
+      - id: plan
+        name: Pin a reviewed release with a successful beta pipeline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REVISION: ${{ inputs.revision }}
+        run: python3 .github/stable-plan.py
+
+  android:
+    needs: plan
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+        with: { native: 'true', android: 'true' }
+      - name: Publish stable Android with its original signing key
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+        run: sh .github/release.sh --stable android
+
+  desktop:
+    needs: plan
+    runs-on: [self-hosted, mini1]
+    environment: production
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - name: Publish stable desktop with its original signing identity
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
+          MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: python3 .github/release-desktop.py --stable
+
+  web:
+    needs: [plan, android, desktop]
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+      - run: cd cloud && pnpm install --frozen-lockfile --prefer-offline
+      - name: Promote the same revision's original beta web artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RELEASE_REVISION: ${{ needs.plan.outputs.sha }}
+        run: python3 scripts/promote-web.py --revision "$RELEASE_REVISION"
+
+  # Offer compatible apps before making the station update available.
+  station:
+    needs: [plan, web]
+    runs-on: [self-hosted, mini1]
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - name: Publish all three stable station platforms from the pinned source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+        run: sh .github/release.sh --stable station
+
+  done:
+    needs: [plan, android, desktop, web, station]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}' }
+      - name: Record the fully published stable revision
+        env:
+          RELEASE_REVISION: ${{ needs.plan.outputs.sha }}
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          git tag -f deployed/stable "$RELEASE_REVISION"
+          git push --no-verify -f origin refs/tags/deployed/stable
+          echo "Published stable 0.1.$RELEASE_VERSION from $RELEASE_REVISION" >> "$GITHUB_STEP_SUMMARY"
