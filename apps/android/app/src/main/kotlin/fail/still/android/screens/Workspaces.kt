@@ -285,7 +285,6 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     Column(Modifier.padding(top = 8.dp, bottom = 16.dp)) {
         PickRow("登录其它账号", sub = "保留已登录账号，添加另一个 Google 账号", busy = app.isDoing("auth.begin"), leading = { IconIn(Icons.LogIn, 20.dp) }) { scope.launch { signIn(app, context) } }
         PickRow("新建 workspace", leading = { IconIn(Icons.Plus, 20.dp) }) { openNewWorkspace(app) }
-        PickRow("用邀请链接加入", leading = { IconIn(Icons.Ticket, 20.dp) }) { openInviteLink(app) }
     }
 }
 
