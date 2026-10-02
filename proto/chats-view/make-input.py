@@ -3,13 +3,20 @@
 station's database, for the views bench. Its rows are that station's real chats; the output stays off git (it holds
 what was said in them).
 
-make-input.py <stillfail.db copy> <out.json> [rows: repeat them up to this many]
+make-input.py <stillfail.db copy> <out.json> [rows: repeat them up to this many] [vary]
+
+`vary`: the copies (and every 3rd row) get what this station's chats rarely have, so that both ports' every branch
+runs: unread, queued and running agents, watches, Slack origins, failures, waits, needs, dismissed and text cards,
+several agents, members with names and pictures, the viewer's Slack user, still.fail's own messages.
 
 Archived chats are listed too (as if not archived): a station's own sidebar is short, the archive is most of it."""
 import json, sqlite3, sys
 
 db, out = sys.argv[1], sys.argv[2]
 want = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+vary = len(sys.argv) > 4 and sys.argv[4] == "vary"
+import random
+rnd = random.Random(7)
 c = sqlite3.connect(db)
 c.row_factory = sqlite3.Row
 q = lambda sql, *a: c.execute(sql, a).fetchall()
@@ -118,7 +125,80 @@ while want and len(rows) < want:
     rows.append(r)
     i += 1
 
+def varied(r, n):
+    pick = rnd.random
+    if pick() < 0.3:
+        r["unread"] = True
+    for a in r["agents"]:
+        t = a.get("lastTurn") or {"kind": "message", "outcome": None, "declared": None, "detail": None, "startedAt": r["lastActiveAt"] - 60000, "endedAt": None}
+        roll = pick()
+        if roll < 0.1:
+            a["process"] = "running"
+        elif roll < 0.15:
+            a["pending"] = 2
+        elif roll < 0.25:
+            t.update({"declared": "waiting", "ending": "waiting", "waitFor": "CI 跑完" if pick() < 0.5 else "  ", "waitSeconds": 600, "endedAt": t.get("endedAt") or r["lastActiveAt"]})
+            if pick() < 0.3:
+                a["watch"] = {"names": ["部署监控", "nightly"]}
+        elif roll < 0.35:
+            t.update({"outcome": "failed", "declared": None, "detail": rnd.choice(["rate_limit: slow down", "auth: expired", "exited: 137", "weird"])})
+            t.pop("ending", None)
+        elif roll < 0.45:
+            t.update({"declared": "block", "need": rnd.choice(["选统计口径", "", "要 Stripe 的测试 key"])})
+            t.pop("ending", None)
+        elif roll < 0.5:
+            t.update({"declared": "final", "need": "已合并所有代码"})
+            t.pop("ending", None)
+        if pick() < 0.3:
+            t["about"] = {"thread": r["thread"] if pick() < 0.7 else 1, "seq": 3, "ts": "1"}
+        a["lastTurn"] = t
+        if pick() < 0.2:
+            a["model"] = rnd.choice(["claude-opus-5-5", "us.anthropic.claude-sonnet-5-v1:0", "gpt-6-astra", "o4-mini", "deepseek-v4-pro", "glm-4.6", "my/Custom-Model", "claude-sonnet-5[1m]", None])
+            a["effort"] = rnd.choice(["high", "", None])
+            a["runtime"] = rnd.choice(["claude", "codex"])
+    if pick() < 0.15:
+        extra = json.loads(json.dumps(r["agents"][0]))
+        extra["key"] = extra["key"] + "-b"
+        extra["process"] = "running" if pick() < 0.5 else "cold"
+        r["agents"].append(extra)
+    if pick() < 0.2:
+        r["connect"] = "slack-1"
+        r["origin"] = {"teamName": rnd.choice(["Cue", None, ""]), "channel": rnd.choice(["C123", "D456"]), "channelName": rnd.choice(["dev", None]), "threadTs": "1.2"}
+    if r["last"] and pick() < 0.3:
+        r["last"]["text"] = rnd.choice(["<@U12AB> 看一下\n第二行", "", "  多   空格\t文字 ", "<@bad> x"])
+        r["last"]["authorKind"] = rnd.choice(["person", "agent", "stillfail", "ember"])
+        r["last"]["author"] = rnd.choice([r["agents"][0]["key"], "U999", "zuozijian1994@gmail.com", "someone@x.com"])
+        r["last"]["authorName"] = rnd.choice(["老王", "", None])
+        if pick() < 0.3:
+            r["last"]["agentIdentity"] = {"model": "gpt-6-astra"}
+    if pick() < 0.15:
+        text = rnd.choice(["# **要不要**合并？\n细节", "", "`部署` 到 __线上__", "> 选一个"])
+        card = rnd.choice([{"type": "options", "options": [{"label": " 合并 ", "detail": "推到 main", "recommended": True}, {"label": "不合", "detail": " "}, {"label": ""}]},
+                           {"type": "text", "placeholder": " 填个名字 ", "assignee": "someone@x.com"}, {"type": "weird"}])
+        m = {"seq": 7, "authorKind": "agent", "author": r["agents"][0]["key"], "text": text, "card": card}
+        r["card"] = {"seq": 7, "card": card, "message": m, "before": []}
+        if pick() < 0.3:
+            r["card"]["dismissed"] = True
+        if card["type"] == "options" and pick() < 0.5:
+            r["decision"] = {"seq": 7, "message": m, "options": card["options"]}
+            if pick() < 0.5:
+                del r["card"]
+    if pick() < 0.05:
+        r["pinned"] = r["lastActiveAt"] - n
+    if pick() < 0.1:
+        r["archiveReminderDismissed"] = True
+    if pick() < 0.1:
+        r["people"].append({"id": "slack:c:U777", "name": "U777", "email": None, "via": "slack"})
+    if pick() < 0.05:
+        r["creator"] = {"id": "local", "name": "本机管理页", "email": None, "via": "local"}
+
+if vary:
+    members.extend([{"email": "someone@x.com", "name": "某人", "picture": "https://x/p.png"}, {"email": "U12AB", "name": "", "picture": ""}])
+    for n, r in enumerate(rows):
+        if n >= base or n % 3 == 0:
+            varied(r, n)
+
 now = max(r["lastActiveAt"] for r in rows) + 3_600_000
-json.dump({"now": now, "offsetMin": 480, "me": {"id": viewer, "email": viewer}, "members": members, "slackUsers": [],
+json.dump({"now": now, "offsetMin": 480, "me": {"id": viewer, "email": viewer}, "members": members, "slackUsers": ["U999"] if vary else [],
            "station": {"address": "ws/station", "name": "ccvm"}, "rows": rows}, open(out, "w"), ensure_ascii=False)
 print(f"{len(rows)} rows ({base} of the station's own), viewer {viewer}, {len(members)} members")
