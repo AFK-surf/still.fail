@@ -265,13 +265,14 @@ fun DecisionsScreen(current: WorkspaceEntry) {
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
         TopBack(t("android-misc.chats"), app::pop)
         if (shown.isEmpty()) {
-            if (view != null && !view.loading) {
+            // What has come so far, at once: stations still being read add theirs as they come.
+            if (view != null) {
                 Idle(view, Modifier.weight(1f))
                 return@Column
             }
-            val note = if (view == null) topic.error?.message ?: t("android-misc.reading") else t("android-misc.reading")
+            val note = topic.error?.message ?: t("android-misc.reading")
             Box(Modifier.weight(1f).fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                Text(note, fontSize = 15.sp, color = if (view == null && topic.error != null) C.red else C.muted, textAlign = TextAlign.Center)
+                Text(note, fontSize = 15.sp, color = if (topic.error != null) C.red else C.muted, textAlign = TextAlign.Center)
             }
             return@Column
         }

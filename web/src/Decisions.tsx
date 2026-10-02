@@ -279,10 +279,9 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
 
   let body: ReactNode;
   if (!front) {
-    body = view.value && !view.value.loading ? <DecisionsIdle view={view.value} onOpen={onOpen} />
-      : view.value || view.error
-        ? <p className={css.empty}>{view.error && !view.value ? view.error.message : t("web-main.reading")}</p>
-        : null;
+    // What has come so far, at once: stations still being read add theirs as they come.
+    body = view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
+      : view.error ? <p className={css.empty}>{view.error.message}</p> : null;
   } else {
     const d = front;
     const path = `${stationBase(d.station)}/chats/${encodeURIComponent(d.session)}`;

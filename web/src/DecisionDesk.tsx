@@ -149,7 +149,7 @@ export function DecisionRows({ active, page }: { active: boolean; page: string }
           </button>
         </div>
       ))}
-      {view.value && !view.value.loading && items.length === 0 && <div className={css.emptyList}>{t("web-main.decisions.empty")}</div>}
+      {view.value && items.length === 0 && <div className={css.emptyList}>{t("web-main.decisions.empty")}</div>}
     </div>
   );
 }
@@ -166,7 +166,8 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
   }, [d && keyOf(d), turn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const path = d ? `${stationBase(d.station)}/chats/${encodeURIComponent(d.session)}` : "";
-  const empty = view.value || view.error ? (view.error && !view.value ? view.error.message : t("web-main.reading")) : null;
+  // Nothing come yet: why, if it failed; else nothing, for the moment the core takes to answer.
+  const empty = view.error && !view.value ? view.error.message : null;
   return (
     <div className={css.page}>
       <header className={sidebarCss.pageBar}>
@@ -200,7 +201,7 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
               </DecisionFoot>
             </div>
           </StationContext.Provider>
-        ) : view.value && !view.value.loading ? <DecisionsIdle view={view.value} onOpen={onOpen} />
+        ) : view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
           : empty && <p className={deckCss.empty}>{empty}</p>}
       </div>
     </div>
