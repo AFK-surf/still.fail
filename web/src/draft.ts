@@ -9,12 +9,14 @@ import { CoreError, useChatSend, type Attachment, type ChatTo, type Quote } from
 import { core } from "./core/react.ts";
 import type { DraftView } from "./core/shapes.ts";
 import { track } from "./telemetry.ts";
+import { useStation } from "./station.tsx";
+import { keepSentImage } from "./sentImages.ts";
 import { useToast } from "./toast.tsx";
 
 export const MAX_FILE = 50 * 1024 * 1024;
 
 /** A file on its way to the station: uploading, uploaded, or failed. `preview`: an image's local picture, until it leaves the draft. */
-export interface Pending { id: number; name: string; size: number; done: Attachment | null; error: string | null; preview?: string }
+export interface Pending { id: number; name: string; size: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob }
 
 /** A passage quoted in the message being written, with what is said about it. */
 export interface DraftQuote extends Quote { id: string }
@@ -114,6 +116,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
   quotes?: [DraftQuote[], Update<DraftQuote[]>];
 }): Draft {
   const chat = useChatSend(station);
+  const contextStation = useStation().address;
   const toast = useToast();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Pending[]>([]);
@@ -230,7 +233,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
       const tooBig = file.size > MAX_FILE;
       // Images show at once from the local file; the picture lives until the file leaves the draft.
       const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
-      setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null, ...(preview ? { preview } : {}) }]);
+      setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null, ...(preview ? { preview, image: file } : {}) }]);
       if (tooBig) continue;
       sender.current(file).then(
         (done) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, done } : f))),
@@ -261,6 +264,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
   const send: Draft["send"] = async (open, { first = false, onSending } = {}) => {
     const back = { text, files, quotes };
     const from = shown.current;
+    for (const f of files) if (f.done && f.image) keepSentImage(station ?? contextStation, f.done.path, f.image);
     const { text: value } = take();
     const attachments = files.flatMap((f) => (f.done ? [f.done] : []));
     const sent = quotes.map(({ author, text: t, comment, ts, role, file }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}), ...(file ? { file } : {}) }));

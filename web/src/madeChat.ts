@@ -31,7 +31,8 @@ function textAt(el: Element): Typed {
 const EASE = "cubic-bezier(.2, .8, .2, 1)";
 
 /** A first message on its way: the words sent, where they were, until the chat's page takes them. */
-interface Sending { field: HTMLElement; from: Typed; top: number; stand: HTMLElement | null }
+interface Picture { key: string; rect: DOMRect; stand: HTMLElement }
+interface Sending { field: HTMLElement; from: Typed; top: number; stand: HTMLElement | null; pictures: Picture[] }
 let sending: Sending | null = null;
 
 /**
@@ -44,7 +45,26 @@ export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElemen
   const stand = standIn(field, text, layer, z);
   // What follows the message comes out of the composer's top edge, as it was when sent.
   const composer = field.closest("[data-made-composer]") ?? field;
-  sending = { field, from: textAt(field), top: composer.getBoundingClientRect().top, stand };
+  const base = layer.getBoundingClientRect();
+  const pictures: Picture[] = [];
+  for (const source of composer.querySelectorAll<HTMLElement>("[data-send-image]")) {
+    const img = source.querySelector("img");
+    if (!img?.complete || !img.naturalWidth) continue;
+    const rect = source.getBoundingClientRect();
+    const picture = document.createElement("div");
+    picture.setAttribute("aria-hidden", "true");
+    Object.assign(picture.style, {
+      position: "absolute", left: `${rect.left - base.left}px`, top: `${rect.top - base.top}px`,
+      width: `${rect.width}px`, height: `${rect.height}px`, overflow: "hidden",
+      borderRadius: getComputedStyle(source).borderRadius, zIndex: z, pointerEvents: "none",
+    });
+    const copy = img.cloneNode(true) as HTMLImageElement;
+    Object.assign(copy.style, { width: "100%", height: "100%", objectFit: "cover", display: "block" });
+    picture.append(copy);
+    layer.append(picture);
+    pictures.push({ key: source.dataset.sendImage!, rect, stand: picture });
+  }
+  sending = { field, from: textAt(field), top: composer.getBoundingClientRect().top, stand, pictures };
   field.dataset.madeField = "";
   document.documentElement.dataset.madeHint = "hidden";
 }
@@ -72,6 +92,7 @@ function standIn(field: HTMLElement, text: string, layer: HTMLElement, z: string
 export function notSent(): void {
   if (!sending) return;
   sending.stand?.remove();
+  for (const picture of sending.pictures) picture.stand.remove();
   delete sending.field.dataset.madeField;
   delete document.documentElement.dataset.madeHint;
   sending = null;
@@ -105,12 +126,17 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     const first = list?.querySelector<HTMLElement>(`.${msgCss.msgMine}`);
     const words = first?.querySelector(`.${msgCss.msgPlain}`);
     const into = layer();
-    if (!now || !list || !first || !words || !into) return;
+    if (!now || !list || !first || !into) return;
+    const anchor = words ?? first.querySelector("[data-send-image]");
+    if (!anchor) return;
     // Where the message arrives, read before anything is moved.
-    const to = textAt(words);
+    const to = textAt(anchor);
     const at = first.getBoundingClientRect();
     const box = list.getBoundingClientRect();
     const frame = into.getBoundingClientRect();
+    // Capture image destinations before translating the list itself.
+    const destinations = new Map([...first.querySelectorAll<HTMLElement>("[data-send-image]")].map((el) =>
+      [el.dataset.sendImage!, { rect: el.getBoundingClientRect(), radius: getComputedStyle(el).borderRadius }]));
     const { from, top } = now;
     const timing = { duration: 480, delay: wait, easing: EASE, fill: "backwards" } as const;
     // The rest of the list comes up with it, out of the composer's top edge: cut there, wherever it has got to.
@@ -141,6 +167,25 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     // Over the pictures of what leaves (named, it is pictured after them; it is not taken away while they go).
     ghost.style.viewTransitionName = "made-arrive";
     now.stand?.remove();
+    // Images leave from their own thumbnails, not from the text's baseline. Keep the decoded image throughout:
+    // cloning the outbox alone would capture its loading placeholder and flash at the start of the flight.
+    for (const picture of now.pictures) {
+      const target = destinations.get(picture.key);
+      const covered = [...copy.querySelectorAll<HTMLElement>("[data-send-image]")].find((el) => el.dataset.sendImage === picture.key);
+      if (!target || !covered) continue;
+      const end = target.rect;
+      covered.style.visibility = "hidden";
+      ghost.append(picture.stand);
+      Object.assign(picture.stand.style, {
+        left: `${end.left - frame.left}px`, top: `${end.top - frame.top}px`,
+        width: `${end.width}px`, height: `${end.height}px`, transformOrigin: "0 0",
+        borderRadius: target.radius,
+      });
+      moves.push(picture.stand.animate([
+        { transform: `translate(${picture.rect.left - end.left}px, ${picture.rect.top - end.top}px)`, width: `${picture.rect.width}px`, height: `${picture.rect.height}px` },
+        { transform: "none", width: `${end.width}px`, height: `${end.height}px` },
+      ], timing).finished);
+    }
     moves.push(copy.animate([
       { transform: `translate(${from.x - to.x}px, ${rise}px) scale(${from.size / to.size})` },
       { transform: "none" },
@@ -166,6 +211,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     for (const el of leaving) { el.style.viewTransitionName = ""; el.style.removeProperty("view-transition-class"); }
     ghost?.remove();
     now?.stand?.remove();
+    for (const picture of now?.pictures ?? []) picture.stand.remove();
     if (now) delete now.field.dataset.madeField;
     if (list) delete list.dataset.madeList;
     delete root.dataset.made;

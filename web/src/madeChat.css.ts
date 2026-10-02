@@ -16,6 +16,8 @@ globalStyle(`${made}::view-transition-old(*.made-fade)`, { animation: `${fadeOut
 globalStyle(`${made}::view-transition-group(made-arrive), ${made}::view-transition-new(made-arrive)`, { animation: "none" });
 // The composer stays on the page, not pictured apart: what arrives passes over it.
 globalStyle(`${made} [data-made-composer]`, { viewTransitionName: "none" });
+// Its flight owns the entrance. Measuring the ordinary 6px row entrance would capture a moving destination.
+globalStyle(`${made} ${msgMine}[data-enter]`, { animation: "none" });
 // The first message is drawn on its way by a copy of it.
 globalStyle(`${made} [data-made-list] ${msgMine}`, { visibility: "hidden" });
 // In an open chat, the flying copy takes the row's place. Its handoff is instantaneous; opacity belongs to the

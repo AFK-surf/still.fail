@@ -2,6 +2,7 @@
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
+import { sentImage, sentImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
@@ -1119,14 +1120,17 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   const [videoFailed, setVideoFailed] = useState(false);
   const box = useRef<HTMLButtonElement>(null);
   const near = useNear(box, image || video);
-  const { url, failed } = useFileShown(sessionKey ?? "", file, (image || video) && sessionKey !== null && near, !video);
+  const fetched = useFileShown(sessionKey ?? "", file, (image || video) && sessionKey !== null && near, !video);
+  const [local] = useState(() => image ? sentImage(station.address, file.path) : undefined);
+  const url = local ?? fetched.url;
+  const failed = !local && fetched.failed;
   const [open, setOpen] = useState(false);
   // An image seen before, or that comes at once, just shows; one that takes a while is brushed in from the top.
   const born = useRef(performance.now());
-  const [loaded, setLoaded] = useState<"instant" | "reveal" | null>(null);
+  const [loaded, setLoaded] = useState<"instant" | "reveal" | null>(local ? "instant" : null);
   const shown = () => {
     const key = `${sessionKey}\n${file.path}`;
-    setLoaded(revealed.has(key) || performance.now() - born.current < 150 ? "instant" : "reveal");
+    setLoaded(local || revealed.has(key) || performance.now() - born.current < 150 ? "instant" : "reveal");
     revealed.add(key);
   };
   const preview = sessionKey !== null && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />;
@@ -1147,7 +1151,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <button ref={box} type="button" className={look.image} onClick={() => (url || failed) && setOpen(true)} aria-label={`查看 ${file.name}`} style={look.box(file)}
+        <button ref={box} type="button" className={look.image} data-send-image={sentImageKey(file.path)} onClick={() => (url || failed) && setOpen(true)} aria-label={`查看 ${file.name}`} style={look.box(file)}
           data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
           data-loaded={loaded ?? undefined} data-failed={failed || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} />}
@@ -1571,7 +1575,7 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
 /** A file waiting to go with the message: an image as its picture, anything else a card. */
 function PendingFile({ file: f, onRemove }: { file: Pending; onRemove?: () => void }) {
   return f.preview ? (
-    <Tip label={f.error ?? f.name}><span className={css.composerThumb} data-error={f.error ? true : undefined}>
+    <Tip label={f.error ?? f.name}><span className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : undefined} data-error={f.error ? true : undefined}>
       <img src={f.preview} alt={f.name} />
       {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
       {onRemove && <button type="button" className={css.composerThumbRemove} aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
