@@ -1,6 +1,8 @@
 //! Workspace peers call named operations over an authenticated station transport. Shell tasks are one service on
 //! that transport, never an admin API proxy. An administrator explicitly trusts source station keys in config.json:
 //! remoteTasks.allow = ["<station public key>"]. This grants shell execution as the station's OS user, not a sandbox.
+//! A source session's tasks share one working directory on the target (remote/sessions/<id>/work). The source asks
+//! for it to be removed when the session is archived or deleted; the target removes it itself after IDLE_MS unused.
 use crate::{
     jobs::{Jobs, Watch},
     mcp::Tool,
@@ -27,6 +29,10 @@ pub struct Refused(pub String);
 
 pub const CHUNK: usize = 256 * 1024;
 const MAX_FILE: u64 = 1024 * 1024 * 1024;
+/// A source session's directory unused this long is removed by the target, in case its source never says so.
+const IDLE_MS: i64 = 14 * 24 * 3600 * 1000;
+/// A source keeps asking an unreachable target to remove a closed session's directory this long.
+const CLOSE_FOR_MS: i64 = 30 * 24 * 3600 * 1000;
 
 pub struct Remote {
     settings: Arc<Settings>,
@@ -37,6 +43,8 @@ pub struct Remote {
     call: Mutex<Option<Call>>,
     serial: tokio::sync::Mutex<()>,
     watching: Mutex<HashSet<PathBuf>>,
+    /// Read-modify-write of the source's record of stations a session used (remote/used).
+    used: Mutex<()>,
 }
 
 fn text<'a>(v: &'a Value, key: &str) -> &'a str {
@@ -86,7 +94,7 @@ fn file_path(root: &Path, relative: &str, create: bool) -> Result<PathBuf> {
 impl Remote {
     pub fn new(settings: Arc<Settings>, store: Arc<Store>, jobs: Arc<Jobs>, notify: Notify) -> Result<Arc<Self>> {
         let root = settings.data_dir.join("remote");
-        for name in ["incoming", "outgoing"] {
+        for name in ["incoming", "outgoing", "sessions", "used"] {
             std::fs::create_dir_all(root.join(name))?;
         }
         Ok(Arc::new(Self {
@@ -98,6 +106,7 @@ impl Remote {
             call: Mutex::new(None),
             serial: tokio::sync::Mutex::new(()),
             watching: Mutex::new(HashSet::new()),
+            used: Mutex::new(()),
         }))
     }
 
@@ -108,6 +117,216 @@ impl Remote {
                 self.watch(e.path());
             }
         }
+        if let Ok(entries) = std::fs::read_dir(self.root.join("used")) {
+            for e in entries.flatten().filter(|e| e.path().extension().is_some_and(|x| x == "json")) {
+                if read(&e.path()).is_ok_and(|v| v["closing"] == true) {
+                    self.closer(e.path());
+                }
+            }
+        }
+        let me = Arc::downgrade(self);
+        tokio::spawn(async move {
+            loop {
+                let Some(remote) = me.upgrade() else { return };
+                remote.sweep(crate::store::now_ms()).await;
+                drop(remote);
+                tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+            }
+        });
+    }
+
+    fn room(&self, workspace: &str, peer: &str, session: &str) -> PathBuf {
+        self.root.join("sessions").join(hash(&json!([workspace, peer, session])))
+    }
+
+    /// Makes a source session's shared directory and notes when it was last used (at most once a minute).
+    fn seen(&self, workspace: &str, peer: &str, session: &str) -> Result<PathBuf> {
+        let room = self.room(workspace, peer, session);
+        std::fs::create_dir_all(room.join("work"))?;
+        let record = room.join("session.json");
+        let now = crate::store::now_ms();
+        if !read(&record).is_ok_and(|v| now - v["seen"].as_i64().unwrap_or(0) < 60_000) {
+            write(&record, &json!({"workspace":workspace,"station":peer,"session":session,"seen":now}))?;
+        }
+        Ok(room.join("work"))
+    }
+
+    /// Task directories (incoming/<id>) of a source session.
+    fn tasks_of(&self, workspace: &str, peer: &str, session: &str) -> Vec<PathBuf> {
+        let Ok(entries) = std::fs::read_dir(self.root.join("incoming")) else { return vec![] };
+        entries
+            .flatten()
+            .filter(|e| {
+                read(&e.path().join("task.json")).is_ok_and(|m| {
+                    text(&m, "workspace") == workspace && text(&m, "station") == peer && text(&m, "session") == session
+                })
+            })
+            .map(|e| e.path())
+            .collect()
+    }
+
+    fn running(&self, task: &Path) -> bool {
+        let id = format!("remote_{}", task.file_name().unwrap_or_default().to_string_lossy());
+        self.store.get_job(&id).ok().flatten().is_some_and(|j| j.state == "running")
+    }
+
+    /// Stops a source session's tasks and removes their records and its shared directory. Callers hold `serial`.
+    async fn close_here(&self, workspace: &str, peer: &str, session: &str) -> Result<()> {
+        for task in self.tasks_of(workspace, peer, session) {
+            if self.running(&task) {
+                let id = format!("remote_{}", task.file_name().unwrap_or_default().to_string_lossy());
+                self.jobs.stop(&id).await?;
+            }
+            std::fs::remove_dir_all(&task)?;
+        }
+        let room = self.room(workspace, peer, session);
+        if room.exists() {
+            std::fs::remove_dir_all(&room)?;
+            tracing::info!(workspace, station = peer, session, "remote session directory removed");
+        }
+        Ok(())
+    }
+
+    /// The target's own cleanup: a source session's directory unused for IDLE_MS, with nothing running, goes; so do
+    /// task directories from before shared session directories.
+    pub async fn sweep(&self, now: i64) {
+        let _guard = self.serial.lock().await;
+        if let Ok(entries) = std::fs::read_dir(self.root.join("sessions")) {
+            for entry in entries.flatten() {
+                let Ok(meta) = read(&entry.path().join("session.json")) else { continue };
+                if now - meta["seen"].as_i64().unwrap_or(now) < IDLE_MS {
+                    continue;
+                }
+                let (workspace, peer, session) = (text(&meta, "workspace"), text(&meta, "station"), text(&meta, "session"));
+                if self.tasks_of(workspace, peer, session).iter().any(|t| self.running(t)) {
+                    continue;
+                }
+                if let Err(e) = self.close_here(workspace, peer, session).await {
+                    tracing::warn!(error = %e, "idle remote session directory not removed");
+                }
+            }
+        }
+        if let Ok(entries) = std::fs::read_dir(self.root.join("incoming")) {
+            for entry in entries.flatten() {
+                let record = entry.path().join("task.json");
+                let Ok(meta) = read(&record) else { continue };
+                let modified = std::fs::metadata(&record)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(now);
+                if meta["layout"] == "session" || now - modified < IDLE_MS || self.running(&entry.path()) {
+                    continue;
+                }
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+
+    fn used_path(&self, session: &str) -> PathBuf {
+        self.root.join("used").join(format!("{}.json", hash(&json!(session))))
+    }
+
+    /// The source remembers which stations a session ran tasks on, to ask them to clean up when it closes.
+    fn record_use(&self, workspace: &str, session: &str, station: &str) -> Result<()> {
+        let _lock = self.used.lock().unwrap();
+        let path = self.used_path(session);
+        let mut v = read(&path).unwrap_or_else(|_| json!({"session":session,"workspace":workspace,"stations":[]}));
+        let known = v["stations"].as_array().is_some_and(|a| a.iter().any(|s| s == station));
+        if known && v["closing"] != true {
+            return Ok(());
+        }
+        if !known {
+            v["stations"].as_array_mut().ok_or_else(|| anyhow!("bad record"))?.push(json!(station));
+        }
+        // Used again after closing (shown again): close later from the start.
+        v["closing"] = json!(false);
+        v["closed"] = json!([]);
+        v["workspace"] = json!(workspace);
+        write(&path, &v)
+    }
+
+    /// A session was archived or deleted: its tasks on other stations stop and their directories are removed. Asked
+    /// until each station has answered (CLOSE_FOR_MS at most), across restarts.
+    pub fn close_session(self: &Arc<Self>, session: &str) {
+        let path = self.used_path(session);
+        {
+            let _lock = self.used.lock().unwrap();
+            let Ok(mut v) = read(&path) else { return };
+            v["closing"] = json!(true);
+            v["since"] = json!(crate::store::now_ms());
+            if write(&path, &v).is_err() {
+                return;
+            }
+        }
+        // Their directories are going away: stop following this session's tasks.
+        if let Ok(entries) = std::fs::read_dir(self.root.join("outgoing")) {
+            for e in entries.flatten() {
+                if let Ok(mut entry) = read(&e.path()) {
+                    if text(&entry, "session") == session && entry["delivered"] != true {
+                        entry["delivered"] = json!(true);
+                        let _ = write(&e.path(), &entry);
+                    }
+                }
+            }
+        }
+        self.closer(path);
+    }
+
+    fn closer(self: &Arc<Self>, path: PathBuf) {
+        if !self.watching.lock().unwrap().insert(path.clone()) {
+            return;
+        }
+        let me = Arc::downgrade(self);
+        tokio::spawn(async move {
+            loop {
+                let Some(remote) = me.upgrade() else { return };
+                let v = {
+                    let _lock = remote.used.lock().unwrap();
+                    read(&path).ok()
+                };
+                let Some(v) = v.filter(|v| v["closing"] == true) else { break };
+                let closed = |s: &Value| v["closed"].as_array().is_some_and(|c| c.contains(s));
+                let pending: Vec<String> = v["stations"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|s| !closed(s))
+                    .filter_map(|s| s.as_str().map(str::to_string))
+                    .collect();
+                if pending.is_empty() || crate::store::now_ms() - v["since"].as_i64().unwrap_or(0) > CLOSE_FOR_MS {
+                    let _lock = remote.used.lock().unwrap();
+                    if read(&path).is_ok_and(|now| now["closing"] == true) {
+                        let _ = std::fs::remove_file(&path);
+                    }
+                    break;
+                }
+                for station in pending {
+                    let request = json!({"method":"session.close","workspace":v["workspace"],"session":v["session"]});
+                    // An answer, or a refusal (a station from before session directories, or one that no longer
+                    // takes tasks from here), is final; no connection is asked again.
+                    let done = match remote.call(&station, request).await {
+                        Ok(_) => true,
+                        Err(e) => e.downcast_ref::<Refused>().is_some(),
+                    };
+                    if done {
+                        let _lock = remote.used.lock().unwrap();
+                        if let Ok(mut now) = read(&path) {
+                            if let (true, Some(closed)) = (now["closing"] == true, now["closed"].as_array_mut()) {
+                                closed.push(json!(station));
+                                let _ = write(&path, &now);
+                            }
+                        }
+                    }
+                }
+                drop(remote);
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            }
+            if let Some(remote) = me.upgrade() {
+                remote.watching.lock().unwrap().remove(&path);
+            }
+        });
     }
 
     async fn call(&self, station: &str, request: Value) -> Result<Value> {
@@ -134,7 +353,7 @@ impl Remote {
         let method = text(&request, "method");
         if method == "describe" {
             return Ok(
-                json!({"protocol":1,"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"tasks":self.allowed(peer),"fileChunkBytes":CHUNK,"maxFileBytes":MAX_FILE}),
+                json!({"protocol":1,"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"tasks":self.allowed(peer),"sessions":true,"fileChunkBytes":CHUNK,"maxFileBytes":MAX_FILE}),
             );
         }
         if !self.allowed(peer) {
@@ -161,6 +380,13 @@ impl Remote {
             }
             return Ok(json!({"tasks":tasks}));
         }
+        if method == "session.close" {
+            if session.is_empty() || session.len() > 256 {
+                bail!("session is required");
+            }
+            self.close_here(workspace, peer, session).await?;
+            return Ok(json!({"closed":true}));
+        }
         let key = text(&request, "key");
         if session.is_empty() || session.len() > 256 || key.is_empty() || key.len() > 128 {
             bail!("session and task key are required (at most 256 / 128 bytes)");
@@ -170,7 +396,6 @@ impl Remote {
         let record = dir.join("task.json");
         let job_id = format!("remote_{id}");
         let owner = format!("remote:{workspace}:{peer}:{session}");
-        let work = dir.join("work");
         if method == "task.prepare" {
             let spec = request["spec"].clone();
             if text(&spec, "command").trim().is_empty() {
@@ -181,16 +406,27 @@ impl Remote {
                     bail!("task key already used with different inputs; choose a new key for new work");
                 }
             } else {
-                std::fs::create_dir_all(&work)?;
+                std::fs::create_dir_all(&dir)?;
                 write(
                     &record,
-                    &json!({"spec":spec,"workspace":workspace,"station":peer,"session":session,"key":key}),
+                    &json!({"spec":spec,"workspace":workspace,"station":peer,"session":session,"key":key,"layout":"session"}),
                 )?;
             }
+            self.seen(workspace, peer, session)?;
             return Ok(json!({"key":key,"prepared":true}));
         }
         let mut meta = read(&record).map_err(|_| anyhow!("unknown task"))?;
         let job = self.store.get_job(&job_id)?;
+        // Tasks prepared before shared session directories keep their own.
+        let work = if meta["layout"] == "session" {
+            if matches!(method, "task.start" | "file.put") {
+                self.seen(workspace, peer, session)?
+            } else {
+                self.room(workspace, peer, session).join("work")
+            }
+        } else {
+            dir.join("work")
+        };
         match method {
             "task.start" => {
                 if meta["uploads"].as_object().is_some_and(|m| m.values().any(|v| v != true)) {
@@ -371,12 +607,12 @@ impl Remote {
             ),
             (
                 "station_task",
-                "Run a shell task on a trusted workspace station, in its own persistent directory. action prepare records command/name with a caller-chosen stable key; upload inputs with station_file; action start executes it once. Reuse the same key after uncertain replies; use a new key for new work. get/log/stop address the same task. Completion and job notices return here, including after reconnect/restart. Commands run as the remote station OS user, not in a sandbox. A lost process is marked failed with unknown exit, never automatically re-executed.",
+                "Run a shell task on a trusted workspace station. All tasks of this session run in one persistent directory there (shared, so a later task can build in what an earlier one cloned); keep checkouts and build output inside it, not elsewhere on that machine. It is removed, with anything still running, when this chat is archived or deleted, or after 14 days unused. action prepare records command/name with a caller-chosen stable key; upload inputs with station_file; action start executes it once. Reuse the same key after uncertain replies; use a new key for new work. get/log/stop address the same task. Completion and job notices return here, including after reconnect/restart. Commands run as the remote station OS user, not in a sandbox. A lost process is marked failed with unknown exit, never automatically re-executed.",
                 json!({"type":"object","properties":{"station":{"type":"string"},"key":{"type":"string"},"action":{"enum":["prepare","start","get","log","stop","list"]},"command":{"type":"string"},"name":{"type":"string"},"lines":{"type":"integer"}},"required":["station","action"],"additionalProperties":false}),
             ),
             (
                 "station_file",
-                "Upload an input before starting a remote task, or download a task artifact to this session. path is relative to the task directory; local is a path in this session workspace. Files are transferred in chunks, up to 1 GiB each; repeat upload after a disconnect. direction is upload/download. Downloads never overwrite an existing local file. Post downloaded artifacts using chat_post files.",
+                "Upload an input before starting a remote task, or download a task artifact to this session. path is relative to this session's directory on that station; local is a path in this session workspace. Files are transferred in chunks, up to 1 GiB each; repeat upload after a disconnect. direction is upload/download. Downloads never overwrite an existing local file. Post downloaded artifacts using chat_post files.",
                 json!({"type":"object","properties":{"station":{"type":"string"},"key":{"type":"string"},"direction":{"enum":["upload","download"]},"path":{"type":"string"},"local":{"type":"string"}},"required":["station","key","direction","path","local"],"additionalProperties":false}),
             ),
         ] {
@@ -411,6 +647,9 @@ impl Remote {
             bail!("station and key are required (list needs only station)");
         }
         let workspace = self.workspace()?;
+        if !(tool == "station_task" && args["action"] == "list") {
+            self.record_use(&workspace, session, station)?;
+        }
         let mut request = json!({"workspace":workspace,"session":session,"key":key});
         if tool == "station_task" {
             let action = text(&args, "action");
@@ -620,6 +859,124 @@ mod task_tests {
         assert_eq!(call(&r, "peer-a", "task.get", json!({})).await.unwrap()["job"]["state"], "stopped");
         assert_eq!(call(&r, "peer-b", "task.get", json!({})).await.unwrap()["job"]["state"], "running");
         call(&r, "peer-b", "task.stop", json!({})).await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod session_tests {
+    use super::*;
+    fn rig() -> (tempfile::TempDir, Arc<Remote>) {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = Settings::open(&dir.path().join("config.json"), dir.path()).unwrap();
+        settings
+            .update(|raw| {
+                raw.rest.insert("remoteTasks".into(), json!({"allow":["peer-a"]}));
+                Ok(())
+            })
+            .unwrap();
+        let store = Arc::new(Store::open(":memory:", None).unwrap());
+        let jobs = Jobs::new(store.clone(), dir.path(), Arc::new(|_, _| {}), Arc::new(|_, _| None)).unwrap();
+        let remote = Remote::new(settings, store, jobs, Arc::new(|_, _| Ok(()))).unwrap();
+        (dir, remote)
+    }
+    async fn call(r: &Remote, session: &str, key: &str, method: &str, more: Value) -> Result<Value> {
+        let mut args = json!({"session":session,"key":key,"method":method});
+        for (k, v) in more.as_object().unwrap() {
+            args[k] = v.clone();
+        }
+        r.handle("ws", "peer-a", args).await
+    }
+    async fn run(r: &Remote, session: &str, key: &str, command: &str) -> Value {
+        call(r, session, key, "task.prepare", json!({"spec":{"command":command}})).await.unwrap();
+        call(r, session, key, "task.start", json!({})).await.unwrap();
+        for _ in 0..200 {
+            let got = call(r, session, key, "task.get", json!({})).await.unwrap();
+            if got["job"]["state"] != "running" {
+                return got;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+        panic!("task did not finish");
+    }
+
+    #[tokio::test]
+    async fn a_sessions_tasks_share_one_directory_that_closing_removes() {
+        let (_dir, r) = rig();
+        run(&r, "s", "clone", "mkdir repo && echo built > repo/out").await;
+        assert_eq!(run(&r, "s", "build", "cat repo/out > copy").await["job"]["exitCode"], 0);
+        let copy = call(&r, "s", "build", "file.get", json!({"path":"copy"})).await.unwrap();
+        assert_eq!(B64.decode(text(&copy, "data")).unwrap(), b"built\n");
+        // Another session starts empty and is left alone when the first closes.
+        assert_ne!(run(&r, "t", "look", "test -e repo").await["job"]["exitCode"], 0);
+        call(&r, "s", "long", "task.prepare", json!({"spec":{"command":"sleep 30"}})).await.unwrap();
+        let long = call(&r, "s", "long", "task.start", json!({})).await.unwrap();
+        r.handle("ws", "peer-a", json!({"method":"session.close","session":"s"})).await.unwrap();
+        assert!(!r.room("ws", "peer-a", "s").exists());
+        assert_eq!(r.store.get_job(text(&long["job"], "id")).unwrap().unwrap().state, "stopped");
+        assert!(call(&r, "s", "build", "task.get", json!({})).await.is_err(), "records go with the directory");
+        assert!(r.room("ws", "peer-a", "t").join("work").exists());
+        // Closing again (a retried request) is fine.
+        r.handle("ws", "peer-a", json!({"method":"session.close","session":"s"})).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn the_target_removes_idle_session_and_old_task_directories_itself() {
+        let (_dir, r) = rig();
+        run(&r, "idle", "a", "touch made").await;
+        run(&r, "recent", "a", "touch made").await;
+        let old = r.root.join("incoming").join("from-before");
+        std::fs::create_dir_all(old.join("work")).unwrap();
+        write(&old.join("task.json"), &json!({"spec":{"command":"true"},"workspace":"ws","station":"peer-a","session":"x","key":"k"})).unwrap();
+        let later = crate::store::now_ms() + IDLE_MS + 1000;
+        let record = r.room("ws", "peer-a", "recent").join("session.json");
+        let mut seen = read(&record).unwrap();
+        seen["seen"] = json!(later);
+        write(&record, &seen).unwrap();
+        r.sweep(later).await;
+        assert!(!r.room("ws", "peer-a", "idle").exists());
+        assert!(r.room("ws", "peer-a", "recent").exists());
+        assert!(!old.exists());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn closing_a_source_session_asks_each_used_station_until_answered() {
+        let (dir, r) = rig();
+        std::fs::create_dir_all(dir.path().join("mesh")).unwrap();
+        r.record_use("ws", "s", "up").unwrap();
+        r.record_use("ws", "s", "old").unwrap();
+        r.record_use("ws", "s", "down").unwrap();
+        r.record_use("ws", "other", "up").unwrap();
+        let asked: Arc<Mutex<Vec<String>>> = Arc::default();
+        let (seen, down) = (asked.clone(), Arc::new(std::sync::atomic::AtomicUsize::new(0)));
+        let fails = down.clone();
+        r.attach(Arc::new(move |station, request| {
+            assert_eq!(request["method"], "session.close");
+            assert_eq!(request["session"], "s");
+            seen.lock().unwrap().push(station.clone());
+            let n = if station == "down" { fails.fetch_add(1, std::sync::atomic::Ordering::SeqCst) } else { 0 };
+            Box::pin(async move {
+                match station.as_str() {
+                    "old" => Err(Refused("unsupported peer method: session.close".into()).into()),
+                    "down" if n < 2 => bail!("offline"),
+                    _ => Ok(json!({"closed":true})),
+                }
+            })
+        }));
+        r.close_session("s");
+        let path = r.used_path("s");
+        for _ in 0..300 {
+            tokio::time::advance(std::time::Duration::from_secs(1)).await;
+            tokio::task::yield_now().await;
+            if !path.exists() {
+                break;
+            }
+        }
+        assert!(!path.exists(), "every station answered");
+        let asked = asked.lock().unwrap().clone();
+        assert_eq!(asked.iter().filter(|s| *s == "up").count(), 1);
+        assert_eq!(asked.iter().filter(|s| *s == "old").count(), 1);
+        assert_eq!(asked.iter().filter(|s| *s == "down").count(), 3);
+        assert!(r.used_path("other").exists());
     }
 }
 

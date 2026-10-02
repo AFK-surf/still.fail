@@ -273,6 +273,10 @@ impl App {
             told.upgrade().ok_or_else(|| anyhow::anyhow!("station is shutting down"))?.notify(session,text)
         }))?;
         hub.set_jobs(&jobs);
+        let closing = Arc::downgrade(&remote);
+        hub.on_close(Arc::new(move |session| {
+            if let Some(remote) = closing.upgrade() { remote.close_session(session); }
+        }));
         jobs.set_notify_url(format!("http://{}:{port}/jobs/notify", config.http.host));
         let (tokens, homes_of) = (store.clone(), store.clone());
         let mut tools = hub.tools();

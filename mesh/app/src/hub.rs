@@ -181,6 +181,8 @@ pub struct Hub {
     /// The station's background jobs (made after the hub, which tells their agents): what a session stopped while it
     /// waits ends (SessionDeps::stop_jobs).
     jobs: Mutex<Weak<crate::jobs::Jobs>>,
+    /// Told when a session is archived or deleted, so what it left on other stations (remote.rs) is removed too.
+    closed: Mutex<Option<Arc<dyn Fn(&str) + Send + Sync>>>,
     me: Weak<Hub>,
 }
 
@@ -235,6 +237,7 @@ impl Hub {
             titles: Mutex::default(),
             thread_gates: Mutex::default(),
             jobs: Mutex::new(Weak::new()),
+            closed: Mutex::default(),
             me: me.clone(),
         })
     }
@@ -710,6 +713,7 @@ impl Hub {
             let _ = std::fs::remove_file(&copy);
             return Ok(());
         }
+        self.closed(key);
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
             let actor = self.actor(&row)?;
             runtime.spawn(async move {
@@ -933,6 +937,7 @@ impl Hub {
         }
         self.live.forget(key);
         self.store.delete_session(key)?;
+        self.closed(key);
         let _ = std::fs::remove_file(self.transcript_copy(key));
         // Sessions made by the station keep their workspace in a directory of their own.
         let workspace = Path::new(&row.workspace);
@@ -957,6 +962,16 @@ impl Hub {
     /// The station's background jobs, once they are made.
     pub fn set_jobs(&self, jobs: &Arc<crate::jobs::Jobs>) {
         *self.jobs.lock().unwrap() = Arc::downgrade(jobs);
+    }
+
+    /// What to do when a session is archived or deleted (Remote::close_session).
+    pub fn on_close(&self, closed: Arc<dyn Fn(&str) + Send + Sync>) {
+        *self.closed.lock().unwrap() = Some(closed);
+    }
+
+    fn closed(&self, key: &str) {
+        let closed = self.closed.lock().unwrap().clone();
+        if let Some(closed) = closed { closed(key); }
     }
 
     /// Interrupts the session's running turn, or what it waits on, as `-stop` in a thread would.
