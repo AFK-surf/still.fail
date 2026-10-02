@@ -15,7 +15,9 @@ import { AgentsLive } from "./sessions/agents.ts";
 import { dataDir, flag } from "./ops/files.ts";
 import { setStationLang } from "./ops/i18n.ts";
 import { type Control, launcher } from "./ops/launcher.ts";
-import { log } from "./ops/log.ts";
+import { hearErrors, log } from "./ops/log.ts";
+import { ConfigFile } from "./ops/config.ts";
+import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { version } from "./ops/version.ts";
 import { AdminApi, AdminHost, Cloud, Events, Key, MeshNative, Paths, Readers, Store, Up } from "./services.ts";
@@ -78,6 +80,20 @@ function run() {
   const app = flag(args, "--app");
   if (!app) usage();
   const control = launcher(args);
+  // Error lines to still.fail's error tracking, while config.json says so (telemetry.errors) and the build has a key.
+  const settings = new ConfigFile(data);
+  const reports = new ErrorReports({
+    key: builtKey(join(app, "dist", "admin")),
+    enabled: () => settings.raw()?.telemetry?.errors === true,
+    station: () => {
+      try {
+        return JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8")).station ?? null;
+      } catch {
+        return null;
+      }
+    },
+  });
+  hearErrors((line, error) => reports.report(line, error));
   const paths = Layer.succeed(Paths)({ data, app });
   const parts = Layer.mergeAll(Cloud.layer, Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer).pipe(Layer.provideMerge(paths));
   const station = Layer.mergeAll(MeshLive, Loopback(control)).pipe(
@@ -107,7 +123,7 @@ function run() {
     if (stopping) return;
     stopping = true;
     log.info("station", "stopping", { why });
-    Effect.runFork(Fiber.interrupt(fiber)).addObserver(() => process.exit(0));
+    Effect.runFork(Fiber.interrupt(fiber)).addObserver(() => void reports.shutdown().finally(() => process.exit(0)));
   };
   control.on("stop", () => stop("asked to stop"));
   control.on("handover", () => stop("handed over to the next station process"));
