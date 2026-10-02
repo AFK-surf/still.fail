@@ -250,7 +250,9 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
         // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in
         // place instead of replacing another page. Its composer is there, not sending yet.
         host.spec = ComposerSpec(station, null, draft, "发消息", onPlus = {}, onSend = {})
-        Column(Modifier.fillMaxSize()) {
+        // What the composer's glass frosts, as the messages are once read: with nothing under it, it would blur what is
+        // outside any source and smear it into the capsule (Glass.kt floatingStill).
+        Column(Modifier.fillMaxSize().hazeSource(host.haze).background(C.bg)) {
             BarFrame("", more = false, modifier = Modifier.background(C.bg).onSizeChanged { topBar = it.height }) {}
             val error = chat.error
             // Read from its station meanwhile, over the messages to come (Loading.kt); what is wrong in red, over faded ones.
