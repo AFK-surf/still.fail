@@ -12,11 +12,13 @@ export class Readers {
   /// People's names as their credentials say them (the admin API's `deps.names`), given to every read.
   readonly names = new Map<string, string>();
 
-  constructor(data: string, size = Math.max(2, Math.min(4, availableParallelism() - 1))) {
+  /// Two by default (STILLFAIL_READERS says otherwise): each is a V8 of its own, tens of MB.
+  constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1))) {
     // Bundled: worker.js beside main.js; from source: worker.ts beside this.
     const file = new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./worker.js", import.meta.url);
     for (let i = 0; i < size; i++) {
-      const worker = new Worker(file, { workerData: { data } });
+      // A reader's heap stays small: what it builds is answered and dropped.
+      const worker = new Worker(file, { workerData: { data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
       const slot = { worker, busy: 0 };
       worker.on("message", (answer: Answer) => {
         slot.busy--;
