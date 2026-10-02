@@ -1389,6 +1389,14 @@ async fn archived_cleanup_backfills_and_retries_after_background_jobs_end() {
     r.hub.clean_archives().await.unwrap();
     assert!(workspace.join("app/node_modules").exists(), "a service waiting to restart still needs its files");
     r.store.job_ended(&job.id, "stopped", None).unwrap();
+    r.store.insert_session(&NewSession {
+        key: "shared_archive_project".into(), connect: "cl".into(), runtime: "claude".into(), profile: "cc".into(),
+        token: "shared_archive_token".into(), workspace: r._dir.path().to_string_lossy().into(),
+        cwd: Some(workspace.join("app").to_string_lossy().into()), ..Default::default()
+    }).unwrap();
+    r.hub.clean_archives().await.unwrap();
+    assert!(workspace.join("app/node_modules").exists(), "another session is working inside the archived directory");
+    r.store.delete_session("shared_archive_project").unwrap();
     r.hub.clean_archives().await.unwrap();
     assert!(!workspace.join("app/node_modules").exists(), "old archive cleaned after the job stops");
     assert_eq!(std::fs::read(workspace.join("unfinished.rs")).unwrap(), b"uncommitted work");

@@ -728,7 +728,8 @@ impl Hub {
         }
         let Ok(sessions) = self.store.list_sessions() else { return 0 };
         let shared = sessions.into_iter().any(|s| {
-            s.key != key && s.archived_at.is_none() && crate::footprint::room_of(&self.config().data_dir, &s.workspace).as_ref() == Some(&dir)
+            s.key != key && (s.archived_at.is_none() || s.running) && [s.workspace.as_str(), s.cwd.as_deref().unwrap_or(&s.workspace)]
+                .into_iter().any(|path| Path::new(path).canonicalize().is_ok_and(|cwd| cwd.starts_with(&dir)))
         });
         if shared || self.archive_has_jobs(key, &dir) {
             return 0;
@@ -770,7 +771,7 @@ impl Hub {
             if row.archived_at.is_none() || row.running {
                 continue;
             }
-            let actor = self.actor(&row)?;
+            let Ok(actor) = self.actor(&row) else { continue };
             actor.evict().await;
             actor.clean_archive().await;
         }
