@@ -21,6 +21,8 @@
 
 - 奏折回答离场（decision-card-swipe-exit）：更新 web 和 Android，卡片回答后收拢并以先慢后快的速度向上抽走，下一张保持原位；左右滑仍为待定和不再提醒。纯视图改动，无 core、station 或数据迁移依赖，可独立更新。上线检查选项回答、文字回复和最后一张返回；减少动态效果时跳过动画。
 
+- 开源准备（prepare-open-source）：MIT、贡献/安全/开发文档和 vendor 许可证；不改运行协议、数据或 station 指令。外部 PR 的 `contributions` 只跑 GitHub-hosted cloud 检查，内部 `pipeline` 默认只读，仅部署标签 job 有写权限；desktop job 纳入 production 环境。管理员在转为 Public 前按 `docs/open-source-release.md` 确认 Firebase key 限制、仓库/runner/环境权限、私密漏洞报告与发布范围。官网 GitHub 链接改为 AFK-surf/still.fail，需单独部署 site 才生效；此分支不改变仓库可见性。
+
 - 可见提问约束（require-visible-question）：发布并更新 station；无需客户端、cloud 或数据迁移。chat_state 的 need_human/need_help 必须带指向自己提问的 about 或已有待答卡片，旧 block 别名保持兼容；旧会话通过迁移说明 9 获知变更。上线后检查追问澄清后的回复：若仍需确认，agent 应在消息中明确提出；仅内部 need 不得挂回「要你帮忙」。卡片继续按需使用，不追溯修改历史状态。
 
 - 安卓决策按钮动效（android-decision-feedback）：需随 Android 包发布；仅视图变化，无 core/API、数据迁移或 station 顺序要求。选项按压缩小回弹，回答后沿用 chat list 归档的整块缩小淡出和延迟弹簧补位；深浅主题录屏已获确认。上线后在聊天里点击普通及静默结束选项，确认反馈、退场和重复点击保护；系统关闭动画时直接完成。
