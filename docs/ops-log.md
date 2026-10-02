@@ -19,6 +19,7 @@
 
 ## 待部署
 
+- 刷新登录凭据的追踪（trace-refresh）：发 api（cloud）和客户端 core（web/桌面/安卓，安卓测试版要发一版，查的是安卓测试版老掉登录），station 不用动。cloud 的 session 多存两个可选字段（`rotated`、账号上的 `ended` 最近 32 条），旧数据直接能读；响应里的 `x-stillfail-span` 由 Worker 摘掉，不会到客户端。旧客户端不带 traceparent，cloud 就不记，没有别的影响。上线验：用新客户端停 5 分钟以上再操作，Axiom 里有 `auth.refresh` 和 cloud 的 `POST /v1/auth/refresh`，后者 `attributes.custom` 里有 `stillfail.auth.outcome=rotated` 和 `stillfail.account`；之后掉登录按 docs/telemetry.md「Signing out」的查询看原因。
 - 完整检查回到 mini1、拆成四个并行 job（ci-check-mini1）：只改了 CI 和脚本（`scripts/check.sh` 加 `STILLFAIL_CHECK_PART`，`scripts/release.sh`、`.github/release-desktop.py` 和 changelog 的 R2 上传失败重试两次，Mac 任务共用一个 Cargo target）。合并后 main 下一次运行就用新布局，第一次各 part 冷编；之后 mini1 上的旧目录 `~/stillfail-ci/target-mini1`、`linux-mini1` 可以删（-2、-3 已删）。上线后验：main 的运行里有 check (ts/station/core/android) 四个 job，有缓存时最慢的那个几分钟内跑完。
 - PC 侧栏的奏变成第 4 个列表（decisions-sidebar-pane）：只发 web（含 web 里的 core），station、安卓不用动。prefs 新增可选字段 `onlyDecisions`（与 onlyMine/onlyWatching 三选一），手机 web 和安卓读到时按「全部」。上线后验：桌面端筛选菜单在 全部/我参与的/监控中/奏 之间切换都会横滑；在奏里点新建对话，侧栏停在奏；从左下角「奏 N 件」进入时各行从入口飞出、不横滑。
 
