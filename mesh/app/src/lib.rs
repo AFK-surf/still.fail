@@ -9,6 +9,7 @@ pub mod admin;
 pub mod agent_home;
 pub mod chat;
 pub mod config;
+pub mod decision;
 pub mod connections;
 pub mod feedback;
 pub mod former;

@@ -19,6 +19,7 @@ pub const NOTES: &[(i64, &str)] = &[
     (11, "New runtime processes expose MCP tools under stillfail (mcp__stillfail__…). A handed-over process may still expose ember: use its available tools until that process restarts. Historical transcripts and old tools remain readable."),
     (12, "New tool adb_devices: Android phones people shared with this station from the still.fail app, each reachable with `adb -s 127.0.0.1:<port>`; it also gives the link that opens this station's 共享调试 in a person's app, to ask for one."),
     (13, "Job tool instructions now use `stillfail-job notify`. The old `ember-job` command remains an alias for jobs and transcripts created before the rename."),
+    (14, "When configured, station reviews all_done (including legacy final) before posting or recording it. A rejected completion returns evidence to reconcile; continue authorized work or ask only a real outstanding question. Review uncertainty is not a request for invented approval."),
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
