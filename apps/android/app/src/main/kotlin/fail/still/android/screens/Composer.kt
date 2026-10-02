@@ -4,6 +4,7 @@
 // so and restores it (web/src/ArchiveNotice.tsx).
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import fail.still.android.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -382,7 +383,7 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
             val mark = try {
                 app.core.call("chat.ref", buildJsonObject { put("station", item.station); put("id", item.id); put("title", item.title); put("base", app.cloudOrigin) })
                     .jsonObject["mark"]?.jsonPrimitive?.content
-            } catch (e: CoreException) { app.toast = "没能引用这个对话：${errorText(e)}"; null } ?: return@launch
+            } catch (e: CoreException) { app.toast = t("android-chat.ref.failed", "error" to errorText(e)); null } ?: return@launch
             val now = draft.input.text
             if (now.getOrNull(start) != '@' || caret > now.length) return@launch
             draft.input = TextFieldValue(now.substring(0, start) + mark + " " + now.substring(caret), TextRange(start + mark.length + 1))
@@ -393,12 +394,12 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
             .verticalScroll(rememberScrollState()).padding(12.dp),
     ) {
         Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("引用对话", fontSize = 13.sp, color = C.muted)
+            Text(t("android-chat.ref.title"), fontSize = 13.sp, color = C.muted)
             if (query.isNotEmpty()) Text(query, fontSize = 13.sp, color = C.ink)
         }
         when {
-            search.value == null -> Text(if (search.error != null) "更新 ${BuildConfig.APP_NAME} 后才能引用对话" else "正在读取…", fontSize = 15.sp, color = C.muted, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
-            items.isEmpty() -> Text(if (query.isNotEmpty()) "没有标题里带这些字的对话" else "这台 station 上没有别的对话", fontSize = 15.sp, color = C.muted,
+            search.value == null -> Text(if (search.error != null) t("android-chat.ref.update", "app" to BuildConfig.APP_NAME) else t("android-chat.reading"), fontSize = 15.sp, color = C.muted, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
+            items.isEmpty() -> Text(if (query.isNotEmpty()) t("android-chat.ref.none.match") else t("android-chat.ref.none"), fontSize = 15.sp, color = C.muted,
                 modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
             else -> items.forEach { item ->
                 Row(
@@ -465,7 +466,7 @@ fun photoPicked(bitmap: Bitmap): Picked {
 fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: CoroutineScope) {
     val p = Pending(System.nanoTime(), picked.name, picked.size, picked.preview)
     draft.files += p
-    if (picked.size > MAX_FILE) { p.error = "超过 50 MB"; return }
+    if (picked.size > MAX_FILE) { p.error = t("android-chat.file.tooBig"); return }
     scope.launch {
         try {
             p.done = api(station).upload(picked.name, picked.bytes, picked.width?.toLong(), picked.height?.toLong())
@@ -498,9 +499,9 @@ fun AttachLaunchers(onPicked: (Picked) -> Unit): Triple<() -> Unit, () -> Unit, 
 fun openAttach(app: AppState, launchers: Triple<() -> Unit, () -> Unit, () -> Unit>) {
     app.sheet = SheetSpec(0.32f) {
         SheetGrab()
-        SheetHead("添加到消息")
+        SheetHead(t("android-chat.attach.title"))
         Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            listOf(Triple("拍照", Icons.Camera, launchers.first), Triple("照片", Icons.Photo, launchers.second), Triple("文件", Icons.File, launchers.third)).forEach { (label, icon, go) ->
+            listOf(Triple(t("android-chat.attach.camera"), Icons.Camera, launchers.first), Triple(t("android-chat.attach.photos"), Icons.Photo, launchers.second), Triple(t("android-chat.attach.files"), Icons.File, launchers.third)).forEach { (label, icon, go) ->
                 Column(
                     Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(C.chip).clickable { app.sheet = null; go() }.padding(top = 16.dp, bottom = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -537,7 +538,7 @@ fun DraftExtras(draft: Draft) {
                     val focus = remember { FocusRequester() }
                     LaunchedEffect(draft.focusQuote) { if (draft.focusQuote == q.id) { focus.requestFocus(); draft.focusQuote = null } }
                     Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 3.dp, bottom = 10.dp)) {
-                        if (q.comment.isEmpty()) Text("对这段说点什么（可以不写）", color = chatSubtle(), fontSize = 15.sp, lineHeight = 22.sp)
+                        if (q.comment.isEmpty()) Text(t("android-chat.quote.comment"), color = chatSubtle(), fontSize = 15.sp, lineHeight = 22.sp)
                         BasicTextField(
                             q.comment, { q.comment = it }, singleLine = true, textStyle = TextStyle(color = C.ink, fontSize = 15.sp, lineHeight = 22.sp), cursorBrush = SolidColor(C.accent),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = KeyboardActions(onNext = { draft.focus++ }),
@@ -557,12 +558,12 @@ fun DraftExtras(draft: Draft) {
             if (f.preview != null) Box(Modifier.size(56.dp).clip(InComposer).background(C.chip)) {
                 Image(f.preview, f.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 if (f.done == null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (f.error != null) 0.5f else 0.25f)), contentAlignment = Alignment.Center) {
-                    if (f.error != null) Text("失败", color = Color.White, fontSize = 11.sp) else CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 1.5.dp)
+                    if (f.error != null) Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp) else CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 1.5.dp)
                 }
                 Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
                     IconIn(Icons.Close, 12.dp, Color.White)
                 }
-            } else FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) "正在上传…" else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
+            } else FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) t("android-chat.file.uploading") else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
         }
     }
 }
@@ -624,7 +625,7 @@ fun ComposerBar(
         val idle = C.ink.copy(alpha = 0.18f).compositeOver(C.surface)
         Box(
             Modifier.part(morph, "send").size(36.dp).clip(CircleShape).background(if (ready) C.ink else idle).clickable(enabled = ready, onClick = onSend)
-                .semantics { contentDescription = "发送" },
+                .semantics { contentDescription = t("android-chat.composer.send") },
             contentAlignment = Alignment.Center,
         ) {
             if (draft.starting) CircularProgressIndicator(Modifier.size(16.dp), color = C.surface, strokeWidth = 2.dp)
@@ -760,9 +761,9 @@ private fun ArchiveNotice(offline: Boolean, restore: suspend () -> Unit) {
     val error = operation.error?.message
     Column(Modifier.padding(horizontal = 8.dp, vertical = 2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("已归档，还原后才能发送消息。 ", fontSize = 13.sp, color = C.muted)
+            Text(t("android-chat.composer.archived"), fontSize = 13.sp, color = C.muted)
             Text(
-                if (busy) "正在还原…" else "还原对话", fontSize = 13.sp, color = if (offline) C.muted else C.ink, textDecoration = TextDecoration.Underline,
+                if (busy) t("android-chat.composer.restoring") else t("android-chat.composer.restore"), fontSize = 13.sp, color = if (offline) C.muted else C.ink, textDecoration = TextDecoration.Underline,
                 modifier = Modifier.clickable(enabled = !busy && !offline) {
 
                     operation.run { restore() }
@@ -791,10 +792,10 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
     val archived = view.archived == true
     draft.locked = view.offline || archived
     return ComposerSpec(
-        station = station, here = keeper, draft = draft, placeholder = if (archived) "还原对话后才能发送" else "发消息",
+        station = station, here = keeper, draft = draft, placeholder = if (archived) t("android-chat.composer.archived.placeholder") else t("android-chat.chat.placeholder"),
         notices = {
             if (archived) ArchiveNotice(view.offline) { api.setArchived(thread?.id, (of as? ChatOf.Session)?.key ?: keeper ?: "", false) }
-            if (view.offline) Text("这台 station 离线了：这里是之前读到的内容，暂时不能发消息。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+            if (view.offline) Text(t("android-chat.composer.offline"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
         },
         onPlus = { openAttach(app, launchers) },
         // Typing starts the session's runtime, so a cold start overlaps the writing.
@@ -815,7 +816,7 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
                     host.notSent()
                     if (e.code == "invalid_params") {
                         if (draft.empty) { draft.restore(taken); draft.error = errorText(e) }
-                        else app.toast = "没能发送：${errorText(e)}"
+                        else app.toast = t("android-chat.composer.send.failed", "error" to errorText(e))
                     }
                     Unit
                 }

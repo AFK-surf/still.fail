@@ -8,6 +8,7 @@
 // once the service is back).
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Outline
@@ -144,11 +145,11 @@ fun PreviewScreen(station: String, service: String) {
     val port = job?.port
     val up = port != null && job.open == true
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
-        NavBar("对话", app::pop, job?.name ?: "服务", sub = { Text(rememberStationName(station), fontSize = 11.sp, color = C.muted, maxLines = 1) })
+        NavBar(t("android-chat.preview.back"), app::pop, job?.name ?: t("android-chat.preview.service"), sub = { Text(rememberStationName(station), fontSize = 11.sp, color = C.muted, maxLines = 1) })
         when {
-            error != null && job == null -> PreviewNote("找不到这个服务：$error")
+            error != null && job == null -> PreviewNote(t("android-chat.preview.notFound", "error" to error))
             job == null -> Unit
-            !up -> PreviewNote("「${job.name}」已经停了。")
+            !up -> PreviewNote(t("android-chat.preview.stopped", "name" to job.name))
             else -> ServicePage(station, service, port!!.toInt(), job.name, restarting = job.state == "exited", restarts = job.restarts ?: 0, session = session)
         }
     }
@@ -165,9 +166,9 @@ fun PreviewFileScreen(station: String, session: String, path: String, name: Stri
     val file = remember(path, name) { fail.still.android.data.Attachment(name = name, path = path, size = 0) }
     val loaded = fail.still.android.ui.rememberViz(station, session, file)
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
-        NavBar("对话", app::pop, name, sub = { Text(rememberStationName(station), fontSize = 11.sp, color = C.muted, maxLines = 1) })
+        NavBar(t("android-chat.preview.back"), app::pop, name, sub = { Text(rememberStationName(station), fontSize = 11.sp, color = C.muted, maxLines = 1) })
         when (val l = loaded) {
-            fail.still.android.ui.Loaded.Failed -> PreviewNote("读不到「$name」。")
+            fail.still.android.ui.Loaded.Failed -> PreviewNote(t("android-chat.preview.unreadable", "name" to name))
             fail.still.android.ui.Loaded.Waiting -> Unit
             is fail.still.android.ui.Loaded.Ready -> {
                 val kept = remember(l) { arrayOf(l.state) }
@@ -193,8 +194,10 @@ private fun PreviewNote(text: String) =
 /** A window `width` wide and `height` high (null: as high as the preview leaves it, at its scale). */
 private data class Viewport(val width: Int, val height: Int?)
 
-private class Preset(val name: String, val width: Int, val height: Int)
-private val PRESETS = listOf(Preset("手机", 390, 844), Preset("平板", 820, 1180), Preset("笔记本", 1280, 800), Preset("桌面", 1440, 900))
+private class Preset(val key: String, val width: Int, val height: Int) {
+    val name: String get() = t("android-chat.preview.preset.$key")
+}
+private val PRESETS = listOf(Preset("phone", 390, 844), Preset("tablet", 820, 1180), Preset("laptop", 1280, 800), Preset("desktop", 1440, 900))
 private const val LIMIT_MIN = 240
 private const val LIMIT_MAX = 3840
 private fun clampSize(n: Int) = n.coerceIn(LIMIT_MIN, LIMIT_MAX)
@@ -205,7 +208,7 @@ private fun presetOf(v: Viewport?): String? {
 }
 
 /** `390 × 844`, with `×` a little apart. */
-private fun dims(w: Int, h: Int?) = "$w × ${h?.toString() ?: "自动"}"
+private fun dims(w: Int, h: Int?) = "$w × ${h?.toString() ?: t("android-chat.preview.auto")}"
 
 /** Kept per service, on this device. */
 private fun viewportKey(station: String, service: String) = "previewViewport.$station\n$service"
@@ -266,7 +269,7 @@ private fun ColumnScope.ServicePage(station: String, service: String, port: Int,
         val served = method == "GET" && !Regex("\\.[a-z0-9]+$", RegexOption.IGNORE_CASE).containsMatchIn(path.substringBefore('?'))
         if (!served) android.webkit.WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), java.io.ByteArrayInputStream("Not found".toByteArray()))
         else {
-            val doc = fail.still.android.ui.vizServed(context, file.html, file.state(), dark, String(context.assets.open("preview/page.js").use { it.readBytes() }))
+            val doc = fail.still.android.ui.vizServed(context, file.html, file.state(), dark, String(pageScript(context.assets.open("preview/page.js").use { it.readBytes() })))
             android.webkit.WebResourceResponse("text/html", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-store"), java.io.ByteArrayInputStream(doc.toByteArray()))
         }
     }
@@ -360,7 +363,7 @@ private fun ColumnScope.ServicePage(station: String, service: String, port: Int,
                     }, loaded = {
                         if (state.marking) js("__stillfailMarks&&__stillfailMarks.on(true)")
                     }, leave = { url ->
-                        app.openLink(url.toString()) { try { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, url)) } catch (_: Exception) { app.toast = "打不开这个链接" } }
+                        app.openLink(url.toString()) { try { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, url)) } catch (_: Exception) { app.toast = t("android-chat.link.failed") } }
                     })
                     loadUrl("https://$PREVIEW_HOST/")
                 }
@@ -454,8 +457,8 @@ private fun Restart(name: String, restarts: Long, modifier: Modifier) {
     ) {
         JobDot(Tone.Restart)
         Column {
-            Text("${name}正在重启", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-            Text((if (restarts > 0) "第 $restarts 次 · " else "") + "起来后自动刷新", fontSize = 12.sp, color = C.muted)
+            Text(t("android-chat.preview.restarting", "name" to name), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+            Text(if (restarts > 0) t("android-chat.preview.restarts", "n" to restarts) else t("android-chat.preview.reloads"), fontSize = 12.sp, color = C.muted)
         }
     }
 }
@@ -644,9 +647,9 @@ private fun Toolbar(stage: StageState, viewport: Viewport?, set: (Viewport?) -> 
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            Chip("自适应", viewport == null) { choose(null) }
+            Chip(t("android-chat.preview.fit"), viewport == null) { choose(null) }
             PRESETS.forEach { p -> Chip(p.name, preset == p.name) { choose(if (preset == p.name) viewport else Viewport(p.width, p.height)) } }
-            Chip(if (isCustom) dims(viewport!!.width, viewport.height) else "自定义", isCustom, custom)
+            Chip(if (isCustom) dims(viewport!!.width, viewport.height) else t("android-chat.preview.custom"), isCustom, custom)
         }
         if (viewport != null) Row(Modifier.padding(start = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
             if (viewport.height != null) Tool(Icons.Landscape, false, turn)
@@ -654,7 +657,7 @@ private fun Toolbar(stage: StageState, viewport: Viewport?, set: (Viewport?) -> 
             if (stage.view != null) Box(
                 Modifier.height(36.dp).clip(CircleShape).background(C.surface).clickable { stage.view = null; stage.moving = false }.padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text("适应", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1) }
+            ) { Text(t("android-chat.preview.fitView"), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1) }
         }
     }
 }
@@ -683,9 +686,9 @@ private fun openViewportSheet(app: AppState, first: Viewport?, set: (Viewport?) 
         val choose = { v: Viewport? -> put(v); app.sheet = null }
         val preset = presetOf(viewport)
         SheetGrab()
-        SheetHead("页面尺寸")
+        SheetHead(t("android-chat.preview.size.title"))
         Column(Modifier.padding(start = 10.dp, end = 10.dp, bottom = 24.dp)) {
-            SizeOption(viewport == null, "自适应", "跟随预览区") { choose(null) }
+            SizeOption(viewport == null, t("android-chat.preview.fit"), t("android-chat.preview.fit.note")) { choose(null) }
             PRESETS.forEach { p -> SizeOption(preset == p.name, p.name, dims(p.width, p.height)) { choose(if (preset == p.name) viewport else Viewport(p.width, p.height)) } }
             Spacer(Modifier.height(10.dp))
             CustomSize(viewport, put) {
@@ -722,7 +725,7 @@ private fun CustomSize(viewport: Viewport?, set: (Viewport?) -> Unit, turn: () -
     }
     val focus = LocalFocusManager.current
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("自定义", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+        Text(t("android-chat.preview.custom"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
         @Composable fun Field(value: String, change: (String) -> Unit, hint: String) = Box(
             Modifier.width(72.dp).height(36.dp).clip(RoundedCornerShape(10.dp)).background(C.chip).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart,
         ) {
@@ -735,9 +738,9 @@ private fun CustomSize(viewport: Viewport?, set: (Viewport?) -> Unit, turn: () -
                 modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) typing = true else if (typing) { typing = false; commit() } },
             )
         }
-        Field(w, { w = it }, "宽")
+        Field(w, { w = it }, t("android-chat.preview.width"))
         Text("×", fontSize = 14.sp, color = C.muted)
-        Field(h, { h = it }, "自动")
+        Field(h, { h = it }, t("android-chat.preview.auto"))
         val turnable = viewport?.height != null
         Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = turnable, onClick = turn), contentAlignment = Alignment.Center) {
             IconIn(Icons.Landscape, 18.dp, C.ink, Modifier.alpha(if (turnable) 1f else 0.35f))
@@ -762,8 +765,8 @@ private fun MarkMode(state: PageState, leave: () -> Unit, send: () -> Unit) {
         val error = state.error
         if (error != null) Text(error, fontSize = 13.sp, color = C.red, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         else Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(if (n > 0) "已标注 $n 处" else "点选页面上的元素", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1, softWrap = false)
-            if (state.marking && n > 0) Text("可以继续点选", fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (n > 0) t("android-chat.preview.marked", "n" to n) else t("android-chat.preview.pick"), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1, softWrap = false)
+            if (state.marking && n > 0) Text(t("android-chat.preview.pickMore"), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Box(Modifier.size(24.dp).clip(CircleShape).clickable(enabled = !state.busy, onClick = leave), contentAlignment = Alignment.Center) { IconIn(Icons.Close, 12.dp, C.muted) }
         val able = !state.busy && n > 0
@@ -775,7 +778,7 @@ private fun MarkMode(state: PageState, leave: () -> Unit, send: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             IconIn(Icons.Send, 12.dp, ink)
-            Text(if (state.busy) "截图中…" else "放进对话", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = ink, maxLines = 1, softWrap = false)
+            Text(if (state.busy) t("android-chat.preview.shooting") else t("android-chat.preview.put"), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = ink, maxLines = 1, softWrap = false)
         }
     }
 }
@@ -858,7 +861,7 @@ private fun Note(mark: Mark, x: Float, y: Float, stageW: Float, onDone: () -> Un
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                if (mark.comment.isEmpty()) Text("对这个${mark.picked.kind}说点什么", fontSize = 13.sp, color = C.muted, maxLines = 1)
+                if (mark.comment.isEmpty()) Text(t("android-chat.preview.mark.comment", "kind" to mark.picked.kind), fontSize = 13.sp, color = C.muted, maxLines = 1)
                 BasicTextField(
                     mark.comment, { mark.comment = it }, singleLine = true,
                     textStyle = TextStyle(fontSize = 13.sp, color = C.ink), cursorBrush = SolidColor(C.accent),
@@ -876,10 +879,10 @@ private fun Note(mark: Mark, x: Float, y: Float, stageW: Float, onDone: () -> Un
  * the composer shows.
  */
 private fun where(p: PagePick, shot: String): String = listOfNotNull(
-    p.kind + if (p.text.isNotEmpty()) "「${p.text}」" else "",
-    "元素：${p.label} · 选择器：${p.selector}",
-    "页面：${p.path}（视口 ${p.viewport.width}×${p.viewport.height}），截图 $shot 是窗口里看到的样子，只画了这一处",
-    p.component?.let { "组件：$it" },
+    if (p.text.isNotEmpty()) t("android-chat.preview.where.text", "kind" to p.kind, "text" to p.text) else p.kind,
+    t("android-chat.preview.where.element", "label" to p.label, "selector" to p.selector),
+    t("android-chat.preview.where.page", "path" to p.path, "width" to p.viewport.width, "height" to p.viewport.height, "shot" to shot),
+    p.component?.let { t("android-chat.preview.where.component", "name" to it) },
 ).joinToString("\n")
 
 /** Runs the page's script, and hands back what it returned. */
@@ -903,7 +906,7 @@ private suspend fun putIntoChat(app: AppState, link: PreviewLink, state: PageSta
         val pictures = ArrayList<Picked2>()
         val quotes = ArrayList<OfferQuote>()
         for (m in state.marks.toList()) {
-            var place = returned(web.eval("__stillfailMarks.place(${m.picked.n},false)"))?.jsonObject ?: throw IllegalStateException("标注 ${m.picked.n} 已经不在页面上")
+            var place = returned(web.eval("__stillfailMarks.place(${m.picked.n},false)"))?.jsonObject ?: throw IllegalStateException(t("android-chat.preview.mark.gone", "n" to m.picked.n))
             val cssW = place["width"]!!.jsonPrimitive.content.toFloat()
             val ratio = web.width / cssW
             val inSight = place.box().let { b -> b.y + b.height > 0 && b.y * ratio < web.height }
@@ -913,18 +916,18 @@ private suspend fun putIntoChat(app: AppState, link: PreviewLink, state: PageSta
                 place = returned(web.eval("__stillfailMarks.place(${m.picked.n},true)"))?.jsonObject ?: place
                 delay(160)
                 link.shot().also { web.eval("__stillfailMarks.back($y0)") }
-            } ?: throw IllegalStateException("截图没能生成")
+            } ?: throw IllegalStateException(t("android-chat.preview.shot.failed"))
             val b = place.box()
             val drawn = withContext(Dispatchers.Default) { drawMark(shot, m.picked.n, b.x * ratio, b.y * ratio, b.width * ratio, b.height * ratio, ratio) }
-            val file = "$name-标注${m.picked.n}-$stamp.png"
+            val file = t("android-chat.preview.mark.file", "name" to name, "n" to m.picked.n, "stamp" to stamp)
             pictures += drawn.copy(name = file)
-            quotes += OfferQuote("网页 $name 标注 ${m.picked.n}", where(m.picked, file), m.comment.trim(), file)
+            quotes += OfferQuote(t("android-chat.preview.mark.quote", "name" to name, "n" to m.picked.n), where(m.picked, file), m.comment.trim(), file)
         }
         DraftOffers.waiting += MarkOffer(station, session, pictures.map { Picked(it.name, it.bytes, it.width, it.height, it.preview) }, quotes)
-        app.toast = "已放进对话，回到对话里发送"
+        app.toast = t("android-chat.preview.put.done")
         leave()
     } catch (e: Exception) {
-        state.error = "没能放进对话：${e.message}"
+        state.error = t("android-chat.preview.put.failed", "error" to e.message)
     } finally {
         state.busy = false
     }

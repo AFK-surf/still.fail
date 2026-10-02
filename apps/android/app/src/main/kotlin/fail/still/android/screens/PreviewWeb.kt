@@ -7,6 +7,7 @@
 // StillFailPreviewNative. No port on the station is open to anyone.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
@@ -54,6 +55,9 @@ import kotlinx.serialization.json.putJsonArray
 
 /** The host the WebView loads the service at: nothing answers it but the core. */
 internal const val PREVIEW_HOST = "preview.stillfail.invalid"
+/** page.js as served, the language now said first (its words for a person are in it, in both). */
+internal fun pageScript(script: ByteArray): ByteArray = "self.__stillfailLang = \"${fail.still.android.ui.I18n.lang}\";\n".toByteArray() + script
+
 /** The page's own script, served here (never asked of the service). */
 private const val PAGE_JS = "/_stillfail/page.js"
 private const val BODY_HEADER = "x-stillfail-body"
@@ -235,8 +239,8 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
                         pair[0].jsonPrimitive.content to pair[1].jsonPrimitive.content
                     }.filter { (k, v) -> Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]{1,256}").matches(k) && v.none { c -> c == '\r' || c == '\n' } && !k.equals("host", ignoreCase = true) && !k.equals(BODY_HEADER, ignoreCase = true) }
                 } catch (_: Exception) { null }
-                val body = try { (o["body"] as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() }?.let { Base64.decode(it, Base64.DEFAULT) } } catch (_: IllegalArgumentException) { return failed("请求内容不对") }
-                if (method == null || path == null || headers == null || fetches.containsKey(id)) return failed("请求不对")
+                val body = try { (o["body"] as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() }?.let { Base64.decode(it, Base64.DEFAULT) } } catch (_: IllegalArgumentException) { return failed(t("android-chat.web.badBody")) }
+                if (method == null || path == null || headers == null || fetches.containsKey(id)) return failed(t("android-chat.web.badRequest"))
                 val follow = (o["redirect"] as? JsonPrimitive)?.content != "manual" && (o["redirect"] as? JsonPrimitive)?.content != "error"
                 val withCookies = (o["cookies"] as? JsonPrimitive)?.content != "false"
                 val job = scope.launch(Dispatchers.IO) {
@@ -269,7 +273,7 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
                         }
                         tell(buildJsonObject { put("t", "end"); put("id", id) })
                     } catch (e: IOException) {
-                        failed(e.message ?: "读到一半断了")
+                        failed(e.message ?: t("android-chat.web.cut"))
                     }
                 }
                 fetches[id] = job
@@ -305,10 +309,10 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
                     else if (c != null) chunks.put(Base64.decode(c.content, Base64.DEFAULT))
                 }
                 chunks.end(null)
-                head.completeExceptionally(IOException("station 没有给出回答"))
+                head.completeExceptionally(IOException(t("android-chat.web.noAnswer")))
             } catch (e: CancellationException) {
                 chunks.end(null)
-                head.completeExceptionally(IOException("已取消"))
+                head.completeExceptionally(IOException(t("android-chat.web.cancelled")))
                 throw e
             } catch (e: CoreException) {
                 chunks.end(IOException(e.message))
@@ -323,10 +327,10 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
             throw e.cause ?: e
         } catch (e: TimeoutException) {
             job.cancel()
-            throw IOException("station 过了 $HEAD_WAIT_S 秒还没有回答")
+            throw IOException(t("android-chat.web.timeout", "s" to HEAD_WAIT_S))
         } catch (e: InterruptedException) {
             job.cancel()
-            throw IOException("已取消")
+            throw IOException(t("android-chat.web.cancelled"))
         }
     }
 
@@ -354,7 +358,7 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
             val head = try {
                 ask(method, path, asked, bytes, within)
             } catch (e: Exception) {
-                throw Unanswered(502, "没能从 station 取到：${e.message}")
+                throw Unanswered(502, t("android-chat.web.unreachable", "error" to e.message))
             }
             // Several cookies may come joined in one header (", " before the next name=): each is kept.
             if (withCookies) for ((k, v) in head.headers) if (k.equals("set-cookie", ignoreCase = true)) for (one in v.split(COOKIES_JOINED)) cookies.setCookie(url, one)
@@ -362,23 +366,23 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
             if (head.status !in 300..399 || location == null) return Answer(head, path, hop > 0)
             if (!follow) { head.body.close(); return Answer(head, path, hop > 0) }
             head.body.close()
-            if (hop == 5) throw Unanswered(508, "跳转太多次了")
-            val next = try { java.net.URI("https://$PREVIEW_HOST$path").resolve(location.trim()) } catch (_: Exception) { throw Unanswered(502, "这个网页跳到了一个读不懂的地址：$location") }
-            if (next.host != null && next.host != "localhost" && next.host != "127.0.0.1" && next.host != PREVIEW_HOST) throw Unanswered(502, "这个网页跳到了别的地址：$location")
+            if (hop == 5) throw Unanswered(508, t("android-chat.web.redirects"))
+            val next = try { java.net.URI("https://$PREVIEW_HOST$path").resolve(location.trim()) } catch (_: Exception) { throw Unanswered(502, t("android-chat.web.badRedirect", "location" to location)) }
+            if (next.host != null && next.host != "localhost" && next.host != "127.0.0.1" && next.host != PREVIEW_HOST) throw Unanswered(502, t("android-chat.web.offsite", "location" to location))
             path = (next.rawPath?.takeIf { it.startsWith("/") } ?: "/") + (next.rawQuery?.let { "?$it" } ?: "")
             if (head.status == 303 || (head.status in 301..302 && method == "POST")) {
                 method = "GET"; bytes = null
                 headers = headers.filterNot { it.first.equals("content-type", ignoreCase = true) || it.first.equals("content-length", ignoreCase = true) }
             }
         }
-        throw Unanswered(508, "跳转太多次了")
+        throw Unanswered(508, t("android-chat.web.redirects"))
     }
 
     /** Answers a request of the preview's host from the station (following redirects here: a WebView takes no 3xx). */
     fun answer(request: WebResourceRequest): WebResourceResponse {
         val url = request.url
         if (url.encodedPath == PAGE_JS) {
-            return WebResourceResponse("text/javascript", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(script))
+            return WebResourceResponse("text/javascript", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(pageScript(script)))
         }
         serve?.let { return it(request.method, pathOf(url)) }
         val asked = request.requestHeaders.toMutableMap()
@@ -445,7 +449,7 @@ private class Chunks : InputStream() {
         if (bytes.isEmpty() || over || closed) return
         if (waiting.addAndGet(bytes.size.toLong()) > BUFFERED_MAX) {
             over = true
-            queue.offer(IOException("网页读得太慢，已停止"))
+            queue.offer(IOException(t("android-chat.web.slow")))
             onClose()
             return
         }

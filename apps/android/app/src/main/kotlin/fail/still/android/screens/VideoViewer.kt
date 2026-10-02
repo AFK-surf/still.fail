@@ -4,6 +4,7 @@
 // small player of the same kind.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.graphics.Matrix
@@ -273,7 +274,7 @@ internal fun VideoViewer(
             }, Modifier.fillMaxSize())
             if (!framed && poster != null) Canvas(Modifier.fillMaxSize()) { drawFitted(poster, zoom) }
         }
-        if (failed) Text("没能播放这个视频", fontSize = 14.sp, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.Center))
+        if (failed) Text(t("android-chat.video.failed"), fontSize = 14.sp, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.Center))
         // The controls: where it is, the steps and play, which frame, the speed, a frame saved, turned sideways.
         Column(
             Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 8.dp, vertical = 8.dp)
@@ -286,16 +287,19 @@ internal fun VideoViewer(
             Timeline(start, end, now, dark = true) { seek(it); wake() }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    PictureButton(Icons.ChevronLeft, "上一帧") { go { it - 1 }; wake() }
-                    PictureButton(if (playing) Icons.Pause else Icons.Play, if (playing) "暂停" else "播放") { play(); wake() }
-                    PictureButton(Icons.ChevronRight, "下一帧") { go { it + 1 }; wake() }
+                    PictureButton(Icons.ChevronLeft, t("android-chat.video.prev")) { go { it - 1 }; wake() }
+                    PictureButton(if (playing) Icons.Pause else Icons.Play, if (playing) t("android-chat.video.pause") else t("android-chat.video.play")) { play(); wake() }
+                    PictureButton(Icons.ChevronRight, t("android-chat.video.next")) { go { it + 1 }; wake() }
                 }
                 Box(Modifier.weight(1f)) {
                     if (starts != null) Text(buildAnnotatedString {
+                        // Which frame in bold, where the sentence has it.
+                        val (before, after) = t("android-chat.video.frames", "n" to starts.size).split("{at}", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+                        withStyle(SpanStyle(color = Color.White.copy(alpha = 0.6f))) { append(before) }
                         withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Color(0xFFF4F4F5))) { append("${at + 1}") }
-                        withStyle(SpanStyle(color = Color.White.copy(alpha = 0.6f))) { append(" / ${starts.size} 帧") }
+                        withStyle(SpanStyle(color = Color.White.copy(alpha = 0.6f))) { append(after) }
                     }, fontFamily = FontFamily.Monospace, fontSize = 12.sp, maxLines = 1)
-                    else if (!read) Text("正在读取帧…", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
+                    else if (!read) Text(t("android-chat.video.reading"), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     Box(
@@ -309,7 +313,7 @@ internal fun VideoViewer(
                         val r = if (rate == 1f) "1" else rate.toString().trimEnd('0')
                         Text("$r×", fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFF4F4F5))
                     }
-                    PictureButton(Icons.Camera, "保存这一帧", enabled = !playing && ready) {
+                    PictureButton(Icons.Camera, t("android-chat.video.saveFrame"), enabled = !playing && ready) {
                         scope.launch {
                             val png = withContext(Dispatchers.IO) {
                                 val r = MediaMetadataRetriever()
@@ -319,10 +323,10 @@ internal fun VideoViewer(
                                 } catch (_: Exception) { null } finally { r.release() }
                             }
                             val saved = png != null && download(context, "${name.substringBeforeLast('.')}-${at + 1}.png", png, "image/png")
-                            app.toast = if (saved) "已存到「下载」" else "没能保存这一帧"
+                            app.toast = if (saved) t("android-chat.file.saved") else t("android-chat.video.saveFrame.failed")
                         }
                     }
-                    PictureButton(Icons.Landscape, if (turned) "退出横屏" else "横屏", pressed = turned) {
+                    PictureButton(Icons.Landscape, if (turned) t("android-chat.video.landscape.exit") else t("android-chat.video.landscape"), pressed = turned) {
                         val activity = context.activity()
                         turned = !turned
                         activity?.requestedOrientation = if (turned) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -389,7 +393,7 @@ fun AudioViewer(file: File, name: String) {
                 if (player.isPlaying) { player.pause(); playing = false } else { player.start(); playing = true }
             }, contentAlignment = Alignment.Center) { IconIn(if (playing) Icons.Pause else Icons.Play, 16.dp, C.bg) }
             Box(Modifier.weight(1f)) { Timeline(0, duration * 1000, time * 1000, dark = false) { if (ready) { player.seekTo((it / 1000).toInt()); time = it / 1000 } } }
-            Text(if (failed) "没能播放" else "${short(time)} / ${short(duration)}", fontSize = 12.sp, color = C.muted, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(end = 10.dp))
+            Text(if (failed) t("android-chat.video.playFailed") else "${short(time)} / ${short(duration)}", fontSize = 12.sp, color = C.muted, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(end = 10.dp))
         }
     }
 }

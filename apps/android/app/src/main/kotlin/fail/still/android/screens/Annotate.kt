@@ -4,6 +4,7 @@
 // the chat's draft as a quote with its comment.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -170,7 +171,7 @@ fun AnnotateScreen(station: String, of: ChatOf, ts: String) {
     val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
     val view = chat.value
     val m = view?.messages?.firstOrNull { it.ts == ts }
-    val author = m?.let { if (it.mine) "你" else it.by.name } ?: ""
+    val author = m?.let { if (it.mine) t("android-chat.annotate.you") else it.by.name } ?: ""
     // In and out: 0 in the chat, 1 here (on the pages' transition, so a swipe back takes it back with the finger). Eased
     // in as well as out: the words start from where they are, not off at once.
     val page = LocalPageTransition.current
@@ -183,11 +184,11 @@ fun AnnotateScreen(station: String, of: ChatOf, ts: String) {
         Box(Modifier.matchParentSize().graphicsLayer { alpha = p() }.background(C.bg))
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.graphicsLayer { alpha = p() }) {
-                NavBar("对话", { app.pop() }, "批注", sub = if (m != null) { { Text(author, fontSize = 12.sp, color = C.muted) } } else null)
+                NavBar(t("android-chat.preview.back"), { app.pop() }, t("android-chat.annotate.title"), sub = if (m != null) { { Text(author, fontSize = 12.sp, color = C.muted) } } else null)
             }
             when {
-                view == null -> Text("正在读取…", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-                m == null -> Text("找不到这条消息", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                view == null -> Text(t("android-chat.reading"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                m == null -> Text(t("android-chat.annotate.missing"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
                 else -> Annotating(station, of, m, author, p)
             }
         }
@@ -226,7 +227,7 @@ private fun Annotating(station: String, of: ChatOf, m: ChatMessage, author: Stri
 
     fun copy(text: String) {
         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", text))
-        app.toast = "已拷贝"
+        app.toast = t("android-chat.annotate.copied")
     }
     fun note() {
         val span = picked ?: return
@@ -237,7 +238,7 @@ private fun Annotating(station: String, of: ChatOf, m: ChatMessage, author: Stri
     }
     fun remove(n: Int) { notes.removeAll { it.n == n }; editing = null }
     fun send() {
-        if (draft.locked) { app.toast = "这个对话现在不能发消息"; return }
+        if (draft.locked) { app.toast = t("android-chat.annotate.locked"); return }
         val quotes = if (notes.isEmpty()) listOf(DraftQuote(System.nanoTime(), author, plainWords(m.text), m.ts, role))
         else notes.sortedWith(compareBy({ it.span.start }, { it.n })).map { x ->
             DraftQuote(System.nanoTime(), author, x.text, m.ts, role).also { it.comment = x.comment.trim() }
@@ -391,13 +392,13 @@ private fun Annotating(station: String, of: ChatOf, m: ChatMessage, author: Stri
                 Row(
                     Modifier.height(44.dp).floating(haze, pill).clickable { copy(m.text) }.padding(horizontal = 18.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) { IconIn(Icons.Copy, 16.dp, C.ink); Text("复制全文", fontSize = 15.sp, color = C.ink) }
+                ) { IconIn(Icons.Copy, 16.dp, C.ink); Text(t("android-chat.annotate.copyAll"), fontSize = 15.sp, color = C.ink) }
                 Row(
                     Modifier.weight(1f).height(44.dp).onGloballyPositioned { placed.send = it }.floating(haze, pill).clickable { send() }.padding(horizontal = 18.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
                 ) {
                     IconIn(if (notes.isEmpty()) Icons.Quote else Icons.Send, 15.dp, C.accent)
-                    Text(if (notes.isEmpty()) "引用全文" else "放进对话 · ${notes.size}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.accent)
+                    Text(if (notes.isEmpty()) t("android-chat.annotate.quoteAll") else t("android-chat.annotate.put", "n" to notes.size), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.accent)
                 }
             }
         }
@@ -519,7 +520,7 @@ private fun QuoteFlight(sent: SentQuote, note: Note?, placed: PagePlaces, p: () 
                 modifier = Modifier.padding(start = 16.dp, end = 34.dp, top = 9.dp),
             )
             val said = sent.quote.comment
-            Text(said.ifEmpty { "对这段说点什么（可以不写）" }, color = if (said.isEmpty()) chatSubtle() else C.ink, fontSize = 15.sp, lineHeight = 22.sp, maxLines = 1,
+            Text(said.ifEmpty { fail.still.android.ui.t("android-chat.quote.comment") }, color = if (said.isEmpty()) chatSubtle() else C.ink, fontSize = 15.sp, lineHeight = 22.sp, maxLines = 1,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 3.dp, bottom = 10.dp))
         }
     }
@@ -549,9 +550,9 @@ private fun PickBar(modifier: Modifier, everything: Boolean, onNote: () -> Unit,
     // PagePlaces by its middle (the offset is where its middle goes).
     Box(modifier.layoutCentred()) {
         Row(Modifier.pop().height(40.dp).floatingStill(RoundedCornerShape(20.dp)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            BarButton("批注", Icons.Edit, onNote)
-            BarButton("复制", Icons.Copy, onCopy)
-            if (!everything) BarButton("全选", null, onAll)
+            BarButton(t("android-chat.annotate.note"), Icons.Edit, onNote)
+            BarButton(t("common.copy"), Icons.Copy, onCopy)
+            if (!everything) BarButton(t("android-chat.annotate.selectAll"), null, onAll)
         }
     }
 }
@@ -643,15 +644,15 @@ internal fun NoteBox(note: NoteLike, modifier: Modifier, onDone: () -> Unit, onR
             Text(note.text, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            Box(Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onRemove).semantics { contentDescription = "删掉这条批注" }, contentAlignment = Alignment.Center) { IconIn(Icons.Trash, 17.dp, C.muted) }
+            Box(Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onRemove).semantics { contentDescription = t("android-chat.annotate.remove") }, contentAlignment = Alignment.Center) { IconIn(Icons.Trash, 17.dp, C.muted) }
             Box(Modifier.weight(1f).heightIn(min = 36.dp).padding(horizontal = 8.dp, vertical = 7.dp), contentAlignment = Alignment.CenterStart) {
-                if (note.comment.isEmpty()) Text("写批注（可以不写）", fontSize = 16.sp, lineHeight = 21.sp, color = C.subtle)
+                if (note.comment.isEmpty()) Text(t("android-chat.annotate.write"), fontSize = 16.sp, lineHeight = 21.sp, color = C.subtle)
                 BasicTextField(
                     note.comment, { note.comment = it }, Modifier.fillMaxWidth().focusRequester(focus),
                     textStyle = TextStyle(fontSize = 16.sp, lineHeight = 21.sp, color = C.ink), cursorBrush = SolidColor(C.accent), maxLines = 8,
                 )
             }
-            Box(Modifier.size(36.dp).clip(CircleShape).background(C.ink).clickable(onClick = onDone).semantics { contentDescription = "写好了" }, contentAlignment = Alignment.Center) { IconIn(Icons.Check, 18.dp, C.bg) }
+            Box(Modifier.size(36.dp).clip(CircleShape).background(C.ink).clickable(onClick = onDone).semantics { contentDescription = t("android-chat.annotate.done") }, contentAlignment = Alignment.Center) { IconIn(Icons.Check, 18.dp, C.bg) }
         }
     }
 }
@@ -673,7 +674,7 @@ private fun CardContent(note: NoteLike, padded: Boolean = true) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Pin(note.n, small = true, color = note.color)
             val said = note.comment.trim()
-            Text(said.ifEmpty { "只引用" }, fontSize = 14.sp, lineHeight = 20.sp, color = if (said.isEmpty()) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(said.ifEmpty { t("android-chat.annotate.quoteOnly") }, fontSize = 14.sp, lineHeight = 20.sp, color = if (said.isEmpty()) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Text(note.text, fontSize = 12.sp, lineHeight = 17.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }

@@ -3,6 +3,7 @@
 // (or file) makes the session on that station; then the page becomes the chat.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import fail.still.android.BuildConfig
 import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.ComposerCorner
@@ -93,7 +94,7 @@ import kotlinx.serialization.json.put
 
 /** Picks for a new chat in a scope (`station`: its id; the core keeps them, client/core/src/choose.rs): each given changes only that. */
 private fun AppState.pickNew(scope: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit) {
-    this.scope.launch { try { core.call("newChat.pick", buildJsonObject { put("scope", scope); fill() }) } catch (e: CoreException) { toast = "没能选上：${errorText(e)}" } }
+    this.scope.launch { try { core.call("newChat.pick", buildJsonObject { put("scope", scope); fill() }) } catch (e: CoreException) { toast = t("android-chat.pick.failed", "error" to errorText(e)) } }
 }
 
 /**
@@ -113,16 +114,16 @@ fun NewChatScreen(current: WorkspaceEntry, host: Host, leaving: Boolean = false)
     // Removing it here leaves the composer's glass without a recorded source for one frame.
     Column(Modifier.fillMaxSize().hazeSource(host.haze).then(if (leaving) Modifier else Modifier.background(C.bg))) {
         // Gone at once as it leaves (the chat has its own bar), its room kept so the scene leaves from where it was.
-        Box(Modifier.alpha(if (leaving) 0f else 1f)) { NavBar("取消", app::pop, "新对话") }
+        Box(Modifier.alpha(if (leaving) 0f else 1f)) { NavBar(t("common.cancel"), app::pop, t("android-chat.new.title")) }
         val view = choice?.station
         val online = choice?.stations
         when {
-            choice == null || online == null -> Loading(choice?.error ?: chat.error?.message ?: "正在读取 station…")
+            choice == null || online == null -> Loading(choice?.error ?: chat.error?.message ?: t("android-chat.new.loading"))
             !choice.any -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { FirstStation(current) }
             view == null -> Column(Modifier.fillMaxSize().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
                 Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 240.dp)
-                Text("没有在线的 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text("在一台机器上打开 ${BuildConfig.APP_NAME}，它就会连上这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+                Text(t("android-chat.new.offline.title"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                Text(t("android-chat.new.offline.text", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
             }
             else -> androidx.compose.runtime.key(view.station) { NewChatOn(scope, choice, view, online, onStation, host, leaving) }
         }
@@ -161,11 +162,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
     Column(Modifier.weight(1f).graphicsLayer { val a = up(); translationY = -lift * a; scaleX = 1f - 0.04f * a; scaleY = scaleX; alpha = 1f - a }.verticalScroll(rememberScrollState())) {
         Column(Modifier.fillMaxWidth().padding(start = 30.dp, end = 30.dp, top = 30.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 230.dp)
-            Text("想让 agent 做什么？", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.padding(top = 6.dp))
-            Text("说要做什么。它会在 ${view.name} 上用选好的模型开一个新会话。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+            Text(t("android-chat.new.heading"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.padding(top = 6.dp))
+            Text(t("android-chat.new.sub", "station" to view.name), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
             choice.frequent?.takeIf { it.isNotEmpty() }?.let { combos ->
                 Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("常用", fontSize = 12.sp, color = C.muted)
+                    Text(t("android-chat.new.frequent"), fontSize = 12.sp, color = C.muted)
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         combos.forEach { combo ->
                             Text(combo.label, fontSize = 13.sp, lineHeight = 18.sp, color = if (combo.selected) C.ink else C.muted,
@@ -182,8 +183,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
             // No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too).
             val overview = view.overview
             if (overview != null && choice.blocked == "profile") {
-                Text("给 ${view.name} 添加一个 Profile。agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。", fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
-                Button("添加 Profile", primary = true) { app.push(Screen.NewProfile(view.station)) }
+                Text(t("android-chat.new.profile.text", "station" to view.name), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+                Button(t("android-chat.new.profile.add"), primary = true) { app.push(Screen.NewProfile(view.station)) }
                 Column(Modifier.fillMaxWidth().padding(top = 12.dp)) { MachineLoginOffers(view.station, overview, inset = 0.dp) }
             }
             // The machine's own Claude Code and Codex sessions, to go on with one (web/src/MachineSessions.tsx).
@@ -207,7 +208,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
             val p = choice.pick
             if (runtime == null || model == null || p == null || p.options.isEmpty()) {
                 // Nothing to choose from: the chooser leads to where models are enabled.
-                Chooser(haze, null, "没有可用模型 · 去勾选", Modifier.weight(1f, fill = false)) { app.push(Screen.Profiles()) }
+                Chooser(haze, null, t("android-chat.new.noModels"), Modifier.weight(1f, fill = false)) { app.push(Screen.Profiles()) }
             } else {
                 Chooser(haze, { MakerIcon(p.valueOption?.maker ?: entry.maker, runtime, 14.dp) }, tripleLabel(p), Modifier.weight(1f, fill = false), chevron = true) {
                     openRunPicker(app, view.station)
@@ -221,7 +222,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
     Spacer(Modifier.height(with(androidx.compose.ui.platform.LocalDensity.current) { room.value.toDp() }))
     if (leaving) return
     host.spec = ComposerSpec(
-        station = view.station, here = null, draft = draft, placeholder = "做任何事",
+        station = view.station, here = null, draft = draft, placeholder = t("android-chat.new.placeholder"),
         onPlus = { openAttach(app, launchers) },
         onSend = {
             // Its words stay where they were in the composer until the chat's page takes them (ChatHost.kt).
@@ -265,7 +266,7 @@ private fun Chooser(haze: HazeState, leading: (@Composable () -> Unit)?, label: 
 private fun pickStation(app: AppState, stations: List<StationView>, current: String, onPick: (String) -> Unit) {
     app.sheet = SheetSpec(0.5f) {
         SheetGrab()
-        SheetHead("在哪台 station 上跑")
+        SheetHead(t("android-chat.new.station.pick"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             stations.forEach { s ->
                 PickRow(s.name, s.summary, checked = s.station == current, leading = { Buddy(s, 36) }) { onPick(s.id); app.sheet = null }
@@ -278,9 +279,9 @@ private fun pickStation(app: AppState, stations: List<StationView>, current: Str
 private fun tripleLabel(p: PickView): String {
     val v = p.value
     return listOfNotNull(
-        p.valueOption?.name ?: v.model ?: "选模型",
+        p.valueOption?.name ?: v.model ?: t("android-chat.pick.model"),
         if (!p.runtimeFixed && (p.valueOption?.runtimes?.size ?: 0) > 1) RUNTIME_LABEL[v.runtime] ?: v.runtime else null,
-        v.effort ?: "默认深度",
+        v.effort ?: t("android-chat.pick.effort.default"),
         p.fastText,
         p.account?.text,
     ).joinToString(" · ")
@@ -295,7 +296,7 @@ private fun openRunPicker(app: AppState, station: String) {
     app.sheet = SheetSpec(0.66f) {
         val scope = rememberCoroutineScope()
         val topic by rememberTopic<PickView>(app.core, Topics.pick(station, "new"))
-        val set = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> scope.launch { try { app.api(station).pickSet("new", fill) } catch (e: CoreException) { app.toast = "没能选上：${errorText(e)}" } }; Unit }
+        val set = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> scope.launch { try { app.api(station).pickSet("new", fill) } catch (e: CoreException) { app.toast = t("android-chat.pick.failed", "error" to errorText(e)) } }; Unit }
         // Picked from what it runs on now, each time it is opened.
         LaunchedEffect(Unit) { set { put("open", true) } }
         var accounts by remember { mutableStateOf(false) }
@@ -305,15 +306,15 @@ private fun openRunPicker(app: AppState, station: String) {
         if (accounts) {
             Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).clickable { accounts = false }, contentAlignment = Alignment.Center) { IconIn(Icons.ChevronLeft, 20.dp, C.ink) }
-                Text("账号", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink)
+                Text(t("android-chat.new.account"), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink)
             }
-        } else SheetHead("模型")
-        if (v == null) return@SheetSpec Loading(topic.error?.message ?: "正在读取…")
+        } else SheetHead(t("android-chat.new.model"))
+        if (v == null) return@SheetSpec Loading(topic.error?.message ?: t("android-chat.reading"))
         val draft = v.draft
         if (accounts) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp).windowInsetsPadding(WindowInsets.navigationBars)) {
                 v.dropped?.let { Text(it, fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) }
-                CascadeOption("自动", v.autoNote, draft.profile == null) { set { put("profile", null as String?) }; accounts = false }
+                CascadeOption(t("android-chat.new.auto"), v.autoNote, draft.profile == null) { set { put("profile", null as String?) }; accounts = false }
                 v.accounts.forEach { a ->
                     CascadeOption(a.name, a.quotaLine?.text, draft.profile == a.id, subColor = if (a.quotaLine?.level != null) C.warn else C.muted,
                         leading = { ProviderMark(a.runtime ?: draft.runtime, a.kind, 16.dp) }) { set { put("profile", a.id) }; accounts = false }
@@ -323,7 +324,7 @@ private fun openRunPicker(app: AppState, station: String) {
         }
         // Side by side, each scrolling on its own: the models (by series, in the core's order), and what goes with the one picked.
         Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val groups = v.options.groupBy { it.family ?: "其他" }
+            val groups = v.options.groupBy { it.family ?: t("android-chat.pick.family.other") }
             Column(Modifier.weight(1.35f).fillMaxHeight().verticalScroll(rememberScrollState())) {
                 groups.forEach { (who, list) ->
                     if (groups.size > 1) CascadeLabel(who)
@@ -335,15 +336,15 @@ private fun openRunPicker(app: AppState, station: String) {
             }
             Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(14.dp)).background(C.surface).verticalScroll(rememberScrollState()).padding(4.dp)) {
                 if (v.runtimes.isNotEmpty()) {
-                    CascadeLabel("运行时")
+                    CascadeLabel(t("android-chat.new.runtime"))
                     v.runtimes.forEach { r -> CascadeOption(RUNTIME_LABEL[r] ?: r, null, draft.runtime == r, leading = { MakerIcon(null, r, 16.dp) }) { set { put("runtime", r) } } }
                 }
-                CascadeLabel("思考深度")
-                (listOf<String?>(null) + v.efforts).forEach { e -> CascadeOption(e ?: "默认", null, draft.effort == e) { set { put("effort", e) } } }
+                CascadeLabel(t("android-chat.new.effort"))
+                (listOf<String?>(null) + v.efforts).forEach { e -> CascadeOption(e ?: t("android-chat.pick.default"), null, draft.effort == e) { set { put("effort", e) } } }
                 if (v.fastAvailable == true) {
-                    CascadeLabel("速度")
+                    CascadeLabel(t("android-chat.new.speed"))
                     listOf<Boolean?>(null, false, true).forEach { fast ->
-                        CascadeOption(when (fast) { true -> "Fast"; false -> "标准"; null -> "跟随订阅" }, if (fast == true) "消耗更多额度或积分" else null, draft.fast == fast) { set { put("fast", fast) } }
+                        CascadeOption(when (fast) { true -> "Fast"; false -> t("android-chat.pick.speed.standard"); null -> t("android-chat.pick.speed.follow") }, if (fast == true) t("android-chat.new.fast.note") else null, draft.fast == fast) { set { put("fast", fast) } }
                     }
                 }
             }
@@ -357,7 +358,7 @@ private fun openRunPicker(app: AppState, station: String) {
                 Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { accounts = true }.padding(horizontal = 10.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text("账号", fontSize = 14.sp, color = C.muted)
+                Text(t("android-chat.new.account"), fontSize = 14.sp, color = C.muted)
                 Text(v.who, fontSize = 14.sp, color = if (v.whoLevel != null) C.warn else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 IconIn(Icons.ChevronRight, 14.dp, C.muted)
             }
@@ -369,13 +370,13 @@ private fun openRunPicker(app: AppState, station: String) {
                     val sheet = app.sheet
                     app.scope.launch {
                         try { app.api(station).pickSave("new"); if (app.sheet === sheet) app.sheet = null }
-                        catch (err: CoreException) { app.toast = "没能保存：${errorText(err)}" }
+                        catch (err: CoreException) { app.toast = t("android-chat.save.failed", "error" to errorText(err)) }
                     }
                 }.padding(horizontal = 22.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 if (saving) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), color = C.bg, strokeWidth = 1.5.dp)
-                Text(if (v.changed) "确定" else "不变", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (v.changed) C.bg else C.ink)
+                Text(if (v.changed) t("android-chat.new.confirm") else t("android-chat.new.unchanged"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (v.changed) C.bg else C.ink)
             }
         }
     }
@@ -419,16 +420,16 @@ private fun MachineSessionsOffer(view: StationView) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         IconIn(Icons.Monitor, 14.dp, C.muted)
-        Text("接着 ${view.name.ifEmpty { "本机" }} 终端里的会话", fontSize = 14.sp, color = C.muted)
+        Text(t("android-chat.new.machine.offer", "station" to view.name.ifEmpty { t("android-chat.new.machine.here") }), fontSize = 14.sp, color = C.muted)
     }
 }
 
 private fun openMachineSessions(app: AppState, view: StationView, sessions: List<MachineSession>) {
     app.sheet = SheetSpec(0.7f) {
         SheetGrab()
-        SheetHead("接着 ${view.name.ifEmpty { "本机" }} 上的会话")
+        SheetHead(t("android-chat.new.machine.title", "station" to view.name.ifEmpty { t("android-chat.new.machine.here") }))
         Text(
-            "这台机器上的 Claude Code 和 Codex 在终端里跑过的会话。点一个先看看内容，再决定要不要在它原来的目录里接着聊；终端里的那个不受影响。",
+            t("android-chat.new.machine.text"),
             fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
         )
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
@@ -442,7 +443,7 @@ private fun openMachineSessions(app: AppState, view: StationView, sessions: List
                         Text(s.title ?: s.first ?: "", fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(s.meta ?: "", fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    if (s.session != null) Text("已在 ${BuildConfig.APP_NAME} 里", fontSize = 12.sp, color = C.muted, maxLines = 1)
+                    if (s.session != null) Text(t("android-chat.new.machine.inApp", "app" to BuildConfig.APP_NAME), fontSize = 12.sp, color = C.muted, maxLines = 1)
                 }
             }
         }
@@ -467,10 +468,10 @@ private fun lookAtMachineSession(app: AppState, view: StationView, sessions: Lis
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             val got = shown
             when {
-                got == null && error == null -> Text("正在读取…", fontSize = 13.sp, color = C.muted, modifier = Modifier.fillMaxWidth().padding(top = 40.dp), textAlign = TextAlign.Center)
+                got == null && error == null -> Text(t("android-chat.reading"), fontSize = 13.sp, color = C.muted, modifier = Modifier.fillMaxWidth().padding(top = 40.dp), textAlign = TextAlign.Center)
                 got != null -> {
                     val left = got.second - got.first.size
-                    if (left > 0) Text("更早的 $left 条没有列出", fontSize = 12.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    if (left > 0) Text(t("android-chat.new.machine.more", "n" to left), fontSize = 12.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     val option = view.models.optionOf(s.model)
                     val name = option?.name ?: s.model ?: (RUNTIME_LABEL[s.runtime] ?: s.runtime)
                     got.first.forEach { m ->
@@ -489,8 +490,8 @@ private fun lookAtMachineSession(app: AppState, view: StationView, sessions: Lis
         }
         error?.let { Text(it, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) }
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            Button("返回", primary = false) { openMachineSessions(app, view, sessions) }
-            Button(if (s.session != null) "打开它的对话" else "接着这个会话", primary = true, busy = busy) {
+            Button(t("common.back"), primary = false) { openMachineSessions(app, view, sessions) }
+            Button(if (s.session != null) t("android-chat.new.machine.open") else t("android-chat.new.machine.continue"), primary = true, busy = busy) {
                 error = null
                 scope.launch {
                     try {

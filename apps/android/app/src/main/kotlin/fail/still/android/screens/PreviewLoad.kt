@@ -1,5 +1,6 @@
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -29,7 +30,9 @@ internal data class PreviewLoading(val percent: Int, val total: Int, val finishe
 @Serializable
 internal data class PreviewResource(val id: Long, val method: String, val path: String, val since: Double, val ended: Double? = null, val status: Int? = null, val error: String? = null)
 private fun loadTopic(station: String, port: Int) = buildJsonObject { put("topic", "previewLoad"); put("station", station); put("port", port) }
-private fun PreviewLoading.label() = "资源加载 $percent% · $finished/$total" + if (failed > 0) " · $failed 个失败" else ""
+private fun PreviewLoading.label() =
+    if (failed > 0) t("android-chat.load.label.failed", "percent" to percent, "finished" to finished, "total" to total, "failed" to failed)
+    else t("android-chat.load.label", "percent" to percent, "finished" to finished, "total" to total)
 
 @Composable
 internal fun PreviewLoad(station: String, port: Int) {
@@ -55,15 +58,15 @@ private fun PreviewLoadDetails(station: String, port: Int) {
     val value = state.value ?: return
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         SheetHead(value.label())
-        Text("按已发现的服务请求计算 · 新资源出现时更新", color = C.muted, fontSize = 12.sp)
+        Text(t("android-chat.load.note"), color = C.muted, fontSize = 12.sp)
         Column(Modifier.verticalScroll(rememberScrollState()).padding(top = 12.dp)) {
-            if (value.total == 0) Text("等待页面请求", color = C.muted, fontSize = 13.sp)
+            if (value.total == 0) Text(t("android-chat.load.waiting"), color = C.muted, fontSize = 13.sp)
             value.resources.forEach { r ->
                 val color = if (r.error != null || (r.status ?: 0) >= 400) C.red else C.muted
                 Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(r.path, color = color, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        Text(if (r.ended == null) "加载中" else if (r.error != null) "失败" else "${r.status}", color = color, fontSize = 12.sp)
+                        Text(if (r.ended == null) t("android-chat.load.loading") else if (r.error != null) t("android-chat.load.failed") else "${r.status}", color = color, fontSize = 12.sp)
                         if (r.ended != null) Text("${(r.ended - r.since).toLong().coerceAtLeast(0)} ms", color = color, fontSize = 12.sp)
                     }
                     r.error?.let { Text(it, color = color, fontSize = 12.sp) }

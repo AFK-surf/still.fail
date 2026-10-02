@@ -4,6 +4,7 @@
 // (model, allowance, the station it runs on).
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import fail.still.android.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.withStyle
@@ -120,7 +121,7 @@ fun openHistory(app: AppState, station: String, of: ChatOf, key: String, entry: 
 fun HistoryScreen(station: String, of: ChatOf, key: String, entry: Long? = null) {
     val app = LocalApp.current
     Column(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.navigationBars)) {
-        NavBar("返回", { app.pop() }, "执行历史")
+        NavBar(t("common.back"), { app.pop() }, t("android-chat.history.title"))
         HistoryContent(station, of, key, entry)
     }
 }
@@ -134,7 +135,7 @@ private fun ColumnScope.HistoryContent(station: String, of: ChatOf, key: String,
     val agent = chat.value?.agents?.firstOrNull { it.session.key == key }
     var tab by rememberSaveable { mutableStateOf(0) }
     if (agent == null) {
-        Text(chat.error?.message ?: "正在读取…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
+        Text(chat.error?.message ?: t("android-chat.reading"), color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
         return
     }
     val s = agent.session
@@ -143,7 +144,7 @@ private fun ColumnScope.HistoryContent(station: String, of: ChatOf, key: String,
         // The page is the agent's history; its head is the agent, with the room its name needs.
         Text(s.agentText, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Actions(station, agent)
-        Seg(listOf("步骤", "详情"), tab, { tab = it })
+        Seg(listOf(t("android-chat.history.tab.steps"), t("android-chat.history.tab.details")), tab, { tab = it })
     }
     Summary(agent)
     Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -170,8 +171,8 @@ private fun Actions(station: String, agent: ChatAgent) {
             contentAlignment = Alignment.Center,
         ) { if (busy) Spinner(12.dp) else IconIn(icon, 14.dp, C.ink) }
     }
-    if (st == "running" || st == "queued") act(Icons.Stop, "已请求停止", "session.stop") { app.api(station).stop(s.key) }
-    if (s.process == "warm") act(Icons.Unplug, "已释放进程", "session.evict") { app.api(station).evict(s.key) }
+    if (st == "running" || st == "queued") act(Icons.Stop, t("android-chat.history.stopped"), "session.stop") { app.api(station).stop(s.key) }
+    if (s.process == "warm") act(Icons.Unplug, t("android-chat.history.evicted"), "session.evict") { app.api(station).evict(s.key) }
 }
 
 /** The head's short line: only what is worth a look now (an account signed out, a quota running out, the disk filling up). */
@@ -204,7 +205,7 @@ private sealed interface Line {
 
 @Composable
 private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: HistoryView?, entry: Long? = null) {
-    if (history == null) return Edge("正在读取执行历史…")
+    if (history == null) return Edge(t("android-chat.history.loading"))
     if (history.empty) return Edge(history.edge)
     val items = history.items
     val lines = items.map { Line.Item(it) } + history.live.map { Line.Live(it) } + listOfNotNull(history.phase?.let { Line.Phase(it) })
@@ -273,16 +274,17 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
     when (val body = item.body) {
         is HistoryBody.Received -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             body.content.note?.let { note ->
-                Message(Icons.Received, { Text("收到来自 ", fontSize = 13.sp, color = C.muted); Strong(BuildConfig.APP_NAME); Text(" 的提醒", fontSize = 13.sp, color = C.muted) }, note) {
+                Message(Icons.Received, { val (before, after) = around("android-chat.history.received.note"); Text(before, fontSize = 13.sp, color = C.muted); Strong(BuildConfig.APP_NAME); Text(after, fontSize = 13.sp, color = C.muted) }, note) {
                     Text(note, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink)
                 }
             }
             body.content.messages.forEach { m ->
                 Message(Icons.Received, {
-                    Text("收到来自 ", fontSize = 13.sp, color = C.muted)
+                    val (before, after) = around("android-chat.history.received.message")
+                    Text(before, fontSize = 13.sp, color = C.muted)
                     val user = m.from.slackUser
                     if (user != null) SlackName(station, user, m.from.name, m.from.bound) else Strong(m.from.name)
-                    Text(" 的消息", fontSize = 13.sp, color = C.muted)
+                    Text(after, fontSize = 13.sp, color = C.muted)
                     m.place?.let { Text(" · ", fontSize = 13.sp, color = C.muted); Box(Modifier.weight(1f, fill = false)) { Place(station, of, it) } }
                 }, m.text) { Text(m.text, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink) }
             }
@@ -290,13 +292,15 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
         is HistoryBody.Post -> {
             val post = body.content
             Message(Icons.Send, {
-                Text("发送到 ", fontSize = 13.sp, color = C.muted)
+                val (before, after) = around("android-chat.history.sent.to")
+                Text(before, fontSize = 13.sp, color = C.muted)
                 Box(Modifier.weight(1f, fill = false)) {
                     val place = post.place
                     if (place != null) Place(station, of, place) else Row(verticalAlignment = Alignment.CenterVertically) { SlackMark(12.dp); Strong(" Slack") }
                 }
+                Text(after, fontSize = 13.sp, color = C.muted)
                 if (post.block) Pill("Block", C.blue)
-                if (post.failed) Pill("发送失败", C.red)
+                if (post.failed) Pill(t("android-chat.history.send.failed"), C.red)
             }, post.text) { Markdown(post.text, size = 15) }
         }
         is HistoryBody.Mark -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -307,13 +311,13 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
                 var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
                 LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
                 val waited = ((now - wait.since) / 1000).coerceAtLeast(0).let { s -> wait.seconds?.let { minOf(s, it) } ?: s }
-                Text("等待中 ${shortSpan(waited)}" + (wait.seconds?.let { " / ${shortSpan(it)}" } ?: ""), fontSize = 13.sp, color = C.muted)
+                Text(t("android-chat.history.waiting", "time" to shortSpan(waited)) + (wait.seconds?.let { " / ${shortSpan(it)}" } ?: ""), fontSize = 13.sp, color = C.muted)
             } else Text(body.content.text, fontSize = 13.sp, color = C.muted)
         }
         is HistoryBody.Text -> Box(Modifier.let { if (body.content.subagent) it.padding(start = 12.dp) else it }) {
             val app = LocalApp.current
             val text = body.content.text
-            Brief(text) { app.reader = ReaderSpec({ Text("${agent.session.agentText} 写道", fontSize = 13.sp, color = C.muted) }) { Markdown(text, size = 15) } }
+            Brief(text) { app.reader = ReaderSpec({ Text(t("android-chat.history.wrote", "name" to agent.session.agentText), fontSize = 13.sp, color = C.muted) }) { Markdown(text, size = 15) } }
         }
         is HistoryBody.Group -> Group(body.content)
     }
@@ -359,6 +363,9 @@ private fun Message(icon: androidx.compose.ui.graphics.vector.ImageVector, label
     }
 }
 
+/** A sentence of the catalog's around a part drawn on its own (`{name}`): its words before it and after it. */
+private fun around(key: String): Pair<String, String> = t(key).split("{name}", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+
 @Composable
 private fun Pill(text: String, color: androidx.compose.ui.graphics.Color) =
     Text(text, fontSize = 11.sp, color = color, modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp))
@@ -377,7 +384,7 @@ private fun Place(station: String, of: ChatOf, place: fail.still.android.data.Pl
     val slack = place.url?.takeIf { place.surface == "slack" }?.let { url ->
         {
             try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
-            catch (_: android.content.ActivityNotFoundException) { app.toast = "打不开这个链接" }
+            catch (_: android.content.ActivityNotFoundException) { app.toast = t("android-chat.link.failed") }
         }
     }
     val open = chat ?: slack
@@ -405,8 +412,8 @@ private fun SlackName(station: String, user: String, name: String, mine: Boolean
         Text(
             name, fontSize = 13.sp, color = C.accentInk, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.clip(RoundedCornerShape(4.dp)).clickable(enabled = !binding) {
-                app.menu = MenuSpec(bounds, listOf(MenuItem(if (mine) "不是我" else "这是我", if (mine) Icons.Close else Icons.Check) {
-                    app.act(if (mine) "解除" else "绑定") { app.api(station).slackIdentity(user, !mine) }
+                app.menu = MenuSpec(bounds, listOf(MenuItem(if (mine) t("android-chat.history.identity.notMe") else t("android-chat.history.identity.me"), if (mine) Icons.Close else Icons.Check) {
+                    app.act(if (mine) t("android-chat.history.identity.unbind") else t("android-chat.history.identity.bind")) { app.api(station).slackIdentity(user, !mine) }
                 }))
             },
         )
@@ -422,13 +429,13 @@ private fun Group(g: HistoryGroup) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconIn(if (open) Icons.ChevronDown else Icons.ChevronRight, 13.dp, C.subtle)
             Text(g.summary, color = if (g.failures > 0) C.red else C.muted, fontSize = 14.sp, maxLines = if (open) 3 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            if (g.failures > 0) Pill("${g.failures} 项失败", C.red)
-            if (g.pending > 0) Pill("${g.pending} 项进行中", C.accentInk)
+            if (g.failures > 0) Pill(t("android-chat.history.group.failed", "n" to g.failures), C.red)
+            if (g.pending > 0) Pill(t("android-chat.history.group.pending", "n" to g.pending), C.accentInk)
         }
         if (open) Column(Modifier.padding(start = 19.dp, top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            g.thinking.forEach { t ->
-                if (g.steps.isEmpty()) Text(t.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted)
-                else Folding("思考", t.first, null, false) { Text(t.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
+            g.thinking.forEach { th ->
+                if (g.steps.isEmpty()) Text(th.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted)
+                else Folding(t("android-chat.history.thinking"), th.first, null, false) { Text(th.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
             }
             g.steps.forEach { StepRow(it) }
         }
@@ -479,14 +486,14 @@ private fun Details(station: String, of: ChatOf, agent: ChatAgent, history: Hist
         // Changing how it runs is a screen of its own.
         RunRow(agent) { app.push(Screen.RunSettings(station, of, s.key)) }
         Column(Modifier.padding(top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Detail("运行时", s.runtimeText)
-            s.processText?.let { Detail("进程", it) }
+            Detail(t("android-chat.history.detail.runtime"), s.runtimeText)
+            s.processText?.let { Detail(t("android-chat.history.detail.process"), it) }
             history?.usage?.forEach { Detail(it.label, it.value) }
         }
         GroupLabel("Station")
         Column(Modifier.padding(top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Detail("名字", rememberStationName(station))
-            if (host != null) Detail("机器", "${host.hostname} · ${host.summary}")
+            Detail(t("android-chat.history.detail.name"), rememberStationName(station))
+            if (host != null) Detail(t("android-chat.history.detail.machine"), "${host.hostname} · ${host.summary}")
         }
         if (host != null) MeterChips(host.meters, Modifier.padding(vertical = 10.dp))
     }
@@ -504,9 +511,9 @@ private fun RunRow(agent: ChatAgent, onOpen: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         MakerIcon(s.maker, s.runtime, 15.dp)
-        Text(s.model?.let { s.modelName ?: it } ?: "选模型", fontSize = 14.sp, color = C.ink, maxLines = 1, softWrap = false)
+        Text(s.model?.let { s.modelName ?: it } ?: t("android-chat.pick.model"), fontSize = 14.sp, color = C.ink, maxLines = 1, softWrap = false)
         Text(
-            " · ${s.effort ?: "默认深度"} · ${if (s.profilePinned == true) name else "自动 · $name"}",
+            " · ${s.effort ?: t("android-chat.pick.effort.default")} · ${if (s.profilePinned == true) name else t("android-chat.history.run.auto", "name" to name)}",
             fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
         )
         IconIn(Icons.ChevronDown, 14.dp, C.muted)
@@ -529,15 +536,15 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
     val pickOf = "session:$key"
     val picking by rememberTopic<PickView>(app.core, Topics.pick(station, pickOf))
     val v = picking.value
-    val pick = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> scope.launch { try { app.api(station).pickSet(pickOf, fill) } catch (e: CoreException) { app.toast = "没能选上：${errorText(e)}" } }; Unit }
+    val pick = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> scope.launch { try { app.api(station).pickSet(pickOf, fill) } catch (e: CoreException) { app.toast = t("android-chat.pick.failed", "error" to errorText(e)) } }; Unit }
     // Picked from what it runs on now, each time it is opened.
     LaunchedEffect(station, key) { pick { put("open", true) } }
     // A long list (the models, the accounts) is a list of its own, picked from and back.
     var list by remember { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(enabled = list != null) { list = null }
     Column(Modifier.fillMaxSize()) {
-        NavBar(if (list != null) "换模型" else "返回", { if (list != null) list = null else app.pop() }, when (list) { "model" -> "选模型"; "account" -> "选账号"; else -> "换模型" })
-        if (agent == null || v == null) return Text(chat.error?.message ?: "正在读取…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
+        NavBar(if (list != null) t("android-chat.run.title") else t("common.back"), { if (list != null) list = null else app.pop() }, when (list) { "model" -> t("android-chat.pick.model"); "account" -> t("android-chat.run.account.choose"); else -> t("android-chat.run.title") })
+        if (agent == null || v == null) return Text(chat.error?.message ?: t("android-chat.reading"), color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
         val s = agent.session
         val busy = app.isDoing("pick.save", "station" to station, "of" to "session:$key")
         val chosen = v.draft.profile
@@ -547,9 +554,9 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
             // Always on top: what it was, and what it becomes, the changes marked; and when the account must change, why.
             Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Each property on its line: what it was, and, when it changes, an arrow to what it becomes.
-                (listOf("模型", "深度", "账号") + if (v.fastAvailable == true) listOf("速度") else emptyList()).forEachIndexed { i, label ->
+                (listOf(t("android-chat.run.label.model"), t("android-chat.run.label.effort"), t("android-chat.run.label.account")) + if (v.fastAvailable == true) listOf(t("android-chat.run.label.speed")) else emptyList()).forEachIndexed { i, label ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(label, fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
+                        Text(label, fontSize = 13.sp, color = C.muted, modifier = Modifier.width(if (fail.still.android.ui.I18n.lang == "zh") 32.dp else 60.dp))
                         val was = v.was.getOrElse(i) { "" }
                         val becomes = v.becomes.getOrElse(i) { "" }
                         val moved = becomes != was
@@ -561,25 +568,27 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                     }
                 }
                 v.force?.let { Text(it, fontSize = 12.sp, color = C.warn) }
-                Text("改了以后从下一轮开始生效。", fontSize = 12.sp, color = C.subtle)
+                Text(t("android-chat.run.next"), fontSize = 12.sp, color = C.subtle)
             }
-            GroupLabel("模型")
+            GroupLabel(t("android-chat.run.label.model"))
             SettingRow(onClick = { list = "model" }, leading = { MakerIcon(v.maker, s.runtime, 18.dp) }) { Text(v.modelText, fontSize = 15.sp, color = C.ink) }
-            GroupLabel("思考深度")
-            Text("想得越深越慢，也越费额度。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
+            GroupLabel(t("android-chat.run.effort.title"))
+            Text(t("android-chat.run.effort.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
             EffortChips(listOf<String?>(null) + v.efforts, v.draft.effort) { e -> pick { put("effort", e) } }
             if (v.fastAvailable == true) {
-                GroupLabel("速度")
-                Text("Fast 响应更快，消耗更多额度或积分。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
-                EffortChips(listOf("跟随订阅", "标准", "Fast"), when (v.draft.fast) { true -> "Fast"; false -> "标准"; null -> "跟随订阅" }) { speed ->
-                    pick { put("fast", when (speed) { "Fast" -> true; "标准" -> false; else -> null } as Boolean?) }
+                GroupLabel(t("android-chat.run.label.speed"))
+                Text(t("android-chat.run.speed.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
+                val asPlan = t("android-chat.pick.speed.follow")
+                val standard = t("android-chat.pick.speed.standard")
+                EffortChips(listOf(asPlan, standard, "Fast"), when (v.draft.fast) { true -> "Fast"; false -> standard; null -> asPlan }) { speed ->
+                    pick { put("fast", when (speed) { "Fast" -> true; standard -> false; else -> null } as Boolean?) }
                 }
             }
-            GroupLabel("账号")
+            GroupLabel(t("android-chat.run.label.account"))
             SettingRow(onClick = { list = "account" }, leading = { chosen?.let { id -> v.accounts.firstOrNull { it.id == id } }?.let { ProviderMark(it.runtime ?: s.runtime, it.kind, 18.dp) } }) {
                 Text(v.accountText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(v.accountNote, fontSize = 12.sp, color = C.muted)
-                if (v.accountWarn) Text("这个模型要换账号", fontSize = 12.sp, color = C.warn)
+                if (v.accountWarn) Text(t("android-chat.run.account.warn"), fontSize = 12.sp, color = C.warn)
             }
             Box(Modifier.height(16.dp))
         }
@@ -590,8 +599,8 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                 .clickable(enabled = !busy) {
                     if (!go) { app.pop(); return@clickable }
                     scope.launch {
-                        try { app.api(station).pickSave(pickOf); app.toast = "已改，下一轮起生效"; app.pop() }
-                        catch (err: CoreException) { app.toast = "没能保存：${errorText(err)}" }
+                        try { app.api(station).pickSave(pickOf); app.toast = t("android-chat.run.saved"); app.pop() }
+                        catch (err: CoreException) { app.toast = t("android-chat.save.failed", "error" to errorText(err)) }
 
                     }
                 }
@@ -630,15 +639,15 @@ internal fun ModelList(models: List<ModelOption>, runtime: String, picked: Strin
     val shown = models.filter { m -> (listOf(m.name, m.model) + m.ids).any { it.contains(filter.trim(), ignoreCase = true) } }
     val on = models.optionOf(picked)
     // By series, in the core's order.
-    val groups = shown.groupBy { it.family ?: "其他" }
+    val groups = shown.groupBy { it.family ?: t("android-chat.pick.family.other") }
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
-        if (models.size > 8) Field(filter, { filter = it }, "搜索模型", modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+        if (models.size > 8) Field(filter, { filter = it }, t("android-chat.run.model.search"), modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             groups.forEach { (who, list) ->
                 if (groups.size > 1) GroupLabel(who)
                 list.forEach { m -> PickLine(m.name, checked = m == on, onClick = { onPick(m.model) }, leading = { MakerIcon(m.maker, runtime, 18.dp) }) }
             }
-            if (shown.isEmpty()) Text("没有叫这个的模型", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(vertical = 16.dp))
+            if (shown.isEmpty()) Text(t("android-chat.run.model.none"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(vertical = 16.dp))
             Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars).height(16.dp))
         }
     }
@@ -648,8 +657,8 @@ internal fun ModelList(models: List<ModelOption>, runtime: String, picked: Strin
 @Composable
 internal fun AccountList(accounts: List<RunnableProfile>, runtime: String, picked: String?, onPick: (String?) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-        Text("自动分配时，额度用完或登录失效会换一个；指定了就一直用它。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
-        PickLine("自动分配", checked = picked == null, onClick = { onPick(null) })
+        Text(t("android-chat.run.account.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+        PickLine(t("android-chat.run.account.auto"), checked = picked == null, onClick = { onPick(null) })
         accounts.forEach { p ->
             PickLine(p.name, checked = picked == p.id, onClick = { onPick(p.id) },
                 leading = { ProviderMark(p.runtime ?: runtime, p.kind, 18.dp) }, trailing = { QuotaRings(p.quota) })
@@ -666,7 +675,7 @@ internal fun EffortChips(efforts: List<String?>, picked: String?, onPick: (Strin
         efforts.forEach { e ->
             val on = e == picked
             Text(
-                e ?: "默认", fontSize = 14.sp, color = if (on) C.bg else C.ink, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                e ?: t("android-chat.pick.default"), fontSize = 14.sp, color = if (on) C.bg else C.ink, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
                 modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(if (on) C.ink else C.chip).clickable { onPick(e) }.padding(horizontal = 16.dp, vertical = 9.dp),
             )
         }

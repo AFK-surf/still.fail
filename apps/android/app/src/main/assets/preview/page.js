@@ -4,6 +4,8 @@
 // cloud/src/previewSocket.ts, as written out with the link below: regenerate it from there when that changes), its
 // requests' bodies, and marking the page.
 (() => {
+  // The words a person may read here in the app's language, which the app says first (PreviewWeb.kt pageScript).
+  const en = self.__stillfailLang === "en";
   const link = (() => {
   // The page's own WebSockets go through the app (the preview's JavascriptInterface, StillFailPreviewNative, on to
   // the core's preview.socket): kept in the top page, which the app speaks to, for the page and its frames alike.
@@ -47,7 +49,7 @@
       super();
       const to = new URL(url, location.href);
       if (to.protocol === "http:" || to.protocol === "https:") to.protocol = to.protocol === "http:" ? "ws:" : "wss:";
-      if (to.protocol !== "ws:" && to.protocol !== "wss:") throw new DOMException("不是 WebSocket 地址：" + url, "SyntaxError");
+      if (to.protocol !== "ws:" && to.protocol !== "wss:") throw new DOMException((en ? "Not a WebSocket address: " : "不是 WebSocket 地址：") + url, "SyntaxError");
       if (to.host !== location.host) return new Native(url, protocols);
       this.url = to.href;
       this.readyState = 0;
@@ -91,7 +93,7 @@
       this.dispatchEvent(event);
     }
     send(data) {
-      if (this.readyState === 0) throw new DOMException("WebSocket 还没连上", "InvalidStateError");
+      if (this.readyState === 0) throw new DOMException(en ? "WebSocket is not connected yet" : "WebSocket 还没连上", "InvalidStateError");
       if (this.readyState !== 1) return;
       // In the order sent, a Blob read first.
       this._sending = this._sending.then(async () => {
@@ -114,7 +116,7 @@
   // Workers the page makes from its own code (a blob: URL: a dev server's check that it is back up, in a shared
   // worker) get the same WebSocket: WORKER_SOCKET goes first in their code, and each is given a port to open its
   // sockets here through. A worker from a script of the service's (not blob:) keeps the browser's own.
-  const shim = "(() => {\n  const Native = self.WebSocket;\n  let relay = null;\n  const queued = [];\n  const sockets = new Map();\n  let next = 0;\n  const post = (message) => (relay ? relay.postMessage(message) : queued.push(message));\n  const take = (event) => {\n    if (!(event.data && event.data.stillfailSockets instanceof MessagePort)) return;\n    event.stopImmediatePropagation();\n    relay = event.data.stillfailSockets;\n    relay.onmessage = ({ data }) => sockets.get(data.id)?._on(data);\n    for (const message of queued.splice(0)) relay.postMessage(message);\n  };\n  if (typeof SharedWorkerGlobalScope !== \"undefined\" && self instanceof SharedWorkerGlobalScope) {\n    self.addEventListener(\"connect\", (event) => {\n      const port = event.ports[0];\n      port.addEventListener(\"message\", take);\n      port.start();\n    });\n  } else {\n    self.addEventListener(\"message\", take);\n  }\n  class WorkerSocket extends EventTarget {\n    static CONNECTING = 0;\n    static OPEN = 1;\n    static CLOSING = 2;\n    static CLOSED = 3;\n    constructor(url, protocols) {\n      super();\n      // A blob: worker's own location has no host: the page's origin is its.\n      const here = new URL(location.origin);\n      const to = new URL(url, location.protocol === \"blob:\" ? here : location.href);\n      if (to.host !== here.host) return new Native(url, protocols);\n      this.url = to.href;\n      this.readyState = 0;\n      this.protocol = \"\";\n      this.extensions = \"\";\n      this.bufferedAmount = 0;\n      this.binaryType = \"blob\";\n      this.onopen = this.onmessage = this.onerror = this.onclose = null;\n      this._id = ++next;\n      sockets.set(this._id, this);\n      post({ open: this._id, url: to.href, protocols: protocols === undefined ? [] : [].concat(protocols).map(String) });\n    }\n    _on(data) {\n      if (data.opened && this.readyState === 0) {\n        this.readyState = 1;\n        this.protocol = data.protocol || \"\";\n        this._fire(new Event(\"open\"));\n      } else if (data.message !== undefined && this.readyState === 1) {\n        const got = typeof data.message === \"string\" || this.binaryType === \"arraybuffer\" ? data.message : new Blob([data.message]);\n        this._fire(new MessageEvent(\"message\", { data: got }));\n      } else if (data.close && this.readyState !== 3) {\n        this.readyState = 3;\n        sockets.delete(this._id);\n        if (data.failed) this._fire(new Event(\"error\"));\n        this._fire(new CloseEvent(\"close\", { code: data.code, reason: data.reason, wasClean: !data.failed }));\n      }\n    }\n    _fire(event) {\n      const handler = this[\"on\" + event.type];\n      if (typeof handler === \"function\") handler.call(this, event);\n      this.dispatchEvent(event);\n    }\n    send(data) {\n      if (this.readyState === 0) throw new DOMException(\"WebSocket 还没连上\", \"InvalidStateError\");\n      if (this.readyState === 1) post({ id: this._id, send: data });\n    }\n    close(code, reason) {\n      if (this.readyState >= 2) return;\n      this.readyState = 2;\n      post({ id: this._id, close: [code ?? 1000, reason ?? \"\"] });\n    }\n  }\n  Object.assign(WorkerSocket.prototype, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });\n  self.WebSocket = WorkerSocket;\n})();\n";
+  const shim = "(() => {\n  const Native = self.WebSocket;\n  let relay = null;\n  const queued = [];\n  const sockets = new Map();\n  let next = 0;\n  const post = (message) => (relay ? relay.postMessage(message) : queued.push(message));\n  const take = (event) => {\n    if (!(event.data && event.data.stillfailSockets instanceof MessagePort)) return;\n    event.stopImmediatePropagation();\n    relay = event.data.stillfailSockets;\n    relay.onmessage = ({ data }) => sockets.get(data.id)?._on(data);\n    for (const message of queued.splice(0)) relay.postMessage(message);\n  };\n  if (typeof SharedWorkerGlobalScope !== \"undefined\" && self instanceof SharedWorkerGlobalScope) {\n    self.addEventListener(\"connect\", (event) => {\n      const port = event.ports[0];\n      port.addEventListener(\"message\", take);\n      port.start();\n    });\n  } else {\n    self.addEventListener(\"message\", take);\n  }\n  class WorkerSocket extends EventTarget {\n    static CONNECTING = 0;\n    static OPEN = 1;\n    static CLOSING = 2;\n    static CLOSED = 3;\n    constructor(url, protocols) {\n      super();\n      // A blob: worker's own location has no host: the page's origin is its.\n      const here = new URL(location.origin);\n      const to = new URL(url, location.protocol === \"blob:\" ? here : location.href);\n      if (to.host !== here.host) return new Native(url, protocols);\n      this.url = to.href;\n      this.readyState = 0;\n      this.protocol = \"\";\n      this.extensions = \"\";\n      this.bufferedAmount = 0;\n      this.binaryType = \"blob\";\n      this.onopen = this.onmessage = this.onerror = this.onclose = null;\n      this._id = ++next;\n      sockets.set(this._id, this);\n      post({ open: this._id, url: to.href, protocols: protocols === undefined ? [] : [].concat(protocols).map(String) });\n    }\n    _on(data) {\n      if (data.opened && this.readyState === 0) {\n        this.readyState = 1;\n        this.protocol = data.protocol || \"\";\n        this._fire(new Event(\"open\"));\n      } else if (data.message !== undefined && this.readyState === 1) {\n        const got = typeof data.message === \"string\" || this.binaryType === \"arraybuffer\" ? data.message : new Blob([data.message]);\n        this._fire(new MessageEvent(\"message\", { data: got }));\n      } else if (data.close && this.readyState !== 3) {\n        this.readyState = 3;\n        sockets.delete(this._id);\n        if (data.failed) this._fire(new Event(\"error\"));\n        this._fire(new CloseEvent(\"close\", { code: data.code, reason: data.reason, wasClean: !data.failed }));\n      }\n    }\n    _fire(event) {\n      const handler = this[\"on\" + event.type];\n      if (typeof handler === \"function\") handler.call(this, event);\n      this.dispatchEvent(event);\n    }\n    send(data) {\n      if (this.readyState === 0) throw new DOMException(" + JSON.stringify(en ? "WebSocket is not connected yet" : "WebSocket 还没连上") + ", \"InvalidStateError\");\n      if (this.readyState === 1) post({ id: this._id, send: data });\n    }\n    close(code, reason) {\n      if (this.readyState >= 2) return;\n      this.readyState = 2;\n      post({ id: this._id, close: [code ?? 1000, reason ?? \"\"] });\n    }\n  }\n  Object.assign(WorkerSocket.prototype, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });\n  self.WebSocket = WorkerSocket;\n})();\n";
   const relay = (port) => {
     const open = new Map();
     port.onmessage = ({ data }) => {
@@ -172,6 +174,8 @@
 // request then carries in a header, x-stillfail-body, which the app takes off again. The top page's fetch() goes to
 // the app whole instead, and its answer comes as it is sent (below).
 (() => {
+  // The words a person may read here in the app's language, which the app says first (PreviewWeb.kt pageScript).
+  const en = self.__stillfailLang === "en";
   const native = window.StillFailPreviewNative;
   if (!native || window.__stillfailBodies) return;
   window.__stillfailBodies = true;
@@ -245,7 +249,7 @@
           if (!stream) return;
           stream.enqueue(bytesOf(said.b));
           // Read too slowly (as in PreviewWeb.kt's Chunks): given up rather than kept here without end.
-          if (stream.desiredSize < -(32 << 20)) { stream.error(new TypeError("网页读得太慢，已停止")); stop(); }
+          if (stream.desiredSize < -(32 << 20)) { stream.error(new TypeError(en ? "The page read too slowly and was stopped" : "网页读得太慢，已停止")); stop(); }
         } else if (said.t === "end") {
           finish();
           try { stream?.close(); } catch {}
@@ -403,7 +407,7 @@
         statusText: { get: () => state.statusText, configurable: true },
         responseURL: { get: () => state.url, configurable: true },
         responseXML: { get: () => null, configurable: true },
-        responseText: { get: () => { if (xhr.responseType && xhr.responseType !== "text") throw new DOMException("responseType 不是文字", "InvalidStateError"); return state.text; }, configurable: true },
+        responseText: { get: () => { if (xhr.responseType && xhr.responseType !== "text") throw new DOMException(en ? "responseType is not text" : "responseType 不是文字", "InvalidStateError"); return state.text; }, configurable: true },
         response: { get: () => (!xhr.responseType || xhr.responseType === "text" ? state.text : whole()), configurable: true },
       });
       fire("loadstart");
@@ -454,6 +458,8 @@
 // (StillFailPreviewNative.marked, `picked`) and where the marks are as the page scrolls or moves (`at`, in the
 // page's viewport, with its width so the app knows its scale). The app draws the marks, and takes the pictures.
 (() => {
+  // The words a person may read here in the app's language, which the app says first (PreviewWeb.kt pageScript).
+  const en = self.__stillfailLang === "en";
   const native = window.StillFailPreviewNative;
   if (!native || window !== window.top || window.__stillfailMarks) return;
   let on = false;
@@ -521,7 +527,12 @@
     if (classes.length) text += "." + classes.join(".");
     return text;
   }
-  const KINDS = {
+  const KINDS = en ? {
+    button: "button", a: "link", img: "image", svg: "icon", picture: "image", video: "video", input: "input", textarea: "input",
+    select: "dropdown", label: "label", h1: "heading", h2: "heading", h3: "heading", h4: "heading", h5: "heading", h6: "heading", p: "paragraph",
+    li: "list item", ul: "list", ol: "list", nav: "navigation", header: "header", footer: "footer", table: "table", tr: "table row", td: "cell",
+    th: "table header", form: "form", aside: "sidebar", dialog: "dialog", code: "code", pre: "code",
+  } : {
     button: "按钮", a: "链接", img: "图片", svg: "图标", picture: "图片", video: "视频", input: "输入框", textarea: "输入框",
     select: "下拉框", label: "标签", h1: "标题", h2: "标题", h3: "标题", h4: "标题", h5: "标题", h6: "标题", p: "段落",
     li: "列表项", ul: "列表", ol: "列表", nav: "导航", header: "页头", footer: "页脚", table: "表格", tr: "表格行", td: "单元格",
@@ -529,13 +540,13 @@
   };
   function kindOf(el) {
     const role = el.getAttribute("role");
-    if (role === "button") return "按钮";
-    if (role === "link") return "链接";
-    if (el instanceof HTMLInputElement && ["button", "submit", "reset"].includes(el.type)) return "按钮";
-    if (el instanceof HTMLInputElement && ["checkbox", "radio"].includes(el.type)) return "选框";
+    if (role === "button") return KINDS.button;
+    if (role === "link") return KINDS.a;
+    if (el instanceof HTMLInputElement && ["button", "submit", "reset"].includes(el.type)) return KINDS.button;
+    if (el instanceof HTMLInputElement && ["checkbox", "radio"].includes(el.type)) return en ? "checkbox" : "选框";
     if (KINDS[el.localName]) return KINDS[el.localName];
     const own = [...el.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
-    return own ? "文字" : "区块";
+    return own ? (en ? "text" : "文字") : (en ? "block" : "区块");
   }
   function selector(el) {
     const one = (css) => { try { return document.querySelectorAll(css).length === 1; } catch { return false; } };

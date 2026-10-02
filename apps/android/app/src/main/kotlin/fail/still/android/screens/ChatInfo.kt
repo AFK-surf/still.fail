@@ -1,6 +1,7 @@
 // A chat's info sheet (split from Chat.kt).
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import fail.still.android.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -63,13 +64,13 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
         val view = chat.value
         SheetGrab()
-        SheetHead("对话信息")
+        SheetHead(t("android-chat.info.title"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
             // Archived or offline, it is only read: no name to change, nothing to archive.
             val open = view != null && view.archived != true && !view.offline
             if (open) InfoList {
                 InfoRow(onClick = { askTitle(app, station, view!!.thread?.id, (of as? ChatOf.Session)?.key ?: view.agents.firstOrNull()?.session?.key ?: "", view.title) }) {
-                    Text("名称", fontSize = 14.sp, color = C.muted, modifier = Modifier.width(72.dp))
+                    Text(t("android-chat.info.name"), fontSize = 14.sp, color = C.muted, modifier = Modifier.width(72.dp))
                     Text(view!!.title, fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
@@ -79,35 +80,35 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                     // Under way: a spinner on the row, not tapped again.
                     val pinning = app.isDoing("chat.pin", "station" to station, "session" to session)
                     InfoRow(onClick = if (pinning) null else ({
-                        app.act(if (pinned) "取消固定" else "固定") { app.api(station).setPinned(session, !pinned) }
+                        app.act(if (pinned) t("android-chat.unpin.verb") else t("android-chat.pin.verb")) { app.api(station).setPinned(session, !pinned) }
                     })) {
                         IconIn(Icons.Pin, 16.dp, C.ink)
-                        Text(if (pinned) "取消固定" else "固定到列表顶部", fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                        Text(if (pinned) t("android-chat.unpin") else t("android-chat.info.pinTop"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
                         if (pinning) Spinner(14.dp)
                     }
                 }
             }
             if (open) Spacer(Modifier.height(10.dp))
             InfoList {
-                Detail("来自", view?.place?.let { "Slack · $it" } ?: "${BuildConfig.APP_NAME} 对话")
-                Detail("发起", (view?.thread ?: thread).creator?.shown?.display ?: "未记录")
-                Detail("参与", "${view?.people?.size ?: 0} 人") { view?.people?.let { if (it.isNotEmpty()) PeopleStack(it.take(8), 16.dp, C.surface2) } }
-                Detail("创建", (view?.thread ?: thread).time?.get("createdAt")?.ago ?: "")
-                (view?.thread ?: thread).lastMessage?.let { Detail("最近消息", it.time?.get("createdAt")?.ago ?: "") }
+                Detail(t("android-chat.info.from"), view?.place?.let { t("android-chat.info.from.slack", "place" to it) } ?: t("android-chat.info.from.app", "app" to BuildConfig.APP_NAME))
+                Detail(t("android-chat.info.creator"), (view?.thread ?: thread).creator?.shown?.display ?: t("android-chat.info.creator.none"))
+                Detail(t("android-chat.info.people"), t("android-chat.info.people.count", "n" to (view?.people?.size ?: 0))) { view?.people?.let { if (it.isNotEmpty()) PeopleStack(it.take(8), 16.dp, C.surface2) } }
+                Detail(t("android-chat.info.created"), (view?.thread ?: thread).time?.get("createdAt")?.ago ?: "")
+                (view?.thread ?: thread).lastMessage?.let { Detail(t("android-chat.info.latest"), it.time?.get("createdAt")?.ago ?: "") }
             }
             view?.slackUrl?.let { url ->
-                GroupLabel("在 Slack 里")
+                GroupLabel(t("android-chat.info.slack"))
                 val context = LocalContext.current
                 InfoList {
                     InfoRow(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }) {
                         SlackMark(16.dp)
-                        Text("在 Slack 中打开", fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                        Text(t("android-chat.info.slack.open"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
                         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                     }
                 }
             }
             if (view != null && view.agents.isNotEmpty()) {
-                GroupLabel("参与的 agent · 点开看它的执行历史")
+                GroupLabel(t("android-chat.info.agents"))
                 InfoList {
                     view.agents.forEach { a ->
                         val s = a.session
@@ -134,7 +135,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
             }
             // Into the archive (its first agent's session with it when it is that session's own), back to the list at once.
             if (open) {
-                GroupLabel("归档")
+                GroupLabel(t("android-chat.archive"))
                 InfoList {
                     InfoRow(onClick = {
                         val session = view!!.agents.firstOrNull()?.session?.key ?: (of as? ChatOf.Session)?.key ?: ""
@@ -142,16 +143,16 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                             app.sheet = null
                             app.pop()
                             app.scope.launch {
-                                try { app.api(station).setArchived(thread.id, session, true); app.toast = "已归档" }
-                                catch (e: CoreException) { app.toast = "没能归档：${e.message}" }
+                                try { app.api(station).setArchived(thread.id, session, true); app.toast = t("android-chat.archived") }
+                                catch (e: CoreException) { app.toast = t("android-chat.info.archive.failed", "error" to e.message) }
                             }
                         }
                         // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
                         val watch = view.watch
-                        if (watch != null) confirm(app, "归档「${view.title}」？", watch.ask, "归档") { archive() } else archive()
+                        if (watch != null) confirm(app, t("android-chat.archive.ask", "title" to view.title), watch.ask, t("android-chat.archive")) { archive() } else archive()
                     }) {
                         IconIn(Icons.Archive, 16.dp, C.ink)
-                        Text("归档对话", fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                        Text(t("android-chat.info.archive"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
                     }
                 }
             }
@@ -167,14 +168,14 @@ internal fun askTitle(app: AppState, station: String, thread: Long?, session: St
         val busy = app.isDoing("chat.rename", "station" to station, "session" to session)
         var error by remember { mutableStateOf<String?>(null) }
         SheetGrab()
-        SheetHead("重命名对话")
+        SheetHead(t("android-chat.rename.title"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Field(text, { text = it }, "对话名称")
-            Text("留空则自动起名", fontSize = 12.sp, color = C.muted)
+            Field(text, { text = it }, t("android-chat.rename.field"))
+            Text(t("android-chat.rename.note"), fontSize = 12.sp, color = C.muted)
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Button("取消", primary = false) { app.sheet = null }
-                Button("保存", primary = true, busy = busy, enabled = text.trim() != first) {
+                Button(t("common.cancel"), primary = false) { app.sheet = null }
+                Button(t("common.save"), primary = true, busy = busy, enabled = text.trim() != first) {
                     error = null
                     scope.launch {
                         try { app.api(station).rename(thread, session, text.trim()); app.sheet = null }

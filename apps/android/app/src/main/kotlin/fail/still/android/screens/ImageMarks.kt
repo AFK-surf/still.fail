@@ -5,6 +5,7 @@
 // new file with a quote per numbered mark, or is downloaded.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
@@ -81,7 +82,9 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-enum class MarkTool(val label: String) { Select("选择"), Rect("框"), Arrow("箭头"), Pen("画笔"), Text("文字") }
+enum class MarkTool { Select, Rect, Arrow, Pen, Text;
+    val label: String get() = t("android-chat.marks.tool." + name.lowercase())
+}
 
 /** still.fail's accent, what is drawn on an image by default (literal: the viewer is dark whatever the theme). */
 val INK = Color(0xFFE5704A)
@@ -536,11 +539,11 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
             val s = all.first { it.id == id }
             fun r(v: Float) = v.roundToInt()
             val what = when (s) {
-                is ImageMark.Box -> boxOf(s).let { "框 · 左上角 (${r(it.x)}, ${r(it.y)})，${r(it.w)}×${r(it.h)}" }
-                is ImageMark.Arrow -> "箭头 · 从 (${r(s.a.x)}, ${r(s.a.y)}) 指向 (${r(s.b.x)}, ${r(s.b.y)})"
+                is ImageMark.Box -> boxOf(s).let { t("android-chat.marks.box.where", "x" to r(it.x), "y" to r(it.y), "w" to r(it.w), "h" to r(it.h)) }
+                is ImageMark.Arrow -> t("android-chat.marks.arrow.where", "ax" to r(s.a.x), "ay" to r(s.a.y), "bx" to r(s.b.x), "by" to r(s.b.y))
                 else -> ""
             }
-            OfferQuote("图片 $original 标注 $n", "$what\n在图片 $made（${natural.width}×${natural.height}，原图 $original）上，编号 $n",
+            OfferQuote(t("android-chat.marks.quote.title", "original" to original, "n" to n), what + "\n" + t("android-chat.marks.quote.on", "made" to made, "width" to natural.width, "height" to natural.height, "original" to original, "n" to n),
                 comments[id]?.trim().orEmpty(), null, "image")
         }
 
@@ -554,7 +557,7 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
     /** The numbered marks' notes, in their numbers' order. */
     fun notes(): List<ImageNote> = numbersOf(shapes).map { (id, n) ->
         val s = shapes.first { it.id == id }
-        ImageNote(id, n, if (s is ImageMark.Box) "框" else "箭头", s.color)
+        ImageNote(id, n, if (s is ImageMark.Box) t("android-chat.marks.note.box") else t("android-chat.marks.note.arrow"), s.color)
     }
 
     /** The note being written, if one is. */
@@ -587,7 +590,7 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
                         .graphicsLayer { val g = if (open) 1.12f else 1f; scaleX = g; scaleY = g; transformOrigin = TransformOrigin(2f / 24f, 22f / 24f) }
                         .shadow(3.dp, pinShape).clip(pinShape).background(halo).padding(2.dp).clip(pinShape).background(s.color)
                         .clickable { open(if (open) null else s.id) }
-                        .semantics { contentDescription = "标注 $n" },
+                        .semantics { contentDescription = t("android-chat.marks.pin", "n" to n) },
                     contentAlignment = Alignment.Center,
                 ) { Text("$n", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = halo) }
             }
@@ -617,7 +620,7 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { putDown() }),
                 modifier = Modifier.focusRequester(focus),
                 decorationBox = { inner ->
-                    Box { if (w.text.isEmpty()) Text("写点什么", style = TextStyle(color = w.color.copy(alpha = 0.55f), fontSize = size, fontWeight = FontWeight.SemiBold)); inner() }
+                    Box { if (w.text.isEmpty()) Text(t("android-chat.marks.write"), style = TextStyle(color = w.color.copy(alpha = 0.55f), fontSize = size, fontWeight = FontWeight.SemiBold)); inner() }
                 },
             )
         }
@@ -693,10 +696,10 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
             if (size > MAX_MARKED) Picked("", ByteArray(0), w, h, picture, size) else Picked("", file.readBytes(), w, h, picture)
         } catch (_: OutOfMemoryError) {
             file.delete()
-            throw IllegalStateException("图片太大，没能画出来")
+            throw IllegalStateException(t("android-chat.marks.tooBig"))
         } catch (e: java.io.IOException) {
             file.delete()
-            throw IllegalStateException("没能画出图片", e)
+            throw IllegalStateException(t("android-chat.file.drawFailed"), e)
         } finally {
             region?.recycle()
             whole?.recycle()
@@ -824,16 +827,16 @@ fun MarksActions(marks: ImageMarks, canDraft: Boolean, onDownload: () -> Unit, o
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         marks.error?.let { Text(it, fontSize = 13.sp, color = Color(0xFFFF7B6B), maxLines = 1, modifier = Modifier.padding(horizontal = 6.dp)) }
         Box(Modifier.height(30.dp).clip(RoundedCornerShape(15.dp)).clickable { marks.leave() }.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
-            Text("取消", fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
+            Text(t("common.cancel"), fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
         }
-        PictureButton(Icons.Download, "下载标注后的图片", enabled = !marks.busy && marks.any, onClick = onDownload)
+        PictureButton(Icons.Download, t("android-chat.marks.downloadMarked"), enabled = !marks.busy && marks.any, onClick = onDownload)
         if (canDraft) Row(
             Modifier.padding(start = 4.dp).height(30.dp).clip(RoundedCornerShape(15.dp)).background(INK).alpha(if (!marks.busy && marks.any) 1f else 0.4f)
                 .clickable(enabled = !marks.busy && marks.any, onClick = onDraft).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             IconIn(Icons.Send, 12.dp, Color.White)
-            Text(if (marks.busy) "正在生成…" else "放进对话", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            Text(if (marks.busy) t("android-chat.marks.making") else t("android-chat.preview.put"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
         }
     }
 }
@@ -851,15 +854,15 @@ fun MarksTools(marks: ImageMarks, glass: Modifier) {
             }
         }
         Row(glass.then(Modifier.height(44.dp)).padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            listOf(MarkTool.Select to Icons.Cursor, MarkTool.Rect to Icons.Square, MarkTool.Arrow to Icons.ArrowUpRight, MarkTool.Pen to Icons.Scribble, MarkTool.Text to Icons.Text).forEach { (t, icon) ->
-                PictureButton(icon, t.label, pressed = marks.tool == t) { marks.pickTool(t) }
+            listOf(MarkTool.Select to Icons.Cursor, MarkTool.Rect to Icons.Square, MarkTool.Arrow to Icons.ArrowUpRight, MarkTool.Pen to Icons.Scribble, MarkTool.Text to Icons.Text).forEach { (tool, icon) ->
+                PictureButton(icon, tool.label, pressed = marks.tool == tool) { marks.pickTool(tool) }
             }
             Gap()
-            Box(Modifier.size(32.dp).clip(RoundedCornerShape(12.dp)).clickable { marks.palette = !marks.palette }.semantics { contentDescription = "颜色" }, contentAlignment = Alignment.Center) { Swatch(marks.shownColor) }
-            marks.pickedShape?.let { s -> PictureButton(Icons.Trash, "删除") { marks.remove(s.id) } }
+            Box(Modifier.size(32.dp).clip(RoundedCornerShape(12.dp)).clickable { marks.palette = !marks.palette }.semantics { contentDescription = t("android-chat.marks.color") }, contentAlignment = Alignment.Center) { Swatch(marks.shownColor) }
+            marks.pickedShape?.let { s -> PictureButton(Icons.Trash, t("common.delete")) { marks.remove(s.id) } }
             Gap()
-            PictureButton(Icons.Retry, "撤销", enabled = marks.canUndo) { marks.undo() }
-            PictureButton(Icons.Redo, "重做", enabled = marks.canRedo) { marks.redo() }
+            PictureButton(Icons.Retry, t("android-chat.marks.undo"), enabled = marks.canUndo) { marks.undo() }
+            PictureButton(Icons.Redo, t("android-chat.marks.redo"), enabled = marks.canRedo) { marks.redo() }
         }
     }
 }

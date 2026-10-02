@@ -3,6 +3,7 @@
 // preview (FilePreview.kt).
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
@@ -86,7 +87,9 @@ import kotlinx.coroutines.withContext
 
 // ── what a file is (web/src/FilePreview.tsx kindOf) ─────────────────────
 
-enum class PreviewKind(val label: String) { Image("图片"), Video("视频"), Audio("音频"), Pdf("PDF"), Markdown("Markdown"), Csv("表格"), Html("网页"), Code("代码"), Text("文本") }
+enum class PreviewKind { Image, Video, Audio, Pdf, Markdown, Csv, Html, Code, Text;
+    val label: String get() = t("android-chat.kind." + name.lowercase())
+}
 
 /** What a file shows as, by its name; `kind` null: look at its bytes to know. */
 class Kind(val kind: PreviewKind?, val type: String, val language: String? = null)
@@ -439,7 +442,7 @@ private fun BoxScope.Unavailable(icon: Dp, size: Long?) {
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
     ) {
         IconIn(Icons.Read, icon, C.muted)
-        Text("暂时无法预览", fontSize = 12.sp, color = C.muted)
+        Text(t("android-chat.file.noPreview"), fontSize = 12.sp, color = C.muted)
         if (size != null) Text(fileSize(size), fontSize = 11.sp, color = C.muted)
     }
 }
@@ -473,7 +476,7 @@ private fun ChatVideo(station: String, key: String, file: Attachment, onOpen: ()
         if (failed) {
             Column(Modifier.matchParentSize().padding(bottom = 30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
                 IconIn(Icons.Read, 24.dp, C.muted)
-                Text("暂时无法预览", fontSize = 13.sp, color = C.muted)
+                Text(t("android-chat.file.noPreview"), fontSize = 13.sp, color = C.muted)
                 Text(fileSize(file.size), fontSize = 11.sp, color = C.muted)
             }
         } else {

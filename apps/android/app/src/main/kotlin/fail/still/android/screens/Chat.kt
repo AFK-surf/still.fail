@@ -5,6 +5,7 @@
 // the time over their words. Long-press quotes or copies a message; ＋ adds files.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -310,7 +311,7 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
             exit = fadeOut(tween(280, easing = ArchiveEase)) + scaleOut(tween(280, easing = ArchiveEase), targetScale = 0.85f) + shrinkHorizontally(tween(280, easing = ArchiveEase), shrinkTowards = Alignment.End, clip = false),
         ) {
             val archiving = app.isDoing("chat.archive", "station" to station, "session" to session)
-            Box(Modifier.semantics { contentDescription = "归档" }) {
+            Box(Modifier.semantics { contentDescription = t("android-chat.archive") }) {
                 if (archiving) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner(14.dp) }
                 else NavButton(Icons.Archive, { if (canArchive && session != null) archiveChat(app, station, view, session) })
             }
@@ -825,7 +826,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                     CompositionLocalProvider(LocalFlight provides f, LocalFlightHost provides host) { when (row) {
                         Entry.Older -> Box(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), contentAlignment = Alignment.Center) { Spinner(16.dp) }
                         Entry.Newer -> Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), contentAlignment = Alignment.Center) { Spinner(16.dp) }
-                        Entry.Empty -> Text("在这里发消息，这个对话里的 agent 会在这里回复。", color = chatMuted(), fontSize = 15.sp, lineHeight = 24.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 24.dp))
+                        Entry.Empty -> Text(t("android-chat.chat.empty"), color = chatMuted(), fontSize = 15.sp, lineHeight = 24.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 24.dp))
                         Entry.Line -> UnreadLine()
                         is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.waiting && now - row.m.createdAt > 1000)
                         is Entry.Out -> Out(ctx, row.o)
@@ -845,7 +846,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         JumpToLatest(awayFromEnd(list) || short, thread?.unread?.takeIf { short && it > 0 }, haze, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = bottom + 2.dp), busy = fetching) {
             if (!short || thread == null) return@JumpToLatest follow.jump()
             toLatest[0] = true
-            try { api.latest(thread.id) } catch (e: CoreException) { toLatest[0] = false; app.toast = "没能跳到最新：${errorText(e)}" }
+            try { api.latest(thread.id) } catch (e: CoreException) { toLatest[0] = false; app.toast = t("android-chat.chat.latest.failed", "error" to errorText(e)) }
         }
       }
         // The avatar flying with a message out of it: over the list, under the bars and the composer (as the web's, in
@@ -902,14 +903,14 @@ private fun JumpToLatest(shown: Boolean, count: Long?, haze: HazeState, modifier
             scaleX = 0.6f + 0.4f * grow; scaleY = scaleX
         }.height(36.dp).widthIn(min = 36.dp).floating(haze, CircleShape)
             .clickable(enabled = shown && !busy) { scope.launch { onJump() } }
-            .semantics { contentDescription = "跳到最新" },
+            .semantics { contentDescription = t("android-chat.chat.latest") },
         contentAlignment = Alignment.Center,
     ) {
         val n = said.value
         if (n == null) { if (busy) Spinner(16.dp) else IconIn(Icons.ArrowDown, 18.dp, C.ink) }
         else Row(Modifier.padding(start = 10.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (busy) Spinner(16.dp) else IconIn(Icons.ArrowDown, 18.dp, C.ink)
-            Text("$n 条新消息", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1)
+            Text(t("android-chat.chat.newMessages", "n" to n), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1)
         }
     }
 }
@@ -920,7 +921,7 @@ private fun UnreadLine() {
     val accent = chatInk().accent
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.weight(1f).height(1.dp).background(accent.copy(alpha = 0.5f)))
-        Text("以下是新消息", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = accent)
+        Text(t("android-chat.chat.newBelow"), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = accent)
         Box(Modifier.weight(1f).height(1.dp).background(accent.copy(alpha = 0.5f)))
     }
 }
@@ -1015,7 +1016,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             if (m.text.isNotEmpty()) Bubble(m.text, hold, press)
             Files(ctx, m.attachments, mine = true)
             // Not taken by its agents yet: after a second it says it waits.
-            if (waitingNow) Waiting("等待 agent 接收")
+            if (waitingNow) Waiting(t("android-chat.chat.waitingAgent"))
             // Coming in with the words, when they fly here from the composer.
             else LocalFlight.current.let { f -> MessageTime(m.time?.get("createdAt"), if (f == null) Modifier else Modifier.graphicsLayer { alpha = f.e() }) }
         }
@@ -1068,10 +1069,10 @@ private fun archiveSession(of: ChatOf, view: ChatView, agents: List<AgentHere>):
 /** Archives the chat (its bar's 归档, and the one under its last 做完了). */
 private fun archiveChat(app: fail.still.android.AppState, station: String, view: ChatView, session: String) {
     val page = app.stack.last()
-    app.act("归档") {
+    app.act(t("android-chat.archive.verb")) {
         app.api(station).setArchived(view.thread?.id, session, true)
         if (app.stack.last() == page) app.home()
-        app.toast = "已归档"
+        app.toast = t("android-chat.archived")
     }
 }
 
@@ -1083,17 +1084,17 @@ private fun archiveChat(app: fail.still.android.AppState, station: String, view:
 private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
     val app = LocalApp.current
     val session = archiveSession(ctx.of, ctx.view, ctx.agents) ?: return
-    val label = "归档这个 chat"
+    val label = t("android-chat.chat.archiveThis")
     val busy = app.isDoing("chat.archive", "station" to ctx.station, "session" to session)
     val thread = ctx.view.thread?.id ?: return
-    val keep = "不再提醒归档"
+    val keep = t("android-chat.chat.keep")
     val keeping = app.isDoing("chat.keep", "station" to ctx.station, "thread" to thread)
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         DecisionOptions(
             listOf(fail.still.android.data.DecisionOption(keep)), Modifier.weight(1f),
             enabled = enabled && !ctx.view.offline && !busy, busy = if (keeping) keep else null,
             failed = app.failedOf("chat.keep", "station" to ctx.station, "thread" to thread),
-        ) { app.act("停止归档提醒") { app.api(ctx.station).keepChat(thread); app.toast = "已保留，不再提醒归档" } }
+        ) { app.act(t("android-chat.chat.keep.verb")) { app.api(ctx.station).keepChat(thread); app.toast = t("android-chat.chat.kept") } }
         DecisionOptions(
             listOf(fail.still.android.data.DecisionOption(label, recommended = true)), Modifier.weight(1f),
             enabled = enabled && !ctx.view.offline && !keeping, busy = if (busy) label else null,
@@ -1123,7 +1124,7 @@ private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toP
                 .padding(horizontal = 14.dp, vertical = 6.dp),
         ) {
             // In one about a profile (its sign-in failed), what went wrong (after its ：) links to that profile's page.
-            val colon = if (toProfile != null) said.indexOf('：') else -1
+            val colon = if (toProfile != null) said.indexOf('：').let { if (it >= 0) it else said.indexOf(':') } else -1
             if (toProfile != null && colon >= 0) {
                 val linked = remember(said) {
                     androidx.compose.ui.text.buildAnnotatedString {
@@ -1210,25 +1211,25 @@ private fun Out(ctx: Here, o: Outgoing) {
         // Said briefly (a tap says why); sending it again or dropping it right beside.
         if (failed) Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(
-                Modifier.padding(end = 6.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { app.toast = o.error?.let { "没发出去：$it" } ?: "没发出去" },
+                Modifier.padding(end = 6.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { app.toast = o.error?.let { t("android-chat.chat.unsent.why", "error" to it) } ?: t("android-chat.chat.unsent.toast") },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                IconIn(Icons.Info, 12.dp, C.red); Text("未发送", fontSize = 13.sp, color = C.red)
+                IconIn(Icons.Info, 12.dp, C.red); Text(t("android-chat.chat.unsent"), fontSize = 13.sp, color = C.red)
             }
             // Either under way: a spinner on it, neither pressed again.
             val retrying = app.isDoing("chat.retry", "station" to ctx.station, "id" to o.id)
             val discarding = app.isDoing("chat.discard", "station" to ctx.station, "id" to o.id)
-            UnsentButton(Icons.Retry, "重试", enabled = !ctx.view.offline && ctx.view.archived != true && !discarding, busy = retrying, failed = app.failedOf("chat.retry", "station" to ctx.station, "id" to o.id)) {
-                app.act("重新发送") { if (thread != null) app.api(ctx.station).retry(thread.id, o.id) else pending?.let { app.api(ctx.station).retryIn(it, o.id) } }
+            UnsentButton(Icons.Retry, t("common.retry"), enabled = !ctx.view.offline && ctx.view.archived != true && !discarding, busy = retrying, failed = app.failedOf("chat.retry", "station" to ctx.station, "id" to o.id)) {
+                app.act(t("android-chat.chat.retry.verb")) { if (thread != null) app.api(ctx.station).retry(thread.id, o.id) else pending?.let { app.api(ctx.station).retryIn(it, o.id) } }
             }
-            UnsentButton(Icons.Trash, "删除", enabled = !retrying, busy = discarding, failed = app.failedOf("chat.discard", "station" to ctx.station, "id" to o.id)) {
-                app.act("删除") { if (thread != null) app.api(ctx.station).discard(thread.id, o.id) else pending?.let { app.api(ctx.station).discardIn(it, o.id) } }
+            UnsentButton(Icons.Trash, t("common.delete"), enabled = !retrying, busy = discarding, failed = app.failedOf("chat.discard", "station" to ctx.station, "id" to o.id)) {
+                app.act(t("android-chat.chat.delete.verb")) { if (thread != null) app.api(ctx.station).discard(thread.id, o.id) else pending?.let { app.api(ctx.station).discardIn(it, o.id) } }
             }
         } else if (slow) {
             // Not while its words are on their way here (ChatHost.kt): only once they have landed, if it is still going.
             val flight = LocalFlight.current
             val host = LocalFlightHost.current
-            Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { Waiting("正在发送") }
+            Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { Waiting(t("android-chat.chat.sending")) }
         }
     }
 }
@@ -1277,7 +1278,7 @@ private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, r
 @Composable
 internal fun quoteLine(who: String, text: String) = androidx.compose.ui.text.buildAnnotatedString {
     appendInlineContent("quote", "❝")
-    pushStyle(androidx.compose.ui.text.SpanStyle(color = chatInk().text, fontWeight = FontWeight.Medium)); append("$who："); pop()
+    pushStyle(androidx.compose.ui.text.SpanStyle(color = chatInk().text, fontWeight = FontWeight.Medium)); append(t("android-chat.quote.who", "name" to who)); pop()
     append(text)
 }
 
@@ -1340,7 +1341,7 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean, opening: B
     LaunchedEffect(Unit) { open.animateTo(1f, tween(220, easing = Ease.Out)) }
     val wait = agent.wait
     val ink = chatInk()
-    val shown = steady(if (wait != null) ActivityNow(key = "wait", text = wait.text ?: "等待中") else agent.live?.activity?.now ?: ActivityNow(key = "busy", text = "处理中"))
+    val shown = steady(if (wait != null) ActivityNow(key = "wait", text = wait.text ?: t("android-chat.chat.waiting")) else agent.live?.activity?.now ?: ActivityNow(key = "busy", text = t("android-chat.chat.working")))
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
     val fade by animateFloatAsState(if (leaving) 0f else 1f, tween(220), label = "leaving")

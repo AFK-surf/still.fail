@@ -4,6 +4,7 @@
 // One bar floats at the top with its name and tools, frosted, and fades when left alone; a tap brings it back.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
@@ -497,7 +498,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                 }
                 known.kind == PreviewKind.Video && still != null && (bytes == null || shownLoaded !is FileLoad.Ready) -> Poster(still, videoZoom, Modifier.viewerFlying(flight))
                 shownLoaded is FileLoad.Loading -> Note { if (progress != null) Progress(progress, file.size, dark = false) else Waiting() }
-                shownLoaded is FileLoad.Failed -> Note { Text("载入失败：${shownLoaded.message}", fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center) }
+                shownLoaded is FileLoad.Failed -> Note { Text(t("android-chat.file.loadFailed", "error" to shownLoaded.message), fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center) }
                 bytes == null -> {}
                 kind == PreviewKind.Video -> OnDisk(fullId, file.name, bytes, waiting = { if (still != null) Poster(still, videoZoom, Modifier.viewerFlying(flight)) else Note { Waiting() } }) {
                     VideoViewer(it, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, RoundedCornerShape(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
@@ -507,12 +508,12 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                 kind == PreviewKind.Pdf -> OnDisk(fullId, file.name, bytes) { PdfViewer(it, ::toggle) }
                 kind != null -> TextViewer(bytes, kind, known.language, file.name, source, ::toggle)
                 else -> Note {
-                    Text("这种文件没法在这里预览", fontSize = 15.sp, color = C.muted)
+                    Text(t("android-chat.file.cantPreview"), fontSize = 15.sp, color = C.muted)
                     Row(
-                        Modifier.clip(RoundedCornerShape(12.dp)).background(C.chip).clickable { scope.launch { app.toast = if (download(context, file.name, bytes)) "已存到「下载」" else "没能下载" } }
+                        Modifier.clip(RoundedCornerShape(12.dp)).background(C.chip).clickable { scope.launch { app.toast = if (download(context, file.name, bytes)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") } }
                             .padding(horizontal = 14.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) { IconIn(Icons.Download, 16.dp, C.ink); Text("下载", fontSize = 15.sp, color = C.ink) }
+                    ) { IconIn(Icons.Download, 16.dp, C.ink); Text(t("android-chat.file.download"), fontSize = 15.sp, color = C.ink) }
                 }
             }
         }
@@ -547,7 +548,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                 if (coming && progress != null) Progress(progress, file.size, dark = true, inBar = true)
                 when {
                     marks.on -> MarksActions(marks, canDraft = true,
-                        onDownload = { if (bytes != null) scope.launch { finish(marks, bytes, zoom, file) { p, _ -> app.toast = if (marks.save(context, p.name)) "已存到「下载」" else "没能下载" } } },
+                        onDownload = { if (bytes != null) scope.launch { finish(marks, bytes, zoom, file) { p, _ -> app.toast = if (marks.save(context, p.name)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") } } },
                         onDraft = {
                             // Into the draft of the chat whose agent keeps the image: its page takes it (Preview.kt → TakeDraftOffers).
                             if (bytes != null) scope.launch {
@@ -557,22 +558,22 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                     // While the whole of it comes the bar says how far it has; its tools come with it.
                     coming -> {}
                     known.kind == PreviewKind.Image -> {
-                        PictureButton(Icons.Minus, "缩小", enabled = zoom.scale > zoom.minScale + 1e-4f, tint = tint) { zoom.zoomTo(zoom.scale / 1.25f, scope = scope) }
+                        PictureButton(Icons.Minus, t("android-chat.file.zoomOut"), enabled = zoom.scale > zoom.minScale + 1e-4f, tint = tint) { zoom.zoomTo(zoom.scale / 1.25f, scope = scope) }
                         Box(Modifier.height(32.dp).widthIn(min = 52.dp).clip(RoundedCornerShape(12.dp)).clickable { zoom.reset(scope) }, contentAlignment = Alignment.Center) {
                             Text("${(zoom.scale * 100).roundToInt()}%", fontSize = 13.sp, color = tint)
                         }
-                        PictureButton(Icons.Plus, "放大", enabled = zoom.scale < fail.still.android.ui.MAX_SCALE - 1e-4f, tint = tint) { zoom.zoomTo(zoom.scale * 1.25f, scope = scope) }
-                        if (bytes != null) PictureButton(Icons.Edit, "标注图片", tint = tint) { marks.start() }
+                        PictureButton(Icons.Plus, t("android-chat.file.zoomIn"), enabled = zoom.scale < fail.still.android.ui.MAX_SCALE - 1e-4f, tint = tint) { zoom.zoomTo(zoom.scale * 1.25f, scope = scope) }
+                        if (bytes != null) PictureButton(Icons.Edit, t("android-chat.file.mark"), tint = tint) { marks.start() }
                     }
                     kind == PreviewKind.Markdown || kind == PreviewKind.Csv || kind == PreviewKind.Html ->
-                        Seg(listOf("预览", "源码"), if (source) 1 else 0, { source = it == 1 }, Modifier.width(120.dp), height = 30.dp, fill = true, radius = 15.dp, inset = 2.dp)
+                        Seg(listOf(t("android-chat.file.tab.preview"), t("android-chat.file.tab.source")), if (source) 1 else 0, { source = it == 1 }, Modifier.width(120.dp), height = 30.dp, fill = true, radius = 15.dp, inset = 2.dp)
                 }
                 if (!marks.on && !coming) Box(Modifier.alpha(if (bytes != null) 1f else 0f)) {
-                    PictureButton(Icons.Download, "下载", enabled = bytes != null, tint = tint) {
-                        if (bytes != null) scope.launch { app.toast = if (download(context, file.name, bytes)) "已存到「下载」" else "没能下载" }
+                    PictureButton(Icons.Download, t("android-chat.file.download"), enabled = bytes != null, tint = tint) {
+                        if (bytes != null) scope.launch { app.toast = if (download(context, file.name, bytes)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") }
                     }
                 }
-                PictureButton(Icons.Close, "关闭", tint = tint, onClick = onClose)
+                PictureButton(Icons.Close, t("common.close"), tint = tint, onClick = onClose)
             }
         }
         if (marks.on) Box(Modifier.align(Alignment.BottomCenter).padding(WindowInsets.navigationBars.asPaddingValues()).padding(bottom = 8.dp)) {
@@ -589,12 +590,12 @@ private suspend fun finish(marks: ImageMarks, bytes: ByteArray, zoom: ZoomState,
     try {
         marks.putDown()
         val all = marks.all()
-        val made = marks.render(bytes, natural) ?: throw IllegalStateException("没能画出图片")
+        val made = marks.render(bytes, natural) ?: throw IllegalStateException(t("android-chat.file.drawFailed"))
         val stamp = java.text.SimpleDateFormat("HHmmss", java.util.Locale.ROOT).format(java.util.Date())
-        val name = "${file.name.substringBeforeLast('.')}-标注-$stamp.png"
+        val name = t("android-chat.file.marked.name", "name" to file.name.substringBeforeLast('.'), "stamp" to stamp)
         use(Picked(name, made.bytes, made.width, made.height, made.preview, made.size), marks.quotes(all, name, file.name, natural))
     } catch (e: Exception) {
-        marks.error = e.message ?: "没能画出图片"
+        marks.error = e.message ?: t("android-chat.file.drawFailed")
     } finally {
         marks.busy = false
     }
@@ -630,7 +631,7 @@ private fun Note(content: @Composable () -> Unit) {
 
 @Composable
 private fun Waiting() {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Spinner(16.dp); Text("正在载入…", fontSize = 15.sp, color = C.muted) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Spinner(16.dp); Text(t("android-chat.file.loading"), fontSize = 15.sp, color = C.muted) }
 }
 
 /** How much of a file has come, out of its size (the station's, else the one sent with it). */
@@ -642,10 +643,13 @@ private fun Progress(got: Pair<Long, Long?>, sent: Long, dark: Boolean, inBar: B
     val muted = if (dark) DarkMuted else C.muted
     val words = buildAnnotatedString {
         if (total != null) {
-            if (!inBar) append("正在载入 ")
+            // The size so far in bold, where the sentence has it.
+            val (before, after) = t("android-chat.file.loading.size").split("{size}", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+            if (!inBar) append(before)
             withStyle(SpanStyle(color = text, fontWeight = FontWeight.SemiBold)) { append(fileSize(got.first)) }
             append(" / ${fileSize(total)}")
-        } else append("正在载入…")
+            if (!inBar) append(after)
+        } else append(t("android-chat.file.loading"))
     }
     val trackColor = (if (dark) Color.White else C.ink).copy(alpha = 0.12f)
     val barColor = if (dark) DarkText else C.accent
@@ -778,7 +782,7 @@ private fun ImageStage(station: String, key: String, file: Attachment, bytes: By
             "<img style=\"max-width:100%;max-height:100vh\" src=\"data:image/svg+xml;base64,${android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)}\">")
         return
     }
-    if (failed) { Note { Text("这张图片没法在这里显示", fontSize = 15.sp, color = DarkMuted) }; return }
+    if (failed) { Note { Text(t("android-chat.file.image.failed"), fontSize = 15.sp, color = DarkMuted) }; return }
     val picture = full ?: thumb
     // Words written under where the keyboard comes up: the image goes up with them, above it.
     val ime = WindowInsets.keyboard.getBottom(LocalDensity.current)
@@ -842,7 +846,7 @@ private fun PdfViewer(file: File, onTap: () -> Unit) {
     val d = doc
     when {
         d == null -> Note { Spinner(16.dp) }
-        d.isFailure -> Note { Text("这个 PDF 打不开：${d.exceptionOrNull()?.message ?: ""}", fontSize = 15.sp, color = C.muted) }
+        d.isFailure -> Note { Text(t("android-chat.file.pdf.failed", "error" to (d.exceptionOrNull()?.message ?: "")), fontSize = 15.sp, color = C.muted) }
         else -> {
             val pdf = d.getOrThrow()
             LazyColumn(
@@ -869,7 +873,7 @@ private fun PdfViewer(file: File, onTap: () -> Unit) {
                         }
                     }
                     Box(Modifier.fillMaxWidth().aspectRatio(size.width.toFloat() / max(1, size.height)).shadow(2.dp).background(Color.White).onSizeChanged { width = it.width }) {
-                        page?.let { Image(it, "第 ${i + 1} 页", Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds) }
+                        page?.let { Image(it, t("android-chat.file.pdf.page", "n" to i + 1), Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds) }
                     }
                 }
             }
@@ -897,7 +901,7 @@ private fun TextViewer(bytes: ByteArray, kind: PreviewKind, language: String?, n
     if (kind == PreviewKind.Csv && !source) { CsvTable(t, name.lowercase().endsWith(".tsv"), cut, top, bottom, onTap); return }
     val tap = Modifier.clickable(interactionSource = null, indication = null, onClick = onTap)
     Column(Modifier.fillMaxSize().then(tap).verticalScroll(rememberScrollState())) {
-        if (cut) Cut("文件较大，只显示前 ${fileSize(SHOW_LIMIT.toLong())}，完整内容请下载。", top)
+        if (cut) Cut(fail.still.android.ui.t("android-chat.file.cut", "size" to fileSize(SHOW_LIMIT.toLong())), top)
         when {
             kind == PreviewKind.Markdown && !source -> Markdown(t, Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 64.dp + top, bottom = 64.dp + bottom))
             else -> {
@@ -998,7 +1002,7 @@ private fun CsvTable(text: String, tab: Boolean, cut: Boolean, top: Dp, bottom: 
                     head.indices.forEach { j -> Cell(r.getOrNull(j) ?: "", widths[j], null, C.ink) }
                 }
             }
-            if (more || cut) item { Cut("只显示前 $TABLE_ROWS 行，完整内容请下载。", 0.dp) }
+            if (more || cut) item { Cut(t("android-chat.file.cut.rows", "n" to TABLE_ROWS), 0.dp) }
         }
     }
 }

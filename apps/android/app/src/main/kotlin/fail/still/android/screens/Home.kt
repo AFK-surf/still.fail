@@ -4,6 +4,7 @@
 // the new-chat button floating at the bottom.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -175,14 +176,14 @@ fun HomeScreen(current: WorkspaceEntry) {
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // Settings, at the top left (SettingsHome.kt): the account, the workspace's things, this device's.
-            Box(Modifier.semantics { contentDescription = "设置" }) { NavButton(Icons.Settings, { app.push(Screen.Settings) }, 22.dp) }
+            Box(Modifier.semantics { contentDescription = t("android-chat.home.settings") }) { NavButton(Icons.Settings, { app.push(Screen.Settings) }, 22.dp) }
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { openWorkspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(current.workspace.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 // The other workspaces have something waiting: its dot by the name, before an invitation's.
                 val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current.workspace.id))
                 val others = marks.value?.others
                 if (others != null) WorkspaceMark(others, marks.value?.othersLabel.orEmpty())
-                else if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = "有邀请" })
+                else if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = t("android-chat.home.invited") })
                 IconIn(Icons.ChevronDown, 16.dp, C.muted)
             }
             // A newer build of the app: tapped, it is downloaded and handed to the installer (Updates.kt).
@@ -192,7 +193,7 @@ fun HomeScreen(current: WorkspaceEntry) {
                 val progress = updates.progress
                 if (progress != null) {
                     Text(progress.substringAfter(' ', "…"), fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.semantics { contentDescription = progress })
-                } else Box(Modifier.semantics { contentDescription = "更新到 ${updates.available?.versionName}" }) {
+                } else Box(Modifier.semantics { contentDescription = t("android-chat.home.update", "version" to updates.available?.versionName) }) {
                     NavButton(Icons.Download, { app.scope.launch { updates.install()?.let { app.toast = it } } }, 20.dp)
                     Box(Modifier.align(Alignment.TopEnd).offset((-3).dp, 3.dp).size(13.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(C.accent))
                 }
@@ -206,12 +207,12 @@ fun HomeScreen(current: WorkspaceEntry) {
                         // The menu is 180 wide (Sheet.kt MenuHost): its right edge under the button's.
                         val left = at.right - with(density) { 180.dp.toPx() }
                         app.menu = MenuSpec(Rect(left, at.top, left, at.bottom), listOf(
-                            MenuItem("全部", if (filter == "all") Icons.Check else null) { app.showChats("all") },
-                            MenuItem("我参与的", if (filter == "mine") Icons.Check else null) { app.showChats("mine") },
-                            MenuItem("监控中", if (filter == "watching") Icons.Check else null) { app.showChats("watching") },
-                            MenuItem("已归档", Icons.Archive) { app.push(Screen.Archive) },
+                            MenuItem(t("android-chat.home.filter.all"), if (filter == "all") Icons.Check else null) { app.showChats("all") },
+                            MenuItem(t("android-chat.home.filter.mine"), if (filter == "mine") Icons.Check else null) { app.showChats("mine") },
+                            MenuItem(t("android-chat.home.filter.watching"), if (filter == "watching") Icons.Check else null) { app.showChats("watching") },
+                            MenuItem(t("android-chat.home.filter.archived"), Icons.Archive) { app.push(Screen.Archive) },
                         ))
-                    }.semantics { contentDescription = "筛选会话：" + when (filter) { "mine" -> "我参与的"; "watching" -> "监控中"; else -> "全部" } },
+                    }.semantics { contentDescription = t("android-chat.home.filter.label", "filter" to when (filter) { "mine" -> t("android-chat.home.filter.mine"); "watching" -> t("android-chat.home.filter.watching"); else -> t("android-chat.home.filter.all") }) },
                     contentAlignment = Alignment.Center,
                 ) { IconIn(Icons.Filter, 20.dp, if (filter != "all") C.accent else C.ink) }
             }
@@ -221,7 +222,7 @@ fun HomeScreen(current: WorkspaceEntry) {
             val counts = glyphCounts(all.value, status.value?.state == "trouble")
             // Asleep, what the core cannot reach says it; else the stations in words (the core's), and what is wrong with them.
             val said = if (counts.asleep) status.value?.text.orEmpty() else all.value?.glyph?.label.orEmpty()
-            val label = "Station：$said" + (all.value?.trouble?.let { "（${it.text}）" } ?: "")
+            val label = all.value?.trouble?.let { t("android-chat.home.stations.trouble", "said" to said, "trouble" to it.text) } ?: t("android-chat.home.stations", "said" to said)
             Box(Modifier.size(34.dp).clip(CircleShape).clickable { app.push(Screen.Stations) }.semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
                 StationGlyph(counts)
             }
@@ -343,11 +344,11 @@ private fun Empty(current: WorkspaceEntry, view: ChatsView, filter: String) {
     if (view.stations.isEmpty() && filter == "all") return FirstStation(current)
     Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 240.dp)
-        if (filter == "mine") Text("没有你参与的会话。", fontSize = 14.sp, color = C.muted)
-        else if (filter == "watching") Text("没有在监控的会话。", fontSize = 14.sp, color = C.muted)
+        if (filter == "mine") Text(t("android-chat.home.empty.mine"), fontSize = 14.sp, color = C.muted)
+        else if (filter == "watching") Text(t("android-chat.home.empty.watching"), fontSize = 14.sp, color = C.muted)
         else {
-            Text("还没有会话。在 Slack 里 @ ${if (view.stations.size > 1) "它们" else "它"}，或者", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
-            Text("新建对话", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.NewChat) })
+            Text(if (view.stations.size > 1) t("android-chat.home.empty.many") else t("android-chat.home.empty.one"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+            Text(t("android-chat.newChat"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.NewChat) })
         }
     }
 }
@@ -428,8 +429,8 @@ private fun SwipeToArchive(item: ChatItem, motion: ListMotion?, content: @Compos
         motion?.swiped?.add(key)
         scope.launch {
             if (!still) drag.animateTo(-width.toFloat(), tween(200, easing = Ease.Standard), v) else drag.snapTo(-width.toFloat())
-            app.act("归档", failed = { motion?.swiped?.remove(key); gone = false; back() }) {
-                app.api(item.station).setArchived(item.thread, item.session, true); app.toast = "已归档"
+            app.act(t("android-chat.archive.verb"), failed = { motion?.swiped?.remove(key); gone = false; back() }) {
+                app.api(item.station).setArchived(item.thread, item.session, true); app.toast = t("android-chat.archived")
             }
         }
     }
@@ -480,14 +481,14 @@ private fun SwipeToArchive(item: ChatItem, motion: ListMotion?, content: @Compos
                     }
                 }
             }
-            .semantics { customActions = listOf(CustomAccessibilityAction("归档") { archive(0f); true }) },
+            .semantics { customActions = listOf(CustomAccessibilityAction(t("android-chat.archive")) { archive(0f); true }) },
     ) {
         // Under it, at the right edge it uncovers: 归档, quiet until letting go would archive it, then filled in ink.
         if (drag.value != 0f) Box(
             Modifier.matchParentSize().background(lerp(C.chip, C.ink, fill)).padding(horizontal = 22.dp),
             contentAlignment = Alignment.CenterEnd,
         ) {
-            Text("归档", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = lerp(C.muted, C.bg, fill), modifier = Modifier.semantics { hideFromAccessibility() })
+            Text(t("android-chat.archive"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = lerp(C.muted, C.bg, fill), modifier = Modifier.semantics { hideFromAccessibility() })
         }
         Box(Modifier.fillMaxWidth().graphicsLayer { translationX = drag.value }.background(if (drag.value != 0f) C.bg else Color.Transparent)) { content() }
     }
@@ -504,9 +505,9 @@ private fun rowMenu(app: AppState, item: ChatItem): List<MenuItem>? {
     fun run(what: String, block: suspend () -> Unit) = app.act(what) { block() }
     return listOfNotNull(
         // A station from before pins says nothing of them: its chats are not pinned from here.
-        item.pinned?.let { pinned -> MenuItem(if (pinned) "取消固定" else "固定", Icons.Pin) { run(if (pinned) "取消固定" else "固定") { api.setPinned(item.session, !pinned) } } },
-        MenuItem("重命名", Icons.Edit) { askTitle(app, item.station, item.thread, item.session, item.title) },
-        MenuItem("归档", Icons.Archive) { archiveRow(app, item) },
+        item.pinned?.let { pinned -> MenuItem(if (pinned) t("android-chat.unpin") else t("android-chat.pin"), Icons.Pin) { run(if (pinned) t("android-chat.unpin.verb") else t("android-chat.pin.verb")) { api.setPinned(item.session, !pinned) } } },
+        MenuItem(t("android-chat.rename"), Icons.Edit) { askTitle(app, item.station, item.thread, item.session, item.title) },
+        MenuItem(t("android-chat.archive"), Icons.Archive) { archiveRow(app, item) },
     )
 }
 
@@ -514,8 +515,8 @@ private fun rowMenu(app: AppState, item: ChatItem): List<MenuItem>? {
 private fun archiveRow(app: AppState, item: ChatItem) {
     val api = app.api(item.station)
     val watch = item.watch
-    if (watch != null) confirm(app, "归档「${item.title}」？", watch.ask, "归档") { api.setArchived(item.thread, item.session, true); app.toast = "已归档" }
-    else app.act("归档") { api.setArchived(item.thread, item.session, true); app.toast = "已归档" }
+    if (watch != null) confirm(app, t("android-chat.archive.ask", "title" to item.title), watch.ask, t("android-chat.archive")) { api.setArchived(item.thread, item.session, true); app.toast = t("android-chat.archived") }
+    else app.act(t("android-chat.archive.verb")) { api.setArchived(item.thread, item.session, true); app.toast = t("android-chat.archived") }
 }
 
 /** Whether the row's menu set its chat's pin or archive going, not answered yet. */
@@ -542,9 +543,9 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
         // A small 归档 at its start (a tap archives it; swiping it left does too, SwipeToArchive).
         if (onArchive != null) Box(
             Modifier.clip(RoundedCornerShape(50)).background(C.chip).clickable(enabled = !busy, onClick = onArchive)
-                .padding(horizontal = 10.dp, vertical = 4.dp).semantics { contentDescription = "归档「${item.title}」" },
+                .padding(horizontal = 10.dp, vertical = 4.dp).semantics { contentDescription = t("android-chat.archive.named", "title" to item.title) },
             contentAlignment = Alignment.Center,
-        ) { Text("归档", fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.muted) }
+        ) { Text(t("android-chat.archive"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.muted) }
         Column(Modifier.weight(1f).alpha(if (item.settled == true) 0.45f else 1f), verticalArrangement = Arrangement.Center) {
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChatMark(item, Modifier)
@@ -609,8 +610,8 @@ private val MarkYellow = Color(0xFFF2B01E)
 private fun ChatMark(item: ChatItem, modifier: Modifier) {
     val tone = rowTone(item) ?: return
     val label = when (tone) {
-        RowTone.Busy -> "工作中"; RowTone.Done -> "做完了，有新消息"; RowTone.Alert -> "需要处理"
-        RowTone.Wait -> "在等你"; RowTone.Other -> "在等别人"
+        RowTone.Busy -> t("android-chat.home.mark.busy"); RowTone.Done -> t("android-chat.home.mark.done"); RowTone.Alert -> t("android-chat.home.mark.alert")
+        RowTone.Wait -> t("android-chat.home.mark.wait"); RowTone.Other -> t("android-chat.home.mark.other")
     }
     // A mark that comes while the chat is in view pops in (web: ChatMark.tsx, 320 ms ease-out, 0 → 1.3 at 60 % → 1);
     // ones there when the list is first drawn do not.
@@ -731,7 +732,7 @@ internal fun DecisionsCapsule(n: Int, ground: Modifier) {
     val app = LocalApp.current
     Row(
         ground.height(56.dp).clickable { app.push(Screen.Decisions) }.padding(horizontal = 20.dp)
-            .semantics(mergeDescendants = true) { contentDescription = "$n 件等你决定" },
+            .semantics(mergeDescendants = true) { contentDescription = t("android-chat.home.decisions", "n" to n) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text("奏", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink)
@@ -751,7 +752,7 @@ private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Mo
         if (decisions > 0) DecisionsCapsule(decisions, Modifier.floating(haze, CircleShape))
         Box(
             Modifier.floating(haze, CircleShape).padding(6.dp).size(44.dp).clip(CircleShape).background(C.accent)
-                .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = "新建对话" },
+                .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-chat.newChat") },
             contentAlignment = Alignment.Center,
         ) { IconIn(Icons.Edit, 20.dp, Color.White) }
     }
