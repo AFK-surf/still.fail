@@ -4,7 +4,8 @@
 Default: inventory only. --copy creates the target if needed, streams every object,
 checks SHA-256 and metadata, and writes a private report. --verify-only rechecks
 without writing. Run a final pass after old uploaders have stopped, before cutover.
-Uses a loopback-only Wrangler process with remote bindings, never a public endpoint.
+Uses a loopback-only Wrangler proxy to an authenticated, temporary edge preview.
+Object bytes stay on Cloudflare; the preview disappears when Wrangler exits.
 """
 import argparse
 import json
@@ -55,10 +56,10 @@ def main():
     with tempfile.TemporaryDirectory(prefix='stillfail-r2-migration-') as directory:
         root = Path(directory)
         config = root / 'wrangler.json'
-        bindings = [{'binding': 'SOURCE', 'bucket_name': 'ember-releases', 'remote': True}]
+        bindings = [{'binding': 'SOURCE', 'bucket_name': 'ember-releases', 'preview_bucket_name': 'ember-releases'}]
         # Inventory does not need a target and must not create one.
         if args.copy or args.verify_only:
-            bindings.append({'binding': 'TARGET', 'bucket_name': 'stillfail-releases', 'remote': True})
+            bindings.append({'binding': 'TARGET', 'bucket_name': 'stillfail-releases', 'preview_bucket_name': 'stillfail-releases'})
         deploy.write_private(config, {
             'name': 'stillfail-r2-migration', 'main': str(deploy.ROOT / 'migrations/release-bucket.ts'),
             'account_id': account, 'compatibility_date': '2026-09-08', 'compatibility_flags': ['nodejs_compat'],
@@ -67,7 +68,7 @@ def main():
         logpath = root / 'wrangler.log'
         with logpath.open('w') as log:
             os.chmod(logpath, 0o600)
-            child = subprocess.Popen(['pnpm', 'exec', 'wrangler', 'dev', '--config', str(config), '--ip', '127.0.0.1', '--port', str(port)], cwd=deploy.ROOT, stdout=log, stderr=log, start_new_session=True)
+            child = subprocess.Popen(['pnpm', 'exec', 'wrangler', 'dev', '--remote', '--config', str(config), '--ip', '127.0.0.1', '--port', str(port)], cwd=deploy.ROOT, stdout=log, stderr=log, start_new_session=True)
             try:
                 def call(path, body=None):
                     data = None if body is None else json.dumps(body).encode()
