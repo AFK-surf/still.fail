@@ -20,7 +20,7 @@ tpid=$(pgrep -f "data $work/ts" | head -1)
 [ -n "$tpid" ] || { echo "this station is not running"; tail -20 "$work/ts.log"; exit 1; }
 rport=$(udp_port "$rpid")
 tport=$(udp_port "$tpid")
-ask() { perl -e 'alarm 30; exec @ARGV' "$load" ask "$1" "$id" "127.0.0.1:$2" "$3" > "$4" 2> "$4.head"; }
+ask() { perl -e 'alarm 30; exec @ARGV' "$load" ask "$work/$1" "$id" "127.0.0.1:$2" "$3" > "$4" 2> "$4.head"; }
 threads=$(sqlite3 "$work/ts/stillfail.db" "select id from threads order by id desc limit 8" | tr '\n' ' ')
 paths="/admin/api/chats /admin/api/chats?archived=1 /admin/api/threads/99999/entries /admin/api/threads/x/entries /admin/api/nothing"
 for t in $threads 1 50 100; do
