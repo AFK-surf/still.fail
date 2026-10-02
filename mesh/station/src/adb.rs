@@ -41,6 +41,8 @@ pub struct Share {
     info: Mutex<Value>,
     /// The connection its latest offer came on: where its tunnels go.
     conn: Mutex<Connection>,
+    /// The language its latest offer asked in: what the phone is told of it is said in it.
+    lang: Mutex<lang::Lang>,
     /// Which offer it is (`offer`): one that ended after another came does not take the phone away.
     offer: std::sync::atomic::AtomicU64,
     /// How the station's adb holds the phone (`{adb, message}`), as the offer's stream is told.
@@ -94,11 +96,17 @@ fn key(viewer: &Viewer, conn: &Connection, ask: &Value) -> String {
     format!("{}/{}", viewer.sub, phone.map_or_else(|| hex::encode(conn.remote_id().as_bytes()), str::to_string))
 }
 
+/// The language a stream's core asks in (`stillfail-lang` among its head's headers).
+fn asked(head: &Value) -> lang::Lang {
+    lang::of_core(head["headers"].as_object().into_iter().flatten().filter_map(|(k, v)| Some((k.as_str(), v.as_str()?))))
+}
+
 /// A stream whose head says `"adb"`: an offer, held as long as the stream is (its span is its opening, as an event
 /// stream's), or an ask about the phone's offer.
 pub async fn answer(station: &Arc<Station>, conn: &Connection, viewer: &Viewer, head: &Value, send: &mut SendStream, outcome: &mut Outcome, traced: &mut Traced<'_>) -> Result<()> {
     let ask = &head["adb"];
     let device = key(viewer, conn, ask);
+    let asked = asked(head);
     let reply = async |send: &mut SendStream, outcome: &mut Outcome, status: u16, message: String| -> Result<()> {
         outcome.status = status;
         write_line(send, &json!({ "status": status, "headers": { "content-type": "application/json" } })).await?;
@@ -107,25 +115,25 @@ pub async fn answer(station: &Arc<Station>, conn: &Connection, viewer: &Viewer, 
         Ok(())
     };
     match ask["op"].as_str() {
-        Some("share") => offer(station, conn, viewer, device, ask, send, outcome, traced).await,
+        Some("share") => offer(station, conn, viewer, device, ask, asked, send, outcome, traced).await,
         Some(op @ ("pair" | "grant")) => {
             let share = station.adb.0.lock().unwrap().get(&device).cloned();
-            let Some(share) = share else { return reply(send, outcome, 409, "这台手机没有在共享调试".into()).await };
-            let done = if op == "pair" { pair(&share, ask["code"].as_str().unwrap_or_default()).await } else { grant(&share).await };
+            let Some(share) = share else { return reply(send, outcome, 409, t!(asked; "station.adb.notSharing")).await };
+            let done = lang::answering(asked, async { if op == "pair" { pair(&share, ask["code"].as_str().unwrap_or_default()).await } else { grant(&share).await } }).await;
             info!(email = %viewer.email, op, done = ?done.as_ref().map_err(|e| e.to_string()), "adb asked");
             match done {
                 Ok(message) => reply(send, outcome, 200, message).await,
                 Err(error) => reply(send, outcome, 422, error.to_string()).await,
             }
         }
-        _ => reply(send, outcome, 400, "不认识的 adb 请求".into()).await,
+        _ => reply(send, outcome, 400, t!(asked; "station.adb.unknownAsk")).await,
     }
 }
 
 /// An offer: the phone in `shares` (its listener up), adb told, and how adb holds it said down the stream until the
 /// phone stops it, its connection goes, or the station is removed. A later offer from the phone takes this one's place.
 #[allow(clippy::too_many_arguments)]
-async fn offer(station: &Arc<Station>, conn: &Connection, viewer: &Viewer, device: String, ask: &Value, send: &mut SendStream, outcome: &mut Outcome, traced: &mut Traced<'_>) -> Result<()> {
+async fn offer(station: &Arc<Station>, conn: &Connection, viewer: &Viewer, device: String, ask: &Value, asked: lang::Lang, send: &mut SendStream, outcome: &mut Outcome, traced: &mut Traced<'_>) -> Result<()> {
     let info = json!({
         "device": text(&ask["device"], 80),
         "android": text(&ask["android"], 20),
@@ -139,6 +147,7 @@ async fn offer(station: &Arc<Station>, conn: &Connection, viewer: &Viewer, devic
         Some(share) => {
             *share.info.lock().unwrap() = info;
             *share.conn.lock().unwrap() = conn.clone();
+            *share.lang.lock().unwrap() = asked;
             share.offer.store(number, std::sync::atomic::Ordering::SeqCst);
             share
         }
@@ -152,6 +161,7 @@ async fn offer(station: &Arc<Station>, conn: &Connection, viewer: &Viewer, devic
                     owner: viewer.clone(),
                     info: Mutex::new(info),
                     conn: Mutex::new(conn.clone()),
+                    lang: Mutex::new(asked),
                     offer: std::sync::atomic::AtomicU64::new(number),
                     state,
                     refused: Mutex::new(None),
@@ -263,14 +273,15 @@ async fn tunnel(conn: &Connection, kind: &str, tcp: TcpStream) -> Result<()> {
 
 /// `adb connect` to the phone (unless adb holds it already), and how adb holds it then.
 async fn connect(share: Arc<Share>) {
+    let speaks = *share.lang.lock().unwrap();
     let Some(adb) = adb_path() else {
-        return share.set("missing", "这台 station 上没有 adb：装上 Android platform-tools（macOS：brew install android-platform-tools），再重新共享");
+        return share.set("missing", t!(speaks; "station.adb.install"));
     };
     let serial = share.serial();
     // Nothing to reach: adb is not left trying to (it would, a few times a second).
     if share.info.lock().unwrap()["adbd"] == false {
         run(&adb, &["disconnect", &serial], ADB_QUICK).await.ok();
-        return share.set("off", "手机上的无线调试没开");
+        return share.set("off", t!(speaks; "station.adb.wirelessOff"));
     }
     // Held already (another offer: the pairing port opened, a new link): it stays so.
     if run(&adb, &["-s", &serial, "get-state"], ADB_QUICK).await.unwrap_or_default() == "device" {
@@ -295,9 +306,9 @@ async fn connect(share: Arc<Share>) {
     let refused = share.refused.lock().unwrap().take();
     match (state.as_str(), refused) {
         ("device", _) => share.set("connected", ""),
-        ("unauthorized", _) => share.set("unauthorized", "手机上弹出了「允许 USB 调试吗？」，点允许"),
+        ("unauthorized", _) => share.set("unauthorized", t!(speaks; "station.adb.allowPrompt")),
         (_, Some(why)) => share.set("failed", why),
-        _ => share.set("unpaired", "这台 station 还没和手机配对"),
+        _ => share.set("unpaired", t!(speaks; "station.adb.unpaired")),
     }
 }
 
@@ -305,12 +316,12 @@ async fn connect(share: Arc<Share>) {
 async fn pair(share: &Arc<Share>, code: &str) -> Result<String> {
     let code: String = code.chars().filter(char::is_ascii_digit).collect();
     if code.len() != 6 {
-        bail!("配对码是 6 位数字");
+        bail!(t!(lang::spoken(); "station.adb.codeDigits"));
     }
     if share.info.lock().unwrap()["pair"] != true {
-        bail!("手机上的配对窗口没开：在无线调试里点「使用配对码配对设备」");
+        bail!(t!(lang::spoken(); "station.adb.pairingClosed"));
     }
-    let adb = adb_path().ok_or_else(|| anyhow!("这台 station 上没有 adb"))?;
+    let adb = adb_path().ok_or_else(|| anyhow!(t!(lang::spoken(); "station.adb.noAdb")))?;
     // A port for this pairing alone, its one connection the phone's pairing port.
     let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
     let port = listener.local_addr()?.port();
@@ -325,25 +336,25 @@ async fn pair(share: &Arc<Share>, code: &str) -> Result<String> {
     tunnel.abort();
     let said = said?;
     if !said.contains("Successfully paired") {
-        bail!("没配上：{said}");
+        bail!(t!(lang::spoken(); "station.adb.pairFailed", said = said));
     }
     tokio::spawn(connect(share.clone()));
-    Ok("配对好了".into())
+    Ok(t!(lang::spoken(); "station.adb.paired"))
 }
 
 /// Lets the app turn Wireless debugging on itself from now on (`WRITE_SECURE_SETTINGS`), as its person asked.
 async fn grant(share: &Arc<Share>) -> Result<String> {
     let package = share.info.lock().unwrap()["package"].as_str().unwrap_or_default().to_string();
     if package.is_empty() {
-        bail!("手机没说 app 的包名");
+        bail!(t!(lang::spoken(); "station.adb.noPackage"));
     }
-    let adb = adb_path().ok_or_else(|| anyhow!("这台 station 上没有 adb"))?;
+    let adb = adb_path().ok_or_else(|| anyhow!(t!(lang::spoken(); "station.adb.noAdb")))?;
     let said = run(&adb, &["-s", &share.serial(), "shell", "pm", "grant", &package, "android.permission.WRITE_SECURE_SETTINGS"], ADB_TIMEOUT).await?;
     // Quiet is granted; a refusal says why (MIUI and ColorOS want 「USB 调试（安全设置）」 on).
     if !said.is_empty() {
-        bail!("没授权上：{said}");
+        bail!(t!(lang::spoken(); "station.adb.grantFailed", said = said));
     }
-    Ok("以后 app 可以自己打开无线调试了".into())
+    Ok(t!(lang::spoken(); "station.adb.granted"))
 }
 
 /// The machine's adb: on `PATH`, else the Android SDK's (where Android Studio puts it, whose adb server is likely the

@@ -173,12 +173,12 @@ impl AdminApi {
         let base = name.rsplit(['/', '\\']).next().unwrap_or("");
         let path = clean(&uploads.join(base));
         if base.is_empty() || !path.starts_with(&uploads) || path == uploads {
-            return Err(http_error(404, "没有这个文件"));
+            return Err(http_error(404, t!(spoken(); "station.files.notFound")));
         }
         if !path.is_file() {
-            let room = room.ok_or_else(|| http_error(404, "没有这个文件"))?;
+            let room = room.ok_or_else(|| http_error(404, t!(spoken(); "station.files.notFound")))?;
             let relative = Path::new("uploads").join(base);
-            let bytes = tokio::task::spawn_blocking(move || crate::archive::workspace_file(&room, &relative)).await??.ok_or_else(|| http_error(404, "没有这个文件"))?;
+            let bytes = tokio::task::spawn_blocking(move || crate::archive::workspace_file(&room, &relative)).await??.ok_or_else(|| http_error(404, t!(spoken(); "station.files.notFound")))?;
             return Ok(Response::builder().status(200).header("content-type", mime(&path))
                 .header("cache-control", "private, max-age=3600").body(super::full(bytes))?);
         }
@@ -233,7 +233,7 @@ impl AdminApi {
                         }
                     }
                 }
-                let uploads = dirs.iter().find(|d| path.starts_with(d) && path != **d).filter(|_| path.exists()).ok_or_else(|| http_error(400, "附件不在上传目录里"))?;
+                let uploads = dirs.iter().find(|d| path.starts_with(d) && path != **d).filter(|_| path.exists()).ok_or_else(|| http_error(400, t!(spoken(); "station.files.notUploaded")))?;
                 let dimension = |k: &str| a.get(k).and_then(Value::as_f64).filter(|v| v.fract() == 0.0 && *v > 0.0 && *v < 100_000.0).map(|v| v as u32);
                 let (width, height) = match (dimension("width"), dimension("height")) {
                     (Some(w), Some(h)) => (Some(w), Some(h)),
