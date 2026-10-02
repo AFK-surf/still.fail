@@ -575,6 +575,9 @@ fun DraftExtras(draft: Draft) {
  * parts ＋, the field and send are (they move with it); `onField`: where the field is, as it is laid out, and
  * `onFieldText` how its words are (where each line breaks: words sent fly line by line from there, ChatHost.kt).
  */
+internal val Draft.composerExpanded: Boolean
+    get() = focused || text.contains('\n') || text.length > 60 || files.isNotEmpty() || quotes.isNotEmpty()
+
 @Composable
 fun ComposerBar(
     draft: Draft, placeholder: String, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit,
@@ -584,7 +587,7 @@ fun ComposerBar(
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
     val style = SendTextStyle.copy(color = C.ink)
     val locked = draft.locked || draft.starting
-    val expanded = draft.focused || draft.text.contains('\n') || draft.text.length > 60 || draft.files.isNotEmpty() || draft.quotes.isNotEmpty()
+    val expanded = draft.composerExpanded
     // Keep the field in one composition slot while the buttons move below it, preserving focus and the IME.
     Layout(content = {
         Box(

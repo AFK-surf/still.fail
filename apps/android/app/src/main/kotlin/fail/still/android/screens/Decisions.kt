@@ -604,10 +604,11 @@ private fun DecisionComposer(item: DecisionItem, placeholder: String?, onField: 
         station = item.station, here = item.session, draft = draft, placeholder = placeholder ?: "发消息",
         onPlus = { openAttach(app, launchers) }, onSend = onReply,
     )
-    host.density = LocalDensity.current
     HostComposer(host, Modifier.onGloballyPositioned(onField).layout { measurable, constraints ->
         val composer = measurable.measure(constraints)
-        val height = constraints.constrainHeight(maxOf(composer.height, host.roomForList()))
+        // Reserve the toolbar below the actual field, including its font metrics and pixel rounding.
+        val extra = if (draft.composerExpanded) 0 else 4.dp.roundToPx() + 36.dp.roundToPx()
+        val height = constraints.constrainHeight(composer.height + extra)
         layout(composer.width, height) { composer.place(0, height - composer.height) }
     }, overContent = false)
 }
