@@ -143,6 +143,8 @@ sealed interface Screen {
     /** Every station's profiles, or (from a station's page) that station's only. */
     data class Profiles(val station: String? = null) : Screen { override val id = "profiles" + (station?.let { "/$it" } ?: "") }
     data object AutomaticDecisions : Screen { override val id = "automatic-decisions" }
+    data object AutomaticDecisionCompletion : Screen { override val id = "automatic-decisions/completion" }
+    data object AutomaticDecisionLogs : Screen { override val id = "automatic-decisions/completion/logs" }
     data object Memories : Screen { override val id = "memories" }
     /** What the agents spent (screens/Usage.kt). */
     data object Usage : Screen { override val id = "usage" }
@@ -681,7 +683,9 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Changelog -> fail.still.android.screens.ChangelogScreen()
                     is Screen.Connects -> fail.still.android.screens.ConnectsScreen(current, screen.station)
                     is Screen.Profiles -> fail.still.android.screens.ProfilesScreen(current, screen.station)
-                    Screen.AutomaticDecisions -> fail.still.android.screens.AutomaticDecisionsScreen(current)
+                    Screen.AutomaticDecisions -> fail.still.android.screens.AutomaticDecisionsScreen()
+                    Screen.AutomaticDecisionCompletion -> fail.still.android.screens.AutomaticDecisionCompletionScreen(current)
+                    Screen.AutomaticDecisionLogs -> fail.still.android.screens.AutomaticDecisionCompletionScreen(current, logs = true)
                     Screen.Memories -> fail.still.android.screens.MemoriesScreen(current)
                     Screen.Usage -> fail.still.android.screens.UsageScreen(current)
                     is Screen.UsagePrices -> fail.still.android.screens.UsagePricesScreen(current, screen.days)

@@ -26,7 +26,7 @@ import { AppearancePage } from "../pages/Appearance.tsx";
 import { NotificationsPage } from "../pages/Notifications.tsx";
 import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
-import { AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
+import { AutomaticDecisionCompletionSettings, AutomaticDecisionLogsSettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
@@ -119,6 +119,8 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
               <Route path="settings/stations" element={<StationsSettings entry={entry} />} />
               <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
               <Route path="settings/automatic-decisions" element={<AutomaticDecisionsSettings entry={entry} />} />
+              <Route path="settings/automatic-decisions/completion" element={<AutomaticDecisionCompletionSettings entry={entry} />} />
+              <Route path="settings/automatic-decisions/completion/logs" element={<AutomaticDecisionLogsSettings entry={entry} />} />
               <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
               <Route path="settings/memory" element={<MemorySettings entry={entry} />} />
               <Route path="settings/usage/prices" element={<UsagePricesSettings entry={entry} />} />
