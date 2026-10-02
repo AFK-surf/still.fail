@@ -3167,7 +3167,7 @@ mod tests {
             let now = t.host.now_ms();
             t.set(rows("ws/st"), json!([row("7", now - 1000.0), row("8", now - 2000.0)]));
             t.read(&mut list, 1).await;
-            let item = |list: &Ui, id: &str| list.value.clone().unwrap()["days"].as_array().unwrap().iter()
+            let item = |list: &Ui, id: &str| list.value.clone().unwrap_or_else(|| panic!("{:?}", list.error))["days"].as_array().unwrap().iter()
                 .flat_map(|d| d["items"].as_array().unwrap().clone()).find(|i| i["id"] == id).unwrap_or_else(|| panic!("{id} in {:?}", list.value));
             let mut title = serde_json::Map::new();
             title.insert("title".into(), json!("新名字"));
