@@ -10,13 +10,10 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -30,15 +27,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -51,7 +46,6 @@ import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.rememberTopic
 import fail.still.android.ui.C
-import fail.still.android.ui.Card
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.NavBar
@@ -112,24 +106,35 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                 fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 10.dp),
             )
             if (!AdbShare.supported) {
-                Card { Text("需要 Android 11 及以上：这台手机没有无线调试。", fontSize = 14.sp, color = C.ink) }
+                ListCard { ListRow { Text("需要 Android 11 及以上：这台手机没有无线调试。", fontSize = 15.sp, color = C.muted) } }
                 return@Column
             }
-            Card {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (here) {
-                        Text(state(view!!, now), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (view.adb in setOf("missing", "failed")) C.red else C.ink)
-                        view.serial?.takeIf { view.adb == "connected" }?.let { serial ->
-                            SelectionContainer { Text("agent 用：adb -s $serial", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = C.muted) }
+            ListCard {
+                // Lent or not, as settings' switches are; what it is doing under the title.
+                ListRow(onClick = { if (here) app.act("停止共享") { app.core.call("adb.stop") } else start() }) {
+                    Column(Modifier.weight(1f)) {
+                        Text("共享调试", fontSize = 15.sp, color = C.ink)
+                        val sub = when {
+                            here -> state(view!!, now)
+                            elsewhere -> "正在共享给另一台 station，打开会换到这台"
+                            // Why it stopped by itself (its hour up, the station too old).
+                            view?.sharing == false && view.message != null -> view.message
+                            else -> "一小时后自动停止"
                         }
-                        // What the station said, when it says more than the line above.
-                        if (view.adb != "connected") view.message?.takeIf { it.isNotBlank() && it != state(view, now) && !state(view, now).endsWith(it) }?.let { Text(it, fontSize = 13.sp, color = C.muted) }
-                        Button("停止共享", primary = false) { app.act("停止共享") { app.core.call("adb.stop") } }
-                    } else {
-                        Text(if (elsewhere) "正在共享给另一台 station；开始会换到这台。" else "没有在共享。", fontSize = 15.sp, color = C.ink)
-                        // Why it stopped by itself (its hour up, the station too old).
-                        if (view?.sharing == false) view.message?.let { Text(it, fontSize = 13.sp, color = C.muted) }
-                        Button("开始共享", primary = true, onClick = start)
+                        Text(sub, fontSize = 13.sp, color = if (here && view!!.adb in setOf("missing", "failed")) C.red else C.muted)
+                    }
+                    Switch(here)
+                }
+                if (here) {
+                    view!!.serial?.takeIf { view.adb == "connected" }?.let { serial ->
+                        ListRow {
+                            Text("agent 用", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                            SelectionContainer { Text("adb -s $serial", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = C.muted) }
+                        }
+                    }
+                    // What the station said, when it says more than the line above.
+                    if (view.adb != "connected") view.message?.takeIf { it.isNotBlank() && it != state(view, now) && !state(view, now).endsWith(it) }?.let {
+                        ListRow { Text(it, fontSize = 13.sp, color = C.muted) }
                     }
                 }
             }
@@ -146,16 +151,21 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
             }
             if (here && view!!.adb == "unpaired") Pairing(view)
             if (here && view!!.adb == "connected" && !phone.canSwitch) {
+                val busy = app.isDoing("adb.grant")
                 SectionHeader("以后", start = 24.dp)
-                Card {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("让 app 以后自己打开无线调试，就不用每次去设置里开。由 station 的 adb 给 app 授权（WRITE_SECURE_SETTINGS），卸载 app 后失效。", fontSize = 13.sp, color = C.muted)
-                        Button("允许 app 打开无线调试", primary = false, busy = app.isDoing("adb.grant")) {
-                            app.act("授权", "以后 app 会自己打开无线调试") {
-                                app.core.call("adb.grant")
-                                phone = phone.copy(canSwitch = AdbShare.canSwitch(context))
-                            }
+                ListCard {
+                    ListRow(onClick = if (busy) null else ({
+                        app.act("授权", "以后 app 会自己打开无线调试") {
+                            app.core.call("adb.grant")
+                            phone = phone.copy(canSwitch = AdbShare.canSwitch(context))
                         }
+                    })) {
+                        Column(Modifier.weight(1f)) {
+                            Text("让 app 自己打开无线调试", fontSize = 15.sp, color = C.ink)
+                            Text("不用每次去设置里开。由 station 的 adb 给 app 授权（WRITE_SECURE_SETTINGS），卸载 app 后失效", fontSize = 13.sp, color = C.muted)
+                        }
+                        DoingMark(busy, app.failedOf("adb.grant"), 14.dp)
+                        Switch(false)
                     }
                 }
             }
@@ -182,22 +192,28 @@ private fun Need(title: String, ok: Boolean, value: String) {
 private fun Pairing(view: AdbShareView) {
     val app = LocalApp.current
     val context = LocalContext.current
-    var code by remember { mutableStateOf("") }
+    val busy = app.isDoing("adb.pair")
     SectionHeader("配对（每台 station 一次）", start = 24.dp)
-    Card {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                "1. 进无线调试，点「使用配对码配对设备」。\n2. 别离开那个窗口：下拉通知，在「共享调试」里点「填配对码」，填上 6 位码。分屏的话也可以填在下面。",
-                fontSize = 13.sp, color = C.muted,
-            )
-            Button("去无线调试", primary = false) { AdbShare.openWireless(context) }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Field(code, { code = it.filter(Char::isDigit).take(6) }, "6 位配对码", mono = true, modifier = Modifier.weight(1f))
-                Button("配对", primary = true, enabled = code.length == 6 && view.pairPort != null, busy = app.isDoing("adb.pair")) {
-                    app.act("配对", "配对好了") { app.core.call("adb.pair", buildJsonObject { put("code", code) }) }
-                }
+    ListCard {
+        ListRow(onClick = { AdbShare.openWireless(context) }) {
+            Column(Modifier.weight(1f)) {
+                Text("打开配对窗口", fontSize = 15.sp, color = C.ink)
+                Text("在无线调试里点「使用配对码配对设备」，别离开那个窗口：下拉通知，在「共享调试」里填上 6 位码", fontSize = 13.sp, color = C.muted)
             }
-            if (view.pairPort == null) Text("配对窗口打开后才能配对。", fontSize = 12.sp, color = C.subtle)
+            Text("去无线调试", fontSize = 14.sp, color = C.accent)
+        }
+        // Split screen: the code typed here instead.
+        ListRow(onClick = if (view.pairPort == null || busy) null else ({
+            ask(app, "配对码", "", "6 位配对码", "配对", hint = "无线调试里「使用配对码配对设备」显示的 6 位数字") { code ->
+                app.core.call("adb.pair", buildJsonObject { put("code", code.filter(Char::isDigit)) })
+                app.toast = "配对好了"
+            }
+        })) {
+            Column(Modifier.weight(1f)) {
+                Text("在这里填配对码", fontSize = 15.sp, color = if (view.pairPort == null) C.subtle else C.ink)
+                Text(if (view.pairPort == null) "配对窗口打开后才能填" else "分屏时用", fontSize = 13.sp, color = C.muted)
+            }
+            DoingMark(busy, app.failedOf("adb.pair"), 14.dp)
         }
     }
 }
