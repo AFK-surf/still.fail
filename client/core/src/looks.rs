@@ -46,17 +46,19 @@ pub fn glyph(stations: &[Value], days: &[Value]) -> Value {
 }
 
 /// What a list says with no rows to show, in their place: that it is still reading (a station loading or its link
-/// coming back), the stations it cannot reach (each tried again), or that there is nothing.
-pub fn list_note(stations: &[Value], days: &[Value], loading: bool) -> Value {
+/// coming back), the stations it cannot reach (each tried again), or that there is nothing. `unread`: the stations
+/// whose chats this device has never read; one of them offline is not "no chats", only none known yet.
+pub fn list_note(stations: &[Value], days: &[Value], loading: bool, unread: &[String]) -> Value {
     let is = |s: &Value, w: &str| s.get("state").and_then(Value::as_str) == Some(w);
     if !days.is_empty() {
         return json!({ "reading": false, "failing": [], "empty": false });
     }
     let connecting = stations.iter().any(|s| is(s, "connecting"));
     let failing: Vec<Value> = if loading { Vec::new() } else {
-        stations.iter().filter(|s| is(s, "error")).map(|s| {
+        stations.iter().filter(|s| is(s, "error") || (is(s, "offline") && s.get("station").and_then(Value::as_str).is_some_and(|a| unread.iter().any(|u| u == a)))).map(|s| {
             let name = s.get("name").and_then(Value::as_str).unwrap_or("");
-            json!({ "station": s["station"], "text": format!("连不上「{name}」，正在重试…"), "message": s["message"] })
+            let text = if is(s, "error") { format!("连不上「{name}」，正在重试…") } else { format!("「{name}」离线，还没读到它的会话") };
+            json!({ "station": s["station"], "text": text, "message": s["message"] })
         }).collect()
     };
     let empty = !loading && !connecting && failing.is_empty();
@@ -140,14 +142,18 @@ mod tests {
     #[test]
     fn a_list_with_no_rows_says_it_reads_fails_or_has_none() {
         let days = [json!({ "items": [{}] })];
-        assert_eq!(list_note(&[station("w/a", "A", "error")], &days, false), json!({ "reading": false, "failing": [], "empty": false }));
-        assert_eq!(list_note(&[station("w/a", "A", "online")], &[], true)["reading"], true);
-        assert_eq!(list_note(&[station("w/a", "A", "connecting")], &[], false)["reading"], true);
-        let failing = list_note(&[station("w/a", "A", "error"), station("w/b", "B", "online")], &[], false);
+        assert_eq!(list_note(&[station("w/a", "A", "error")], &days, false, &[]), json!({ "reading": false, "failing": [], "empty": false }));
+        assert_eq!(list_note(&[station("w/a", "A", "online")], &[], true, &[])["reading"], true);
+        assert_eq!(list_note(&[station("w/a", "A", "connecting")], &[], false, &[])["reading"], true);
+        let failing = list_note(&[station("w/a", "A", "error"), station("w/b", "B", "online")], &[], false, &[]);
         assert_eq!(failing["failing"][0]["text"], "连不上「A」，正在重试…");
         assert_eq!(failing["empty"], false);
-        assert_eq!(list_note(&[station("w/b", "B", "online")], &[], false)["empty"], true);
-        assert_eq!(list_note(&[], &[], false)["empty"], true);
+        assert_eq!(list_note(&[station("w/b", "B", "online")], &[], false, &[])["empty"], true);
+        assert_eq!(list_note(&[], &[], false, &[])["empty"], true);
+        // An offline station never read here: its chats are not known, not none.
+        let unread = list_note(&[station("w/a", "A", "offline")], &[], false, &["w/a".to_string()]);
+        assert_eq!((unread["empty"].as_bool(), unread["failing"][0]["text"].as_str()), (Some(false), Some("「A」离线，还没读到它的会话")));
+        assert_eq!(list_note(&[station("w/a", "A", "offline")], &[], false, &[])["empty"], true);
     }
 
     #[test]

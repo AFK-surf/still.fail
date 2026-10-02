@@ -743,10 +743,15 @@ impl Views {
         let mut troubles: Vec<(&str, String)> = Vec::new();
         let mut rows = Vec::new();
         let mut loading = false;
+        // The stations whose chats this device has never read (looks.rs list_note).
+        let mut unread = Vec::new();
         for s in &stations {
             // What was read from it shows whatever its state: an offline station's chats are still there to read (the
             // data center kept them), only not to write to.
             let read = self.store.value(&Topic::ChatRows { station: s.address.clone() });
+            if !matches!(read, Some(Ok(_))) {
+                unread.push(s.address.clone());
+            }
             if let Some(Ok(list)) = &read {
                 let slack_users: Vec<String> = self.ok(Topic::Overview { station: s.address.clone() })
                     .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
@@ -876,7 +881,7 @@ impl Views {
         };
         // The glyph, and what the list says with no rows (looks.rs).
         let glyph = crate::looks::glyph(&states, &days);
-        let note = crate::looks::list_note(&states, &days, loading);
+        let note = crate::looks::list_note(&states, &days, loading, &unread);
         // How many people the scope has: its members, once known.
         let members = self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).map(Vec::len));
         // Whose pictures lead: always the agents, the people after them (the 侧栏头像 setting is gone; clients from before

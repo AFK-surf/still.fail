@@ -140,6 +140,17 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
                 ) { IconIn(Icons.Edit, 17.dp, Color.White) }
             }
             if (view == null) Text(chats.error?.message ?: "正在读取会话…", fontSize = 14.sp, color = if (chats.error != null) C.red else C.muted, modifier = Modifier.padding(18.dp))
+            // No rows: what the list says in their place (the core's `note`), as the home list does.
+            else if (view.days.isEmpty()) {
+                val note = view.note
+                val failing = note?.failing?.firstOrNull()?.text
+                val said = when {
+                    note?.reading == true -> "正在读取会话…"
+                    failing != null -> failing
+                    else -> "还没有会话"
+                }
+                Text(said, fontSize = 14.sp, color = if (failing != null && note?.reading != true) C.red else C.muted, modifier = Modifier.padding(18.dp))
+            }
             else LazyColumn(Modifier.weight(1f, fill = false).padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 items(view.days.flatMap { it.items }.take(6), key = { "${it.station}/${it.id}" }) { item ->
                     val here = top is Screen.Chat && top.station == item.station && top.of == item.page

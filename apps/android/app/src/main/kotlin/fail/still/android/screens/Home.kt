@@ -156,7 +156,10 @@ fun HomeScreen(current: WorkspaceEntry) {
     val density = LocalDensity.current
     // Their heights kept with the page's state: coming back to the list, it is laid out with them at once, so a list
     // left at its end is not first clamped short of it (with no room under the bars) and stays there.
-    var topBar by rememberSaveable { mutableIntStateOf(0) }
+    // The first time, the top bar as it is laid out (the status bar, 8 + 34 + 8dp) rather than none: a note at the
+    // list's top is not drawn under the bar until it has been measured (which a busy start can take a while to do).
+    val statusTop = WindowInsets.statusBars.getTop(density)
+    var topBar by rememberSaveable { mutableIntStateOf(statusTop + with(density) { 50.dp.roundToPx() }) }
     var bottomBar by rememberSaveable { mutableIntStateOf(0) }
     val padding = with(density) { PaddingValues(top = topBar.toDp() + 8.dp, bottom = bottomBar.toDp() + 8.dp) }
     Box(Modifier.fillMaxSize()) {
