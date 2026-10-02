@@ -800,6 +800,10 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
             }
         }
         Topic::Overview { .. } => {
+            for row in value.get_mut("automaticDecisions").and_then(|v| v.get_mut("recent")).and_then(Value::as_array_mut).into_iter().flatten() {
+                if let Some(at) = row["at"].as_f64() { row["stamp"] = stamp(at, c); }
+            }
+
             // Its agents' processes, in a line.
             if let Some(processes) = value.get("processes").and_then(Value::as_array).cloned() {
                 let mb: f64 = processes.iter().filter_map(|p| p.get("rssMb").and_then(Value::as_f64)).sum();

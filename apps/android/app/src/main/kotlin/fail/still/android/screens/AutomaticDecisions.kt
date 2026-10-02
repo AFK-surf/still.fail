@@ -23,16 +23,14 @@ fun AutomaticDecisionsScreen(current: WorkspaceEntry) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
         TopBack("设置", app::pop)
         LargeTitle("", "自动决策")
-        PageNote("选择自动判断的事项和模型")
         topic.value?.forEach { station -> key(station.station) {
-            SectionHeader(station.name, start = 24.dp)
             val view = station.overview?.automaticDecisions
             when {
                 !station.online -> PageNote("station 上线后可配置和查看记录")
                 station.overview == null -> PageNote("正在连接…")
                 view == null -> PageNote("更新这台 station 后可使用自动决策")
                 !view.canEdit -> PageNote("只有 workspace 管理员可以配置自动决策和查看记录")
-                else -> AutomaticDecisionPanel(station.station, view)
+                else -> AutomaticDecisionPanel(station.station, station.name, view)
             }
         } } ?: PageNote(topic.error?.message ?: "正在读取…")
         Spacer(Modifier.height(30.dp))
@@ -40,7 +38,7 @@ fun AutomaticDecisionsScreen(current: WorkspaceEntry) {
 }
 
 @Composable
-private fun AutomaticDecisionPanel(station: String, view: AutomaticDecisionView) {
+private fun AutomaticDecisionPanel(station: String, name: String, view: AutomaticDecisionView) {
     val app = LocalApp.current
     val form = remember(station) { java.util.UUID.randomUUID().toString() }
     val topic by rememberTopic<AutomaticDecisionDraft>(app.core, buildJsonObject { put("topic", "decisionForm"); put("station", station); put("form", form) })
@@ -58,11 +56,19 @@ private fun AutomaticDecisionPanel(station: String, view: AutomaticDecisionView)
     val refreshing = app.isDoing("automaticDecisions.refresh", "station" to station)
     val busy = d.pending || saving
     val model = view.models.find { it.id == d.model }
+    Row(Modifier.fillMaxWidth().padding(end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) { SectionHeader(name, start = 24.dp) }
+        if (refreshing) Spinner(16.dp) else NavButton(Icons.Refresh, onClick = {
+            app.act("刷新决策模型", "已刷新模型") { app.core.call("automaticDecisions.refresh", buildJsonObject { put("station", station) }) }
+        })
+    }
+    val refreshFailed = app.failedOf("automaticDecisions.refresh", "station" to station)
+    refreshFailed?.let { PageNote(it) }
     ListCard {
         ListRow(onClick = if (busy) null else ({ edit("enabled", JsonPrimitive(!d.enabled)) })) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text("完成检查", color = C.ink, fontSize = 15.sp)
-                Text("结束前检查未完成的工作和待处理事项", fontSize = 13.sp, color = C.muted)
+                Text("结束前检查遗漏和待处理事项", fontSize = 13.sp, color = C.muted)
             }
             Switch(d.enabled)
         }
@@ -77,27 +83,25 @@ private fun AutomaticDecisionPanel(station: String, view: AutomaticDecisionView)
         }
     }
 
-    Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(model?.let { "复用 ${it.profiles.joinToString("、")}" } ?: "模型自动从现有 Profile 识别", fontSize = 12.sp, color = C.muted)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button("保存", primary = true, busy = saving, enabled = !busy && d.dirty) { act("save") }
-            Button("刷新模型", primary = false, busy = refreshing, enabled = !refreshing) {
-                app.act("刷新决策模型", "已刷新模型") { app.core.call("automaticDecisions.refresh", buildJsonObject { put("station", station) }) }
-            }
-            DoingMark(false, app.failedOf("automaticDecisions.form.save", "station" to station, "form" to form))
-        }
+    if (d.dirty) Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Button("保存修改", primary = true, busy = saving, enabled = !busy) { act("save") }
+        DoingMark(false, app.failedOf("automaticDecisions.form.save", "station" to station, "form" to form))
     }
-    SectionHeader("最近决策", start = 24.dp)
+    SectionHeader("最近检查", start = 24.dp)
     ListCard {
         if (view.recent.isEmpty()) ListRow { Text("还没有记录", fontSize = 13.sp, color = C.muted) }
         view.recent.forEach { row -> ListRow(onClick = { app.push(Screen.Chat(station, ChatOf.Session(row.session))) }) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(row.title, fontSize = 15.sp, color = C.ink)
-                Text(row.model, fontSize = 13.sp, color = C.muted)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(row.title, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    row.stamp?.let { Text(it.ago, fontSize = 12.sp, color = C.subtle) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(row.label, fontSize = 13.sp, color = if (row.accepted) C.muted else C.red)
+                    Text("· ${row.model}", fontSize = 13.sp, color = C.muted)
+                }
                 row.error?.let { Text(it, fontSize = 12.sp, color = C.red) }
             }
-            Text(row.label, fontSize = 13.sp, color = if (row.accepted) C.muted else C.red)
-            IconIn(Icons.ChevronRight, 14.dp, C.subtle)
         } }
     }
 }

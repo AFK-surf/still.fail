@@ -161,12 +161,23 @@ data class Attention (
 	val quota: QuotaAttention? = null
 )
 
+/// A moment in words, fresh each minute: 3 分钟前 (`ago`), 9/20 14:05:09 (`full`), 3 小时后 (`until`), whether it has come.
+@Serializable
+data class Stamp (
+	val at: Double,
+	val ago: String,
+	val full: String,
+	val until: String,
+	val past: Boolean
+)
+
 @Serializable
 data class AutomaticDecisionCheck (
 	val id: Long,
 	val session: String,
 	val title: String,
 	val at: Long,
+	val stamp: Stamp? = null,
 	val label: String,
 	val accepted: Boolean,
 	val model: String,
@@ -332,16 +343,6 @@ typealias Badge = String
 data class Maker (
 	val id: String,
 	val name: String
-)
-
-/// A moment in words, fresh each minute: 3 分钟前 (`ago`), 9/20 14:05:09 (`full`), 3 小时后 (`until`), whether it has come.
-@Serializable
-data class Stamp (
-	val at: Double,
-	val ago: String,
-	val full: String,
-	val until: String,
-	val past: Boolean
 )
 
 /// What a session keeps watch with (its watches running): their names, oldest first; since when the first runs; when
