@@ -45,5 +45,27 @@ async fn hold(endpoint: &Endpoint, relay: &RelayUrl) -> Result<()> {
         .clear_ip_transports()
         .relay_mode(RelayMode::Custom(iroh::RelayMap::from_iter([relay.clone()])))
         .alpns(vec![ALPN.to_vec()]);
-    // The tests' relays have certificates of their own.
-    
+    let keeper = keeper
+        .bind()
+        .await
+        .context("keeper")?;
+    let held = async {
+        tokio::time::timeout(SETUP, keeper.online()).await.map_err(|_| anyhow!("keeper not on the relay after {SETUP:?}"))?;
+        let addr = EndpointAddr::new(keeper.id()).with_relay_url(relay.clone());
+        let dialed = async { endpoint.connect(addr, ALPN).await.context("station to keeper") };
+        let accepted = async {
+            let incoming = keeper.accept().await.context("keeper closed")?;
+            incoming.await.context("keeper accepting")
+        };
+        let (conn, _accepted) = tokio::time::timeout(SETUP, async { tokio::try_join!(dialed, accepted) })
+            .await
+            .map_err(|_| anyhow!("no connection through the relay after {SETUP:?}"))??;
+        eprintln!("mesh: held on {relay}");
+        let reason = conn.closed().await;
+        Err::<(), _>(anyhow!("connection through the relay ended: {reason}"))
+    }
+    .await;
+    keeper.close().await;
+    held
+}
+
