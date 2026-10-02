@@ -1,0 +1,474 @@
+// Sessions and threads as the pages read them, ported from mesh/app/src/admin/views.rs (`summary`, `sessions`, `session`,
+// `threads`, `thread`, `thread_view`), admin/mod.rs (GET /sessions/:key/timeline, /widget-state) and admin/files.rs
+// (`session_file`), with the same JSON, field for field and in serde_json's order.
+//
+// What the Rust station keeps outside the database is taken as views.ts takes it (a station with none of it):
+// - the hub: no session has a runtime process (`process` "cold"); no transcript is watched, so a timeline is read from
+//   the transcript's file each time, as the Rust does for a session nobody follows;
+// - Slack connections: none connected, so no channel names (`channelName` null) and no Slack people (a Slack user
+//   goes by their id, with no email);
+// - the cloud's names: those of the members who asked since the station started (`Store.names`).
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { basename, dirname, join, isAbsolute } from "node:path";
+import { zstdDecompressSync } from "node:zlib";
+import type { Viewer } from "../mesh/credential.ts";
+import type { Lang } from "../ops/i18n.ts";
+import { watching } from "./store.ts";
+import * as store from "./store.ts";
+import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
+import { setLang, tr } from "./spoken.ts";
+import { postEntries, readTimeline, transcriptPath, weave } from "./transcript.ts";
+import { HttpError, messageView } from "./views.ts";
+import { parseUsize } from "./jobs.ts";
+import { shown } from "./jobs.ts";
+
+/// The connect of the station's own chats (chat/internal.rs).
+const INTERNAL_CONNECT = "ember";
+
+// ---- the config: its connects' names and its profiles' homes (config.rs) ----
+
+type Config = { connects: { id: string; name: string }[]; profiles: { id: string; home: string }[] };
+const configs = new WeakMap<Store, Config>();
+
+/// The station's config.json, as far as these reads need it; none of it when it does not read.
+function configOf(s: Store): Config {
+  let config = configs.get(s);
+  if (!config) {
+    config = { connects: [], profiles: [] };
+    try {
+      const raw = JSON.parse(readFileSync(join(s.dataDir, "config.json"), "utf8"));
+      for (const c of Array.isArray(raw.connects) ? raw.connects : []) {
+        // Connect::name: its bot's name, else its id.
+        const bot = typeof c?.slack?.botName === "string" && c.slack.botName !== "" ? c.slack.botName : undefined;
+        if (typeof c?.id === "string") config.connects.push({ id: c.id, name: bot ?? c.id });
+      }
+      for (const p of Array.isArray(raw.profiles) ? raw.profiles : []) {
+        // A profile's home, under the data directory when it is relative (config.rs `under`).
+        if (typeof p?.id === "string" && typeof p?.home === "string") config.profiles.push({ id: p.id, home: isAbsolute(p.home) ? p.home : join(s.dataDir, p.home) });
+      }
+    } catch {
+      // No config: none.
+    }
+    configs.set(s, config);
+  }
+  return config;
+}
+
+// ---- people (views.rs `creator`, `people`; as views.ts has them) ----
+
+/// A creator reference in words: who, and their email where known.
+function creator(s: Store, reference: string | null): Json | null {
+  if (reference === null) return null;
+  if (reference === "local") return { id: "local", name: tr("station.creator.localPage"), email: null, via: "local" };
+  if (reference.startsWith("slack:")) {
+    const rest = reference.slice("slack:".length);
+    const colon = rest.indexOf(":");
+    if (colon > 0 && colon < rest.length - 1) {
+      // No connection knows the person: their id, no email.
+      return { id: reference, name: rest.slice(colon + 1), email: null, via: "slack" };
+    }
+  }
+  return { id: reference, name: s.names.get(reference) ?? reference, email: reference, via: "cloud" };
+}
+
+/// Several people, once each (by email, else id).
+function people(s: Store, refs: string[]): Json[] {
+  const seen = new Set<string>();
+  return refs
+    .map((r) => creator(s, r))
+    .filter((p): p is Json => p !== null)
+    .filter((p) => {
+      const key = typeof p.email === "string" ? p.email : typeof p.id === "string" ? p.id : "";
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+/// views.rs `author_names`: who wrote in a thread, in words, each author asked once.
+function authorNames(s: Store, thread: number): (kind: AuthorKind, author: string) => string | null {
+  const th = store.getThread(s, thread);
+  const members = store.threadSessions(s, thread);
+  const connects = configOf(s).connects;
+  const names = new Map<string, string | null>();
+  return (kind, author) => {
+    const key = `${kind}:${author}`;
+    if (names.has(key)) return names.get(key)!;
+    let name: string | null;
+    if (kind === "ember") name = "still.fail";
+    else if (kind === "agent") {
+      // An agent goes by the name of the connect it posts through (on the page, of the connect that started it).
+      const session = store.getSession(s, author);
+      const via = members.find((m) => m.session === author)?.connect;
+      const connect = via !== undefined && via !== INTERNAL_CONNECT ? via : (session?.connect ?? null);
+      const c = connects.find((c) => c.id === connect);
+      name = c ? c.name : (session?.title ?? null);
+    } else if (th !== null && th.surface === store.STILLFAIL_SURFACE) {
+      name = author === "local" ? tr("station.author.admin") : (s.names.get(author) ?? author);
+    } else {
+      // A Slack person: no connection knows them.
+      name = null;
+    }
+    names.set(key, name);
+    return name;
+  };
+}
+
+// ---- sessions ----
+
+/// SessionRow as serde writes it: the token skipped, `cwd` left out when none.
+function sessionJson(r: SessionRow): Json {
+  const v: Json = {
+    key: r.key, connect: r.connect, scope: r.scope, title: r.title, createdBy: r.createdBy, runtime: r.runtime, profile: r.profile,
+    profilePinned: r.profilePinned, model: r.model, effort: r.effort, fast: r.fast, runtimeSessionId: r.runtimeSessionId, workspace: r.workspace,
+  };
+  if (r.cwd !== null) v.cwd = r.cwd;
+  Object.assign(v, { running: r.running, createdAt: r.createdAt, lastActiveAt: r.lastActiveAt, archivedAt: r.archivedAt, archivedBy: r.archivedBy, shownAt: r.shownAt });
+  return v;
+}
+
+/// admin/mod.rs `session_row`: the session, or 404.
+function sessionRow(s: Store, key: string): SessionRow {
+  const row = store.getSession(s, key);
+  if (row === null) throw new HttpError(404, `unknown session ${key}`);
+  return row;
+}
+
+type Lists = { stats: Map<string, store.SessionStats>; bindings: Map<string, string[]>; participants: Map<string, string[]>; watches: Map<string, Json> };
+
+/// views.rs `summary_with`: a session for lists and events: its row (without the token), process state, counts and people.
+function summaryWith(s: Store, key: string, l: Lists): Json {
+  const row = sessionRow(s, key);
+  const v = sessionJson(row);
+  v.boundTo = l.bindings.get(key) ?? [];
+  // No runtime process here (the hub's): cold.
+  v.process = "cold";
+  const stat = l.stats.get(key);
+  v.turns = stat?.turns ?? 0;
+  v.pending = stat?.pending ?? 0;
+  v.firstText = stat?.firstText ?? null;
+  v.lastTurn = stat?.lastTurn ?? null;
+  v.creator = creator(s, row.createdBy);
+  v.participants = people(s, l.participants.get(key) ?? []);
+  // Keeping watch (jobs::watching): the pages say so.
+  const watch = l.watches.get(key);
+  if (watch !== undefined) v.watch = watch;
+  return v;
+}
+
+/// views.rs `summary`: one session's.
+function summary(s: Store, key: string): Json {
+  return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s) });
+}
+
+/// GET /sessions (views.rs `sessions`): the sessions shown in lists, or only the archived ones; those of one connect.
+export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang): Json[] {
+  setLang(lang);
+  const l: Lists = { stats: store.sessionStats(s, null), bindings: store.listBindings(s), participants: store.participants(s, null), watches: watching(s) };
+  return store
+    .listSessions(s)
+    .filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived)
+    .map((x) => summaryWith(s, x.key, l));
+}
+
+/// GET /sessions/:key (views.rs `session`): the session, its threads, turns and jobs (newest first).
+export function session(s: Store, key: string, viewer: Viewer, lang: Lang): Json {
+  setLang(lang);
+  const turns = store.listTurns(s, key);
+  const jobs = store.listJobs(s, key).map((j) => shown(s, j));
+  return { session: summary(s, key), threads: threadViews(s, viewer, key), turns, jobs };
+}
+
+// ---- threads ----
+
+/// ThreadRow as serde writes it: auto_title, home, hidden_at, hidden_by and shown_at left out when none.
+function threadJson(t: ThreadRow): Json {
+  const v: Json = { id: t.id, surface: t.surface, channel: t.channel, threadTs: t.threadTs, title: t.title };
+  if (t.autoTitle !== null) v.autoTitle = t.autoTitle;
+  v.createdBy = t.createdBy;
+  v.createdAt = t.createdAt;
+  if (t.home !== null) v.home = t.home;
+  if (t.hiddenAt !== null) v.hiddenAt = t.hiddenAt;
+  if (t.hiddenBy !== null) v.hiddenBy = t.hiddenBy;
+  if (t.shownAt !== null) v.shownAt = t.shownAt;
+  return v;
+}
+
+/// views.rs `thread_view`: a thread with its sessions, last entry and message, what the viewer read, who wrote.
+function threadView(s: Store, t: ThreadSummary): Json {
+  const names = authorNames(s, t.thread.id);
+  const v = threadJson(t.thread);
+  v.sessions = t.sessions.map((m) => ({ thread: m.thread, session: m.session, connect: m.connect, joinedAt: m.joinedAt }));
+  v.last = t.last;
+  v.lastMessage = t.lastMessage === null ? null : messageView(t.lastMessage, names);
+  v.read = t.read;
+  v.unread = t.unread;
+  v.people = people(s, t.people);
+  v.firstText = t.firstText;
+  // No connection to know a Slack channel's name.
+  v.channelName = null;
+  v.creator = creator(s, t.thread.createdBy);
+  return v;
+}
+
+function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
+  return store.listThreads(s, viewer.email, session, null).map((t) => threadView(s, t));
+}
+
+/// GET /threads?session= (views.rs `threads`): the threads (of one session).
+export function threads(s: Store, viewer: Viewer, session: string | null, lang: Lang): Json[] {
+  setLang(lang);
+  return threadViews(s, viewer, session);
+}
+
+/// GET /threads/:id (admin/mod.rs, views.rs `thread`): the id an i64, the thread there.
+export function thread(s: Store, viewer: Viewer, id: string, lang: Lang): Json {
+  setLang(lang);
+  const n = parseI64(id);
+  if (n === null || store.getThread(s, n) === null) throw new HttpError(404, `unknown thread ${id}`);
+  const found = store.listThreads(s, viewer.email, null, n)[0];
+  if (found === undefined) throw new HttpError(404, `unknown thread ${n}`);
+  return threadView(s, found);
+}
+
+/// `str::parse::<i64>`: digits with a sign at most, within an i64.
+export function parseI64(text: string): number | null {
+  if (!/^[+-]?\d+$/.test(text)) return null;
+  const n = BigInt(text);
+  return n > 9223372036854775807n || n < -9223372036854775808n ? null : Number(n);
+}
+
+// ---- a session's timeline and widgets ----
+
+/// GET /sessions/:key/timeline: transcript entries before those a page was sent: up to `limit` (200, from 1 to 1000)
+/// before entry `before` (0), and the index of the first (live.rs `before`). The transcript is found through the
+/// session's profile (hub.rs `locate`); none found: nothing.
+export function timeline(s: Store, key: string, beforeParam: string | undefined, limitParam: string | undefined, lang: Lang): Json {
+  setLang(lang);
+  const row = sessionRow(s, key);
+  const before = parseUsize(beforeParam) ?? 0;
+  const limit = Math.min(Math.max(parseUsize(limitParam) ?? 200, 1), 1000);
+  const profile = configOf(s).profiles.find((p) => p.id === row.profile);
+  const runtime = row.runtime === "claude" || row.runtime === "codex" ? row.runtime : null;
+  const path = profile && runtime && row.runtimeSessionId !== null ? transcriptPath(runtime, profile.home, row.runtimeSessionId) : null;
+  if (path === null || runtime === null) return { start: 0, entries: [] };
+  const entries = weave(readTimeline(runtime, path), postEntries(store.postsBy(s, key)));
+  const end = Math.min(before, entries.length);
+  const start = Math.max(0, end - limit);
+  return { start, entries: entries.slice(start, end) };
+}
+
+/// GET /sessions/:key/widget-state?path: what a widget in one of the session's messages holds, null when nothing or
+/// what is kept does not read as JSON.
+export function widgetState(s: Store, key: string, path: string | undefined, lang: Lang): Json {
+  setLang(lang);
+  sessionRow(s, key);
+  const kept = store.widgetState(s, key, path ?? "");
+  let state: Json = null;
+  if (kept !== null) {
+    try {
+      state = JSON.parse(kept);
+    } catch {
+      state = null;
+    }
+  }
+  return { state };
+}
+
+// ---- a session's files (admin/files.rs) ----
+
+/// files.rs `mime`: by the file's extension.
+function mime(path: string): string {
+  const name = basename(path);
+  const dot = name.lastIndexOf(".");
+  // Path::extension: none for a name with no dot, or only the one it starts with.
+  const ext = dot <= 0 ? null : name.slice(dot + 1).toLowerCase();
+  const kinds: Record<string, string> = {
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+    pdf: "application/pdf", txt: "text/plain; charset=utf-8", md: "text/markdown; charset=utf-8", json: "application/json",
+  };
+  return (ext !== null && Object.hasOwn(kinds, ext) ? kinds[ext] : undefined) ?? "application/octet-stream";
+}
+
+/// files.rs `clean`: a path absolute, with `.` and `..` worked out (no link followed).
+function clean(path: string): string {
+  const out: string[] = [];
+  for (const part of path.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") out.pop();
+    else out.push(part);
+  }
+  return `/${out.join("/")}`;
+}
+
+/// Path::starts_with, component by component.
+const within = (path: string, base: string) => base === "/" || path === base || path.startsWith(`${base}/`);
+
+const isFile = (path: string) => {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+};
+const canonical = (path: string): string | null => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return null;
+  }
+};
+/// Path::file_name: the last part, none for `..` or the root.
+const fileName = (path: string): string | null => {
+  const parts = path.split("/").filter((p) => p !== "" && p !== ".");
+  const last = parts.at(-1);
+  return last === undefined || last === ".." ? null : last;
+};
+
+/// footprint.rs `room_of`: a session's own directory, the one its workspace is in when the station made it
+/// (<data>/sessions/<connect>/<session>/workspace), else none.
+function roomOf(dataDir: string, workspace: string): string | null {
+  const sessions = canonical(join(dataDir, "sessions"));
+  if (sessions === null) return null;
+  let path = canonical(workspace);
+  if (path === null) {
+    if (fileName(workspace) !== "workspace") return null;
+    const parent = canonical(dirname(workspace));
+    if (parent === null) return null;
+    path = join(parent, "workspace");
+  }
+  if (!within(path, sessions) || path === sessions) return null;
+  const relative = path.slice(sessions.length).split("/").filter((p) => p !== "");
+  if (relative.length !== 3 || fileName(path) !== "workspace") return null;
+  return dirname(path);
+}
+
+/// archive.rs `workspace_file`: a file of an archived workspace (`workspace.tar.zst` in its room), by its path in it.
+function workspaceFile(room: string, relative: string): Buffer | null {
+  const archive = join(room, "workspace.tar.zst");
+  if (!existsSync(archive)) return null;
+  const tar = zstdDecompressSync(readFileSync(archive));
+  const wanted = relative.split("/").filter((p) => p !== "" && p !== ".").join("/");
+  for (const entry of tarEntries(tar)) {
+    if (entry.path === wanted && entry.file) return entry.data;
+  }
+  return null;
+}
+
+/// The entries of a tar archive as the tar crate reads them: each named by the GNU long name or pax path before it,
+/// else its ustar name with its prefix; the path as components (`.` left out, a leading `/` kept); the archive ends
+/// at a zero block.
+function* tarEntries(tar: Buffer): Generator<{ path: string; file: boolean; data: Buffer }> {
+  const text = (b: Buffer) => {
+    const nul = b.indexOf(0);
+    return (nul < 0 ? b : b.subarray(0, nul)).toString("utf8");
+  };
+  const octal = (b: Buffer): number => {
+    // Base-256 when its first byte's high bit is set (GNU).
+    if (b[0]! & 0x80) return b.subarray(1).reduce((n, x) => n * 256 + x, b[0]! & 0x7f);
+    const t = text(b).trim();
+    return t === "" ? 0 : parseInt(t, 8);
+  };
+  let longName: string | null = null;
+  let paxPath: string | null = null;
+  for (let at = 0; at + 512 <= tar.length; ) {
+    const head = tar.subarray(at, at + 512);
+    if (head.every((x) => x === 0)) return;
+    const size = octal(head.subarray(124, 136));
+    const kind = String.fromCharCode(head[156]!);
+    const data = tar.subarray(at + 512, at + 512 + size);
+    at += 512 + Math.ceil(size / 512) * 512;
+    if (kind === "L") {
+      longName = text(data);
+      continue;
+    }
+    if (kind === "x") {
+      // Records of "<length> <key>=<value>\n", the length in bytes and counting itself.
+      for (let rest = data; rest.length > 0; ) {
+        const space = rest.indexOf(0x20);
+        const len = space < 0 ? NaN : parseInt(rest.subarray(0, space).toString("latin1"), 10);
+        if (!(len > space + 1) || len > rest.length) break;
+        const record = rest.subarray(space + 1, len - 1);
+        rest = rest.subarray(len);
+        const eq = record.indexOf(0x3d);
+        if (eq >= 0 && record.subarray(0, eq).toString("latin1") === "path") paxPath = record.subarray(eq + 1).toString("utf8");
+      }
+      continue;
+    }
+    if (kind === "g" || kind === "K") continue;
+    const ustar = head.subarray(257, 263).toString("latin1") === "ustar\0";
+    const prefix = ustar ? text(head.subarray(345, 500)) : "";
+    const name = text(head.subarray(0, 100));
+    const raw = longName ?? paxPath ?? (prefix !== "" ? `${prefix}/${name}` : name);
+    longName = null;
+    paxPath = null;
+    const parts = raw.split("/").filter((p, i) => p !== "." && (p !== "" || i === 0));
+    const path = parts.map((p) => (p === "" ? "/" : p)).join("/");
+    yield { path, file: kind === "0" || kind === "\0", data };
+  }
+}
+
+/// thumbs.rs: how small an image is shown itself, and where thumbnails are kept.
+const SMALL = 24 * 1024;
+const thumbWanted = (name: string) => [".png", ".jpg", ".jpeg", ".webp"].some((e) => name.toLowerCase().endsWith(e));
+
+/// thumbs.rs `thumbnail`: the image's thumbnail and its type, as kept. One not made yet is made by the station that
+/// writes (thumbs.rs `make`, an image codec): here the image itself is shown, as for one that is small already.
+function thumbnail(image: string, dataDir: string): [string, string] | null {
+  const name = fileName(image);
+  if (name === null || !thumbWanted(name)) return null;
+  let len: number;
+  try {
+    len = statSync(image).size;
+  } catch {
+    return null;
+  }
+  if (len <= SMALL) return null;
+  const id = createHash("sha256").update(image).digest().subarray(0, 16).toString("hex");
+  const kept = (
+    [
+      ["jpg", "image/jpeg"],
+      ["png", "image/png"],
+    ] as const
+  )
+    .map(([ext, kind]): [string, string] => [join(dataDir, "thumbs", `${id}.${ext}`), kind])
+    .find(([path]) => isFile(path));
+  return kept ?? null;
+}
+
+/// std::io::Error as anyhow shows it.
+function ioMessage(e: NodeJS.ErrnoException): string {
+  const said: Record<string, string> = { ENOENT: "No such file or directory", EACCES: "Permission denied", EISDIR: "Is a directory", EPERM: "Operation not permitted" };
+  return e.code && said[e.code] && typeof e.errno === "number" ? `${said[e.code]} (os error ${-e.errno})` : e.message;
+}
+
+/// GET /sessions/:key/files?name&thumb=1 (files.rs `session_file`): a file sent to the session, for previews: only from
+/// its upload directory, else from its archived workspace. `thumb`: an image as a chat shows it. Its bytes as base64 and
+/// its type, for the route to answer with (cache-control `private, max-age=3600`).
+export function sessionFile(s: Store, key: string, name: string, thumb: boolean, lang: Lang): Json {
+  setLang(lang);
+  const row = sessionRow(s, key);
+  const room = roomOf(s.dataDir, row.workspace);
+  // The archive's lock is the writer's (it packs and unpacks the room): a reader reads what is there.
+  const uploads = clean(join(row.workspace, "uploads"));
+  const base = name.split(/[/\\]/).at(-1) ?? "";
+  const path = clean(`${uploads}/${base}`);
+  const notFound = () => new HttpError(404, tr("station.files.notFound"));
+  if (base === "" || !within(path, uploads) || path === uploads) throw notFound();
+  if (!isFile(path)) {
+    if (room === null) throw notFound();
+    const bytes = workspaceFile(room, `uploads/${base}`);
+    if (bytes === null) throw notFound();
+    return { contentType: mime(path), base64: bytes.toString("base64") };
+  }
+  const small = thumb ? thumbnail(path, s.dataDir) : null;
+  const [file, kind] = small ?? [path, mime(path)];
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(file);
+  } catch (e) {
+    throw new Error(ioMessage(e as NodeJS.ErrnoException));
+  }
+  return { contentType: kind, base64: bytes.toString("base64") };
+}

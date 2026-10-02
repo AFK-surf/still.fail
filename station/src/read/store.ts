@@ -651,3 +651,131 @@ export function archivedEntries(s: Store, thread: number): EntryRow[] {
   s.archived.push([thread, entries]);
   return entries;
 }
+
+// ── usage (store/usage.rs) ──
+
+/// The calls of one day (in the asker's time zone) for one thread, person, profile and model, added up (UsageGroup).
+export type UsageGroup = {
+  day: string; session: string; thread: number | null; person: string | null; profile: string | null; runtime: string;
+  model: string | null; fast: boolean; calls: number; input: number; cacheRead: number; cacheWrite: number;
+  cacheWriteLong: number; output: number;
+};
+
+/// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and by
+/// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
+export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint): UsageGroup[] {
+  return all(
+    s,
+    `SELECT strftime('%Y-%m-%d', (at + ?3 * 60000) / 1000, 'unixepoch') AS day, session, thread, person, profile, runtime, model, fast,
+       COUNT(*) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write,
+       SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
+     FROM usage WHERE at >= ?1 AND at < ?2
+     GROUP BY day, session, thread, person, profile, runtime, model, fast`,
+    from,
+    to,
+    utcOffsetMin,
+  ).map((r) => ({
+    day: r.day, session: r.session, thread: r.thread, person: r.person, profile: r.profile, runtime: r.runtime, model: r.model,
+    fast: r.fast !== 0 && r.fast !== null, calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write,
+    cacheWriteLong: r.cache_write_long, output: r.output,
+  }));
+}
+
+/// usage_threads: the threads usage names, each with the first thing a person said in it (for its title; none where
+/// its archive cannot be read). Those gone are left out.
+export function usageThreads(s: Store, ids: number[]): [ThreadRow, string | null][] {
+  const out: [ThreadRow, string | null][] = [];
+  for (const id of ids) {
+    const thread = getThread(s, id);
+    if (thread === null) continue;
+    let first: string | null = null;
+    if (thread.title === null && thread.autoTitle === null) {
+      try {
+        first = firstText(s, id);
+      } catch {
+        // `.ok().flatten()`: an archive that does not read gives none.
+      }
+    }
+    out.push([thread, first]);
+  }
+  return out;
+}
+
+/// usage_since: when the earliest call recorded was made.
+export function usageSince(s: Store): number | null {
+  return one(s, "SELECT MIN(at) AS at FROM usage").at ?? null;
+}
+
+// ── what the session and job reads add (admin/views.rs sessions, session, threads; jobs.rs) ──
+
+/// Rust's ordering of String keys (a BTreeMap's): by their UTF-8 bytes.
+export const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.from(b));
+
+/// Store::list_bindings: the connects bound to each session.
+export function listBindings(s: Store): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const r of all(s, "SELECT connect, session_key FROM bindings")) out.set(r.session_key, [...(out.get(r.session_key) ?? []), r.connect]);
+  return out;
+}
+
+/// Store::participants: everyone who wrote in each session's threads (or one session's), as creator references,
+/// earliest first; a session no one wrote to has none.
+export function participants(s: Store, session: string | null): Map<string, string[]> {
+  const sql = `SELECT ts.session, ts.connect, t.id, t.surface, t.archived_at FROM thread_sessions ts JOIN threads t ON t.id = ts.thread ${session !== null ? "WHERE ts.session = ?" : ""}`;
+  const rows = session !== null ? all(s, sql, session) : all(s, sql);
+  // Each person once per session, at the first time they wrote in any of its threads.
+  const firsts = new Map<string, Map<string, number>>();
+  for (const r of rows) {
+    const authors: [string, number][] =
+      r.archived_at !== null
+        ? archivedEntries(s, r.id).filter((e) => e.kind === "message" && e.authorKind === "person").map((e) => [e.author, e.at])
+        : all(s, "SELECT author, MIN(at) AS at FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' GROUP BY author", r.id).map((a) => [a.author, a.at]);
+    const refs = firsts.get(r.session) ?? new Map<string, number>();
+    firsts.set(r.session, refs);
+    for (const [author, at] of authors) {
+      const reference = r.surface === STILLFAIL_SURFACE ? author : `slack:${r.connect}:${author}`;
+      const first = refs.get(reference);
+      if (first === undefined || at < first) refs.set(reference, at);
+    }
+  }
+  const out = new Map<string, string[]>();
+  for (const [key, refs] of firsts) {
+    if (refs.size === 0) continue;
+    // In the BTreeMap's order, then (stably) by when.
+    const sorted = [...refs].sort(([a], [b]) => byBytes(a, b)).sort(([, a], [, b]) => a - b);
+    out.set(key, sorted.map(([r]) => r));
+  }
+  return out;
+}
+
+/// Store::list_turns: a session's turns, oldest first, each its summary and id (as views.rs `session` shows them).
+export function listTurns(s: Store, session: string): Json[] {
+  return all(s, "SELECT * FROM turns WHERE session_key = ? ORDER BY started_at", session).map((r) => ({ ...turnSummary(r, r.started_at), id: r.id }));
+}
+
+export function getJob(s: Store, id: string): JobRow | null {
+  const r = one(s, "SELECT * FROM jobs WHERE id = ?", id);
+  return r ? toJob(r) : null;
+}
+
+/// A message an agent posted (Store::posts_by's Post).
+export type Post = { thread: number; n: number; channel: string; threadTs: string; text: string; attachments: Json[]; declared: string | null; at: number };
+
+/// Store::posts_by: the messages a session's agent posted, in every thread, oldest first.
+export function postsBy(s: Store, key: string): Post[] {
+  return all(
+    s,
+    `SELECT e.thread, e.n, t.channel, t.thread_ts, e.text, e.attachments, e.declared, e.at FROM entries e JOIN threads t ON t.id = e.thread
+     WHERE e.kind = 'message' AND e.author_kind = 'agent' AND e.author = ? ORDER BY e.at, e.thread, e.n`,
+    key,
+  ).map((r) => ({
+    thread: r.thread, n: r.n, channel: r.channel, threadTs: r.thread_ts, text: r.text ?? "", attachments: fromJsonList(r.attachments, attachment),
+    declared: r.declared, at: r.at,
+  }));
+}
+
+/// Store::widget_state: what a widget in one of the session's messages holds, as kept (JSON text).
+export function widgetState(s: Store, session: string, path: string): string | null {
+  const r = one(s, "SELECT state FROM widget_states WHERE session = ? AND path = ?", session, path);
+  return r ? r.state : null;
+}

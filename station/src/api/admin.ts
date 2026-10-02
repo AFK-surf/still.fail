@@ -5,6 +5,8 @@ import type { Readers } from "../read/pool.ts";
 import { HttpError } from "../read/views.ts";
 import { type Answer, type Request, error, json } from "./request.ts";
 import { routes as chats } from "./routes/chats.ts";
+import { routes as usage } from "./routes/usage.ts";
+import { routes as sessions } from "./routes/sessions.ts";
 
 export type Handler = (r: Request, args: string[]) => Promise<Answer>;
 export type Route = { method: string; pattern: RegExp; handle: Handler };
@@ -29,7 +31,7 @@ export class Admin {
         }
       },
     };
-    this.routes = [...chats(tools)];
+    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools)];
   }
 
   async handle(r: Request): Promise<Answer> {
@@ -43,6 +45,8 @@ export class Admin {
         return answer;
       }
     }
-    return error(404, `no route ${r.method} ${r.path}`);
+    const unknown = error(404, `no route ${r.method} ${r.path}`);
+    unknown.headers["stillfail-idempotent"] = "1";
+    return unknown;
   }
 }
