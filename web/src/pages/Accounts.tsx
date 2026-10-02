@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
 import { KEYED } from "../format.ts";
+import { useDoing, useDoingFailed } from "../doing.ts";
+import { useAct } from "../toast.tsx";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
@@ -200,6 +202,8 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
       {signIn && !profile.machine && (latest?.state === "login" || signingIn) && <section className={pagesCss.section}><SignIn profile={profile} needed /></section>}
 
       <QuotaSection profile={profile} />
+
+      {profile.fast !== undefined && profile.fast !== null && <FastSection profile={profile} />}
 
       <ModelPool profile={profile} found={latest?.models ?? null} onSave={(models) => save.run({ models })} />
 
@@ -435,15 +439,45 @@ function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: 
   );
 }
 
+function FastSection({ profile }: { profile: Profile }) {
+  const api = useApi();
+  const station = useStation();
+  const act = useAct();
+  const params = { station: station.address, id: profile.id };
+  const busy = useDoing("profile.put", params);
+  const error = useDoingFailed("profile.put", params);
+  return <Section title="运行"><SwitchRow title="Fast" checked={!!profile.fast} disabled={busy}
+    description="更快响应，消耗更多额度或积分 · 下一轮生效"
+    onChange={(fast) => act(api.putProfile(profile.id, { fast }), "保存 Fast", fast ? "已打开 Fast" : "已关闭 Fast")} />
+    {busy && <p className={shellCss.muted}>正在保存…</p>}
+    {error && <p className={controlsCss.fieldError}>{error}</p>}
+  </Section>;
+}
+
 function QuotaSection({ profile }: { profile: Profile }) {
   const api = useApi();
   // A refresh comes back with the overview.
   const refresh = useAction(() => api.refreshQuota(profile.id));
   const quota = profile.quota;
+  const station = useStation();
+  const toast = useToast();
+  const [resetting, setResetting] = useState(false);
+  const params = { station: station.address, id: profile.id };
+  const busy = useDoing("profile.resetQuota", params);
+  const failed = useDoingFailed("profile.resetQuota", params);
+  const reset = useAction(async () => { await api.resetQuota(profile.id); setResetting(false); toast("已重置额度"); });
   return (
     <Section title={<>额度{quota?.time?.checkedAt && <About>{quota.time.checkedAt.ago}查询，每几分钟自动更新</About>}</>}
       actions={<Button variant="ghost" icon={Refresh} busy={refresh.busy} onClick={() => void refresh.run()}>刷新</Button>}>
-      <QuotaBars quota={quota} />
+      {(quota?.windows.length || !quota?.creditsText) ? <QuotaBars quota={quota} /> : null}
+      {quota?.creditsText && <p>积分余额 <span className={shellCss.muted}>{quota.creditsText}</span></p>}
+      {quota?.resetCount != null && <p>额度重置 <span className={shellCss.muted}>{quota.resetText}</span>{" "}
+        <Button variant="ghost" disabled={!quota.resetCount || busy} busy={busy} onClick={() => setResetting(true)}>重置额度</Button>
+      </p>}
+      {failed && <p className={controlsCss.fieldError}>{failed}</p>}
+      <Confirm open={resetting} onClose={() => setResetting(false)} title="重置额度？" action="使用一次重置"
+        description={`将使用「${profile.name}」的 1 次额度重置，剩余 ${quota?.resetCount ?? 0} 次`} busy={busy}
+        onConfirm={() => void reset.run()} error={reset.error?.message} />
       {refresh.error && <p className={controlsCss.fieldError} role="alert">没能刷新额度：{refresh.error.message}</p>}
     </Section>
   );

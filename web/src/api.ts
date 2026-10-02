@@ -45,6 +45,7 @@ export interface ProfileInput {
   env?: Record<string, string | null>;
   /** Claude Code: a message to a running turn moves what it waits on to the background first. */
   backgroundOnMessage?: boolean;
+  fast?: boolean;
 }
 
 /** The groups of scopes and events a Slack app made here asks for (mesh/app/src/chat/slack_apps.rs). */
@@ -272,6 +273,7 @@ export function stationApi(t: StationCall) {
     deleteConnect: (id: string) => ops.connectDelete<Overview>({ id }),
     reconnect: (id: string) => ops.connectReconnect<{ ok: true }>({ id }),
     putProfile: (id: string, input: ProfileInput) => ops.profilePut<Overview>({ id, input }),
+    resetQuota: (id: string) => ops.profileResetQuota({ id }),
     refreshQuota: (id: string) => ops.profileQuota<Quota | null>({ id }),
     checkProfile: (id: string) => ops.profileCheck<ProfileCheck>({ id }),
     verifySlack: (input: { connect?: string; install?: string; appToken?: string; botToken?: string }) =>

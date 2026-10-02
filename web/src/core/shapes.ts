@@ -441,6 +441,12 @@ export interface LoginJob {
 	expiresAt: number;
 }
 
+export interface QuotaCredits {
+	hasCredits: boolean;
+	unlimited: boolean;
+	balance?: string;
+}
+
 /** A quota window, as drawn: its mark (5H, W), what is left, how full (ok | amber | red), when it refills in words. */
 export interface QuotaWindow {
 	label: string;
@@ -456,6 +462,10 @@ export interface QuotaWindow {
 
 /** An allowance: its windows shortest first. */
 export interface Quota {
+	credits?: QuotaCredits;
+	resetCount?: number;
+	creditsText?: string;
+	resetText?: string;
 	/** ok | unsupported | unavailable | blocked (the provider refuses the account) */
 	state: string;
 	windows: QuotaWindow[];
@@ -505,6 +515,7 @@ export interface Profile {
 	 * station older than the setting.
 	 */
 	backgroundOnMessage?: boolean;
+	fast?: boolean;
 	check?: ProfileCheck;
 	login?: LoginJob;
 	quota?: Quota;

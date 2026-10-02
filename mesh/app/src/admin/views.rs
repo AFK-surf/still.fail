@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use anyhow::Result;
+use stillfail_shapes::{AccessKind, RuntimeKind};
 use serde_json::{Value, json};
 
 use super::{AdminApi, Asked, http_error, mask};
@@ -163,6 +164,7 @@ impl AdminApi {
                     "loginCommand": crate::profiles::login_command(p.runtime, &p.home.to_string_lossy()),
                     "machine": p.machine,
                     "backgroundOnMessage": p.background_on_message,
+                    "fast": (p.runtime == RuntimeKind::Codex && p.access_kind == AccessKind::Subscription).then_some(p.fast),
                     "check": checks.get(&p.id),
                     "login": self.deps.logins.get(&p.id),
                     "quota": quotas.get(&p.id),

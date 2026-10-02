@@ -168,6 +168,7 @@ function ProfilePage({ p }: { p: Profile }) {
         {p.trouble && <ProfileRecovery p={p} />}
         {p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
         {p.trouble?.action !== "quota" && <Quota p={p} />}
+        {p.fast != null && <><SectionHeader title="运行" start={24} /><ListCard><FastRow p={p} /></ListCard></>}
         <Models p={p} put={(models) => api.putProfile(p.id, { models })} />
         {/* A station older than the setting says nothing of it. */}
         {p.runtimes.includes("claude") && p.backgroundOnMessage !== undefined && (
@@ -279,7 +280,26 @@ function ProfileMenu({ p }: { p: Profile }) {
 }
 
 /** Its allowance, window by window: what is left and when it refills; why it cannot be read, when the provider says. */
+function FastRow({ p }: { p: Profile }) {
+  const api = useApi();
+  const station = useStation();
+  const act = useAct();
+  const busy = useDoing("profile.put", { station: station.address, id: p.id });
+  const error = useDoingFailed("profile.put", { station: station.address, id: p.id });
+  return <ListRow onClick={busy ? undefined : () => act(api.putProfile(p.id, { fast: !p.fast }), "保存 Fast", p.fast ? "已关闭 Fast" : "已打开 Fast")}>
+    <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>Fast</span>
+      <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>更快响应，消耗更多额度或积分 · 下一轮生效</span></span>
+    {busy && <Spinner size={14} />}{error && <FailedMark error={error} size={14} />}
+    <span className={connectsCss.mSwitch} data-on={p.fast || undefined} />
+  </ListRow>;
+}
+
 function Quota({ p }: { p: Profile }) {
+  const app = useApp();
+  const api = useApi();
+  const station = useStation();
+  const busy = useDoing("profile.resetQuota", { station: station.address, id: p.id });
+  const error = useDoingFailed("profile.resetQuota", { station: station.address, id: p.id });
   const windows = p.quota?.state === "ok" ? p.quota.windows : [];
   const trouble = quotaTrouble(p.quota);
   if (trouble) {
@@ -297,11 +317,22 @@ function Quota({ p }: { p: Profile }) {
       </>
     );
   }
-  if (!windows.length) return null;
+  if (!windows.length && !p.quota?.creditsText && p.quota?.resetCount == null) return null;
   return (
     <>
       <SectionHeader title="额度" trailing={p.quota?.time?.checkedAt ? `${p.quota.time.checkedAt.ago}查询` : undefined} start={24} />
-      <ListCard><div className={css.mQuotaDials}><QuotaBars quota={p.quota} /></div></ListCard>
+      <ListCard>
+        {!!windows.length && <div className={css.mQuotaDials}><QuotaBars quota={p.quota} /></div>}
+        {p.quota?.creditsText && <ListRow><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>积分余额</span><span className={listsCss.mRowNote}>{p.quota.creditsText}</span></ListRow>}
+        {p.quota?.resetCount != null && <ListRow onClick={p.quota.resetCount > 0 && !busy ? () => confirm(app, {
+          title: "重置额度？", text: `将使用「${p.name}」的 1 次额度重置，${p.quota?.resetText}`, action: "使用一次重置",
+          run: () => api.resetQuota(p.id).then(() => app.toast("已重置额度")),
+        }) : undefined}>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>额度重置</span><span className={listsCss.mRowNote}>{p.quota.resetText}</span></span>
+          {busy && <Spinner size={14} />}{error && <FailedMark error={error} size={14} />}
+          <span className={p.quota.resetCount > 0 ? partsCss.mLink : partsCss.mMuted}>重置额度</span>
+        </ListRow>}
+      </ListCard>
     </>
   );
 }

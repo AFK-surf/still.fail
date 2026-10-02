@@ -217,7 +217,7 @@ impl App {
                 }) as BoxFuture<'static, Result<()>>
             }),
         );
-        let codex = Arc::new(CodexDriver::new(store.clone(), "codex"));
+        let codex = Arc::new(CodexDriver::new(store.clone(), "codex").with_settings(settings.clone()));
         let claude = Arc::new(ClaudeDriver::new(store.clone(), "claude"));
         let mesh = MeshFile::new(&options.data);
         let (read, chats, link, people) = (settings.clone(), connections.clone(), mesh.clone(), names.clone());
@@ -329,7 +329,7 @@ impl App {
         // What the agents spent, read from their transcripts as they grow.
         let usage = crate::usage::Usage::new(store.clone(), settings.clone());
         usage.start();
-        let (quota_codex, models_codex) = (codex.clone(), codex.clone());
+        let (quota_codex, models_codex, reset_codex) = (codex.clone(), codex.clone(), codex.clone());
         let admin = AdminApi::new(AdminDeps {
             settings: settings.clone(),
             store: store.clone(),
@@ -347,6 +347,10 @@ impl App {
                     };
                     crate::quota::check_quota(&profile, &process_env(), &limits).await
                 })
+            })),
+            reset_quota: Some(Arc::new(move |profile, key| {
+                let codex = reset_codex.clone();
+                Box::pin(async move { codex.reset_quota(&profile, &key).await })
             })),
             check_profile: Arc::new(|request: CheckRequest| {
                 Box::pin(async move {

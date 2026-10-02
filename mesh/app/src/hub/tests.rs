@@ -1494,7 +1494,7 @@ async fn a_session_changes_profile_model_and_effort_by_hand_and_is_taken_on_by_a
     r.hub.evict(&key).await;
     r.hub.set_profile_health(Arc::new(|id| ProfileHealth {
         check: None,
-        quota: (id == "cc2").then(|| ProfileQuota {
+        quota: (id == "cc2").then(|| ProfileQuota { credits: None, reset_count: None,
             state: "ok".into(),
             windows: vec![QuotaWindow { label: "每周".into(), used_percent: 100.0, resets_at: None }],
             detail: None,

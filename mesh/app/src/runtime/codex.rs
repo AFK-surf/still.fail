@@ -238,6 +238,7 @@ fn on_line(line: &str, pending: &Mutex<HashMap<i64, oneshot::Sender<Result<Value
 }
 
 pub struct CodexDriver {
+    settings: Option<Arc<crate::settings::Settings>>,
     store: Arc<Store>,
     command: String,
     hosts: AsyncMutex<HashMap<String, Arc<Host>>>,
@@ -248,7 +249,12 @@ pub struct CodexDriver {
 impl CodexDriver {
     pub fn new(store: Arc<Store>, command: &str) -> CodexDriver {
         let home = std::env::var("HOME").map(PathBuf::from).unwrap_or_default();
-        CodexDriver { store, command: command.into(), hosts: AsyncMutex::new(HashMap::new()), host_skills: home.join(".agents").join("skills") }
+        CodexDriver { settings: None, store, command: command.into(), hosts: AsyncMutex::new(HashMap::new()), host_skills: home.join(".agents").join("skills") }
+    }
+
+    pub fn with_settings(mut self, settings: Arc<crate::settings::Settings>) -> Self {
+        self.settings = Some(settings);
+        self
     }
 
     async fn host(&self, profile: &Profile) -> Result<Arc<Host>> {
@@ -281,6 +287,10 @@ impl CodexDriver {
     /// The account's rate-limit windows, as the profile's app-server reports them (ChatGPT subscriptions).
     pub async fn rate_limits(&self, profile: &Profile) -> Result<Value> {
         self.host(profile).await?.request("account/rateLimits/read", json!({})).await
+    }
+
+    pub async fn reset_quota(&self, profile: &Profile, key: &str) -> Result<Value> {
+        self.host(profile).await?.request("account/rateLimitResetCredit/consume", json!({ "idempotencyKey": key })).await
     }
 
     /// The models the account can run in Codex, as its app-server lists them (the ones it does not hide).
@@ -341,6 +351,7 @@ struct ThreadState {
 }
 
 pub struct CodexSession {
+    settings: Option<Arc<crate::settings::Settings>>,
     thread_id: String,
     host: Arc<Host>,
     state: Arc<Mutex<ThreadState>>,
@@ -459,7 +470,7 @@ impl AgentDriver for CodexDriver {
         let thread_id = opened.get("thread").and_then(|t| t.get("id")).and_then(Value::as_str).ok_or_else(|| anyhow!("codex gave no thread id"))?.to_string();
         let state = Arc::new(Mutex::new(ThreadState { busy: false, turn_id: None, closed: false }));
         host.threads.lock().unwrap().insert(thread_id.clone(), thread_sink(&state, &events, &thread_id));
-        Ok(Arc::new(CodexSession { thread_id, host, state }))
+        Ok(Arc::new(CodexSession { settings: self.settings.clone(), thread_id, host, state }))
     }
 
     async fn hand_off(&self) -> Result<Value> {
@@ -505,7 +516,7 @@ impl AgentDriver for CodexDriver {
         let host = self.hosts.lock().await.get(&handed.profile).filter(|h| h.alive()).cloned().ok_or_else(|| anyhow!("codex app-server {} was not taken up", handed.profile))?;
         let state = Arc::new(Mutex::new(ThreadState { busy: handed.busy, turn_id: handed.turn_id, closed: false }));
         host.threads.lock().unwrap().insert(handed.thread_id.clone(), thread_sink(&state, &events, &handed.thread_id));
-        Ok(Arc::new(CodexSession { thread_id: handed.thread_id, host, state }))
+        Ok(Arc::new(CodexSession { settings: self.settings.clone(), thread_id: handed.thread_id, host, state }))
     }
 
     async fn shutdown(&self) {
@@ -541,7 +552,14 @@ impl AgentSession for CodexSession {
             }
             s.busy = true;
         }
-        match self.host.request("turn/start", json!({ "threadId": self.thread_id, "input": input(text) })).await {
+        let mut params = json!({ "threadId": self.thread_id, "input": input(text) });
+        if let Some(settings) = &self.settings {
+            if let Some(p) = settings.config().profiles.iter().find(|p| p.id == self.host.profile && p.access_kind == stillfail_shapes::AccessKind::Subscription) {
+                // An explicit null clears a previously selected tier; omitting it would keep Fast on.
+                params["serviceTier"] = if p.fast { json!("fast") } else { Value::Null };
+            }
+        }
+        match self.host.request("turn/start", params).await {
             Ok(started) => {
                 if let Some(id) = started.get("turn").and_then(|t| t.get("id")).and_then(Value::as_str) {
                     self.state.lock().unwrap().turn_id = Some(id.to_string());

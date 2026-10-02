@@ -301,6 +301,7 @@ struct Setup {
     dir: Option<PathBuf>,
     /// Counts quota questions; with it, profiles have an allowance (12% of five hours).
     quota: Option<Arc<AtomicUsize>>,
+    reset_quota: Option<super::ResetQuotaFn>,
     cloud: Option<&'static str>,
     machine: Option<Arc<MachineLogins>>,
     /// The station's updates, as a release installed from `channel` (BUILD 1300) in a cloud that answers nothing.
@@ -417,7 +418,7 @@ async fn setup_with(o: Setup) -> Rig {
         Arc::new(move |_p: Profile| {
             count.fetch_add(1, Ordering::SeqCst);
             Box::pin(async {
-                ProfileQuota { state: "ok".into(), windows: vec![QuotaWindow { label: "5 小时".into(), used_percent: 12.0, resets_at: None }], detail: None, checked_at: now_ms() }
+                ProfileQuota { credits: None, reset_count: None, state: "ok".into(), windows: vec![QuotaWindow { label: "5 小时".into(), used_percent: 12.0, resets_at: None }], detail: None, checked_at: now_ms() }
             }) as BoxFuture<'static, ProfileQuota>
         }) as QuotaFn
     });
@@ -442,6 +443,7 @@ async fn setup_with(o: Setup) -> Rig {
         names: Arc::default(),
         mesh,
         quota,
+        reset_quota: o.reset_quota,
         check_profile: Arc::new(|_r| Box::pin(async { ProfileCheck { model_efforts: None, state: "ok".into(), detail: "fake".into(), models: Some(vec![]), checked_at: now_ms() } })),
         codex_models: None,
         slack_apps: Some(slack.clone()),
@@ -1972,4 +1974,48 @@ async fn keeping_a_chat_suppresses_only_this_viewers_archive_reminder() {
     assert_eq!(row(t.call_as("GET", "/chats", None, dev()).await.1)["archiveReminderDismissed"], false);
     assert!(t.store.kept_chats(None).unwrap().contains(&thread));
     assert_eq!(t.store.get_thread(thread).unwrap().unwrap().hidden_at, None);
+}
+
+#[tokio::test]
+async fn openai_reset_keeps_its_redemption_key_and_refreshes_even_without_a_reset() {
+    let keys = Arc::new(Mutex::new(Vec::<String>::new()));
+    let seen = keys.clone();
+    let reads = Arc::new(AtomicUsize::new(0));
+    let t = setup_with(Setup { quota: Some(reads.clone()), reset_quota: Some(Arc::new(move |p, key| {
+        assert_eq!(p.id, "cx");
+        seen.lock().unwrap().push(key.clone());
+        Box::pin(async move { Ok(json!({"outcome": match key.as_str() { "empty" => "noCredit", "unused" => "nothingToReset", "again" => "alreadyRedeemed", _ => "reset" }})) })
+    })), ..Setup::default() }).await;
+    t.call("PUT", "/profiles/cx", Some(json!({"access":{"kind":"subscription"}}))).await;
+    let redeem = |id: &'static str, key: &'static str| {
+        let t = &t;
+        async move {
+            let req = Request::builder().method("POST").uri(format!("/admin/api/profiles/{id}/reset-quota"))
+                .header("idempotency-key", key).body(Full::new(Bytes::new())).unwrap();
+            t.api.handle(req, owner()).await.status().as_u16()
+        }
+    };
+    assert_eq!(t.call("POST", "/profiles/cx/reset-quota", None).await.0, 400);
+    assert_eq!(redeem("cc", "wrong-provider").await, 400);
+    let (a, b) = tokio::join!(redeem("cx", "one"), redeem("cx", "one"));
+    assert_eq!((a,b), (200,200));
+    assert_eq!(keys.lock().unwrap().as_slice(), ["one"]);
+    assert_eq!(redeem("cx", "again").await, 200);
+    assert_eq!(redeem("cx", "empty").await, 409);
+    assert_eq!(redeem("cx", "unused").await, 409);
+    assert!(reads.load(Ordering::SeqCst) >= 4);
+}
+
+#[tokio::test]
+async fn openai_fast_defaults_off_survives_other_edits_and_can_be_disabled() {
+    let t = setup().await;
+    let profile = || t.config().profiles.iter().find(|p| p.id == "cx").cloned().unwrap();
+    assert!(!profile().fast);
+    assert_eq!(t.call("PUT", "/profiles/cx", Some(json!({"fast": true, "access":{"kind":"subscription"}}))).await.0, 200);
+    assert!(profile().fast);
+    t.call("PUT", "/profiles/cx", Some(json!({"name": "OpenAI"}))).await;
+    assert!(profile().fast);
+    t.call("PUT", "/profiles/cx", Some(json!({"fast": false}))).await;
+    assert!(!profile().fast);
+    assert_eq!(t.call("PUT", "/profiles/cx", Some(json!({"fast": "yes"}))).await.0, 400);
 }

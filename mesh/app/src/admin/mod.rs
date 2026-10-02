@@ -139,6 +139,7 @@ impl SlackService for SlackOnline {
 
 pub type CheckFn = Arc<dyn Fn(CheckRequest) -> BoxFuture<'static, ProfileCheck> + Send + Sync>;
 pub type QuotaFn = Arc<dyn Fn(Profile) -> BoxFuture<'static, ProfileQuota> + Send + Sync>;
+pub type ResetQuotaFn = Arc<dyn Fn(Profile, String) -> BoxFuture<'static, Result<Value>> + Send + Sync>;
 pub type ModelsFn = Arc<dyn Fn(Profile) -> BoxFuture<'static, Result<crate::runtime::codex::ModelCatalog>> + Send + Sync>;
 
 pub struct AdminDeps {
@@ -152,6 +153,7 @@ pub struct AdminDeps {
     pub mesh: Option<Arc<dyn Mesh>>,
     /// A profile's allowance; None where nobody can ask (tests).
     pub quota: Option<QuotaFn>,
+    pub reset_quota: Option<ResetQuotaFn>,
     /// How a profile is checked; tests replace it so no real CLI runs.
     pub check_profile: CheckFn,
     /// Codex model ids and reasoning capabilities, as each account's app-server reports them.
@@ -941,6 +943,11 @@ impl AdminApi {
             }
             (Some("profiles"), Some(id), None, "DELETE") => return ok(self.delete_profile(id, viewer)?),
             (Some("profiles"), Some(id), Some("check"), "POST") => return ok(serde_json::to_value(me.check(id).await?)?),
+            (Some("profiles"), Some(id), Some("reset-quota"), "POST") => {
+                let key = asked.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(once::KEY)).map(|(_, v)| v.as_str())
+                    .filter(|k| !k.is_empty() && k.len() <= 200).ok_or_else(|| http_error(400, "reset requires an idempotency key"))?;
+                return ok(self.reset_quota(id, key).await?);
+            }
             (Some("profiles"), Some(id), Some("quota"), "POST") => return ok(serde_json::to_value(self.refresh_quota(id).await?)?),
             (Some("profiles"), Some(id), Some("login"), _) => {
                 let config = self.config();

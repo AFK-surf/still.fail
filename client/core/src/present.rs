@@ -401,6 +401,18 @@ pub fn times(value: &mut Value, c: Clock) {
                     times(v, c);
                 }
             }
+            if map.contains_key("windows") && map.contains_key("state") {
+                if let Some(credits) = map.get("credits").filter(|v| v.is_object()) {
+                    let text = if credits["unlimited"] == true { "不限额".to_string() }
+                        else if let Some(balance) = credits["balance"].as_str() { format!("{balance} 积分") }
+                        else if credits["hasCredits"] == false { "0 积分".to_string() }
+                        else { "有可用积分 · 未提供余额".to_string() };
+                    map.insert("creditsText".into(), json!(text));
+                }
+                if let Some(count) = map.get("resetCount").and_then(Value::as_u64) {
+                    map.insert("resetText".into(), json!(format!("剩余 {count} 次")));
+                }
+            }
             if !stamps.is_empty() {
                 map.insert("time".into(), Value::Object(stamps));
             }

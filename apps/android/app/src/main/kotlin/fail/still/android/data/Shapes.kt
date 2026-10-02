@@ -451,6 +451,13 @@ data class LoginJob (
 	val expiresAt: Long
 )
 
+@Serializable
+data class QuotaCredits (
+	val hasCredits: Boolean,
+	val unlimited: Boolean,
+	val balance: String? = null
+)
+
 /// A quota window, as drawn: its mark (5H, W), what is left, how full (ok | amber | red), when it refills in words.
 @Serializable
 data class QuotaWindow (
@@ -468,6 +475,10 @@ data class QuotaWindow (
 /// An allowance: its windows shortest first.
 @Serializable
 data class Quota (
+	val credits: QuotaCredits? = null,
+	val resetCount: Long? = null,
+	val creditsText: String? = null,
+	val resetText: String? = null,
 	/// ok | unsupported | unavailable | blocked (the provider refuses the account)
 	val state: String,
 	val windows: List<QuotaWindow>,
@@ -518,6 +529,7 @@ data class Profile (
 	/// Whether a message to a running Claude Code turn moves what it waits on to the background first; None from a
 	/// station older than the setting.
 	val backgroundOnMessage: Boolean? = null,
+	val fast: Boolean? = null,
 	val check: ProfileCheck? = null,
 	val login: LoginJob? = null,
 	val quota: Quota? = null,

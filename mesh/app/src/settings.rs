@@ -80,7 +80,7 @@ mod tests {
         let path = dir.path().join("config.json");
         let settings = Settings::open(&path, dir.path()).unwrap();
         let mut changes = settings.subscribe();
-        let profile = RawProfile { id: "cc".into(), name: None, runtime: Some(stillfail_shapes::RuntimeKind::Claude), access: None, home: "homes/cc".into(), env: None, model: None, models: None, machine: None, background_on_message: None };
+        let profile = RawProfile { id: "cc".into(), name: None, runtime: Some(stillfail_shapes::RuntimeKind::Claude), access: None, home: "homes/cc".into(), env: None, model: None, models: None, machine: None, fast: None, background_on_message: None };
         settings.update(|raw| { raw.profiles = Some(vec![profile.clone()]); Ok(()) }).unwrap();
         assert!(changes.has_changed().unwrap());
         assert_eq!(changes.borrow_and_update().profiles[0].id, "cc");

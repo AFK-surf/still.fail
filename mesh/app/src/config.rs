@@ -173,6 +173,8 @@ pub struct RawProfile {
     /// Absent: on (Profile::background_on_message).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub background_on_message: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fast: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -272,6 +274,7 @@ pub struct Profile {
     /// A message that reaches a running Claude Code turn first moves the commands and subagents it waits on to the
     /// background (Ctrl+B), so it is read now rather than when they end.
     pub background_on_message: bool,
+    pub fast: bool,
 }
 
 impl Profile {
@@ -458,6 +461,7 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
             models,
             machine: p.machine == Some(true),
             background_on_message: p.background_on_message != Some(false),
+            fast: p.fast == Some(true),
         });
     }
     unique("profile", profiles.iter().map(|p| p.id.as_str()))?;

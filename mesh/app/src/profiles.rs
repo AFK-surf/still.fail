@@ -144,8 +144,20 @@ pub struct ProfileQuota {
     /// provider refuses the account (suspended, on hold, deactivated).
     pub state: String,
     pub windows: Vec<QuotaWindow>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credits: Option<QuotaCredits>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reset_count: Option<u64>,
     pub detail: Option<String>,
     pub checked_at: i64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct QuotaCredits {
+    pub has_credits: bool,
+    pub unlimited: bool,
+    pub balance: Option<String>,
 }
 
 // ── checks ─────────────────────────────────────────────────────────────────

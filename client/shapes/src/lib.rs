@@ -730,12 +730,27 @@ pub struct QuotaWindow {
     pub time: Option<HashMap<String, Stamp>>,
 }
 
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct QuotaCredits {
+    pub has_credits: bool,
+    pub unlimited: bool,
+    pub balance: Option<String>,
+}
+
 /// An allowance: its windows shortest first.
 #[typeshare]
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Quota {
+    pub credits: Option<QuotaCredits>,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub reset_count: Option<u64>,
+    pub credits_text: Option<String>,
+    pub reset_text: Option<String>,
     /// ok | unsupported | unavailable | blocked (the provider refuses the account)
     pub state: String,
     pub windows: Vec<QuotaWindow>,
@@ -792,6 +807,7 @@ pub struct Profile {
     /// Whether a message to a running Claude Code turn moves what it waits on to the background first; None from a
     /// station older than the setting.
     pub background_on_message: Option<bool>,
+    pub fast: Option<bool>,
     pub check: Option<ProfileCheck>,
     pub login: Option<LoginJob>,
     pub quota: Option<Quota>,

@@ -24,7 +24,7 @@ const CHATGPT: &str = "https://chatgpt.com";
 const TIMEOUT: Duration = Duration::from_secs(15);
 
 fn quota(state: &str, windows: Vec<QuotaWindow>, detail: Option<String>) -> ProfileQuota {
-    ProfileQuota { state: state.into(), windows, detail, checked_at: now_ms() }
+    ProfileQuota { credits: None, reset_count: None, state: state.into(), windows, detail, checked_at: now_ms() }
 }
 
 fn ok_or_unavailable(windows: Vec<QuotaWindow>, empty: &str) -> ProfileQuota {
@@ -208,6 +208,22 @@ fn codex_windows(result: &Value) -> Vec<QuotaWindow> {
         .collect()
 }
 
+fn with_codex_credits(mut quota: ProfileQuota, limits: &Value, resets: &Value) -> ProfileQuota {
+    quota.credits = limits.get("credits").filter(|v| v.is_object()).map(|c| crate::profiles::QuotaCredits {
+        has_credits: c.get("hasCredits").or_else(|| c.get("has_credits")).and_then(Value::as_bool).unwrap_or(false),
+        unlimited: c.get("unlimited").and_then(Value::as_bool).unwrap_or(false),
+        balance: c.get("balance").and_then(|b| match b { Value::String(s) => Some(s.clone()), Value::Number(n) => Some(n.to_string()), _ => None }),
+    });
+    quota.reset_count = resets.get("availableCount").or_else(|| resets.get("available_count")).and_then(Value::as_u64);
+    if quota.credits.is_some() || quota.reset_count.is_some() { quota.state = "ok".into(); quota.detail = None; }
+    quota
+}
+
+fn codex_quota(result: &Value) -> ProfileQuota {
+    let limits = result.get("rateLimits").filter(|v| v.is_object()).unwrap_or(result);
+    with_codex_credits(ok_or_unavailable(codex_windows(result), "ChatGPT 没有返回额度信息"), limits, &result["rateLimitResetCredits"])
+}
+
 /// Reaches a profile's codex app-server for its account/rateLimits/read.
 pub type CodexRateLimits<'a> = &'a (dyn Fn(&Profile) -> BoxFuture<'static, Result<Value>> + Send + Sync);
 
@@ -222,7 +238,7 @@ pub async fn check_quota(profile: &Profile, env: &Env, codex_rate_limits: CodexR
             AccessKind::Subscription if profile.runtime == RuntimeKind::Claude => claude(profile, env).await,
             AccessKind::Subscription => {
                 let limits = codex_rate_limits(profile).await?;
-                Ok(ok_or_unavailable(codex_windows(&limits), "ChatGPT 没有返回额度信息"))
+                Ok(codex_quota(&limits))
             }
         }
     };
@@ -266,7 +282,7 @@ async fn codex_usage_at(base: &str, auth_file: &Path) -> Result<Option<ProfileQu
             })
         })
         .collect();
-    Ok(Some(ok_or_unavailable(windows, "ChatGPT 没有返回额度信息")))
+    Ok(Some(with_codex_credits(ok_or_unavailable(windows, "ChatGPT 没有返回额度信息"), &body, &body["rate_limit_reset_credits"])))
 }
 
 /// The allowance of the machine's own login of a runtime (machine_logins.rs), read without starting anything of the
@@ -340,6 +356,23 @@ mod tests {
         assert!(head.contains("authorization: bearer at") && head.contains("chatgpt-account-id: acc"), "{head}");
         // No file (the keychain keeps it): nothing to read.
         assert!(codex_usage_at(&base, &dir.path().join("none").join("auth.json")).await.unwrap().is_none());
+    }
+
+    #[test]
+    fn codex_credits_and_resets_are_independent_of_windows_and_preserve_unknowns() {
+        let q = codex_quota(&serde_json::json!({ "rateLimits": {"credits": {"hasCredits": true, "unlimited": false, "balance": "123.45"}}, "rateLimitResetCredits": {"availableCount": 2, "credits": []} }));
+        assert_eq!(q.state, "ok");
+        assert!(q.windows.is_empty());
+        assert_eq!(q.credits.unwrap().balance.as_deref(), Some("123.45"));
+        assert_eq!(q.reset_count, Some(2));
+        let old = codex_quota(&serde_json::json!({"rateLimits": {"primary": {"usedPercent": 10}}}));
+        assert!(old.credits.is_none());
+        assert!(old.reset_count.is_none());
+        let unlimited = codex_quota(&serde_json::json!({"rateLimits": {"credits": {"hasCredits": true, "unlimited": true, "balance": null}}}));
+        assert!(unlimited.credits.unwrap().unlimited);
+        let zero = codex_quota(&serde_json::json!({"rateLimits": {"credits": {"hasCredits": false, "unlimited": false, "balance": "0"}}, "rateLimitResetCredits": {"availableCount": 0}}));
+        assert_eq!(zero.reset_count, Some(0));
+        assert_eq!(zero.credits.unwrap().balance.as_deref(), Some("0"));
     }
 
     #[test]

@@ -203,6 +203,8 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         // @params id:string
         "profile.delete" => op("DELETE", p.at("id").map(|id| format!("/profiles/{id}")), None, Effect::Overview),
         // @params id:string
+        "profile.resetQuota" => op("POST", p.at("id").map(|id| format!("/profiles/{id}/reset-quota")), None, Effect::Overview),
+        // @params id:string
         "profile.quota" => op("POST", p.at("id").map(|id| format!("/profiles/{id}/quota")), None, Effect::Overview),
         // @params id:string
         "profile.check" => op("POST", p.at("id").map(|id| format!("/profiles/{id}/check")), None, Effect::Overview),

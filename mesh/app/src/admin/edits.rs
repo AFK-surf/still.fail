@@ -39,6 +39,7 @@ pub fn bare_profile(id: &str, runtime: RuntimeKind, kind: AccessKind, key: &str,
         models: vec![],
         machine: false,
         background_on_message: true,
+        fast: false,
     }
 }
 
@@ -242,7 +243,7 @@ impl AdminApi {
             let machine = existing.as_ref().and_then(|p| p.machine).unwrap_or(false);
             // One on the machine's login is the machine's: only which of its models are used, and how it runs, are chosen
             // here.
-            let get = |key: &str| if machine && !["model", "models", "backgroundOnMessage"].contains(&key) { None } else { given.get(key) };
+            let get = |key: &str| if machine && !["model", "models", "backgroundOnMessage", "fast"].contains(&key) { None } else { given.get(key) };
             // env: a string sets the value; null removes the key; an omitted key keeps it (so masked secrets survive
             // edits).
             let mut env = existing.as_ref().and_then(|p| p.env.clone()).unwrap_or_default();
@@ -297,6 +298,11 @@ impl AdminApi {
                 model,
                 models,
                 machine: machine.then_some(true),
+                fast: match get("fast") {
+                    Some(Value::Bool(on)) => Some(*on),
+                    Some(_) => return Err(http_error(400, "fast must be a boolean")),
+                    None => existing.as_ref().and_then(|p| p.fast),
+                }.filter(|on| *on),
                 // Only the default's opposite is written.
                 background_on_message: match get("backgroundOnMessage") {
                     Some(Value::Bool(on)) => Some(*on),
@@ -331,6 +337,22 @@ impl AdminApi {
             raw.profiles.get_or_insert_with(Vec::new).retain(|p| p.id != id);
             Ok(())
         })
+    }
+
+    pub(super) async fn reset_quota(&self, id: &str, key: &str) -> Result<Value> {
+        let profile = self.config().profiles.iter().find(|p| p.id == id).cloned().ok_or_else(|| http_error(404, "没有这个 Profile"))?;
+        if profile.runtime != RuntimeKind::Codex || profile.access_kind != AccessKind::Subscription {
+            return Err(http_error(400, "只有 OpenAI 订阅支持重置额度"));
+        }
+        let reset = self.deps.reset_quota.as_ref().ok_or_else(|| http_error(503, "此 station 不支持重置额度"))?;
+        let result = reset(profile, key.to_string()).await?;
+        self.refresh_quota(id).await?;
+        match result.get("outcome").and_then(Value::as_str) {
+            Some("reset" | "alreadyRedeemed") => Ok(result),
+            Some("nothingToReset") => Err(http_error(409, "当前没有可重置的额度")),
+            Some("noCredit") => Err(http_error(409, "没有可用的重置次数")),
+            _ => Err(http_error(502, "OpenAI 没有确认重置结果，请查询额度")),
+        }
     }
 
     /// A profile's allowance, asked again (unless a question is on its way already).
@@ -448,7 +470,7 @@ impl AdminApi {
                 model: None,
                 models: None,
                 machine: None,
-                background_on_message: None,
+                fast: None, background_on_message: None,
             });
             Ok(())
         });
@@ -535,7 +557,7 @@ impl AdminApi {
                 model: None,
                 models: None,
                 machine: None,
-                background_on_message: None,
+                fast: None, background_on_message: None,
             });
             Ok(())
         })?;
@@ -583,7 +605,7 @@ impl AdminApi {
                 model: None,
                 models: None,
                 machine: Some(true),
-                background_on_message: None,
+                fast: None, background_on_message: None,
             });
             Ok(())
         })?;

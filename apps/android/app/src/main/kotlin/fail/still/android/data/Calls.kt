@@ -109,6 +109,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Changes a profile: any of `name`, `access`, `env`, `models`. */
     suspend fun putProfile(id: String, body: JsonObject) { ops.profilePut(id = id) { this.input = body } }
     suspend fun deleteProfile(id: String) { ops.profileDelete(id = id) }
+    suspend fun resetQuota(id: String) { ops.profileResetQuota(id = id) }
     suspend fun refreshQuota(id: String) { ops.profileQuota(id = id) }
     suspend fun startLogin(profile: String) { ops.profileLogin(id = profile) }
     suspend fun cancelLogin(profile: String) { ops.profileCancelLogin(id = profile) }

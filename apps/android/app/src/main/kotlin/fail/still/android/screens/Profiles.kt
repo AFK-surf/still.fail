@@ -226,6 +226,20 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             if (p.trouble != null) ProfileRecovery(s, p)
             if (kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
             if (p.trouble?.action != "quota") QuotaSection(address, p)
+            if (p.fast != null) {
+                val busy = app.isDoing("profile.put", "station" to address, "id" to p.id)
+                SectionHeader("运行", start = 24.dp)
+                ListCard {
+                    ListRow(onClick = if (busy) null else ({ app.act("保存 Fast", if (p.fast) "已关闭 Fast" else "已打开 Fast") { api.putProfile(p.id, buildJsonObject { put("fast", !p.fast) }) } })) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Fast", fontSize = 15.sp, color = C.ink)
+                            Text("更快响应，消耗更多额度或积分 · 下一轮生效", fontSize = 13.sp, color = C.muted)
+                        }
+                        DoingMark(busy, app.failedOf("profile.put", "station" to address, "id" to p.id), 14.dp)
+                        Switch(p.fast)
+                    }
+                }
+            }
             ModelsSection(address, p, p.models, p.modelsSaving != null) { models -> setModels(models) }
             // A station older than the setting says nothing of it.
             val background = flipping ?: p.backgroundOnMessage
@@ -399,11 +413,30 @@ private fun QuotaSection(station: String, p: Profile) {
         }
         return
     }
-    if (windows.isEmpty()) {
+    if (windows.isEmpty() && p.quota?.creditsText == null && p.quota?.resetCount == null) {
         Text(p.quota?.detail?.ifBlank { null } ?: "还没有额度信息", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 10.dp))
         return
     }
-    ListCard { QuotaDials(p.quota, Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 14.dp)) }
+    val resetting = app.isDoing("profile.resetQuota", "station" to station, "id" to p.id)
+    ListCard {
+        if (windows.isNotEmpty()) QuotaDials(p.quota, Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 14.dp))
+        p.quota?.creditsText?.let { text -> ListRow {
+            Text("积分余额", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+            Text(text, fontSize = 13.sp, color = C.muted)
+        } }
+        p.quota?.resetCount?.let { count -> ListRow(onClick = if (count <= 0 || resetting) null else ({
+            confirm(app, "重置额度？", "将使用「${p.name}」的 1 次额度重置，${p.quota.resetText}", "使用一次重置") {
+                app.api(station).resetQuota(p.id); app.toast = "已重置额度"
+            }
+        })) {
+            Column(Modifier.weight(1f)) {
+                Text("额度重置", fontSize = 15.sp, color = C.ink)
+                Text(p.quota.resetText ?: "", fontSize = 13.sp, color = C.muted)
+            }
+            DoingMark(resetting, app.failedOf("profile.resetQuota", "station" to station, "id" to p.id), 14.dp)
+            Text("重置额度", fontSize = 14.sp, color = if (count > 0) C.accent else C.muted)
+        } }
+    }
 }
 
 /** A check's state in its words on a soft pill of its tone (the core's: accent | green | blue | red | amber | neutral). */

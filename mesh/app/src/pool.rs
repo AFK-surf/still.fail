@@ -90,7 +90,7 @@ mod tests {
         Some(ProfileCheck { model_efforts: None, state: state.into(), detail: String::new(), models: None, checked_at: 0 })
     }
     fn quota(used: f64) -> Option<ProfileQuota> {
-        Some(ProfileQuota { state: "ok".into(), windows: vec![QuotaWindow { label: "5 小时".into(), used_percent: used, resets_at: None }], detail: None, checked_at: 0 })
+        Some(ProfileQuota { credits: None, reset_count: None, state: "ok".into(), windows: vec![QuotaWindow { label: "5 小时".into(), used_percent: used, resets_at: None }], detail: None, checked_at: 0 })
     }
     struct Signals {
         health: HashMap<String, ProfileHealth>,
