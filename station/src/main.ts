@@ -4,8 +4,9 @@
 //
 //   run --app DIR [--port N] [--data DIR] [--with-parent] [--launcher-fds a,b,c]
 //   enroll <cloud> <token> [--data DIR]   status [--data DIR]   id [--data DIR]
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
 import { enroll, id, status } from "./cli.ts";
@@ -14,6 +15,7 @@ import { dataDir, flag } from "./ops/files.ts";
 import { setStationLang } from "./ops/i18n.ts";
 import { type Control, launcher } from "./ops/launcher.ts";
 import { log } from "./ops/log.ts";
+import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { version } from "./ops/version.ts";
 import { AdminApi, Cloud, Key, MeshNative, Paths, Readers, Up } from "./services.ts";
 
@@ -32,17 +34,27 @@ function usage(): never {
   process.exit(2);
 }
 
-/// The loopback port: whether the station answers (`/healthz`), for `bin/stillfail` and the desktop app.
+/// The loopback port (src/ops/loopback.ts): old page links sent on to still.fail cloud, `/healthz`. The port it got is
+/// written to <data>/run/ports.json.
 const Loopback = (control: Control) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const up = yield* Up;
+      const cloud = yield* Cloud;
       yield* Effect.acquireRelease(
         Effect.sync(() => {
           const server = createServer((req, res) => {
-            const answering = SubscriptionRef.getUnsafe(up);
-            if (req.url === "/healthz") res.writeHead(answering ? 200 : 503).end(answering ? "ok" : "starting");
-            else res.writeHead(404).end();
+            const url = new URL(req.url ?? "/", "http://station");
+            const s = cloud.state.state;
+            const place = s ? { origin: s.origin, workspace: s.workspace, workspace_name: s.workspace_name, station: s.station, removed_at: s.removed_at } : null;
+            const reply = answer(url.pathname, url.search ? url.search.slice(1) : null, SubscriptionRef.getUnsafe(up), place, langOfBrowser(req.headers));
+            res.writeHead(reply.status, reply.headers).end(reply.body);
+          });
+          server.on("listening", () => {
+            const port = (server.address() as AddressInfo).port;
+            mkdirSync(join(data, "run"), { recursive: true });
+            writeFileSync(join(data, "run", "ports.json"), `{"admin":${port}}\n`);
+            log.info("station", "loopback port listening (old /admin links go to still.fail cloud)", { port });
           });
           if (control.loopbackFd !== undefined) server.listen({ fd: control.loopbackFd });
           else {
