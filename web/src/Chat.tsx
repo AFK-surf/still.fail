@@ -846,6 +846,8 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
       avatar={<MessageAvatar message={m} name={who} />} time={m.time?.createdAt}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{who}</button>
+        // Another chat's agent: its name opens that chat (its link, as the chat pages open still.fail's links).
+        : m.by.from ? <a href={m.by.from} className={`${css.msgName} ${css.msgAgent}`}>{who}</a>
         : <span className={css.msgName}>{who}</span>}>
       <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
       {m.authorKind === "person"

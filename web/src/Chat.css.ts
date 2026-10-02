@@ -132,7 +132,7 @@ export const chatUnreadLine = style({
   },
 });
 export const msgAgent = style({
-  padding: "0", border: "0", background: "none", font: "inherit", fontWeight: "600", color: vars.text,
+  padding: "0", border: "0", background: "none", font: "inherit", fontWeight: "600", color: vars.text, textDecoration: "none",
   cursor: "pointer",
   selectors: {
     "&:hover": { color: vars.accent },

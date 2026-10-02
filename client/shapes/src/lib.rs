@@ -363,6 +363,8 @@ pub struct MessageBy {
     pub maker: Option<Maker>,
     pub runtime: Option<RuntimeKind>,
     pub picture: Option<String>,
+    /// Another chat's agent (session_send): that chat's link, its name opens it.
+    pub from: Option<String>,
 }
 
 /// A message as merged from its thread's entries. In a chat, the core says whose it is and who said it.

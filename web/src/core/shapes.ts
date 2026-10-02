@@ -1190,6 +1190,8 @@ export interface MessageBy {
 	maker?: Maker;
 	runtime?: RuntimeKind;
 	picture?: string;
+	/** Another chat's agent (session_send): that chat's link, its name opens it. */
+	from?: string;
 }
 
 /**

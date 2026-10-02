@@ -1192,7 +1192,9 @@ data class MessageBy (
 	val agent: String? = null,
 	val maker: Maker? = null,
 	val runtime: RuntimeKind? = null,
-	val picture: String? = null
+	val picture: String? = null,
+	/** Another chat's agent (session_send): that chat's link, its name opens it. */
+	val from: String? = null
 )
 
 /// Where a decision in a chat's messages stands (core, decisions.rs): still waiting (no person has written since it was

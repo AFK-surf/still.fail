@@ -1041,7 +1041,15 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             Row(Modifier.padding(start = 25.dp).heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     who, fontSize = 15.sp, fontWeight = FontWeight(650), color = ink.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 240.dp).let { mod -> if (agent != null) mod.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { openHistory(app, ctx.station, ctx.of, agent.key) } else mod },
+                    modifier = Modifier.widthIn(max = 240.dp).let { mod ->
+                        val from = m.by.from
+                        when {
+                            agent != null -> mod.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { openHistory(app, ctx.station, ctx.of, agent.key) }
+                            // Another chat's agent (session_send): its name opens that chat.
+                            from != null -> mod.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { app.openLink(from) }
+                            else -> mod
+                        }
+                    },
                 )
                 MessageTime(m.time?.get("createdAt"))
             }
