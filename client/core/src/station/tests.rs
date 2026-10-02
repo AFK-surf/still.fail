@@ -489,9 +489,17 @@ fn a_jobs_log_on_a_station_that_does_not_follow_it_is_read_again_less_often_whil
         host.settle().await;
         assert_eq!(sink.get(&topic).unwrap(), json!({"text": "a", "outputAt": 5}));
         wire.answer(&format!("GET {path}"), 200, json!({"text": "b", "outputAt": 6}));
-        wait(80).await;
+        // A busy CI runner can be descheduled beyond 80 ms. Wait for the actual
+        // refresh and backoff observations, with a deadline so broken polling fails.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while sink.get(&topic) != Some(json!({"text": "b", "outputAt": 6})) {
+                wait(10).await;
+            }
+            while ![LOG_READ_MS * 2, LOG_READ_MS * 4].iter().all(|ms| host.sleeps.borrow().contains(ms)) {
+                wait(10).await;
+            }
+        }).await.expect("legacy job log must refresh and back off");
         assert_eq!(sink.get(&topic).unwrap(), json!({"text": "b", "outputAt": 6}));
-        wait(200).await;
         let waits: Vec<u64> = host.sleeps.borrow().iter().copied().filter(|ms| [LOG_READ_MS, LOG_READ_MS * 2, LOG_READ_MS * 4].contains(ms)).collect();
         assert!(waits.contains(&(LOG_READ_MS * 2)) && waits.contains(&(LOG_READ_MS * 4)), "{waits:?}");
         // Given up: no more reading.
