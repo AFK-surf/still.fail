@@ -57,3 +57,30 @@
 - 安卓 0.1.1123 已发（包名 `fail.still.android`）。
 - 桌面端 0.1.1123 在 studio 本机终端签名发布：约 957 个文件带时间戳签名，要 15 分钟左右；那个终端里的上传没进 bucket，后来从 ssh 重新上传。
 - MBA 和 mini1 装上新的 still.fail.app 后切换。
+
+## Removing the remaining deployment names (2026-10-02)
+
+Production resources are migrated separately from wire compatibility. Never change a
+Worker name and replay its `new_sqlite_classes` on an existing installation: that
+creates empty namespaces. `cloud/migrate-workers.py` prepares the new API/relay,
+seeds existing secrets, transfers the classes, and verifies every namespace ID.
+It changes no routes. `cloud/cutover-worker.py` then updates the existing route IDs,
+records them, and supports `--rollback` to the preserved former Worker. Both tools
+are read-only unless `--apply` is specified. Their `--report` files are private
+operator state outside the repository. The grant signing key must match production.
+
+`cloud/migrate-releases.py --copy --report <private-file>` copies the entire release
+bucket, including private feedback attachments, using a temporary authenticated
+edge preview. It checks SHA-256, size and metadata on every object and never deletes
+the source. Default mode inventories; `--verify-only` checks without writing.
+A final delta pass and uploader cutover are required before retiring the source.
+Keep reports and rollback resources until all callers have switched and the final
+verification passes; an initial successful copy alone is not a completed cutover.
+
+Protocol aliases have a different retirement condition: all supported clients and
+stations must read the new identifiers first, all new writes must use them, then
+wait for old credentials (up to 30 days), active jobs and handed-over agent processes
+to expire or restart. Historical transcripts, exported links and migration readers
+remain readable. They are archival compatibility, not permission to keep issuing
+old identifiers in new data. Old deployment resource names do not need to remain
+forever once their live bindings, uploaders and rollback window have ended.
