@@ -234,7 +234,7 @@ cloud 的端口、`doing` 的 `since`。
   打开、TS 写的目录 Rust 打开，账号/workspace/偏好/草稿都一样。
 - 网页：worker（`web/src/core/worker.ts`）跑 TS core（`src/hosts/web.ts`：fetch、WebSocket、IndexedDB 同库同表
   `stillfail-core` v2 的 `values`/`records`，第一次打开照旧从 `ember-core` 搬），iroh 来自新的 `client/iroh-wasm`
-  （只有 iroh，2.7 MB；原来整个 Rust core 的 wasm 6.2 MB），在 mesh 第一次 bind 时才加载。web 的 tsconfig 更严，所以 worker
+  （只有 iroh，2.7 MB；整个 Rust core 的 wasm 同样的编法是 8.0 MB，见「测量」），在 mesh 第一次 bind 时才加载。web 的 tsconfig 更严，所以 worker
   经 `@stillfail/core-ts/web` 引用（vite alias 指到源码，类型见 `web/src/core/core-ts.d.ts`），core-ts 用自己的 tsconfig 检查。
   `pnpm build`/`build:cloud` 改编 iroh-wasm 并装 core-ts 的依赖；`scripts/check.sh` 的替身和测试步骤跟着换，加了 core-ts 的
   typecheck 和测试。验证（studio）：`build:cloud`、`build:site` 通过；dev cloud（`cloud/test/dev.ts`）+ 本地 relay + 临时 station，
@@ -262,8 +262,49 @@ cloud 的端口、`doing` 的 `since`。
   （mesh/）共用的词和读法；客户端类型和操作 bindings 由 TS 生成（见「写法」）；check.sh、CI 的检查跟着改（构建步骤本来就
   走 `apps/desktop/build.sh`、`apps/android/build.py`、`build:cloud`，它们已是 TS core）；`docs/client-core.md` 重写。
 
-还没做（接手从这里开始）：
-- studio 上的整套验证和测量（见下「测量」），以及安卓模拟器端到端。
+验证（studio，2026-10-03，d521cec8，独立 worktree `~/ember-wt/core-ts-final`）：
+- core-ts 测试 384 个，连跑 5 遍全绿（mesh 的 20 个要插件：`STILLFAIL_MESH_NATIVE=<station/native/mesh 编出的 dylib>`，
+  没编到默认位置时它们跳过，check.sh 里就是这样）；`tsgo --noEmit` 通过。
+- `sh scripts/check.sh all` 16 步全过（类型和 bindings、图标、各处 typecheck、web/core-ts/cloud 测试、Rust station、
+  Rust client、Android）。
+- `pnpm run build:cloud` 通过；桌面 `UNSIGNED=1 sh apps/desktop/build.sh` 出了 `.app` 和 zip，包里的 `core-ts.js` + `mesh.node`
+  在 Node 里起得来、答 `accounts` 和 `auth.begin`。
+- 安卓：`build.py --release --tasks` + `gradlew :app:assembleDebug -PmotionTest -PstillfailCloud=…`，模拟器（cts-api36）上清空后
+  点开发账号 alice 登录 → 经 iroh 读到临时 station 的 chat 列表 → 打开 chat 输入发送，station 库里多了这条（n=5），agent 的
+  报错（n=6）也回到 app。同一台设备上 TS → Rust（27992e3a 编的 Rust core 包覆盖安装）和 Rust → TS 都直接打开对方的数据，
+  登录和列表都在。
+
+## 测量（2026-10-03，studio）
+
+桌面（Node，`harness/measure.ts`：假 cloud + 假 station 300 个 chat、每个 40 条，走 host wire；cloud/station 在另一个进程；
+各 3 次；Node 自己 44 MB）：
+
+| | Rust core（napi addon） | TS core |
+|---|---|---|
+| 冷启动（登录 + 读）到 chat 列表第一次出值 | 71–87 ms（一次就是全部 300 个） | 69–124 ms；300 个全到 125–161 ms |
+| 热启动（本机数据）到第一次出值 | 67–78 ms | 69–72 ms |
+| 进程 RSS（10 秒后） | 232–241 MB | 196–210 MB（冷）；热启动 202–352 MB（随 GC） |
+| JS 堆 | 29 MB（Node 自己的） | 50–51 MB |
+
+TS 这时已经把 12 000 条 entries 都同步到本机（规则 6），Rust 只读打开过的。
+
+安卓（模拟器 cts-api36，API 36 arm64；debug 包、core 用 release 编；1 个 chat；冷启动 5 次，按屏幕上第一行 chat 出现的
+时刻算，`am start` 起；PSS 是启动 15 秒后 `dumpsys meminfo`）：
+
+| | Rust core（27992e3a） | TS core（d521cec8） |
+|---|---|---|
+| 启动画面 → 第一行 chat（本机数据） | 1.83–2.96 s，中位 2.24 s | 1.08–1.73 s，中位 1.64 s |
+| 第一帧（`am start -W`） | 815–945 ms | 811–905 ms |
+| PSS | 116.4–116.8 MB | 121.0–121.4 MB |
+
+包大小：
+
+| | Rust core | TS core |
+|---|---|---|
+| 网页 | core 的 wasm 8.02 MB（gzip 2.66 MB）+ 57 KB 胶水 | worker JS 1.09 MB（gzip 314 KB）+ iroh wasm 2.68 MB（gzip 1.03 MB，第一次连 station 时才加载） |
+| 桌面 | `stillfail_core_node.node` 30.8 MB | `core-ts.js` 1.89 MB + `mesh.node` 15.1 MB |
+| 安卓（arm64，包里） | `libstillfail_core_ffi.so` 26.5 MB + JNA 0.17 MB | `libstillfail_shell.so` 17.3 MB + `libhermes.so` 3.7 MB + jsi/fbjni/引擎 0.38 MB + `libc++_shared.so` 1.25 MB + `core.hbc` 1.89 MB = 24.5 MB |
+| 安卓 debug APK | 69.1 MB | 65.9 MB |
 
 此前（第一版，照 Rust 写的，已被上面取代）：
 1. 第 1 期（2026-10-03）：协议、Host、Store/delta、data center、accounts、cloud、status、workspace、wake、trace、ops、
@@ -271,6 +312,6 @@ cloud 的端口、`doing` 的 `since`。
    对照运行 44 步全部一致（账号登录登出、accounts/workspaces/workspace/loginSessions/status/prefs/doing 话题、
    cloud 写操作和 events socket 推送与断线重连、草稿、各种错误）。移植测试 79 个通过。
 
-下一步（按顺序）：mesh（iroh 走 station 的 `mesh.node` 形状，见 `station/src/mesh/native.ts`）→ station 链路
-（`station.rs`、`station/{wire,transport,events,threads}.rs`、`kept.rs`、`entries.rs`、`sync.rs`）→ views →
-其余模块 → 桌面/web/安卓 host。
+接手：计划里的事都做完了（2026-10-03）。剩下的是合并：分支 `core-ts` 等用户看过证据后合进 main（照 ember 的合并流程，
+部署时注意 web、桌面、安卓三个包都换成 TS core，数据两个方向都能打开，可以随时退回）。可以接着做的：`kept.rs` 那种
+本机存储上限（现在不设上限，见「刻意不同」）、安卓真机上量内存和流畅度。
