@@ -71,6 +71,8 @@ export class Router implements Source {
       }
       case "draft":
         return { ok: { text: "", quotes: [], files: [] } };
+      case "adbShare":
+        return { ok: core.adb.value() };
       case "previewLoad":
         return { ok: core.workspaces.ofStation(topic.station as string).part("previewLoad", () => new Loads()).value(topic) };
       case "prefs":

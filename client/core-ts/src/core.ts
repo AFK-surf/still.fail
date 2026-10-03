@@ -40,6 +40,7 @@ import { Changelog } from "./changelog.ts";
 import { installForms, type Forms } from "./forms-calls.ts";
 import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
+import { Adb } from "./adb.ts";
 import { envOf, Views } from "./views/views.ts";
 import { isObject } from "./util.ts";
 
@@ -93,6 +94,7 @@ export class Inner {
   choose!: Choose;
   changelog!: Changelog;
   forms!: Forms;
+  adb!: Adb;
   viewCalls!: ViewCalls;
   router!: Router;
   /// The calls under way that a UI can stop, by `client/id`.
@@ -168,6 +170,14 @@ export class Core {
       inner.choose = installChoose(inner);
       inner.forms = installForms(inner);
       const asks = new Asks(inner.host);
+      inner.adb = new Adb({
+        host: inner.host,
+        runner: inner.runner,
+        store: inner.store,
+        mesh: () => inner.mesh(),
+        credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, inner.meshNow()?.deviceId() ?? null),
+      });
+      handlers.adb = (_i, call) => inner.adb.run((call as Extract<Call, { kind: "adb" }>).call);
       handlers.ask = (_i, call) => asks.run((call as Extract<Call, { kind: "ask" }>).ask, inner.accounts);
       inner.changelog = new Changelog(inner.host, inner.store, inner.data);
       inner.router.owners.push(inner.changelog);

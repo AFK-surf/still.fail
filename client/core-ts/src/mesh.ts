@@ -197,7 +197,13 @@ class Control {
 }
 
 /// A station's reply: its head, and its body as it comes (what came with the head line first).
-export type Reply = { status: number; headers: [string, string][]; body: Pull<Uint8Array> };
+export type Reply = {
+  status: number;
+  headers: [string, string][];
+  body: Pull<Uint8Array>;
+  /// Lets go of it: the stream is stopped both ways (what is not read any more, the station stops sending).
+  cancel(): void;
+};
 
 function headersOf(v: J): [string, string][] {
   if (v === null || typeof v !== "object" || Array.isArray(v)) return [];
@@ -278,7 +284,7 @@ export class Link {
   request(head: RequestHead, body: Uint8Array): Effect.Effect<Reply, CoreError> {
     const wire = { method: head.method, path: head.path, headers: Object.fromEntries(head.headers) };
     return Effect.mapError(
-      Effect.map(this.#open(wire, true, body), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines) })),
+      Effect.map(this.#open(wire, true, body), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines), cancel: () => stream.reset(0) })),
       (e) => this.refused ?? e,
     );
   }
@@ -291,14 +297,14 @@ export class Link {
         write: (bytes) => Effect.mapError(stream.write(bytes), (e) => meshError(t("core-logic.mesh.unsent", { error: e.message }))),
         finish: () => void Effect.runFork(Effect.ignore(stream.finish())),
       };
-      return [{ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines) }, out] as [Reply, SocketOut];
+      return [{ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines), cancel: () => stream.reset(0) }, out] as [Reply, SocketOut];
     });
   }
 
   /// This phone's adb offered to the station, or asked about (adb.ts).
   adb(head: RequestHead, ask: J): Effect.Effect<Reply, CoreError> {
     const wire = { method: head.method, path: head.path, headers: Object.fromEntries(head.headers), adb: ask };
-    return Effect.map(this.#open(wire, true, null), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines) }));
+    return Effect.map(this.#open(wire, true, null), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines), cancel: () => stream.reset(0) }));
   }
 
   /// The next stream the station opens on the link; null once it closed.
@@ -1074,6 +1080,8 @@ export class MeshWire implements StationWire {
         answered = r.success;
       }
       const [l, reply] = answered;
+      // Its stream goes with the scope it was asked in.
+      yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
       if (reply.headers.some(([k]) => k.toLowerCase() === IDEMPOTENT)) idempotent.add(id);
       return { status: reply.status, headers: reply.headers, body: reply.body, via: l.path() };
     });
@@ -1112,6 +1120,7 @@ export class MeshWire implements StationWire {
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
       const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.station, env.credentials(station.workspace)));
       const [reply, send] = yield* link.socket(head);
+      yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
       return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send };
     });
   }

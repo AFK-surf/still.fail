@@ -148,9 +148,12 @@ export class WakingHost implements Host {
   readonly inner: Host;
   readonly wakes: Wakes;
 
+  readonly tcp?: Host["tcp"];
+
   constructor(inner: Host, wakes: Wakes) {
     this.inner = inner;
     this.wakes = wakes;
+    if (inner.tcp) this.tcp = (port) => inner.tcp!(port);
   }
 
   cloudOrigin(): string {

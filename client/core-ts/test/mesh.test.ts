@@ -342,3 +342,89 @@ test("moves_only_to_a_clearly_quicker_relay", () => {
   assert.equal(quicker(null, a, [[a, null], [b, 100]]), null, "nothing to compare with");
   assert.equal(quicker(1000, a, [[a, 11_000], [b, 82]]), b, "fresh measurements of the same round win over the link's estimate");
 });
+
+// ── adb.rs ──
+
+import { createServer } from "node:net";
+import { Adb } from "../src/adb.ts";
+import { parseAdb, MAX_MINUTES } from "../src/adb-parse.ts";
+import { Store } from "../src/store.ts";
+import { nodeTcp } from "../src/hosts/node.ts";
+
+/// adbd: says back what it hears.
+function adbd(): Promise<number> {
+  return new Promise((resolve) => {
+    const server = createServer((socket) => socket.pipe(socket));
+    server.listen(0, "127.0.0.1", () => resolve((server.address() as J).port));
+    server.unref();
+  });
+}
+
+test("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", { skip }, async () => {
+  const port = await adbd();
+  // A station that takes a credential, then an offer: answers it, opens a tunnel and says "hello" through it.
+  const key = new Uint8Array(32);
+  crypto.getRandomValues(key);
+  const endpoint = await addon.bind({ secretKey: Buffer.from(key), alpns: [Buffer.from(ALPN)], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const seen: { offer?: J; echoed?: string; stopped?: boolean } = {};
+  void (async () => {
+    const conn = await endpoint.accept();
+    const control = await conn.acceptBi();
+    const c1 = { bytes: Buffer.alloc(0) };
+    await Station.readLine(control, c1);
+    await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+    const offer = await conn.acceptBi();
+    const c2 = { bytes: Buffer.alloc(0) };
+    seen.offer = JSON.parse((await Station.readLine(offer, c2))!);
+    await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+    await offer.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb: "connected", message: "" })}\n`));
+    const tunnel = await conn.openBi();
+    await tunnel.write(Buffer.from(`${JSON.stringify({ tunnel: "connect" })}\n`));
+    const c3 = { bytes: Buffer.alloc(0) };
+    assert.deepEqual(JSON.parse((await Station.readLine(tunnel, c3))!), { ok: true });
+    await tunnel.write(Buffer.from("hello"));
+    let back = c3.bytes;
+    while (back.length < 5) {
+      const chunk = await tunnel.read();
+      if (chunk === null) break;
+      back = Buffer.concat([back, chunk]);
+    }
+    seen.echoed = back.toString();
+    await offer.stopped();
+    seen.stopped = true;
+  })().catch(() => {});
+  const host = new FakeHost();
+  (host as J).tcp = nodeTcp;
+  const e = env(host);
+  const mesh = await e.runner.run(Mesh.make(e, []));
+  mesh.addAddr({ id: endpoint.id(), ips: [endpoint.sockets().find((a: string) => a.startsWith("127.0.0.1"))] });
+  const store = new Store(host, e.runner);
+  const adb = new Adb({ host, runner: e.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential) });
+  const station = `ws/${endpoint.id()}`;
+  await e.runner.run(adb.run({ kind: "share", offer: { station, connect: port, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
+  for (let i = 0; i < 200 && (seen.echoed === undefined || adb.value().tunnels !== 1 || adb.value().adb !== "connected"); i++) await sleep(20);
+  const head = seen.offer;
+  assert.equal(head.path, "/admin/api/adb");
+  assert.equal(head.adb.phone.length, 64);
+  delete head.adb.phone;
+  assert.deepEqual(head.adb, { op: "share", device: "Pixel 8", android: "14", package: "fail.still.android", adbd: true, pair: false });
+  assert.equal(seen.echoed, "hello");
+  const value = adb.value();
+  assert.deepEqual([value.sharing, value.station, value.phase, value.serial], [true, station, "offered", "127.0.0.1:37001"]);
+  await e.runner.run(adb.run({ kind: "stop" }));
+  for (let i = 0; i < 250 && !seen.stopped; i++) await sleep(20);
+  assert.ok(seen.stopped, "the station sees the offer stop");
+  const after = adb.value();
+  assert.deepEqual([after.sharing, after.phase], [false, "off"]);
+  await e.runner.run(mesh.close());
+  await endpoint.close();
+  e.runner.shutdown();
+});
+
+test("reads_its_calls", () => {
+  const share = parseAdb("adb.share", { station: "ws/st", connect: 41234, minutes: 10_000 });
+  assert.deepEqual(share, { kind: "share", offer: { station: "ws/st", connect: 41234, pair: null, device: "", android: "", package: "", minutes: MAX_MINUTES } });
+  assert.throws(() => parseAdb("adb.share", {}));
+  assert.deepEqual(parseAdb("adb.pair", { code: "123456" }), { kind: "pair", code: "123456" });
+  assert.equal(parseAdb("job.stop", {}), null);
+});
