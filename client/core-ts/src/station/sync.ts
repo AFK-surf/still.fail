@@ -41,6 +41,9 @@ export const EVENTS_COALESCE_MS = 400;
 export const PAGE = 50;
 export const TRANSCRIPT_PAGE = 200;
 export const RECHECK_MS = 5 * 60 * 1000;
+/// A read that failed in passing (a 5xx, the link dropping) is tried again after this, doubling, this many times.
+export const READ_RETRY_MS = 2_000;
+export const READ_RETRIES = 5;
 export const RECHECKING = "等它回来确认";
 
 /// The steps in flight and the phase of a session at work, as its stream says them.
@@ -249,9 +252,10 @@ export class StationsSync {
     if (!link || !this.reachable(address)) return;
     const wants = this.#wants(address);
     if (!anew && link.events && equal(link.events.wants, wants)) return;
-    // Handed over from a stream that is open and heard (wanted for more or less now): it kept the records current
-    // until the new one opens, so the new one reads nothing again.
-    const handover = !anew && link.events !== null && link.heard !== null;
+    // Handed over from a stream that is open and heard lately (wanted for more or less now): it kept the records
+    // current until the new one opens, so the new one reads nothing again. One quiet past a keepalive may have died
+    // unnoticed (the device asleep): what it may have missed is read.
+    const handover = !anew && link.events !== null && link.heard !== null && this.#core.host.nowMs() - link.heard < STREAM_QUIET_MS;
     if (link.events) {
       link.replaced?.pipe((f) => this.#core.runner.interrupt(f as Fiber.Fiber<unknown, unknown>));
       link.replaced = link.events.fiber;
@@ -465,8 +469,9 @@ export class StationsSync {
     });
   }
 
-  /// Reads one held topic: a 4xx while nothing is held is its error (the topic says so); anything else passes.
-  #read(address: string, topic: Topic, path: string, shape?: (answer: unknown) => unknown, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
+  /// Reads one held topic: a 4xx while nothing is held is its error (the topic says so); anything else passes, and
+  /// is read again a little later (less and less often, a few times) while the station stays reached.
+  #read(address: string, topic: Topic, path: string, shape?: (answer: unknown) => unknown, ctx: SpanContext | null = null, attempt = 0): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (!this.reachable(address) || !this.#links.has(address)) return;
       const link = this.#links.get(address)!;
@@ -478,6 +483,11 @@ export class StationsSync {
       } else if (this.#core.data.get(topic) === undefined && answer.failure.status !== undefined && answer.failure.status >= 400 && answer.failure.status < 500) {
         link.errors.set(key, answer.failure);
         this.onChange(address, "errors", key);
+      } else if ((answer.failure.status === undefined || answer.failure.status >= 500) && attempt < READ_RETRIES) {
+        const again = Effect.sleep(READ_RETRY_MS * 2 ** attempt).pipe(
+          Effect.andThen(Effect.sync(() => void this.#enqueue(address, `again/${key}`, Priority.background, this.#read(address, topic, path, shape, null, attempt + 1)))),
+        );
+        this.#core.runner.fork(again, link.scoped);
       }
     });
   }
@@ -915,15 +925,11 @@ export class StationsSync {
       if (kind === "timeline") {
         const start = u64(get(message, "start")) ?? 0;
         const entries = (get(message, "entries") as unknown[] | undefined) ?? [];
-        // The transcript written anew (or past what is held: the latest page only): it starts there.
+        // Written anew from before what is held ends: what came after it goes. Past what is held (the latest page
+        // only): it is put as it is, and the topic shows the run that ends the transcript.
         const held = yield* core.data.log("transcript", address, key);
         const top = held.size > 0 ? Math.max(...held.keys()) + 1 : 0;
-        if (start > top || start < top) {
-          if (start < top) {
-            // Written anew from `start`: what came after goes.
-            yield* core.data.putItems("transcript", address, key, entries.map((e, i) => [start + i, e] as [number, unknown]), true);
-          } else yield* core.data.putItems("transcript", address, key, entries.map((e, i) => [start + i, e] as [number, unknown]));
-        } else yield* core.data.putItems("transcript", address, key, entries.map((e, i) => [start + i, e] as [number, unknown]));
+        yield* core.data.putItems("transcript", address, key, entries.map((e, i) => [start + i, e] as [number, unknown]), start < top ? start + entries.length - 1 : null);
         view.usage = get(message, "usage") ?? null;
         // Ended steps stay until the entries that record them arrive.
         if (entries.length > 0) view.steps = view.steps.filter((s) => get(s, "ended") !== true);
@@ -1092,6 +1098,11 @@ export class StationsSync {
       const n = u64(get(answer, "n"));
       if (n === null) return yield* Effect.fail(new CoreError("bad_response", t("station.core.noMessageNumber")));
       const held = yield* this.#core.data.log("entry", address, String(thread));
+      // The thread goes that far now: what came after what is held is read.
+      this.#core.data.update({ topic: "threads", station: address }, (list) => {
+        for (const t of Array.isArray(list) ? list : []) if (isObject(t) && u64(t.id) === thread && (u64(t.last) ?? 0) < n) t.last = n;
+        return list;
+      });
       if (!held.has(n)) yield* Effect.ignore(this.ask(address, `entries/${thread}`, this.#entriesPage(address, thread, Priority.asked)));
       return n;
     });
