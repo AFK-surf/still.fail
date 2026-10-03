@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 pub use stillfail_i18n::{Lang, t, tr};
 
-/// The header a core names its person's language in (client/core/src/station.rs `LANG_HEADER`).
+/// The header a core names its person's language in (client/core-ts/src/station/sync.ts `LANG_HEADER`).
 pub const HEADER: &str = "stillfail-lang";
 
 tokio::task_local! {

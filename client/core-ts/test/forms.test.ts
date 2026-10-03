@@ -1,4 +1,4 @@
-// client/core/src/decision_form.rs, slack_tokens.rs and profile_flow.rs tests, ported.
+// The Rust core's decision_form.rs, slack_tokens.rs and profile_flow.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { conform } from "../src/conform.ts";

@@ -232,7 +232,7 @@ const WORKER_SOCKET = `(() => {
 /**
  * A `link` over the page's own requests, for a host that answers them itself (the desktop app's stillfail-preview://):
  * `GET /_ember/socket/<id>?path=&protocols=` opens the socket and streams what happens on it, `POST /_ember/socket/<id>`
- * sends one message. Both are framed as the station frames a socket (client/core/src/station.rs, SocketFrame: a kind
+ * sends one message. Both are framed as the station frames a socket (client/core-ts/src/station/sync.ts, SocketFrame: a kind
  * byte, the length in 4 bytes big-endian, the payload), with kind 0 for its opening (the sub-protocol).
  */
 export const FETCH_LINK = `(path, protocols, on) => {

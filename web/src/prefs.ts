@@ -1,4 +1,4 @@
-// How its person likes it on this device, as the core keeps it (its `prefs` topic, `prefs.set`; client/core/src/prefs.rs):
+// How its person likes it on this device, as the core keeps it (its `prefs` topic, `prefs.set`; client/core-ts/src/prefs.ts):
 // the lists' filter, the appearance, whose pictures lead a row, times as dates, keys changed, the chat last open, each
 // chat's history tabs, an invite code kept through signing in. The page reads them at once, before the core answers,
 // from a copy of the core's last value in localStorage (`stillfail.prefs`): the first paint is as it was left (the

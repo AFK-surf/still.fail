@@ -20,7 +20,7 @@ Run integration tests with a local control plane and a disposable station, not a
 ## Design constraints
 
 - Older stations and newer clients coexist. Add optional fields and compatible database migrations; preserve existing commands and shared links.
-- Keep client state and operations in `client/core`. Views name operations and render state; they do not call station HTTP endpoints directly.
+- Keep client state and operations in the core (`client/core-ts`). Views name operations and render state; they do not call station HTTP endpoints directly.
 - Keep workspace data isolated. Show progress and errors for user operations.
 - Keep upstream notices in `vendor/`; document local patches in its README.
 

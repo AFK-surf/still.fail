@@ -647,7 +647,7 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
 }
 
 /**
- * What a workspace has waiting, as the core says (views/marks.rs): `alert` a red dot with a soft halo, `wait` a blue
+ * What a workspace has waiting, as the core says (views/marks.ts): `alert` a red dot with a soft halo, `wait` a blue
  * ring (a card or an agent waits on them), `done` a blue dot; as a chat's mark (ChatMark), still. `label` says it in words.
  */
 @Composable

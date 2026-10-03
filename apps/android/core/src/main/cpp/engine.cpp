@@ -47,7 +47,7 @@ double clockMs(clockid_t clock) {
 }
 
 /// Timers run on CLOCK_BOOTTIME, which goes on while the phone sleeps: a 10 s wait begun before a sleep is over after
-/// it (client/ffi's `sleep` did the same with the wall clock).
+/// it (the Rust core's `sleep` did the same with the wall clock).
 double bootMs() { return clockMs(CLOCK_BOOTTIME); }
 
 /// A JSON string literal of `s` (for `{"fatal": …}`).

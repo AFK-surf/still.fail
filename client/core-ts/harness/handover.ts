@@ -1,4 +1,4 @@
-// One core's data directory opened by the other (docs/core-ts.md, 数据兼容): the Rust core (client/node's addon) signs
+// One core's data directory opened by the other (docs/core-ts.md, 数据兼容): the Rust core (its Node addon, built from a commit that still has it: 7091dc84) signs
 // in, sets prefs and a draft, and the TS core opened on its directory shows the same accounts, workspaces, prefs and
 // draft before reaching anything; then the other way round (going back to the Rust core keeps what the TS core did).
 //

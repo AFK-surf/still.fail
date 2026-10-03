@@ -1,4 +1,4 @@
-// client/core/src/format.rs, client/shapes/src/model.rs, reasoning.rs and client/i18n tests, ported.
+// The Rust core's format.rs, client/core-ts/src/shapes/model.ts, reasoning.rs and client/i18n tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as f from "../src/format.ts";

@@ -205,7 +205,7 @@ function chatItem(chat: DemoChat): ChatItem {
     ...(chat.originText ? { originText: chat.originText } : {}),
     // Who is in it: who asked first started it.
     people: chat.people, ...(chat.people[0] ? { creator: chat.people[0] } : {}),
-    // As the core says it (present.rs row_people).
+    // As the core says it (present.ts row_people).
     peopleText: [chat.people[0] && `${chat.people[0].shown.display} 发起`, chat.people.slice(1).map((p) => p.shown.display).join("、")].filter(Boolean).join(" · "),
     last: {
       seq: last?.seq ?? 0, authorKind: byAgent ? "agent" : "person", author: byAgent ? chat.key : last?.author ?? "", text: preview, preview,
@@ -228,7 +228,7 @@ export function chatsView(chats: DemoChat[]): ChatsView {
   return {
     me: { id: "local" }, stations: [{ id: "local", station: STATION, name: "Studio", state: "online" }], loading: false,
     days: [{ daysAgo: 0, at: Date.now(), label: "今天", items: today }, ...(earlier.length ? [{ daysAgo: 1, at: ago(24 * 60), label: "昨天", items: earlier }] : [])],
-    // As the core puts them (client/core/src/looks.rs): the workspace's one station, at work while a chat runs.
+    // As the core puts them (client/core-ts/src/looks.ts): the workspace's one station, at work while a chat runs.
     glyph: { online: 1, dim: 0, failing: 0, working, summary: working ? "这台机器 · 在干活" : "这台机器", label: working ? "1 台 station，1 台在线，1 台在干活" : "1 台 station，1 台在线" },
     note: { reading: false, failing: [], empty: items.length === 0 },
   };

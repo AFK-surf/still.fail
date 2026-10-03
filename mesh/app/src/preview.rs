@@ -92,7 +92,7 @@ pub async fn proxy_preview(method: &str, headers: &[(String, String)], body: req
 
 // ── a service's WebSocket ────────────────────────────────────────────────────
 
-/// A WebSocket message on a preview's socket stream, as the client core frames it (client/core/src/station.rs): a kind
+/// A WebSocket message on a preview's socket stream, as the client core frames it (client/core-ts/src/station/sync.ts): a kind
 /// byte, the payload's length (4 bytes, big-endian), then the payload.
 pub const FRAME_TEXT: u8 = 1;
 pub const FRAME_BINARY: u8 = 2;

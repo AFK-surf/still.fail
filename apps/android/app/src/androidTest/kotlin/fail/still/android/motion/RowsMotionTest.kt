@@ -37,7 +37,7 @@ class RowsMotionTest {
         agentText = if (k == key) "Claude" else "Codex", maker = if (k == key) Fixtures.anthropic else openai, runtimeText = if (k == key) "Claude Code" else "Codex", efforts = listOf("high"),
     )
 
-    /** `started`: seen starting while the chat shows, as the core marks it (attend.rs): its activity comes in. */
+    /** `started`: seen starting while the chat shows, as the core marks it (attend.ts): its activity comes in. */
     private fun agentAt(running: Boolean, started: Boolean = running, k: String = key) = ChatAgent(
         session = session(k), status = if (running) "running" else "idle", profiles = emptyList(), choices = emptyList(), attention = emptyList(),
         since = if (running) System.currentTimeMillis() - 42_000 else null, started = if (started) true else null, turns = emptyList(), threads = emptyList(), jobs = emptyList(),

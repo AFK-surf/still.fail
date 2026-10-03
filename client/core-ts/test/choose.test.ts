@@ -1,4 +1,4 @@
-// client/core/src/choose.rs tests, ported.
+// The Rust core's choose.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { frequentCombos, recordCombo, resolve } from "../src/choose.ts";

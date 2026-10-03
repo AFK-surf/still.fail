@@ -78,7 +78,7 @@ export class NeedsReal extends Error {
 /** What the demo's station does itself, changing nothing: a chat's agent woken, stopped or moved to another model. */
 const OWN = new Set(["session.warm", "session.stop", "session.evict", "session.settings"]);
 
-/** The station's operations (client/core/src/ops.rs), by name: what is read answers; what would reach out needs a real
+/** The station's operations (client/core-ts/src/ops.ts), by name: what is read answers; what would reach out needs a real
  *  ember; what stays in the station answers the overview (what most writes answer with) and changes nothing. */
 export function op(name: string): unknown {
   if (name === "memory.get") return data.memory;
@@ -90,7 +90,7 @@ export function op(name: string): unknown {
   throw new NeedsReal();
 }
 
-/** The archive, as the core puts it together (client/core/src/views/archive.rs): the station's archived chats by day. */
+/** The archive, as the core puts it together (client/core-ts/src/views/archive.ts): the station's archived chats by day. */
 export function archive(): ArchiveView {
   const days: ArchiveDay[] = [];
   const today = new Date().setHours(0, 0, 0, 0);

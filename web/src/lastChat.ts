@@ -1,5 +1,5 @@
 // The chat last open, per workspace, so leaving for settings or another workspace and coming back returns to it; and
-// what each workspace has waiting. Both the core's (client/core/src/views/marks.rs): it keeps the chat from what the
+// what each workspace has waiting. Both the core's (client/core-ts/src/views/marks.ts): it keeps the chat from what the
 // chat pages tell it (`client.focus`), so a settings page, showing none, leaves it as it was. A core from before it (an
 // older desktop app's) has no `workspaceMarks`: the page keeps the path in the prefs then, as it did.
 import { useEffect } from "react";
@@ -9,7 +9,7 @@ import type { OpenChat, WorkspaceMarksView } from "./core/shapes.ts";
 import { prefs, setPrefs } from "./prefs.ts";
 import { stationBase } from "./station.tsx";
 
-/** How the keys the core gives chats made here, before their station has made them, begin (views.rs, PENDING_PREFIX). */
+/** How the keys the core gives chats made here, before their station has made them, begin (views/views.ts, PENDING_PREFIX). */
 export const PENDING = "new:";
 
 function useMarks(workspace: string) {

@@ -1,4 +1,4 @@
-// client/core/src/cloud.rs, status.rs, workspace.rs, ops.rs and trace.rs tests, ported.
+// The Rust core's cloud.rs, status.rs, workspace.rs, ops.rs and trace.rs tests, ported.
 import { Effect } from "effect";
 import { run } from "./run.ts";
 import assert from "node:assert/strict";

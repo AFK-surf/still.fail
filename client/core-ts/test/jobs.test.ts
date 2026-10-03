@@ -1,4 +1,4 @@
-// client/core/src/jobs.rs and footprint.rs tests, ported.
+// The Rust core's jobs.rs and footprint.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { conform } from "../src/conform.ts";

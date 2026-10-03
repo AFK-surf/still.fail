@@ -65,8 +65,8 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 ## 开发
 
 - station：在 mesh/ 里 `cargo test --workspace`。
-- client core：在 client/ 里 `cargo test --workspace --exclude stillfail-core-wasm`。
-- `pnpm test`（web 里的 TypeScript 部分，需要先构建 wasm core）、`pnpm typecheck`。
+- client core（TypeScript）：在 client/core-ts 里 `pnpm test`、`pnpm exec tsgo --noEmit`；core 的原生壳（client/shell、client/iroh-wasm）：在 client/ 里 `cargo test --workspace`。
+- `pnpm test`（web 里的 TypeScript 部分，需要先构建 iroh wasm）、`pnpm typecheck`。
 - `pnpm check`：跑全部检查（scripts/check.sh all）。
 - `pnpm dev:web`：still.fail cloud 网页版（`--mode cloud`）的热更新开发服务器。
 

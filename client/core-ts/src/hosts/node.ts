@@ -1,7 +1,7 @@
 // The core on Node (the desktop app's utility process; tests and the side-by-side runs): the Host over fetch, the `ws`
-// package, node:sqlite and files, as client/ffi's native host keeps them — the same data directory, the same file per
+// package, node:sqlite and files, as the Rust core's native host kept them — the same data directory, the same file per
 // storage key (`%XX` for what a file name cannot hold), the same `core.db` — so a desktop app moving from the Rust core
-// keeps its logins and what it had read. `start` is client/node's API: connect / receive(json) / disconnect, the
+// keeps its logins and what it had read. `start` is the API the Rust core's Node addon had: connect / receive(json) / disconnect, the
 // listener given `(client, json)`.
 import { mkdirSync } from "node:fs";
 import { open, readFile, rename, rm } from "node:fs/promises";
@@ -146,7 +146,7 @@ export class NodeHost implements Host {
     return join(this.#dir, name);
   }
 
-  /// One file operation after another, in the order asked for (client/ffi's storage thread): a write is never
+  /// One file operation after another, in the order asked for (as the Rust core's storage thread did): a write is never
   /// overtaken by an earlier one, and none holds up the core's thread.
   #files: Promise<unknown> = Promise.resolve();
 
@@ -256,8 +256,8 @@ export class NodeHost implements Host {
   }
 }
 
-/// client/node's `start`: a core whose messages go to `listener(client, json)`; `channel` "beta" for a beta app's.
-/// A bug that ends a fiber ends the core as a panic ends client/ffi's: each client is told `{"fatal": …}` and the host
+/// The Node addon's `start`, as the Rust core had it: a core whose messages go to `listener(client, json)`; `channel` "beta" for a beta app's.
+/// A bug that ends a fiber ends the core as a panic ended the Rust core: each client is told `{"fatal": …}` and the host
 /// starts another (apps/desktop/src/core.ts).
 /// `hostWire`: its stations answer at the cloud's origin over plain HTTP, not on the mesh (the side-by-side run,
 /// harness/run.ts).
@@ -275,7 +275,7 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
     for (const client of clients) listener(client, said);
     void ready.then((core) => core.close(), () => {});
   };
-  // Messages that arrive while the core starts wait, in order (client/ffi's queue).
+  // Messages that arrive while the core starts wait, in order (as the Rust core's queue did).
   const ready = Core.create(host, options.hostWire ? { iroh: null, wire: () => new HostWire(host) } : { iroh: nodeIroh() }).then((core) => {
     core.inner.runner.onDefect = fatal;
     core.keepTime();

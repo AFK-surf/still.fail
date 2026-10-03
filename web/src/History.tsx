@@ -1,5 +1,5 @@
 // Execution history, after Zork's: a readable account of what actually ran. The core puts it together
-// (client/core/src/history.rs): messages in and out, state marks and the agent's words stand alone; the tool calls and
+// (client/core-ts/src/history.ts): messages in and out, state marks and the agent's words stand alone; the tool calls and
 // thinking between them fold into one group. Here it is only drawn.
 import { failure, useToast } from "./toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";

@@ -40,7 +40,7 @@ The title is the chat's title as the sidebar shows it. Texts are one line
 
 ## Client core: the `notices` topic
 
-`notices` (`workspace?`) is kept by the core (`notices.rs`, fed by what `sync.rs`
+`notices` (`workspace?`) is kept by the core (`notices.ts`, fed by what the sync (`station/sync.ts`)
 keeps: every station's `chatRows`), each workspace's apart: with a `workspace`,
 that workspace's (the last 20), with none every workspace's. Its value:
 
@@ -83,7 +83,7 @@ Calls:
 | `notice.claim` | `id` | `{ show }`: true for the first page that takes a notice of `notify.show` |
 | `notice.pushed` | `workspace?` | `{ show }`: whether a push that came is shown (on, no page in view, and of the workspace the viewer is in) |
 
-`notify` (no params, attend.rs) is what the clients show from: `{ on, asked, push, show }`. `on` and `asked` (the
+`notify` (no params, attend.ts) is what the clients show from: `{ on, asked, push, show }`. `on` and `asked` (the
 system asked to allow them, once) are kept on the device, on by default. `push`: this device should hold a push
 registration. `show`: the notices to show now, decided as they come: none while off; none for a chat a UI is looking at
 (`client.focus`: `visible`, `focused`, that chat); none while this device has pushes and no page is in view (the push

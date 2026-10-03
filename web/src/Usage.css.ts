@@ -1,7 +1,7 @@
 import { globalStyle, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 
-// The people a day's bar is split by, in the order the usage view ranks them (client/core/src/views/usage.rs SERIES),
+// The people a day's bar is split by, in the order the usage view ranks them (client/core-ts/src/views/usage.ts SERIES),
 // the rest grey. Checked with the dataviz validator (four slots, adjacent pairs) on the light and dark grounds; the
 // first is still.fail's own accent, stepped down in dark to stay in the band.
 const light = ["#ef6a3c", "#2a78d6", "#1baf7a", "#4a3aa7"];

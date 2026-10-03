@@ -1,4 +1,4 @@
-// What the Rust core kept (client/core/src/kept.rs storage chunks) is read into records on the first start.
+// What the Rust core kept (the Rust core's kept.rs storage chunks) is read into records on the first start.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Data } from "../src/data.ts";

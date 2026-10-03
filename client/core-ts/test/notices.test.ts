@@ -1,4 +1,4 @@
-// client/core/src/notices.rs tests, ported.
+// The Rust core's notices.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";

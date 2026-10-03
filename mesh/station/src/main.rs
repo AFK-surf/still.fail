@@ -708,7 +708,7 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
     let key = load_key(&data)?;
     // still.fail's relays, homing on the nearest (iroh's public ones only while none answers: `keep_relays`); found
     // without the cloud: on the LAN by mDNS, and which relay it is on, published to the Mainline DHT (clients look both
-    // up: client/core/src/mesh.rs).
+    // up: client/core-ts/src/mesh.ts).
     let relays = iroh::RelayMap::from_iter(relays(&state));
     if relays.is_empty() {
         bail!("no relay url");

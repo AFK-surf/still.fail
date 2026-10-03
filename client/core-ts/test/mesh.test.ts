@@ -1,4 +1,4 @@
-// client/core/src/mesh.rs tests, ported: a station on localhost over the native addon (station/native/mesh), the
+// The Rust core's mesh.rs tests, ported: a station on localhost over the native addon (station/native/mesh), the
 // client's mesh over the same addon. Real time here (iroh needs its own clock).
 import assert from "node:assert/strict";
 import { test } from "node:test";

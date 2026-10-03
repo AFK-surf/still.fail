@@ -10,7 +10,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
 /**
- * A delta (`Op` in client/core/src/delta.rs) applied to a value, as
+ * A delta (`Op` in client/core-ts/src/delta.ts) applied to a value, as
  * `applyDelta` in web/src/core/client.ts does: only the objects and arrays
  * along each op's path are copied, so unchanged parts stay the same instances
  * and Compose skips them.

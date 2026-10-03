@@ -4,7 +4,7 @@
 //! Codex speaks, and a chat-completions endpoint is what the automatic decisions ask (decision/profiles.rs).
 //!
 //! The station sets the runtimes up from this (mesh/app/src/profiles.rs) and the core says what a profile can do from
-//! it (client/core/src/present.rs), so the two cannot disagree.
+//! it (client/core-ts/src/present.ts), so the two cannot disagree.
 
 use crate::{AccessKind, RuntimeKind};
 

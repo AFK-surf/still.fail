@@ -232,7 +232,7 @@ export type Tone = "neutral" | "green" | "blue" | "amber" | "red" | "accent";
 
 /**
  * Keep a completed state compact while retaining its explanation and accessible name. The core says it in words, in
- * either language (client/core present.rs: 做完了, 做完了：<why>; Done, Done: <why>).
+ * either language (client/core-ts present.ts: 做完了, 做完了：<why>; Done, Done: <why>).
  */
 export function StatusText({ text }: { text: string }) {
   const done = /^(?:做完了(?:：|$)|Done(?:: |$))/.exec(text);

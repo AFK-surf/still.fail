@@ -312,7 +312,7 @@ left as it is. Showing the session again or deleting it removes the copy.
 
 ### In the client core
 
-Merging happens in one place (`client/core/src/entries.rs`, used by the
+Merging happens in one place (`client/core-ts/src/entries.ts`, used by the
 `chat` view): a message shows its latest edit's text, attachments and quotes,
 marked edited (`editedAt`). Unread and read positions are entry numbers.
 

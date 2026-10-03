@@ -85,7 +85,7 @@ export function proxyPreview(method: string, headers: [string, string][], body: 
 
 // ── a service's WebSocket ────────────────────────────────────────────────────
 
-/// A WebSocket message on a preview's socket stream, as the client core frames it (client/core/src/station.rs): a kind
+/// A WebSocket message on a preview's socket stream, as the client core frames it (client/core-ts/src/station/sync.ts): a kind
 /// byte, the payload's length (4 bytes, big-endian), then the payload.
 export const FRAME_TEXT = 1;
 export const FRAME_BINARY = 2;

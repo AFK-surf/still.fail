@@ -22,7 +22,7 @@ fun fcm(key: String): String = providers.gradleProperty(key).orNull ?: firebase.
 
 // The beta app (-PstillfailBeta; apps/android/build.py --beta): an app of its own beside the released one
 // (fail.still.android.beta, 「youdid.wtf」, the face dark with white eyes), signing in through stillfail-beta:// and taking its newer
-// builds from the beta feed (/releases/android/beta/latest.json: its core says it is a beta app, client/core
+// builds from the beta feed (/releases/android/beta/latest.json: its core says it is a beta app, client/core-ts
 // Host::beta). Its pushes need a Firebase app of its own (fcmBetaAppId); without one it has none.
 val beta = providers.gradleProperty("stillfailBeta").isPresent
 

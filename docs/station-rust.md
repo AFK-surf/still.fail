@@ -1,6 +1,6 @@
 # station：Rust
 
-station 是一个 Rust 程序：`stillfail-station`（mesh/station）一个进程运行整个 station，station 本身是 stillfail-app（mesh/app），在同一个进程里。数据格式和 client core 共用 `client/shapes`。只装一个二进制，不带 Node。
+station 是一个 Rust 程序：`stillfail-station`（mesh/station）一个进程运行整个 station，station 本身是 stillfail-app（mesh/app），在同一个进程里。数据格式和 client core 共用 `client/core-ts/src/shapes/schema.ts`。只装一个二进制，不带 Node。
 
 ## 现在的结构
 
@@ -26,7 +26,7 @@ station 原来是 Node/TypeScript，由它启动 ember-mesh。迁移逐块进行
 
 1. 倒转主次，去掉管理端口：Rust 接替 Node 做主进程，安装脚本、launchd、`ember` 命令都改成启动 Rust 程序。
 1.5 桌面端自带 station：打包 `ember-station`，登录后自动把本机加入当前 workspace，随应用启动和退出；已经装过独立 station 的机器用已有的那个。
-2. station 的类型也从 `client/shapes` 来，station 到 core 这一段由契约管住。
+2. station 的类型也从 `client/core-ts/src/shapes/schema.ts` 来，station 到 core 这一段由契约管住。
 3. 存储迁到 Rust：先读后写，期间 Node 和 Rust 共用同一个库（WAL）。
 4. 管理接口迁到 Rust，按资源一组一组来：overview、profiles、connects、threads、sessions、slack apps、logins。
 5. 运行时驱动迁到 Rust：Codex（app-server JSON-RPC）、Claude Code（stream-json），以及会话、Hub、live 转写和执行历史的来源。

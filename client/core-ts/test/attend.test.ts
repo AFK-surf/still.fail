@@ -1,4 +1,4 @@
-// client/core/src/attend.rs tests, ported.
+// The Rust core's attend.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Attend } from "../src/attend.ts";

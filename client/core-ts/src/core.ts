@@ -141,7 +141,7 @@ export class Core {
       inner.workspaces = new Workspaces(inner.host, inner.runner);
       inner.store = new Store(inner.host, inner.runner);
       const store = inner.store;
-      // What goes out is what the clients' types say (client/shapes).
+      // What goes out is what the clients' types say (client/core-ts/src/shapes/schema.ts).
       store.setShaped();
       store.setHeld((topic) => inner.data.shared(topic));
       inner.data.onChange((topic) => store.changed(topic));

@@ -1,4 +1,4 @@
-// client/core/src/preview_load.rs tests, ported.
+// The Rust core's preview_load.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Loads } from "../src/preview-load.ts";

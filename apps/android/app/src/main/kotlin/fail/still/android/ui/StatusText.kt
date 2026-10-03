@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** The core's done lead in either language (client/core present.rs: 做完了, 做完了：<why>; Done, Done: <why>). */
+/** The core's done lead in either language (client/core-ts present.ts: 做完了, 做完了：<why>; Done, Done: <why>). */
 val doneLead = Regex("^(?:做完了(?:：|$)|Done(?:: |$))")
 
 /** Same compact completed label as web StatusText; the explanation and accessible name stay intact. */

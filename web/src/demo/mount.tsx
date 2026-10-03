@@ -50,7 +50,7 @@ function valueOf(topic: Topic): unknown {
     case "connects": return station.connects();
     case "stations": return [station.stationView()];
     case "archive": return station.archive();
-    // What the core puts together of them (client/core/src/choose.rs), as a new chat and a model control start.
+    // What the core puts together of them (client/core-ts/src/choose.ts), as a new chat and a model control start.
     case "newChat": return newChatView();
     case "pick": return pickView(topic.of);
     // still.fail cloud's, for the phone's workspace pages (mobile/).
@@ -153,7 +153,7 @@ function answer(name: string, params: Record<string, unknown>): unknown {
   // What reaches past the demo is offered in a real still.fail instance instead, and fails here as not done.
   try {
     if (name === "station.upload" || name.startsWith("auth.")) throw new station.NeedsReal();
-    // still.fail cloud's operations (ops.rs: by the account they go as): every one would reach out.
+    // still.fail cloud's operations (ops.ts: by the account they go as): every one would reach out.
     if ("account" in params) throw new station.NeedsReal();
     if (typeof params.station === "string") return station.op(name);
   } catch (e) {

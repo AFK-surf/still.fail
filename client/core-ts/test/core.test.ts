@@ -1,4 +1,4 @@
-// client/core/src/core/tests.rs, ported (same names, same checks): the protocol, the calls, the account topics and
+// The Rust core's core/tests.rs, ported (same names, same checks): the protocol, the calls, the account topics and
 // still.fail cloud's events socket, prefs and drafts.
 import assert from "node:assert/strict";
 import { test } from "node:test";

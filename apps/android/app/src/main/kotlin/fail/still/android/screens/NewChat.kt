@@ -92,7 +92,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** Picks for a new chat in a scope (`station`: its id; the core keeps them, client/core/src/choose.rs): each given changes only that. */
+/** Picks for a new chat in a scope (`station`: its id; the core keeps them, client/core-ts/src/choose.ts): each given changes only that. */
 private fun AppState.pickNew(scope: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit) {
     this.scope.launch { try { core.call("newChat.pick", buildJsonObject { put("scope", scope); fill() }) } catch (e: CoreException) { toast = t("android-chat.pick.failed", "error" to errorText(e)) } }
 }

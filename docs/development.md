@@ -34,14 +34,14 @@ rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version 0.2.129 --locked
 ```
 
-`client/wasm/build.sh` uses `LLVM_BIN` when set, otherwise checks Homebrew LLVM installations and then `clang`/`llvm-ar` on `PATH`. It checks for WebAssembly support before compiling. To choose a particular LLVM installation, set `LLVM_BIN` to its `bin` directory.
+`client/iroh-wasm/build.sh` uses `LLVM_BIN` when set, otherwise checks Homebrew LLVM installations and then `clang`/`llvm-ar` on `PATH`. It checks for WebAssembly support before compiling. To choose a particular LLVM installation, set `LLVM_BIN` to its `bin` directory.
 
 ```sh
 STILLFAIL_PREVIEW_ORIGIN=http://127.0.0.1:8790 pnpm run build:cloud
 (cd mesh && cargo build --locked --release -p stillfail-station)
 ```
 
-The first command builds the WebAssembly core and the local cloud's web/admin/preview assets, with previews pointing at the local preview host. This variable is read at build time; changing it requires rebuilding the web assets. If you change the development server's `PORT`, use its preview port (`PORT + 3`) here. Without this variable, the web build uses the hosted preview service.
+The first command builds the browser's iroh (WebAssembly; the core itself is TypeScript, client/core-ts) and the local cloud's web/admin/preview assets, with previews pointing at the local preview host. This variable is read at build time; changing it requires rebuilding the web assets. If you change the development server's `PORT`, use its preview port (`PORT + 3`) here. Without this variable, the web build uses the hosted preview service.
 
 The second command builds `mesh/target/release/stillfail-station` (or the directory selected by `CARGO_TARGET_DIR`).
 

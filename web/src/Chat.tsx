@@ -361,7 +361,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   const sentHere = useRef(new Set<string>());
   for (const o of chat.outbox) sentHere.current.add(o.text);
   // Only what is said while the chat shows comes in, and an activity only for an agent seen starting meanwhile: the
-  // core decides both (attend.rs: `said`, `started`); the rest is there at once.
+  // core decides both (attend.ts: `said`, `started`); the rest is there at once.
   const said = new Set(messages.filter((m) => m.said).map((m) => m.seq));
   const saidHere = (seq: number) => said.has(seq);
   // Only an agent that has taken a message and runs is at work: until then the message itself says it waits.
@@ -755,7 +755,7 @@ function useLoadNear(ref: RefObject<HTMLElement | null>, edge: "top" | "bottom",
 
 /**
  * Tells the core this page shows the chat, and whether its end (`floor`) is in view: what is read, where the unread
- * line goes and which notices are not shown follow from it there (client/core/src/attend.rs).
+ * line goes and which notices are not shown follow from it there (client/core-ts/src/attend.ts).
  */
 export function useShowing(floor: RefObject<HTMLElement | null>, station: string, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
   const thread = chat.thread?.id ?? null;

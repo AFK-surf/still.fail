@@ -45,7 +45,7 @@ struct Options {
 }
 
 /// Through a relay a round trip is hundreds of milliseconds: a first window of 256 KB sends what a screen needs in
-/// one (client/core mesh.rs `INITIAL_WINDOW`, the station's too).
+/// one (client/core-ts mesh.ts `INITIAL_WINDOW`, the station's too).
 fn transport() -> QuicTransportConfig {
     let mut cubic = noq_proto::congestion::CubicConfig::default();
     cubic.initial_window(256 * 1024);

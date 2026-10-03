@@ -1,4 +1,4 @@
-// client/core/src/delta.rs tests, ported.
+// The Rust core's delta.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply, diff, largerThan } from "../src/delta.ts";

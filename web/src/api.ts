@@ -1,9 +1,9 @@
 import { bindStationOperations } from "./core/operations.ts";
 // A station's data, through the client core (docs/client-core.md): screens
 // subscribe to the views the core puts together; what they have done is a
-// call by its name (client/core/src/ops.rs), never a request made here, and the
+// call by its name (client/core-ts/src/ops.ts), never a request made here, and the
 // core brings whatever it touches up to date before it answers. Types come
-// from client/shapes (core/shapes.ts); what is only sent to a station is
+// from client/core-ts/src/shapes/schema.ts (core/shapes.ts); what is only sent to a station is
 // declared here.
 import { createContext, useCallback, useContext, useMemo, useRef } from "react";
 import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
@@ -70,7 +70,7 @@ export type SlackAppView =
   | { state: "ok"; appId: string; links: SlackAppLinks; settings: SlackAppSettings; groups: SlackGroup[] }
   | { state: "error"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[]; error: string };
 
-// ── what the core gives: generated from client/shapes (core/shapes.ts), nothing hand-written ──
+// ── what the core gives: generated from client/core-ts/src/shapes/schema.ts (core/shapes.ts), nothing hand-written ──
 
 export type * from "./core/shapes.ts";
 
@@ -104,7 +104,7 @@ export function useStatus(workspace?: string): StatusView | undefined {
 }
 const STATUS = { topic: "status" } as const;
 
-/** The archive of a scope's stations online (client/core/src/views/archive.rs). */
+/** The archive of a scope's stations online (client/core-ts/src/views/archive.ts). */
 export function useArchiveView(scope: string): TopicState<ArchiveView> {
   return useTopic<ArchiveView>({ topic: "archive", scope });
 }
@@ -171,7 +171,7 @@ export function useHost(station: string): TopicState<Host> {
 // ── calls ───────────────────────────────────────────────────────────────
 
 export interface StationCall {
-  /** Has the core do `name` (client/core/src/ops.rs) on this station, with `params`. */
+  /** Has the core do `name` (client/core-ts/src/ops.ts) on this station, with `params`. */
   op<T>(name: string, params?: Record<string, unknown>): Promise<T>;
   /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
   upload(file: File): Promise<Attachment>;

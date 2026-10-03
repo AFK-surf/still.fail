@@ -1,6 +1,6 @@
 // This phone's adb, lent to a station's agents (docs/adb-share.md): Wireless debugging's ports found on the phone
 // (DNS-SD) and given to the core (`adb.share`), which offers them to the station and carries what its agents' adb sends
-// (client/core/src/adb.rs). A foreground service holds the app up meanwhile and says so, with 停止 and, while the pairing
+// (client/core-ts/src/adb.ts). A foreground service holds the app up meanwhile and says so, with 停止 and, while the pairing
 // dialog is open, a field for its code: the dialog closes if Settings is left, so the code is typed here.
 package fail.still.android
 

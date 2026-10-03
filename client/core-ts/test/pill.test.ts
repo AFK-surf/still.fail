@@ -1,4 +1,4 @@
-// client/core/src/pill.rs tests, ported.
+// The Rust core's pill.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";

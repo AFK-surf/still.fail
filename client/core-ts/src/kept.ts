@@ -1,4 +1,4 @@
-// What the Rust core kept on the device (client/core/src/kept.rs), read once into records. The Rust core kept threads'
+// What the Rust core kept on the device (client/core-ts/src/kept.ts), read once into records. The Rust core kept threads'
 // entries and sessions' transcripts in host storage, in chunks of 256: `thread/<station>/<thread>/<chunk>` (entries
 // numbered from 1), `transcript/<station>/<session>/<chunk>` (items from 0), `<log>/meta` the run `{first, last}` it
 // holds, and `kept` the index of every log (`{station, opened, chunks: {chunk: bytes}}`). The TS core keeps them as

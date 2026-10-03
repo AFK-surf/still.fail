@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
     /**
      * Back on screen after a while in the background, as the web page does on visibilitychange (web/src/core/client.ts
      * connectCore): the core gives up requests that went out before and reconnects links gone quiet
-     * (client/core/src/wake.rs), so nothing hangs on a socket the system dropped while away.
+     * (client/core-ts/src/wake.ts), so nothing hangs on a socket the system dropped while away.
      */
     private fun wake() {
         // No core yet (the activity made again, its core still starting): woken once it is there.
@@ -208,7 +208,7 @@ private var hidden: Long? = null
 /**
  * The default network, followed: `changed` when it becomes another one than before (Wi-Fi to mobile data, back
  * online after none). Every connection the core has was on the old one and is dead with nothing said; iroh cannot
- * see this on Android itself (client/core/src/wake.rs, mesh.rs `watch`). The first network seen is the one the core
+ * see this on Android itself (client/core-ts/src/wake.ts, mesh.ts `watch`). The first network seen is the one the core
  * started on, so nothing is said of it.
  */
 private class NetworkWatch(context: Context, private val changed: () -> Unit) : ConnectivityManager.NetworkCallback() {

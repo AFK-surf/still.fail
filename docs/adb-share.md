@@ -27,7 +27,7 @@ agent ─ adb ─ 127.0.0.1:<port> on the station ─ stream on the phone's link
   notification, with 停止. Sharing ends after an hour, when it is stopped, or when
   the app goes; nothing is kept for a next run.
 
-The core (`client/core/src/adb.rs`) holds the offer: the `adbShare` topic and the
+The core (`client/core-ts/src/adb.ts`) holds the offer: the `adbShare` topic and the
 calls `adb.share`, `adb.stop`, `adb.pair`, `adb.grant`. Only native cores carry
 tunnels (the web has no sockets).
 

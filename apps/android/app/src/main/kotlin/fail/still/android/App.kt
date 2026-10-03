@@ -215,7 +215,7 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
         }
     }
 
-    /** What people set going here and the core has not finished (the `doing` topic, client/core/src/doing.rs). */
+    /** What people set going here and the core has not finished (the `doing` topic, client/core-ts/src/doing.ts). */
     var doing by mutableStateOf(emptyList<DoingItem>()); private set
 
     /** Follows what is under way for the app's life. */
@@ -540,7 +540,7 @@ private fun AppContent(app: AppState) {
                     else Landing(signedIn, all)
                 } else {
                     rememberNotificationAsk(app, once = true)
-                    // The core hears which workspace the app is in: what it tells the viewer is of it (attend.rs).
+                    // The core hears which workspace the app is in: what it tells the viewer is of it (attend.ts).
                     LaunchedEffect(current.workspace.id) { app.core.focus(buildJsonObject { put("workspace", current.workspace.id) }) }
                     Pages(app, current)
                 }
@@ -551,7 +551,7 @@ private fun AppContent(app: AppState) {
         val context = LocalContext.current
         LaunchedEffect(top) { if (top is Screen.Chat && top.of is ChatOf.Session) Notifier.cancel(context, "${top.station}/${top.of.key}") }
         // Looked at while in front with a chat on top (the chat itself says which, screens/Chat.kt): its notices are
-        // not shown then (client/core/src/attend.rs).
+        // not shown then (client/core-ts/src/attend.ts).
         val lookedAt = app.inFront && top is Screen.Chat
         LaunchedEffect(app.inFront, lookedAt) { app.core.focus(buildJsonObject { put("visible", app.inFront); put("focused", lookedAt) }) }
         // An image or a video opened, over the pages (it grows out of its thumbnail in the chat); sheets and notes over it.

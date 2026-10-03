@@ -155,7 +155,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
 
 /**
  * Renames the chat (web mobile/sheets.tsx → ask, with `empty`): an empty name gives it back its first message. The core
- * shows the new name at once (views/changing.rs), so the sheet goes as it is given, not waiting on the station; a
+ * shows the new name at once (views/local.ts), so the sheet goes as it is given, not waiting on the station; a
  * failure is said by a toast, the name as it was again.
  */
 internal fun askTitle(app: AppState, station: String, thread: Long?, session: String, first: String) {

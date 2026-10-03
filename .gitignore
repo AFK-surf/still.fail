@@ -23,8 +23,7 @@ __pycache__/
 
 .claude/
 
-# built by client/wasm/build.sh, client/iroh-wasm/build.sh
-web/src/core/pkg/
+# built by client/iroh-wasm/build.sh
 web/src/core/iroh-pkg/
 client/target/
 

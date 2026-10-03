@@ -53,7 +53,7 @@ fn percent(value: Option<&Value>) -> f64 {
     n.round().clamp(0.0, 100.0)
 }
 
-/// A window's label. Labels are not translated: cores read them (client/core/src/format.rs `window_mark`).
+/// A window's label. Labels are not translated: cores read them (client/core-ts/src/format.ts `window_mark`).
 fn window_label(minutes: Option<f64>, fallback: &str) -> String {
     let Some(minutes) = minutes.filter(|m| *m > 0.0) else { return fallback.into() };
     if minutes <= 60.0 * 6.0 {

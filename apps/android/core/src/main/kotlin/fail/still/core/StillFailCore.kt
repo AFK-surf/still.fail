@@ -60,7 +60,7 @@ class StillFailCore internal constructor(
 
         /**
          * One per process. `cloudOrigin` e.g. "https://app.still.fail" (the emulator reaches a dev cloud at
-         * http://10.0.2.2:8787); `beta`: the beta app's core (client/core Host::beta).
+         * http://10.0.2.2:8787); `beta`: the beta app's core (client/core-ts Host.beta).
          */
         suspend fun start(context: Context, cloudOrigin: String, beta: Boolean = false): StillFailCore = started.withLock {
             instance?.let { core ->
@@ -110,7 +110,7 @@ class StillFailCore internal constructor(
     }
 
     /**
-     * Tells the core where the app's attention is (client/core/src/attend.rs): whether it is in view and looked at, the
+     * Tells the core where the app's attention is (client/core-ts/src/attend.ts): whether it is in view and looked at, the
      * chat it shows. Each field given changes; `chat: null` shows none; `left` says the chat named is not shown any
      * more. Not waited for; a core that does not know it takes no notice.
      */
@@ -228,7 +228,7 @@ class StillFailCore internal constructor(
     internal fun open() {
         val next = try {
             engines { from, json ->
-                // CoreMessage writes id, then ok/value/delta/error (client/core/src/protocol.rs).
+                // CoreMessage writes id, then ok/value/delta/error (client/core-ts/src/protocol.ts).
                 // Inspect only that bounded prefix, never the text or base64 payload itself.
                 val id = MESSAGE_ID.find(json.take(128))?.groupValues?.get(1)?.toLongOrNull()
                 val lane = if (id != null && id in replyIds) replies else incoming

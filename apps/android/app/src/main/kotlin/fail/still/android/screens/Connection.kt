@@ -31,7 +31,7 @@ fun RetryPill(modifier: Modifier = Modifier) {
     val trying = app.isDoing("client.wake")
     Row(
         modifier.height(22.dp).clip(RoundedCornerShape(50)).background(C.chip).clickable(enabled = !trying) {
-            // A person's retry (client/core/src/wake.rs): `network` for a core from before `retry`.
+            // A person's retry (client/core-ts/src/wake.ts): `network` for a core from before `retry`.
             app.act(t("android-misc.connection.reconnect")) { app.core.call("client.wake", buildJsonObject { put("away", 0); put("network", true); put("retry", true) }) }
         }.padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),

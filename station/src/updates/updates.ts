@@ -45,7 +45,7 @@ import {
   stationVersion, stepOf, tail, versionIn,
 } from "./versions.ts";
 
-/// A line of what the pages show (client/shapes SoftwareVersion; fields that are none are left out, as serde does).
+/// A line of what the pages show (client/core-ts/src/shapes/schema.ts SoftwareVersion; fields that are none are left out, as serde does).
 export type SoftwareVersion = {
   id: string;
   name: string;

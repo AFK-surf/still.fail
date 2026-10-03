@@ -1,4 +1,4 @@
-// How its person likes it on this device, as the core keeps it (its `prefs` topic, `prefs.set`; client/core/src/prefs.rs),
+// How its person likes it on this device, as the core keeps it (its `prefs` topic, `prefs.set`; client/core-ts/src/prefs.ts),
 // as web/src/prefs.ts has it: the workspace last open, the appearance, whose pictures lead a row, 只看我的, a new connect
 // to go on with. The app kept these in its preferences before; they go into the core once (AppState reads the core's).
 package fail.still.android.data

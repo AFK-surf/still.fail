@@ -35,7 +35,7 @@ if (DEV_URL) app.commandLine.appendSwitch("unsafely-treat-insecure-origin-as-sec
 /**
  * The beta app (apps/desktop/build.sh --beta, which fixes this at build time; or the variable, run from the source): an
  * app of its own beside the released one, 「youdid.wtf」 (fail.still.desktop.beta, its own userData), its core
- * saying so to still.fail cloud (client/core Host::beta), its updates on the beta channel, its own link scheme.
+ * saying so to still.fail cloud (client/core-ts Host.beta), its updates on the beta channel, its own link scheme.
  */
 const BETA = process.env.STILLFAIL_CHANNEL === "beta";
 /** The name the app goes by in what it says (its productName when packed; build.sh --beta names it so): still.fail's dual on the test channel. */
@@ -687,7 +687,7 @@ function open(path = "/", titled = false): BrowserWindow {
 }
 
 // The chats' notices (docs/notifications.md), shown by the app itself, so also with no window open. Which to show now
-// is the core's call (its `notify`, client/core/src/attend.rs): none for a chat looked at, only the workspace the
+// is the core's call (its `notify`, client/core-ts/src/attend.ts): none for a chat looked at, only the workspace the
 // windows are in; each taken once (`notice.claim`). Whether they are on is kept in userData/notify.json; the system's
 // own settings for the app come on top.
 const NOTIFY_FILE = () => join(app.getPath("userData"), "notify.json");

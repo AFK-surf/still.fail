@@ -1,4 +1,4 @@
-// Decisions an agent left to people (a block post with options, client/core/src/decisions.rs), as both screens draw
+// Decisions an agent left to people (a block post with options, client/core-ts/src/decisions.ts), as both screens draw
 // them. In a chat: the post is a message like any other, its options right under it, one per line, the recommended one
 // last; once answered (or replaced), a quiet line saying how. On the decisions page (奏): one at a time, the post and
 // what came just before it drawn as the chat draws them, its options under the post and the chat's composer floating

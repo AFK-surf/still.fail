@@ -1,4 +1,4 @@
-// What people set going on this device and the core has not finished (the `doing` topic, client/core/src/doing.rs):
+// What people set going on this device and the core has not finished (the `doing` topic, client/core-ts/src/doing.ts):
 // every call that changes something, from when it is asked until it answers, whichever page or menu asked it. A row or
 // button shows its own at once (a spinner, not pressed again), even after the menu that asked it has closed; one that
 // failed stays a few seconds more with why (`stage` failed, `error`), for that place to say so.
