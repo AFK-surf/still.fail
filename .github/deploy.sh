@@ -5,7 +5,7 @@
 #   sh .github/deploy.sh [--dry-run] PART…
 # The secrets, each a file's content (none of them needed for --dry-run): CLOUDFLARE_API_TOKEN (without it, the
 # machine's own `wrangler login`), DEPLOY_KEYS_JSON (keys.json), GOOGLE_OAUTH_JSON (google-oauth.json), AXIOM_JSON,
-# VAPID_JSON, FCM_SERVICE_ACCOUNT_JSON, POSTHOG_JSON.
+# VAPID_JSON, FCM_SERVICE_ACCOUNT_JSON, POSTHOG_JSON, APPLE_JSON (apple.json, Sign in with Apple).
 set -eu
 cd "$(dirname "$0")/.."
 pnpm install --frozen-lockfile --prefer-offline > /dev/null
@@ -21,6 +21,7 @@ put axiom.json "${AXIOM_JSON:-}"
 put vapid.json "${VAPID_JSON:-}"
 put fcm-service-account.json "${FCM_SERVICE_ACCOUNT_JSON:-}"
 put posthog.json "${POSTHOG_JSON:-}"
+put apple.json "${APPLE_JSON:-}"
 umask 022
 mkdir -p "$HOME/stillfail-deploy/builds"
 ln -s "$HOME/stillfail-deploy/builds" "$dir/builds"
