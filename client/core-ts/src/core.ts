@@ -89,7 +89,8 @@ export class Inner {
   views!: Views;
   /// The iroh this host has, and the mesh over it once up (mesh.ts).
   iroh: Iroh | null = null;
-  mesh!: () => Effect.Effect<Mesh, CoreError>;
+  /// None until a wire over the mesh is made (a core whose stations answer otherwise has none).
+  mesh: () => Effect.Effect<Mesh, CoreError> = () => Effect.fail(new CoreError("unsupported", t("station.core.oneWay")));
   meshNow: () => Mesh | null = () => null;
   attention!: Attention;
   choose!: Choose;
