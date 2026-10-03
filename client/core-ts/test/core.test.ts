@@ -3,8 +3,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { STORAGE_KEY } from "../src/accounts.ts";
-import { answer, Core, CREDENTIAL_KEY, relaysOf, SOCKET_IDLE_MS, SOCKET_RETRY_MS } from "../src/core.ts";
-import * as accountState from "../src/core/account_state.ts";
+import { answer, Core, CREDENTIAL_KEY, relaysOf } from "../src/core.ts";
+import { SOCKET_IDLE_MS, SOCKET_RETRY_MS } from "../src/sync/cloud.ts";
+import { run } from "./run.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { diff } from "../src/delta.ts";
 import { CoreError, HostError } from "../src/error.ts";
@@ -143,7 +144,7 @@ test("a_kept_credential_reaches_the_stations_without_ember_cloud", async () => {
   });
   const core = await Core.create(host, { clock: host.time.clock });
   const inner = core.inner;
-  const credential = (fresh: boolean) => accountState.credential(inner, "ws", "dev", fresh, null);
+  const credential = (fresh: boolean) => run(inner.cloudSync.credential("ws", "dev", fresh, null));
   const kept = (c: object, device = "dev") => toJsonBytes({ device, ...c });
   assert.equal((await credential(false)).credential, "c1");
   assert.equal((await credential(false)).credential, "c1");
@@ -161,7 +162,7 @@ test("a_kept_credential_reaches_the_stations_without_ember_cloud", async () => {
   assert.equal((await credential(false)).credential, "c3");
   host.store(`${CREDENTIAL_KEY}/s1/ws`, kept(old, "other"));
   assert.equal((await credential(false)).credential, "c4");
-  await inner.accounts.signOut("s1");
+  await run(inner.accounts.signOut("s1"));
   await host.time.pass(10);
   assert.equal(host.stored(`${CREDENTIAL_KEY}/s1/ws`), undefined);
   core.close();
@@ -397,7 +398,7 @@ test("prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over", asyn
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).stationUpdatesDismissed["ws/st"], "stable:2");
-  await core.inner.data.written();
+  await run(core.inner.data.written);
   core.close();
   const again = await Core.create(host, { clock: host.time.clock, sample: 0 });
   const ui2 = again.connect();
@@ -471,7 +472,7 @@ test("a_draft_is_kept_on_the_device_until_emptied", async () => {
   assert.equal(v(values, 1).text, "修一下登录");
   assert.equal(v(values, 1).files[0].path, "up/x.png");
   await host.time.pass(350);
-  await core.inner.data.written();
+  await run(core.inner.data.written);
   core.close();
   host.takeEmitted();
   let again = await Core.create(host, { clock: host.time.clock, sample: 0 });
@@ -486,7 +487,7 @@ test("a_draft_is_kept_on_the_device_until_emptied", async () => {
   await host.settle();
   apply(host, values2);
   assert.deepEqual(values2.get(1), { text: "", quotes: [], files: [] });
-  await again.inner.data.written();
+  await run(again.inner.data.written);
   again.close();
   again = await Core.create(host, { clock: host.time.clock, sample: 0 });
   ui2 = again.connect();

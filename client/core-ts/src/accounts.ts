@@ -8,7 +8,8 @@
 //
 // Storage (the Rust core's, so either core reads the other's): `accounts` is a JSON array of StoredAccount
 // (`access_expires` in epoch seconds), `login` the sign-in in progress.
-import { CoreError, asCoreError } from "./error.ts";
+import { Deferred, Effect } from "effect";
+import { CoreError, HostError, asCoreError } from "./error.ts";
 import type { Host, HttpResponse } from "./host.ts";
 import { t } from "./i18n.ts";
 import { Kind, type Tracer } from "./trace.ts";
@@ -70,7 +71,8 @@ export class Accounts {
   readonly #host: Host;
   #list: StoredAccount[];
   #listeners: (() => void)[] = [];
-  readonly #refreshing = new Map<string, Promise<string>>();
+  /// The refresh under way per account: every caller waits on the one.
+  readonly #refreshing = new Map<string, Deferred.Deferred<string, CoreError>>();
   #tracer: Tracer | null = null;
   /// Since when (monotonic ms) a refresh has had no answer.
   #unanswered: number | null = null;
@@ -81,12 +83,8 @@ export class Accounts {
   }
 
   /// Loads the stored accounts.
-  static async load(host: Host): Promise<Accounts> {
-    let list: StoredAccount[] = [];
-    try {
-      list = readStored(parseJson(await host.storageGet(STORAGE_KEY))) ?? [];
-    } catch {}
-    return new Accounts(host, list);
+  static load(host: Host): Effect.Effect<Accounts> {
+    return Effect.map(Effect.orElseSucceed(host.storageGet(STORAGE_KEY), () => null), (bytes) => new Accounts(host, readStored(parseJson(bytes)) ?? []));
   }
 
   setTracer(tracer: Tracer): void {
@@ -107,142 +105,144 @@ export class Accounts {
   }
 
   /// Starts a sign-in: stores the PKCE verifier and state, returns the URL to open.
-  async beginSignIn(redirectUri: string, returnTo: string, deviceName: string): Promise<string> {
-    const verifier = this.#secret();
-    const state = this.#secret();
-    const pending: PendingLogin = { verifier, state, return_to: returnTo, redirect_uri: redirectUri };
-    try {
-      await this.#host.storageSet(LOGIN_KEY, toJsonBytes(pending));
-    } catch (e) {
-      throw asCoreError(e);
-    }
-    const query = (
-      [
-        ["state", state],
-        ["code_challenge", challenge(verifier)],
-        ["code_challenge_method", "S256"],
-        ["redirect_uri", redirectUri],
-        ["name", deviceName],
-      ] as [string, string][]
-    )
-      .map(([k, v]) => `${k}=${encodeComponent(v)}`)
-      .join("&");
-    return `${this.#host.cloudOrigin()}/v1/auth/google/start?${query}`;
+  beginSignIn(redirectUri: string, returnTo: string, deviceName: string): Effect.Effect<string, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const verifier = this.#secret();
+      const state = this.#secret();
+      const pending: PendingLogin = { verifier, state, return_to: returnTo, redirect_uri: redirectUri };
+      yield* Effect.mapError(this.#host.storageSet(LOGIN_KEY, toJsonBytes(pending)), asCoreError);
+      const query = (
+        [
+          ["state", state],
+          ["code_challenge", challenge(verifier)],
+          ["code_challenge_method", "S256"],
+          ["redirect_uri", redirectUri],
+          ["name", deviceName],
+        ] as [string, string][]
+      )
+        .map(([k, v]) => `${k}=${encodeComponent(v)}`)
+        .join("&");
+      return `${this.#host.cloudOrigin()}/v1/auth/google/start?${query}`;
+    });
   }
 
   /// Finishes a sign-in from the callback's query string. Returns the account and where to go next.
-  async completeSignIn(query: string): Promise<[AccountView, string]> {
-    const params = parseQuery(query);
-    const param = (k: string) => params.find(([n]) => n === k)?.[1];
-    let pending: PendingLogin | null = null;
-    try {
-      const raw = parseJson(await this.#host.storageGet(LOGIN_KEY));
-      if (isObject(raw) && ["verifier", "state", "return_to", "redirect_uri"].every((k) => typeof raw[k] === "string")) pending = raw as unknown as PendingLogin;
-    } catch {}
-    try {
-      await this.#host.storageDelete(LOGIN_KEY);
-    } catch {}
-    const error = param("error");
-    if (error !== undefined && error !== "") {
-      throw error === "login_cancelled" ? new CoreError("login_cancelled", t("core-logic.accounts.login.cancelled")) : new CoreError("login_failed", t("core-logic.accounts.login.failed"));
-    }
-    if (!pending || param("state") !== pending.state) throw new CoreError("login_state_mismatch", t("core-logic.accounts.login.state_mismatch"));
-    const expired = () => new CoreError("login_expired", t("core-logic.accounts.login.expired"));
-    const body = { code: param("code") ?? null, code_verifier: pending.verifier, redirect_uri: pending.redirect_uri };
-    let response: HttpResponse;
-    try {
-      response = await this.#post("/v1/auth/token", null, body, null);
-    } catch {
-      throw expired();
-    }
-    if (!ok(response)) throw expired().withStatus(response.status);
-    const tokens = readTokens(parseJson(response.body));
-    if (!tokens) throw expired();
-    const account: StoredAccount = {
-      sub: tokens.subject,
-      email: tokens.email,
-      name: tokens.name ?? "",
-      picture: "",
-      access: tokens.access_token,
-      refresh: tokens.refresh_token,
-      access_expires: tokens.expires_at,
-    };
-    await this.#put(account);
-    const picture = await this.#picture(account.access);
-    if (picture !== null) {
-      account.picture = picture;
-      await this.#put(account).catch(() => undefined);
-    }
-    const returnTo = pending.return_to === "" || pending.return_to.startsWith("/auth/") ? "/" : pending.return_to;
-    return [view(account), returnTo];
+  completeSignIn(query: string): Effect.Effect<[AccountView, string], CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const params = parseQuery(query);
+      const param = (k: string) => params.find(([n]) => n === k)?.[1];
+      // A login is good for one try, whatever its outcome.
+      const raw = parseJson(yield* Effect.orElseSucceed(this.#host.storageGet(LOGIN_KEY), () => null));
+      const pending = isObject(raw) && ["verifier", "state", "return_to", "redirect_uri"].every((k) => typeof raw[k] === "string") ? (raw as unknown as PendingLogin) : null;
+      yield* Effect.ignore(this.#host.storageDelete(LOGIN_KEY));
+      const error = param("error");
+      if (error !== undefined && error !== "") {
+        return yield* Effect.fail(error === "login_cancelled" ? new CoreError("login_cancelled", t("core-logic.accounts.login.cancelled")) : new CoreError("login_failed", t("core-logic.accounts.login.failed")));
+      }
+      if (!pending || param("state") !== pending.state) return yield* Effect.fail(new CoreError("login_state_mismatch", t("core-logic.accounts.login.state_mismatch")));
+      const expired = () => new CoreError("login_expired", t("core-logic.accounts.login.expired"));
+      const body = { code: param("code") ?? null, code_verifier: pending.verifier, redirect_uri: pending.redirect_uri };
+      const response = yield* Effect.mapError(this.#post("/v1/auth/token", null, body, null), expired);
+      if (!ok(response)) return yield* Effect.fail(expired().withStatus(response.status));
+      const tokens = readTokens(parseJson(response.body));
+      if (!tokens) return yield* Effect.fail(expired());
+      const account: StoredAccount = {
+        sub: tokens.subject,
+        email: tokens.email,
+        name: tokens.name ?? "",
+        picture: "",
+        access: tokens.access_token,
+        refresh: tokens.refresh_token,
+        access_expires: tokens.expires_at,
+      };
+      yield* this.#put(account);
+      // The picture comes with the profile; fetched once, best effort.
+      const picture = yield* this.#picture(account.access);
+      if (picture !== null) {
+        account.picture = picture;
+        yield* Effect.ignore(this.#put(account));
+      }
+      const returnTo = pending.return_to === "" || pending.return_to.startsWith("/auth/") ? "/" : pending.return_to;
+      return [view(account), returnTo] as [AccountView, string];
+    });
   }
 
-  /// A usable access token, refreshing it when it expires within a minute. A refused refresh forgets the account.
-  async accessToken(sub: string): Promise<string> {
-    const now = this.#host.nowMs() / 1000;
-    const a = this.#get(sub);
-    if (!a) throw CoreError.signedOut(t("core-logic.accounts.signed_out"));
-    if (a.access_expires - 60 > now) return a.access;
-    let refresh = this.#refreshing.get(sub);
-    if (!refresh) {
-      refresh = (async () => {
-        try {
-          return await this.#refresh(sub);
-        } finally {
-          this.#refreshing.delete(sub);
-        }
-      })();
-      this.#refreshing.set(sub, refresh);
-    }
-    return refresh;
+  /// A usable access token, refreshing it when it expires within a minute (once at a time per account). A refused
+  /// refresh forgets the account.
+  accessToken(sub: string): Effect.Effect<string, CoreError> {
+    return Effect.suspend(() => {
+      const now = this.#host.nowMs() / 1000;
+      const a = this.#get(sub);
+      if (!a) return Effect.fail(CoreError.signedOut(t("core-logic.accounts.signed_out")));
+      if (a.access_expires - 60 > now) return Effect.succeed(a.access);
+      const existing = this.#refreshing.get(sub);
+      if (existing) return Deferred.await(existing);
+      const done = Deferred.makeUnsafe<string, CoreError>();
+      this.#refreshing.set(sub, done);
+      // The refresh runs to its end whoever waits (it rotates the session): a fiber of its own.
+      Effect.runFork(
+        this.#refresh(sub).pipe(
+          Effect.exit,
+          Effect.flatMap((exit) =>
+            Effect.sync(() => {
+              this.#refreshing.delete(sub);
+              Deferred.doneUnsafe(done, exit);
+            }),
+          ),
+        ),
+      );
+      return Deferred.await(done);
+    });
   }
 
-  async signOut(sub: string): Promise<void> {
-    const account = this.#get(sub);
-    if (account) await this.#post("/v1/auth/logout", account.refresh, { all: false }, null).catch(() => undefined);
-    await this.#forget(sub);
+  signOut(sub: string): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const account = this.#get(sub);
+      if (account) yield* Effect.ignore(this.#post("/v1/auth/logout", account.refresh, { all: false }, null));
+      yield* this.#forget(sub);
+    });
   }
 
   /// Takes over the accounts a page kept before the core existed (camelCase fields). An account already here is
   /// replaced only by a newer session.
-  async migrate(accounts: unknown): Promise<void> {
-    let raw = accounts;
-    if (typeof raw === "string") {
-      const parsed = parseJson(raw);
-      if (parsed === undefined) throw CoreError.invalid(t("core-logic.accounts.invalid_json"));
-      raw = parsed;
-    } else if (raw === null) return;
-    if (!Array.isArray(raw)) throw CoreError.invalid(t("core-logic.accounts.not_array"));
-    let changed = false;
-    for (const item of raw) {
-      if (!isObject(item)) continue;
-      const { sub, email, access, refresh, accessExpires } = item;
-      if (typeof sub !== "string" || typeof email !== "string" || typeof access !== "string" || typeof refresh !== "string" || typeof accessExpires !== "number") continue;
-      const name = item.name === undefined ? "" : item.name;
-      const picture = item.picture === undefined ? "" : item.picture;
-      if (typeof name !== "string" || typeof picture !== "string") continue;
-      const account: StoredAccount = { sub, email, name, picture, access, refresh, access_expires: accessExpires };
-      const existing = this.#list.findIndex((a) => a.sub === sub);
-      if (existing < 0) this.#list.push(account);
-      else if (this.#list[existing].access_expires < accessExpires) this.#list[existing] = account;
-      changed = true;
-    }
-    if (changed) await this.#save();
+  migrate(accounts: unknown): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      let raw = accounts;
+      if (typeof raw === "string") {
+        const parsed = parseJson(raw);
+        if (parsed === undefined) return yield* Effect.fail(CoreError.invalid(t("core-logic.accounts.invalid_json")));
+        raw = parsed;
+      } else if (raw === null) return;
+      if (!Array.isArray(raw)) return yield* Effect.fail(CoreError.invalid(t("core-logic.accounts.not_array")));
+      let changed = false;
+      for (const item of raw) {
+        if (!isObject(item)) continue;
+        const { sub, email, access, refresh, accessExpires } = item;
+        if (typeof sub !== "string" || typeof email !== "string" || typeof access !== "string" || typeof refresh !== "string" || typeof accessExpires !== "number") continue;
+        const name = item.name === undefined ? "" : item.name;
+        const picture = item.picture === undefined ? "" : item.picture;
+        if (typeof name !== "string" || typeof picture !== "string") continue;
+        const account: StoredAccount = { sub, email, name, picture, access, refresh, access_expires: accessExpires };
+        const existing = this.#list.findIndex((a) => a.sub === sub);
+        if (existing < 0) this.#list.push(account);
+        else if (this.#list[existing].access_expires < accessExpires) this.#list[existing] = account;
+        changed = true;
+      }
+      if (changed) yield* this.#save();
+    });
   }
 
   /// Takes the stored credentials of `sub` when another core wrote newer ones; their access token when still good.
-  async #adoptStored(sub: string): Promise<string | null> {
-    let list: StoredAccount[] | null = null;
-    try {
-      list = readStored(parseJson(await this.#host.storageGet(STORAGE_KEY)));
-    } catch {}
-    const theirs = list?.find((a) => a.sub === sub);
-    const ours = this.#get(sub);
-    if (!theirs || !ours || theirs.refresh === ours.refresh) return null;
-    const good = theirs.access_expires - 60 > this.#host.nowMs() / 1000;
-    const i = this.#list.findIndex((a) => a.sub === sub);
-    if (i >= 0) this.#list[i] = theirs;
-    return good ? theirs.access : null;
+  #adoptStored(sub: string): Effect.Effect<string | null> {
+    return Effect.map(Effect.orElseSucceed(this.#host.storageGet(STORAGE_KEY), () => null), (bytes) => {
+      const theirs = readStored(parseJson(bytes))?.find((a) => a.sub === sub);
+      const ours = this.#get(sub);
+      if (!theirs || !ours || theirs.refresh === ours.refresh) return null;
+      const good = theirs.access_expires - 60 > this.#host.nowMs() / 1000;
+      const i = this.#list.findIndex((a) => a.sub === sub);
+      if (i >= 0) this.#list[i] = theirs;
+      return good ? theirs.access : null;
+    });
   }
 
   #get(sub: string): StoredAccount | undefined {
@@ -255,63 +255,64 @@ export class Accounts {
     return this.#get(sub);
   }
 
-  async #refresh(sub: string): Promise<string> {
-    const adopted = await this.#adoptStored(sub);
-    if (adopted !== null) return adopted;
-    const account = this.#get(sub);
-    if (!account) throw CoreError.signedOut(t("core-logic.accounts.signed_out"));
-    const body = { request_id: ulid(this.#host) };
-    const span = this.#tracer?.always("auth.refresh", Kind.Client) ?? null;
-    if (span && this.#unanswered !== null) span.set("stillfail.auth.unanswered_ago_ms", Math.trunc(this.#host.monotonicMs() - this.#unanswered));
-    const traceparent = span ? span.context.traceparent() : null;
-    this.#unanswered = this.#host.monotonicMs();
-    let response: HttpResponse;
-    try {
-      response = await this.#post("/v1/auth/refresh", account.refresh, body, traceparent);
-    } catch (e) {
-      const error = asCoreError(e);
+  #refresh(sub: string): Effect.Effect<string, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      // Another core on the same storage may have refreshed already: its credentials are the current ones.
+      const adopted = yield* this.#adoptStored(sub);
+      if (adopted !== null) return adopted;
+      const account = this.#get(sub);
+      if (!account) return yield* Effect.fail(CoreError.signedOut(t("core-logic.accounts.signed_out")));
+      const body = { request_id: ulid(this.#host) };
+      // Every refresh is a trace of its own, recorded whatever the sampling.
+      const span = this.#tracer?.always("auth.refresh", Kind.Client) ?? null;
+      if (span && this.#unanswered !== null) span.set("stillfail.auth.unanswered_ago_ms", Math.trunc(this.#host.monotonicMs() - this.#unanswered));
+      const traceparent = span ? span.context.traceparent() : null;
+      this.#unanswered = this.#host.monotonicMs();
+      const sent = yield* Effect.result(Effect.mapError(this.#post("/v1/auth/refresh", account.refresh, body, traceparent), asCoreError));
+      if (sent._tag === "Failure") {
+        if (span) {
+          span.set("error.type", sent.failure.code);
+          span.fail();
+          span.end();
+        }
+        return yield* Effect.fail(sent.failure);
+      }
+      const response = sent.success;
+      this.#unanswered = null;
       if (span) {
-        span.set("error.type", error.code);
-        span.fail();
+        span.set("http.response.status_code", response.status);
+        if (!ok(response)) {
+          const code = parseJson(response.body);
+          span.set("error.type", isObject(code) && typeof code.error === "string" ? code.error : `http_${response.status}`);
+          span.fail();
+        }
         span.end();
       }
-      throw error;
-    }
-    this.#unanswered = null;
-    if (span) {
-      span.set("http.response.status_code", response.status);
-      if (!ok(response)) {
-        const code = parseJson(response.body);
-        const c = isObject(code) && typeof code.error === "string" ? code.error : `http_${response.status}`;
-        span.set("error.type", c);
-        span.fail();
+      if (response.status === 401) {
+        yield* Effect.ignore(this.#forget(sub));
+        return yield* Effect.fail(CoreError.signedOut(t("core-logic.accounts.session_expired", { email: account.email })).withStatus(401));
       }
-      span.end();
-    }
-    if (response.status === 401) {
-      await this.#forget(sub).catch(() => undefined);
-      throw CoreError.signedOut(t("core-logic.accounts.session_expired", { email: account.email })).withStatus(401);
-    }
-    if (!ok(response)) throw new CoreError("refresh_failed", t("core-logic.accounts.refresh_failed", { status: response.status }), response.status);
-    const tokens = readTokens(parseJson(response.body));
-    if (!tokens) throw new CoreError("refresh_failed", t("core-logic.accounts.refresh_unreadable"));
-    const name = tokens.name ? tokens.name : account.name;
-    // The new tokens are good even if they cannot be written down.
-    await this.#put({ ...account, access: tokens.access_token, refresh: tokens.refresh_token, access_expires: tokens.expires_at, name }).catch(() => undefined);
-    return tokens.access_token;
+      if (!ok(response)) return yield* Effect.fail(new CoreError("refresh_failed", t("core-logic.accounts.refresh_failed", { status: response.status }), response.status));
+      const tokens = readTokens(parseJson(response.body));
+      if (!tokens) return yield* Effect.fail(new CoreError("refresh_failed", t("core-logic.accounts.refresh_unreadable")));
+      const name = tokens.name ? tokens.name : account.name;
+      // The new tokens are good even if they cannot be written down.
+      yield* Effect.ignore(this.#put({ ...account, access: tokens.access_token, refresh: tokens.refresh_token, access_expires: tokens.expires_at, name }));
+      return tokens.access_token;
+    });
   }
 
-  async #picture(access: string): Promise<string | null> {
-    try {
-      const response = await this.#host.fetch({ method: "GET", url: `${this.#host.cloudOrigin()}/v1/me`, headers: [["authorization", `Bearer ${access}`]], body: null });
-      const picture = pointer(parseJson(response.body), "/user/picture");
-      return typeof picture === "string" && picture !== "" ? picture : null;
-    } catch {
-      return null;
-    }
+  #picture(access: string): Effect.Effect<string | null> {
+    return this.#host.fetch({ method: "GET", url: `${this.#host.cloudOrigin()}/v1/me`, headers: [["authorization", `Bearer ${access}`]], body: null }).pipe(
+      Effect.map((response) => {
+        const picture = pointer(parseJson(response.body), "/user/picture");
+        return typeof picture === "string" && picture !== "" ? picture : null;
+      }),
+      Effect.orElseSucceed(() => null),
+    );
   }
 
-  async #post(path: string, bearer: string | null, body: unknown, traceparent: string | null): Promise<HttpResponse> {
+  #post(path: string, bearer: string | null, body: unknown, traceparent: string | null): Effect.Effect<HttpResponse, HostError> {
     const headers: [string, string][] = [["content-type", "application/json"]];
     if (traceparent !== null) headers.push(["traceparent", traceparent]);
     if (bearer !== null) headers.push(["authorization", `Bearer ${bearer}`]);
@@ -321,31 +322,30 @@ export class Accounts {
   }
 
   /// Adds or replaces an account, keeping its place in the list.
-  async #put(account: StoredAccount): Promise<void> {
-    const i = this.#list.findIndex((a) => a.sub === account.sub);
-    if (i >= 0) this.#list[i] = stored(account);
-    else this.#list.push(stored(account));
-    await this.#save();
+  #put(account: StoredAccount): Effect.Effect<void, CoreError> {
+    return Effect.suspend(() => {
+      const i = this.#list.findIndex((a) => a.sub === account.sub);
+      if (i >= 0) this.#list[i] = stored(account);
+      else this.#list.push(stored(account));
+      return this.#save();
+    });
   }
 
-  async #forget(sub: string): Promise<void> {
-    const before = this.#list.length;
-    this.#list = this.#list.filter((a) => a.sub !== sub);
-    if (this.#list.length === before) return;
-    await this.#save();
+  #forget(sub: string): Effect.Effect<void, CoreError> {
+    return Effect.suspend(() => {
+      const before = this.#list.length;
+      this.#list = this.#list.filter((a) => a.sub !== sub);
+      return this.#list.length === before ? Effect.void : this.#save();
+    });
   }
 
   /// Writes the list and tells the listeners. Memory is updated first, so a failed write still changes this session.
-  async #save(): Promise<void> {
-    const bytes = toJsonBytes(this.#list);
-    let failed: unknown = null;
-    try {
-      await this.#host.storageSet(STORAGE_KEY, bytes);
-    } catch (e) {
-      failed = e;
-    }
-    for (const listener of [...this.#listeners]) listener();
-    if (failed !== null) throw asCoreError(failed);
+  #save(): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const written = yield* Effect.result(this.#host.storageSet(STORAGE_KEY, toJsonBytes(this.#list)));
+      for (const listener of [...this.#listeners]) listener();
+      if (written._tag === "Failure") return yield* Effect.fail(asCoreError(written.failure));
+    });
   }
 
   #secret(): string {

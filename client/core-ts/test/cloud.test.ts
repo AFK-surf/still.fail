@@ -1,4 +1,6 @@
 // client/core/src/cloud.rs, status.rs, workspace.rs, ops.rs and trace.rs tests, ported.
+import { Effect } from "effect";
+import { run } from "./run.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Accounts, STORAGE_KEY } from "../src/accounts.ts";
@@ -20,7 +22,7 @@ holdLanguage();
 async function cloud(host: FakeHost) {
   host.store(STORAGE_KEY, [{ sub: "s", email: "s@x.com", name: "", picture: "", access: "tok", refresh: "ref", access_expires: Date.now() / 1000 + 3600 }]);
   const runner = new Runner(host.time.clock);
-  return new Cloud(host, await Accounts.load(host), new Tracer(host, runner, 1), new Status(host, runner));
+  return new Cloud(host, await run(Accounts.load(host)), new Tracer(host, runner, 1), new Status(host, runner));
 }
 const header = (r: { headers: [string, string][] }, name: string) => r.headers.find(([k]) => k === name)?.[1];
 
@@ -28,8 +30,8 @@ test("request_adds_the_token_and_json", async () => {
   const host = new FakeHost();
   host.onFetch(() => jsonResponse(200, { ok: true }));
   const c = await cloud(host);
-  assert.deepEqual(await c.me("s"), { ok: true });
-  await c.request("s", "PATCH", "/v1/workspaces/w", { name: "新" });
+  assert.deepEqual(await run(c.me("s")), { ok: true });
+  await run(c.request("s", "PATCH", "/v1/workspaces/w", { name: "新" }));
   const [a, b] = host.requests;
   assert.deepEqual([a.method, a.url], ["GET", "https://stillfail.test/v1/me"]);
   assert.equal(header(a, "authorization"), "Bearer tok");
@@ -56,10 +58,10 @@ test("errors_map_to_codes_and_messages", async () => {
     }
     throw new Error("ok");
   };
-  assert.deepEqual(await err(c.request("s", "GET", "/v1/known", null)), { code: "workspace_not_found", message: "找不到这个 workspace，或者你已经不在里面了", status: 404 });
-  assert.deepEqual(await err(c.request("s", "GET", "/v1/unknown", null)), { code: "something_new", message: "something_new", status: 409 });
-  assert.deepEqual(await err(c.request("s", "GET", "/v1/html", null)), { code: "http_502", message: "http_502", status: 502 });
-  assert.equal((await err(c.me("nobody"))).code, "signed_out");
+  assert.deepEqual(await err(run(c.request("s", "GET", "/v1/known", null))), { code: "workspace_not_found", message: "找不到这个 workspace，或者你已经不在里面了", status: 404 });
+  assert.deepEqual(await err(run(c.request("s", "GET", "/v1/unknown", null))), { code: "something_new", message: "something_new", status: 409 });
+  assert.deepEqual(await err(run(c.request("s", "GET", "/v1/html", null))), { code: "http_502", message: "http_502", status: 502 });
+  assert.equal((await err(run(c.me("nobody")))).code, "signed_out");
   assert.equal(host.requests.length, 3);
 });
 
@@ -67,7 +69,7 @@ test("a_credential_is_asked_for_the_device", async () => {
   const host = new FakeHost();
   host.onFetch(() => jsonResponse(200, { credential: "c", issued_at: 1.0, expires_at: 10.0, relay_url: "https://relay" }));
   const c = await cloud(host);
-  const credential = await c.credential("s", "ws 1", "dev-key");
+  const credential = await run(c.credential("s", "ws 1", "dev-key"));
   assert.deepEqual([credential.credential, credential.expires_at], ["c", 10]);
   const r = host.requests[0];
   assert.deepEqual([r.method, r.url], ["POST", "https://stillfail.test/v1/workspaces/ws%201/credential"]);
@@ -226,7 +228,7 @@ test("spans_nest_and_go_out_in_one_batch", async () => {
   const host = new FakeHost();
   const tracer = new Tracer(host, new Runner(host.time.clock), 1);
   const bodies: unknown[] = [];
-  tracer.setExport(async (b) => void bodies.push(parseJson(b)));
+  tracer.setExport((b) => Effect.sync(() => void bodies.push(parseJson(b))));
   const root = tracer.root("chat.open", Kind.Internal);
   root.set("stillfail.station", "st");
   const context = root.context;
@@ -259,7 +261,7 @@ test("nothing_is_recorded_when_off_and_a_dropped_span_is_cancelled", async () =>
   const host = new FakeHost();
   const off = new Tracer(host, new Runner(host.time.clock), 0);
   const bodies: unknown[] = [];
-  off.setExport(async (b) => void bodies.push(parseJson(b)));
+  off.setExport((b) => Effect.sync(() => void bodies.push(parseJson(b))));
   const root = off.root("chat.send", Kind.Internal);
   assert.ok(root.context.traceparent().endsWith("-00"));
   off.enter(root.context, () => off.span("POST /admin/api/threads/1/messages", Kind.Client).end());
@@ -269,7 +271,7 @@ test("nothing_is_recorded_when_off_and_a_dropped_span_is_cancelled", async () =>
   assert.deepEqual(host.time.sleeps, []);
   const on = new Tracer(host, new Runner(host.time.clock), 1);
   const onBodies: unknown[] = [];
-  on.setExport(async (b) => void onBodies.push(parseJson(b)));
+  on.setExport((b) => Effect.sync(() => void onBodies.push(parseJson(b))));
   on.root("chat.open", Kind.Internal).cancel();
   await host.time.pass(EXPORT_MS + 20, 100);
   assert.deepEqual((exported(onBodies)[0].attributes as unknown[])[0], { key: "stillfail.cancelled", value: { boolValue: true } });

@@ -10,7 +10,9 @@ export type Ctx = {
   disconnect(): void;
 };
 
-export type Step = { name: string; run(ctx: Ctx): void | Promise<void>; wait?: number };
+/// `deliberate`: the TS core is meant to show something else at this step (docs/core-ts.md, 刻意不同), and why; the end
+/// state is still compared.
+export type Step = { name: string; run(ctx: Ctx): void | Promise<void>; wait?: number; deliberate?: string };
 
 const call = (id: number, name: string, params?: unknown) => (ctx: Ctx) => ctx.send(params === undefined ? { id, call: name } : { id, call: name, params });
 const sub = (id: number, topic: unknown) => (ctx: Ctx) => ctx.send({ id, subscribe: topic });
@@ -63,6 +65,7 @@ export const SCRIPT: Step[] = [
   },
   {
     name: "the cloud says bob's workspaces changed",
+    deliberate: "rule 6: an account's workspaces changing reads each of them again (the Rust core only the list, until its socket reopens)",
     run: (ctx) => {
       ctx.cloud.workspaces.get("ws2")!.name = "个人空间";
       ctx.cloud.push({ type: "workspaces" }, "u-bob");
@@ -70,6 +73,7 @@ export const SCRIPT: Step[] = [
   },
   {
     name: "the events sockets drop and come back",
+    deliberate: "the step before: what the Rust core catches up on here the TS core had already",
     run: (ctx) => {
       for (const s of ctx.cloud.sockets) s.ws.terminate();
     },

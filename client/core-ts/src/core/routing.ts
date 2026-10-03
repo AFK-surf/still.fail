@@ -1,71 +1,65 @@
-// Topic routing and derived subscription values (core/routing.rs): station topics go to the stations module, views to
-// the views, the account topics are kept here, the core's own are computed when they go out.
+// Topic routing and the values the core computes as they go out (core/routing.rs). Subscriptions only read what is
+// held (rule 6): nothing here asks the network for anything; a topic with nothing held yet shows nothing (or why it
+// cannot have anything), and fills in as the sync brings it.
 import type { Inner } from "../core.ts";
-import { isView, topicStation, type Topic } from "../protocol.ts";
+import { CoreError } from "../error.ts";
+import { t } from "../i18n.ts";
 import { RECHECKING } from "../station/words.ts";
 import * as status from "../status.ts";
+import type { Topic } from "../protocol.ts";
 import type { Source, Value } from "../store.ts";
-import * as accountState from "./account_state.ts";
 
-/// The topics the core keeps itself and computes when they go out (status.rs, doing.rs, …).
-const OWN = new Set(["status", "notices", "notify", "previewLoad", "doing", "adbShare", "slackTokens", "connectFlow", "decisionForm", "profileFlow"]);
-/// Kept on the device (data.ts) and nowhere else.
-const KEPT = new Set(["draft", "prefs"]);
-
-/// What a module that owns topics of its own plugs in (pill.ts, choose.ts, jobs.ts, changelog.ts, the views…).
+/// What a module that owns topics of its own plugs in (the station topics, the views, …).
 export interface Owner {
   owns(topic: Topic): boolean;
-  start(topic: Topic): void;
-  stop(topic: Topic): void;
+  start?(topic: Topic): void;
+  stop?(topic: Topic): void;
   compute?(topic: Topic): Value | undefined;
 }
 
 export class Router implements Source {
   readonly #core: Inner;
-  /// Later modules, in the order the Rust router asks them.
   readonly owners: Owner[] = [];
-  /// The core's own topics' values, by topic name (notices, notify, adbShare, the flows…).
-  readonly computers = new Map<string, (topic: Topic) => Value | undefined>();
 
   constructor(core: Inner) {
     this.#core = core;
   }
 
   start(topic: Topic): void {
-    const core = this.#core;
-    // Always kept: only computed while shown.
-    if (OWN.has(topic.topic) || KEPT.has(topic.topic)) {
-      core.store.invalidate(topic);
-      return;
-    }
     const owner = this.owners.find((o) => o.owns(topic));
-    if (owner) return owner.start(topic);
-    if (isView(topic) || topicStation(topic) !== null) {
-      core.parts.stations?.start(topic);
-      return;
-    }
-    accountState.startTopic(core, topic);
+    if (owner?.start) owner.start(topic);
+    // Computed when it goes out: its first value now.
+    this.#core.store.invalidate(topic);
   }
 
   stop(topic: Topic): void {
-    const core = this.#core;
-    if (OWN.has(topic.topic) || KEPT.has(topic.topic)) return;
-    const owner = this.owners.find((o) => o.owns(topic));
-    if (owner) return owner.stop(topic);
-    if (isView(topic) || topicStation(topic) !== null) {
-      core.parts.stations?.stop(topic);
-      return;
-    }
-    accountState.stopTopic(core, topic);
+    this.owners.find((o) => o.owns(topic))?.stop?.(topic);
   }
 
   compute(topic: Topic): Value | undefined {
     const core = this.#core;
     switch (topic.topic) {
+      case "accounts":
+        return { ok: core.accounts.list() };
+      case "workspaces":
+        // What the accounts' `/v1/me` said, as held; nothing while no account's is.
+        if (core.accounts.list().length > 0 && !core.accounts.list().some((a) => core.data.record("me", a.sub) !== undefined || core.cloudSync.mes.has(a.sub))) return undefined;
+        return { ok: core.cloudSync.workspacesValue() };
+      case "workspace": {
+        const error = core.cloudSync.workspaceError(topic.workspace as string);
+        return error ? { err: error } : undefined;
+      }
+      case "loginSessions":
+      case "admin": {
+        // An account signed out: nothing of it is shown any more.
+        if (!core.accounts.list().some((a) => a.sub === topic.account)) return { err: CoreError.signedOut(t("core-logic.accounts.signed_out")) };
+        const error = core.cloudSync.topicError(topic);
+        return error ? { err: error } : undefined;
+      }
       case "status":
         return { ok: this.statusValue(typeof topic.workspace === "string" ? topic.workspace : null) };
       case "doing": {
-        // A write on a station that went quiet is being asked again (station.ts): it says so.
+        // A write on a station that went quiet is being asked again: it says so.
         const rechecking = (params: Map<string, string>) => {
           const address = params.get("station");
           return address !== undefined && core.workspaces.ofStation(address).status.waits({ station: address }, RECHECKING());
@@ -77,10 +71,7 @@ export class Router implements Source {
       case "prefs":
         return { ok: {} };
     }
-    const own = this.computers.get(topic.topic);
-    if (own) return own(topic);
-    const owner = this.owners.find((o) => o.owns(topic));
-    return owner?.compute?.(topic);
+    return this.owners.find((o) => o.owns(topic))?.compute?.(topic);
   }
 
   /// What is waited on: of a workspace, its own waits, its account's socket and the relay opened for no station; of
@@ -89,10 +80,9 @@ export class Router implements Source {
     const core = this.#core;
     if (workspace !== null) {
       const of = core.workspaces.of(workspace);
-      const owner = of.owner !== null ? [of.owner] : [];
       return status.value([
         [of.status, "all"],
-        [core.status, { for: owner }],
+        [core.status, { for: of.owner !== null ? [of.owner] : [] }],
       ]);
     }
     const parts: [status.Status, status.Take][] = core.workspaces.all().map((w) => [w.status, "all"]);

@@ -2,6 +2,7 @@
 // still.fail cloud, exported as OTLP JSON to still.fail cloud's `/v1/telemetry/traces`. JavaScript has no way to carry
 // a context across awaits on every host (the Rust core sets it around each poll), so here the context is current
 // around synchronous calls (`enter`) and is handed on explicitly to what runs later (`ctx` parameters).
+import { Effect } from "effect";
 import type { Host } from "./host.ts";
 import type { Runner } from "./runtime.ts";
 import { hex, toJsonBytes } from "./util.ts";
@@ -36,7 +37,7 @@ export class SpanContext {
 export const Kind = { Internal: 1, Client: 3 } as const;
 export type Kind = (typeof Kind)[keyof typeof Kind];
 
-export type Export = (body: Uint8Array) => Promise<void>;
+export type Export = (body: Uint8Array) => Effect.Effect<void>;
 
 /// What a host is, for Axiom's `service.name` and `os.type` (set by the host's entry).
 export const service = { name: "stillfail-native", os: "macos" };
@@ -120,10 +121,7 @@ export class Tracer {
     this.#buffer.push(span);
     if (this.#scheduled) return;
     this.#scheduled = true;
-    this.#runner.spawn(async () => {
-      await this.#runner.sleep(EXPORT_MS);
-      this.flush();
-    });
+    this.#runner.fork(Effect.sleep(EXPORT_MS).pipe(Effect.andThen(Effect.sync(() => this.flush()))));
   }
 
   /// Sends what waits now, if there is somewhere to send it.
@@ -142,7 +140,7 @@ export class Tracer {
         },
       ],
     };
-    this.#runner.spawn(() => this.enter(null, () => e(toJsonBytes(body))));
+    this.#runner.fork(e(toJsonBytes(body)));
   }
 }
 
