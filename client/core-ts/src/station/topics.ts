@@ -194,9 +194,10 @@ export class StationTopics implements Owner {
       first = Math.max(end - TRANSCRIPT_PAGE, ns.length > 0 ? ns[0] : 0);
       this.#firsts.set(tk, first);
     }
-    // The run held from `first` to the end.
-    let from = first;
-    while (from < end && !items.has(from)) from++;
+    // The unbroken run that ends the transcript, back as far as `first`.
+    let from = end;
+    while (from > first && items.has(from - 1)) from--;
+    this.#firsts.set(tk, from);
     const timeline: unknown[] = [];
     for (let n = from; n < end && items.has(n); n++) timeline.push(items.get(n));
     const value: Record<string, unknown> = {

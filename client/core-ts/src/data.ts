@@ -495,8 +495,8 @@ export class Data {
   }
 
   /// Items into a log, by number (an entry's `n`, a transcript item's index); those it has that are the same change
-  /// nothing. `truncate`: nothing after them is kept (a transcript written anew from `from`).
-  putItems(table: "entry" | "transcript", station: string, id: string, items: [number, unknown][], truncate = false): Effect.Effect<void> {
+  /// nothing. `cutAfter`: nothing past that number is kept (a transcript written anew, ending there).
+  putItems(table: "entry" | "transcript", station: string, id: string, items: [number, unknown][], cutAfter: number | null = null): Effect.Effect<void> {
     return Effect.map(this.log(table, station, id), (log) => {
       const ops: DbOp[] = [];
       for (const [n, value] of items) {
@@ -505,10 +505,9 @@ export class Data {
         log.set(n, copy(value));
         ops.push({ put: { table, key: join([station, id, num(n)]), value: toJsonBytes(value) } });
       }
-      if (truncate && items.length > 0) {
-        const last = Math.max(...items.map(([n]) => n));
+      if (cutAfter !== null) {
         for (const n of [...log.keys()]) {
-          if (n > last) {
+          if (n > cutAfter) {
             log.delete(n);
             ops.push({ delete: { table, key: join([station, id, num(n)]) } });
           }
