@@ -37,6 +37,7 @@ import type { Choose } from "./choose.ts";
 import { installChoose } from "./choose-calls.ts";
 import { Changelog } from "./changelog.ts";
 import { installForms, type Forms } from "./forms-calls.ts";
+import { Loads } from "./preview-load.ts";
 import { envOf, Views } from "./views/views.ts";
 import { isObject } from "./util.ts";
 
@@ -279,7 +280,21 @@ export class Core {
     const span = inner.tracer.root(name, Kind.Internal);
     const station = callStation(call);
     if (station !== null) span.set("stillfail.station", stationId(station));
-    const progress: Progress = (value) => inner.host.emit(client, { id, value });
+    // A preview's resource: its page's progress counts it (preview-load.ts).
+    const loads = call.kind === "stationPreview" ? inner.workspaces.ofStation(call.station).part("previewLoad", () => new Loads()) : null;
+    const resource = loads !== null && call.kind === "stationPreview" ? loads.start(call.station, call.port, call.method, call.path, call.headers, inner.host.nowMs()) : null;
+    if (resource) inner.store.invalidate(resource[0]);
+    const progress: Progress = (value) => {
+      const head = isObject(value) && isObject(value.head) ? value.head : null;
+      if (loads && resource && head && typeof head.status === "number") {
+        loads.head(resource, head.status);
+        // Event streams stay open after they have connected.
+        const stream = Array.isArray(head.headers) && head.headers.some((h) => Array.isArray(h) && typeof h[0] === "string" && h[0].toLowerCase() === "content-type" && typeof h[1] === "string" && h[1].startsWith("text/event-stream"));
+        if (stream) loads.end(resource, inner.host.nowMs(), null);
+        inner.store.invalidate(resource[0]);
+      }
+      inner.host.emit(client, { id, value });
+    };
     const key = `${client}/${id}`;
     const stoppable = cancellable(call);
     const run = execute(inner, call, progress, [client, id], span.context).pipe(
@@ -297,6 +312,12 @@ export class Core {
         Effect.gen(function* () {
           if (stoppable) inner.calls.delete(key);
           const result: { ok: unknown } | { err: CoreError } = exit._tag === "Success" ? { ok: exit.value } : { err: failureOf(exit.cause) };
+          if (loads && resource) {
+            const status = "ok" in result && isObject(result.ok) ? result.ok.status : undefined;
+            if (typeof status === "number") loads.head(resource, status);
+            loads.end(resource, inner.host.nowMs(), "err" in result ? result.err.message : null);
+            inner.store.invalidate(resource[0]);
+          }
           if ("err" in result) {
             span.fail();
             span.set("error.type", result.err.code);

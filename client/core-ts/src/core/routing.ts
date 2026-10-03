@@ -5,6 +5,7 @@ import type { Inner } from "../core.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { RECHECKING } from "../station/words.ts";
+import { Loads } from "../preview-load.ts";
 import * as status from "../status.ts";
 import type { Topic } from "../protocol.ts";
 import type { Source, Value } from "../store.ts";
@@ -70,6 +71,8 @@ export class Router implements Source {
       }
       case "draft":
         return { ok: { text: "", quotes: [], files: [] } };
+      case "previewLoad":
+        return { ok: core.workspaces.ofStation(topic.station as string).part("previewLoad", () => new Loads()).value(topic) };
       case "prefs":
         return { ok: {} };
     }
