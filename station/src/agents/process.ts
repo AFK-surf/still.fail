@@ -55,7 +55,8 @@ const pidAlive = (pid: number) => {
   }
 };
 
-export const findRunner = (data: string, id: string): RunnerInfo | undefined => existingRunners(data).find((r) => r.id === id);
+/// A runner of this id that keeps its process still (its socket there: one on its way out has let it go).
+export const findRunner = (data: string, id: string): RunnerInfo | undefined => existingRunners(data).find((r) => r.id === id && existsSync(r.socket));
 export const outFile = (data: string, id: string) => join(runnersDir(data), `${id}.out`);
 
 /// The connection's socket, which runner.ts keeps to itself: its errors would otherwise go unhandled, and its closing
@@ -187,6 +188,8 @@ export class AgentProcess {
     }
     await Promise.race([this.exited, sleep(1000)]);
     this.conn.done();
+    // The runner itself goes once it has told: waited for, so a process started under its id next is not taken for it.
+    for (let i = 0; i < 200 && pidAlive(this.info.runner); i++) await sleep(10);
   }
 }
 
