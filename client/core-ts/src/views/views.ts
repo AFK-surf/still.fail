@@ -26,6 +26,8 @@ import { presentHistory } from "../history.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import * as marks from "./marks.ts";
+import { usageView } from "./usage.ts";
+import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes } from "./models.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -37,7 +39,7 @@ const u64 = (v: J): number | null => (typeof v === "number" && Number.isInteger(
 
 const DAY_MS = 86_400_000;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "stations", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "longJobs"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "stations", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
 
 /// A station of a scope, as the workspace lists it.
 export type StationInfo = { address: string; id: string; name: string; online: boolean; lastSeen: J; version: J };
@@ -298,7 +300,7 @@ export class Views implements Owner {
   }
 
   owns(topic: Topic): boolean {
-    return VIEW_TOPICS.has(topic.topic) || topic.topic.startsWith("admin") && topic.topic !== "admin";
+    return VIEW_TOPICS.has(topic.topic);
   }
 
   // ── what the views watch ──
@@ -428,6 +430,10 @@ export class Views implements Owner {
         scope = view.scope as string;
         perStation = (s) => [{ topic: "jobs", station: s }];
         break;
+      case "usage":
+        scope = view.scope as string;
+        perStation = (s) => [{ topic: "stationUsage", station: s }];
+        break;
       case "connects":
         scope = view.scope as string;
         perStation = (s) => [{ topic: "overview", station: s }, { topic: "sessions", station: s }, { topic: "threads", station: s }];
@@ -486,7 +492,7 @@ export class Views implements Owner {
         return topics;
       }
       default:
-        if (view.topic.startsWith("admin")) return [{ topic: "admin", account: view.account, list: view.topic === "adminOverview" ? "overview" : view.list }];
+        if (view.topic.startsWith("admin")) return adminSources(view);
         return topics;
     }
     if (view.topic === "chats" || view.topic === "decisions") topics.push({ topic: "prefs" });
@@ -652,6 +658,21 @@ export class Views implements Owner {
         const [value, next] = jobs.chatJobs(chat.ok, this.#clock());
         this.#againIn(view, next);
         return { ok: value };
+      }
+      case "adminList":
+      case "adminItem":
+      case "adminOverview": {
+        const now = this.#core.host.nowMs();
+        return admin(view, (account, list) => this.value({ topic: "admin", account, list }), now, this.#core.host.utcOffsetMin(now));
+      }
+      case "usage": {
+        const scope = view.scope as string;
+        const stations = this.#stationsOr(scope);
+        if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+        const sources = stations.map((s) => ({ address: s.address, name: s.name, online: s.online, value: s.online ? this.value({ topic: "stationUsage", station: s.address }) : undefined }));
+        const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
+        const now = this.#core.host.nowMs();
+        return { ok: usageView(sources, typeof view.days === "number" ? view.days : 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), members_) };
       }
       case "longJobs": {
         const stations = this.#stationsOr(view.scope as string);
