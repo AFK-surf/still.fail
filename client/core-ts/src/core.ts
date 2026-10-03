@@ -8,6 +8,7 @@ import { Cloud } from "./cloud.ts";
 import { parseCall, cancellable, callStation, counts, type Call } from "./core/calls.ts";
 import { execute, handlers, hooks } from "./core/execute.ts";
 import { Router } from "./core/routing.ts";
+import { readKept } from "./kept.ts";
 import { Data } from "./data.ts";
 import { Doing, FAILED_SHOWN_MS, heavy } from "./doing.ts";
 import { CoreError, asCoreError } from "./error.ts";
@@ -133,6 +134,8 @@ export class Core {
       // What was last known is there before any network.
       inner.data = new Data(inner.host, inner.runner);
       yield* inner.data.load;
+      // What the Rust core kept of threads and transcripts, the first time (kept.ts).
+      yield* readKept(inner.host, inner.data);
       prefs.followLang(inner.data);
       inner.workspaces = new Workspaces(inner.host, inner.runner);
       inner.store = new Store(inner.host, inner.runner);

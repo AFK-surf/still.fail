@@ -169,11 +169,11 @@ cloud 的端口、`doing` 的 `since`。
   已为客户端加了：不广播的 lookup、只走 relay 的 endpoint、附加 ALPN、paths/rtt/stats、单向流、关闭原因、网络变化、
   relay 状态、已知地址）。`test/mesh.test.ts` 在 studio 上起本机 station 端点实测（10 个）。
 - 移植的 Rust 测试：present、decisions、jobs、footprint、looks、refs、history、views（43）、usage、admin、notices、attend、
-  pill、choose、changelog、asks、forms、preview_load、mesh 的大部分；合计 249 个测试通过（`node --test --test-force-exit`）。
+  pill、choose、changelog、asks、forms、preview_load、mesh 的大部分；合计 252 个测试通过（`node --test --test-force-exit`）。
+- adb 共享（`src/adb.ts`，host 给 TCP：Node 用 `net`）；Rust kept 分块的一次性导入（`src/kept.ts`，存储标记 `kept-read`，
+  原分块不删，退回 Rust 仍可用）。
 
 还没做（接手从这里开始）：
-- adb 共享（`adb.rs`）：需要 host 给 TCP（Node 有 `net`），link 的 `adb`/`accept` 已经有了。
-- `kept.rs` 的导入：第一次启动把 Rust 的 kept 分块（storage `kept/…`）读出来写成 `entry`/`transcript` 记录。
 - 剩下的 Rust 测试：`core/tests.rs`（56）、`station/tests.rs`（45）、`kept.rs`、`data.rs`、`sync.rs`、`account_state`、
   mesh 里要 relay 服务器的几个。
 - 规则 7（按 key 的增量）：`src/collections.ts`、Store 支持 `keyed`、web 和安卓的 delta 应用器、2000 行的对比测量。
