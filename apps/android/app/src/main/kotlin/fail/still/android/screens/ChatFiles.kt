@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -47,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
@@ -297,17 +299,16 @@ private fun FileItem(station: String, key: String?, file: Attachment, onOpen: ()
 
 /**
  * The box an image takes in the chat, known before it loads: its own proportions (sent with it, or read from its
- * ThumbHash) within 360×300, or a fixed box for images sent before sizes were recorded. A narrower chat shrinks it.
+ * ThumbHash) as mediaSize puts them, or a fixed box for images sent before sizes were recorded. A narrower chat shrinks it.
  */
-fun imageBox(file: Attachment): Pair<Float, Float> {
+fun imageBox(file: Attachment, least: Float = 16f): MediaSize {
     val ratio = ThumbHash.ratio(file.thumbhash)
     val (w, h) = when {
         file.width != null && file.height != null && file.width > 0 && file.height > 0 -> file.width.toFloat() to file.height.toFloat()
         ratio != null -> Math.round(160 * ratio).toFloat() to 160f
-        else -> return 240f to 160f
+        else -> return MediaSize(240f, 160f)
     }
-    val scale = minOf(1f, 360f / w, 300f / h)
-    return maxOf(40f, Math.round(w * scale).toFloat()) to maxOf(40f, Math.round(h * scale).toFloat())
+    return mediaSize(w, h, least)
 }
 
 private val ImageShape = RoundedCornerShape(10.dp)
@@ -346,27 +347,29 @@ private fun ChatImage(station: String, key: String, file: Attachment, size: Modi
     val thumb = FileViewers.id(station, key, file.path)
     ForgetThumb(thumb)
     val radius = with(LocalDensity.current) { 10.dp.toPx() }
-    MediaBox(file, Modifier.clickable(enabled = image != null || failed, onClick = onOpen), size = size, thumb = Modifier.viewerThumb(thumb, radius) { image }) {
-        if (!instant) Waiting(file.thumbhash, loaded = image != null, still = failed)
+    val box = imageBox(file)
+    // Letterboxed only in its own box (one given it is filled).
+    val fit = box.fit.takeIf { size == null }
+    MediaBox(box, Modifier.clickable(enabled = image != null || failed, onClick = onOpen), background = if (fit != null && !failed) Color.Transparent else C.chip, size = size, thumb = Modifier.viewerThumb(thumb, radius, letterbox = fit != null) { image }) {
+        if (!instant) Waiting(file.thumbhash, loaded = image != null, still = failed, fit = fit)
         if (failed) Unavailable(20.dp, null)
-        image?.let { Revealed(it, file.name, reveal) }
+        image?.let { Revealed(it, file.name, reveal, if (fit != null) ContentScale.Fit else ContentScale.Crop) }
     }
 }
 
 @Composable
-private fun MediaBox(file: Attachment, modifier: Modifier, background: Color = C.chip, size: Modifier? = null, thumb: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
-    val (w, h) = imageBox(file)
-    Box((size ?: Modifier.widthIn(max = w.dp).fillMaxWidth().aspectRatio(w / h)).then(thumb).clip(ImageShape).background(background).then(modifier), content = content)
+private fun MediaBox(box: MediaSize, modifier: Modifier, background: Color = C.chip, size: Modifier? = null, thumb: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+    Box((size ?: Modifier.widthIn(max = box.width.dp).fillMaxWidth().aspectRatio(box.width / box.height)).then(thumb).clip(ImageShape).background(background).then(modifier), content = content)
 }
 
 /** The picture, brushed in from the top when `reveal` (blurred to sharp, from a little larger), else just shown. */
 @Composable
-private fun Revealed(image: ImageBitmap, name: String, reveal: Boolean) {
+private fun Revealed(image: ImageBitmap, name: String, reveal: Boolean, scale: ContentScale) {
     val t = remember { Animatable(if (reveal) 0f else 1f) }
     LaunchedEffect(Unit) { if (t.value < 1f) t.animateTo(1f, tween(1100, easing = EaseOut)) }
     val density = LocalDensity.current
     Image(
-        image, name, contentScale = ContentScale.Crop,
+        image, name, contentScale = scale,
         modifier = Modifier.fillMaxSize()
             .graphicsLayer {
                 val k = t.value
@@ -391,14 +394,18 @@ private fun Revealed(image: ImageBitmap, name: String, reveal: Boolean) {
     )
 }
 
-/** What an image's box shows until it loads: its ThumbHash drawn, sent with it; else a few warm blots drifting. Fades once it has. */
+/**
+ * What an image's box shows until it loads: its ThumbHash drawn, sent with it; else a few warm blots drifting. Fades
+ * once it has. Letterboxed, it takes only the image's share of the box (`fit`), centred.
+ */
 @Composable
-private fun BoxScope.Waiting(hash: String?, loaded: Boolean, still: Boolean) {
+private fun BoxScope.Waiting(hash: String?, loaded: Boolean, still: Boolean, fit: Pair<Float, Float>?) {
     val fade = remember { Animatable(1f) }
     LaunchedEffect(loaded) { if (loaded) fade.animateTo(0f, tween(300, delayMillis = 800, easing = EaseOut)) }
     if (fade.value == 0f) return
     val likeness = remember(hash) { ThumbHash.image(hash) }
-    Box(Modifier.matchParentSize().alpha(fade.value).background(C.chip)) {
+    val area = if (fit == null) Modifier.matchParentSize() else Modifier.align(Alignment.Center).fillMaxWidth(fit.first).fillMaxHeight(fit.second)
+    Box(area.alpha(fade.value).background(C.chip).clipToBounds()) {
         if (likeness != null) Image(likeness, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else Blots(still)
     }
@@ -472,7 +479,9 @@ private fun ChatVideo(station: String, key: String, file: Attachment, onOpen: ()
     val thumb = FileViewers.id(station, key, file.path)
     ForgetThumb(thumb)
     val radius = with(LocalDensity.current) { 10.dp.toPx() }
-    MediaBox(file, Modifier.clickable(onClick = onOpen), background = if (failed) C.chip else Color.Black, thumb = Modifier.viewerThumb(thumb, radius) { FileViewers.frames[thumb]?.picture ?: still }) {
+    // Thick enough for the play mark and the name along the bottom.
+    val box = imageBox(file, least = 96f)
+    MediaBox(box, Modifier.clickable(onClick = onOpen), background = if (failed) C.chip else Color.Black, thumb = Modifier.viewerThumb(thumb, radius, letterbox = box.fit != null) { FileViewers.frames[thumb]?.picture ?: still }) {
         if (failed) {
             Column(Modifier.matchParentSize().padding(bottom = 30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
                 IconIn(Icons.Read, 24.dp, C.muted)
@@ -481,7 +490,7 @@ private fun ChatVideo(station: String, key: String, file: Attachment, onOpen: ()
             }
         } else {
             // The frame the viewer was left at, once it has been closed back into here; else the first.
-            (FileViewers.frames[thumb]?.picture ?: still)?.let { Image(it, file.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+            (FileViewers.frames[thumb]?.picture ?: still)?.let { Image(it, file.name, Modifier.fillMaxSize(), contentScale = if (box.fit != null) ContentScale.Fit else ContentScale.Crop) }
             // The web's "▶" at 20px: a solid triangle.
             Box(Modifier.align(Alignment.Center).size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.65f)), contentAlignment = Alignment.Center) {
                 androidx.compose.foundation.Canvas(Modifier.padding(start = 2.dp).size(12.dp, 14.dp)) {

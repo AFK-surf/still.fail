@@ -549,6 +549,9 @@ globalStyle(`${fileCardOpen}:hover ${fileCard}`, { background: vars.hover });
 globalStyle(`button${msgImage} img`, {
   width: "100%", height: "100%", maxWidth: "none", maxHeight: "none", objectFit: "cover", display: "block",
 });
+// A letterboxed image's placeholder takes only its share of the box (sized where it is drawn), centred.
+globalStyle(`${msgImage}[data-letterbox] ${msgImageWait}`, { inset: "auto", top: "50%", left: "50%", transform: "translate(-50%, -50%)" });
+globalStyle(`button${msgImage}[data-letterbox] img`, { objectFit: "contain" });
 globalStyle(`${msgRow} ${msgFiles}`, { justifyContent: "flex-start" });
 /** Here rather than with its class: it comes after .quote-card-input, and wins over it. */
 globalStyle(quoteCardComment, {
@@ -576,6 +579,9 @@ export const msgVideo = style({
   },
 });
 globalStyle(`${msgVideo} video`, { width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" });
+globalStyle(`${msgVideo}[data-letterbox] video`, { objectFit: "contain" });
+// A letterboxed image on the chat itself, not on grey (a video keeps its black).
+globalStyle(`button${msgImage}[data-letterbox]:not(${msgVideo}):not([data-failed])`, { background: "none" });
 export const msgVideoPlay = style({
   position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
   width: "40px", height: "40px", display: "grid", placeItems: "center", borderRadius: "50%",

@@ -27,6 +27,18 @@ function thumbOf(id: string): HTMLElement | null {
   return null;
 }
 
+/**
+ * Where a thumbnail shows its picture (proportioned like `to`): its whole box, or, letterboxed in it (Chat.tsx's
+ * imageBox), the picture fitted inside, centred.
+ */
+function shownIn(thumb: HTMLElement, to: DOMRect): { left: number; top: number; width: number; height: number } {
+  const box = thumb.getBoundingClientRect();
+  if (thumb.dataset.letterbox === undefined) return box;
+  const k = Math.min(box.width / to.width, box.height / to.height);
+  const width = to.width * k, height = to.height * k;
+  return { left: box.left + (box.width - width) / 2, top: box.top + (box.height - height) / 2, width, height };
+}
+
 /** An element's inline styles to put back as they were. */
 function keep(el: HTMLElement, props: string[]): () => void {
   const was = props.map((p) => [p, el.style.getPropertyValue(p), el.style.getPropertyPriority(p)] as const);
@@ -74,8 +86,8 @@ export function viewerFlight(root: () => HTMLElement | null, { stage: stageClass
     stage.style.clipPath = "none";
     const to = picture.getBoundingClientRect();
     const box = stage.getBoundingClientRect();
-    const from = thumb.getBoundingClientRect();
     if (!to.width || !to.height) return false;
+    const from = shownIn(thumb, to);
     // Covering the thumbnail's box at the start, as a cropped picture does, and at its own size at the end.
     const s0 = Math.max(from.width / to.width, from.height / to.height);
     const s = s0 + (1 - s0) * at;
