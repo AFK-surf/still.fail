@@ -1,32 +1,20 @@
-// How requests reach a station, and a preview socket's framing (station/wire.rs). The mesh wire (mesh links) is in
-// mesh.ts; tests' stations answer over the host's fetch (testing.ts `HostWire`).
-import { CoreError } from "../error.ts";
-import { Effect } from "effect";
-import type { Pull } from "../host.ts";
+// How requests reach a station, and a preview socket's framing (station/wire.rs), as Effects. The mesh wire (mesh
+// links) is in mesh.ts; tests' stations answer over the host's fetch (`HostWire` below).
+import { Effect, Scope } from "effect";
+import { CoreError, asCoreError } from "../error.ts";
+import type { Host, Pull } from "../host.ts";
 import { t } from "../i18n.ts";
 import type { StationAddr } from "./addr.ts";
 
 /// A request's head as it goes to a station: `path` includes `/admin/api`.
 export type RequestHead = { method: string; path: string; headers: [string, string][] };
 
-/// A station's answer: status, headers, and the body as it arrives; how it came (`relay`, `direct`), when known.
+/// A station's answer: status, headers, and the body as it arrives (open while the request's scope is); how it came
+/// (`relay`, `direct`), when known.
 export type WireReply = { status: number; headers: [string, string][]; body: Pull<Uint8Array>; via: string | null };
 
 export function replyHeader(reply: { headers: [string, string][] }, name: string): string | undefined {
   return reply.headers.find(([k]) => k.toLowerCase() === name.toLowerCase())?.[1];
-}
-
-/// The whole body.
-export function replyBytes(reply: WireReply) {
-  return Effect.gen(function* () {
-    const parts: Uint8Array[] = [];
-    for (;;) {
-      const chunk = yield* reply.body.take;
-      if (chunk === null) break;
-      parts.push(chunk);
-    }
-    return concat(parts);
-  });
 }
 
 export function concat(parts: Uint8Array[]): Uint8Array {
@@ -37,6 +25,20 @@ export function concat(parts: Uint8Array[]): Uint8Array {
     at += p.length;
   }
   return out;
+}
+
+/// The whole body; `each` hears each piece as it comes.
+export function readAll(body: Pull<Uint8Array>, each?: (chunk: Uint8Array) => void): Effect.Effect<Uint8Array, CoreError> {
+  return Effect.gen(function* () {
+    const parts: Uint8Array[] = [];
+    for (;;) {
+      const chunk = yield* Effect.mapError(body.take, asCoreError);
+      if (chunk === null) break;
+      each?.(chunk);
+      parts.push(chunk);
+    }
+    return concat(parts);
+  });
 }
 
 /// How a link to a station runs (mesh.ts `Link.net`).
@@ -54,39 +56,68 @@ export type LinkNet = {
 
 /// The client's half of a socket stream.
 export interface SocketOut {
-  write(bytes: Uint8Array): Promise<void>;
+  write(bytes: Uint8Array): Effect.Effect<void, CoreError>;
   finish(): void;
-  /// Let go: the stream is reset.
-  reset(): void;
 }
 
 /// A socket stream as it opened: the station's reply (101 once the service took it), and where the client's frames go.
 export type WireSocket = { reply: WireReply; send: SocketOut };
 
-/// How requests reach a station. A request for an event stream carries `accept: text/event-stream`.
+/// How requests reach a station. A request for an event stream carries `accept: text/event-stream`. What is open (a
+/// reply's body, a socket) closes with the scope it was asked in.
 export interface StationWire {
-  request(station: StationAddr, head: RequestHead, body: Uint8Array): Promise<WireReply>;
+  request(station: StationAddr, head: RequestHead, body: Uint8Array): Effect.Effect<WireReply, CoreError, Scope.Scope>;
   /// The way to the station is taken for gone: what is open to it closes.
   reset?(station: StationAddr): void;
   /// Whether the wire itself finds another way to a station when the UI comes back.
   races?(): boolean;
-  /// Resolves once the way to the station a request would take now is replaced by another; never for a wire that
-  /// does not race. `cancel` lets go of the wait.
-  replaced?(station: StationAddr): { done: Promise<void>; cancel(): void };
+  /// Succeeds once the way to the station a request would take now is replaced by another (never, for a wire that
+  /// does not race).
+  replaced?(station: StationAddr): Effect.Effect<void>;
   /// How the connection to the station runs now; null where there is none of its own.
   net?(station: StationAddr): LinkNet | null;
   /// Measures the ways to the station now.
-  measure?(station: StationAddr): Promise<void>;
+  measure?(station: StationAddr): Effect.Effect<void, CoreError>;
   /// A preview page's WebSocket. Only the mesh carries one.
-  socket?(station: StationAddr, head: RequestHead): Promise<WireSocket>;
+  socket?(station: StationAddr, head: RequestHead): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
 }
 
-export function noMeasure(): Promise<void> {
-  return Promise.reject(new CoreError("unsupported", t("station.core.oneWay")));
+export function noMeasure(): Effect.Effect<void, CoreError> {
+  return Effect.fail(new CoreError("unsupported", t("station.core.oneWay")));
 }
 
-export function noSocket(): Promise<WireSocket> {
-  return Promise.reject(new CoreError("unsupported", t("station.core.previewNoSocket")));
+export function noSocket(): Effect.Effect<WireSocket, CoreError, Scope.Scope> {
+  return Effect.fail(new CoreError("unsupported", t("station.core.previewNoSocket")));
+}
+
+/// Stations for tests, in place of the mesh: every one answers over the host's fetch, at `<cloud origin><path>`; an
+/// event stream (`accept: text/event-stream`) and a preview's answer come as they are sent, the rest whole.
+export class HostWire implements StationWire {
+  readonly #host: Host;
+  constructor(host: Host) {
+    this.#host = host;
+  }
+  request(_station: StationAddr, head: RequestHead, body: Uint8Array): Effect.Effect<WireReply, CoreError, Scope.Scope> {
+    const stream = head.path.startsWith("/admin/api/preview/") || head.headers.some(([k, v]) => k.toLowerCase() === "accept" && v.includes("text/event-stream"));
+    const request = {
+      url: `${this.#host.cloudOrigin()}${head.path}`,
+      body: body.length === 0 && head.method.toUpperCase() === "GET" ? null : body,
+      method: head.method,
+      headers: head.headers,
+    };
+    if (stream) return Effect.map(Effect.mapError(this.#host.fetchStream(request), asCoreError), (r) => ({ status: r.status, headers: r.headers, body: r.body, via: null }));
+    return Effect.map(Effect.mapError(this.#host.fetch(request), asCoreError), (r) => {
+      let done = false;
+      const body: Pull<Uint8Array> = {
+        take: Effect.sync(() => {
+          if (done) return null;
+          done = true;
+          return r.body;
+        }),
+      };
+      return { status: r.status, headers: r.headers, body, via: null };
+    });
+  }
 }
 
 /// A WebSocket message on a socket stream (mesh/app/src/preview.rs): a kind byte (1 text, 2 binary, 8 close), the
@@ -145,14 +176,4 @@ export function takeFrames(buf: Uint8Array): [Frame[], Uint8Array] {
   return [frames, buf.slice(at)];
 }
 
-/// Whichever of two attempts answers; one that fails leaves it to the other.
-export function firstAnswer<T>(a: Promise<T>, b: Promise<T>): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let failed = 0;
-    const fail = (e: unknown) => {
-      if (++failed === 2) reject(e);
-    };
-    a.then(resolve, fail);
-    b.then(resolve, fail);
-  });
-}
+export type { Scope };
