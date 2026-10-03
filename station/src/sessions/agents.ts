@@ -34,6 +34,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { type Updates, makeUpdates } from "../updates/updates.ts";
 import { hubConfig } from "./config.ts";
+import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
 import { autoArchive } from "./lifecycle.ts";
@@ -132,6 +133,7 @@ export const AgentsLive = (control: Control) =>
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),
         link: pageOf,
+        cold: new ColdRooms(() => hub),
       });
       // Background jobs and web services: their agents told through the hub; a service's link is its session's page
       // with its port.

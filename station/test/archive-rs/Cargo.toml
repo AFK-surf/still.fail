@@ -1,0 +1,17 @@
+# The Rust station's cold storage (mesh/app/src/archive.rs, compiled as it is) as a command, for test/cold-compat.test.ts:
+# what one station packed, the other restores. Built on its own: `cargo build --release` here.
+[package]
+name = "archive-rs"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+libc = "0.2"
+serde_json = "1"
+# The versions mesh/Cargo.lock has.
+tar = "=0.4.46"
+zstd = "=0.13.3"

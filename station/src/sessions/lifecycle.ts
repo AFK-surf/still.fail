@@ -3,6 +3,7 @@
 // continue_machine_session). Archiving here is the record (archived, hidden) and what goes with it (the process ends,
 // other stations are told); packing an archived session's files is the hub's ColdStorage.
 import { copyFileSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
@@ -10,6 +11,8 @@ import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/
 import { readTimeline, transcriptPath } from "../read/transcript.ts";
 import { AUTO, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import type { SessionChange } from "./accounts.ts";
+import { unlockWorktrees, withLock } from "./archive.ts";
+import { roomOf } from "./footprint.ts";
 import { type Runtime, runs, runtimeTitle } from "./config.ts";
 import { CLIENT_KEY_KEPT_MS, type Hub, connectOf, newChatKey, newSingleSessionKey, newToken } from "./hub.ts";
 import { INTERNAL_CHANNEL, INTERNAL_CONNECT, nextTs } from "./internal.ts";
@@ -167,16 +170,20 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
 const transcriptCopy = (hub: Hub, key: string) => join(hub.store.archiveDir(), "transcripts", `${key}.jsonl.zst`);
 
 /// Hides a session from lists, or shows it again; `by` is MANUAL or AUTO. Archiving also ends its idle process and
-/// hands its files to cold storage once it is idle; they are restored before the next runtime starts.
-export function archiveBy(hub: Hub, key: string, archived: boolean, by: string) {
+/// hands its files to cold storage once it is idle; they are restored before the next runtime starts, and before it is
+/// shown again (a promise then, when cold storage takes its time: the session is shown once they are back).
+export function archiveBy(hub: Hub, key: string, archived: boolean, by: string): void | Promise<void> {
   const row = hub.store.getSession(key);
   if (!row) throw new Error(`unknown session ${key}`);
-  if (!archived) hub.cold.restore(key);
-  hub.store.setArchived(key, archived, by);
   if (!archived) {
-    rmSync(transcriptCopy(hub, key), { force: true });
-    return;
+    const shown = () => {
+      hub.store.setArchived(key, false, by);
+      rmSync(transcriptCopy(hub, key), { force: true });
+    };
+    const restoring = hub.cold.restore(key);
+    return restoring ? restoring.then(shown) : shown();
   }
+  hub.store.setArchived(key, archived, by);
   hub.closed(key);
   const actor = hub.actor(row);
   void actor.evict().then(() => actor.cleanArchive());
@@ -187,10 +194,10 @@ export const archive = (hub: Hub, key: string, archived: boolean) => archiveBy(h
 
 /// Archives a chat on the pages, or shows it again: a session's own chat goes with its session; a chat of its own goes
 /// alone, its sessions staying as they are.
-export function archiveChat(hub: Hub, thread: number, archived: boolean) {
+export function archiveChat(hub: Hub, thread: number, archived: boolean): void | Promise<void> {
   const chat = stillfailChat(hub, thread);
-  if (chat.home !== null) archive(hub, chat.home, archived);
-  else hub.store.setThreadHidden(thread, archived, MANUAL);
+  if (chat.home !== null) return archive(hub, chat.home, archived);
+  hub.store.setThreadHidden(thread, archived, MANUAL);
 }
 
 /// Archives what has idled past autoArchiveMs (counted from its last activity, or from being shown again by hand) and is
@@ -245,7 +252,15 @@ export async function deleteSession(hub: Hub, key: string) {
   // Sessions made by the station keep their workspace in a directory of their own.
   const sessions = join(hub.config().dataDir, "sessions");
   const own = basename(row.workspace) === "workspace" && (row.workspace + sep).startsWith(sessions + sep);
-  rmSync(own ? dirname(row.workspace) : row.workspace, { recursive: true, force: true });
+  const home = own ? dirname(row.workspace) : row.workspace;
+  const room = roomOf(hub.config().dataDir, row.workspace);
+  if (room !== null) {
+    // Git worktrees it archived are let go first, so `git worktree prune` can clean them up.
+    await withLock(room, async () => {
+      await unlockWorktrees(room);
+      await rm(home, { recursive: true, force: true });
+    });
+  } else rmSync(home, { recursive: true, force: true });
   log.info("hub", "session deleted", { session: key });
 }
 
@@ -287,7 +302,12 @@ export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSes
   if (going) {
     const thread = store.homeChat(going.key);
     if (thread) {
-      if (going.archivedAt !== null) archive(hub, going.key, false);
+      if (going.archivedAt !== null) {
+        // Its files come back before its runtime starts in any case: a failure here is only told.
+        void Promise.resolve()
+          .then(() => archive(hub, going.key, false))
+          .catch((error) => log.warn("hub", "archived session not shown again", { session: going.key, error: (error as Error).message }));
+      }
       return [going.key, thread];
     }
   }

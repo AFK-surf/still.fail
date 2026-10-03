@@ -379,12 +379,24 @@ export class LiveHub {
     const tail = new TranscriptTail(at.runtime, at.path);
     tail.read(); // what is already there counts as known; subscribers ask for what they lack
     tail.weave(this.posts(key));
-    let watcher: FSWatcher | null = null;
-    try {
-      watcher = watch(existsSync(at.path) ? at.path : `${at.path}.zst`, { persistent: false }, () => this.soon(key));
-      watcher.on("error", () => {});
-    } catch {}
-    this.watched.set(key, { tail, watcher, reading: false });
+    const watched: Watched = { tail, watcher: null, reading: false };
+    // The transcript is its file, or its `.zst` while packed (sessions/cold.ts): packed or restored, it is another file,
+    // watched from then on (live.rs looks at whichever is there).
+    const arm = () => {
+      watched.watcher?.close();
+      watched.watcher = null;
+      if (this.watched.get(key) !== watched) return;
+      try {
+        const watcher: FSWatcher = watch(existsSync(at.path) ? at.path : `${at.path}.zst`, { persistent: false }, (event) => {
+          if (event === "rename") arm();
+          this.soon(key);
+        });
+        watcher.on("error", () => {});
+        watched.watcher = watcher;
+      } catch {}
+    };
+    this.watched.set(key, watched);
+    arm();
     return true;
   }
 
