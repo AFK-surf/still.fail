@@ -98,8 +98,11 @@ test("a job's log is told now and as it grows", async () => {
   const s = reader((await events.open(viewer("a@x"), "zh", false, [], [["j", 50], ["nothing", 5]])).body as AsyncIterable<Buffer>);
   await settle();
   appendFileSync(join(dir, "j.log"), "two\n");
-  await new Promise((r) => setTimeout(r, 400));
-  const logs = s.got.filter((e) => e.event === "job-log").map((e) => e.data);
+  // Its watch tells of the growth.
+  const told = () => s.got.filter((e) => e.event === "job-log").map((e) => e.data);
+  for (let t = 0; told().length < 2 && t < 5000; t += 20) await new Promise((r) => setTimeout(r, 20));
+  await settle();
+  const logs = told();
   assert.deepEqual(logs, [
     { id: "j", lines: 50, text: "one\n", outputAt: 7 },
     { id: "j", lines: 50, text: "one\ntwo\n", outputAt: 7 },

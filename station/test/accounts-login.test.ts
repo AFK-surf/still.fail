@@ -7,16 +7,18 @@ import { join } from "node:path";
 import { deviceCode, LoginManager, type LoginState, stripAnsi } from "../src/accounts/login.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
 import { linkCodexAuth } from "../src/agents/machine-logins.ts";
-import { FAKE_LOGIN, idToken, machine, script, temp, until } from "./accounts-fakes.ts";
+import { approval, fakeLogin, idToken, machine, script, temp, upon } from "./accounts-fakes.ts";
 
 test("a subscription sign-in relays the link, the code and the result", async () => {
   const dir = temp("login");
   const fake = join(dir, "fake-login");
-  script(fake, FAKE_LOGIN);
+  const approved = approval(dir);
+  script(fake, fakeLogin(approved.path));
   const logins = new LoginManager(dir, { claude: fake, codex: fake });
   const heard: string[] = [];
   logins.changes((id) => heard.push(id));
-  const wait = (profile: string, state: LoginState) => until(() => (logins.get(profile)?.state === state ? logins.get(profile) : undefined), `${profile} ${state}`);
+  const wait = (profile: string, state: LoginState) =>
+    upon((wake) => logins.changes(wake), () => (logins.get(profile)?.state === state ? logins.get(profile) : undefined), `${profile} ${state}`);
   try {
     const sub = { id: "sub", runtime: "claude" as const, home: join(dir, "homes", "sub") };
     await logins.start(sub, "zh");
@@ -36,6 +38,7 @@ test("a subscription sign-in relays the link, the code and the result", async ()
     await logins.start(cxs, "zh");
     const device = await wait("cxs", "needs_approval");
     assert.deepEqual([device.url, device.userCode], ["https://auth.openai.com/codex/device", "ABCD-12345"]);
+    await approved.approve();
     await wait("cxs", "done");
 
     // A cancelled sign-in stops its command and says so.

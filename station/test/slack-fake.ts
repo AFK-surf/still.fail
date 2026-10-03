@@ -25,6 +25,8 @@ export class FakeSlack {
   acks: Json[] = [];
   /// Whether a socket answers pings (false: like a connection cut off on the way).
   answersPings = true;
+  /// The pings that came, answered or not.
+  pings = 0;
   private waiters: (() => void)[] = [];
   private ts = 1;
 
@@ -43,7 +45,9 @@ export class FakeSlack {
       this.wss.handleUpgrade(req, socket, head, (ws) => {
         this.sockets.push(ws);
         ws.on("ping", (data) => {
+          this.pings++;
           if (this.answersPings) ws.pong(data);
+          this.tell();
         });
         ws.on("message", (data) => {
           try {

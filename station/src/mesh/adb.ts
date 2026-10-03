@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import net from "node:net";
 import { delimiter, join } from "node:path";
+import { Clock, Effect, Exit, FiberSet, Scope } from "effect";
 import { langOfCore } from "../api/request.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
@@ -45,8 +46,8 @@ export type SharesOptions = {
   cloud?: { removed(): boolean; listen(f: () => void): () => void };
   /// Where adb is (default: `adbPath`, looked for anew each time as the Rust station does).
   adb?: () => string | null;
-  grace?: number;
-  settle?: number;
+  /// The clock GRACE and SETTLE are waited out on (a TestClock in tests).
+  clock?: Clock.Clock;
 };
 
 let nextOffer = 1;
@@ -119,9 +120,15 @@ export class Shares {
   readonly options: SharesOptions;
   private stopping = false;
   private stopWaiters: (() => void)[] = [];
+  /// Its waits, on its clock; they end as it closes.
+  private scope: Scope.Closeable;
+  readonly run: <A>(effect: Effect.Effect<A>) => Promise<A>;
 
   constructor(options: SharesOptions = {}) {
     this.options = options;
+    this.scope = Effect.runSync(Scope.make());
+    const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, any, never>(), this.scope);
+    this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
   }
 
   /// The phones offered now, for the `adb_devices` tool: `{serial, device, android, owner: {name, email}, adb, message}`.
@@ -138,6 +145,7 @@ export class Shares {
   async close() {
     this.stopping = true;
     for (const f of this.stopWaiters.splice(0)) f();
+    await Effect.runPromise(Scope.close(this.scope, Exit.void));
     const servers = [...this.byKey.values()].map((s) => s.server);
     this.byKey.clear();
     await Promise.all(servers.map((s) => new Promise<void>((resolve) => s.close(() => resolve()))));
@@ -229,7 +237,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     }
   }
   await writeLine(stream, { status: 200, headers: { "content-type": "application/x-ndjson" } });
-  void connect(shares, share);
+  void connect(shares, share).catch(() => {});
 
   let unlisten = () => {};
   const removed = new Promise<"removed">((resolve) => {
@@ -268,7 +276,8 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
   if (ended === "stopping") return;
   // Only the latest offer takes the phone away (one that came on another link has it now), and only if no other comes
   // a moment after.
-  if (ended !== "removed") await Promise.race([sleep(shares.options.grace ?? GRACE), shares.stopped()]);
+  // (`close` ends the wait.)
+  if (ended !== "removed") await shares.run(Effect.sleep(GRACE)).catch(() => {});
   if (!shares.isStopping && share.offer === number && shares.byKey.get(device) === share) {
     shares.byKey.delete(device);
     share.server.close();
@@ -293,13 +302,14 @@ function listen(share: Share) {
 export async function bind(device: string): Promise<net.Server> {
   const hash = createHash("sha256").update(device).digest();
   const usual = PORTS.start + (((hash[0] << 8) | hash[1]) % (PORTS.end - PORTS.start));
-  // An offer from before (the station handed over to a new one) may hold it a moment yet.
-  for (let i = 0; i < 5; i++) {
-    const server = await listenOn(usual).catch(() => null);
-    if (server) return server;
-    await sleep(500);
-  }
-  return listenOn(0);
+  // An offer from before (the station handed over to a new one) may hold it a moment yet: tried 5 times, each miss
+  // waited 500 ms after.
+  const usualOne = Effect.tryPromise(() => listenOn(usual)).pipe(
+    Effect.tapError(() => Effect.sleep(500)),
+    Effect.retry({ times: 4 }),
+    Effect.orElseSucceed(() => null),
+  );
+  return (await Effect.runPromise(usualOne)) ?? listenOn(0);
 }
 
 function listenOn(port: number): Promise<net.Server> {
@@ -396,15 +406,18 @@ async function connect(shares: Shares, share: Share) {
   } catch (error) {
     return share.set("failed", (error as Error).message);
   }
-  // adb says `connected to …` for a TLS port it is not paired with too; only its state says whether it got in.
-  const started = Date.now();
-  const settle = shares.options.settle ?? SETTLE;
-  let now: string;
-  for (;;) {
-    now = await state();
-    if (now === "device" || Date.now() - started >= settle) break;
-    await sleep(500);
-  }
+  // adb says `connected to …` for a TLS port it is not paired with too; only its state says whether it got in: looked
+  // at every 500 ms until it is `device` or SETTLE is over.
+  const now = await shares.run(
+    Effect.gen(function* () {
+      const started = yield* Clock.currentTimeMillis;
+      for (;;) {
+        const now = yield* Effect.promise(state);
+        if (now === "device" || (yield* Clock.currentTimeMillis) - started >= SETTLE) return now;
+        yield* Effect.sleep(500);
+      }
+    }),
+  );
   const refused = share.refused;
   share.refused = null;
   if (now === "device") share.set("connected");
@@ -440,7 +453,7 @@ async function pair(shares: Shares, share: Share, typed: string, lang: Lang): Pr
     done.abort();
   }
   if (!said.includes("Successfully paired")) throw new Error(tr(lang, "station.adb.pairFailed", { said }));
-  void connect(shares, share);
+  void connect(shares, share).catch(() => {});
   return tr(lang, "station.adb.paired");
 }
 
@@ -506,8 +519,6 @@ export function text(value: unknown, max: number): string {
 export function isPackage(name: string): boolean {
   return name.length > 0 && name.length <= 200 && /^[A-Za-z0-9._]+$/.test(name);
 }
-
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 function within<T>(ms: number, promise: Promise<T>, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;

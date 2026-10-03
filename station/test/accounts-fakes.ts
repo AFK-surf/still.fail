@@ -1,7 +1,9 @@
 // What the accounts' tests stand in for: providers (a local HTTP server answering as a test says, keeping what it was
 // asked), command-line tools (shell scripts in a bin/ of a temp HOME, first on a PATH of only that and the system's),
 // and a machine (a temp HOME with its own .claude and .codex). Nothing here reaches a real service, keychain or login.
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -42,23 +44,67 @@ export function machine(clis: Record<string, string> = {}): { home: string; bin:
   const home = temp("machine");
   const bin = join(home, "bin");
   mkdirSync(bin);
-  for (const [name, script] of Object.entries({ security: "exit 44", ...clis })) {
-    const path = join(bin, name);
-    writeFileSync(path, script.startsWith("#!") ? script : `#!/bin/sh\n${script}\n`);
-    chmodSync(path, 0o755);
-  }
+  for (const [name, text] of Object.entries({ security: "exit 44", ...clis })) script(join(bin, name), text.startsWith("#!") ? text : `#!/bin/sh\n${text}\n`);
   return { home, bin, env: { HOME: home, PATH: `${bin}:/usr/bin:/bin` } };
 }
 
-/// An executable script at `path`.
+/// macOS looks at every new executable file the first time it runs (some 200 ms each, more on a busy machine), and the
+/// stand-ins are new files in new temp homes. So a shell stand-in is a hard link to one launcher, made once per machine
+/// (and looked at once), that runs the stand-in's text kept beside it: `<path>.sh`, or beside the file `<path>` links to.
+/// Toward the code under test it is the same: an executable file at `path` that does what `text` says. Other
+/// interpreters' scripts are written as they are.
+const LAUNCHER = `#!/bin/sh
+# A test's stand-in command (test/accounts-fakes.ts): runs the shell script beside it.
+s="$0.sh"
+[ -f "$s" ] || s="$(/bin/realpath "$0").sh"
+exec /bin/sh "$s" "$@"
+`;
+
+/// The launcher shared by the stand-ins (made once, never written again: stand-ins are links to it).
+export function launcher(): string {
+  const path = join(tmpdir(), "station-test-launcher-1");
+  if (existsSync(path)) return path;
+  const made = `${path}.${process.pid}.${Math.random().toString(36).slice(2)}`;
+  writeFileSync(made, LAUNCHER, { mode: 0o755 });
+  try {
+    linkSync(made, path);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+  } finally {
+    rmSync(made, { force: true });
+  }
+  return path;
+}
+
+/// An executable script at `path`: a shell script by the shared launcher, another as it is.
 export function script(path: string, text: string) {
-  writeFileSync(path, text);
-  chmodSync(path, 0o755);
+  // Never written through: an earlier stand-in at `path` is the launcher's link.
+  rmSync(path, { force: true });
+  if (text.startsWith("#!") && !text.startsWith("#!/bin/sh\n")) {
+    writeFileSync(path, text);
+    chmodSync(path, 0o755);
+    return;
+  }
+  writeFileSync(`${path}.sh`, text);
+  try {
+    linkSync(launcher(), path);
+  } catch {
+    // Another file system than the launcher's: a copy (looked at the first time it runs).
+    writeFileSync(path, LAUNCHER);
+    chmodSync(path, 0o755);
+  }
+}
+
+/// An approval a stand-in waits for (a fifo it reads a line from): `approve` lets it go on.
+export function approval(dir: string): { path: string; approve: () => Promise<void> } {
+  const path = join(dir, `approval-${Math.random().toString(36).slice(2)}`);
+  execFileSync("/usr/bin/mkfifo", [path]);
+  return { path, approve: () => writeFile(path, "approved\n") };
 }
 
 /// The stand-in login command (login.rs's tests): Claude's prints a link and reads a code; Codex's prints a device
-/// link and a code, then finishes.
-export const FAKE_LOGIN = `#!/bin/sh
+/// link and a code, then finishes once the person approved (when an `approval` fifo is given, once it is written).
+export const fakeLogin = (approval?: string) => `#!/bin/sh
 if [ "$1" = "auth" ]; then
   echo "Opening browser to sign in…"
   echo "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&client_id=x&state=y"
@@ -68,9 +114,44 @@ if [ "$1" = "auth" ]; then
   echo "OAuth error: invalid code"; exit 1
 fi
 printf "1. Open this link\\n   \\033[94mhttps://auth.openai.com/codex/device\\033[0m\\n2. Enter this one-time code\\n   \\033[94mABCD-12345\\033[0m\\n"
-sleep 0.3
+${approval === undefined ? "" : `read approved < '${approval}'`}
 echo "Successfully logged in"
 `;
+
+/// Waits until `f` gives something, looking again each time `changes` says something changed (up to 30 s).
+export function upon<T>(changes: (wake: () => void) => () => void, f: () => T | undefined | null | false | Promise<T | undefined | null | false>, what: string, ms = 30_000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let over = false;
+    let looking = false;
+    let again = false;
+    const finish = (then: () => void) => {
+      if (over) return;
+      over = true;
+      clearTimeout(timer);
+      stop();
+      then();
+    };
+    const look = async () => {
+      if (over) return;
+      if (looking) return void (again = true);
+      looking = true;
+      try {
+        do {
+          again = false;
+          const got = await f();
+          if (got) return finish(() => resolve(got));
+        } while (again && !over);
+      } catch (e) {
+        finish(() => reject(e));
+      } finally {
+        looking = false;
+      }
+    };
+    const timer = setTimeout(() => finish(() => reject(new Error(`never: ${what}`))), ms);
+    const stop = changes(() => void look());
+    void look();
+  });
+}
 
 /// Waits until `f` gives something (up to 30 s: a new executable can take long to start on a busy machine).
 export async function until<T>(f: () => T | undefined | null | false, what: string, ms = 30_000): Promise<T> {

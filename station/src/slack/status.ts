@@ -2,7 +2,7 @@
 // line under the thread (assistant.threads.setStatus), changed at most every couple of seconds and cleared when the turn
 // ends. Where Slack will not show one (the app lacks the scope, the conversation does not take it), an 👀 on the
 // message that started the work says the same, and goes when it is done. The words are sessions/chat.ts `toolStatus`.
-import { Effect } from "effect";
+import { Clock, Effect } from "effect";
 import { log } from "../ops/log.ts";
 import type { Params } from "./web.ts";
 
@@ -30,7 +30,8 @@ export class ThreadStatus {
   private messageTs: string | null = null;
   private shown = "";
   private wanted = "";
-  private lastAt = 0;
+  /// When it last changed (never, at first: the first change goes at once, whatever the clock says).
+  private lastAt = Number.NEGATIVE_INFINITY;
   private timer = false;
   /// Slack will not show a status line here: the reaction stands in.
   private reactionOnly = false;
@@ -50,14 +51,19 @@ export class ThreadStatus {
     this.wanted = status;
     if (this.timer) return;
     this.timer = true;
-    const wait = status === "" ? 0 : Math.max(0, this.lastAt + MIN_INTERVAL_MS - Date.now());
-    void this.run(Effect.sleep(wait).pipe(Effect.andThen(Effect.promise(() => this.due())))).catch(() => {});
+    // On the clock of whoever runs it (a TestClock in tests).
+    const due = Clock.currentTimeMillis.pipe(
+      Effect.flatMap((now) => Effect.sleep(status === "" ? 0 : Math.max(0, this.lastAt + MIN_INTERVAL_MS - now))),
+      Effect.andThen(Clock.currentTimeMillis),
+      Effect.flatMap((now) => Effect.promise(() => this.due(now))),
+    );
+    void this.run(due).catch(() => {});
   }
 
-  private async due() {
+  private async due(now: number) {
     this.timer = false;
     if (this.wanted === this.shown) return;
-    this.lastAt = Date.now();
+    this.lastAt = now;
     const next = this.wanted;
     const sent = this.sending.then(() => this.send(next));
     this.sending = sent.catch(() => {});

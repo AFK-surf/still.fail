@@ -5,6 +5,7 @@
 // Connects connect while the station is in its workspace (`bound`) and follow config edits; out of it they disconnect.
 // Each connected connect's surface is the hub's (`chats`), and what Slack says reaches the hub through `receive`.
 import { join } from "node:path";
+import type { Clock } from "effect";
 import type { ConfigFile } from "../ops/config.ts";
 import { log } from "../ops/log.ts";
 import type { ChatEvent, ChatSurface } from "../sessions/chat.ts";
@@ -31,6 +32,8 @@ export type SlackOptions = {
   /// Socket Mode's ping and silence limits (tests make them short).
   pingMs?: number;
   staleMs?: number;
+  /// The clock the surfaces' pings, retries and status lines run on (tests: a TestClock).
+  clock?: Clock.Clock;
   /// How a connect's connection is made (tests); default a SlackSurface.
   create?: (connect: SlackConnect, book: NameBook, client: SlackClient) => Connection;
 };
@@ -72,7 +75,7 @@ export function makeConnections(options: SlackOptions) {
   const create =
     options.create ??
     ((c: SlackConnect, book: NameBook, web: SlackClient) =>
-      new SlackSurface({ appToken: c.appToken, botToken: c.botToken, client: web, book, pingMs: options.pingMs, staleMs: options.staleMs }));
+      new SlackSurface({ appToken: c.appToken, botToken: c.botToken, client: web, book, pingMs: options.pingMs, staleMs: options.staleMs, clock: options.clock }));
   const connections = new Connections((c) => create(c, names, client), options.receive);
   const connects = () => slackConnects(config.raw());
   const connect = (id: string) => connects().find((c) => c.id === id);
