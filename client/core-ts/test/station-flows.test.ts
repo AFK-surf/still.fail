@@ -9,7 +9,8 @@ import { encode, request } from "../src/ops.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { SseParser } from "../src/station/sse.ts";
 import { run } from "./run.ts";
-import { base, overview, session, started, status, stationReplies, threadView } from "./station-fixture.ts";
+import { base, entries, entry, overview, session, started, status, stationReplies, threadView } from "./station-fixture.ts";
+import { merge } from "../src/entries.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
 import { EVENTS_COALESCE_MS, LINK_KEY, RECONNECT_MS } from "../src/station/sync.ts";
@@ -393,5 +394,117 @@ test("topics_are_read_once_and_nothing_runs_on_a_timer", async () => {
   host.time.sleeps.length = 0;
   await host.time.pass(RECONNECT_MS * 2, 100);
   assert.equal(reqs(host), requests, "idle: no request");
+  core.close();
+});
+
+// ── threads: their entries are records on the device, a chat's window is read from them ──
+
+const edit = (n: number, target: number, text: string) => ({ thread: 7, n, kind: "edit", target, ts: null, authorKind: "person", author: "a@x.com", text, at: n });
+const coalesce = (host: FakeHost) => host.time.pass(EVENTS_COALESCE_MS + 100, 50);
+
+/// A core whose station has `answers`, and a UI on it with its values.
+async function ui(answers: J, before?: Parameters<typeof started>[3]) {
+  const s = await started(answers, 0, undefined, before);
+  const id = s.core.connect();
+  const values = new Map<number, unknown>();
+  const read = async () => {
+    await s.host.settle();
+    apply(s.host, values);
+  };
+  return { ...s, ui: id, values, read };
+}
+
+const page = (values: Map<number, unknown>, id = 1) => v(values, id);
+const nums = (values: Map<number, unknown>, id = 1) => page(values, id).entries.map((e: J) => e.n);
+const texts = (values: Map<number, unknown>, id = 1) => merge(page(values, id).entries).map((m: J) => m.text);
+const windowOf = (values: Map<number, unknown>, id = 1) => [page(values, id).first, page(values, id).last, page(values, id).end];
+const thread7 = { topic: "thread", station: ST, thread: 7 };
+const threadsOf = (core: J) => core.inner.data.get({ topic: "threads", station: ST }) as J[];
+
+test("thread_events_append_entries_and_refresh_summaries", async () => {
+  const answers: J = {
+    ...base(),
+    "GET /threads/7/entries?limit=50": { last: 12, entries: [entry(11, "a"), entry(12, "b")] },
+    "GET /threads": [threadView(7, 12, 12, 0)],
+    "GET /threads/7": threadView(7, 15, 12, 2),
+    "GET /threads/8": threadView(8, 20, 0, 1),
+  };
+  const { host, core, push, values, read } = await ui(answers);
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
+  await read();
+  assert.deepEqual(texts(values), ["a", "b"]);
+  // New entries (an edit among them), in one burst: appended at once, one known already skipped; the summary is
+  // read once after it.
+  push("thread", { id: 7, entries: [entry(13, "c")] });
+  push("thread", { id: 7, entries: [entry(13, "c"), entry(14, "d"), edit(15, 12, "b 改了")] });
+  await read();
+  assert.deepEqual(nums(values), [11, 12, 13, 14, 15]);
+  assert.deepEqual(texts(values), ["a", "b 改了", "c", "d"]);
+  assert.equal(page(values).last, 15);
+  assert.equal(gets(host, "/admin/api/threads/7"), 0, "waits for the burst to end");
+  await coalesce(host);
+  assert.equal(gets(host, "/admin/api/threads/7"), 1);
+  assert.equal(threadsOf(core)[0].unread, 2);
+  // A thread not listed yet comes in, first (its last message is the newest).
+  push("thread", { id: 8, entries: [{ ...entry(20, "x"), thread: 8 }] });
+  await coalesce(host);
+  assert.deepEqual(threadsOf(core).map((t) => t.id), [8, 7]);
+  // Reading up to the last entry: nothing unread, without a request. Short of it: counted again.
+  push("read", { viewer: "a@x.com", thread: 7, n: 15 });
+  await host.settle();
+  assert.deepEqual([threadsOf(core)[1].unread, threadsOf(core)[1].read], [0, 15]);
+  push("read", { viewer: "a@x.com", thread: 8, n: 15 });
+  await coalesce(host);
+  assert.equal(gets(host, "/admin/api/threads/8"), 2);
+  // A thread gone: out of the list.
+  answers["GET /threads/8"] = status(404, { error: "unknown thread 8" });
+  push("thread", { id: 8, entries: [] });
+  await coalesce(host);
+  assert.equal(threadsOf(core).length, 1);
+  core.close();
+});
+
+test("a_gap_is_read_once_and_what_came_meanwhile_waits_for_it", async () => {
+  const { host, core, push, values, read } = await ui({
+    ...base(),
+    "GET /threads": [threadView(7, 3)],
+    "GET /threads/7/entries?limit=50": { last: 3, entries: entries(1, 3) },
+    "GET /threads/7/entries?from=4&to=5": { last: 7, entries: entries(4, 5) },
+  });
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
+  await read();
+  // Entries 4 and 5 never came: 6 shows the gap, and 7 comes while it is read.
+  push("thread", { id: 7, entries: [entry(6, "m6")] });
+  push("thread", { id: 7, entries: [entry(7, "m7")] });
+  await read();
+  await read();
+  assert.deepEqual(nums(values), [1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(gets(host, "/admin/api/threads/7/entries?from=4&to=5"), 1);
+  assert.equal(host.requests.filter((r) => r.url.includes("/entries")).length, 2, JSON.stringify(host.requests.map((r) => r.url)));
+  core.close();
+});
+
+test("a_thread_keeps_a_page_ahead_so_going_back_does_not_wait", async () => {
+  // Further than the Rust core (which kept one page ahead): the whole thread is brought onto the device, so going
+  // back asks the station nothing.
+  const { host, core, values, read } = await ui({
+    ...base(),
+    "GET /threads": [threadView(7, 300)],
+    "GET /threads/7/entries?limit=50": { last: 300, entries: entries(251, 300) },
+    "GET /threads/7/entries?from=201&to=250": { last: 300, entries: entries(201, 250) },
+    "GET /threads/7/entries?from=151&to=200": { last: 300, entries: entries(151, 200) },
+    "GET /threads/7/entries?from=101&to=150": { last: 300, entries: entries(101, 150) },
+    "GET /threads/7/entries?from=51&to=100": { last: 300, entries: entries(51, 100) },
+    "GET /threads/7/entries?from=1&to=50": { last: 300, entries: entries(1, 50) },
+  });
+  await host.time.pass(1_000, 50);
+  assert.equal(gets(host, "/admin/api/threads/7/entries?from=201&to=250"), 1, "the page before, brought in ahead");
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
+  await read();
+  const asked = host.requests.length;
+  assert.equal(await run(core.inner.stationTopics.older(ST, 7)), true);
+  await read();
+  assert.equal(page(values).first, 201);
+  assert.equal(host.requests.length, asked, "going back asks nothing");
   core.close();
 });
