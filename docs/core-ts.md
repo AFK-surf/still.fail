@@ -71,11 +71,31 @@ Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」�
    订阅什么；UI 最多改同步任务的**优先级**（比如打开的 chat 的消息先同步），不能开始或停止同步。所以订阅只读记录，从不
    触发网络请求；所有 station/cloud 的流量归一个同步调度器（Effect）管，优先级由 UI 的 focus/订阅调整；数据还没同步到的
    视图显示已有的，记录到了再补上。
-7. **workspace 互相隔离**（docs/client-core.md、client/core/src/workspace.rs 的意图）；本地先建的东西和 station 的对应项只靠
+7. **数据按增量订阅来定义**：话题的数据是按稳定 id 分的集合（rows、sessions、threads、entries、jobs…）加少量标量。
+   记录变了只重算受影响视图里受影响的那几项（每项按它依赖的记录和版本记忆化，没变的项是同一个对象），集合从不「整个
+   重算再 diff」；发给 UI 的是按 key 的增量：插入/更新（patch）/删除/移动，日志类（entries、transcript）用 append，
+   一行变了就是一个小 op，不管它在第几行。协议扩展见下面「按 key 的增量」，老 op 继续有效；没声明支持的客户端照旧收老式
+   delta。web 和安卓的 delta 应用器都支持新 op，并按 key 保持解码出来的对象稳定，UI 只重绘变了的项。
+8. **workspace 互相隔离**（docs/client-core.md、client/core/src/workspace.rs 的意图）；本地先建的东西和 station 的对应项只靠
    确切的 clientKey 对上，绝不猜。
 
 对照运行因此只比两件事：协议形状，和同一个脚本下 UI 最终看到的结果。下面「刻意不同」一节列出 TS core 因为 Rust 违反
 上面某条规则而故意做得不一样的每一处。
+
+## 按 key 的增量（协议扩展）
+
+订阅消息可以带 `"keyed": true`（`{ "id": 8, "subscribe": {…}, "keyed": true }`；Rust core 忽略多余字段，照旧发老式 delta）。
+声明了的订阅，话题里按 key 的集合（每个话题在 `src/collections.ts` 里声明哪些路径是集合、key 是哪个字段）变了时收到：
+
+```jsonc
+{ "path": ["days", 0, "items"], "key": "id", "put": { … }, "before": "k2" }   // 插入或整项替换；before：放在 key 为 k2 的项前面，null 放最后；省略：原地
+{ "path": ["days", 0, "items"], "key": "id", "patch": "k1", "ops": [ … ] }    // 只改 key 为 k1 的那一项：ops 是相对那一项的老式/新式 op
+{ "path": ["days", 0, "items"], "key": "id", "drop": "k1" }                   // 删掉
+{ "path": ["days", 0, "items"], "key": "id", "move": "k1", "before": null }    // 只挪位置
+```
+
+老式 op（`set`、`append`、`remove`）照旧可用；集合以外的部分照旧用它们。没声明 `keyed` 的订阅收到的是同一变化的老式
+表达（集合整列 `set`，或整值）。
 
 ## 刻意和 Rust core 不同的地方
 
@@ -90,6 +110,8 @@ Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」�
   它能到的每个 workspace 都重读（Rust 只重读列表，workspace 要等 socket 重连或该话题被订阅才读）；登录设备列表、运营
   列表也由同步维护，不靠订阅触发。
 - 规则 1：Host 的接口是 Effect（Rust 是 future），流式的 body 和 WebSocket 是在 scope 里的 pull 句柄，scope 关了就关。
+- 规则 7：Rust 每次把话题整个重算再和上次发的整值做 JSON diff（数组按下标比，开头插一行后面全部 set）；TS 按记录变化
+  只重算受影响的项，集合按 key 发增量（声明 `keyed` 的订阅）。
 - 规则 2：老 station 不跟随 job 日志时，Rust 每 2 秒起退避重读 `/jobs/:id/log`；TS 不重读，只在事件里更新（老 station 上
   日志面板不再自动增长，打开时读一次）。
 - 规则 2：`job` 话题 Rust 每半分钟（老 station 每 4 秒）重读 `/jobs/:id`；TS 只靠 `job` 事件。
