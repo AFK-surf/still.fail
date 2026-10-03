@@ -30,6 +30,7 @@ import {
 import { callApi } from "./chat.ts";
 import type { Hub } from "./hub.ts";
 import { imageSize } from "./image-size.ts";
+import { dir as thumbsDir, keep } from "./thumbs.ts";
 import { INTERNAL_CONNECT } from "./internal.ts";
 import { prepare } from "./local-links.ts";
 import { suggestArchive } from "./review.ts";
@@ -142,8 +143,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     if (link === undefined) throw new Error("files cannot be shown from Slack until this station is in a still.fail workspace; mention their paths in the text instead");
     return link;
   };
-  // (Thumbnails are not made here: thumbs.rs is not ported; attachments carry no thumbhash.)
-  const files = paths.length === 0 ? [] : attach(hub, key, paths);
+  const files = await keep(paths.length === 0 ? [] : attach(hub, key, paths), thumbsDir(hub.config().dataDir));
   const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
   const chat = hub.chat(thread.connect);
   let posted: string;

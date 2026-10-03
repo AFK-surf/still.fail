@@ -70,3 +70,4 @@ Rust 版 station 交接前会先问新二进制 `handoff-version`，只有回答
 - 连接：`connect(addr, alpn)`（站间 peer 用），`Connection.paths()`（relay 还是直连，给 trace 用）、`closed()`、`close(code, reason)`、`acceptBi/openBi`。
 - 流：`read()`、`write()`、`finish()`、`reset()`、`stopped()`。
 - 所有异步操作不阻塞 Node 主线程（napi async，tokio 多线程运行时）。
+- 缩略图（`src/thumbs.rs`，就是 `mesh/app/src/thumbs.rs` 的代码，`image`/`thumbhash` 及其编解码 crate 钉在 `mesh/Cargo.lock` 的版本上，产出与 Rust 版逐字节相同）：`thumbnail(image, dir)` → `{path, type}` 或 null；`thumbhash(image, dir?)` → `{hash, width, height}` 或 null，给了 `dir` 且图大于 24 KiB 时用同一次解码在后台线程做缩略图。哪些文件、何时做由 TS（`src/sessions/thumbs.ts`）决定。
