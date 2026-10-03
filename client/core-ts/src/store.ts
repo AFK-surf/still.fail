@@ -7,7 +7,9 @@
 // value, the next ones only what changed (delta.ts), and an unchanged value sends nothing. Code inside the core can
 // `watch` a topic; a derived topic is `invalidate`d and computed by its source when its emission goes out.
 import { Effect } from "effect";
+import { type AnyOp, diffKeyed, heavier, specOf } from "./collections.ts";
 import { diff, largerThan, type Op } from "./delta.ts";
+import { Output } from "./output.ts";
 import { CoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
@@ -62,14 +64,17 @@ type Entry = {
   value?: Value;
   /// The value last sent to the subscribers; the next emission is the difference to it.
   sent?: Value;
-  subscribers: [ClientId, RequestId][];
+  /// Who subscribes, and whether it takes keyed ops (collections.ts).
+  subscribers: [ClientId, RequestId, boolean][];
   watchers: [number, () => void][];
   stale: boolean;
   emitScheduled: boolean;
   idle: number | null;
+  /// How its value goes out (output.ts).
+  output?: Output;
 };
 
-type Out = { value: unknown } | { delta: Op[] } | { error: CoreError };
+type Out = { value: unknown } | { delta: AnyOp[] } | { error: CoreError };
 
 function whole(v: Value): Out {
   return "ok" in v ? { value: v.ok } : { error: v.err };
@@ -129,7 +134,7 @@ export class Store {
   }
 
   /// Adds a subscriber; sends the cached value at once if there is one, and starts the topic if it was not live.
-  subscribe(client: ClientId, id: RequestId, topic: Topic): void {
+  subscribe(client: ClientId, id: RequestId, topic: Topic, keyed = false): void {
     this.unsubscribe(client, id);
     const key = topicKey(topic);
     this.#subscriptions.set(`${client}/${id}`, topic);
@@ -139,7 +144,7 @@ export class Store {
       entry = { topic, subscribers: [], watchers: [], stale: false, emitScheduled: false, idle: null };
       this.#topics.set(key, entry);
     }
-    entry.subscribers.push([client, id]);
+    entry.subscribers.push([client, id, keyed]);
     entry.idle = null;
     const cached = entry.sent;
     if (cached !== undefined) this.host.emit(client, to(whole(cached), id));
@@ -339,29 +344,33 @@ export class Store {
     const c: present.Clock = { now: this.host.nowMs(), offsetMin: this.host.utcOffsetMin(this.host.nowMs()) };
     let value: Value = now.value;
     if ("ok" in value) {
-      // A copy: what is decorated is what goes out, not what is kept.
-      let v = present.decorate(topic, structuredClone(value.ok), c);
-      if (this.#shaped) {
-        const shaped = present.conformTopic(topic, v);
-        if ("error" in shaped) value = { err: new CoreError("shape", t("core-misc.shape", { topic: topicDebug(topic), at: shaped.error })) };
-        else {
-          v = shaped.ok;
-          value = { ok: v };
-        }
-      } else value = { ok: v };
+      // What is decorated is a copy (output.ts): not what is kept.
+      now.output ??= new Output();
+      const out = now.output.shape(topic, value.ok, c, this.#shaped);
+      value = "ok" in out ? { ok: out.ok } : { err: new CoreError("shape", t("core-misc.shape", { topic: topicDebug(topic), at: out.error })) };
     }
+    // What goes out: to a subscriber taking keyed ops, its lists changed item by item; to the others, the old ops.
     let out: Out | null;
+    let keyedOut: Out | null;
     const sent = now.sent;
-    if (sent !== undefined && "ok" in sent && "ok" in value) {
-      const ops = diff(sent.ok, value.ok);
-      out = ops.length === 0 ? null : largerThan(ops, value.ok) ? { value: value.ok } : { delta: ops };
-    } else if (sent !== undefined && sameValue(sent, value)) out = null;
-    else out = whole(value);
-    now.sent = value;
     const subscribers = [...now.subscribers];
+    if (sent !== undefined && "ok" in sent && "ok" in value) {
+      const next = value.ok;
+      const delta = (ops: Op[]): Out | null => (ops.length === 0 ? null : largerThan(ops, next) ? { value: next } : { delta: ops });
+      const spec = specOf(topic);
+      out = subscribers.some(([, , k]) => !k || !spec) ? delta(diff(sent.ok, next)) : null;
+      if (spec && subscribers.some(([, , k]) => k)) {
+        const ops = diffKeyed(sent.ok, next, spec);
+        keyedOut = ops.length === 0 ? null : heavier(ops, next) ? { value: next } : { delta: ops };
+      } else keyedOut = out;
+    } else if (sent !== undefined && sameValue(sent, value)) out = keyedOut = null;
+    else out = keyedOut = whole(value);
+    now.sent = value;
     for (const w of changed) w();
-    if (!out) return;
-    for (const [client, id] of subscribers) this.host.emit(client, to(out, id));
+    for (const [client, id, keyed] of subscribers) {
+      const o = keyed ? keyedOut : out;
+      if (o) this.host.emit(client, to(o, id));
+    }
   }
 
   #evict(topic: Topic, idle: number): void {

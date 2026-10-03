@@ -1,6 +1,6 @@
 // Messages between a UI and the core (protocol.rs; docs/client-core.md, Protocol). The JSON is the Rust core's.
 import type { CoreError } from "./error.ts";
-import type { Op } from "./delta.ts";
+import type { AnyOp } from "./collections.ts";
 import { isObject, toJson } from "./util.ts";
 
 /// One connected UI (a tab, a window).
@@ -11,7 +11,7 @@ export type RequestId = number;
 /// UI → core.
 export type ClientMessage =
   | { kind: "call"; id: RequestId; call: string; params: unknown }
-  | { kind: "subscribe"; id: RequestId; subscribe: Topic }
+  | { kind: "subscribe"; id: RequestId; subscribe: Topic; keyed?: boolean }
   | { kind: "unsubscribe"; id: RequestId; unsubscribe: boolean }
   | { kind: "cancel"; id: RequestId; cancel: boolean };
 
@@ -20,7 +20,7 @@ export type CoreMessage =
   | { id: RequestId; ok: unknown }
   | { id: RequestId; error: CoreError }
   | { id: RequestId; value: unknown }
-  | { id: RequestId; delta: Op[] };
+  | { id: RequestId; delta: AnyOp[] };
 
 /// What a UI can subscribe to: `{ topic, …params }`, its params as protocol.rs declares them (defaults filled, absent
 /// options left out). `station` is `"<workspace>/<station>"`.
@@ -156,7 +156,8 @@ export function parseClientMessage(raw: unknown): ClientMessage | { invalid: str
   if (typeof raw.call === "string") return { kind: "call", id, call: raw.call, params: raw.params === undefined ? null : raw.params };
   if ("subscribe" in raw) {
     const topic = parseTopic(raw.subscribe);
-    if (topic) return { kind: "subscribe", id, subscribe: topic };
+    // `keyed`: the UI applies keyed ops (collections.ts); the Rust core ignores it.
+    if (topic) return raw.keyed === true ? { kind: "subscribe", id, subscribe: topic, keyed: true } : { kind: "subscribe", id, subscribe: topic };
   }
   if (typeof raw.unsubscribe === "boolean") return { kind: "unsubscribe", id, unsubscribe: raw.unsubscribe };
   if (typeof raw.cancel === "boolean") return { kind: "cancel", id, cancel: raw.cancel };

@@ -216,7 +216,7 @@ class StillFailCore internal constructor(
         subs[id] = sub
         onState(sub.state)
         // While the core is being restarted, open() subscribes everything anew.
-        if (engine != null) post(buildJsonObject { put("id", id); put("subscribe", topic) }.toString())
+        if (engine != null) post(buildJsonObject { put("id", id); put("subscribe", topic); put("keyed", true) }.toString())
         return id
     }
 
@@ -247,7 +247,7 @@ class StillFailCore internal constructor(
         }
         engine = next
         client = next.connect()
-        for ((id, sub) in subs) post(buildJsonObject { put("id", id); put("subscribe", sub.topic) }.toString())
+        for ((id, sub) in subs) post(buildJsonObject { put("id", id); put("subscribe", sub.topic); put("keyed", true) }.toString())
         if (focus.isNotEmpty()) post(buildJsonObject { put("id", nextId++); put("call", "client.focus"); put("params", focus) }.toString())
         val queued = queue.toList()
         queue.clear()

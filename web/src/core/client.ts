@@ -246,7 +246,7 @@ export class CoreClient {
     const id = this.#nextId++;
     this.#subs.set(id, { topic, onValue, onError });
     // While the worker is being replaced, #connect subscribes everything anew.
-    if (this.#channel) this.#post({ id, subscribe: topic });
+    if (this.#channel) this.#post({ id, subscribe: topic, keyed: true });
     return () => {
       if (this.#subs.delete(id) && this.#channel) this.#post({ id, unsubscribe: true });
     };
@@ -272,7 +272,7 @@ export class CoreClient {
    */
   resume(): void {
     this.#rejectCalls(t("web-main.core.resumed"));
-    if (this.#channel) for (const [id, sub] of this.#subs) this.#post({ id, subscribe: sub.topic });
+    if (this.#channel) for (const [id, sub] of this.#subs) this.#post({ id, subscribe: sub.topic, keyed: true });
     this.#refocus();
   }
 
@@ -342,7 +342,7 @@ export class CoreClient {
     }
     this.#channel = channel;
     this.#up = false;
-    for (const [id, sub] of this.#subs) this.#post({ id, subscribe: sub.topic });
+    for (const [id, sub] of this.#subs) this.#post({ id, subscribe: sub.topic, keyed: true });
     const queued = this.#queue;
     this.#queue = [];
     for (const message of queued) this.#post(message);

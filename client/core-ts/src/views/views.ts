@@ -285,6 +285,9 @@ export function envOf(core: Inner): ViewsEnv {
 
 /// The views a core shows, as an owner of their topics.
 export class Views implements Owner {
+  /// The list rows made from each record (with what else they were made with), so a row whose record did not change
+  /// is not made again (rule 7). Kept as long as the record is.
+  readonly #rowsMade = new WeakMap<object, { sig: string; row: J }>();
   readonly #core: ViewsEnv;
   readonly local: Local;
   /// Per live view, the topics it watches.
@@ -727,10 +730,24 @@ export class Views implements Owner {
         this.local.settle(s.address, read.ok);
         const listed = arr(read.ok).slice();
         const asked = this.local.pendingRows(s.address, listed);
+        // What a row is made with besides its record: a row whose record and these are as they were is the one made
+        // before (rule 7: the list redoes only the rows that changed).
+        const link = this.link(s.address);
+        const sig = JSON.stringify([s.address, s.name, s.online, link.state ?? null, me, slackUsers, members_, watching]);
         for (const raw of [...asked, ...listed]) {
           if (mine && get(raw, "mine") !== true) continue;
           if (this.local.beingArchived(s.address, raw)) continue;
-          const row = this.#chatRow(s, this.local.asChanging(s.address, raw), me, slackUsers, members_, watching);
+          const shown = this.local.asChanging(s.address, raw);
+          // Only a frozen record (data.ts) is surely as it was when its row was made.
+          const keepable = isObject(shown) && Object.isFrozen(shown);
+          const kept = keepable ? this.#rowsMade.get(shown) : undefined;
+          let row: J;
+          if (kept && kept.sig === sig) row = kept.row;
+          else {
+            row = this.#chatRow(s, shown, me, slackUsers, members_, watching);
+            if (row !== null) deepFreeze(row);
+            if (keepable) this.#rowsMade.set(shown, { sig, row });
+          }
           if (row !== null) rows.push(row);
         }
       }
@@ -773,6 +790,9 @@ export class Views implements Owner {
   /// A station's row as the list shows it (null: not in this list).
   #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean): J {
     const row = structuredClone(raw);
+    // Pinned rows are pinned (true) in the list, in the order they were pinned in; one unpinned says false.
+    if (typeof row.pinned === "number") pinnedAt.set(row, row.pinned);
+    if (row.pinned !== undefined) row.pinned = typeof row.pinned === "number";
     row.station = s.address;
     row.stationName = s.name;
     if (!s.online) row.offline = t("core-views.station.offline", { name: s.name });
@@ -823,12 +843,10 @@ export class Views implements Owner {
   #days(rows: J[]): J[] {
     const host = this.#core.host;
     const at = (row: J) => (typeof row.lastActiveAt === "number" ? row.lastActiveAt : 0);
-    const pinned = rows.filter((row) => typeof row.pinned === "number");
-    const rest = rows.filter((row) => typeof row.pinned !== "number");
-    const pinnedAt = (row: J) => (typeof row.pinned === "number" ? row.pinned : 0);
-    pinned.sort((a, b) => pinnedAt(b) - pinnedAt(a) || at(b) - at(a));
-    for (const row of pinned) row.pinned = true;
-    for (const row of rest) if (row.pinned !== undefined) row.pinned = false;
+    const pinned = rows.filter((row) => pinnedAt.has(row));
+    const rest = rows.filter((row) => !pinnedAt.has(row));
+    const when = (row: J) => pinnedAt.get(row) ?? 0;
+    pinned.sort((a, b) => when(b) - when(a) || at(b) - at(a));
     const day = (ms: number) => Math.floor((ms + host.utcOffsetMin(ms) * 60_000) / DAY_MS);
     const settled = (row: J) => (row.settled === true ? 1 : 0);
     rest.sort((a, b) => day(at(b)) - day(at(a)) || settled(a) - settled(b) || at(b) - at(a));
@@ -1341,4 +1359,14 @@ export class Views implements Owner {
     }
     return topics;
   }
+}
+
+/// When each pinned list row was pinned (the rows say only `pinned: true`).
+const pinnedAt = new WeakMap<object, number>();
+
+/// Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
+function deepFreeze(v: unknown): void {
+  if (v === null || typeof v !== "object" || Object.isFrozen(v)) return;
+  for (const k of Object.keys(v)) deepFreeze((v as Record<string, unknown>)[k]);
+  Object.freeze(v);
 }
