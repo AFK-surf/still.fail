@@ -67,7 +67,21 @@ STILLFAIL_ENGINE=cmake python3 apps/android/build.py  # the engine built by Grad
 
 **Publishing** happens only in CI, on main: the pipeline's `natives` job (mini1) runs `node scripts/native.ts ensure --publish`, which builds every part (and target) whose key the release lacks and uploads it with the run's token, then `prune 20` keeps the newest 20 assets of each part and target. A branch publishes nothing: its `natives` job builds what the release lacks of what its checks and builds use, and hands it to its other jobs as the run artifact `natives-<sha>` (`STILLFAIL_NATIVE_INBOX`, `.github/actions/natives`); on mini1 the jobs share the cache anyway. Every job after it (checks, the web build, Android on Blacksmith, the desktop and station on mini1) then compiles no Rust. The release is a prerelease, made once by hand (`gh release create native-artifacts --prerelease --target <a main commit> -t "Prebuilt native parts"`): GitHub refuses the run's token a new tag at a commit that changes a workflow.
 
-Measured 2026-10-04 (studio and mini1, f5b84fbf, a fresh worktree each: install, typecheck, station and core-ts tests, web, unsigned desktop and Android debug builds): with the parts published and an empty cache, 144 s on studio / 150 s on mini1 (33 MB downloaded in about 12 s, no rustc call); a second worktree, 137 s / 119 s; nothing published (each part built here, through sccache), 384 s / 383 s with 1,530 rustc calls; the Rust-era commit b98a7f6e the same way, 478 s with 2,642. A worktree takes 2.1 GB (no Cargo target) against 4.8 GB building the parts and 11.1 GB in the Rust era; the shared cache 0.09 GB. A TypeScript-only commit's full check, part by part as CI runs it, made no rustc call and ran no cargo.
+Measured on studio, a fresh worktree each, step by step (seconds; rustc calls in brackets where there were any):
+
+| Step | Parts in the machine's cache (39eced35) | Nothing prebuilt, built here through sccache (39eced35) | Rust era (b98a7f6e) |
+| --- | --- | --- | --- |
+| worktree + install | 5.6 | 5.6 | 3.4 |
+| web's iroh | 0.4 | 50.9 (280) | 106.9 (308) |
+| typecheck | 6.2 | 6.1 | 2.4 |
+| station tests | 3.9 | 71.4 (434) | 56.0 (486) |
+| core tests | 9.9 | 12.8 | 61.6 (504) |
+| web build | 13.4 | 13.5 | 11.2 |
+| desktop build (unsigned) | 24.8 | 99.1 (442) | 154.9 (890) |
+| Android debug build | 21.5 | 79.4 (374) | 81.6 (454) |
+| **total** | **85.9** | **339.0 (1,530)** | **478.3 (2,642)** |
+
+With the parts published and an empty cache, the first column plus their download (33 MB, about 12 s; measured at f5b84fbf, when the core tests still took 58 s: 144 s on studio, 150 s on mini1). A worktree takes 2.1 GB (no Cargo target) against 4.8 GB building the parts and 11.1 GB in the Rust era; the shared cache 0.09 GB. A TypeScript-only commit's full check, part by part as CI runs it, made no rustc call and ran no cargo.
 
 ## Browser and station builds
 
