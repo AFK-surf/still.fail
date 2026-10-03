@@ -5,7 +5,7 @@
 // events bring what changes as it changes, into the records. Then the rest is brought onto the device in the
 // background, the most urgent first: every chat's entries (from its latest page back to its first), every session's
 // detail and the latest page of its transcript. The UI makes some of it more urgent (`prioritize`), never more or less.
-import { Effect, Exit, Fiber, Scope } from "effect";
+import { Deferred, Effect, Exit, Fiber, Scope } from "effect";
 import type { Inner } from "../core.ts";
 import { join } from "../data.ts";
 import { CoreError, asCoreError } from "../error.ts";
@@ -340,8 +340,8 @@ export class StationsSync {
             link.heard = core.host.nowMs();
             self.setLink(address, { state: "online" });
             span.end();
-            // Nothing is replayed: what the station holds is read now.
-            self.snapshot(address);
+            // Nothing is replayed: what the station holds is read now, in the trace of its connecting.
+            self.snapshot(address, span.context);
             const parser = new SseParser();
             const openedAt = core.host.nowMs();
             let why = "ended";
@@ -396,18 +396,26 @@ export class StationsSync {
 
   // ── reading what a station holds ──
 
-  /// Everything the station holds, read again (its stream opened): the lists, then what they name.
-  snapshot(address: string): void {
+  /// Everything the station holds, read again (its stream opened): the lists, then what they name. One span
+  /// (`station.read`, under `parent` where given) has each read under it, and ends once they all have.
+  snapshot(address: string, parent: SpanContext | null = null): void {
     const p = Priority.shown;
-    this.#enqueue(address, "overview", p, this.#read(address, { topic: "overview", station: address }, "/overview"));
-    this.#enqueue(address, "sessions", p, Effect.andThen(this.#read(address, { topic: "sessions", station: address }, "/sessions"), Effect.sync(() => this.#details(address))));
-    this.#enqueue(address, "threads", p, Effect.andThen(this.#read(address, { topic: "threads", station: address }, "/threads"), Effect.sync(() => this.#entries(address))));
-    this.#enqueue(address, "chats", p, Effect.andThen(this.#read(address, { topic: "chatRows", station: address }, "/chats"), Effect.sync(() => this.openEvents(address, false))));
-    this.#enqueue(address, "archived", Priority.background, this.#read(address, { topic: "archivedRows", station: address }, "/chats?archived=1"));
-    this.#enqueue(address, "jobs", p, this.#read(address, { topic: "jobs", station: address }, "/jobs"));
-    this.#enqueue(address, "footprint", Priority.background, this.#read(address, { topic: "footprint", station: address }, "/footprint"));
-    this.#enqueue(address, "usage", Priority.background, this.#usage(address));
-    for (const id of this.#slackConnects(address)) this.#enqueue(address, `slackApp/${id}`, Priority.background, this.#read(address, { topic: "slackApp", station: address, connect: id }, `/connects/${encode(id)}/slack-app`));
+    const span = this.#core.tracer.span("station.read", Kind.Internal, parent);
+    span.set("stillfail.station", address);
+    const ctx = span.context;
+    const read = (topic: Topic, path: string) => this.#read(address, topic, path, undefined, ctx);
+    const done = [
+      this.#enqueue(address, "overview", p, read({ topic: "overview", station: address }, "/overview")),
+      this.#enqueue(address, "sessions", p, Effect.andThen(read({ topic: "sessions", station: address }, "/sessions"), Effect.sync(() => this.#details(address)))),
+      this.#enqueue(address, "threads", p, Effect.andThen(read({ topic: "threads", station: address }, "/threads"), Effect.sync(() => this.#entries(address)))),
+      this.#enqueue(address, "chats", p, Effect.andThen(read({ topic: "chatRows", station: address }, "/chats"), Effect.sync(() => this.openEvents(address, false)))),
+      this.#enqueue(address, "archived", Priority.background, read({ topic: "archivedRows", station: address }, "/chats?archived=1")),
+      this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, "/jobs")),
+      this.#enqueue(address, "footprint", Priority.background, read({ topic: "footprint", station: address }, "/footprint")),
+      this.#enqueue(address, "usage", Priority.background, this.#usage(address, ctx)),
+      ...this.#slackConnects(address).map((id) => this.#enqueue(address, `slackApp/${id}`, Priority.background, read({ topic: "slackApp", station: address, connect: id }, `/connects/${encode(id)}/slack-app`))),
+    ];
+    this.#core.runner.fork(Effect.ensuring(Effect.ignore(Effect.all(done.map((d) => Deferred.await(d)), { mode: "result" })), Effect.sync(() => span.end())));
   }
 
   /// A task of the station's lane; its key is `<address> <what>` (what `prioritize` matches).
@@ -429,11 +437,11 @@ export class StationsSync {
   }
 
   /// Reads one held topic: a 4xx while nothing is held is its error (the topic says so); anything else passes.
-  #read(address: string, topic: Topic, path: string, shape?: (answer: unknown) => unknown): Effect.Effect<void, CoreError> {
+  #read(address: string, topic: Topic, path: string, shape?: (answer: unknown) => unknown, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (!this.reachable(address) || !this.#links.has(address)) return;
       const link = this.#links.get(address)!;
-      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", path, null, { quiet: true }));
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", path, null, { quiet: true, ctx }));
       const key = topicKey(topic);
       if (answer._tag === "Success") {
         link.errors.delete(key);
@@ -446,14 +454,14 @@ export class StationsSync {
   }
 
   /// What the station's agents spent over the last 30 days, days as this device's clock has them.
-  #usage(address: string): Effect.Effect<void, CoreError> {
+  #usage(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       const now = this.#core.host.nowMs();
       const offset = this.#core.host.utcOffsetMin(now);
       const day = 86_400_000;
       const local = Math.trunc(now) + offset * 60_000;
       const from = local - (((local % day) + day) % day) - 29 * day - offset * 60_000;
-      return this.#read(address, { topic: "stationUsage", station: address }, `/usage?from=${from}&tz=${offset}`);
+      return this.#read(address, { topic: "stationUsage", station: address }, `/usage?from=${from}&tz=${offset}`, undefined, ctx);
     });
   }
 
