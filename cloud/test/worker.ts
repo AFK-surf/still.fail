@@ -90,6 +90,14 @@ export class Account extends ProductionAccount {
     else session.expires = nowSeconds();
     this.ctx.storage.kv.put("account", account);
   }
+  /** Moves the session's last rotation `seconds` into the past (past its retry window, say). */
+  age(id: string, seconds: number) {
+    const account = this.ctx.storage.kv.get<any>("account");
+    const session = account.sessions.find((s: any) => s.id === id);
+    if (session.retry) session.retry.until -= seconds;
+    if (session.rotated !== undefined) session.rotated -= seconds;
+    this.ctx.storage.kv.put("account", account);
+  }
   statistics() {
     return {
       quota: this.ctx.storage.kv.get("quota"),

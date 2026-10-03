@@ -43,11 +43,18 @@ export class Account extends DurableObject<Env> {
     return true;
   }
 
-  private async mint(data: AccountData, session: Session): Promise<Tokens> {
+  /** A new access credential for the session. */
+  private async access(data: AccountData, session: Session): Promise<{ access_token: string; expires_at: number }> {
     const now = nowSeconds();
     const expires = Math.min(now + ACCESS_TTL_SEC, session.expires, session.idle);
     const claims = { sub: data.sub, email: data.email, name: data.name ?? "", sid: session.id };
-    const access = await signToken(this.env, "access", claims, expires, now);
+    return { access_token: await signToken(this.env, "access", claims, expires, now), expires_at: expires };
+  }
+
+  private async mint(data: AccountData, session: Session): Promise<Tokens> {
+    const now = nowSeconds();
+    const claims = { sub: data.sub, email: data.email, name: data.name ?? "", sid: session.id };
+    const { access_token: access, expires_at: expires } = await this.access(data, session);
     const refresh = await signToken(
       this.env,
       "refresh",
@@ -117,10 +124,15 @@ export class Account extends DurableObject<Env> {
       if (!this.charge()) return outcome(limited(), "limited");
       const now = nowSeconds();
       const rotated: SpanNotes = session.rotated === undefined ? {} : { "stillfail.auth.rotated_ago": now - session.rotated };
-      // The credential just rotated, back within the retry window: an interrupted rotation, or another client of the
-      // same device (a second tab's core, say) racing this one. Both get the same new credentials; not reuse.
-      if (session.retry?.hash === hash && session.retry.until > now) {
-        return outcome(reply(await unseal(this.env, session.retry.response)), "retried", rotated);
+      // The credential that just rotated, while what it rotated to has not been used (that would have rotated again and
+      // replaced this retry): an interrupted rotation, or another client of the same device (a second tab's core, say)
+      // racing this one. Both get the same new credentials; not reuse. Later than the retry window too: a phone that
+      // slept with the answer on its way sends the same request again minutes later (2026-10-03, 142 s), and it never
+      // got the credential it is now offered, so nobody else can have used it. Its access credential is made again.
+      if (session.retry?.hash === hash) {
+        const answer = await unseal(this.env, session.retry.response);
+        if (session.retry.until > now) return outcome(reply(answer), "retried", rotated);
+        return outcome(reply({ ...answer, ...(await this.access(data, session)) }), "retried_late", rotated);
       }
       if (session.refreshHash !== hash || session.generation !== claims.gen) {
         // A validly signed older refresh credential outside the exact retry is
@@ -136,7 +148,7 @@ export class Account extends DurableObject<Env> {
         hash,
         request: requestId,
         until: nowSeconds() + REFRESH_RETRY_SEC,
-        response: await seal(this.env, tokens),
+        response: await seal(this.env, tokens, session.expires),
       };
       session.refreshHash = await digest(tokens.refresh_token);
       this.save(data);
@@ -196,11 +208,10 @@ export class Account extends DurableObject<Env> {
   private prune(data: AccountData) {
     const now = nowSeconds();
     data.sessions = data.sessions.filter((s) => s.expires > now && s.idle > now);
-    for (const session of data.sessions) if (session.retry && session.retry.until <= now) delete session.retry;
     this.save(data);
   }
   private async schedule(data: AccountData) {
-    const deadlines = data.sessions.flatMap((s) => [s.expires, s.idle, ...(s.retry ? [s.retry.until] : [])]);
+    const deadlines = data.sessions.flatMap((s) => [s.expires, s.idle]);
     if (deadlines.length) await this.ctx.storage.setAlarm(Math.max(Date.now() + 1000, Math.min(...deadlines) * 1000));
     else await this.ctx.storage.deleteAlarm();
   }

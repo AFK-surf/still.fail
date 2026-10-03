@@ -150,15 +150,16 @@ export async function verifyToken(env: Env, token: string, type: "access" | "ref
 }
 
 // An interrupted rotation can return exactly the same credentials; refresh
-// secrets are hashed, with only a short-lived encrypted retry response retained.
+// secrets are hashed, with only the last rotation's answer retained, encrypted
+// (until the session ends, or rotates again).
 // (The key's label keeps its old name: a retry sealed before a deploy still opens after it.)
 async function encryptionKey(env: Env) {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(`ember-refresh-retry\0${env.AUTH_SIGNING_KEY}`)));
 }
-export async function seal(env: Env, value: Tokens): Promise<string> {
+export async function seal(env: Env, value: Tokens, expires: number): Promise<string> {
   return new EncryptJWT({ value })
     .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
-    .setExpirationTime(nowSeconds() + REFRESH_RETRY_SEC)
+    .setExpirationTime(expires)
     .encrypt(await encryptionKey(env));
 }
 export async function unseal(env: Env, value: string): Promise<Tokens> {

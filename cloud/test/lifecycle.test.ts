@@ -309,3 +309,36 @@ test("relay budgets span anonymous and account sessions; account idle expiry sti
     await h.close();
   }
 });
+
+test("a refresh answered after its retry window: the same credentials while the new ones are unused, a fresh access", { timeout: 20000 }, async () => {
+  const h = await harness();
+  try {
+    const session = await h.login("sleepy-phone");
+    const accounts: any = await h.mf.getDurableObjectNamespace("ACCOUNTS", "api");
+    const account = accounts.get(accounts.idFromName(session.subject)) as any;
+    const refresh = (token: string, request_id = ulid()) =>
+      h.fetch("/v1/auth/refresh", { method: "POST", headers: auth(token), body: JSON.stringify({ request_id }) });
+    const requestId = ulid();
+    const first = await refresh(session.refresh_token, requestId);
+    assert.equal(first.status, 200);
+    const next = (await first.json()) as Tokens;
+    // The phone slept with the answer on its way, and sends the same request again minutes later (2026-10-03: 142 s).
+    await account.age(session.session_id, 600);
+    for (const id of [requestId, ulid()]) {
+      const late = await refresh(session.refresh_token, id);
+      assert.equal(late.status, 200, "not taken for reuse");
+      const again = (await late.json()) as Tokens;
+      assert.equal(again.refresh_token, next.refresh_token, "the credential it never got");
+      assert.ok(again.expires_at > Date.now() / 1000, "an access credential that works");
+      assert.equal((await h.fetch("/v1/auth/session", { headers: auth(again.access_token) })).status, 200);
+    }
+    // Once the new credential is used, the old one is reuse again: the family is revoked.
+    const used = await refresh(next.refresh_token);
+    assert.equal(used.status, 200);
+    const latest = (await used.json()) as Tokens;
+    assert.equal((await refresh(session.refresh_token)).status, 401);
+    assert.equal((await h.fetch("/v1/auth/session", { headers: auth(latest.access_token) })).status, 401, "reuse revokes access");
+  } finally {
+    await h.close();
+  }
+});

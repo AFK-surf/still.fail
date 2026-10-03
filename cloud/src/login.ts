@@ -4,7 +4,7 @@ export { devicePage } from "./page";
 import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import type { Env } from "./env";
-import { CODE_TTL_SEC, LOGIN_TTL_SEC, digest, googleIdentity, limited, nowSeconds, randomSecret, readText, reply, seal, unseal, validRedirect, validSecret, type Identity, type Tokens } from "./auth";
+import { CODE_TTL_SEC, LOGIN_TTL_SEC, REFRESH_RETRY_SEC, digest, googleIdentity, limited, nowSeconds, randomSecret, readText, reply, seal, unseal, validRedirect, validSecret, type Identity, type Tokens } from "./auth";
 
 type Attempt = {
   redirect: string;
@@ -150,7 +150,7 @@ export class LoginAttempt extends DurableObject<Env> {
       const result = await this.env.ACCOUNTS.getByName(attempt.identity.sub).create(attempt.identity, attempt.sessionId, attempt.name);
       if (result.ok) {
         const tokens = (await result.json()) as Tokens;
-        attempt.receipt = await seal(this.env, tokens);
+        attempt.receipt = await seal(this.env, tokens, nowSeconds() + REFRESH_RETRY_SEC);
         attempt.phase = "used";
         attempt.expires = nowSeconds() + CODE_TTL_SEC;
         this.ctx.storage.kv.put("attempt", attempt);

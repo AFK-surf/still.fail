@@ -187,7 +187,7 @@ recorded whatever the sampling), and still.fail cloud's span of it
 | attribute (`attributes.custom`) | |
 |---|---|
 | `stillfail.account`, `stillfail.session` | whose session (the Google `sub`, the session id) |
-| `stillfail.auth.outcome` | `rotated`, `retried` (the same credential again within the 120 s retry window), `reused` (an older credential outside it: the session is revoked and the device signed out), `no_session`, `invalid_token`, `limited` |
+| `stillfail.auth.outcome` | `rotated`, `retried` (the credential that last rotated again, within the 120 s retry window), `retried_late` (the same past the window, while what it rotated to is unused: the same credentials, a new access one), `reused` (any other older credential: the session is revoked and the device signed out), `no_session`, `invalid_token`, `limited` |
 | `stillfail.auth.presented_generation`, `stillfail.auth.generation` | the credential's generation, and the session's |
 | `stillfail.auth.rotated_ago` | seconds since the session last rotated (sessions rotated since this was kept) |
 | `stillfail.auth.gone` | for `no_session`: `reused`, `logout`, `logout_all`, `removed` (from another device's session list), `blocked`, `expired`, `idle`, `no_account`, `unknown` (pruned, or ended before endings were kept); `stillfail.auth.ended_ago` seconds since |
