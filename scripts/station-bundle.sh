@@ -7,7 +7,7 @@
 #   stillfail/mesh/target/release/stillfail-station       (the launcher, with the Rust station's command line and path,
 #                                                          ember-station beside it: what the installer, bin/stillfail,
 #                                                          the desktop app and services written by older releases run)
-#   stillfail/station/{main.js, read/worker.js, skills/, mesh.node, stillfail-runner}
+#   stillfail/station/{main.js, read/worker.js, skills/, mesh.node, stillfail-runner, package.json}
 #   stillfail/node/bin/node                               (the Node it runs on, NODE_VERSION's)
 #   stillfail/dist/admin/posthog.json                     (only the PostHog key the station reports errors with, when
 #                                                          $STILLFAIL_POSTHOG names one: scripts/posthog-key.ts; the
@@ -55,6 +55,9 @@ cp "$root/station/dist/main.js" "$app/station/"
 cp "$root/station/dist/read/worker.js" "$app/station/read/"
 cp -R "$root/station/dist/skills" "$app/station/skills"
 cp "$mesh" "$runner" "$app/station/"
+# The bundle is an ES module: said, so Node neither guesses nor takes the type of a package.json above the release
+# (the desktop app built in apps/desktop has one: every command warned).
+printf '{"type":"module"}\n' > "$app/station/package.json"
 cp "$cache/$node_dist/bin/node" "$app/node/bin/node"
 git -C "$root" rev-parse HEAD > "$app/VERSION"
 git -C "$root" rev-list --count HEAD > "$app/BUILD"

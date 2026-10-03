@@ -9,11 +9,13 @@
 #   4. back to the Rust release: the launcher cannot start it (no Node in it), says so (run/handoff-failed), and the
 #      installer drains and restarts.
 #   install-e2e.sh <work> <rust release dir> <ts release tarball>
+# The Rust release is an old one (the Rust station left this repository at 2d5df360): an installed station's from before,
+# or laid out at 34e1a30a by its scripts/station-bundle.sh (its stillfail-station: scripts/native.ts file station-rs).
 set -eu
 work=$1 rust=$2 ts=$3
 here=$(cd "$(dirname "$0")/.." && pwd)
 root=$(cd "$here/.." && pwd)
-load=$here/tools/load/target/release/station-load
+load=${E2E_LOAD:-$(node "$root/scripts/native.ts" file station-load)} # prebuilt, or built here (scripts/native.ts)
 rm -rf "$work" && mkdir -p "$work/home" "$work/rel"
 HOME=$work/home
 data=$HOME/.stillfail
