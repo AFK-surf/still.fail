@@ -20,6 +20,8 @@ export interface Owner {
 export class Router implements Source {
   readonly #core: Inner;
   readonly owners: Owner[] = [];
+  /// What a topic's value goes through once computed (a chat as its UIs attend to it).
+  after: (topic: Topic, value: Value | undefined) => Value | undefined = (_topic, value) => value;
 
   constructor(core: Inner) {
     this.#core = core;
@@ -71,7 +73,7 @@ export class Router implements Source {
       case "prefs":
         return { ok: {} };
     }
-    return this.owners.find((o) => o.owns(topic))?.compute?.(topic);
+    return this.after(topic, this.owners.find((o) => o.owns(topic))?.compute?.(topic));
   }
 
   /// What is waited on: of a workspace, its own waits, its account's socket and the relay opened for no station; of
