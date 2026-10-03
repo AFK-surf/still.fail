@@ -31,7 +31,8 @@ export interface Entry {
 }
 
 const PARTS: [RegExp, Part[]][] = [
-  [/^mesh\//, ["station"]],
+  // The station: station/ (src/ and its native parts; not its tests), and mesh/ in the history before it (the Rust one).
+  [/^station\/(src|native)\/|^mesh\//, ["station"]],
   [/^client\//, ["web", "android"]],
   [/^web\//, ["web"]],
   [/^apps\/android\//, ["android"]],

@@ -1,14 +1,15 @@
-// This machine's station, run by the app (docs/station-rust.md, 1.5): the release the app carries in its Resources
-// (scripts/station-bundle.sh), started with the app, started again when it ends, stopped when the app quits. Its data
+// This machine's station, run by the app: the release the app carries in its Resources (scripts/station-bundle.sh: the
+// station in TypeScript, its launcher at mesh/target/release/stillfail-station with the command line the Rust station
+// had), started with the app, started again when it ends, stopped when the app quits. Its data
 // is ~/.stillfail, as an installed station's is, so the machine is one station whichever runs it; when one is installed
 // and running already (stillfail-station exits with HELD), the app leaves it be. A machine that ran it before the
-// rename has it in ~/.ember: the station moves it to ~/.stillfail as it starts (mesh/app/src/former.rs).
+// rename has it in ~/.ember: the station moves it to ~/.stillfail as it starts (station/native/launcher, data.rs).
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-/** stillfail-station's exit when another station runs the data directory (mesh/station/src/main.rs). */
+/** stillfail-station's exit when another station runs the data directory (station/native/launcher: HELD). */
 const HELD = 3;
 
 /** A directory with something in it (a link counts: ~/.ember once moved is one). */

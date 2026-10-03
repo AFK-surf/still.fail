@@ -18,12 +18,9 @@ if [ -n "${POSTHOG_JSON:-}" ]; then (umask 077 && printf '%s' "$POSTHOG_JSON" > 
 
 case "${1:?usage: release.sh station|android}" in
   station)
-    # station-bundle.sh takes darwin-arm64's stillfail-station from mesh/target; built in the runner's own target,
-    # kept between runs (the checkout's is cleaned each time), and put there.
-    (cd mesh && cargo build --release -p stillfail-station)
-    mkdir -p mesh/target/release
-    cp "$CARGO_TARGET_DIR/release/stillfail-station" mesh/target/release/
-    export LINUX_TARGET_DIR="${LINUX_TARGET_DIR:-${RUNNER_TEMP:-/tmp}/linux}"
+    # The station in TypeScript, bundled for each platform (scripts/station-bundle.sh) with its native parts prebuilt:
+    # the natives job before this one built and published those of this commit (all three platforms).
+    (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
     sh scripts/release.sh ${beta:+$beta}
     ;;
   android)

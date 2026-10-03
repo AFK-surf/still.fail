@@ -1,7 +1,7 @@
 #!/bin/sh
-# Builds the still.fail station's releases (the layout of scripts/station-bundle.sh) and puts them in the cloud's releases
-# bucket, where install.sh (cloud/src/install.ts) gets them: this Mac's (darwin-arm64), and Linux's (linux-x64,
-# linux-arm64, built from here: scripts/linux-station.sh).
+# Builds the still.fail station's releases (the station in TypeScript, laid out by scripts/station-bundle.sh) and puts
+# them in the cloud's releases bucket, where install.sh (cloud/src/install.ts) gets them: darwin-arm64, linux-x64 and
+# linux-arm64, each with its Node and its native parts (prebuilt for that platform: scripts/native.ts).
 # The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip, its blockmap and stillfail-mac.yml, in desktop/) and
 # `android` (apps/android/build.py --release: stillfail-<n>.apk and latest.json, in android/). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
@@ -114,7 +114,7 @@ for platform in $platforms; do
       ;;
   esac
 done
-# What stations read to say a newer release is out (mesh/app/src/updates.rs), once its files are there.
+# What stations read to say a newer release is out (station/src/updates/updates.ts), once its files are there.
 if [ -n "${station:-}" ]; then
   printf '{"version":"0.1.%s","build":%s,"commit":"%s"}\n' "$build" "$build" "$(git -C "$root" rev-parse HEAD)" > "$out/station.json"
   put "$out/station.json" "station${beta:+-beta}.json" application/json

@@ -12,9 +12,9 @@
 #
 # STILLFAIL_CHECK_PART=ts|station|core|android runs only that part of it (CI runs the four side by side): ts the
 # icons, the clients' types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the
-# core: client/core-ts); station the station in TypeScript (station/, its typecheck and tests), its native parts'
-# own tests (station/native) and the Rust station (mesh/); core client/'s Rust (the core's native shells: iroh for the
-# web and Android's IO, the words); android the app. Unset: all of them.
+# core: client/core-ts); station the station (station/, its typecheck and tests) and its native parts' own tests
+# (station/native); core client/'s Rust (the core's native shells: iroh for the web and Android's IO); android the app.
+# Unset: all of them.
 #
 # The native parts the TypeScript builds and tests use (the station's mesh addon and runner, the web's iroh, the
 # Android shell and engine, …) are prebuilt (scripts/native.ts): Rust is compiled only where Rust changed, for its
@@ -135,26 +135,22 @@ if [ $full = 1 ]; then
   # The TypeScript core's own tests; its mesh tests use the station's addon and n0's relay, prebuilt (its package.json).
   if part ts && touches "$ts_core|^station/native/mesh/|^vendor/"; then deps client/core-ts; step "tests: core-ts" sh -c 'cd client/core-ts && pnpm test'; fi
   if part ts && touches "$ts_cloud"; then step "tests: cloud" sh -c 'cd cloud && pnpm test'; fi
-  # The station in TypeScript, with its native parts prebuilt (mesh addon, runner, the Rust archive for the
-  # compatibility tests): its tests run whenever it or one of them changed.
-  if part station && touches '^station/|^vendor/|^mesh/app/src/(archive\.rs|skills/)|^scripts/native\.ts$'; then
+  # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility
+  # tests): its tests run whenever it, one of them or the words it says changed.
+  if part station && touches '^station/|^vendor/|^client/i18n/|^scripts/native\.ts$'; then
     deps station
     step "typecheck: station" sh -c 'cd station && pnpm exec tsgo --noEmit'
     step "tests: station" sh -c 'cd station && pnpm test'
   fi
-  # The native parts' own tests, where their Rust changed.
+  # The native parts' own tests, where their Rust changed (the mesh addon's: the vendored crates it patches in, too).
   for crate in launcher runner mesh; do
-    if part station && touches "^station/native/$crate/"; then
+    also='^$'; [ $crate = mesh ] && also='^vendor/'
+    if part station && { touches "^station/native/$crate/" || touches "$also"; }; then
       if has cargo; then step "Rust: station/native/$crate" sh -c "cd station/native/$crate && cargo test --locked -q"; else later "Rust: station/native/$crate"; fi
     fi
   done
-  # The Rust station (mesh/, which shares client/shapes and client/i18n), only when it changed.
-  if part station && touches '^(mesh|vendor)/|^client/(shapes|i18n)/'; then
-    if has cargo; then step "Rust: station" sh -c 'cd mesh && cargo test --workspace -q'; else later "Rust: station"; fi
-  fi
-  # The core's native shells (client/shell for Android, client/iroh-wasm for the web), the words, the shapes the Rust
-  # station shares.
-  if part core && touches '^client/(shell|iroh-wasm|i18n|shapes)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
+  # The core's native shells (client/shell for Android, client/iroh-wasm for the web).
+  if part core && touches '^client/(shell|iroh-wasm)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
     if has cargo; then step "Rust: client" sh -c 'cd client && cargo test --workspace -q'; else later "Rust: client"; fi
   fi
   # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed.

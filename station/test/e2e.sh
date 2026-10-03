@@ -9,7 +9,7 @@ work=$1
 here=$(cd "$(dirname "$0")/.." && pwd)
 native() { node "$here/../scripts/native.ts" file "$1"; } # prebuilt, or built here (scripts/native.ts)
 load=${E2E_LOAD:-$(native station-load)}
-# E2E_APP: a release (scripts/station-bundle.sh with STILLFAIL_STATION=ts) instead of this checkout: its launcher, its
+# E2E_APP: a release (scripts/station-bundle.sh) instead of this checkout: its launcher, its
 # Node, its runner and mesh addon, as an installed station runs them.
 rm -rf "$work" && mkdir -p "$work/data/homes/cc"
 if [ -n "${E2E_APP:-}" ]; then
