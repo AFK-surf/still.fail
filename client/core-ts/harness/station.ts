@@ -16,14 +16,20 @@ export class FakeStation {
   readonly entries: Entry[] = [];
   readonly streams = new Set<ServerResponse>();
   read = 3;
+  /// More chats beside chat 7 (for measuring, harness/measure.ts): ids 1000…, each `perChat` entries long, all read.
+  readonly others: { id: number; entries: Entry[] }[] = [];
 
-  constructor() {
+  constructor(more = 0, perChat = 0) {
     for (let n = 1; n <= 3; n++) this.entries.push(this.#entry(n, n % 2 === 1 ? "person" : "agent", `第 ${n} 条`));
+    for (let i = 0; i < more; i++) {
+      const id = 1000 + i;
+      this.others.push({ id, entries: Array.from({ length: perChat }, (_, k) => this.#entry(k + 1, k % 2 === 0 ? "person" : "agent", `chat ${id} 的第 ${k + 1} 条：${"一些文字 ".repeat(8)}`, id)) });
+    }
   }
 
-  #entry(n: number, kind: string, text: string): Entry {
+  #entry(n: number, kind: string, text: string, thread = 7): Entry {
     const person = kind === "person";
-    return { thread: 7, n, kind: "message", target: null, ts: `${T0 + n}.0`, authorKind: kind, author: person ? "alice@x.test" : "k1", authorName: person ? "Alice" : null, text, at: (T0 + n) * 1000, attachments: [], quotes: [], declared: null };
+    return { thread, n, kind: "message", target: null, ts: `${T0 + n}.0`, authorKind: kind, author: person ? "alice@x.test" : "k1", authorName: person ? "Alice" : null, text, at: (T0 + n + (thread === 7 ? 0 : thread)) * 1000, attachments: [], quotes: [], declared: null };
   }
 
   get last(): number {
@@ -31,24 +37,36 @@ export class FakeStation {
   }
 
   #message(e: Entry) {
-    return { seq: e.n, thread: 7, ts: e.ts, authorKind: e.authorKind, author: e.author, authorName: e.authorName, text: e.text, attachments: [], quotes: [], declared: null, createdAt: e.at, editedAt: null };
+    return { seq: e.n, thread: e.thread, ts: e.ts, authorKind: e.authorKind, author: e.author, authorName: e.authorName, text: e.text, attachments: [], quotes: [], declared: null, createdAt: e.at, editedAt: null };
   }
 
-  thread() {
-    const last = this.entries.at(-1)!;
+  thread(id = 7) {
+    const entries = this.#entries(id)!;
+    const last = entries.at(-1)!;
+    const read = id === 7 ? this.read : entries.length;
     return {
-      id: 7, surface: "ember", channel: "EMBER", channelName: null, threadTs: "7.0", title: "部署", createdBy: "alice@x.test", creator: null, createdAt: T0 * 1000,
-      sessions: [{ thread: 7, session: "k1", connect: "ember", joinedAt: T0 * 1000 }], last: this.last, lastMessage: this.#message(last), read: this.read, unread: Math.max(0, this.last - this.read), people: [], firstText: null,
+      id, surface: "ember", channel: "EMBER", channelName: null, threadTs: `${id}.0`, title: id === 7 ? "部署" : `chat ${id}`, createdBy: "alice@x.test", creator: null, createdAt: T0 * 1000,
+      sessions: [{ thread: id, session: "k1", connect: "ember", joinedAt: T0 * 1000 }], last: entries.length, lastMessage: this.#message(last), read, unread: Math.max(0, entries.length - read), people: [], firstText: null,
     };
   }
 
-  row() {
-    const last = this.entries.at(-1)!;
+  row(id = 7) {
+    const entries = this.#entries(id)!;
+    const last = entries.at(-1)!;
+    const read = id === 7 ? this.read : entries.length;
     return {
-      id: "7", thread: 7, session: "k1", title: "部署", mine: true, pinned: false, keep: false, createdAt: T0 * 1000, lastActiveAt: last.at,
+      id: String(id), thread: id, session: "k1", title: id === 7 ? "部署" : `chat ${id}`, mine: true, pinned: false, keep: false, createdAt: T0 * 1000, lastActiveAt: last.at,
       agents: [{ key: "k1", connect: "ember", runtime: "claude", profile: "p1", process: "cold", pending: 0, title: null, lastTurn: null }],
-      last: this.#message(last), unread: this.read < this.last,
+      last: this.#message(last), unread: read < entries.length,
     };
+  }
+
+  #entries(id: number): Entry[] | undefined {
+    return id === 7 ? this.entries : this.others.find((o) => o.id === id)?.entries;
+  }
+
+  #ids(): number[] {
+    return [7, ...this.others.map((o) => o.id)];
   }
 
   /// A message said in the chat (an agent's reply, a person's elsewhere), told on every stream.
@@ -78,7 +96,6 @@ export class FakeStation {
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(value));
     };
-    const page = (list: Entry[]) => send(200, { last: this.last, entries: list });
     if (path === "/events") {
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
       res.write(": hello\n\n");
@@ -93,20 +110,24 @@ export class FakeStation {
     if (path === "/sessions") return send(200, [session("k1")]), true;
     if (path === "/sessions/k1") return send(200, { session: session("k1"), threads: [this.thread()], turns: [], jobs: [] }), true;
     if (path === "/sessions/k1/timeline") return send(200, { start: 0, entries: [] }), true;
-    if (path === "/threads" && method === "GET") return send(200, [this.thread()]), true;
-    if (path === "/threads/7" && method === "GET") return send(200, this.thread()), true;
-    if (path === "/chats") return send(200, q.get("archived") === "1" ? [] : [this.row()]), true;
+    if (path === "/threads" && method === "GET") return send(200, this.#ids().map((id) => this.thread(id))), true;
+    if (path === "/chats") return send(200, q.get("archived") === "1" ? [] : this.#ids().map((id) => this.row(id))), true;
+    const one = /^\/threads\/(\d+)$/.exec(path);
+    if (one && method === "GET" && this.#entries(Number(one[1]))) return send(200, this.thread(Number(one[1]))), true;
     if (path === "/jobs") return send(200, []), true;
     if (path === "/footprint") return send(200, {}), true;
     if (path === "/usage") return send(200, { days: [], total: {} }), true;
-    if (path === "/threads/7/entries") {
+    const listed = /^\/threads\/(\d+)\/entries$/.exec(path);
+    if (listed && this.#entries(Number(listed[1]))) {
+      const all = this.#entries(Number(listed[1]))!;
+      const page = (list: Entry[]) => send(200, { last: all.length, entries: list });
       const after = q.get("after");
       const before = q.get("before");
       const from = q.get("from");
       const limit = Number(q.get("limit") ?? 50);
-      if (after !== null) return page(this.entries.filter((e) => e.n > Number(after))), true;
-      if (from !== null) return page(this.entries.filter((e) => e.n >= Number(from) && e.n <= Number(q.get("to")))), true;
-      const below = before !== null ? this.entries.filter((e) => e.n < Number(before)) : this.entries;
+      if (after !== null) return page(all.filter((e) => e.n > Number(after))), true;
+      if (from !== null) return page(all.filter((e) => e.n >= Number(from) && e.n <= Number(q.get("to")))), true;
+      const below = before !== null ? all.filter((e) => e.n < Number(before)) : all;
       return page(below.slice(-limit)), true;
     }
     if (path === "/threads/7/messages" && method === "POST") {

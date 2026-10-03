@@ -32,9 +32,10 @@ export class FakeCloud {
   /// Answer pings with pong (a cloud from before them does not).
   pongs = true;
   /// Every station of every workspace, answering at this origin (harness/station.ts).
-  readonly station = new FakeStation();
+  readonly station: FakeStation;
 
-  constructor() {
+  constructor(station = new FakeStation()) {
+    this.station = station;
     this.addUser({ sub: "u-alice", email: "alice@x.test", name: "Alice", picture: "https://pic.test/alice" });
     this.addUser({ sub: "u-bob", email: "bob@x.test", name: "Bob", picture: "" });
     this.codes.set("code-alice", "u-alice");
