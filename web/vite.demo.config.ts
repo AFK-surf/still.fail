@@ -39,6 +39,7 @@ export default defineConfig({
       { find: /^\.\/iroh-pkg\/built\.js$/, replacement: here("src/demo/stubs/built.js") },
       { find: /^\.\/iroh-pkg\/stillfail_iroh_wasm\.js$/, replacement: here("src/demo/stubs/stillfail_iroh_wasm.js") },
       { find: "@stillfail/core-ts/web", replacement: here("src/demo/stubs/core-ts-web.js") },
+      { find: "@sqlite.org/sqlite-wasm", replacement: here("src/demo/stubs/sqlite-wasm.js") },
     ],
   },
   server: {

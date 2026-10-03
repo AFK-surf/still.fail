@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.2.0",
+    "@sqlite.org/sqlite-wasm": "3.53.4-build2",
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
