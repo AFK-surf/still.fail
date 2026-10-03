@@ -1,10 +1,13 @@
 // The client core in the desktop app's utility process (docs/client-core.md):
-// client/node's core, with one MessagePort per page, as the web's worker has
-// one per tab (web/src/core/worker.ts). Pages post messages as objects; the
-// core takes JSON and answers JSON, which goes to the page as it is.
+// the TypeScript core on Node (client/core-ts, its hosts/node.ts bundled
+// beside this file as core-ts.js; docs/core-ts.md), with one MessagePort per
+// page, as the web's worker has one per tab (web/src/core/worker.ts). Pages
+// post messages as objects; the core takes JSON and answers JSON, which goes to
+// the page as it is. Its iroh is the native addon the station ships (mesh.node).
+import { join } from "node:path";
 import type { MessagePortMain } from "electron";
 
-/** client/node (stillfail_core.node). */
+/** client/core-ts's Node start (the API client/node had). */
 interface NodeCore {
   connect(): number;
   receive(client: number, json: string): void;
@@ -13,8 +16,9 @@ interface NodeCore {
 /** `channel`: "beta" for the beta app's core (main.ts BETA). */
 type Start = (dataDir: string, cloudOrigin: string, listener: (client: number, json: string) => void, channel?: string) => NodeCore;
 
-const [dataDir, cloudOrigin, addon, channel] = process.argv.slice(2) as [string, string, string, string | undefined];
-const { start } = require(addon) as { start: Start };
+const [dataDir, cloudOrigin, mesh, channel] = process.argv.slice(2) as [string, string, string, string | undefined];
+process.env.STILLFAIL_MESH_NATIVE ??= mesh;
+const { start } = require(join(__dirname, "core-ts.js")) as { start: Start };
 
 /** One core and its clients. A panic ends a core; the pages then open new ports, which go to the next one. */
 interface Generation {
@@ -26,7 +30,7 @@ interface Generation {
 function begin(): Generation {
   const generation: Generation = { core: null as unknown as NodeCore, clients: new Map(), dead: false };
   generation.core = start(dataDir, cloudOrigin, (client, json) => {
-    // `{"fatal": …}` goes to each of its clients (client/ffi); from the first, new pages get a new core.
+    // `{"fatal": …}` goes to each of its clients (a bug that ended the core); from the first, new pages get a new core.
     if (!generation.dead && json.startsWith('{"fatal"')) {
       generation.dead = true;
       current = begin();

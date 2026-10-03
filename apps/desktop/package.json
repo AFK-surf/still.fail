@@ -34,8 +34,8 @@
         "to": "web"
       },
       {
-        "from": "build/stillfail_core.node",
-        "to": "stillfail_core.node"
+        "from": "build/mesh.node",
+        "to": "mesh.node"
       },
       {
         "from": "build/station/stillfail",

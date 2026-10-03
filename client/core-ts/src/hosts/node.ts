@@ -3,7 +3,8 @@
 // storage key (`%XX` for what a file name cannot hold), the same `core.db` — so a desktop app moving from the Rust core
 // keeps its logins and what it had read. `start` is client/node's API: connect / receive(json) / disconnect, the
 // listener given `(client, json)`.
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { open, readFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { webcrypto } from "node:crypto";
@@ -16,6 +17,7 @@ import { HostError } from "../error.ts";
 import { SOCKET_PING, SOCKET_PING_MS, type TcpConnection, type DbOp, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
+import { t } from "../i18n.ts";
 
 export type Listener = (client: ClientId, json: string) => void;
 
@@ -143,41 +145,51 @@ export class NodeHost implements Host {
     return join(this.#dir, name);
   }
 
+  /// One file operation after another, in the order asked for (client/ffi's storage thread): a write is never
+  /// overtaken by an earlier one, and none holds up the core's thread.
+  #files: Promise<unknown> = Promise.resolve();
+
+  #file<T>(job: () => Promise<T>, error: (e: Error) => string): Effect.Effect<T, HostError> {
+    const run = this.#files.then(job);
+    this.#files = run.catch(() => {});
+    return Effect.tryPromise({ try: () => run, catch: (e) => new HostError(error(e as Error)) });
+  }
+
   storageGet(key: string): Effect.Effect<Uint8Array | null, HostError> {
-    return Effect.try({
-      try: () => {
+    return this.#file(
+      async () => {
         try {
-          return new Uint8Array(readFileSync(this.path(key)));
+          return new Uint8Array(await readFile(this.path(key)));
         } catch (e) {
           if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
           throw e;
         }
       },
-      catch: (e) => new HostError(`读不了：${(e as Error).message}`),
-    });
+      (e) => `读不了：${e.message}`,
+    );
   }
 
   storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError> {
-    return Effect.try({
-      // Written aside and renamed over: a crash leaves the old value or the new one, never half.
-      try: () => {
+    // Written aside and renamed over: a crash leaves the old value or the new one, never half.
+    return this.#file(
+      async () => {
         const path = this.path(key);
         const partial = `${path}.partial`;
-        writeFileSync(partial, value);
-        const fd = openSync(partial, "r");
+        const file = await open(partial, "w");
         try {
-          fsyncSync(fd);
+          await file.writeFile(value);
+          await file.sync();
         } finally {
-          closeSync(fd);
+          await file.close();
         }
-        renameSync(partial, path);
+        await rename(partial, path);
       },
-      catch: (e) => new HostError(`写不进去：${(e as Error).message}`),
-    });
+      (e) => `写不进去：${e.message}`,
+    );
   }
 
   storageDelete(key: string): Effect.Effect<void, HostError> {
-    return Effect.try({ try: () => rmSync(this.path(key), { force: true }), catch: (e) => new HostError(`删不掉：${(e as Error).message}`) });
+    return this.#file(() => rm(this.path(key), { force: true }), (e) => `删不掉：${e.message}`);
   }
 
   #open(): DatabaseSync {
@@ -244,23 +256,38 @@ export class NodeHost implements Host {
 }
 
 /// client/node's `start`: a core whose messages go to `listener(client, json)`; `channel` "beta" for a beta app's.
+/// A bug that ends a fiber ends the core as a panic ends client/ffi's: each client is told `{"fatal": …}` and the host
+/// starts another (apps/desktop/src/core.ts).
 export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string) {
   service.name = "stillfail-native";
   service.os = process.platform === "darwin" ? "macos" : process.platform;
   const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener);
+  const clients = new Set<number>();
+  let dead = false;
+  const fatal = (error: unknown) => {
+    if (dead) return;
+    dead = true;
+    console.error("still.fail core:", error);
+    const said = JSON.stringify({ fatal: t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }) });
+    for (const client of clients) listener(client, said);
+    void ready.then((core) => core.close(), () => {});
+  };
   // Messages that arrive while the core starts wait, in order (client/ffi's queue).
   const ready = Core.create(host, { iroh: nodeIroh() }).then((core) => {
+    core.inner.runner.onDefect = fatal;
     core.keepTime();
     return core;
   });
+  ready.catch(fatal);
   let next = 1;
   let chain: Promise<unknown> = ready;
   const later = (job: (core: Core) => void) => {
-    chain = chain.then(() => ready.then(job));
+    chain = chain.then(() => ready.then((core) => !dead && job(core))).catch(fatal);
   };
   return {
     connect(): number {
       const id = next++;
+      clients.add(id);
       later((core) => core.connect());
       return id;
     },
@@ -268,9 +295,11 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
       later((core) => core.receiveJson(client, json));
     },
     disconnect(client: number): void {
+      clients.delete(client);
       later((core) => core.disconnect(client));
     },
     async close(): Promise<void> {
+      dead = true;
       (await ready).close();
       host.close();
     },
