@@ -113,10 +113,8 @@ export class StationTopics implements Owner {
     if (urgent) this.#core.scheduler.prioritize(topicKey(topic), urgent, Priority.shown);
     if (topic.topic === "thread") {
       const id = topic.thread as number;
-      // Opened: the most recently opened, kept while shown. Let go before (the limit), or a chat no list has (an old
-      // notification's link): the sync brings it.
-      const evicted = this.#core.data.opened("entry", station, String(id), true);
-      if (evicted || this.summary(station, id) === null) this.#sync.syncEntries(station, id, Priority.shown);
+      // A chat no list has (opened from an old notification's link): the sync is told of it, and brings it.
+      if (this.summary(station, id) === null) this.#sync.syncEntries(station, id, Priority.shown);
       this.#core.runner.fork(
         Effect.gen({ self: this }, function* () {
           yield* this.#core.data.log("entry", station, String(id));
@@ -125,7 +123,6 @@ export class StationTopics implements Owner {
         }),
       );
     }
-    if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.syncTranscript(station, topic.key as string, Priority.shown);
     if (topic.topic === "live") this.#core.runner.fork(Effect.andThen(this.#core.data.log("transcript", station, topic.key as string), Effect.sync(() => this.#core.store.invalidate(topic))));
     if (topic.topic === "net") this.#sampleNet(topic);
     // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
@@ -137,8 +134,6 @@ export class StationTopics implements Owner {
     const station = topicStation(topic);
     if (station === null) return;
     const key = topicKey(topic);
-    if (topic.topic === "thread") this.#core.data.opened("entry", station, String(topic.thread), false);
-    if (topic.topic === "live") this.#core.data.opened("transcript", station, topic.key as string, false);
     this.#core.scheduler.prioritize(key, null);
     this.#windows.delete(key);
     this.#firsts.delete(key);

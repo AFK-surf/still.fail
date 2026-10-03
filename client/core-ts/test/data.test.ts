@@ -123,7 +123,7 @@ test("a_thread_is_kept_in_chunks_of_256_and_read_back", async () => {
   await run(data.putItems("entry", "ws/st", "7", entries(251, 300)));
   await run(data.putItems("entry", "ws/st", "7", entries(1, 200)));
   await run(data.written);
-  const writes = host.dbKeys("entry").length;
+  const writes = host.db.size;
   const before = [...host.db.entries()].map(([k, v]) => k + v.length).join();
   await run(data.putItems("entry", "ws/st", "7", entries(290, 300)));
   await run(data.written);
@@ -186,55 +186,14 @@ test("a_transcript_counts_from_0_and_can_be_cut_short", async () => {
 });
 
 test("past_the_limit_the_least_recently_opened_go", async () => {
-  // As kept.rs: a limit of two logs; `a` written, `b` written, `a` opened again, `c` written: `b` goes (its items only,
-  // and its meta says it was let go). What is shown now never goes, however long ago it was opened.
-  const host = new FakeHost();
-  const runner = new Runner();
-  const size = entries(1, 100).reduce((n, [, e]) => n + new TextEncoder().encode(JSON.stringify(e)).length, 0);
-  const data = new Data(host, runner, size * 2 + 10);
-  await run(data.putItems("entry", "ws/st", "1", entries(1, 100)));
-  host.advance(2);
-  await run(data.putItems("entry", "ws/st", "2", entries(1, 100)));
-  host.advance(2);
-  data.opened("entry", "ws/st", "1", true);
-  data.opened("entry", "ws/st", "1", false);
-  host.advance(2);
-  await run(data.putItems("entry", "ws/st", "3", entries(1, 100)));
-  await run(data.written);
-  assert.equal((await run(data.log("entry", "ws/st", "2"))).size, 0);
-  assert.ok(data.evicted("entry", "ws/st", "2"));
-  assert.equal((await run(data.log("entry", "ws/st", "1"))).size, 100);
-  assert.equal((await run(data.log("entry", "ws/st", "3"))).size, 100);
-  assert.ok(host.dbKeys("entry").every((k) => !k.startsWith(`ws/st${SEP}2${SEP}`)));
-  // Opened again: no longer let go (the sync brings it back), and written it is kept; now `1` is the least recently
-  // opened, but it is shown, so `3` goes.
-  assert.equal(data.opened("entry", "ws/st", "2", true), true);
-  assert.ok(!data.evicted("entry", "ws/st", "2"));
-  data.opened("entry", "ws/st", "1", true);
-  host.advance(2);
-  await run(data.putItems("entry", "ws/st", "2", entries(1, 100)));
-  assert.equal((await run(data.log("entry", "ws/st", "1"))).size, 100);
-  assert.equal((await run(data.log("entry", "ws/st", "3"))).size, 0);
-  // Kept across a restart: which went, and the sizes.
-  await run(data.written);
-  const again = new Data(host, runner, size * 2 + 10);
-  await run(again.load);
-  assert.ok(again.evicted("entry", "ws/st", "3"));
-  assert.ok(!again.evicted("entry", "ws/st", "2"));
-  runner.shutdown();
-});
-
-test("logs_kept_before_their_sizes_were_are_measured_once", async () => {
-  // A device whose logs were written (or imported from the Rust core) before sizes were kept: measured as it loads.
+  // Deliberately otherwise (rules 3 and 6): the Rust core kept 50 MB of chunks and let the least recently opened go;
+  // the TS core keeps everything the stations it reaches hold (the sync brings it all), and lets go of a station's
+  // only once no signed-in account reaches it (retain, above). Here: nothing goes for being opened less.
   const { host, runner, data } = fresh();
-  await run(data.putItems("entry", "ws/st", "1", entries(1, 10)));
+  for (const id of ["1", "2", "3"]) await run(data.putItems("entry", "ws/st", id, entries(1, 100)));
   await run(data.written);
-  for (const key of host.dbKeys("log")) host.db.delete(`log\u0000${key}`);
-  const small = new Data(host, runner, 10);
-  await run(small.load);
-  await run(small.putItems("entry", "ws/st", "2", entries(1, 1)));
-  // Over 10 bytes with both: the older goes.
-  assert.ok(small.evicted("entry", "ws/st", "1"));
+  const again = new Data(host, runner);
+  for (const id of ["1", "2", "3"]) assert.equal((await run(again.log("entry", "ws/st", id))).size, 100);
   runner.shutdown();
 });
 

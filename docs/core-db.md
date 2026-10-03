@@ -53,8 +53,7 @@ one never read. Each record carries when it was last confirmed by its source
   workspace's stations, and of each reachable station everything it holds: link,
   overview, chat rows, sessions and their details, threads and every thread's
   entries (latest page first, then back to the first), transcripts, jobs, usage,
-  footprint, the live state of every agent at work — except the logs let go to
-  keep within the size cap, until their chat is opened. A UI only makes some of it
+  footprint, the live state of every agent at work. A UI only makes some of it
   more urgent (`client.focus`, a topic shown). Events keep it current. No polling.
 - **Startup**: the core loads the records before any network, so views are
   answered at once; offline, they stay as last seen.
@@ -76,14 +75,8 @@ table, and batches of puts and deletes written at once or not at all):
 1. Done: records and the write path for workspaces, stations, rows,
    sessions, threads, overview; topics read them; startup from the database.
 2. Done: entries and transcripts are records (one per entry); the Rust core's
-   chunks are read in once. A size cap (`KEPT_LIMIT`, 50 MB, as `kept.rs` had)
-   with least-recently-opened eviction: past it, the entries or transcript of
-   the logs not shown now go, the least recently opened first (the `log` table
-   keeps each log's size, when its chat was last opened, and whether it was let
-   go); metadata (rows, sessions, threads, read positions, outbox, pending) is
-   small and always kept. A log let go is not brought back by the background
-   sync, nor by its events: only once its chat is opened (the sync reads it then,
-   as urgently as it is shown), so nothing is fetched and evicted in a loop. A
-   station's records go once no signed-in account reaches it (`Data.retain`).
+   chunks are read in once. No size cap: everything the reached stations hold
+   is kept, and a station's records go once no signed-in account reaches it
+   (`Data.retain`).
 3. Done: background sync (`sync/`, `station/sync.ts`).
 4. Done: tests (client/core-ts/test/data.test.ts, station-flows.test.ts).
