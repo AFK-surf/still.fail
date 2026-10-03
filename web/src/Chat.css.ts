@@ -549,6 +549,7 @@ globalStyle(`${fileCardOpen}:hover ${fileCard}`, { background: vars.hover });
 globalStyle(`button${msgImage} img`, {
   width: "100%", height: "100%", maxWidth: "none", maxHeight: "none", objectFit: "cover", display: "block",
 });
+globalStyle(`button${msgImage}[data-letterbox]`, { background: "none" });
 globalStyle(`button${msgImage}[data-letterbox] img`, { objectFit: "contain" });
 globalStyle(`${msgRow} ${msgFiles}`, { justifyContent: "flex-start" });
 /** Here rather than with its class: it comes after .quote-card-input, and wins over it. */
