@@ -2,12 +2,12 @@
 // client's mesh over the same addon. Real time here (iroh needs its own clock).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Effect } from "effect";
+import { Clock, Duration, Effect } from "effect";
 import type { Credential } from "../src/cloud.ts";
 import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ALPN, DEVICE_KEY, FORMER_ALPN, Mesh, MeshWire, quicker, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, CONNECT_TIMEOUT_MS, DEVICE_KEY, FORMER_ALPN, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, quicker, sampleRelayRtt, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -36,14 +36,30 @@ function grants(prefix: string, count: { n: number }): CredentialSource {
     });
 }
 
-function env(host: FakeHost, wakes = new Wakes()) {
-  const runner = new Runner();
+/// Timers as mesh.rs's tests' QuickHost has them: renewals every 150 ms, a connection unanswered after 200 ms, a link
+/// replaced let go after 200 ms.
+function quickClock(): Clock.Clock {
+  const base = Effect.runSync(Clock.clockWith(Effect.succeed));
+  const quick = (ms: number) => (ms === RENEW_MS ? 150 : ms === RETIRE_MS || ms === CONNECT_TIMEOUT_MS ? 200 : ms);
+  return {
+    currentTimeMillisUnsafe: () => base.currentTimeMillisUnsafe(),
+    currentTimeMillis: base.currentTimeMillis,
+    currentTimeNanosUnsafe: () => base.currentTimeNanosUnsafe(),
+    currentTimeNanos: base.currentTimeNanos,
+    monotonicTimeNanosUnsafe: () => base.monotonicTimeNanosUnsafe(),
+    monotonicTimeNanos: base.monotonicTimeNanos,
+    sleep: (d: Duration.Duration) => base.sleep(Duration.millis(quick(Duration.toMillis(d)))),
+  } as Clock.Clock;
+}
+
+function env(host: FakeHost, wakes = new Wakes(), clock?: Clock.Clock) {
+  const runner = new Runner(clock);
   return { host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes };
 }
 
-async function setup(station?: Station, host = new FakeHost(), wakes = new Wakes()) {
+async function setup(station?: Station, host = new FakeHost(), wakes = new Wakes(), clock?: Clock.Clock) {
   const s = station ?? (await Station.start());
-  const e = env(host, wakes);
+  const e = env(host, wakes, clock);
   const mesh = await e.runner.run(Mesh.make(e, []));
   mesh.addAddr(s.addr());
   return { mesh, station: s, runner: e.runner, host };
@@ -228,6 +244,256 @@ test("moves_only_to_a_clearly_quicker_relay", () => {
   assert.equal(quicker(300, b, [[a, 300], [b, 200]]), null, "already through it");
   assert.equal(quicker(null, a, [[a, null], [b, 100]]), null, "nothing to compare with");
   assert.equal(quicker(1000, a, [[a, 11_000], [b, 82]]), b, "fresh measurements of the same round win over the link's estimate");
+});
+
+const close = async (station: Station, runner: Runner, mesh: Mesh) => {
+  await station.close();
+  await runner.run(mesh.close());
+  runner.shutdown();
+};
+
+test("renews_the_grant_until_the_link_closes", { skip }, async () => {
+  const { mesh, station, runner } = await setup(undefined, new FakeHost(), new Wakes(), quickClock());
+  const count = { n: 0 };
+  const link = await runner.run(mesh.link(station.id(), grants("ok", count)));
+  await sleep(400);
+  const seen = [...station.grants];
+  assert.ok(seen.length >= 3, JSON.stringify(seen));
+  assert.deepEqual(seen.slice(0, 3), ["ok-1", "ok-2", "ok-3"]);
+  // Renewing kept the same link.
+  assert.equal(await runner.run(mesh.link(station.id(), grants("ok", count))), link);
+  link.close();
+  const asked = count.n;
+  await sleep(400);
+  assert.equal(count.n, asked);
+  assert.equal(link.closed(), "连接已关闭");
+  await close(station, runner, mesh);
+});
+
+test("a_refused_renewal_makes_the_next_link_reopen", { skip }, async () => {
+  const { mesh, station, runner } = await setup(undefined, new FakeHost(), new Wakes(), quickClock());
+  let n = 0;
+  const refuseLater: CredentialSource = () => Effect.sync(() => ({ credential: ++n === 1 ? "ok" : "revoked", issued_at: 0, expires_at: 0, relay_url: "" }) as Credential);
+  const first = await runner.run(mesh.link(station.id(), refuseLater));
+  await sleep(300);
+  const second = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  assert.notEqual(first, second);
+  await close(station, runner, mesh);
+});
+
+/// A wire over `mesh` for the station `id`, as the core has one.
+function wireOf(mesh: Mesh, runner: Runner, host: FakeHost) {
+  const status = new Status(host, runner);
+  return new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials: () => grants("ok", { n: 0 }), status: () => status });
+}
+const within = <A>(ms: number, p: Promise<A>, what: string) => Promise.race([p, sleep(ms).then(() => Promise.reject(new Error(`${what}: not within ${ms} ms`)))]);
+
+test("a_read_under_way_on_a_link_that_is_replaced_is_answered_on_the_new_one", { skip }, async () => {
+  const wakes = new Wakes();
+  const { mesh, station, runner, host } = await setup(undefined, new FakeHost(), wakes);
+  const wire = wireOf(mesh, runner, host);
+  const addr = StationAddr.parse(`w/${station.id()}`);
+  const get: RequestHead = { method: "GET", path: "/admin/api/overview", headers: [] };
+  const ask = (h: RequestHead) => runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, h, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
+  assert.equal(await ask(get), 200);
+  station.deadBelow = station.conns.length;
+  // Sent on the dead way: it would never be answered.
+  const asked = ask(get);
+  await sleep(50);
+  wakes.wake(network(host));
+  assert.equal(await within(PROBE_MS / 2, asked, "answered on the new link"), 200);
+  assert.equal(station.conns.length, 2);
+  await close(station, runner, mesh);
+});
+
+test("a_write_whose_link_went_before_its_answer_is_asked_again_once_its_station_is_back", { skip }, async () => {
+  const { mesh, station, runner, host } = await setup();
+  station.idempotent = true;
+  const wire = wireOf(mesh, runner, host);
+  const addr = StationAddr.parse(`w/${station.id()}`);
+  const ask = (h: RequestHead) => runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, h, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
+  // Its first answer says it keeps writes to once.
+  assert.equal(await ask({ method: "GET", path: "/admin/api/overview", headers: [] }), 200);
+  station.deadBelow = station.conns.length;
+  const asked = ask({ method: "POST", path: "/admin/api/sessions/k/pin", headers: [["idempotency-key", "k1"]] });
+  await sleep(50);
+  // Its link goes before it is answered (the station restarting): asked again, with its key, on the next.
+  station.conns[0].close(0, "restart");
+  assert.equal(await within(5_000, asked, "asked again"), 200);
+  assert.equal(station.conns.length, 2);
+  await close(station, runner, mesh);
+});
+
+test("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", { skip }, async () => {
+  const { mesh, station, runner } = await setup(undefined, new FakeHost(), new Wakes(), quickClock());
+  station.unanswered(1);
+  const before = mesh.endpoint();
+  const device = mesh.deviceId();
+  const error = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 }))).then(
+    () => null,
+    (e) => e as CoreError,
+  );
+  assert.equal(error?.message, "连不上这台 station：没有回应");
+  const link = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  assert.equal((await request(runner, link, head("/admin/api/overview"))).status, 200);
+  // Another endpoint (other sockets), the same device.
+  assert.notEqual(mesh.endpoint(), before);
+  assert.equal(mesh.deviceId(), device);
+  // Answered: the next try stays on it.
+  const now = mesh.endpoint();
+  link.close();
+  await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  assert.equal(mesh.endpoint(), now);
+  await close(station, runner, mesh);
+});
+
+test("a_wake_while_a_try_goes_unanswered_opens_one_beside_it", { skip }, async () => {
+  const wakes = new Wakes();
+  const { mesh, station, runner, host } = await setup(undefined, new FakeHost(), wakes);
+  station.unanswered(1);
+  const id = station.id();
+  const opening = runner.run(mesh.link(id, grants("ok", { n: 0 })));
+  await sleep(50);
+  // A person taps 重试 (client.wake, network) while a try that will never be answered is under way: another beside it
+  // opens.
+  wakes.wake(network(host));
+  await within(5_000, opening, "opened beside it");
+  const link = mesh.current(id)!;
+  assert.equal((await request(runner, link, head("/admin/api/overview"))).status, 200);
+  await close(station, runner, mesh);
+});
+
+// ── relays: iroh-relay in dev mode (plain HTTP) on this machine, as many as a test needs ──
+
+import { spawn, type ChildProcess } from "node:child_process";
+import { createServer as tcpServer, connect as tcpConnect } from "node:net";
+import { existsSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
+
+const RELAY_BIN = process.env.STILLFAIL_RELAY_BIN ?? join(homedir(), ".config/ember-spike/relay/iroh-relay");
+const noRelay = skip || (existsSync(RELAY_BIN) ? false : "no iroh-relay here (STILLFAIL_RELAY_BIN)");
+let relayPort = 3361 + (process.pid % 200) * 2;
+
+/// A relay on localhost: its url, and a way to stop it.
+async function relay(): Promise<[string, ChildProcess]> {
+  const port = relayPort++;
+  const config = join(tmpdir(), `relay-${process.pid}-${port}.toml`);
+  writeFileSync(config, `enable_relay = true\nhttp_bind_addr = "127.0.0.1:${port}"\nenable_metrics = false\nenable_quic_addr_discovery = false\n`);
+  const child = spawn(RELAY_BIN, ["--dev", "--config-path", config], { stdio: "ignore" });
+  const url = `http://127.0.0.1:${port}`;
+  for (let i = 0; i < 100; i++) {
+    if (await fetch(url).then(() => true, () => false)) break;
+    await sleep(50);
+  }
+  return [url, child];
+}
+
+/// The relay at `url` reached through a proxy that holds what goes through it, either way, `delay` ms a piece: its url
+/// for those who should find it slow.
+async function slowed(url: string, delay: number): Promise<string> {
+  const upstream = new URL(url);
+  const pump = (from: import("node:net").Socket, to: import("node:net").Socket) => {
+    from.on("data", (chunk) => {
+      from.pause();
+      setTimeout(() => {
+        to.write(chunk);
+        from.resume();
+      }, delay);
+    });
+    from.on("close", () => to.destroy());
+  };
+  const server = tcpServer((down) => {
+    const up = tcpConnect(Number(upstream.port), upstream.hostname);
+    pump(down, up);
+    pump(up, down);
+    up.on("error", () => down.destroy());
+    down.on("error", () => up.destroy());
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  server.unref();
+  return `http://127.0.0.1:${(server.address() as J).port}`;
+}
+
+const sameRelay = (a: string | null, b: string) => a !== null && new URL(a).host === new URL(b).host;
+
+test("relay_probes_disable_ip_without_disabling_live_hole_punching", { skip: noRelay }, async () => {
+  const [url, server] = await relay();
+  const probe = await addon.bind({ secretKey: Buffer.alloc(32, 31), alpns: [], relayUrls: [url], discovery: false, relayOnly: true });
+  assert.deepEqual(probe.sockets(), []);
+  const live = await addon.bind({ secretKey: Buffer.alloc(32, 32), alpns: [], relayUrls: [url], discovery: false });
+  assert.ok(live.sockets().length > 0);
+  await probe.close();
+  await live.close();
+  server.kill();
+});
+
+test("a_direct_rtt_is_never_reported_as_a_relay_measurement", { skip }, async () => {
+  const station = await Station.start();
+  const runner = new Runner();
+  const endpoint = await runner.run(nodeIroh()!.bind({ secretKey: new Uint8Array(32).fill(5), relayUrls: [], lookup: false, relayOnly: false }));
+  endpoint.addAddr(station.addr());
+  const conn = await runner.run(endpoint.connect({ id: station.id(), relays: [] }, ALPN, []));
+  assert.equal(await runner.run(sampleRelayRtt(conn, "https://relay.test/")), null);
+  conn.close(0, "done");
+  await runner.run(endpoint.close());
+  await station.close();
+  runner.shutdown();
+});
+
+/// A phone's link to a station abroad went through the relay nearest the phone, the station's way there slow
+/// (2026-10-01, bft: 11 s a round trip); measured, it moves to the relay that is quicker the whole way.
+test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, async () => {
+  const [[a, ra], [b, rb]] = [await relay(), await relay()];
+  // The station reaches a slowly, b at once; the device reaches both at once.
+  const station = await Station.on(b, await slowed(a, 150));
+  const id = station.id();
+  const host = new FakeHost();
+  const e = env(host);
+  // As it went: through a, the only relay the device was on then.
+  const mesh = await e.runner.run(Mesh.make(e, [a]));
+  const runner = e.runner;
+  let link: Link | null = null;
+  for (let i = 0; i < 40 && link === null; i++) {
+    const tried = await runner.run(mesh.link(id, grants("ok", { n: 0 }))).catch(() => null);
+    if (tried && (await request(runner, tried, head("/admin/api/overview")).then((r) => r.status === 200, () => false))) link = tried;
+    else await sleep(250);
+  }
+  assert.ok(link, "reached through a");
+  for (let i = 0; i < 3; i++) assert.equal((await request(runner, link, head("/admin/api/overview"))).status, 200);
+  const slow = link.net().rttMs!;
+  assert.ok(sameRelay(link.via(), a), `${link.via()}`);
+  assert.ok(slow > 250, `${slow}`);
+  // Now on both: measured, it moves to b.
+  (mesh.relays as string[]).push(b);
+  await runner.run(mesh.remeasure(id));
+  const moved = mesh.current(id)!;
+  assert.notEqual(moved, link);
+  assert.ok(sameRelay(moved.via(), b), `${moved.via()}`);
+  assert.ok(moved.pinned !== null && sameRelay(moved.pinned, b));
+  for (let i = 0; i < 5; i++) assert.equal((await request(runner, moved, head("/admin/api/overview"))).status, 200);
+  const quick = moved.net().rttMs!;
+  assert.ok(quick < slow / 2, `${quick} vs ${slow}`);
+  // On b's own endpoint, under a key of its own: the station sees another device.
+  const device = station.conns.filter((c: J) => !c.isClosed()).at(-1).remoteId();
+  assert.notEqual(device, mesh.deviceId());
+  const shown = mesh.measured(id)!;
+  assert.equal(shown.measuring, false);
+  assert.equal(shown.moved, new URL(b).hostname);
+  assert.equal(shown.relays.length, 2);
+  assert.ok(shown.relays.every(([, ms]) => ms !== null), JSON.stringify(shown));
+  // Measured again, as a person asks: it stays, nothing is quicker than where it is.
+  await runner.run(mesh.remeasure(id));
+  assert.equal(mesh.measured(id)!.moved, null);
+  assert.equal(mesh.current(id), moved);
+  // The endpoint only measured on is let go (RETIRE_MS after measuring); b's, with the link on it, stays.
+  await sleep(RETIRE_MS + 500);
+  assert.equal((await request(runner, moved, head("/admin/api/overview"))).status, 200);
+  await station.close();
+  await runner.run(mesh.close());
+  runner.shutdown();
+  ra.kill();
+  rb.kill();
 });
 
 // ── adb.rs ──

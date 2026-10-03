@@ -17,10 +17,22 @@ export class Station {
   idempotent = false;
 
   static async start(alpns: Uint8Array[] = [ALPN, FORMER_ALPN]): Promise<Station> {
+    return Station.bound({ alpns: alpns.map((a) => Buffer.from(a)), relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  }
+
+  /// One at home on the relay `home`, held on `other` too by a keeper there (station/native/mesh keep.rs).
+  static async on(home: string, other: string): Promise<Station> {
+    const s = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [home], discovery: false, relayOnly: true });
+    await s.endpoint.online();
+    s.endpoint.keep([other]);
+    return s;
+  }
+
+  static async bound(options: J): Promise<Station> {
     const s = new Station();
     const key = new Uint8Array(32);
     crypto.getRandomValues(key);
-    s.endpoint = await addon.bind({ secretKey: Buffer.from(key), alpns: alpns.map((a) => Buffer.from(a)), relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+    s.endpoint = await addon.bind({ secretKey: Buffer.from(key), ...options });
     void (async () => {
       for (;;) {
         const conn = await s.endpoint.accept();
@@ -31,6 +43,11 @@ export class Station {
       }
     })();
     return s;
+  }
+
+  /// The next `n` connections coming are never answered, not even their handshake (a device whose way here is gone).
+  unanswered(n: number): void {
+    this.endpoint.holdIncoming(n);
   }
 
   id(): string {
