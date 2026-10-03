@@ -6,7 +6,7 @@
 
 station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/.stillfail`（`STILLFAIL_DATA` 可改，兼容 `EMBER_DATA`）；旧版 `~/.ember` 在首次启动时迁移。开发测试使用独立数据目录，不使用已有真实会话的 station。
 
-更新支持原地交接；不支持交接时，安装器会先排空再重启。运行细节见 `mesh/app/src/handoff.rs`。
+更新支持原地交接：启动器（station/native/launcher，pid 不变）收到 SIGUSR2，在旁边起新版本的 Node 进程，新的就绪后放掉旧的，轮次、运行时和 job 不断（station/native/launcher/src/run.rs、station/src/ops/launcher.ts）；不支持交接的旧版本（Rust station），安装器会先排空再重启。
 
 ## 管理界面
 
@@ -64,7 +64,7 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 
 ## 开发
 
-- station：在 mesh/ 里 `cargo test --workspace`。
+- station：在 station/ 里 `pnpm test`、`pnpm exec tsgo --noEmit`；它的原生部分（station/native/*）在各自目录里 `cargo test`。
 - client core（TypeScript）：在 client/core-ts 里 `pnpm test`、`pnpm exec tsgo --noEmit`；core 的原生壳（client/shell、client/iroh-wasm）：在 client/ 里 `cargo test --workspace`。
 - `pnpm test`（web 里的 TypeScript 部分，需要先构建 iroh wasm）、`pnpm typecheck`。
 - `pnpm check`：跑全部检查（scripts/check.sh all）。
@@ -72,10 +72,10 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 
 ## CI
 
-`.github/workflows/pipeline.yml` 使用 AFK-surf 的 CI 资源：计划/API/changelog/标签在 ubuntu-24.04，网页构建和 Android 发布在 Blacksmith Linux；完整检查（2026-10-03 起）和 station、桌面打包签名在 `[self-hosted, mini1]` Mac（M4 10 核，编译缓存在本机：4 核的 Blacksmith 上一次要 9 分钟）。完整检查按 `STILLFAIL_CHECK_PART` 拆成 ts、station、core、android 四个 job 并排跑，每个 job 用自己的临时 Cargo target（`$RUNNER_TEMP/target`），经 sccache 编译，跨 job 保留的只有 sccache 的缓存（`~/stillfail-ci/sccache`，上限 25G）。不要再在 runner 之间共享 target：三个 runner 的检出路径不同，vendor 里的 iroh（lib + cdylib，.dylib 不带 hash）每个路径编一份，加上不同分支、不同特性的构建堆在一起，rustc 会拿错（E0308「multiple different versions of crate iroh_relay」，2026-10-02、03 反复出现，去掉 kache、按依赖指纹分目录都没根治）。上传 R2 遇到 Cloudflare 的 502、fetch failed 会自己重试两次。Linux 工具链由 `.github/actions/setup` 安装并缓存；Mac 使用 `.github/actions/setup-mac` 接入 mini1 既有工具链。原生部分（station 的 mesh 插件/启动器/runner、网页的 iroh wasm、安卓的 shell 和引擎、桌面带的 Rust station）预编译（`scripts/native.ts`，见 development.md「Native parts」）：`natives` job 在 mini1 上按源码算 key，GitHub release `native-artifacts` 里没有的才编，main 上传上去、分支只作本次运行的 artifact 传给后面的 job；检查、网页构建、Android 和桌面都不再编 Rust（只有 Rust 自己的测试在它的源码变了时才编）。只有 Studio 自更新经 mini1 执行；构建签名不再 SSH 到 Studio。桌面必须使用原签名身份，可通过 production 的 MACOS_SIGNING_CERTIFICATE_B64 / MACOS_SIGNING_CERTIFICATE_PASSWORD 注入一次性钥匙串，结束后删除；身份缺失则拒绝发包。
+`.github/workflows/pipeline.yml` 使用 AFK-surf 的 CI 资源：计划/API/changelog/标签在 ubuntu-24.04，网页构建和 Android 发布在 Blacksmith Linux；完整检查（2026-10-03 起）和 station、桌面打包签名在 `[self-hosted, mini1]` Mac（M4 10 核，编译缓存在本机：4 核的 Blacksmith 上一次要 9 分钟）。完整检查按 `STILLFAIL_CHECK_PART` 拆成 ts、station、core、android 四个 job 并排跑，每个 job 用自己的临时 Cargo target（`$RUNNER_TEMP/target`），经 sccache 编译，跨 job 保留的只有 sccache 的缓存（`~/stillfail-ci/sccache`，上限 25G）。不要再在 runner 之间共享 target：三个 runner 的检出路径不同，vendor 里的 iroh（lib + cdylib，.dylib 不带 hash）每个路径编一份，加上不同分支、不同特性的构建堆在一起，rustc 会拿错（E0308「multiple different versions of crate iroh_relay」，2026-10-02、03 反复出现，去掉 kache、按依赖指纹分目录都没根治）。上传 R2 遇到 Cloudflare 的 502、fetch failed 会自己重试两次。Linux 工具链由 `.github/actions/setup` 安装并缓存；Mac 使用 `.github/actions/setup-mac` 接入 mini1 既有工具链。原生部分（station 的 mesh 插件/启动器/runner、网页的 iroh wasm、安卓的 shell 和引擎）预编译（`scripts/native.ts`，见 development.md「Native parts」）：`natives` job 在 mini1 上按源码算 key，GitHub release `native-artifacts` 里没有的才编，main 上传上去、分支只作本次运行的 artifact 传给后面的 job；检查、网页构建、Android 和桌面都不再编 Rust（只有 Rust 自己的测试在它的源码变了时才编）。只有 Studio 自更新经 mini1 执行；构建签名不再 SSH 到 Studio。桌面必须使用原签名身份，可通过 production 的 MACOS_SIGNING_CERTIFICATE_B64 / MACOS_SIGNING_CERTIFICATE_PASSWORD 注入一次性钥匙串，结束后删除；身份缺失则拒绝发包。
 
 - **分支**：每次 push 跑完整检查（`scripts/check.sh full <merge-base>..HEAD`），并把改到的部分构建、打包一遍（`deploy.py --dry-run`，不部署、不读密钥）。结果当合并的证据，不卡合并。
-- **main**：检查上次部署（tag `deployed/beta`）以来改到的部分，过了就按顺序部署改到的：先 api（stillfail-cloud，正式环境，只有一份），再 web-beta（app.youdid.wtf）、admin、preview、site-beta（youdid.wtf），以及测试通道的 station 发布包（`.github/release.sh station`：三个平台，传完让 studio 的 station `stillfail update`，经 mini1 到 studio 的 ssh）、桌面测试版（`.github/release-desktop.py`：在组织 Mac runner 上直接构建，用原签名身份签名、验证后上传）和安卓测试版（`.github/release.sh android`，用 secret `ANDROID_DEBUG_KEYSTORE_B64` 里 studio 的那把 key 签，不能换）。哪一步不过，后面的都不发；全部发完才把 `deployed/beta` 挪到这个提交，所以被取消或失败的那次，改动会算进下一次。relay 改了只在 Actions 里给个警告，不自动部署（会断所有连接）。
+- **main**：检查上次部署（tag `deployed/beta`）以来改到的部分，过了就按顺序部署改到的：先 api（stillfail-cloud，正式环境，只有一份），再 web-beta（app.youdid.wtf）、admin、preview、site-beta（youdid.wtf），以及测试通道的 station 发布包（`.github/release.sh station`：TypeScript station 加它的 Node 和原生部分，三个平台，传完让 studio 的 station `stillfail update`，经 mini1 到 studio 的 ssh）、桌面测试版（`.github/release-desktop.py`：在组织 Mac runner 上直接构建，用原签名身份签名、验证后上传）和安卓测试版（`.github/release.sh android`，用 secret `ANDROID_DEBUG_KEYSTORE_B64` 里 studio 的那把 key 签，不能换）。哪一步不过，后面的都不发；全部发完才把 `deployed/beta` 挪到这个提交，所以被取消或失败的那次，改动会算进下一次。relay 改了只在 Actions 里给个警告，不自动部署（会断所有连接）。
 - **正式版手动一键发布**：在 GitHub Actions 的 **Publish stable → Run workflow**，选择 main，revision 留空即可。它选择最新已审核的 `docs/releases/0.1.<n>.md` 对应提交；也可填写完整 main SHA。该提交必须包含本版本日志、已通过 main pipeline 且保留网页 artifact（90 天），否则在发布前停止。先由 Blacksmith / mini1 构建签名正式 Android / 桌面，再将同一提交的原网页 artifact 转正，最后从该提交构建三个平台的正式 station。各端全部成功才移动 `deployed/stable`；不自动更新用户的 station。测试版继续随 main 自动发布，正式版没有 push 触发器。失败后可用相同 SHA 重跑；已发布到更新正式版后不能借此回退旧版。
 - **仍手动处理**：relay 用 studio 的部署入口（会断开连接）；正式官网 `deploy.py site`。旧 `ember-promote` 仅为运维入口，日常正式发布使用上述 workflow。
 - **密钥**：GitHub 的 Environment `production`（只有 main 能用），secret 是部署目录各文件的内容：`DEPLOY_KEYS_JSON`（keys.json）、`GOOGLE_OAUTH_JSON`、`AXIOM_JSON`、`FCM_SERVICE_ACCOUNT_JSON`、`POSTHOG_JSON`、`VAPID_JSON`（还没有）、`CLOUDFLARE_API_TOKEN`（GitHub-hosted 部署必须配置）。`.github/deploy.sh` 每次把它们写进临时部署目录，用完就删。换密钥：改 studio `~/ember-deploy` 里的文件，再 `gh secret set <名字> --env production < 文件`。

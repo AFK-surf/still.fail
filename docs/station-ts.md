@@ -1,4 +1,8 @@
-# station 用 TypeScript 重写：设计方案（草案）
+# station 用 TypeScript 重写：设计方案
+
+> 已完成：TS station 是唯一的 station，Rust station（`mesh/`）2026-10-04 删除（分支 native-prebuilt），之前的代码在 git 历史里。
+> 下文是当时的方案，提到的 `mesh/…` 文件都指删除前的 Rust station。退回 Rust 版仍然可以：装一个旧的发布包（数据目录和
+> `stillfail.db` 两边通用）。
 
 2026-10-03。依据：现有 Rust station（main d5a4dd72，去掉测试约 3.2 万行）的完整梳理，以及分支 proto-rust-shell-ts 上的原型实测（`proto/ts-station`：同库 53 个请求与 Rust 逐字段一致；4.1 万行 TS 的类型检查 165ms、esbuild 38ms；Node 单线程会被重请求堵住）。
 

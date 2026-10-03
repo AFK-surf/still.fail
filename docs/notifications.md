@@ -133,10 +133,9 @@ service account FCM pushes are skipped.
 
 ## Station
 
-The station notices at the two moments that matter (mesh/app `notify.rs`):
-an agent's turn ending (`Session::on_turn_ended`), and a message in one of
-its own chats: a person's, or the station's own ⚠️. It sends the notices to the station process
-(mesh/station), which posts them to still.fail cloud, batched over a second;
+The station notices at the two moments that matter (station/src/cloud/notify.ts):
+an agent's turn ending, and a message in one of
+its own chats: a person's, or the station's own ⚠️. It posts them to still.fail cloud, batched over a second;
 one that cannot be sent is dropped. A station not enrolled with still.fail
 cloud sends nothing. An older cloud answers 404, and nothing more comes of it.
 

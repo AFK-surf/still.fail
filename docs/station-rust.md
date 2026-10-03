@@ -1,4 +1,6 @@
-# station：Rust
+# station：Rust（历史）
+
+> 历史文档。Rust station（`mesh/`）已于 2026-10-04 删除，TS station（[station-ts.md](station-ts.md)）是唯一的 station；代码在 git 历史里（删除前的最后一个提交是 native-prebuilt 分支上删除提交的父提交）。下文描述的是它当时的样子。发布包的布局（`mesh/target/release/stillfail-station` 这个路径、`bin/stillfail`）和数据目录（`mesh/cloud.json` 等）沿用至今，TS station 的启动器就在这个路径上。
 
 station 是一个 Rust 程序：`stillfail-station`（mesh/station）一个进程运行整个 station，station 本身是 stillfail-app（mesh/app），在同一个进程里。数据格式和 client core 共用 `client/core-ts/src/shapes/schema.ts`。只装一个二进制，不带 Node。
 

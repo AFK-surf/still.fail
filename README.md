@@ -11,9 +11,9 @@ still.fail connects Slack threads and its own web chats to persistent Claude Cod
 
 ## How it works
 
-- A **station** (`mesh/`, Rust) runs on a machine you choose. It starts and keeps the agent sessions, connects to Slack, and stores conversations locally in SQLite.
+- A **station** (`station/`, TypeScript on Node, with a few prebuilt native parts in Rust) runs on a machine you choose. It starts and keeps the agent sessions, connects to Slack, and stores conversations locally in SQLite.
 - A **workspace** groups people and stations. The cloud service (`cloud/`, Cloudflare Workers) handles accounts, workspaces and member credentials, and runs the relays.
-- **Clients** (web, desktop and Android) share one Rust client core (`client/`). They connect to stations peer-to-peer over [iroh](https://github.com/n0-computer/iroh), directly on the local network or through a relay; conversation content does not pass through the cloud's database.
+- **Clients** (web, desktop and Android) share one client core in TypeScript (`client/core-ts`). They connect to stations peer-to-peer over [iroh](https://github.com/n0-computer/iroh), directly on the local network or through a relay; conversation content does not pass through the cloud's database.
 
 See [docs/design.md](docs/design.md) and [docs/cloud.md](docs/cloud.md) for details.
 
@@ -47,8 +47,8 @@ Desktop and Android builds connect to the hosted service at `app.still.fail` by 
 
 | Path | Contents |
 | --- | --- |
-| `mesh/` | Station (`stillfail-station`) and its agent runtime integrations |
-| `client/` | Shared Rust client core, WebAssembly bindings and translations |
+| `station/` | Station (`stillfail-station`) and its agent runtime integrations; its native parts in `station/native/` |
+| `client/` | Shared client core (`core-ts`), its native shells (the browser's iroh, Android's IO) and translations (`i18n`) |
 | `web/` | Web app, official site and previews |
 | `apps/desktop/`, `apps/android/` | Electron and native Android clients |
 | `cloud/` | Accounts, workspaces, relays and releases on Cloudflare |

@@ -4,18 +4,18 @@ Someone using still.fail runs into still.fail itself misbehaving; the agent work
 team, shows them the report, and sends it once they agree. The reports wait in the admin console (admin.still.fail,
 「反馈」), where the team picks them up and hands them to an agent on their own station.
 
-- **Skill** `stillfail-feedback` (mesh/app/src/skills/stillfail-feedback.md): when something is still.fail's (a station
+- **Skill** `stillfail-feedback` (station/src/skills/stillfail-feedback.md): when something is still.fail's (a station
   tool failing or acting wrong, lost or doubled messages, the apps misbehaving) and when not (their own code, other
   services, the model); offer once per problem; write the report so the team can find the bug without the
   conversation; leave out the conversation's words, files and secrets unless a short excerpt is needed, pointed out
   when shown; show it, send on a yes, give the FB number.
-- **Tool** `feedback_send` (mesh/app/src/feedback.rs): title, body, area, reporter, optional logs. The station adds
+- **Tool** `feedback_send` (station/src/tools/feedback.ts): title, body, area, reporter, optional logs. The station adds
   the session, connect, runtime, profile, model, thread, the session's /o/ link, OS and its version, and a key
-  (sha256 of session, title and body) so a retried call is not a second report. The station process posts it
-  (mesh/station/src/feedback.rs) to `<origin>/v1/feedback`, signed over
+  (sha256 of session, title and body) so a retried call is not a second report. The station posts it
+  (station/src/cloud/signed.ts) to `<origin>/v1/feedback`, signed over
   `stillfail-station-feedback-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>`.
 - **Not on the test channel**: a station updated on the beta channel (youdid.wtf; the team's own stations) has neither
-  the skill nor the tool, decided as it starts (`updates::channel_of`); a skill directory left from before is removed
+  the skill nor the tool, decided as it starts (station/src/updates/channel.ts); a skill directory left from before is removed
   unless someone added files to it.
 - **API** (cloud/src/feedback.ts): `POST /v1/feedback`, from a station (signed) or a signed-in account (bearer), on
   app.still.fail and app.youdid.wtf alike; each report is marked `channel: stable | beta` by the host it came on (or

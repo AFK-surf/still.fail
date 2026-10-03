@@ -12,7 +12,7 @@ station 启动、Profile 修改/检查以及自动决策页「刷新模型」都
 
 规则启用后，指定模型不可用、证据不足或判断尚未完成，都不会冒充完成；在发帖、上传附件和结束状态落库前返回工具错误。没有启用规则时保持既有行为。检查期间设置或会话改变会丢弃旧结果。每次结果进入 decision_checks，页面实时显示最近 30 次结果及对应会话链接；审计不存聊天正文或凭据。
 
-检查覆盖 session 的全部会话、待决定卡片和拟发文字/done。每段历史超过 200 条或总请求超过 96 KB 不静默截断。模型概率不是校准后的正确率；模拟供应商只验证接线和拦截流程，不证明真实模型准确率。样例集位于 tests/fixtures/completion-decisions.jsonl，decision_eval 可使用测试 station 配置中的 Profile 跑真实提供商评估。
+检查覆盖 session 的全部会话、待决定卡片和拟发文字/done。每段历史超过 200 条或总请求超过 96 KB 不静默截断。模型概率不是校准后的正确率；模拟供应商只验证接线和拦截流程，不证明真实模型准确率。样例集位于 station/test/fixtures/completion-decisions.jsonl（拿它跑真实提供商评估的 decision_eval 是 Rust station 的工具，2026-10-04 随它删除，在 git 历史里）。
 
 配置及 Overview 新字段可选，旧站/旧客户端兼容；设置权限在 station 校验，core 保存草稿并驱动具名操作，web/Android 只渲染。station 的 decision_checks 事件刷新 Overview，无客户端轮询。
 

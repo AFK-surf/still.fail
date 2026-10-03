@@ -1,11 +1,11 @@
 # Development
 
-The commands below run from the repository root unless noted. The core/station use Rust; the web UI and Cloudflare Workers use Node.js. Start with cloud tests if you do not need to build a client.
+The commands below run from the repository root unless noted. The station, the client core, the web UI and the Cloudflare Workers are TypeScript (Node.js); a few native parts are Rust, prebuilt. Start with cloud tests if you do not need to build a client.
 
 ## Prerequisites
 
 - Git, Python 3, Node.js 24 or later, and pnpm (the root manifest pins 10.11.1; `cloud/` pins 10.33.0).
-- Rust is optional for everyday work: the native parts the TypeScript station and clients use are prebuilt (see [Native parts](#native-parts)). To change one of them, or the Rust station in `mesh/`, you need rustup (the parts are built with the toolchain pinned in `scripts/native.ts`, which rustup installs on first use), plus, per part: the `wasm32-unknown-unknown` target, `wasm-bindgen-cli` matching `wasm-bindgen` in `client/Cargo.lock` (currently 0.2.129) and LLVM's `clang`/`llvm-ar` with WebAssembly support for the browser's iroh; the NDK below for Android's shell and engine; zig and cargo-zigbuild for the Linux station parts from a Mac.
+- Rust is optional for everyday work: the native parts the TypeScript station and clients use are prebuilt (see [Native parts](#native-parts)). To change one of them you need rustup (the parts are built with the toolchain pinned in `scripts/native.ts`, which rustup installs on first use), plus, per part: the `wasm32-unknown-unknown` target, `wasm-bindgen-cli` matching `wasm-bindgen` in `client/Cargo.lock` (currently 0.2.129) and LLVM's `clang`/`llvm-ar` with WebAssembly support for the browser's iroh; the NDK below for Android's shell and engine; zig and cargo-zigbuild for the Linux station parts from a Mac.
 - Android additionally needs JDK 17 and the Android SDK (NDK 28.2.13676358 to build its shell or engine, or to strip them when packing); desktop packaging has its own dependencies in `apps/desktop/`.
 
 ```sh
@@ -32,17 +32,16 @@ Everything Rust that the TypeScript station, the clients, their builds and their
 
 | Part | What | Targets | Used by |
 | --- | --- | --- | --- |
-| `mesh` | `station/native/mesh`: the station's iroh and image codecs, a Node addon (`mesh.node`) | darwin-arm64, linux-x64, linux-arm64 | station tests and bundle, core-ts tests, the desktop app |
-| `launcher` | `station/native/launcher`: the TypeScript station's `stillfail-station` | same | the station's bundle, `station/test/e2e.sh` |
+| `mesh` | `station/native/mesh`: the station's iroh and image codecs, a Node addon (`mesh.node`) | darwin-arm64, linux-x64, linux-arm64 | station tests and bundle, core-ts tests, the desktop app's core |
+| `launcher` | `station/native/launcher`: the station's `stillfail-station` | same | the station's bundle (releases, the desktop app), `station/test/e2e.sh` |
 | `runner` | `station/native/runner`: `stillfail-runner` | same | station tests and bundle |
-| `station-rs` | `mesh/`: the Rust station (`stillfail-station`) | darwin-arm64 published | the desktop app |
 | `iroh-wasm` | `client/iroh-wasm`: the browser's iroh (`web/src/core/iroh-pkg`) | wasm32 | web build, web typecheck and tests |
 | `shell` | `client/shell`: the Android core's IO (`libstillfail_shell.so`) | android-arm64 | `apps/android/build.py` |
 | `engine` | `apps/android/core/src/main/cpp`: Hermes with its JSI (`libstillfail_hermes.so`, `libjsi.so`, the NDK's `libc++_shared.so`) | android-arm64 | `apps/android/build.py` |
-| `archive-rs`, `station-load` | `station/test/archive-rs`, `station/tools/load`: test tools | darwin-arm64 published | station tests, `e2e.sh`, `compare.sh` |
+| `archive-rs`, `station-load` | `station/test/archive-rs` (the Rust station's cold storage, kept for data it left), `station/tools/load`: test tools | darwin-arm64 published | station tests, `e2e.sh`, `compare.sh` |
 | `iroh-relay` | n0's release v1.1.0, checked against its SHA-256 (not ours to publish) | darwin-arm64, linux | core-ts mesh tests |
 
-**Keys.** A part's key is the SHA-256 of: the git hash of every file it is made from (its crate, its `Cargo.lock`, the vendored crates it patches in, `mesh/app/src/archive.rs` for `archive-rs`, …: `inputs` in `scripts/native.ts`), as committed or as edited in the worktree; the Rust toolchain (pinned there, `TOOLCHAIN`, and installed by rustup when building); zig's version for Linux; the target; and the build's command, flags, NDK, Hermes and AGP versions. Nothing else changes a key, so a change anywhere else compiles no Rust. `node scripts/native.ts status` lists every part's key and where it is.
+**Keys.** A part's key is the SHA-256 of: the git hash of every file it is made from (its crate, its `Cargo.lock`, the vendored crates it patches in, …: `inputs` in `scripts/native.ts`), as committed or as edited in the worktree; the Rust toolchain (pinned there, `TOOLCHAIN`, and installed by rustup when building); zig's version for Linux; the target; and the build's command, flags, NDK, Hermes and AGP versions. Nothing else changes a key, so a change anywhere else compiles no Rust. `node scripts/native.ts status` lists every part's key and where it is.
 
 **Where they are**, in this order:
 
@@ -53,7 +52,7 @@ Everything Rust that the TypeScript station, the clients, their builds and their
 
 One process at a time gets or builds a key on a machine; others wait for it (a lock directory beside the cache entry), so parallel checks or worktrees never build a part twice. A cache entry appears atomically (renamed into place when complete).
 
-**Who uses them.** `pnpm test` in `station/` and `client/core-ts/` runs `node ../scripts/native.ts run <parts> -- node --test …`, which sets `STILLFAIL_MESH_NATIVE`, `STILLFAIL_RUNNER`, `ARCHIVE_RS` and `STILLFAIL_RELAY_BIN` (unless already set). `pnpm run build` and `build:cloud` run `node scripts/native.ts iroh-pkg`, which puts the browser's iroh in `web/src/core/iroh-pkg` once per key. `scripts/station-bundle.sh` (`STILLFAIL_STATION=ts`), `apps/desktop/build.sh` and `apps/android/build.py` take theirs from `native.ts file|path`. `scripts/check.sh` compiles Rust only for Rust's own tests (`cargo test` in `mesh/`, `client/`, `station/native/*`), each only when that Rust changed.
+**Who uses them.** `pnpm test` in `station/` and `client/core-ts/` runs `node ../scripts/native.ts run <parts> -- node --test …`, which sets `STILLFAIL_MESH_NATIVE`, `STILLFAIL_RUNNER`, `ARCHIVE_RS` and `STILLFAIL_RELAY_BIN` (unless already set). `pnpm run build` and `build:cloud` run `node scripts/native.ts iroh-pkg`, which puts the browser's iroh in `web/src/core/iroh-pkg` once per key. `scripts/station-bundle.sh`, `apps/desktop/build.sh` and `apps/android/build.py` take theirs from `native.ts file|path`. `scripts/check.sh` compiles Rust only for Rust's own tests (`cargo test` in `client/` and `station/native/*`), each only when that Rust changed.
 
 ```sh
 node scripts/native.ts file mesh                 # the addon for this machine (prebuilt, or built)
@@ -65,7 +64,7 @@ STILLFAIL_NATIVE=offline …                       # neither download nor build
 STILLFAIL_ENGINE=cmake python3 apps/android/build.py  # the engine built by Gradle's CMake (working on engine.cpp)
 ```
 
-**Publishing** happens only in CI, on main: the pipeline's `natives` job (mini1) runs `node scripts/native.ts ensure --publish`, which builds every part (and target) whose key the release lacks and uploads it with the run's token, then `prune 20` keeps the newest 20 assets of each part and target. A branch publishes nothing: its `natives` job builds what the release lacks of what its checks and builds use, and hands it to its other jobs as the run artifact `natives-<sha>` (`STILLFAIL_NATIVE_INBOX`, `.github/actions/natives`); on mini1 the jobs share the cache anyway. Every job after it (checks, the web build, Android on Blacksmith, the desktop and station on mini1) then compiles no Rust. The release is a prerelease, made once by hand (`gh release create native-artifacts --prerelease --target <a main commit> -t "Prebuilt native parts"`): GitHub refuses the run's token a new tag at a commit that changes a workflow.
+**Publishing** happens only in CI, on main: the pipeline's `natives` job (mini1) runs `node scripts/native.ts ensure --publish`, which builds every part (and target) whose key the release lacks and uploads it with the run's token, then `prune 20` keeps the newest 20 assets of each part and target. A branch publishes nothing: its `natives` job builds what the release lacks of what its checks and builds use, and hands it to its other jobs as the run artifact `natives-<sha>` (`STILLFAIL_NATIVE_INBOX`, `.github/actions/natives`); on mini1 the jobs share the cache anyway. Every job after it (checks, the web build, Android on Blacksmith, the desktop and station on mini1) then compiles no Rust; the station's releases (all three platforms) take the parts main's natives job published. The release is a prerelease, made once by hand (`gh release create native-artifacts --prerelease --target <a main commit> -t "Prebuilt native parts"`): GitHub refuses the run's token a new tag at a commit that changes a workflow.
 
 Measured on studio, a fresh worktree each, step by step (seconds; rustc calls in brackets where there were any):
 
@@ -89,12 +88,13 @@ With the parts published and an empty cache, the first column plus their downloa
 
 ```sh
 STILLFAIL_PREVIEW_ORIGIN=http://127.0.0.1:8790 pnpm run build:cloud
-(cd mesh && cargo build --locked --release -p stillfail-station)
+(cd station && pnpm install --frozen-lockfile)
+sh scripts/station-bundle.sh /tmp/station   # [darwin-arm64|linux-x64|linux-arm64]
 ```
 
 The first command gets the browser's iroh (WebAssembly, prebuilt; the core itself is TypeScript, client/core-ts) and builds the local cloud's web/admin/preview assets, with previews pointing at the local preview host. This variable is read at build time; changing it requires rebuilding the web assets. If you change the development server's `PORT`, use its preview port (`PORT + 3`) here. Without this variable, the web build uses the hosted preview service.
 
-The second command builds `mesh/target/release/stillfail-station` (or the directory selected by `CARGO_TARGET_DIR`).
+The last one lays out a station release in `/tmp/station/stillfail` (the layout `scripts/station-bundle.sh` describes): the station bundled, its Node, its native parts (prebuilt) and `bin/stillfail`, as the installer and the desktop app have it.
 
 ## Isolated local development
 
@@ -125,11 +125,11 @@ Use a fresh station data directory. For example, in another terminal at the repo
 ```sh
 export STILLFAIL_DATA="$(mktemp -d)"
 # Substitute the token printed in an ENROLL line by the development server:
-bin/stillfail station enroll http://127.0.0.1:8787 <enrollment-token>
-bin/stillfail start
+/tmp/station/stillfail/bin/stillfail station enroll http://127.0.0.1:8787 <enrollment-token>
+/tmp/station/stillfail/bin/stillfail start
 ```
 
-The enrollment token is temporary; do not commit it. Keep `STILLFAIL_DATA` set to the same directory for subsequent station commands. If you use `CARGO_TARGET_DIR`, also set `STILLFAIL_STATION_BIN` to the built station executable. Configure your agent runtime in the local app when you need real agent execution; that step uses your own runtime account.
+The enrollment token is temporary; do not commit it. Keep `STILLFAIL_DATA` set to the same directory for subsequent station commands. Rebuild the release (the last command above) after changing the station. Configure your agent runtime in the local app when you need real agent execution; that step uses your own runtime account.
 
 The mock login routes are for loopback development only. Restarting the local cloud recreates its test identities and workspace, so enroll a fresh test station again. The station's old local admin URL is a redirect, not a standalone UI.
 

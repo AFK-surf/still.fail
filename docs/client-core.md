@@ -457,8 +457,7 @@ client/
     test/       the core's tests (the Rust core's, ported, and the TS core's own); harness/ the side-by-side run
   iroh-wasm/  iroh alone for the browser (wasm-bindgen), which hosts/web.ts binds
   shell/      Android's native shell (C ABI): HTTP, the cloud's WebSocket, files, SQLite, TCP, iroh
-  i18n/       the words (catalog/<lang>/*.json), shared with the Rust station
-  shapes/     words and model/provider reading the Rust station (mesh/) shares; not where the clients' types are
+  i18n/       the words (catalog/<lang>/*.json), shared with the station, the web and Android
 ```
 
 The core's modules (`client/core-ts/src`):
@@ -530,8 +529,9 @@ Nothing in the pages differs but the host underneath:
   macOS, `second-instance` elsewhere), and the app loads the page's own
   `/auth/callback` with that query, which calls `auth.complete` as on the web.
 
-- The app carries a station release (scripts/station-bundle.sh) and runs
-  `stillfail-station` itself (`src/station.ts`, docs/station-rust.md), on
+- The app carries a station release (scripts/station-bundle.sh: the station
+  in TypeScript with its Node) and runs its launcher, `stillfail-station`,
+  itself (`src/station.ts`), on
   `~/.stillfail` like an installed station; when one is running already
   (`stillfail-station` exits with HELD) it leaves it be.
 

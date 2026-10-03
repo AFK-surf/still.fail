@@ -265,7 +265,8 @@ cloud 的端口、`doing` 的 `since`。
   core-ts 共 384 个测试。mesh 插件为「握手不答」的测试加了 `holdIncoming(n)`。
 - 对照运行加了 station（见上）。
 - Rust core 删了（2d8a53ab）：`client/core`、`client/wasm`、`client/node`、`client/ffi`；`client/shapes` 只剩 Rust station
-  （mesh/）共用的词和读法；客户端类型和操作 bindings 由 TS 生成（见「写法」）；check.sh、CI 的检查跟着改（构建步骤本来就
+  （mesh/）共用的词和读法（2026-10-04 Rust station 删掉后，`client/shapes` 和 `client/i18n` 的 Rust crate 也删了，词表还在
+  `client/i18n/catalog`）；客户端类型和操作 bindings 由 TS 生成（见「写法」）；check.sh、CI 的检查跟着改（构建步骤本来就
   走 `apps/desktop/build.sh`、`apps/android/build.py`、`build:cloud`，它们已是 TS core）；`docs/client-core.md` 重写。
 
 验证（studio，2026-10-03，d521cec8，独立 worktree `~/ember-wt/core-ts-final`）：

@@ -27,7 +27,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 ## station
 
-`mesh/app/src/telemetry.rs`，只做错误追踪，**默认关闭**。station 跑在用户自己的机器上，由它的管理者在 `config.json` 里打开：
+`station/src/ops/telemetry.ts`，只做错误追踪，**默认关闭**。station 跑在用户自己的机器上，由它的管理者在 `config.json` 里打开：
 
 ```json
 { "telemetry": { "errors": true } }

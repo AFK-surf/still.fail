@@ -33,7 +33,7 @@ tunnels (the web has no sockets).
 
 ## On the wire
 
-Over the member link (ALPN `stillfail/admin/1`; mesh/station/src/main.rs):
+Over the member link (ALPN `stillfail/admin/1`; station/src/mesh/serve.ts):
 
 1. **The offer**, a stream the phone opens: the head line
    `{"method":"POST","path":"/admin/api/adb","headers":{},"adb":{"op":"share","phone":"<its device key, hex>","device":"Pixel 8","android":"14","package":"fail.still.android","adbd":true,"pair":false}}`,
@@ -58,12 +58,12 @@ Over the member link (ALPN `stillfail/admin/1`; mesh/station/src/main.rs):
 
 ## On the station
 
-`mesh/station/src/adb.rs`: a listener on `127.0.0.1` for each phone offered (the
+`station/src/mesh/adb.ts`: a listener on `127.0.0.1` for each phone offered (the
 same port for the same phone when it is free, 37000–37999), `adb connect` to it
 as the offer comes, `adb disconnect` as it goes. adb is the station machine's
 (`PATH`, `$ANDROID_HOME`, the SDK's usual places); without it the offer says
 `missing`. Agents see the phones shared with them with the `adb_devices` tool
-(mesh/app/src/adb.rs): each one's serial, model, owner and state, and the link
+(station/src/tools/adb.ts): each one's serial, model, owner and state, and the link
 to ask a person for theirs: `<cloud>/w/<workspace>/s/<station>/adb` opens the
 station's 共享调试 in the Android app (an App Link; in a chat the app opens it
 itself, `link.parse` → `adbShare`). Sharing starts only once its person taps

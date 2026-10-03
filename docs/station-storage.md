@@ -134,7 +134,7 @@ CREATE TABLE profile_status (
 ```
 
 A database of another schema version is refused (the station says to move
-its data by hand); no migrations are kept in the code (`mesh/app/src/store.rs`).
+its data by hand); no migrations are kept in the code (`station/src/store/schema.ts`).
 The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
 `hidden_*`) are added in place when missing.
 

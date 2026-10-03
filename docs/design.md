@@ -13,7 +13,7 @@ still.fail 是一个团队聊天里的 coding agent 服务：人在 Slack 或 st
 
 ## 2. 进程结构
 
-单进程 `stillfail-station`（Rust，mesh/station），station 本身是 stillfail-app（mesh/app），在同一个进程里。由 launchd（macOS）或 systemd 用户服务（Linux）托管；桌面端自带一份，作为子进程用 `--with-parent` 启动。迁移过程见 [station-rust.md](station-rust.md)。
+station 是 TypeScript（station/，跑在发布包自带的 Node 上），原生的只有三件预编译的：启动器 `stillfail-station`（station/native/launcher：持有数据目录的锁和端口，pid 不变，更新时在旁边起新的 Node 进程再放掉旧的）、每个 agent 一个 runner（station/native/runner：station 重启或崩溃时轮次不断）、iroh 和图片编解码的 Node 插件（station/native/mesh）。由 launchd（macOS）或 systemd 用户服务（Linux）托管；桌面端自带一份，作为子进程用 `--with-parent` 启动。方案见 [station-ts.md](station-ts.md)；之前的 Rust station（2026-10-04 删除）见 [station-rust.md](station-rust.md)。
 
 ```
 Chat 接入(Slack / 网页对话) ── Store(SQLite) ── SessionActor(每个会话一个，串行)
@@ -45,7 +45,7 @@ Jobs   账号池   空闲进程回收   自动归档
 
 ## 5. 运行时驱动
 
-still.fail 定义自己的接口（mesh/app/src/runtime/mod.rs），其余部分只依赖这层：`AgentDriver` 按 profile、cwd、要 resume 的 id、model、effort、附加指令和 MCP 地址 / token 打开一个 `AgentSession`；会话提供 `prompt` / `steer` / `abort` / `dispose`（Claude 另有把工具调用挪到后台），运行时发生的事按顺序作为事件（turn 开始 / 结束及结果、进程关闭、实时步骤）送回会话自己的任务，而不是回调。
+still.fail 定义自己的接口（station/src/agents/runtime.ts），其余部分只依赖这层：`AgentDriver` 按 profile、cwd、要 resume 的 id、model、effort、附加指令和 MCP 地址 / token 打开一个 `AgentSession`；会话提供 `prompt` / `steer` / `abort` / `dispose`（Claude 另有把工具调用挪到后台），运行时发生的事按顺序作为事件（turn 开始 / 结束及结果、进程关闭、实时步骤）送回会话自己的任务，而不是回调。
 
 - 两个驱动都自己实现，共用一套进程管理（进程组、stdin）。不依赖 `@botiverse/oar`：它只结束直接子进程、不解析 `api_retry` / `rate_limit_event`，也没有按账号的 env。它的 Claude / Codex 文档和实验脚本作为需求清单和参考，升级 CLI 版本时对照其上游。
 - **账号相关全部自己实现**。

@@ -56,7 +56,7 @@ Google OAuth（`openid email profile`），access token 5 分钟，refresh token
 
 连接上优先用 ALPN `stillfail/admin/1`，兼容旧版 `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。
 
-station 端由 `stillfail-station`（Rust，iroh 1.0.3，mesh/station）负责：它运行整个 station（mesh/app，同一个进程），把 mesh 上来的请求交给 station 的管理 API，带上已验证的用户身份；station 据此记录「谁」做了操作、在管理页对话里说了话。
+station 端由 station 自己负责（station/src/mesh/serve.ts，iroh 1.0.3 在它的 Node 插件 station/native/mesh 里）：把 mesh 上来的请求交给 station 的管理 API，带上已验证的用户身份；station 据此记录「谁」做了操作、在管理页对话里说了话。
 
 ## 网页版
 
@@ -78,7 +78,7 @@ relay 的做法：Cloudflare Container 里跑官方 `iroh-relay`，前面由 Wor
 
 station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 
-- **局域网**：mDNS（服务名 `stillfail`，兼容期内也查旧名 `ember`；见 `mesh/station/src/main.rs` 的 `MDNS_SERVICE`，只有 station 广播，设备只查询）。每块网卡都收发；路由器在子网之间转发的 mDNS 也认。
+- **局域网**：mDNS（服务名 `stillfail`，兼容期内也查旧名 `ember`；见 `station/native/mesh/src/lib.rs` 的 `MDNS_SERVICE`，只有 station 广播，设备只查询）。每块网卡都收发；路由器在子网之间转发的 mDNS 也认。
 - **公网**：station 把自己所在的 relay 发布到 Mainline DHT，设备查得到它换过的 relay。
 - 浏览器（wasm）只能走 still.fail 的 relay。
 
