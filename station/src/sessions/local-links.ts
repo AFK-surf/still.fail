@@ -1,10 +1,12 @@
 // Local Markdown destinations are files to deliver, not routes on the web client (mesh/app/src/local_links.rs). The
 // Rust reads the Markdown with pulldown-cmark; this reads what that finds of links: inline links and images (`[x](d)`,
 // `![x](d)`, `<…>` destinations, nested ones), outside code spans and fenced code blocks, and reference links (which
-// are refused when they name a local file). Raw HTML and indented code blocks are not told apart from text.
+// are refused when they name a local file). With the native addon the Rust's own code reads it (native/mesh/src/local.rs); without it, raw HTML and indented code blocks
+// are not told apart from text.
 import { realpathSync, statSync } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { type Mesh, loadMesh } from "../mesh/native.ts";
 
 type Found = { inline: boolean; destination: string; start: number; end: number };
 
@@ -251,6 +253,30 @@ const canonical = (path: string) => {
 /// their files to `paths`). Run before posting anything, so a missing or ambiguous attachment can be corrected by the
 /// agent.
 export function prepare(text: string, paths: string[], workspace: string): string {
+  // The Rust station's own reading of the Markdown (pulldown-cmark, in the native addon), when it is there.
+  const native = nativeOrNull();
+  if (native !== null) {
+    const prepared = native.prepareLocalLinks(text, paths, workspace);
+    paths.splice(0, paths.length, ...prepared.paths);
+    return prepared.text;
+  }
+  return prepareHere(text, paths, workspace);
+}
+
+let addon: Mesh | null | undefined;
+function nativeOrNull(): Mesh | null {
+  if (addon === undefined) {
+    try {
+      addon = loadMesh();
+    } catch {
+      addon = null;
+    }
+  }
+  return addon;
+}
+
+/// prepare without the addon: as far as this reads the Markdown (raw HTML and indented code blocks not told apart).
+export function prepareHere(text: string, paths: string[], workspace: string): string {
   const replacements: [number, number, string][] = [];
   for (const link of links(text)) {
     const path = localPath(link.destination);
