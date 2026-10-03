@@ -342,8 +342,10 @@ SharedWorker 时多个 core 一起写、各账号共用一个库（已读、未�
 - 旧数据一次导入（`src/db/import.ts`）：旧记录库（`core.db` 的 `records`、IndexedDB `records`）和 Rust 的 kept 分块，
   按当时的 owner 分给各账号，原样留着（可以退回），不设上限；entries/transcript 首屏之后后台导。
 
-验证（studio，2026-10-04）：core-ts 395 个测试（`test/data.test.ts` 为新层重写，`kept.test.ts` 并入）；`cargo test -p
-stillfail-shell`；web 的 build:cloud；安卓 `build.py --release --tasks` + `assembleDebug -PmotionTest`；dev cloud（8871）
+验证（studio，2026-10-04，0283c609，独立 worktree）：`sh scripts/check.sh all` 16 步全过（6725974d）；core-ts 395 个测试
+（`test/data.test.ts` 为新层重写，`kept.test.ts` 并入）连跑 5 遍全绿（含 mesh 的 20 个）；`cargo test -p
+stillfail-shell`；web 的 build:cloud；桌面 `UNSIGNED=1 sh apps/desktop/build.sh` 出了 `.app`，包里的 `core-ts.js` 在 Electron
+自带的 Node（24.21）里从库出首屏 152 ms；安卓 `build.py --release --tasks` + `assembleDebug -PmotionTest`；dev cloud
 + 临时 station：Chrome 里登录 → 新建对话、消息立刻出现、station 建出 chat → 列表 → 打开 → 第二条 → 第二个标签页经
 转发 250 ms 显示 → 关掉第一个标签页，第二个接管并发出第三条（station 库里 n=5）→ 断开 cloud 和 relay 重开：列表 309 ms
 （core 的第一份列表在导航后 289 ms）、chat 三条都在；模拟器（API 36）上开发账号登录 → 列表（web 建的 chat）→ 打开 →
