@@ -6,7 +6,7 @@
 
 - 一份 TS core，三端共用：web（SharedWorker）、桌面（Electron utilityProcess）、安卓（Hermes）。
 - **UI 一行不改**：UI ↔ core 的 JSON 协议（docs/client-core.md「Protocol」）、所有 call 和 topic 的名字与形状原样保留；安卓的 `Engine` 接口（connect/receive/close）原样保留，只是换一个实现。
-- **数据兼容**：core 的数据库（docs/core-db.md 的记录）、storage 里的键（账号、token、设备密钥、偏好）、kept 的条目，新旧 core 都能读；升级不丢登录、不丢缓存，也能退回 Rust core。
+- **数据兼容**：storage 里的键（账号、token、设备密钥）新旧 core 都能读；旧的记录库（`core.db` 的 `records`、IndexedDB `records`）和 Rust 的 kept 分块在每个账号的库第一次建出来时导入一次、原样留着（docs/core-db.md），升级不丢登录、不丢缓存，也能退回旧 core。
 - 不做：改 UI、改协议、改 cloud/station 的接口。
 
 ## 进程结构（每端）
@@ -55,15 +55,17 @@
 ## 设计规则（2026-10-03 用户定：照设计做，不照 Rust 逐行搬）
 
 Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」为目标。只有两样必须和 Rust 完全一样：UI 协议（call/topic
-的名字和 JSON 形状）和设备上的存储（storage 的键和格式、`core.db` 的表和记录），这样老 UI 不用改、登录和缓存升级不丢、
-也能退回 Rust core。其余一律按下面的规则：
+的名字和 JSON 形状）和设备上的存储（storage 的键和格式），这样老 UI 不用改、登录升级不丢、也能退回 Rust core。本机的
+数据库 2026-10-04 起是每个账号一个 SQLite 库（docs/core-db.md；用户：旧的设计「太打补丁了」），旧的记录库和 kept 分块
+导入一次、原样留着。其余一律按下面的规则：
 
 1. **异步全是 Effect**：call、订阅、station 链路、cloud socket、同步，都是挂在 scope 里的 fiber；取消就是 interrupt；
    重试和退避用 Schedule；计时走 Clock（测试用 TestClock）。Host 的接口也返回 Effect。
 2. **推送，不轮询**：订阅先给当前值，再给变化；station 和 cloud 的状态靠事件来，任何数据都不定时重读。只有显示在屏幕上的
    测量值（链路速率、RTT、「已等 3 秒」）可以在被看着的时候采样。
-3. **docs/core-db.md 全做完**：所有业务数据都是记录，包括 Rust 还放在 kept.rs 里的消息 entries 和 transcript、已读位置、
-   outbox；视图从记录算出来，推 delta；启动先从数据库出值，再联网；每条记录带最后一次被来源确认的时间。
+3. **docs/core-db.md 全做完**：每个登录账号一个 SQLite 库，真正的表（station、chat、session、thread、entry、transcript、
+   job、outbox、草稿……）加上视图按它找、按它排的列和索引；一个写者；视图读的是查询（带 limit，首屏先出）；启动先从库里
+   出值，再联网；schema 带版本和迁移。
 4. **用户操作不等网络**：操作在 core 里立刻生效（outbox、待建的 chat、改名/置顶/归档的覆盖层、已回答），`doing` 跟踪，
    失败回滚并说明原因；跨 station 的话题是流式的：到了多少显示多少，station 陆续补进来，不用 loading 挡住已有的内容。
 5. **UI 不发请求**：一切都是 core 的具名 call；数据和逻辑（草稿、选择、状态、PC 和手机的差别）都在 core 里。
@@ -107,8 +109,9 @@ Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」�
 `ChatItem`，所以 Compose 只重组变了的行。web 的 client 和安卓的 bridge 订阅时都带 `keyed: true`（Rust core 忽略它）。
 
 core 这边怎么做到「一行变只算一行」：
-- 记录在 `Data` 里冻结（只会被整条替换），`store` 读持有的话题用 `data.shared()`，不复制；没变的记录每次读都是同一个对象。
-- 视图按记录做行（`views.ts` 的 `#rowsMade`：记录对象 + 这行用到的其余东西的签名 → 做好的行，冻结），没变的行不再做。
+- 库里读出来的行冻结并按 key 留着（`db/account.ts`，写到它时才换），`store` 读持有的话题用 `data.shared()`，不复制；没变的行
+  每次读都是同一个对象。
+- 视图按行做行（`views.ts` 的 `#rowsMade`：行对象 + 这行用到的其余东西的签名 → 做好的行，冻结），没变的行不再做。
 - 输出（`src/output.ts`）按集合逐项装饰（时间文字）和过 shape，项和上次是同一个对象（或相等）且在同一分钟内，就直接用上次
   发出去的那个对象；diff 遇到同一对象直接跳过。
 
@@ -143,13 +146,15 @@ core 这边怎么做到「一行变只算一行」：
 - 规则 2：老 station 不跟随 job 日志时，Rust 每 2 秒起退避重读 `/jobs/:id/log`；TS 不重读，只在事件里更新（老 station 上
   日志面板不再自动增长，打开时读一次）。
 - 规则 2：`job` 话题 Rust 每半分钟（老 station 每 4 秒）重读 `/jobs/:id`；TS 只靠 `job` 事件。
-- 规则 3：消息 entries、transcript、已读位置、outbox 在 TS 里是 `core.db` 的记录（新表），不再用 kept.rs 的 storage 分块；
-  第一次启动时把 Rust 留下的 kept 分块导入成记录（老数据不丢），之后不再写 kept 分块（退回 Rust 时它会从 station 重新读）。
-- 规则 3：每条记录带「最后确认时间」（新表 `confirmed`，键 `<表>␁<键>`），Rust 没有。
+- 规则 3：消息 entries、transcript、已读位置、outbox 都在账号的 SQLite 库里（表 `entry`、`transcript`，`thread` 的
+  `read`/`unread` 列，`outbox`），不再用 kept.rs 的 storage 分块；第一次建库时把 Rust 留下的 kept 分块导入（老数据不丢），
+  之后不再写 kept 分块（退回 Rust 时它会从 station 重新读）。
+- 规则 3：文档和列表带「最后确认时间」（`confirmed` 列），Rust 没有。
 - 规则 3、4：发送中的消息（outbox）、在这里建的 chat（pending）、发给还没有 chat 的 agent 的消息（first）、改名/置顶/
-  保留/归档的覆盖层（changing）都是 `core.db` 的记录（表 `outbox`、`pending`、`first`、`changing`），重启后还在；没回答的
-  发送用同一个 idempotency key 重发、没建完的 chat 重新请求（Rust 这些都只在内存里，重启就丢）。没回答的覆盖层在重启时
-  按「被拒」撤掉（它的回答不会再来），station 的行随后会说明到底改没改。
+  保留/归档的覆盖层（changing）都在账号的库里（表 `outbox`、`pending`、`first`、`changing`；磁盘满时单独再写），重启后还在；
+  没回答的发送用同一个 idempotency key 重发、没建完的 chat 重新请求（Rust 这些都只在内存里，重启就丢）。没回答的覆盖层在
+  重启时按「被拒」撤掉（它的回答不会再来），station 的行随后会说明到底改没改；答了的覆盖层等 station 的行再变一次
+  （`list.rev`）才撤。
 - 规则 6：一个 profile 自 station 启动后没检查过时，Rust 在算「新 chat」页面时顺手发 `profile.check`；TS 在 overview 记录
   进来时由同步发（每次运行每个 profile 一次），和页面开没开无关。
 - 规则 6：更新日志（`changelog`）Rust 在页面打开时读（一小时最多一次）；TS 在 core 启动和每次账号的 events socket 打开时
@@ -159,11 +164,11 @@ core 这边怎么做到「一行变只算一行」：
 - 规则 3、6：Rust 每个 thread 只保留一段连续的 entries（`kept.rs` 的 extend：隔着缺口的丢掉），前面只预读一页；TS 把每个
   thread 的全部 entries 都同步到本机（先最新一页，再往前一页一页补，缺口按 `from..to` 只读缺的那段），听到的每条都留下。
   所以「往上翻」「打开 chat」基本不再请求。
-- 规则 3、6：Rust 的 kept 分块有 50 MB 上限，最久没打开的先丢；TS 保留能到的 station 的全部记录，只在没有任何已登录账号
-  能到某台 station 时删它的记录（`Data.retain`）。
+- 规则 3、6：Rust 的 kept 分块有 50 MB 上限，最久没打开的先丢；TS 保留能到的 station 的全部数据，只在没有任何已登录账号
+  能到某台 station 时删它（`Data.retain`），账号登出时删掉它的整个库。
 - 规则 3：transcript 收到「比已有的更后」的一页（中间有缺口）时 Rust 丢掉之前的，TS 留着，`live` 话题显示结尾那一段连续的；
   被改写得更短时（`start` 小于已有的末尾，哪怕 entries 为空）都从 `start` 截断。
-- 规则 3：`thread` 话题里的 `thread`（摘要）就是记录，跟着事件和事件后的摘要重读更新；Rust 停在窗口打开时的样子
+- 规则 3：`thread` 话题里的 `thread`（摘要）就是 `thread` 表里那一行，跟着事件和事件后的摘要重读更新；Rust 停在窗口打开时的样子
   （对照运行里「发消息」「agent 回复」「读到底」「别处来的消息」四步因此不同）。
 - 规则 6：一次读失败（5xx、链路断）由同步过一会再读（2 秒起翻倍，最多 5 次）；Rust 是话题自己在 RETRY_MS 后重读。
 - 规则 6：打开一个哪个列表里都没有的 chat（旧通知的链接）时，同步被告知它存在，去读它的 entries；读到 403/404/410 时话题
@@ -232,8 +237,9 @@ cloud 的端口、`doing` 的 `since`。
   验证（studio）：`DEV=1 SKIP_WEB=1 SKIP_STATION=1 sh apps/desktop/build.sh` 通过；Electron 44.4.5（Node 24.21）里
   utilityProcess + MessagePort 跑通订阅和调用、`core.db` 写入；`node harness/handover.ts <Rust addon>`：Rust 写的目录 TS
   打开、TS 写的目录 Rust 打开，账号/workspace/偏好/草稿都一样。
-- 网页：worker（`web/src/core/worker.ts`）跑 TS core（`src/hosts/web.ts`：fetch、WebSocket、IndexedDB 同库同表
-  `stillfail-core` v2 的 `values`/`records`，第一次打开照旧从 `ember-core` 搬），iroh 来自新的 `client/iroh-wasm`
+- 网页：worker（`web/src/core/worker.ts`）跑 TS core（`src/hosts/web.ts`：fetch、WebSocket、IndexedDB 同库
+  `stillfail-core` v2 的 `values` 放小值，第一次打开照旧从 `ember-core` 搬；账号的库是 OPFS 上的 SQLite WASM，见
+  docs/core-db.md），iroh 来自新的 `client/iroh-wasm`
   （只有 iroh，2.7 MB；整个 Rust core 的 wasm 同样的编法是 8.0 MB，见「测量」），在 mesh 第一次 bind 时才加载。web 的 tsconfig 更严，所以 worker
   经 `@stillfail/core-ts/web` 引用（vite alias 指到源码，类型见 `web/src/core/core-ts.d.ts`），core-ts 用自己的 tsconfig 检查。
   `pnpm build`/`build:cloud` 改编 iroh-wasm 并装 core-ts 的依赖；`scripts/check.sh` 的替身和测试步骤跟着换，加了 core-ts 的
@@ -312,6 +318,42 @@ TS 这时已经把 12 000 条 entries 都同步到本机（规则 6），Rust �
    对照运行 44 步全部一致（账号登录登出、accounts/workspaces/workspace/loginSessions/status/prefs/doing 话题、
    cloud 写操作和 events socket 推送与断线重连、草稿、各种错误）。移植测试 79 个通过。
 
-接手：计划里的事都做完了（2026-10-03）。剩下的是合并：分支 `core-ts` 等用户看过证据后合进 main（照 ember 的合并流程，
-部署时注意 web、桌面、安卓三个包都换成 TS core，数据两个方向都能打开，可以随时退回）。可以接着做的：安卓真机上量内存和流畅度。
-本机存储不设上限（2026-10-04 用户定：「为啥清掉，我们不是存 db 吗」）：能到的 station 的数据全部留在库里。
+## 本机数据库重做（2026-10-04）
+
+用户否了在旧设计上打补丁（「太打补丁了」）：键 → JSON 的通用存储、除 entries/transcript 外启动时整表进内存、web 没有
+SharedWorker 时多个 core 一起写、各账号共用一个库（已读、未读、置顶、草稿却是每个人自己的）、没有 schema 版本。换成一个
+设计，全文在 docs/core-db.md：
+
+- 每个登录账号一个 SQLite 库（`account-<sub>`）：桌面 node:sqlite（`src/hosts/node-sql.ts`）、安卓壳里的 SQLite
+  （`client/shell` 的 `sql.*`，经 callSync 同步调用）、web 是官方 SQLite WASM（`@sqlite.org/sqlite-wasm`）在 worker 里用
+  OPFS 的 `opfs-sahpool`。文件在数据目录的 `databases/`（`accounts` 是 storage 键的文件名，不能当目录）。登出删库。账号
+  列表、设备密钥、偏好、更新日志等设备级的东西留在 host storage（`device/*`）。
+- 真正的表（`src/db/schema.ts`）、`PRAGMA user_version` + 按序迁移；更新的 core 写过的库只读，`status` 说出来。
+- 一个写者（`src/db/account.ts`）：一阵写是一个事务，库的写 fiber 提交后告诉哪些 topic、哪些 chat 行（前后）、哪些日志
+  变了，驱动按 key 的增量；没变的行不写；已读位置等热字段是列，原地 UPDATE。磁盘/配额满：回滚，outbox 等本机做的事单独
+  再写，`status` 说出来。
+- web 单写者：每个标签页一个 dedicated worker，拿到 Web Lock `stillfail-core` 的那个跑 core，其它的经 BroadcastChannel
+  转发，那个标签页关了由下一个接管，页面收到 `{rejoin: true}` 重新订阅（`web/src/core/worker.ts`、`client.ts`）；
+  页面调用 `navigator.storage.persist()`。桌面/安卓靠 `locking_mode = EXCLUSIVE`，第二个进程打开得到 busy（库在内存里
+  这一轮，`status` 说出来）；桌面同一进程里 core 因 fatal 重启前先关库。
+- 读就是查询：列表在被读时一条索引查询载入、之后写者逐行维护、topic 走了就放掉；只被 view 盯着的列表不读；chat 列表
+  行多（> 500）时首屏 80 行一条查询先出（`chat_recent` 索引），再逐台载入；workspace 标记只读 `tone`/`asks` 选出的行，
+  奏页只读 `desk` 行，同步只读 `running` 行；chat 页按区间读 entries；通知听写者给的行变化。启动时不整表载入。
+- 旧数据一次导入（`src/db/import.ts`）：旧记录库（`core.db` 的 `records`、IndexedDB `records`）和 Rust 的 kept 分块，
+  按当时的 owner 分给各账号，原样留着（可以退回），不设上限；entries/transcript 首屏之后后台导。
+
+验证（studio，2026-10-04）：core-ts 395 个测试（`test/data.test.ts` 为新层重写，`kept.test.ts` 并入）；`cargo test -p
+stillfail-shell`；web 的 build:cloud；安卓 `build.py --release --tasks` + `assembleDebug -PmotionTest`；dev cloud（8871）
++ 临时 station：Chrome 里登录 → 新建对话、消息立刻出现、station 建出 chat → 列表 → 打开 → 第二条 → 第二个标签页经
+转发 250 ms 显示 → 关掉第一个标签页，第二个接管并发出第三条（station 库里 n=5）→ 断开 cloud 和 relay 重开：列表 309 ms
+（core 的第一份列表在导航后 289 ms）、chat 三条都在；模拟器（API 36）上开发账号登录 → 列表（web 建的 chat）→ 打开 →
+发送（station 库里 n=7）→ 强杀重开 3 次、去掉 adb reverse（没有 cloud 和 relay）再 2 次：`am start -W` 0.80–0.96 s，
+第一次界面 dump 时列表就在，断网时 chat 和消息都在；PSS 138.7 MB。测量见 docs/core-db.md「Measurements」：首屏
+Node 2.9 s → 0.10 s、Hermes 23.6 s → 0.13 s、Chrome 2.6 s → 0.16 s，首屏时内存 Node 1.16 GB → 168 MB、Hermes
+716 MB → 36 MB；web 包多 1.08 MB（gzip 467 KB，只有跑 core 的标签页加载）。
+
+接手：分支 `core-ts` 等用户看过证据后合进 main（照 ember 的合并流程，部署时注意 web、桌面、安卓三个包都换成 TS core；
+旧记录库原样留着，可以随时退回）。本机存储不设上限（2026-10-04 用户定：「为啥清掉，我们不是存 db 吗」）：能到的 station
+的数据全部留在库里。可以接着做的：安卓真机上量首屏和内存（模拟器上的 uiautomator 一次要 2–3 s，量不细）；dist 里
+sqlite-wasm 带出来但不加载的 246 KB（Worker1、`opfs` VFS 的 proxy）可以去掉；`connects` 页仍整表载入 sessions/threads
+（打开时才载）。

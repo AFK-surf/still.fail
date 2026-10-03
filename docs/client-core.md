@@ -8,9 +8,9 @@ client. Only iroh and, on Android, the IO are native:
 
 | Client | Where the core runs | Host (network, storage, time) | iroh |
 | --- | --- | --- | --- |
-| Web (app.still.fail) | a SharedWorker (a dedicated Worker where SharedWorker is missing, e.g. Chrome on Android) | `src/hosts/web.ts`: fetch, WebSocket, IndexedDB | `client/iroh-wasm` (wasm-bindgen, relay only), loaded on the first link |
+| Web (app.still.fail) | one tab's dedicated Worker (the one holding the Web Lock `stillfail-core`; the other tabs' workers relay to it) | `src/hosts/web.ts`: fetch, WebSocket, IndexedDB (small values), SQLite's WASM build on OPFS | `client/iroh-wasm` (wasm-bindgen, relay only), loaded on the first link |
 | Desktop (Electron) | a `utilityProcess` (Node) | `src/hosts/node.ts`: fetch, ws, `node:sqlite`, files | the station's napi addon (`station/native/mesh`, `mesh.node`) |
-| Android (iOS later) | Hermes on a thread of its own (`apps/android/core/src/main/cpp/engine.cpp`), the core as Hermes bytecode | `src/hosts/bridge.ts` over the Rust shell `client/shell` (HTTP, the cloud's WebSocket, files, `core.db`, TCP) | in `client/shell` |
+| Android (iOS later) | Hermes on a thread of its own (`apps/android/core/src/main/cpp/engine.cpp`), the core as Hermes bytecode | `src/hosts/bridge.ts` over the Rust shell `client/shell` (HTTP, the cloud's WebSocket, files, SQLite, TCP) | in `client/shell` |
 
 The UI never talks to still.fail cloud or a station itself. It sends **calls** and
 holds **subscriptions** to the core over one message channel, and renders the
@@ -25,9 +25,10 @@ interrupted, a subscription's work ends with its scope. Every timer is on
 Effect's Clock (a TestClock in the tests): nothing in the core calls
 `setTimeout`. Network waits yield to other work.
 
-It is cache-first: everything still.fail cloud and the stations say is a record
-in the core's database (`src/data.ts`, docs/core-db.md), and a topic is read
-from the records only — subscribing never asks the network. One sync scheduler
+It is cache-first: everything still.fail cloud and the stations say is kept in
+the signed-in account's SQLite database (`src/data.ts`, `src/db/`,
+docs/core-db.md), and a topic is read from it only, by query — subscribing never
+asks the network. One sync scheduler
 (`src/sync/scheduler.ts`; `src/sync/cloud.ts`, `src/station/sync.ts`) owns all
 traffic to still.fail cloud and the stations, keeps everything current by itself
 whatever the UI shows, and takes the UI's attention (`client.focus`, a topic
@@ -48,11 +49,14 @@ What differs per platform comes in through one interface, `Host`
   `websocket` — a receive-only WebSocket (still.fail cloud's `/v1/events`) with the
   subprotocols given, open once it resolves, closed with its scope.
 - `storageGet` / `storageSet` / `storageDelete` — small persistent values by
-  key (accounts and tokens, the device key, UI preferences); `dbRead` / `dbWrite`
-  — the core's database: ranges of keys in a table, batches written at once.
-  Web: IndexedDB (`stillfail-core`, as the Rust core kept it); desktop and
-  Android: files and `core.db` in the app's data directory, as the Rust core
-  kept them, so an update keeps the sign-in and everything read.
+  key (accounts and tokens, the device key, UI preferences). Web: IndexedDB
+  (`stillfail-core` `values`, as the Rust core kept it); desktop and Android:
+  a file per key in the app's data directory, as the Rust core kept them, so an
+  update keeps the sign-in.
+- `openDb` / `deleteDb` / `memoryDb` — an account's SQLite database (`Sql`:
+  `exec`, `run`, `all`, synchronous): desktop node:sqlite, Android the shell's
+  (`sql.*`), web SQLite's WASM build on OPFS; `legacyRead` — the former records
+  store, read once (docs/core-db.md).
 - `nowMs`, `monotonicMs`, `utcOffsetMin` (the viewer's time zone), `randomBytes`,
   `resetConnections`, `tcp` (adbd, native hosts).
 - `emit` — delivers a message to one connected UI (by its client id).
@@ -452,7 +456,7 @@ client/
     scripts/    shapes.ts, operations.ts (the clients' types and operation bindings), hermes-bundle.ts
     test/       the core's tests (the Rust core's, ported, and the TS core's own); harness/ the side-by-side run
   iroh-wasm/  iroh alone for the browser (wasm-bindgen), which hosts/web.ts binds
-  shell/      Android's native shell (C ABI): HTTP, the cloud's WebSocket, files, core.db, TCP, iroh
+  shell/      Android's native shell (C ABI): HTTP, the cloud's WebSocket, files, SQLite, TCP, iroh
   i18n/       the words (catalog/<lang>/*.json), shared with the Rust station
   shapes/     words and model/provider reading the Rust station (mesh/) shares; not where the clients' types are
 ```
@@ -464,11 +468,10 @@ The core's modules (`client/core-ts/src`):
 - `core.ts` — `Core`: accepts client messages, routes calls, manages subscriptions. `core/calls.ts` parses the named calls and validates input; `core/execute.ts` runs them; `core/routing.ts` routes topics; `core/account_state.ts` reconciles accounts, workspaces and their sockets.
 - `ops.ts` — station and cloud operations: their requests, their effects on the records, and their contracts (`PARAMS`).
 - `store.ts` — topics: values, subscribers, coalesced emission as deltas (`delta.ts`; keyed by `collections.ts`, shaped by `output.ts` and `conform.ts`), eviction.
-- `data.ts` — the records (docs/core-db.md): what still.fail cloud and the stations said, entries and transcripts included, and what is local (outbox, pending chats, overlays).
+- `data.ts`, `db/` — the data (docs/core-db.md): a SQLite database per signed-in account (`db/schema.ts` its tables and migrations, `db/account.ts` its writer and reads), the device's own values, what came before imported once (`db/import.ts`).
 - `sync/scheduler.ts`, `sync/cloud.ts`, `station/sync.ts` — everything kept current, by itself; `station/topics.ts` — the station topics, read from the records; `station/requests.ts`, `station/wire.ts` — requests over a link.
 - `accounts.ts` — sign-in (PKCE), token refresh (one at a time per account), persistence. `cloud.ts` — still.fail cloud's API.
 - `mesh.ts` — the device endpoint and station links: the credential and its renewal, reopening, hedging on a wake, relay measurement and moving.
-- `kept.ts` — what the Rust core kept in `kept` chunks, read into records once.
 - `entries.ts` — a thread's entries merged into messages (edits applied): the one place that does it.
 - `workspace.ts` — the workspaces, each with what is its own. `notices.ts`, `attend.ts` (`client.focus`, `notify`), `status.ts`, `pill.ts`, `doing.ts`, `adb.ts`.
 - `activity.ts`, `history.ts`, `present.ts`, `format.ts`, `decisions.ts`, `jobs.ts`, `looks.ts`, `changelog.ts` — what the clients show, decided once for every client.
@@ -483,9 +486,9 @@ The core's modules (`client/core-ts/src`):
 with a task queue, timers on CLOCK_BOOTTIME and the microtasks drained after
 each task, and `__native` calls into the Rust shell (`client/shell`), which does
 the IO the core asks of its host — HTTP (reqwest, rustls), the cloud's
-WebSocket, files per storage key and `core.db` (the same directory and format as
-the Rust core's), TCP to adbd, iroh — on threads of its own and answers through a
-C callback. The core is bundled for Hermes and compiled to its bytecode
+WebSocket, files per storage key (the same directory and format as the Rust
+core's), the accounts' SQLite databases (`databases/`, asked synchronously), TCP
+to adbd, iroh — on threads of its own and answers through a C callback. The core is bundled for Hermes and compiled to its bytecode
 (`client/core-ts/scripts/hermes-bundle.ts` → `core.hbc` in the app's assets).
 A bug that ends a fiber ends the core: every client gets `{"fatal": "…"}` and the
 app starts a new one.
@@ -506,16 +509,16 @@ Nothing in the pages differs but the host underneath:
 
 - The core runs in a `utilityProcess` (`src/core.ts`): the TypeScript core
   (`client/core-ts`, its Node host bundled as `core-ts.js`; docs/core-ts.md),
-  with its data in the app's `userData/core` (the same files and `core.db` the
-  Rust core kept, so an update keeps the sign-in and what was
-  read, and going back to it does too). Its iroh endpoint is the full native one
+  with its data in the app's `userData/core` (the same files the Rust core
+  kept, so an update keeps the sign-in; the accounts' databases in
+  `databases/`, what `core.db` held imported once and left there). Its iroh endpoint is the full native one
   (the station's napi addon, `mesh.node`), so links go direct once the relay has
   introduced both sides.
 - A page asks the main process for a channel (`emberDesktop.openCore`, from
   the preload): a `MessageChannelMain` whose one end goes to the core and the
   other to the page, as a window message (a port cannot cross the context
   bridge). `web/src/core/client.ts` uses that port instead of the
-  SharedWorker (`desktopOpener`); the protocol is the same, posted as objects
+  worker (`desktopOpener`); the protocol is the same, posted as objects
   and answered as the core's JSON. A port that closes disconnects its client;
   a core process that exits is announced to every page, which opens a new
   channel (the main process starts a new core); a `{"fatal"}` (a fiber that
@@ -541,12 +544,15 @@ IndexedDB data remain accessible.
 
 ## Web
 
-`web/src/core/` is the UI side: it starts the worker (SharedWorker, else
-Worker), speaks the protocol over its port, and gives React
-`useTopic(topic)` (built on `useSyncExternalStore`) and `call(name, params)`.
-The worker (`web/src/core/worker.ts`) runs the TS core (`@stillfail/core-ts/web`,
-aliased to `client/core-ts/src/hosts/web.ts`), which loads `client/iroh-wasm`'s
-module on its first link. `web/src/core/delta.ts` applies deltas (keyed ones
+`web/src/core/` is the UI side: it starts the tab's worker, speaks the protocol
+over its port, and gives React `useTopic(topic)` (built on
+`useSyncExternalStore`) and `call(name, params)`. One tab's worker
+(`web/src/core/worker.ts`, the one holding the Web Lock `stillfail-core`) runs
+the TS core (`@stillfail/core-ts/web`, aliased to
+`client/core-ts/src/hosts/web.ts`) on SQLite's WASM build (loaded by it alone),
+and loads `client/iroh-wasm`'s module on its first link; the other tabs' workers
+relay to it over a BroadcastChannel and take over when its tab goes (the page
+subscribes again on `{rejoin: true}`). `web/src/core/delta.ts` applies deltas (keyed ones
 too) for the pages and the desktop's main process alike.
 
 ## Operation contracts and module boundaries
