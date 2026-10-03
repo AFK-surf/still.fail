@@ -1,0 +1,16 @@
+# What a job building or testing with the native parts starts with (scripts/native.ts): on a branch, the parts the
+# natives job built for it (not published: a branch publishes nothing), as an inbox native.ts looks in before the
+# release. On main the natives job has published what was missing, and native.ts downloads it from the release.
+name: natives
+description: The native parts a branch's natives job built, for scripts/native.ts
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo "STILLFAIL_NATIVE_INBOX=$RUNNER_TEMP/natives" >> "$GITHUB_ENV"
+    - if: github.ref != 'refs/heads/main'
+      uses: actions/download-artifact@v4
+      continue-on-error: true # none when the release had every part already
+      with:
+        name: natives-${{ github.sha }}
+        path: ${{ runner.temp }}/natives
