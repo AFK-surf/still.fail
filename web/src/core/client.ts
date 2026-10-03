@@ -1,10 +1,10 @@
 import { UNTRACKED_OPERATIONS } from "./operations.ts";
 // The UI's side of the core (docs/client-core.md): one channel to the worker
 // that runs it, calls with request ids, and subscriptions that survive the
-// worker being replaced. The worker is a SharedWorker so every tab shares one
-// core; a dedicated Worker per tab where SharedWorker is missing (Chrome on
-// Android). In the desktop app (apps/desktop) the core runs in a utility
-// process instead, reached through a MessagePort; the protocol is the same.
+// worker being replaced. Each tab has a dedicated Worker; one of them runs the
+// core and the others' relay to it (worker.ts, docs/core-db.md). In the desktop
+// app (apps/desktop) the core runs in a utility process instead, reached
+// through a MessagePort; the protocol is the same.
 import { BUILT_AT } from "./built.ts";
 import { BETA } from "../channel.ts";
 import { applyDelta, type DeltaOp } from "./delta.ts";
@@ -401,10 +401,15 @@ export class CoreClient {
   #receive(data: unknown): void {
     if (typeof data !== "object" || data === null) return;
     this.#heard++;
-    const message = data as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean };
+    const message = data as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean; rejoin?: boolean };
     // A newer build's core took over: this page is of the older build, so it loads the newer one.
     if (message.retired) {
       location.reload();
+      return;
+    }
+    // The core this page talked to went with its tab; another tab's worker runs it now: this page asks it again.
+    if (message.rejoin) {
+      this.resume();
       return;
     }
     if (message.fatal !== undefined) {
@@ -453,20 +458,17 @@ export class CoreClient {
  */
 const workerName = `stillfail-core-${BUILT_AT}${BETA ? "-test" : ""}`;
 
-/** Opens a channel to the core's worker: shared by every tab where the browser can. */
+/**
+ * Opens a channel to this tab's core worker (worker.ts: one of the tabs' workers runs the core, the others relay to
+ * it). The browser is asked to keep what the core stores (it is the only copy of what was sent offline).
+ */
 export function workerOpener(): Opener {
+  void navigator.storage?.persist?.().catch(() => false);
   return (onMessage, onFail) => {
     const receive = (event: MessageEvent) => {
       onMessage(event.data);
     };
-    // Both constructors spelled out: Vite bundles a worker only from a literal
-    // `new (Shared)Worker(new URL(…, import.meta.url))`.
-    if (typeof SharedWorker !== "undefined") {
-      const worker = new SharedWorker(new URL("./worker.ts", import.meta.url), { type: "module", name: workerName });
-      worker.port.onmessage = receive;
-      worker.onerror = () => onFail(t("web-main.core.sharedWorkerFailed"));
-      return { post: (message) => worker.port.postMessage(message), close: () => worker.port.close() };
-    }
+    // Spelled out: Vite bundles a worker only from a literal `new Worker(new URL(…, import.meta.url))`.
     const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: workerName });
     worker.onmessage = receive;
     worker.onerror = (event) => onFail(event.message || t("web-main.core.workerFailed"));
