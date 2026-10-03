@@ -4,7 +4,7 @@ import { Deferred, Duration, Effect, Queue, Scope, type Clock } from "effect";
 import { TestClock } from "effect/testing";
 import { COALESCE_MS } from "./store.ts";
 import { HostError } from "./error.ts";
-import type { DbOp, DbRange, Host, HttpRequest, HttpResponse, Pull, StreamResponse } from "./host.ts";
+import type { DbOp, DbRange, Host, HttpRequest, HttpResponse, Pull, StreamResponse, TcpConnection } from "./host.ts";
 import type { ClientId, CoreMessage } from "./protocol.ts";
 import { compareKeys, toJsonBytes } from "./util.ts";
 
@@ -233,6 +233,13 @@ export class FakeHost implements Host {
 
   resetConnections(): void {
     this.resets++;
+  }
+
+  /// This machine's TCP (adbd, for the adb share): set by a test that has one; none answers by default.
+  tcpConnect: ((port: number) => Effect.Effect<TcpConnection, HostError, Scope.Scope>) | null = null;
+
+  tcp(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope> {
+    return this.tcpConnect ? this.tcpConnect(port) : Effect.fail(new HostError(`nothing listens on ${port}`));
   }
 
   storageGet(key: string): Effect.Effect<Uint8Array | null, HostError> {

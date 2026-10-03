@@ -14,7 +14,13 @@ const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { account, apply, call, nowS, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { base, overview, session, started, stationReplies } from "./station-fixture.ts";
+import { base, overview, session, started, stationHost, stationReplies, threadView } from "./station-fixture.ts";
+import { apply as applyOps } from "../src/delta.ts";
+import { conform } from "../src/conform.ts";
+import { CoreError } from "../src/error.ts";
+import { tokensOf } from "../src/forms.ts";
+import * as present from "../src/present.ts";
+import { PUSH_KEY } from "../src/attention.ts";
 import { SOON_MS } from "../src/data.ts";
 import { PENDING_PREFIX } from "../src/views/local.ts";
 import { deferralKey } from "../src/decisions.ts";
@@ -675,5 +681,631 @@ test("a_sessions_model_control_says_what_changes_and_saves_it_on_the_station", a
   // The machine's own sessions come each with its line.
   const listed = await ask(host, core, ui, 6, "machineSessions.list", { station: "ws/st" });
   assert.ok(String(listed.sessions[0].meta).startsWith("Codex · ~/src/x · "), JSON.stringify(listed));
+  core.close();
+});
+
+test("a_chat_referred_to_goes_out_as_a_link_to_it", async () => {
+  const { host, core } = await started();
+  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? { n: 4 } : undefined));
+  const ui = core.connect();
+  assert.deepEqual(await ask(host, core, ui, 1, "chat.ref", { station: "ws/st", id: "ember:c 1", title: "排查 [登录]", base: "https://x" }), { mark: "@[排查 登录]" });
+  assert.deepEqual(await ask(host, core, ui, 2, "chat.ref", { station: "w2/st", id: "k2", title: "云上的", base: "https://x" }), { mark: "@[云上的]" });
+  // Kept by a page before the core kept them: one to a station's own page (gone) is no workspace's.
+  await ask(host, core, ui, 3, "chat.refs", { links: [["旧的", "https://x/w/ws/s/st/chats/a"], ["本机", "/admin/chats/b"]] });
+  call(core, ui, 4, "chat.send", { station: "ws/st", thread: 7, text: "看 @[排查 登录]、@[云上的]、@[旧的]、@[本机] 和 @[不知道]" });
+  await host.settle();
+  // Another workspace's chat is none of this one's: its mark stays as written.
+  assert.equal(posted(host).at(-1).text, "看 [排查 登录](https://x/w/ws/s/st/chats/ember%3Ac%201)、@[云上的]、[旧的](https://x/w/ws/s/st/chats/a)、@[本机] 和 @[不知道]");
+  core.close();
+});
+
+test("an_address_of_a_stations_own_page_kept_from_before_is_said_gone", async () => {
+  const { host, core } = await started();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chat", station: "local", thread: 7 });
+  subscribe(core, ui, 2, { topic: "overview", station: "local" });
+  call(core, ui, 3, "chat.send", { station: "local", thread: 7, text: "hi" });
+  await host.settle();
+  const codes = new Map(host.takeEmitted().map(([, m]) => m as J).filter((m) => "error" in m).map((m) => [m.id, m.error.code]));
+  assert.deepEqual([codes.get(1), codes.get(2), codes.get(3)], ["gone", "gone", "gone"], JSON.stringify([...codes]));
+  core.close();
+});
+
+test("the_chats_a_few_words_find_are_a_view_of_the_list", async () => {
+  const row = (id: string, title: string, at: number) => ({ id, session: id, thread: null, title, agents: [], last: null, unread: false, mine: true, lastActiveAt: at, connect: null, origin: null });
+  const { host, core } = await started({ ...base(), "GET /chats": [row("a", "别的", 3), row("b", "登录页", 2), row("c", "修登录", 1)] });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "登录", exclude: "c" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).items.map((i: J) => i.id), ["b"]);
+  assert.equal(v(values, 1).items[0].station, "ws/st");
+  core.close();
+});
+
+test("a_chat_shown_has_its_unread_line_and_is_read_while_its_end_is_in_view", async () => {
+  const said = (n: number) => ({ thread: 7, n, kind: "message", ts: `${n}.0`, authorKind: "agent", author: "k1", authorName: null, text: "好", at: n });
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [threadView(7, 3, 1, 2)],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 3, entries: [said(1), said(2), said(3)] },
+    "PUT /threads/7/read": { n: 3 },
+  });
+  let ui = core.connect();
+  let values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  // Not shown by any page yet: the line as it will be (its first value opens there).
+  assert.equal(v(values, 1).messages.length, 3);
+  assert.equal(v(values, 1).unreadLine, 2);
+  // Shown: the line over the first not read when it was opened; not read while its end is out of view.
+  call(core, ui, 2, "client.focus", { visible: true, focused: true, chat: { station: "ws/st", thread: 7, end: false } });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).unreadLine, 2);
+  const reads = () => host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/threads/7/read")).length;
+  assert.equal(reads(), 0);
+  // Its end in view: read up to the newest, once; the line stays for the visit.
+  call(core, ui, 3, "client.focus", { chat: { station: "ws/st", thread: 7, end: true } });
+  await host.settle();
+  call(core, ui, 4, "client.focus", { visible: true });
+  await host.settle();
+  apply(host, values);
+  assert.equal(reads(), 1);
+  assert.equal(v(values, 1).unreadLine, 2);
+  // The page gone: the visit ends with it; opened again, nothing unread.
+  core.disconnect(ui);
+  ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  call(core, ui, 2, "client.focus", { visible: true, chat: { station: "ws/st", thread: 7 } });
+  await host.settle();
+  values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).unreadLine ?? null, null);
+  core.close();
+});
+
+test("notifications_are_on_until_turned_off_and_kept_so_with_no_pushes", async () => {
+  const { host, core } = await started();
+  let ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "notify" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1), { on: true, asked: false, push: true, show: [] });
+  // Off (and asked, as Android moves its old settings over): pushes go, and are not taken while off.
+  call(core, ui, 2, "notify.set", { on: false, asked: true });
+  call(core, ui, 3, "push.register", { kind: "fcm", token: "t" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1), { on: false, asked: true, push: false, show: [] });
+  assert.equal(host.stored(PUSH_KEY), undefined);
+  // Kept across a restart.
+  core.close();
+  const again = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  ui = again.connect();
+  subscribe(again, ui, 1, { topic: "notify" });
+  call(again, ui, 2, "notice.pushed", {});
+  call(again, ui, 3, "notice.claim", { id: "n1" });
+  await host.settle();
+  const emitted = host.takeEmitted().map(([, m]) => m as J);
+  const ok = (id: number) => emitted.find((m) => m.id === id && "ok" in m)?.ok;
+  assert.deepEqual([ok(2), ok(3)], [{ show: false }, { show: false }]);
+  assert.equal(emitted.find((m) => m.id === 1 && "value" in m).value.on, false);
+  again.close();
+});
+
+/// What came out: subscription values (deltas applied) into `values`, and the calls' answers (core/tests.rs `answers`).
+function answersOf(host: FakeHost, values: Map<number, unknown>): Map<number, { ok: J } | { err: string }> {
+  const out = new Map<number, { ok: J } | { err: string }>();
+  for (const [, m] of host.takeEmitted()) {
+    const x = m as J;
+    if ("value" in x) values.set(x.id, x.value);
+    else if ("delta" in x) values.set(x.id, applyOps(values.get(x.id), x.delta));
+    else if ("ok" in x) out.set(x.id, { ok: x.ok });
+    else if ("error" in x) out.set(x.id, { err: x.error.message });
+  }
+  return out;
+}
+
+test("a_chats_jobs_are_shown_as_the_core_puts_them_and_a_jobs_output_says_when_it_last_grew", async () => {
+  let logReads = 0;
+  let now = 0;
+  const job = (id: string, patch: J) => ({ id, session: "k1", name: id, state: "running", port: null, startedAt: now - 60_000, command: "watch", ...patch });
+  const s = stationHost(base());
+  now = Math.round(s.host.nowMs());
+  stationReplies(s.host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/sessions/k1")
+      return {
+        session: session("k1"), threads: [], turns: [],
+        jobs: [job("w", { notices: [{ at: now - 120_000, text: "CI 还在跑" }] }), job("s", { port: 4817, state: "exited", restarts: 1 }), job("done", { state: "exited", exitCode: 0, endedAt: now - 30_000 })],
+      };
+    if (path.startsWith("/jobs/w/log")) {
+      logReads++;
+      return { text: "step 3\n", outputAt: now - 180_000, follows: true };
+    }
+    return undefined;
+  });
+  const core = await Core.create(s.host, { clock: s.host.time.clock, sample: 0, wire: () => new HostWire(s.host) });
+  const host = s.host;
+  await host.time.pass(500);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chatJobs", station: "ws/st", thread: 7 });
+  subscribe(core, ui, 2, { topic: "jobLog", station: "ws/st", job: "w", lines: 1 });
+  await host.settle();
+  await host.settle();
+  // The station follows the log on its stream, opened again for it: what it says comes as an event (the Rust core
+  // read /jobs/w/log first; here nothing is read, docs/core-ts.md rule 2).
+  assert.ok(s.streams.at(-1)!.path.includes("job=w&lines=1"), s.streams.at(-1)!.path);
+  s.push("job-log", { id: "w", lines: 1, text: "step 3\n", outputAt: now - 180_000 });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  // Restarting first, then alive, then what is over; each with its dot and its line; the heads' notes.
+  const jobs = v(values, 1);
+  assert.deepEqual(jobs.jobs.map((j: J) => j.id), ["s", "w", "done"]);
+  assert.deepEqual([jobs.alarm, jobs.servicesNote, jobs.jobsNote], ["restart", "1 个在重启", "1 个在盯着"]);
+  assert.deepEqual([jobs.ended, jobs.clear, jobs.clearText], [1, ["k1"], "清掉 1 个已结束的"]);
+  const w = jobs.jobs[1];
+  assert.deepEqual([w.tone, w.meta[0].text, w.meta[1].text, w.detail], ["live", "CI 还在跑", " · 2 分钟前", "在盯着 · 1 分钟 · 1 条通知"]);
+  assert.deepEqual([jobs.jobs[0].meta[0].text, jobs.jobs[2].tone], ["正在重启", "off"]);
+  // Its output: the last line and when, in words; the station follows it, so it is not read again.
+  assert.deepEqual([v(values, 2).last, v(values, 2).said], ["step 3", "最后输出 · 3 分钟前"]);
+  await host.time.pass(5_000, 100);
+  assert.equal(logReads, 0);
+  core.close();
+});
+
+test("a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_station_has_made_it", async () => {
+  let up = false;
+  const { host, core } = await started();
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (req.method === "POST" && path === "/sessions") {
+      if (!up) return undefined;
+      return { key: "ember:c-1", thread: { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "ember:c-1", connect: "ember", joinedAt: 1 }] } };
+    }
+    if (req.method === "POST" && path === "/threads/9/messages") return { n: 1 };
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  const key = String((await ask(host, core, ui, 1, "chat.create", { station: "ws/st", runtime: "claude", model: "opus" })).key);
+  assert.ok(key.startsWith(PENDING_PREFIX), key);
+  // The station could not make it (it answers 404 here): what is sent waits, and has it tried again.
+  subscribe(core, ui, 2, { topic: "chat", station: "ws/st", session: key });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).pending, true);
+  up = true;
+  call(core, ui, 3, "chat.send", { station: "ws/st", session: key, text: "修一下登录", client: "android 0.1.1123" });
+  await host.settle();
+  await host.settle();
+  const asked = host.requests.filter((r) => r.method === "POST" && r.url.includes("/admin/api/")).map((r) => [r.url.replace("https://stillfail.test/admin/api", ""), new TextDecoder().decode(r.body!)]);
+  assert.deepEqual(asked.map(([p]) => p), ["/sessions", "/sessions", "/threads/9/messages"]);
+  // It carries the key given here: the station's rows say it of the chat made.
+  assert.deepEqual(JSON.parse(asked[0][1]), { runtime: "claude", model: "opus", clientKey: key });
+  // With the app it was sent from, which waited with it.
+  const sent = JSON.parse(asked[2][1]);
+  assert.deepEqual([sent.text, sent.client], ["修一下登录", "android 0.1.1123"]);
+  // The page is the station's chat now, under the key it was opened with, and says the one the station gave it.
+  apply(host, values);
+  assert.deepEqual([v(values, 2).pending, v(values, 2).key], [false, "ember:c-1"]);
+  core.close();
+});
+
+test("a_chat_being_archived_leaves_the_list_at_once_and_comes_back_if_it_could_not_be", async () => {
+  let archived = false;
+  let refused = true;
+  const row = (id: string, thread: number) => ({ id, session: id, thread, title: id, agents: [], last: null, unread: false, mine: true, lastActiveAt: 1, connect: null, origin: null });
+  const { host, core } = await started({ ...base(), "GET /chats": [row("k1", 7), row("k2", 8)] });
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (req.method === "GET" && path === "/chats" && archived) return [row("k2", 8)];
+    if (req.method === "POST" && path === "/threads/7/archive" && !refused) {
+      archived = true;
+      return { ok: true };
+    }
+    return undefined;
+  });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+  await host.settle();
+  const values = new Map();
+  answersOf(host, values);
+  const ids = () => v(values, 1).days.flatMap((d: J) => d.items.map((i: J) => i.id));
+  assert.deepEqual(ids(), ["k1", "k2"]);
+  // (The station refuses with 404 here where the Rust test's said 409 「还在跑」: either is a refusal.)
+  const archive = (id: number) => call(core, ui, id, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: true });
+  // Gone at once, while the station has not answered.
+  let release = host.hold("/threads/7/archive");
+  archive(2);
+  await host.settle();
+  assert.equal(answersOf(host, values).size, 0);
+  assert.deepEqual(ids(), ["k2"]);
+  // It could not be: back, and the call says why.
+  release();
+  await host.settle();
+  assert.ok("err" in answersOf(host, values).get(2)!);
+  assert.deepEqual(ids(), ["k1", "k2"]);
+  // Archived: its station's rows, read again before the answer, no longer have it.
+  refused = false;
+  release = host.hold("/threads/7/archive");
+  archive(3);
+  await host.settle();
+  answersOf(host, values);
+  assert.deepEqual(ids(), ["k2"]);
+  release();
+  await host.settle();
+  assert.ok("ok" in answersOf(host, values).get(3)!);
+  assert.deepEqual(ids(), ["k2"]);
+  assert.ok(archived);
+  core.close();
+});
+
+test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_restored_or_deleted_leaves_it", async () => {
+  const gone: string[] = [];
+  let now = 0;
+  const chat = (id: string, thread: number, archived: J) => ({ id, session: id, thread, title: `聊 ${id}`, last: { text: "好了" }, lastActiveAt: now - 9e8, archived });
+  const all = () =>
+    [
+      chat("k2", 8, { at: now - 3 * 86_400_000, by: "auto", alone: true }),
+      chat("k1", 7, { at: now, by: "manual", alone: false }),
+      // A station from before the archive answers the chats it shows: not archived ones.
+      chat("k3", 9, null),
+    ].filter((c) => !gone.includes(c.id));
+  const s = stationHost(base());
+  now = Math.round(s.host.nowMs());
+  stationReplies(s.host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (req.method === "GET" && path === "/chats?archived=1") return all();
+    if (req.method === "DELETE" && path === "/threads/7/archive") {
+      gone.push("k1");
+      return { ok: true };
+    }
+    if (req.method === "DELETE" && path === "/sessions/k2") {
+      gone.push("k2");
+      return { ok: true };
+    }
+    return undefined;
+  });
+  const host = s.host;
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  await host.time.pass(500);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "archive", scope: "ws" });
+  await host.settle();
+  const values = new Map();
+  answersOf(host, values);
+  const a = v(values, 1);
+  assert.deepEqual([a.loading, a.note, a.errors], [false, undefined, []]);
+  assert.equal(a.days.length, 2);
+  assert.equal(a.days[0].label, "今天");
+  const first = a.days[0].items[0];
+  assert.deepEqual([first.station, first.session, first.thread, first.title, first.last, first.how, first.deletable], ["ws/st", "k1", 7, "聊 k1", "好了", "手动归档", true]);
+  assert.equal(first.clock.length, 5);
+  // One station: which one is not said.
+  assert.equal(first.place, undefined);
+  assert.deepEqual([a.days[1].items[0].how, a.days[1].items[0].deletable], ["空闲后自动归档", false]);
+  // Put back in the list: it leaves the archive before the call answers.
+  call(core, ui, 2, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: false });
+  await host.settle();
+  assert.ok("ok" in answersOf(host, values).get(2)!);
+  const sessions = () => v(values, 1).days.flatMap((d: J) => d.items.map((i: J) => i.session));
+  assert.deepEqual(sessions(), ["k2"]);
+  // Deleted: the same, and with nothing left the page says so.
+  call(core, ui, 3, "session.delete", { station: "ws/st", key: "k2" });
+  await host.settle();
+  assert.ok("ok" in answersOf(host, values).get(3)!);
+  assert.deepEqual([v(values, 1).days, v(values, 1).note], [[], "没有归档的对话。"]);
+  core.close();
+});
+
+test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen", async () => {
+  const host = new FakeHost();
+  const now = Math.round(host.nowMs() / 1000);
+  host.onFetch((req) => {
+    if (!req.url.endsWith("/v1/changelog")) return jsonResponse(404, {});
+    const entry = (version: number, parts: string[], text: string) => ({ version, commit: "c", at: now, text: [text], fixes: [], parts });
+    return jsonResponse(200, {
+      entries: [entry(1340, ["android"], "修复：还没发布的"), entry(1330, ["android", "web"], "修复：列表跳动"), entry(1325, ["station"], "修复：station 的"), entry(1310, ["android"], "新功能：更早的")],
+      released: { android: 1335, web: 1335, station: 1320, desktop: null },
+    });
+  });
+  let core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  let ui = core.connect();
+  await ask(host, core, ui, 1, "client.device", { app: "android", build: "0.1.1320" });
+  subscribe(core, ui, 2, { topic: "changelog" });
+  await host.settle();
+  const values = new Map();
+  answersOf(host, values);
+  const c = v(values, 2);
+  assert.deepEqual([c.app, c.build, c.loading], ["android", 1320, false]);
+  assert.equal(c.days[0].label, "今天");
+  assert.deepEqual(c.days[0].entries.map((e: J) => e.note), ["还没发布", "更新到 0.1.1330 后就有", "还没发布", "你的版本已包含"]);
+  // The first build seen here: nothing is news.
+  assert.equal(c.news, undefined, JSON.stringify(c));
+  // Updated, the app started again: what it brought, until seen.
+  await run(core.inner.data.written);
+  core.close();
+  core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  ui = core.connect();
+  await ask(host, core, ui, 3, "client.device", { app: "android", build: "0.1.1335" });
+  subscribe(core, ui, 2, { topic: "changelog" });
+  await host.settle();
+  answersOf(host, values);
+  const news = v(values, 2).news;
+  assert.equal(news.build, "0.1.1335");
+  assert.deepEqual(news.entries.map((e: J) => e.text[0]), ["修复：列表跳动"]);
+  await ask(host, core, ui, 4, "changelog.seen", {});
+  answersOf(host, values);
+  assert.equal(v(values, 2).news, undefined);
+  // Read once at each start (the TS core reads it then and as the cloud's socket opens: docs/core-ts.md).
+  assert.equal(host.requests.filter((r) => r.url.endsWith("/v1/changelog")).length, 2);
+  core.close();
+});
+
+const connectTopic = (form: string) => ({ topic: "connectFlow", station: "ws/st", form });
+
+test("connect_wizard_owns_steps_tokens_and_submission_on_all_clients", async () => {
+  const { host, core } = await choosing();
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/slack/verify") return { identity: { team: "Team", teamId: "T", url: "https://t.slack.com", botUserId: "B", botName: "bot" }, errors: [] };
+    if (path === "/connects") return { id: "new" };
+    return undefined;
+  });
+  const ui = core.connect();
+  const topic = connectTopic("wizard");
+  const form = { station: "ws/st", form: "wizard" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  const flow = core.inner.forms.connects;
+  const view = flow.value(topic);
+  assert.equal(view.gettingToken, true, "desktop has the config form on its first step");
+  assert.equal(view.total, 4);
+  const shaped = present.decorate(topic, structuredClone(view), { now: 0, offsetMin: 0 });
+  assert.ok("ok" in conform("ConnectFlowView", shaped), JSON.stringify(conform("ConnectFlowView", shaped)));
+  assert.throws(() => flow.go(topic, ui, "bind"), "cannot skip token verification");
+  flow.go(topic, ui, "manual");
+  assert.equal(flow.value(topic).total, 2);
+  await ask(host, core, ui, 2, "slack.tokens.edit", { station: "ws/st", form: "wizard", input: { appToken: "app", botToken: "bot" } });
+  await ask(host, core, ui, 3, "connect.flow.verify", form);
+  assert.equal(flow.value(topic).step, "bind");
+  await ask(host, core, ui, 4, "pick.set", { station: "ws/st", of: "connect-new:wizard", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 5, "pick.save", { station: "ws/st", of: "connect-new:wizard" });
+  const created = await ask(host, core, ui, 6, "connect.flow.create", form);
+  assert.equal(created.id, "new");
+  const sent = stationPosted(host, "/connects");
+  assert.equal(sent.length, 1);
+  assert.deepEqual([sent[0].bind.model, sent[0].bind.runtime, sent[0].bind.effort, sent[0].slack.appToken], ["gpt-6-astra", "codex", "", "app"]);
+  await assert.rejects(ask(host, core, ui, 7, "connect.flow.create", form), "a completed form cannot create twice");
+  await ask(host, core, ui, 8, "connect.flow.drop", form);
+  assert.throws(() => flow.value(topic));
+  assert.equal(core.inner.forms.tokens.value(tokensOf("ws/st", "wizard")).appToken, "");
+  core.close();
+});
+
+test("connect_wizard_isolates_forms_handles_resume_and_discards_closed_results", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  const other = core.connect();
+  for (const [id, form] of [[1, "one"], [2, "two"]] as const) await ask(host, core, ui, id, "connect.flow.open", { station: "ws/st", form, input: { mobile: true } });
+  const flow = core.inner.forms.connects;
+  const one = connectTopic("one");
+  const two = connectTopic("two");
+  assert.equal(flow.value(one).gettingToken, false, "mobile shows a token page, not the desktop inline form");
+  assert.throws(() => flow.edit(one, other, { config: "secret" }));
+  assert.throws(() => flow.edit(one, ui, { requireMention: "false" }));
+  flow.go(one, ui, "token");
+  flow.edit(one, ui, { config: "xoxe.xoxp-wrong" });
+  assert.equal(typeof flow.value(one).configError, "string");
+  assert.throws(() => flow.begin(one, ui, "config", {}, false));
+  flow.edit(one, ui, { config: " xoxe-1-long-enough-refresh-token " });
+  const [generation, name, params] = flow.begin(one, ui, "config", {}, false);
+  assert.equal(name, "slack.addConfigToken");
+  assert.equal(params.refreshToken, "xoxe-1-long-enough-refresh-token");
+  assert.throws(() => flow.go(one, ui, "back"));
+  assert.throws(() => flow.begin(one, ui, "config", {}, false));
+  flow.drop(one, ui);
+  flow.open(one, ui, { mobile: true, resume: "existing" });
+  assert.equal(flow.finish(one, generation, "config", { ok: { teamId: "late" } }), false);
+  assert.deepEqual([flow.value(one).step, flow.value(one).back], ["install", "close"]);
+  await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "connect-new:one", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "connect-new:one" });
+  assert.equal(flow.value(one).pick.value.model, "gpt-6-astra");
+  assert.notEqual(flow.value(two).pick.value.model, "gpt-6-astra");
+  core.disconnect(ui);
+  assert.throws(() => flow.value(one));
+  assert.throws(() => flow.value(two));
+  core.close();
+});
+
+test("connect_wizard_configuration_and_oauth_install_keep_one_draft", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  const topic = connectTopic("oauth");
+  const flow = core.inner.forms.connects;
+  flow.open(topic, ui, { mobile: true });
+  await host.settle();
+  flow.go(topic, ui, "token");
+  flow.edit(topic, ui, { config: "xoxe-1-a-refresh-token-for-test" });
+  let [generation] = flow.begin(topic, ui, "config", {}, false);
+  flow.finish(topic, generation, "config", { ok: { teamId: "T" } });
+  const overviewTopic = { topic: "overview", station: "ws/st" };
+  const ov = structuredClone(core.inner.store.get(overviewTopic)) as J;
+  ov.slackTeams = [{ teamId: "T", teamName: "Team" }];
+  core.inner.data.set(overviewTopic, ov);
+  assert.equal(flow.value(topic).config, "");
+  let name: string;
+  let params: J;
+  [generation, name, params] = flow.begin(topic, ui, "make", {}, false);
+  assert.equal(name, "slack.makeApp");
+  assert.equal(params.team, "T");
+  assert.equal(Object.keys(params.settings.groups).length, 16);
+  flow.finish(topic, generation, "make", { err: CoreError.invalid("try again") });
+  assert.equal(flow.value(topic).step, "app");
+  [generation] = flow.begin(topic, ui, "make", {}, false);
+  flow.finish(topic, generation, "make", { ok: { appId: "A" } });
+  ov.slackApps = [{ appId: "A", state: "oauth-state", installed: true }];
+  core.inner.data.set(overviewTopic, ov);
+  const tokens = { appToken: "app-token", botToken: "" };
+  [generation, name, params] = flow.begin(topic, ui, "verify", tokens, false);
+  assert.equal(name, "slack.verify");
+  assert.equal(params.install, "oauth-state");
+  flow.finish(topic, generation, "verify", { ok: { identity: null, errors: ["invalid token"] } });
+  assert.equal(flow.value(topic).step, "install");
+  [generation] = flow.begin(topic, ui, "verify", tokens, false);
+  flow.finish(topic, generation, "verify", { ok: { identity: { teamId: "T" }, errors: [] } });
+  assert.throws(() => flow.begin(topic, ui, "create", tokens, false));
+  [, name, params] = flow.begin(topic, ui, "create", tokens, true);
+  assert.equal(name, "connect.create");
+  assert.deepEqual(params.input.slack, { appToken: "app-token", install: "oauth-state" });
+  assert.ok(host.requests.every((r) => !r.url.includes("slack.com")));
+  core.close();
+});
+
+test("an_agent_provided_close_option_never_posts_a_chat_message", async () => {
+  const { host, core } = await started({ ...base(), "PUT /threads/7/closed-card": {} });
+  const ui = core.connect();
+  const card = { seq: 4, card: { type: "options", options: [{ label: "不需要部署", action: "close" }, { label: "部署" }] }, message: { seq: 4, ts: "9.000004", text: "部署吗？", authorName: "Claude" } };
+  core.inner.data.set({ topic: "chatRows", station: "ws/st" }, [{ id: "k1", session: "k1", thread: 7, card }]);
+  call(core, ui, 71, "decision.answer", { station: "ws/st", thread: 7, seq: 4, option: "不需要部署" });
+  await host.settle();
+  const closed = host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/threads/7/closed-card")).map((r) => JSON.parse(new TextDecoder().decode(r.body!)));
+  assert.deepEqual(closed, [{ n: 4, option: "不需要部署" }]);
+  assert.ok(!host.requests.some((r) => r.method === "POST" && r.url.endsWith("/threads/7/messages")));
+  core.close();
+});
+
+test("preview_load_topic_reports_pending_finished_and_cancelled_resources", async () => {
+  const { host, core } = await started();
+  host.onFetchStream(() =>
+    Effect.gen(function* () {
+      const queue = yield* Queue.unbounded<Uint8Array | null>();
+      return { status: 200, headers: [["content-type", "image/png"]] as [string, string][], body: { take: Queue.take(queue) } };
+    }),
+  );
+  const ui = core.connect();
+  subscribe(core, ui, 90, { topic: "previewLoad", station: "ws/st", port: 5180 });
+  await host.settle();
+  const values = new Map();
+  const last = () => {
+    apply(host, values);
+    return v(values, 90);
+  };
+  assert.equal(last().total, 0);
+  call(core, ui, 1, "station.preview", { station: "ws/st", port: 5180, method: "GET", path: "/slow.png", stream: true });
+  await host.settle();
+  const loading = last();
+  assert.equal(loading.percent, 0);
+  assert.equal(loading.resources[0].status, 200);
+  core.receive(ui, { kind: "cancel", id: 1, cancel: true });
+  await host.settle();
+  const cancelled = last();
+  assert.deepEqual([cancelled.percent, cancelled.failed, cancelled.resources[0].error], [100, 1, "已取消"]);
+  core.close();
+});
+
+test("session_speed_pick_sends_true_false_and_null_and_new_chats_keep_it", async () => {
+  const { host, core } = await choosing(true);
+  const ui = core.connect();
+  subscribe(core, ui, 9, { topic: "newChat", scope: "ws" });
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).fastAvailable, true);
+  for (const fast of [true, false]) {
+    await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", fast });
+    apply(host, values);
+    assert.equal(v(values, 1).draft.fast, fast);
+    assert.equal(v(values, 1).changed, true);
+    await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "session:k1" });
+    assert.equal(stationPosted(host, "/sessions/k1/settings").at(-1).fast, fast);
+  }
+  await ask(host, core, ui, 4, "newChat.pick", { scope: "ws", station: "st", model: "gpt-6-astra", fast: false });
+  await ask(host, core, ui, 5, "newChat.create", { station: "ws/st" });
+  await host.settle();
+  assert.equal(stationPosted(host, "/sessions").at(-1).fast, false);
+  await ask(host, core, ui, 6, "newChat.pick", { scope: "ws", fast: null });
+  await ask(host, core, ui, 7, "newChat.create", { station: "ws/st" });
+  await host.settle();
+  assert.equal("fast" in stationPosted(host, "/sessions").at(-1), false);
+  core.close();
+});
+
+test("speed_summary_only_shows_effective_fast_and_ignores_unsaved_drafts", async () => {
+  for (const profileFast of [false, true]) {
+    for (const sessionFast of [null, false, true]) {
+      const { host, core } = await choosing(true, profileFast, sessionFast);
+      const ui = core.connect();
+      subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+      await host.settle();
+      const values = new Map();
+      apply(host, values);
+      const expected = (sessionFast ?? profileFast) ? "Fast" : undefined;
+      assert.equal(v(values, 1).fastText, expected, `${profileFast} ${sessionFast}`);
+      assert.equal(v(values, 1).fastAvailable, true);
+      await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", fast: !(sessionFast ?? profileFast) });
+      apply(host, values);
+      assert.equal(v(values, 1).fastText, expected, "drafts do not change the summary");
+      subscribe(core, ui, 9, { topic: "newChat", scope: "ws" });
+      subscribe(core, ui, 3, { topic: "pick", station: "ws/st", of: "new" });
+      await host.settle();
+      for (const pinned of [false, true]) {
+        await ask(host, core, ui, 4, "newChat.pick", { scope: "ws", station: "st", model: "gpt-6-astra", profile: pinned ? "p3" : "", fast: sessionFast });
+        apply(host, values);
+        assert.equal(v(values, 3).fastText, (sessionFast ?? (pinned && profileFast)) ? "Fast" : undefined, `${profileFast} ${sessionFast} ${pinned}`);
+      }
+      core.close();
+    }
+  }
+});
+
+test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
+  const { host, core } = await started();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "adbShare" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual([v(values, 1).sharing, v(values, 1).phase], [false, "off"]);
+  call(core, ui, 2, "adb.share", { station: "ws1/st1", connect: 41234, device: "Pixel" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual([v(values, 1).sharing, v(values, 1).station, v(values, 1).connectPort], [true, "ws1/st1", 41234]);
+  assert.equal(typeof v(values, 1).until, "number");
+  call(core, ui, 3, "adb.stop", {});
+  await host.settle();
+  apply(host, values);
+  // Off again, every field of the offer gone (the clients' shape takes their absence).
+  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", tunnels: 0 });
+  core.close();
+});
+
+test("automatic_decision_drafts_require_a_model_and_preserve_failed_saves", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  const other = core.connect();
+  const topic = { topic: "decisionForm", station: "ws/st", form: "automatic-test" };
+  await ask(host, core, ui, 1, "automaticDecisions.form.open", { station: "ws/st", form: "automatic-test" });
+  const forms = core.inner.forms.decisions;
+  assert.ok("ok" in conform("AutomaticDecisionDraft", forms.value(topic)), JSON.stringify(forms.value(topic)));
+  assert.throws(() => forms.change(topic, other, "edit", { enabled: true }));
+  forms.change(topic, ui, "edit", { enabled: true });
+  assert.throws(() => forms.begin(topic, ui));
+  forms.change(topic, ui, "edit", { model: "gpt-6-luna" });
+  assert.deepEqual(forms.begin(topic, ui), { completion: { enabled: true, model: "gpt-6-luna" } });
+  assert.throws(() => forms.change(topic, ui, "edit", { enabled: false }));
+  forms.finish(topic, ui, false);
+  assert.equal(forms.value(topic).dirty, true);
+  forms.begin(topic, ui);
+  forms.finish(topic, ui, true);
+  assert.equal(forms.value(topic).dirty, false);
+  forms.change(topic, ui, "drop", {});
+  assert.equal(forms.value(topic), null);
   core.close();
 });

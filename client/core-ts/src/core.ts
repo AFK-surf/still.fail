@@ -328,7 +328,17 @@ export class Core {
         Effect.sync(() => {
           inner.calls.delete(key);
           span.cancel();
-          inner.host.emit(client, answer(id, { err: new CoreError("cancelled", t("core-misc.call.cancelled")) }));
+          const cancelled = new CoreError("cancelled", t("core-misc.call.cancelled"));
+          // Its resource ends with it: the page's progress counts it as failed.
+          if (loads && resource) {
+            loads.end(resource, inner.host.nowMs(), cancelled.message);
+            inner.store.invalidate(resource[0]);
+          }
+          if (doing !== null) {
+            inner.doing.end(doing);
+            inner.store.invalidate({ topic: "doing" });
+          }
+          inner.host.emit(client, answer(id, { err: cancelled }));
         }),
       ),
       Effect.exit,
