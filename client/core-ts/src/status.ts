@@ -2,6 +2,7 @@
 // stations and to still.fail cloud, connections being opened, still.fail cloud's events sockets that are down, and how
 // fast bytes come in. Only what has taken a while (SLOW_MS) or is down is worth a word. Each workspace has its own
 // waits; the device's are apart. While anything is waited on, the topic is computed again each second.
+import { Effect } from "effect";
 import * as brand from "./brand.ts";
 import { said } from "./format.ts";
 import type { Host } from "./host.ts";
@@ -141,19 +142,16 @@ export class Status {
   #tick(): void {
     if (this.#ticking || (this.#waits.size === 0 && this.#sockets.size === 0)) return;
     this.#ticking = true;
-    this.#runner.spawn(async () => {
-      for (;;) {
-        await this.#runner.sleep(TICK_MS);
-        const now = this.now();
-        const busy = this.#waits.size > 0 || this.#sockets.size > 0;
-        const shown = this.#sockets.size > 0 || [...this.#waits.values()].some((w) => now - w.since >= SLOW_MS);
-        if (shown) this.changed();
-        if (!busy) {
-          this.#ticking = false;
-          return;
-        }
-      }
+    // A measurement shown on screen (seconds waited, the rate): computed again each second while anything waits.
+    const step = Effect.sync(() => {
+      const now = this.now();
+      const busy = this.#waits.size > 0 || this.#sockets.size > 0;
+      const shown = this.#sockets.size > 0 || [...this.#waits.values()].some((w) => now - w.since >= SLOW_MS);
+      if (shown) this.changed();
+      if (!busy) this.#ticking = false;
+      return busy;
     });
+    this.#runner.fork(Effect.repeat(Effect.sleep(TICK_MS).pipe(Effect.andThen(step)), { while: (busy) => busy }));
   }
 
   #placeName(place: Place): string | null {

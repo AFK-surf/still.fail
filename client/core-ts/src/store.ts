@@ -6,6 +6,7 @@
 // they changed; a topic's first value goes out on the next turn instead. A subscriber's first message is the whole
 // value, the next ones only what changed (delta.ts), and an unchanged value sends nothing. Code inside the core can
 // `watch` a topic; a derived topic is `invalidate`d and computed by its source when its emission goes out.
+import { Effect } from "effect";
 import { diff, largerThan, type Op } from "./delta.ts";
 import { CoreError } from "./error.ts";
 import type { Host } from "./host.ts";
@@ -162,14 +163,19 @@ export class Store {
     this.#clock = true;
     const now = this.host.nowMs();
     const next = (Math.floor(now / 60_000) + 1) * 60_000 + 1000;
-    this.runner.spawn(async () => {
-      await this.runner.sleep(Math.max(next - now, 0));
-      this.#clock = false;
-      const shown = [...this.#topics.values()].filter((e) => e.subscribers.length > 0 && present.ticks(e.topic)).map((e) => e.topic);
-      if (shown.length === 0) return;
-      for (const topic of shown) this.invalidate(topic);
-      this.#tick();
-    });
+    this.runner.fork(
+      Effect.sleep(Math.max(next - now, 0)).pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            this.#clock = false;
+            const shown = [...this.#topics.values()].filter((e) => e.subscribers.length > 0 && present.ticks(e.topic)).map((e) => e.topic);
+            if (shown.length === 0) return;
+            for (const topic of shown) this.invalidate(topic);
+            this.#tick();
+          }),
+        ),
+      ),
+    );
   }
 
   unsubscribe(client: ClientId, id: RequestId): void {
@@ -213,10 +219,7 @@ export class Store {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry || entry.subscribers.length > 0 || entry.watchers.length > 0) return;
     entry.idle = idle;
-    this.runner.spawn(async () => {
-      await this.runner.sleep(EVICT_AFTER_MS);
-      this.#evict(topic, idle);
-    });
+    this.runner.fork(Effect.sleep(EVICT_AFTER_MS).pipe(Effect.andThen(Effect.sync(() => this.#evict(topic, idle)))));
   }
 
   /// A UI went away: drops all its subscriptions.
@@ -303,10 +306,7 @@ export class Store {
       if (this.#windowOpen) return;
       this.#windowOpen = true;
     }
-    this.runner.spawn(async () => {
-      await this.runner.sleep(first ? 0 : COALESCE_MS);
-      this.#flushPending();
-    });
+    this.runner.fork((first ? Effect.yieldNow : Effect.sleep(COALESCE_MS)).pipe(Effect.andThen(Effect.sync(() => this.#flushPending()))));
   }
 
   #flushPending(): void {

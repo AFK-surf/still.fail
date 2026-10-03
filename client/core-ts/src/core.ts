@@ -1,68 +1,41 @@
-// `Core`: takes messages from connected UIs, answers calls, keeps subscriptions (core.rs). Construction wires the
-// modules together: accounts → cloud → mesh links → stations; the store routes topics to accounts (accounts,
-// workspaces, workspace), stations (everything with a station) or the views. What the core has of each workspace is
-// that workspace's (workspace.ts).
-//
-// The account topics live here: `accounts` is the list itself, `workspaces` every account's `/v1/me`, `workspace` one
-// `GET /v1/workspaces/:id`. While `workspaces` or a `workspace` is live, each signed-in account holds still.fail cloud's
-// `/v1/events` socket, and the topics change when it says so. Every time a socket opens, the live account topics are
-// read once (nothing is replayed). They are also read when the accounts change and after a write to still.fail cloud;
-// never on a timer.
-import type { Clock } from "effect";
-import type { Fiber } from "effect";
+// `Core`: takes messages from connected UIs, answers calls, keeps subscriptions (docs/client-core.md; core.rs for the
+// protocol). Construction wires the modules together and starts the sync (sync/), which keeps everything the core
+// holds current by itself; subscriptions only read what is held (data.ts, store.ts).
+import { Cause, Effect, type Clock, type Fiber } from "effect";
 import { Accounts, type AccountView } from "./accounts.ts";
 import * as brand from "./brand.ts";
 import { Cloud } from "./cloud.ts";
-import * as accountState from "./core/account_state.ts";
-import { parseCall, type Call } from "./core/calls.ts";
+import { parseCall, cancellable, callStation, counts, type Call } from "./core/calls.ts";
 import { execute } from "./core/execute.ts";
 import { Router } from "./core/routing.ts";
 import { Data } from "./data.ts";
 import { Doing, FAILED_SHOWN_MS, heavy } from "./doing.ts";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
+import { t } from "./i18n.ts";
 import * as prefs from "./prefs.ts";
-import { parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId, type Topic } from "./protocol.ts";
+import { parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId } from "./protocol.ts";
 import { Runner } from "./runtime.ts";
 import { stationId } from "./station/addr.ts";
 import { Status } from "./status.ts";
 import { Store } from "./store.ts";
-import { Kind, SAMPLE, Tracer, type Span } from "./trace.ts";
+import { CloudSync } from "./sync/cloud.ts";
+import { Scheduler } from "./sync/scheduler.ts";
+import { Kind, SAMPLE, Tracer } from "./trace.ts";
 import { Wakes, WakingHost } from "./wake.ts";
 import { Workspaces } from "./workspace.ts";
-import { cancellable, callStation, counts } from "./core/calls.ts";
-import { isObject, parseJson } from "./util.ts";
-import { t } from "./i18n.ts";
-
-/// The first wait before an events socket is opened again; it doubles up to SOCKET_RETRY_MAX_MS.
-export const SOCKET_RETRY_MS = 1_000;
-export const SOCKET_RETRY_MAX_MS = 60_000;
-/// An events socket that answered a ping before and then heard nothing this long is opened again.
-export const SOCKET_IDLE_MS = 2 * 25_000 + 10_000;
-/// The subprotocol still.fail cloud's `/v1/events` answers with; the token travels as a second one.
-export const EVENTS_PROTOCOL = "stillfail-events";
+import { isObject } from "./util.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
 export const CREDENTIAL_KEY = "credential";
 export const CREDENTIAL_FOR_S = 24 * 60 * 60;
 export const CREDENTIAL_OTHERS = "others";
 export const CREDENTIAL_OTHERS_KEPT = 8;
-/// Where this device's push registration is kept, and the accounts that have it.
+/// Where this device's push registration is kept.
 export const PUSH_KEY = "push";
-
-export type SocketState = "connecting" | "open" | "retrying";
 
 /// How far a call has got, for a UI that asked to hear it.
 export type Progress = (value: unknown) => void;
-
-/// What later parts of the core plug in (the station links, the views…): each a module of its own, wired here.
-export interface Parts {
-  /// The topics of stations: started, stopped, computed (station.ts).
-  stations?: {
-    start(topic: Topic): void;
-    stop(topic: Topic): void;
-  };
-}
 
 export type Options = {
   /// The share of traces recorded (0: none).
@@ -71,7 +44,7 @@ export type Options = {
   clock?: Clock.Clock;
 };
 
-/// What the core holds: every module, and the account topics' state.
+/// What the core holds: every module.
 export class Inner {
   host!: Host;
   runner!: Runner;
@@ -82,36 +55,18 @@ export class Inner {
   cloud!: Cloud;
   store!: Store;
   data!: Data;
-  /// still.fail's relays, its own first, as the first `/v1/me` of this run or the kept one said.
-  relays: string[] | null = null;
   workspaces!: Workspaces;
-  /// Whether each account's latest `/v1/me` answered this run (null), or why it failed.
-  mes = new Map<string, CoreError | null>();
-  /// The accounts as last shown, so a change that UIs cannot see (a refreshed token) is not one.
-  shownAccounts: AccountView[] = [];
-  /// Every account's `/v1/me` under way.
-  meLoading: Promise<void> | null = null;
-  /// Numbers the `/v1/me` requests per account, so only the newest answer is kept.
-  meFetches = new Map<string, number>();
-  /// The live `workspaces` / `workspace` / `loginSessions` / `admin` topics, each with the number of its newest fetch.
-  live = new Map<string, { topic: Topic; fetch: number }>();
-  /// Per account, its still.fail cloud events socket while an account topic is live.
-  sockets = new Map<string, { fiber: Fiber.Fiber<unknown, unknown>; state: SocketState }>();
   /// What the device waits on: still.fail cloud, its sockets, the relay for no station.
   status!: Status;
   wakes!: Wakes;
-  /// The calls under way that a UI can stop, by client and id.
-  calls = new Map<string, () => void>();
+  scheduler!: Scheduler;
+  cloudSync!: CloudSync;
+  router!: Router;
+  /// The calls under way that a UI can stop, by `client/id`.
+  calls = new Map<string, Fiber.Fiber<unknown, unknown>>();
   doing = new Doing();
-  parts: Parts = {};
-  /// The mesh endpoint, brought up once (phase 2: station links).
-  meshWarm: (() => void) | null = null;
-  closed = false;
-
-  /// The data center's topics go to the data center, the rest to the store (data.rs `Center::set`).
-  centerSet(topic: Topic, value: { ok: unknown } | { err: CoreError }): void {
-    accountState.centerSet(this, topic, value);
-  }
+  /// The accounts as last shown, so a change UIs cannot see (a refreshed token) is not one.
+  shownAccounts: AccountView[] = [];
 }
 
 export class Core {
@@ -122,52 +77,58 @@ export class Core {
     this.inner = inner;
   }
 
-  /// A core on `host`; its timers on `options.clock` (the live clock by default).
-  static async create(host: Host, options: Options = {}): Promise<Core> {
+  /// A core on `host`, its timers on `options.clock`; it starts syncing at once, from what the database holds.
+  static create(host: Host, options: Options = {}): Promise<Core> {
     const inner = new Inner();
-    inner.wakes = new Wakes();
-    // Everything the core asks of the host is given up or opened again when a UI comes back (wake.ts).
-    inner.host = new WakingHost(host, inner.wakes);
     inner.runner = new Runner(options.clock);
-    brand.setTestChannel(inner.host.testChannel());
-    inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
-    inner.accounts = await Accounts.load(inner.host);
-    inner.accounts.setTracer(inner.tracer);
-    inner.status = new Status(inner.host, inner.runner);
-    inner.cloud = new Cloud(inner.host, inner.accounts, inner.tracer, inner.status);
-    // What was last known is there before any UI asks.
-    inner.data = new Data(inner.host, inner.runner);
-    await inner.data.load();
-    prefs.followLang(inner.data);
-    inner.workspaces = new Workspaces(inner.host, inner.runner);
-    inner.store = new Store(inner.host, inner.runner);
-    const store = inner.store;
-    // What goes out is what the clients' types say (client/shapes).
-    store.setShaped();
-    store.setHeld((topic) => inner.data.shown(topic));
-    inner.data.onChange((topic) => store.changed(topic));
-    inner.status.onChange(() => store.invalidateAll((t) => t.topic === "status"));
-    inner.status.setNames((address) => accountState.nameOf(inner, address));
-    inner.workspaces.wireStatus(
-      (id) => {
-        store.invalidateAll((t) => t.topic === "status" && (t.workspace === undefined || t.workspace === id));
-        store.invalidate({ topic: "doing" });
-      },
-      (address) => accountState.nameOf(inner, address),
-    );
-    store.setSource(new Router(inner));
-    inner.shownAccounts = inner.accounts.list();
-    // Whom each account reaches, as the data center has it from the last run.
-    accountState.recomputeOwners(inner);
-    const kept = parseJson(await inner.host.storageGet(PUSH_KEY).catch(() => null));
-    void kept;
-    inner.tracer.setExport(async (body) => {
-      const account = inner.accounts.list()[0];
-      if (!account) return;
-      await inner.cloud.traces(account.sub, body).catch(() => undefined);
+    return inner.runner.run(Core.make(inner, host, options));
+  }
+
+  static make(inner: Inner, host: Host, options: Options): Effect.Effect<Core> {
+    return Effect.gen(function* () {
+      inner.wakes = new Wakes();
+      // Everything the core asks of the host is given up or opened again when a UI comes back (wake.ts).
+      inner.host = new WakingHost(host, inner.wakes);
+      brand.setTestChannel(inner.host.testChannel());
+      inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
+      inner.accounts = yield* Accounts.load(inner.host);
+      inner.accounts.setTracer(inner.tracer);
+      inner.status = new Status(inner.host, inner.runner);
+      inner.cloud = new Cloud(inner.host, inner.accounts, inner.tracer, inner.status);
+      // What was last known is there before any network.
+      inner.data = new Data(inner.host, inner.runner);
+      yield* inner.data.load;
+      prefs.followLang(inner.data);
+      inner.workspaces = new Workspaces(inner.host, inner.runner);
+      inner.store = new Store(inner.host, inner.runner);
+      const store = inner.store;
+      // What goes out is what the clients' types say (client/shapes).
+      store.setShaped();
+      store.setHeld((topic) => inner.data.shown(topic));
+      inner.data.onChange((topic) => store.changed(topic));
+      inner.status.onChange(() => store.invalidateAll((t) => t.topic === "status"));
+      inner.scheduler = new Scheduler(inner.runner, inner.runner.root);
+      inner.cloudSync = new CloudSync(inner);
+      inner.status.setNames((address) => inner.cloudSync.nameOf(address));
+      inner.workspaces.wireStatus(
+        (id) => {
+          store.invalidateAll((t) => t.topic === "status" && (t.workspace === undefined || t.workspace === id));
+          store.invalidate({ topic: "doing" });
+        },
+        (address) => inner.cloudSync.nameOf(address),
+      );
+      inner.router = new Router(inner);
+      store.setSource(inner.router);
+      inner.shownAccounts = inner.accounts.list();
+      inner.tracer.setExport((body) => {
+        const account = inner.accounts.list()[0];
+        return account ? Effect.ignore(inner.cloud.traces(account.sub, body)) : Effect.void;
+      });
+      inner.accounts.onChange(() => inner.cloudSync.accountsChanged());
+      // From now on the core keeps what it holds current, whatever the UI shows.
+      inner.cloudSync.start();
+      return new Core(inner);
     });
-    inner.accounts.onChange(() => accountState.accountsChanged(inner));
-    return new Core(inner);
   }
 
   /// Keeps times in words fresh while anything is shown (a UI's core).
@@ -183,10 +144,10 @@ export class Core {
   /// A UI went away: its subscriptions end, its calls that hold something open for it stop.
   disconnect(client: ClientId): void {
     this.inner.store.dropClient(client);
-    for (const [key, stop] of [...this.inner.calls]) {
+    for (const [key, fiber] of [...this.inner.calls]) {
       if (key.startsWith(`${client}/`)) {
         this.inner.calls.delete(key);
-        stop();
+        this.inner.runner.interrupt(fiber);
       }
     }
   }
@@ -196,7 +157,7 @@ export class Core {
     let raw: unknown;
     try {
       raw = JSON.parse(json);
-    } catch (e) {
+    } catch {
       return;
     }
     this.receiveRaw(client, raw);
@@ -207,8 +168,7 @@ export class Core {
     const message = parseClientMessage(raw);
     if ("invalid" in message) {
       const id = isObject(raw) && typeof raw.id === "number" && Number.isInteger(raw.id) && raw.id >= 0 ? raw.id : null;
-      if (id === null) return;
-      this.inner.host.emit(client, { id, error: new CoreError("bad_message", t("core-misc.host.bad_message", { error: message.invalid })) });
+      if (id !== null) this.inner.host.emit(client, { id, error: new CoreError("bad_message", t("core-misc.host.bad_message", { error: message.invalid })) });
       return;
     }
     this.receive(client, message);
@@ -224,10 +184,10 @@ export class Core {
         return inner.store.unsubscribe(client, message.id);
       case "cancel": {
         const key = `${client}/${message.id}`;
-        const stop = inner.calls.get(key);
-        if (stop) {
+        const fiber = inner.calls.get(key);
+        if (fiber) {
           inner.calls.delete(key);
-          stop();
+          inner.runner.interrupt(fiber);
         }
         return;
       }
@@ -253,60 +213,63 @@ export class Core {
       inner.store.invalidate({ topic: "doing" });
     }
     // Each call is a trace: what it asks of stations and still.fail cloud are its spans.
-    const span: Span = inner.tracer.root(name, Kind.Internal);
+    const span = inner.tracer.root(name, Kind.Internal);
     const station = callStation(call);
     if (station !== null) span.set("stillfail.station", stationId(station));
     const progress: Progress = (value) => inner.host.emit(client, { id, value });
-    // Only a call that holds something open for its page can be stopped (and is, with the page).
-    let cancelled: (() => void) | null = null;
-    const stopped = new Promise<never>((_, reject) => {
-      cancelled = () => reject(new CoreError("cancelled", t("core-misc.call.cancelled")));
-    });
-    const abort = new AbortController();
-    if (cancellable(call)) {
-      inner.calls.set(`${client}/${id}`, () => {
-        abort.abort();
-        cancelled!();
-      });
-    }
-    inner.runner.spawn(async () => {
-      let result: { ok: unknown } | { err: CoreError };
-      try {
-        const run = execute(inner, call, progress, [client, id], span.context, abort.signal);
-        result = { ok: await (cancellable(call) ? Promise.race([run, stopped]) : run) };
-      } catch (e) {
-        result = { err: asCoreError(e) };
-      }
-      inner.calls.delete(`${client}/${id}`);
-      if ("err" in result) {
-        span.fail();
-        span.set("error.type", result.err.code);
-      }
-      span.end();
-      let failed: number | null = null;
-      if (doing !== null) {
-        if ("err" in result) {
-          inner.doing.fail(doing, result.err.message);
-          failed = doing;
-        } else inner.doing.end(doing);
-        inner.store.invalidate({ topic: "doing" });
-      }
-      inner.host.emit(client, answer(id, result));
-      if (failed !== null) {
-        await inner.runner.sleep(FAILED_SHOWN_MS);
-        inner.doing.end(failed);
-        inner.store.invalidate({ topic: "doing" });
-      }
-    });
+    const key = `${client}/${id}`;
+    const stoppable = cancellable(call);
+    const run = execute(inner, call, progress, [client, id], span.context).pipe(
+      Effect.mapError(asCoreError),
+      // Stopped (a UI cancelled it, or went): it says so.
+      Effect.onInterrupt(() =>
+        Effect.sync(() => {
+          inner.calls.delete(key);
+          span.cancel();
+          inner.host.emit(client, answer(id, { err: new CoreError("cancelled", t("core-misc.call.cancelled")) }));
+        }),
+      ),
+      Effect.exit,
+      Effect.flatMap((exit) =>
+        Effect.gen(function* () {
+          if (stoppable) inner.calls.delete(key);
+          const result: { ok: unknown } | { err: CoreError } = exit._tag === "Success" ? { ok: exit.value } : { err: failureOf(exit.cause) };
+          if ("err" in result) {
+            span.fail();
+            span.set("error.type", result.err.code);
+          }
+          span.end();
+          let failed: number | null = null;
+          if (doing !== null) {
+            if ("err" in result) {
+              inner.doing.fail(doing, result.err.message);
+              failed = doing;
+            } else inner.doing.end(doing);
+            inner.store.invalidate({ topic: "doing" });
+          }
+          inner.host.emit(client, answer(id, result));
+          if (failed !== null) {
+            yield* Effect.sleep(FAILED_SHOWN_MS);
+            inner.doing.end(failed);
+            inner.store.invalidate({ topic: "doing" });
+          }
+        }),
+      ),
+    );
+    // Only a call that holds something open for its page can be stopped; any other runs to its end whoever waits.
+    const fiber = inner.runner.fork(run);
+    if (stoppable) inner.calls.set(key, fiber as Fiber.Fiber<unknown, unknown>);
   }
 
-  /// Lets the core go: its timers and sockets stop.
+  /// Lets the core go: its fibers stop.
   close(): void {
-    this.inner.closed = true;
-    for (const socket of this.inner.sockets.values()) this.inner.runner.interrupt(socket.fiber);
-    this.inner.sockets.clear();
-    this.inner.runner.close();
+    this.inner.runner.shutdown();
   }
+}
+
+function failureOf(cause: Cause.Cause<unknown>): CoreError {
+  // The cause's failure: a CoreError (a defect said as one).
+  return asCoreError(Cause.squash(cause));
 }
 
 export function answer(id: RequestId, result: { ok: unknown } | { err: CoreError }): CoreMessage {

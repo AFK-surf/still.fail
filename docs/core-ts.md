@@ -86,6 +86,10 @@ Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」�
   只读记录，读请求都由同步调度器发起，订阅和 `client.focus` 只调高相关任务的优先级。
 - 规则 6：Rust 的 `sync.rs` 只同步 workspace、station 的 rows/sessions/threads/overview 和在跑的 agent 的 live；消息由
   `warm` 顺带拉。TS 的同步调度器同步全部业务数据（含每个 chat 的 entries），按优先级排队。
+- 规则 6：cloud 的 `/v1/events` socket 在账号登录期间一直开着（Rust 只在有 account 话题时开）；账号的 workspace 列表一变，
+  它能到的每个 workspace 都重读（Rust 只重读列表，workspace 要等 socket 重连或该话题被订阅才读）；登录设备列表、运营
+  列表也由同步维护，不靠订阅触发。
+- 规则 1：Host 的接口是 Effect（Rust 是 future），流式的 body 和 WebSocket 是在 scope 里的 pull 句柄，scope 关了就关。
 - 规则 2：老 station 不跟随 job 日志时，Rust 每 2 秒起退避重读 `/jobs/:id/log`；TS 不重读，只在事件里更新（老 station 上
   日志面板不再自动增长，打开时读一次）。
 - 规则 2：`job` 话题 Rust 每半分钟（老 station 每 4 秒）重读 `/jobs/:id`；TS 只靠 `job` 事件。
@@ -114,7 +118,15 @@ Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」�
 按各自 core 的调度，Rust 那边本来就随 HashMap 顺序变）和每个订阅应用 delta 后的值。只抹掉 PKCE 的 state/challenge、
 cloud 的端口、`doing` 的 `since`。
 
-已完成：
+已完成（2026-10-03 按设计规则重写后）：
+- 地基全换成 Effect：Host、Runner（scope + FiberSet）、Store 的发送窗口和回收、Data 的单写 fiber 和新表（`confirmed`、
+  `entry`、`transcript`、`outbox` 等）、Accounts（刷新用 Deferred 单飞）、Cloud、Status、Trace、wake（hedge/drop 用
+  race）、call 的执行（可取消的 call 是可 interrupt 的 fiber）。
+- 同步调度器 `src/sync/scheduler.ts`（按 lane 限并发、按 key 去重、按优先级取，UI 只能 `prioritize`）和 cloud 同步
+  `src/sync/cloud.ts`（socket、/v1/me、workspace、登录设备、运营列表）。订阅只读记录（`core/routing.ts`）。
+- 对照运行：44 步里 42 步一致，2 步是规则 6 带来的刻意不同（见上），最终 UI 状态完全一致。测试 79 个通过。
+
+此前（第一版，照 Rust 写的，已被上面取代）：
 1. 第 1 期（2026-10-03）：协议、Host、Store/delta、data center、accounts、cloud、status、workspace、wake、trace、ops、
    calls（全部 call 的解析）、prefs、doing、format、shapes 的 model/reasoning、i18n、Node host、假 Host。
    对照运行 44 步全部一致（账号登录登出、accounts/workspaces/workspace/loginSessions/status/prefs/doing 话题、

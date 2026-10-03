@@ -1,72 +1,71 @@
-// Where the core's work runs (host.rs `spawn` and `sleep`): fibers on Effect's runtime, every timer on its Clock — the
-// live one, or a TestClock in tests (docs/station-ts.md, 写法：Effect). Nothing in the core calls setTimeout itself.
-import { Cause, Clock, Effect, Exit, Fiber } from "effect";
+// Where the core's work runs: fibers on Effect's runtime, in scopes, every timer on its Clock — the live one, or a
+// TestClock in tests. What arrives from outside (a UI's message, a host callback) is synchronous; it starts fibers
+// here. Nothing in the core calls setTimeout itself.
+import { Cause, Clock, Effect, Exit, Fiber, FiberSet, Scope } from "effect";
+
+/// A scope and the fibers forked in it: closing it interrupts them, and anything else that was opened in it.
+export type Scoped = { readonly scope: Scope.Closeable; readonly fibers: FiberSet.FiberSet<unknown, unknown> };
 
 export class Runner {
   readonly clock: Clock.Clock | null;
-  readonly #fibers = new Set<Fiber.Fiber<unknown, unknown>>();
+  /// The core's own: closing it ends everything.
+  readonly root: Scoped;
   #closed = false;
-  /// Told of a task that died (a bug): a native host ends the core, as a panic does.
+  /// Told of a fiber that failed with a bug: a native host starts the core anew.
   onDefect: (error: unknown) => void = (error) => {
-    console.error("core task failed", error);
+    console.error("core fiber failed", error);
   };
 
   constructor(clock?: Clock.Clock) {
     this.clock = clock ?? null;
+    const scope = Effect.runSync(Scope.make());
+    this.root = { scope, fibers: Effect.runSync(Scope.provide(FiberSet.make(), scope)) };
   }
 
-  #provide<A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E> {
+  /// The effect with the core's clock.
+  provide<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> {
     return this.clock ? effect.pipe(Effect.provideService(Clock.Clock, this.clock)) : effect;
   }
 
-  /// Runs an effect as a fiber of its own; interrupting it (`Fiber.interrupt`) stops it where it waits.
-  fork<A, E>(effect: Effect.Effect<A, E>): Fiber.Fiber<A, E> {
-    const fiber = Effect.runFork(this.#provide(effect));
-    if (this.#closed) {
-      Effect.runFork(Fiber.interrupt(fiber));
-      return fiber;
-    }
-    this.#fibers.add(fiber);
+  /// Runs an effect as a fiber of `scoped` (the core's by default): interrupted when it closes. A failure that is no
+  /// interruption is a bug, told to `onDefect`.
+  fork<A, E>(effect: Effect.Effect<A, E>, scoped: Scoped = this.root): Fiber.Fiber<A, E> {
+    const fiber = Effect.runFork(this.provide(effect));
     fiber.addObserver((exit) => {
-      this.#fibers.delete(fiber);
       if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)) this.onDefect(Cause.squash(exit.cause));
     });
+    FiberSet.addUnsafe(scoped.fibers, fiber as Fiber.Fiber<unknown, unknown>);
     return fiber;
   }
 
-  /// An effect's result as a promise (for the async code around it).
+  /// An effect's result as a promise (hosts' entries, tests).
   run<A, E>(effect: Effect.Effect<A, E>): Promise<A> {
-    return Effect.runPromise(this.#provide(effect));
+    return Effect.runPromise(this.provide(effect));
   }
 
-  /// Waits `ms` on the core's clock.
-  sleep(ms: number): Promise<void> {
-    if (ms <= 0) return this.run(Effect.yieldNow);
-    return this.run(Effect.sleep(ms));
+  /// A scope inside `parent` (a topic's, a link's).
+  child(parent: Scoped = this.root): Scoped {
+    const scope = Effect.runSync(Scope.fork(parent.scope));
+    return { scope, fibers: Effect.runSync(Scope.provide(FiberSet.make(), scope)) };
   }
 
-  /// Runs an async task to its end on the core (host.rs `spawn`): what it throws is a bug, said as such.
-  spawn(task: () => Promise<unknown>): void {
-    if (this.#closed) return;
-    task().catch((error) => this.onDefect(error));
-  }
-
-  /// Stops everything still running (the core is let go).
-  close(): void {
-    this.#closed = true;
-    for (const fiber of this.#fibers) Effect.runFork(Fiber.interrupt(fiber));
-    this.#fibers.clear();
+  /// Closes a scope: what runs in it is interrupted.
+  close(scoped: Scoped): void {
+    Effect.runFork(Scope.close(scoped.scope, Exit.void));
   }
 
   interrupt(fiber: Fiber.Fiber<unknown, unknown>): void {
     Effect.runFork(Fiber.interrupt(fiber));
   }
-}
 
-/// A sleep that can be called off: `done` resolves after `ms` on the clock, or never once `cancel` is called.
-export function timer(runner: Runner, ms: number): { done: Promise<void>; cancel(): void } {
-  let resolve!: () => void;
-  const done = new Promise<void>((r) => (resolve = r));
-  const fiber = runner.fork(Effect.sleep(Math.max(0, ms)).pipe(Effect.andThen(Effect.sync(() => resolve()))));
-  return { done, cancel: () => runner.interrupt(fiber) };
+  /// Stops everything (the core is let go).
+  shutdown(): void {
+    if (this.#closed) return;
+    this.#closed = true;
+    this.close(this.root);
+  }
+
+  get closed(): boolean {
+    return this.#closed;
+  }
 }

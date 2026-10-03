@@ -98,6 +98,7 @@ void T0;
 if (results.rust && results.ts) {
   let same = 0;
   let differ = 0;
+  let deliberate = 0;
   for (let i = 0; i < SCRIPT.length; i++) {
     const r = results.rust[i];
     const t = results.ts[i];
@@ -114,6 +115,9 @@ if (results.rust && results.ts) {
     if ((exact || reordered) && states) {
       same++;
       console.log(`✔ ${r.step} (${r.messages.length} messages${reordered ? ", interleaved otherwise" : ""})`);
+    } else if (SCRIPT[i].deliberate) {
+      deliberate++;
+      console.log(`≠ ${r.step}: differs as meant (${SCRIPT[i].deliberate})`);
     } else {
       differ++;
       console.log(`✖ ${r.step}: ${exact ? "messages equal" : reordered ? "same messages, another order" : "messages differ"}; ${states ? "states equal" : "states differ"}`);
@@ -128,8 +132,10 @@ if (results.rust && results.ts) {
       }
     }
   }
-  console.log(`\n${same} steps the same, ${differ} differ`);
-  process.exit(differ === 0 ? 0 : 1);
+  // Whatever happened on the way, the UI must end with the same values.
+  const end = isDeepStrictEqual(results.rust[SCRIPT.length - 1].states, results.ts[SCRIPT.length - 1].states);
+  console.log(`\n${same} steps the same, ${deliberate} different as meant, ${differ} differ; the end state ${end ? "the same" : "DIFFERS"}`);
+  process.exit(differ === 0 && end ? 0 : 1);
 } else {
   const [name, recorded] = Object.entries(results)[0];
   for (const r of recorded) console.log(`${name} ${r.step}: ${JSON.stringify(r.messages)}`);
