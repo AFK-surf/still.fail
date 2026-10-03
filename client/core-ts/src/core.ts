@@ -29,6 +29,8 @@ import { StationsSync } from "./station/sync.ts";
 import { StationTopics } from "./station/topics.ts";
 import type { StationWire } from "./station/wire.ts";
 import { meshWire } from "./mesh.ts";
+import { ViewCalls } from "./views/calls.ts";
+import { envOf, Views } from "./views/views.ts";
 import { isObject } from "./util.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
@@ -70,6 +72,8 @@ export class Inner {
   cloudSync!: CloudSync;
   stations!: StationsSync;
   stationTopics!: StationTopics;
+  views!: Views;
+  viewCalls!: ViewCalls;
   router!: Router;
   /// The calls under way that a UI can stop, by `client/id`.
   calls = new Map<string, Fiber.Fiber<unknown, unknown>>();
@@ -132,6 +136,10 @@ export class Core {
       inner.stationTopics = new StationTopics(inner, inner.stations);
       inner.router.owners.push(inner.stationTopics);
       installStationCalls();
+      inner.views = new Views(envOf(inner));
+      inner.router.owners.push(inner.views);
+      inner.viewCalls = new ViewCalls(inner, inner.views);
+      inner.viewCalls.install();
       // The stations every account reaches are linked, as the workspaces say (once a burst of changes settles).
       let reconciling = false;
       inner.cloudSync.onReach = () => {
@@ -153,6 +161,8 @@ export class Core {
       // From now on the core keeps what it holds current, whatever the UI shows.
       inner.cloudSync.start();
       inner.stations.reconcile();
+      // What was on its way when the core last stopped goes on.
+      inner.viewCalls.resume();
       return new Core(inner);
     });
   }

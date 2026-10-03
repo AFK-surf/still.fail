@@ -20,7 +20,7 @@ import { GONE, NETWORK } from "../wake.ts";
 import { Priority } from "../sync/scheduler.ts";
 import * as activity from "../activity.ts";
 import { StationAddr } from "./addr.ts";
-import { Requests, httpError } from "./requests.ts";
+import { IDEMPOTENCY_KEY, Requests, httpError } from "./requests.ts";
 import { SseParser } from "./sse.ts";
 import { readAll, type StationWire } from "./wire.ts";
 
@@ -1044,10 +1044,11 @@ export class StationsSync {
   }
 
   /// A person's message into a thread; answers its entry number once the thread's entries hold it.
-  post(address: string, thread: number, message: unknown, ctx: SpanContext | null): Effect.Effect<number, CoreError> {
+  post(address: string, thread: number, message: unknown, ctx: SpanContext | null, idempotency?: string): Effect.Effect<number, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const addr = StationAddr.parse(address);
-      const answer = yield* this.requests.call(addr, "POST", `/threads/${thread}/messages`, message, { ctx });
+      const headers: [string, string][] = idempotency ? [[IDEMPOTENCY_KEY, idempotency]] : [];
+      const answer = yield* this.requests.call(addr, "POST", `/threads/${thread}/messages`, message, { ctx, headers });
       const n = u64(get(answer, "n"));
       if (n === null) return yield* Effect.fail(new CoreError("bad_response", t("station.core.noMessageNumber")));
       const held = yield* this.#core.data.log("entry", address, String(thread));
