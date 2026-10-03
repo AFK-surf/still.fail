@@ -105,6 +105,12 @@ function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops:
   }
   // Where each kept one was among the kept (in the new order), and which of them stay.
   const positions = nextKeys.map((k) => was.get(k) ?? -1);
+  // Mostly new (a list loaded after its first screen): it goes whole, not item by item.
+  const fresh = positions.reduce((n, p) => n + (p < 0 ? 1 : 0), 0);
+  if (fresh > LONG && fresh * 2 > next.length) {
+    ops.push({ path: [...path], set: next });
+    return true;
+  }
   const stay = longestRun(positions);
   for (let i = next.length - 1; i >= 0; i--) {
     const before = i + 1 < next.length ? keyOf(next[i + 1], fields) : null;
@@ -117,7 +123,8 @@ function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops:
     const changes = diffKeyed(old[from], next[i], spec.item ?? null);
     if (changes.length === 0) continue;
     const key = keyOf(next[i], fields);
-    out.push(largerThan(changes as Op[], next[i]) ? { path: [...path], key: fields, put: next[i] } : { path: [...path], key: fields, patch: key, ops: changes });
+    const put = !setsLongList(changes) && largerThan(changes as Op[], next[i]);
+    out.push(put ? { path: [...path], key: fields, put: next[i] } : { path: [...path], key: fields, patch: key, ops: changes });
   }
   // A list that changed all through goes whole.
   if (out.length > 0 && heavier(out, next)) ops.push({ path: [...path], set: next });
@@ -128,8 +135,22 @@ function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops:
 /// Whether ops take as many bytes as the value they make: then it goes whole. Ops of a few KB are taken as lighter
 /// without writing out the value (a list of 2000 rows is 100 KB: weighing it on every change is the cost saved).
 export function heavier(ops: AnyOp[], value: unknown): boolean {
+  // One value set whole: as heavy as the value where it is all of it, lighter where it is a part.
+  if (ops.length === 1 && "set" in ops[0]) return ops[0].path.length === 0;
+  // Ops that set a long list whole (one loaded after its first screen) are about as heavy as the value: not weighed.
+  if (setsLongList(ops)) return false;
   const size = JSON.stringify(ops).length;
   return size > 4096 && size >= JSON.stringify(value).length;
+}
+
+/// Whether ops set a list of more than LONG items whole, anywhere in them.
+const LONG = 256;
+function setsLongList(ops: AnyOp[]): boolean {
+  for (const op of ops) {
+    if ("set" in op && Array.isArray(op.set) && op.set.length > LONG) return true;
+    if ("patch" in op && setsLongList(op.ops)) return true;
+  }
+  return false;
 }
 
 /// The indexes (into `positions`) of a longest increasing run of its non-negative values.

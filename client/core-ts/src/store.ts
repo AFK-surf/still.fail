@@ -125,7 +125,8 @@ export class Store {
 
   #start(topic: Topic): void {
     this.#source?.start(topic);
-    if (this.#heldValue(topic) !== undefined) this.invalidate(topic);
+    // A held topic goes out as it is read when its emission goes (not read now: a list only watched is not loaded).
+    if (this.#held !== null && holds(topic)) this.invalidate(topic);
   }
 
   /// The data changed a topic's value: it goes out, and whatever watches it hears now.

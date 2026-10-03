@@ -3,7 +3,7 @@
 // shell does it on its own threads and answers (`complete`) with JSON and maybe bytes. What the shell does is what
 // the Rust core's native host did (HTTP, the cloud's WebSocket, files per storage key and `core.db`, TCP to adbd) and what the
 // station's addon does for Node (iroh), so a phone moving from the Rust core keeps its files. The accounts' databases
-// are SQLite in the shell, used synchronously (the `sql.*` calls), files `accounts/<name>.db` beside the former
+// are SQLite in the shell, used synchronously (the `sql.*` calls), files `databases/<name>.db` beside the former
 // `core.db`, which is only read (`db.read`), once.
 //
 // Operations (`op`, its JSON → its answer):

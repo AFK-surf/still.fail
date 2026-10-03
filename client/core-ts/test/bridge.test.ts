@@ -52,7 +52,8 @@ test("storage_and_the_database_go_through_the_bridge", async () => {
   }
   const rows = await run(host.legacyRead({ table: "row", from: "s\u0001", to: "s\u0002" }));
   assert.deepEqual(rows.map(([k, v]) => [k, text(v)]), [["s\u0001a", "1"], ["s\u0001c", ""]]);
-  // An account's database: SQLite in the shell, asked synchronously.
+  // An account's database: SQLite in the shell, asked synchronously (beside the storage keys' files, `accounts` one).
+  await run(host.storageSet("accounts", bytes("[]")));
   const sql = await run(host.openDb("account-a"));
   sql.exec("CREATE TABLE t (k TEXT PRIMARY KEY, n INTEGER, j TEXT)");
   assert.equal(sql.run("INSERT INTO t VALUES (?, ?, ?)", ["a", 1, '{"x":"中"}']), 1);
