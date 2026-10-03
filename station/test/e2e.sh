@@ -7,17 +7,28 @@
 set -eu
 work=$1
 here=$(cd "$(dirname "$0")/.." && pwd)
-load=$here/tools/load/target/release/station-load
-rm -rf "$work" && mkdir -p "$work/app/node/bin" "$work/data/homes/cc"
-ln -s "$here/dist" "$work/app/station"
-ln -s "$(command -v node)" "$work/app/node/bin/node"
+load=${E2E_LOAD:-$here/tools/load/target/release/station-load}
+# E2E_APP: a release (scripts/station-bundle.sh with STILLFAIL_STATION=ts) instead of this checkout: its launcher, its
+# Node, its runner and mesh addon, as an installed station runs them.
+rm -rf "$work" && mkdir -p "$work/data/homes/cc"
+if [ -n "${E2E_APP:-}" ]; then
+  app=$E2E_APP
+  export PATH="$here/test/fake:$app/node/bin:$PATH" STILLFAIL_NO_DISCOVERY=1
+else
+  app=$work/app
+  mkdir -p "$app/node/bin"
+  ln -s "$here/dist" "$app/station"
+  ln -s "$(command -v node)" "$app/node/bin/node"
+  export PATH="$here/test/fake:$PATH" STILLFAIL_NO_DISCOVERY=1
+  export STILLFAIL_MESH_NATIVE=$here/native/mesh/target/release/libstillfail_mesh.dylib
+  export STILLFAIL_RUNNER=$here/native/runner/target/release/stillfail-runner
+fi
+launch=${E2E_APP:+$app/mesh/target/release/stillfail-station}
+launch=${launch:-$here/native/launcher/target/release/stillfail-station}
 id=$("$load" setup "$work/data")
 echo '{"profiles":[{"id":"cc","runtime":"claude","home":"homes/cc"}],"autoUpdate":false}' > "$work/data/config.json"
 echo '{}' > "$work/data/homes/cc/.credentials.json"
-export PATH="$here/test/fake:$PATH" STILLFAIL_NO_DISCOVERY=1
-export STILLFAIL_MESH_NATIVE=$here/native/mesh/target/release/libstillfail_mesh.dylib
-export STILLFAIL_RUNNER=$here/native/runner/target/release/stillfail-runner
-"$here/native/launcher/target/release/stillfail-station" run --app "$work/app" --data "$work/data" > "$work/station.log" 2>&1 &
+"$launch" run --app "$app" --data "$work/data" > "$work/station.log" 2>&1 &
 launcher=$!
 trap 'kill $launcher 2>/dev/null; sleep 3; pkill -f "$work/data" 2>/dev/null || true' EXIT
 node_pid() { pgrep -f "station/main.js run .*$work/data" | head -1; }

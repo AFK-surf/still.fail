@@ -1,0 +1,8 @@
+#!/bin/sh
+# A stand-in for curl, for test/install-e2e.sh: `-o FILE` gets $FAKE_RELEASE (the release under test), whatever is asked.
+out=""
+while [ $# -gt 0 ]; do
+  [ "$1" = "-o" ] && out=$2
+  shift
+done
+[ -n "$out" ] && cp "$FAKE_RELEASE" "$out"
