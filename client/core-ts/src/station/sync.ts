@@ -564,11 +564,18 @@ export class StationsSync {
         }
       }
       const answer = yield* Effect.result(this.requests.call(link.addr, "GET", path, null, { quiet: true }));
+      const topic = topicKey({ topic: "thread", station: address, thread: id });
       if (answer._tag === "Failure") {
-        // A thread that is gone: what is held of it goes.
-        if (answer.failure.status === 404) yield* this.#threadGone(address, id);
+        // A thread that is gone: what is held of it goes. One not to be read (no longer this viewer's): said so.
+        const status = answer.failure.status;
+        if (status === 404) yield* this.#threadGone(address, id);
+        else if (status !== undefined && status >= 400 && status < 500 && held.size === 0) {
+          link.errors.set(topic, answer.failure);
+          this.onChange(address, "errors", topic);
+        }
         return;
       }
+      if (link.errors.delete(topic)) this.onChange(address, "errors", topic);
       const entries = (get(answer.success, "entries") as unknown[] | undefined) ?? [];
       yield* this.putEntries(address, id, entries);
       // More to bring: asked again, behind what is more urgent.

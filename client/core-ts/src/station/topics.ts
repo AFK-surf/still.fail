@@ -113,6 +113,8 @@ export class StationTopics implements Owner {
     if (urgent) this.#core.scheduler.prioritize(topicKey(topic), urgent, Priority.shown);
     if (topic.topic === "thread") {
       const id = topic.thread as number;
+      // A chat no list has (opened from an old notification's link): the sync is told of it, and brings it.
+      if (this.summary(station, id) === null) this.#sync.syncEntries(station, id, Priority.shown);
       this.#core.runner.fork(
         Effect.gen({ self: this }, function* () {
           yield* this.#core.data.log("entry", station, String(id));
