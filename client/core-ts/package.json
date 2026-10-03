@@ -7,13 +7,16 @@
     "check": "tsgo --noEmit",
     "shapes": "node scripts/shapes-schema.ts",
     "build": "esbuild src/index.ts src/hosts/node.ts --outbase=src --bundle --platform=node --format=esm --target=node24 --outdir=dist --external:*.node",
-    "test": "node --test --test-force-exit test/*.test.ts"
+    "test": "node --test --test-force-exit test/*.test.ts",
+    "hermes": "node scripts/hermes-bundle.ts"
   },
   "dependencies": {
     "effect": "4.0.0",
     "ws": "8.22.0"
   },
   "devDependencies": {
+    "@babel/core": "7.28.4",
+    "@babel/plugin-transform-classes": "7.28.4",
     "@types/node": "24.10.1",
     "@types/ws": "8.18.2",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",

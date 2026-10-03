@@ -70,6 +70,8 @@ android {
         }
     }
     buildFeatures { compose = true; buildConfig = true; resValues = true }
+    // The core's engine (:core) and Hermes's fbjni each bring the C++ runtime; :core's libhermes.so is the one it built against.
+    packaging { jniLibs { pickFirsts += listOf("**/libc++_shared.so", "**/libhermes.so") } }
     // An inline visualization's page is the web's: its stylesheet and bridge, from web/src/viz (ui/Viz.kt).
     sourceSets["main"].assets.srcDir(rootProject.file("../../web/src/viz"))
     // The words, in each language: the catalog the core and the web read too (client/i18n, ui/I18n.kt).

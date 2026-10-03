@@ -1,0 +1,32 @@
+[package]
+name = "stillfail-shell"
+description = "The native shell of the core in TypeScript on Android (client/core-ts hosts/bridge.ts, apps/android/core): HTTP, still.fail cloud's WebSocket, files and the core's database, TCP to adbd, and iroh, behind a C ABI the Hermes engine (C++) calls."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "stillfail_shell"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros", "net", "io-util"] }
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hex = "0.4"
+# As client/ffi has them: the crypto provider is iroh's (ring); roots are Mozilla's.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "stream"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
+tokio-tungstenite = { version = "0.26", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+# The core's database, built in: the same SQLite and file as client/ffi's.
+rusqlite = { version = "0.37", features = ["bundled"] }
+libc = "0.2"
+iroh = { version = "=1.0.3" }
+iroh-mdns-address-lookup = "=0.4.0"
+iroh-mainline-address-lookup = "=0.5.0"
+noq-proto = { version = "1", default-features = false }
+
+[dev-dependencies]
+tempfile = "3"
