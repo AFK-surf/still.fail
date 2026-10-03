@@ -32,6 +32,9 @@ import { meshWire } from "./mesh.ts";
 import { ViewCalls } from "./views/calls.ts";
 import { Attend } from "./attend.ts";
 import { Attention } from "./attention.ts";
+import { Pills } from "./pill.ts";
+import type { Choose } from "./choose.ts";
+import { installChoose } from "./choose-calls.ts";
 import { envOf, Views } from "./views/views.ts";
 import { isObject } from "./util.ts";
 
@@ -76,6 +79,7 @@ export class Inner {
   stationTopics!: StationTopics;
   views!: Views;
   attention!: Attention;
+  choose!: Choose;
   viewCalls!: ViewCalls;
   router!: Router;
   /// The calls under way that a UI can stop, by `client/id`.
@@ -147,6 +151,8 @@ export class Core {
       inner.router.owners.push(inner.attention);
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);
       inner.attention.install();
+      inner.choose = installChoose(inner);
+      inner.router.owners.push(new Pills(inner.store, inner.runner, () => inner.host.nowMs(), (station) => inner.views.stationName(station)));
       // The stations every account reaches are linked, as the workspaces say (once a burst of changes settles).
       let reconciling = false;
       inner.cloudSync.onReach = () => {
