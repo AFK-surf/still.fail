@@ -29,13 +29,17 @@ private final class NativeCoreEngine: CoreEngine, @unchecked Sendable {
 
 enum CoreEvent: Sendable {
     case started
-    case topic(UInt64, CoreTopicState)
+    /// A topic's latest state; `valueChanged` when its value differs from the last one delivered.
+    case topic(UInt64, CoreTopicState, valueChanged: Bool)
     case reply(UInt64, Result<JSONValue, CoreFailure>)
     case fatal(CoreFailure)
 }
 
 /// All mutable bridge state, JSON encode/decode and deltas are serial-worker
 /// confined. FIFO dispatch to main applies whole states, never payload work.
+/// Topic states that did not change are dropped, and a burst of states (a stream
+/// of tokens) reaches main as its latest state at most `topicInterval` apart.
+/// Replies and failures first deliver the topic states queued before them.
 final class CoreBridge: @unchecked Sendable {
     private let worker = DispatchQueue(label: "fail.still.iphone.core-json", qos: .userInitiated)
     private let factory: CoreEngineFactory
@@ -47,6 +51,11 @@ final class CoreBridge: @unchecked Sendable {
     private var subscriptions: [UInt64: (spec: JSONValue, state: CoreTopicState)] = [:]
     private var calls: Set<UInt64> = []
     private var stopped = false
+    private var queuedTopics: [UInt64: (state: CoreTopicState, changed: Bool)] = [:]
+    private var queuedOrder: [UInt64] = []
+    private var flushScheduled = false
+    private var lastFlush = DispatchTime(uptimeNanoseconds: 0)
+    static let topicInterval: TimeInterval = 1.0 / 24
 
     init(factory: @escaping CoreEngineFactory = { try NativeCoreEngine(callback: $0) },
          onEvent: @escaping @MainActor @Sendable (CoreEvent) -> Void) {
@@ -58,6 +67,7 @@ final class CoreBridge: @unchecked Sendable {
             self.stopped = true; self.generation += 1
             self.engine?.disconnect(client: self.client); self.engine = nil
             self.calls.removeAll(); self.subscriptions.removeAll()
+            self.queuedTopics.removeAll(); self.queuedOrder.removeAll()
         }
     }
     func subscribe(id: UInt64, spec: JSONValue) {
@@ -69,6 +79,7 @@ final class CoreBridge: @unchecked Sendable {
     func unsubscribe(id: UInt64) {
         worker.async {
             self.subscriptions.removeValue(forKey: id)
+            self.queuedTopics.removeValue(forKey: id); self.queuedOrder.removeAll { $0 == id }
             self.post(.object(["id": .number(Double(id)), "unsubscribe": .bool(true)]))
         }
     }
@@ -129,13 +140,17 @@ final class CoreBridge: @unchecked Sendable {
             return
         }
         guard var sub = subscriptions[id] else { return }
+        let before = sub.state
         sub.state.receive(message)
         subscriptions[id] = sub
-        emit(.topic(id, sub.state))
+        let changed = before.value != sub.state.value
+        guard changed || before.error != sub.state.error || before.isLoading != sub.state.isLoading else { return }
+        queueTopic(id, sub.state, changed: changed)
     }
     private func fail(_ error: CoreFailure) {
         generation += 1
         engine?.disconnect(client: client); engine = nil; calls.removeAll()
+        queuedTopics.removeAll(); queuedOrder.removeAll()
         for id in Array(subscriptions.keys) { subscriptions[id]?.state = CoreTopicState() }
         emit(.fatal(error))
         let delays: [Double] = [0.5, 1, 2, 5, 10, 30]
@@ -145,8 +160,27 @@ final class CoreBridge: @unchecked Sendable {
             guard epoch == self.generation else { return }; self.open()
         }
     }
-    private func emit(_ event: CoreEvent) {
+    private func queueTopic(_ id: UInt64, _ state: CoreTopicState, changed: Bool) {
+        if let queued = queuedTopics[id] { queuedTopics[id] = (state, queued.changed || changed) }
+        else { queuedTopics[id] = (state, changed); queuedOrder.append(id) }
+        guard !flushScheduled else { return }
+        flushScheduled = true
+        let elapsed = Double(DispatchTime.now().uptimeNanoseconds &- lastFlush.uptimeNanoseconds) / 1e9
+        worker.asyncAfter(deadline: .now() + max(0, Self.topicInterval - elapsed)) { self.flushTopics() }
+    }
+    private func takeQueuedTopics() -> [CoreEvent] {
+        flushScheduled = false
+        guard !queuedOrder.isEmpty else { return [] }
+        lastFlush = .now()
+        let events = queuedOrder.compactMap { id in queuedTopics[id].map { CoreEvent.topic(id, $0.state, valueChanged: $0.changed) } }
+        queuedTopics.removeAll(keepingCapacity: true); queuedOrder.removeAll(keepingCapacity: true)
+        return events
+    }
+    private func flushTopics() { deliver(takeQueuedTopics()) }
+    private func emit(_ event: CoreEvent) { deliver(takeQueuedTopics() + [event]) }
+    private func deliver(_ events: [CoreEvent]) {
+        guard !events.isEmpty else { return }
         let callback = onEvent
-        DispatchQueue.main.async { MainActor.assumeIsolated { callback(event) } }
+        DispatchQueue.main.async { MainActor.assumeIsolated { events.forEach(callback) } }
     }
 }

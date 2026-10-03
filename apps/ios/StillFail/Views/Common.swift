@@ -36,14 +36,30 @@ struct WorkspaceChoice: Identifiable {
     }
 }
 
+/// One subscription per view identity, cancelled when that identity is destroyed.
+/// Navigation transitions can deliver a late onDisappear after the next onAppear
+/// (a cancelled back swipe), so appearance never cancels or replaces the topic.
+@MainActor final class TopicLease {
+    private var topics: [String: CoreTopic] = [:]
+    var topic: CoreTopic? { topics[""] }
+    func replace(_ next: CoreTopic, key: String = "") { topics[key]?.cancel(); topics[key] = next }
+    func drop(key: String) { topics.removeValue(forKey: key)?.cancel() }
+    func cancelAll() { topics.values.forEach { $0.cancel() }; topics.removeAll() }
+    deinit {
+        let topics = Array(topics.values)
+        if Thread.isMainThread { MainActor.assumeIsolated { topics.forEach { $0.cancel() } } }
+        else { Task { @MainActor in topics.forEach { $0.cancel() } } }
+    }
+}
+
 /// Owns exactly one core subscription for this view identity. A scope change destroys its parent.
 struct TopicContent<Content: View>: View {
     @Environment(AppStore.self) private var store
     let name: String
     var params: [String: JSONValue] = [:]
     @ViewBuilder let content: (JSONValue) -> Content
+    @State private var lease = TopicLease()
     @State private var topic: CoreTopic?
-    @State private var generation = 0
 
     var body: some View {
         Group {
@@ -65,13 +81,17 @@ struct TopicContent<Content: View>: View {
                 ProgressView("正在读取…").accessibilityIdentifier("topic.loading")
             }
         }
-        .task(id: generation) {
-            topic?.cancel()
-            topic = store.subscribe(name, params: params)
-        }
-        .onDisappear { topic?.cancel(); topic = nil }
+        // Overlays on this content (the floating new-chat button) align to the
+        // full page, never to a centred loading indicator.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // A reappearing view keeps its live subscription; only a retry replaces it.
+        .task { if topic == nil { subscribe() } }
     }
-    private func restart() { generation += 1 }
+    private func subscribe() {
+        let next = store.subscribe(name, params: params)
+        lease.replace(next); topic = next
+    }
+    private func restart() { subscribe() }
 }
 
 struct FailureNotice: View {

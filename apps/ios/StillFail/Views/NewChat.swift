@@ -7,6 +7,7 @@ struct NewChatView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.displayScale) private var displayScale
     let workspace: String
     let onCreated: (ChatRoute) -> Void
     @State private var topic: CoreTopic?
@@ -89,6 +90,7 @@ struct NewChatView: View {
                                 }
                             }.padding(.horizontal, 14).padding(.vertical, 10)
                                 .background(Color(uiColor: ChatPalette.myBubble), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color(uiColor: ChatPalette.myBorder), lineWidth: 1 / max(1, displayScale)))
                         }.accessibilityIdentifier("newChat.optimisticMessage")
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     } else {

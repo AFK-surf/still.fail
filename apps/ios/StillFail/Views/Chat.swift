@@ -16,16 +16,26 @@ struct ChatDraft: Equatable {
 /// conversation again. This reference cache has no observed mutations, so a
 /// cache lookup during `body` does not trigger another SwiftUI render pass.
 @MainActor final class ChatTimelineProjection {
-    private var value: JSONValue?
-    private var outgoing: ChatDraft?
-    private var lives: [String: JSONValue] = [:]
-    private var language = ""
+    private struct Key: Equatable {
+        var topics: [ObjectIdentifier: Int]
+        var outgoing: ChatDraft?
+        var language: String
+    }
+    private var key: Key?
     private var cachedRows: [ChatTimelineRow] = []
     private(set) var revision = 0
-    func rows(value: JSONValue, outgoing: ChatDraft?, lives: [String: JSONValue], language: String) -> [ChatTimelineRow] {
-        if self.value == value && self.outgoing == outgoing && self.lives == lives && self.language == language { return cachedRows }
-        self.value = value; self.outgoing = outgoing; self.lives = lives; self.language = language
-        cachedRows = ChatTimeline.rows(value: value, initialOutgoing: outgoing, lives: lives)
+    /// Topics are compared by their change counters, never document by document:
+    /// a streaming token used to compare the entire conversation on every frame.
+    /// Every topic's value is read, so the calling body observes each of them.
+    func rows(topic: CoreTopic?, outgoing: ChatDraft?, lives: [String: CoreTopic], histories: [String: CoreTopic], language: String) -> [ChatTimelineRow] {
+        let value = topic?.value ?? .null
+        let liveValues = lives.compactMapValues { $0.value }, historyValues = histories.compactMapValues { $0.value }
+        var topics: [ObjectIdentifier: Int] = [:]
+        for observed in [topic].compactMap({ $0 }) + Array(lives.values) + Array(histories.values) { topics[ObjectIdentifier(observed)] = observed.revision }
+        let next = Key(topics: topics, outgoing: outgoing, language: language)
+        if key == next { return cachedRows }
+        key = next
+        cachedRows = ChatTimeline.rows(value: value, initialOutgoing: outgoing, lives: liveValues, histories: historyValues)
         revision += 1
         return cachedRows
     }
@@ -113,6 +123,10 @@ struct ChatView: View {
     @State private var timelineProjection = ChatTimelineProjection()
     @State private var composerFooterHeight: CGFloat = 68
     @State private var liveTopics: [String: CoreTopic] = [:]
+    @State private var historyTopics: [String: CoreTopic] = [:]
+    // Subscriptions end with this page's identity, not with onDisappear, which a
+    // navigation transition can deliver after the page has appeared again.
+    @State private var lease = TopicLease()
     @State private var showHistory = false
     @State private var showInfo = false
     @State private var topic: CoreTopic?
@@ -138,6 +152,8 @@ struct ChatView: View {
     @State private var jumpToEnd = 0
     @State private var visitEpoch: Int?
     @State private var inView = false
+    @State private var subscribedGeneration = -1
+    @State private var paused = false
     private var draftIdentity: String { (store.selectedAccountID ?? "") + ":" + route.session }
     private var draftParams: [String: JSONValue] { ["station": .string(route.station), "chat": .string(draftIdentity)] }
     private var value: JSONValue { topic?.value ?? .null }
@@ -153,9 +169,15 @@ struct ChatView: View {
 
     private var agents: [JSONValue] { value["agents"].arrayValue }
     private var liveKeys: [String] { agents.map { $0["session"].text("key", fallback: $0.text("key")) }.filter { !$0.isEmpty } }
+    private var slackKeys: [String] { ChatSlack.historyKeys(value: value) }
     private var timeline: [ChatTimelineRow] {
-        timelineProjection.rows(value: value, outgoing: initialOutgoing,
-                                lives: liveTopics.compactMapValues { $0.value }, language: locale.identifier)
+        timelineProjection.rows(topic: topic, outgoing: initialOutgoing, lives: liveTopics, histories: historyTopics, language: locale.identifier)
+    }
+    /// Cheap stand-ins for the outbox and messages, so onChange never compares the conversation.
+    private var outboxSignature: [String] { value["outbox"].arrayValue.map { $0.text("id") + ":" + $0.text("state") + ":" + ($0["seq"].intValue.map(String.init) ?? "") } }
+    private var messagesSignature: [Int] {
+        let messages = value["messages"].arrayValue
+        return [messages.count, messages.first?["seq"].intValue ?? -1, messages.last?["seq"].intValue ?? -1]
     }
 
     var body: some View {
@@ -228,7 +250,10 @@ struct ChatView: View {
             if visitEpoch == nil { visitEpoch = store.scopeEpoch }
             guard visitEpoch == store.scopeEpoch else { return }
             inView = true
-            topic?.cancel(); topic = store.subscribe("chat", params: route.params)
+            if topic == nil || generation != subscribedGeneration {
+                let next = store.subscribe("chat", params: route.params)
+                lease.replace(next); topic = next; subscribedGeneration = generation
+            }
             if !draftLoaded { await loadDraft() }
             reconcileInitialOutgoing()
             await focus()
@@ -236,13 +261,8 @@ struct ChatView: View {
         .onChange(of: draft) { _, _ in
             if draftLoaded { persistDraft() } else { draftEditedBeforeLoad = true }
         }
-        .onChange(of: value["outbox"]) { _, _ in reconcileSubmission(); reconcileInitialOutgoing() }
-        .onChange(of: value["messages"]) { _, _ in reconcileInitialOutgoing() }
-        .task(id: liveKeys) {
-            let wanted = Set(liveKeys)
-            for (key, topic) in liveTopics where !wanted.contains(key) { topic.cancel(); liveTopics.removeValue(forKey: key) }
-            for key in liveKeys where liveTopics[key] == nil { liveTopics[key] = store.subscribe("live", params: ["station": .string(route.station), "key": .string(key)]) }
-        }
+        .onChange(of: outboxSignature) { _, _ in reconcileSubmission(); reconcileInitialOutgoing() }
+        .onChange(of: messagesSignature) { _, _ in reconcileInitialOutgoing() }
         .onChange(of: chatVisible) { _, visible in
             Task {
                 if visible { await focus() }
@@ -252,18 +272,18 @@ struct ChatView: View {
         .onChange(of: scenePhase) { _, _ in Task { await focus() } }
         .onChange(of: thread) { _, _ in Task { await focus() } }
         .onChange(of: value.flag("newer")) { _, _ in Task { await focus() } }
-        .onDisappear {
-            inView = false
-            let epoch = visitEpoch
-            let params = ChatProtocol.depart(route: route, value: value)
-            topic?.cancel(); topic = nil
-            liveTopics.values.forEach { $0.cancel() }; liveTopics = [:]
-            Task {
-                guard epoch == store.scopeEpoch else { return }
-                _ = try? await store.call("client.focus", params: params)
-            }
-        }
+        .onDisappear(perform: depart)
         .accessibilityIdentifier("chat.page")
+    }
+    private func depart() {
+        inView = false
+        let epoch: Int? = visitEpoch
+        let params: [String: JSONValue] = ChatProtocol.depart(route: route, value: value)
+        let store = store
+        Task { @MainActor in
+            guard epoch == store.scopeEpoch else { return }
+            _ = try? await store.call("client.focus", params: params)
+        }
     }
 
     private var messages: some View {
@@ -271,9 +291,27 @@ struct ChatView: View {
                         atEnd: $readerAtEnd, quote: quote, download: download, retry: retry, page: page,
                         initialSeq: value["at"].intValue, initialOffset: value["atOffset"].numberValue, newer: value.flag("newer"),
                         topicLoaded: topic?.value != nil, rememberPlace: rememberPlace, positionReady: { readerPositionReady = true },
-                        footerHeight: topic?.value == nil || sendable ? composerFooterHeight : 0)
+                        footerHeight: topic?.value == nil || sendable ? composerFooterHeight : 0,
+                        visibilityChanged: setVisible)
             .onChange(of: readerAtEnd) { _, _ in Task { await focus() } }
             .onChange(of: readerPositionReady) { _, _ in Task { await focus() } }
+            .task(id: liveKeys) {
+                let wanted = Set(liveKeys)
+                for key in liveTopics.keys where !wanted.contains(key) { lease.drop(key: "live:" + key); liveTopics.removeValue(forKey: key) }
+                for key in liveKeys where liveTopics[key] == nil {
+                    let next = store.subscribe("live", params: ["station": .string(route.station), "key": .string(key)])
+                    lease.replace(next, key: "live:" + key); liveTopics[key] = next
+                }
+            }
+            // Agents that also talk in Slack: their histories carry those words into this timeline.
+            .task(id: slackKeys) {
+                let wanted = Set(slackKeys)
+                for key in historyTopics.keys where !wanted.contains(key) { lease.drop(key: "history:" + key); historyTopics.removeValue(forKey: key) }
+                for key in slackKeys where historyTopics[key] == nil {
+                    let next = store.subscribe("history", params: ["station": .string(route.station), "key": .string(key)])
+                    lease.replace(next, key: "history:" + key); historyTopics[key] = next
+                }
+            }
     }
     private func reconcileInitialOutgoing() {
         if let outgoing = initialOutgoing, ChatTimeline.contains(outgoing, value: value) { initialOutgoing = nil }
@@ -298,6 +336,18 @@ struct ChatView: View {
         }.disabled(operation.busy || uploading)
     }
     private func restart() { generation += 1 }
+    /// A covered page (back on the list on iPhone, where its identity is kept) stops
+    /// its chat, live and history subscriptions, and takes them up again when shown.
+    private func setVisible(_ visible: Bool) {
+        if visible {
+            guard paused else { return }
+            paused = false; generation += 1
+        } else {
+            guard !paused, topic != nil else { return }
+            paused = true
+            lease.cancelAll(); topic = nil; liveTopics = [:]; historyTopics = [:]
+        }
+    }
     private func loadDraft() async {
         guard visitEpoch == store.scopeEpoch else { return }
         let epoch = store.scopeEpoch
@@ -483,9 +533,24 @@ struct DecisionReplyView: View {
                 TextField(message["card"].text("placeholder", fallback: L10n.text("写下你的决定")), text: $reply, axis: .vertical).accessibilityIdentifier("decision.text")
                 Button(L10n.text("回复")) { answer(nil) }.disabled(reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || operation.busy).accessibilityIdentifier("decision.reply")
             } else {
-                ForEach(ViewRecord.decode(message["options"].arrayValue, key: "label")) { option in
-                    Button(option.value.text("label")) { answer(option.value.text("label")) }.disabled(operation.busy).accessibilityIdentifier("decision.option.\(option.id)")
+                // Suggested answers: glass capsules in one row that scrolls sideways,
+                // running to the screen edges so a long row reads as scrollable.
+                ScrollView(.horizontal) {
+                    GlassEffectContainer(spacing: 8) {
+                        HStack(spacing: 8) {
+                            ForEach(ViewRecord.decode(message["options"].arrayValue, key: "label")) { option in
+                                Button { answer(option.value.text("label")) } label: {
+                                    Text(option.value.text("label")).font(.subheadline.weight(.medium)).lineLimit(1)
+                                        .padding(.horizontal, 4).padding(.vertical, 2)
+                                }
+                                .buttonStyle(.glass).buttonBorderShape(.capsule)
+                                .disabled(operation.busy).accessibilityIdentifier("decision.option.\(option.id)")
+                            }
+                        }.padding(.horizontal, 18).padding(.vertical, 6)
+                    }
                 }
+                .scrollIndicators(.hidden).scrollClipDisabled()
+                .padding(.horizontal, -18)
             }
             OperationSection(operation: operation)
         }

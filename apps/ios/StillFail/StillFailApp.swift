@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct StillFailApp: App {
     @State private var store = AppStore()
+    @State private var widgetFeed = WidgetFeed()
     @AppStorage("appearance") private var appearance = "system"
     @AppStorage(L10n.preferenceKey) private var appLanguage = "system"
     @Environment(\.scenePhase) private var scenePhase
@@ -14,9 +15,12 @@ struct StillFailApp: App {
                 .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
                 .tint(Color("AccentColor"))
                 .task { store.resume() }
+                // Each scope (account, workspace, core restart) gets its own widget feed subscriptions.
+                .task(id: store.scopeEpoch) { widgetFeed.restart(store: store) }
+                .onOpenURL { url in store.open(url) }
                 .onChange(of: appLanguage) { _, _ in L10n.notifyLanguageChanged() }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active { store.resume() }
+                    if phase == .active { store.resume(); widgetFeed.resume() }
                     else { store.pause() }
                 }
         }

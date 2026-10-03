@@ -235,6 +235,19 @@ struct ConversationsView: View {
             if column == .sidebar && horizontalSizeClass == .compact { Task { await focusList() } }
         }
         .task { if route == nil && draftID == nil { await focusList() } }
+        // A widget's chat: opened over whatever this page shows.
+        .onChange(of: store.requestedRoute) { _, _ in openRequested() }
+        .onAppear { openRequested() }
+    }
+
+    private func openRequested() {
+        guard let requested = store.requestedRoute else { return }
+        store.requestedRoute = nil
+        if drawerID != nil { drawerID = nil; drawerOffset = 0 }
+        showingSettings = false; choosingWorkspace = false
+        draftID = nil
+        route = requested
+        compactColumn = .detail
     }
 
     private func open(_ row: ConversationListRow) {
@@ -386,6 +399,30 @@ struct ConversationListRow: Identifiable, Equatable {
         return route.thread == nil || route.thread == self.route.thread
     }
     var editable: Bool { !value.flag("pending") && value.text("offline").isEmpty }
+    /// Where the chat came from, as web's sidebar marks it at the title's end: a chat a
+    /// connect brought in (Slack, the only kind there is so far), named by `originText`.
+    var source: ConversationSource? {
+        guard !value.text("connect").isEmpty || !value["origin"].objectValue.isEmpty else { return nil }
+        let text = value.text("originText")
+        let slack = !value["origin"]["threadTs"].stringValue.isNilOrEmpty || text.isEmpty || text.localizedCaseInsensitiveContains("slack")
+        return ConversationSource(kind: slack ? .slack : .other, text: text.isEmpty ? "Slack" : text)
+    }
+}
+
+struct ConversationSource: Equatable {
+    enum Kind: Equatable { case slack, other }
+    let kind: Kind
+    let text: String
+    var image: UIImage? {
+        switch kind {
+        case .slack: return UIImage(named: "Slack")
+        case .other: return UIImage(systemName: "bubble.left.and.text.bubble.right")
+        }
+    }
+}
+
+private extension Optional where Wrapped == String {
+    var isNilOrEmpty: Bool { self?.isEmpty ?? true }
 }
 
 struct ConversationListSection: Equatable {
@@ -406,14 +443,24 @@ struct ConversationListSection: Equatable {
                 if ago == 0 { title = L10n.text("今天") }
                 else if ago == 1 { title = L10n.text("昨天") }
                 else {
-                    let formatter = DateFormatter(); formatter.locale = locale
-                    if ago < 7 { formatter.dateFormat = "EEEE" } else { formatter.dateStyle = .medium }
-                    title = formatter.string(from: Calendar.current.date(byAdding: .day, value: -ago, to: Date()) ?? Date())
+                    title = dayFormatter(locale: locale, weekday: ago < 7).string(from: Calendar.current.date(byAdding: .day, value: -ago, to: Date()) ?? Date())
                 }
             } else { title = day.text("label") }
             sections.append(Self(id: "day:\(day["daysAgo"].intValue ?? index)", title: title, rows: rows.map { ConversationListRow(value: $0, peopleFirst: peopleFirst) }))
         }
         return sections
+    }
+    // A list update used to build a DateFormatter for every older day section.
+    nonisolated(unsafe) private static var formatters: [String: DateFormatter] = [:]
+    private static let formattersLock = NSLock()
+    private static func dayFormatter(locale: Locale, weekday: Bool) -> DateFormatter {
+        let key = locale.identifier + (weekday ? ":w" : ":d")
+        formattersLock.lock(); defer { formattersLock.unlock() }
+        if let cached = formatters[key] { return cached }
+        let formatter = DateFormatter(); formatter.locale = locale
+        if weekday { formatter.dateFormat = "EEEE" } else { formatter.dateStyle = .medium }
+        formatters[key] = formatter
+        return formatter
     }
 }
 
@@ -693,6 +740,7 @@ private final class ConversationCell: UITableViewCell {
     private let participants = ConversationAsideView(frame: .zero)
     private let mark = UIView()
     private let accessory = UIImageView()
+    private let sourceIcon = UIImageView()
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let highlight = UIView()
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -704,13 +752,15 @@ private final class ConversationCell: UITableViewCell {
         highlight.layer.cornerRadius = 14; highlight.layer.cornerCurve = .continuous
         let selected = UIView(); selected.addSubview(highlight)
         selectedBackgroundView = selected
-        let top = UIStackView(arrangedSubviews: [titleLabel, spinner, accessory]); top.alignment = .center; top.spacing = 6
+        let top = UIStackView(arrangedSubviews: [titleLabel, spinner, sourceIcon, accessory]); top.alignment = .center; top.spacing = 6
         let bottom = UIStackView(arrangedSubviews: [summaryLabel, participants]); bottom.alignment = .center; bottom.spacing = 10
         let stack = UIStackView(arrangedSubviews: [top, bottom]); stack.axis = .vertical; stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview(stack)
         mark.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview(mark)
         let accessoryWidth = accessory.widthAnchor.constraint(equalToConstant: 13)
         accessoryWidth.priority = .init(999)
+        let sourceWidth = sourceIcon.widthAnchor.constraint(equalToConstant: 13)
+        sourceWidth.priority = .init(999)
         NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 11),
@@ -719,7 +769,8 @@ private final class ConversationCell: UITableViewCell {
             mark.widthAnchor.constraint(equalToConstant: 7), mark.heightAnchor.constraint(equalToConstant: 7),
             mark.centerXAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
             mark.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            accessoryWidth, accessory.heightAnchor.constraint(equalToConstant: 13)])
+            accessoryWidth, accessory.heightAnchor.constraint(equalToConstant: 13),
+            sourceWidth, sourceIcon.heightAnchor.constraint(equalToConstant: 13)])
         mark.layer.cornerRadius = 3.5
         for label in [titleLabel, summaryLabel] {
             label.numberOfLines = 1; label.lineBreakMode = .byTruncatingTail; label.adjustsFontForContentSizeCategory = true
@@ -730,7 +781,9 @@ private final class ConversationCell: UITableViewCell {
         participants.setContentCompressionResistancePriority(.required, for: .horizontal)
         participants.setContentHuggingPriority(.required, for: .horizontal)
         titleLabel.setContentHuggingPriority(.init(1), for: .horizontal)
-        [accessory, spinner].forEach { $0.setContentHuggingPriority(.required, for: .horizontal); $0.setContentCompressionResistancePriority(.required, for: .horizontal) }
+        sourceIcon.contentMode = .scaleAspectFit; sourceIcon.tintColor = .secondaryLabel
+        sourceIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 11, weight: .medium)
+        [accessory, spinner, sourceIcon].forEach { $0.setContentHuggingPriority(.required, for: .horizontal); $0.setContentCompressionResistancePriority(.required, for: .horizontal) }
         accessory.tintColor = .tertiaryLabel; accessory.contentMode = .scaleAspectFit
         accessory.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
         spinner.hidesWhenStopped = true; spinner.transform = CGAffineTransform(scaleX: 0.7, y: 0.7)
@@ -760,9 +813,14 @@ private final class ConversationCell: UITableViewCell {
         let offline = !row.value.text("offline").isEmpty || !row.value.text("reconnecting").isEmpty
         accessory.image = UIImage(systemName: offline ? "network.slash" : "pin.fill")
         accessory.isHidden = !offline && !row.value.flag("pinned")
+        // Offline wins the spot, as on the web: the unplugged mark says more than the source.
+        let source = offline ? nil : row.source
+        sourceIcon.image = source?.image; sourceIcon.isHidden = source == nil
+        sourceIcon.alpha = subdued ? 0.55 : 1
+        sourceIcon.accessibilityIdentifier = "conversation.source.\(row.value.text("id"))"
         if row.value.flag("pending") { spinner.startAnimating() } else { spinner.stopAnimating() }
         accessibilityIdentifier = "conversation.open.\(row.value.text("id"))"
-        accessibilityLabel = [row.title, row.summary, row.metadata, L10n.projected(row.value.text("offline")), L10n.projected(row.value.text("reconnecting"))].filter { !$0.isEmpty }.joined(separator: ", ")
+        accessibilityLabel = [row.title, row.source?.text ?? "", row.summary, row.metadata, L10n.projected(row.value.text("offline")), L10n.projected(row.value.text("reconnecting"))].filter { !$0.isEmpty }.joined(separator: ", ")
         accessibilityTraits = [.button]
     }
 }
