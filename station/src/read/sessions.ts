@@ -9,7 +9,6 @@
 //   goes by their id, with no email);
 // - the cloud's names: those of the members who asked since the station started (`Store.names`).
 import { knownChannel, knownPerson, slackCreator } from "./slack-known.ts";
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join, isAbsolute } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
@@ -21,6 +20,7 @@ import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } fr
 import { setLang, tr } from "./spoken.ts";
 import { postEntries, readTimeline, transcriptPath, weave } from "./transcript.ts";
 import { HttpError, messageView } from "./views.ts";
+import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../sessions/thumbs.ts";
 import { parseUsize } from "./jobs.ts";
 import { shown } from "./jobs.ts";
 
@@ -412,13 +412,10 @@ function* tarEntries(tar: Buffer): Generator<{ path: string; file: boolean; data
   }
 }
 
-/// thumbs.rs: how small an image is shown itself, and where thumbnails are kept.
-const SMALL = 24 * 1024;
-const thumbWanted = (name: string) => [".png", ".jpg", ".jpeg", ".webp"].some((e) => name.toLowerCase().endsWith(e));
-
-/// thumbs.rs `thumbnail`: the image's thumbnail and its type, as kept. One not made yet is made by the station that
-/// writes (thumbs.rs `make`, an image codec): here the image itself is shown, as for one that is small already.
-function thumbnail(image: string, dataDir: string): [string, string] | null {
+/// thumbs.rs `thumbnail`, as far as a reader goes: the image's thumbnail as kept; else whether one is to be made (an
+/// image by its name, over 24 KiB), which the route asks the image codecs for (sessions/thumbs.ts: the addon is not
+/// loaded in the readers, and a reader is not held up decoding); else null, the image shown itself.
+function thumbnail(image: string, dataDir: string): Thumbnail | "make" | null {
   const name = fileName(image);
   if (name === null || !thumbWanted(name)) return null;
   let len: number;
@@ -428,27 +425,19 @@ function thumbnail(image: string, dataDir: string): [string, string] | null {
     return null;
   }
   if (len <= SMALL) return null;
-  const id = createHash("sha256").update(image).digest().subarray(0, 16).toString("hex");
-  const kept = (
-    [
-      ["jpg", "image/jpeg"],
-      ["png", "image/png"],
-    ] as const
-  )
-    .map(([ext, kind]): [string, string] => [join(dataDir, "thumbs", `${id}.${ext}`), kind])
-    .find(([path]) => isFile(path));
-  return kept ?? null;
+  return kept(thumbsDir(dataDir), idOf(image)) ?? "make";
 }
 
 /// std::io::Error as anyhow shows it.
-function ioMessage(e: NodeJS.ErrnoException): string {
+export function ioMessage(e: NodeJS.ErrnoException): string {
   const said: Record<string, string> = { ENOENT: "No such file or directory", EACCES: "Permission denied", EISDIR: "Is a directory", EPERM: "Operation not permitted" };
   return e.code && said[e.code] && typeof e.errno === "number" ? `${said[e.code]} (os error ${-e.errno})` : e.message;
 }
 
 /// GET /sessions/:key/files?name&thumb=1 (files.rs `session_file`): a file sent to the session, for previews: only from
 /// its upload directory, else from its archived workspace. `thumb`: an image as a chat shows it. Its bytes as base64 and
-/// its type, for the route to answer with (cache-control `private, max-age=3600`).
+/// its type, for the route to answer with (cache-control `private, max-age=3600`); or, for a thumbnail not made yet,
+/// `{contentType, image, thumbs}`: the route has it made (else answers the image itself, of that type).
 export function sessionFile(s: Store, key: string, name: string, thumb: boolean, lang: Lang): Json {
   setLang(lang);
   const row = sessionRow(s, key);
@@ -466,7 +455,8 @@ export function sessionFile(s: Store, key: string, name: string, thumb: boolean,
     return { contentType: mime(path), base64: bytes.toString("base64") };
   }
   const small = thumb ? thumbnail(path, s.dataDir) : null;
-  const [file, kind] = small ?? [path, mime(path)];
+  if (small === "make") return { contentType: mime(path), image: path, thumbs: thumbsDir(s.dataDir) };
+  const [file, kind] = small !== null ? [small.path, small.type] : [path, mime(path)];
   let bytes: Buffer;
   try {
     bytes = readFileSync(file);

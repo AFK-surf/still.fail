@@ -2,20 +2,33 @@
 // timeline, files and widget-state; GET /threads, /threads/:id; GET /jobs, /jobs/:id, /jobs/:id/log. As the Rust
 // splits a path, its parts are those between slashes that are not empty, each percent-decoded (a `+` stays itself),
 // and parts after the third do not count.
+import { readFile } from "node:fs/promises";
 import { type Answer, type Request, error, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
+import { ioMessage } from "../../read/sessions.ts";
+import { thumbnail } from "../../sessions/thumbs.ts";
 
 /// admin/mod.rs `segment_decode`.
 const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
 /// What the Rust answers a path it has no route for.
 const noRoute = (r: Request) => error(404, `no route ${r.method} ${r.path}`);
 
-/// The bytes of a file read (`sessionFile`), answered as files.rs does; an error as it came.
+/// The bytes of a file read (`sessionFile`), answered as files.rs does; an error as it came. An image whose thumbnail is
+/// not made yet (`thumb=1`) has it made here, by the image codecs off this thread (sessions/thumbs.ts), and is answered
+/// with it, or with the image itself when it gets none.
 async function file(read: Tools["read"], r: Request, args: unknown): Promise<Answer> {
   const answer = await read(r, "sessionFile", args);
   if (answer.status !== 200 || !Buffer.isBuffer(answer.body)) return answer;
-  const { contentType, base64 } = JSON.parse(answer.body.toString("utf8")) as { contentType: string; base64: string };
-  return { status: 200, headers: { "content-type": contentType, "cache-control": "private, max-age=3600" }, body: Buffer.from(base64, "base64") };
+  const found = JSON.parse(answer.body.toString("utf8")) as { contentType: string; base64: string } | { contentType: string; image: string; thumbs: string };
+  const answered = (contentType: string, body: Buffer): Answer => ({ status: 200, headers: { "content-type": contentType, "cache-control": "private, max-age=3600" }, body });
+  if ("base64" in found) return answered(found.contentType, Buffer.from(found.base64, "base64"));
+  const made = await thumbnail(found.image, found.thumbs);
+  const [path, kind] = made !== null ? [made.path, made.type] : [found.image, found.contentType];
+  try {
+    return answered(kind, await readFile(path));
+  } catch (e) {
+    return error(500, ioMessage(e as NodeJS.ErrnoException));
+  }
 }
 
 export const routes = ({ read }: Tools): Route[] => [

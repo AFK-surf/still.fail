@@ -2,9 +2,10 @@
 //! mesh/station/src/main.rs `serve_mesh` makes it (the station's key, its relays, found on the LAN by mDNS and by relay
 //! through the Mainline DHT, cubic with a 256 KiB initial window), keepers on every relay (keep.rs), connections both
 //! ways and their streams. Which relays, when to add iroh's public ones, who may connect and what is said: the
-//! TypeScript's.
+//! TypeScript's. And the image codecs of the thumbnails (thumbs.rs).
 
 mod keep;
+mod thumbs;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
