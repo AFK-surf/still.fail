@@ -2,15 +2,16 @@
 // the Host and the iroh over one narrow bridge. The JS asks for an operation by name with JSON and maybe bytes; the
 // shell does it on its own threads and answers (`complete`) with JSON and maybe bytes. What the shell does is what
 // the Rust core's native host did (HTTP, the cloud's WebSocket, files per storage key and `core.db`, TCP to adbd) and what the
-// station's addon does for Node (iroh), so a phone moving from the Rust core keeps its files.
+// station's addon does for Node (iroh), so a phone moving from the Rust core keeps its files. The accounts' databases
+// are SQLite in the shell, used synchronously (the `sql.*` calls), files `accounts/<name>.db` beside the former
+// `core.db`, which is only read (`db.read`), once.
 //
 // Operations (`op`, its JSON → its answer):
 //   fetch {url, method, headers} + body → {status, headers} + body
 //   stream.open {url, method, headers} + body → {status, headers, id}; stream.read {id} → bytes, or {end}; stream.close {id}
 //   ws.open {url, protocols} → {id}; ws.next {id} → {text} or {end}; ws.send {id, text}; ws.close {id}
 //   storage.get {key} → bytes or {none}; storage.set {key} + value; storage.delete {key}
-//   db.read {table, from, to} → {keys, sizes} + the values one after another; db.write {ops: [{put: {table, key, size}} |
-//     {delete: {table, key}}]} + the put values one after another
+//   db.read {table, from, to} → {keys, sizes} + the values one after another (the former records store, read once)
 //   tcp.open {port} → {id}; tcp.read {id} → bytes or {end}; tcp.write {id} + bytes; tcp.end {id}; tcp.close {id}
 //   reset {} — the connections kept for requests are taken for gone
 //   iroh.bind {relayUrls, lookup, relayOnly} + key → {id}; iroh.connect {id, addr, additional: [hex]} + alpn → {id};
@@ -19,14 +20,16 @@
 //     conn.close {id, code, reason}
 //   istream.read {id} → bytes or {end}; istream.write {id} + bytes; istream.finish {id}; istream.stopped {id} → {code};
 //     istream.reset {id, code}
-// And at once (`callSync`, answering {value} or {error}): iroh.endpointId {id}; iroh.addAddr {id, addr};
+// And at once (`callSync`, answering {value} or {error}): sql.open {name} → {id} (`:memory:` one in memory);
+//   sql.exec {id, sql}; sql.run {id, sql, params} → changes; sql.all {id, sql, params} → rows (arrays);
+//   sql.close {id}; sql.delete {name}; iroh.endpointId {id}; iroh.addAddr {id, addr};
 //   iroh.relayStatus {id}; conn.remoteId {id};
 //   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go).
 import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
 import { HostError } from "../error.ts";
 import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohStream } from "../iroh.ts";
-import { SOCKET_PING, SOCKET_PING_MS, type DbOp, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type StreamResponse, type TcpConnection } from "../host.ts";
+import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, type TcpConnection, type SqlError, sqlError } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { t } from "../i18n.ts";
 import { service } from "../trace.ts";
@@ -183,7 +186,7 @@ export class BridgeHost implements Host {
     return Effect.asVoid(this.#bridge.call("storage.delete", { key }));
   }
 
-  dbRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
+  legacyRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
     return Effect.map(this.#bridge.call("db.read", range), (a) => {
       const { keys, sizes } = a.json as { keys: string[]; sizes: number[] };
       const bytes = a.bytes ?? new Uint8Array(0);
@@ -195,16 +198,17 @@ export class BridgeHost implements Host {
       });
     });
   }
-  dbWrite(ops: DbOp[]): Effect.Effect<void, HostError> {
-    const values: Uint8Array[] = [];
-    const said = ops.map((op) => {
-      if ("put" in op) {
-        values.push(op.put.value);
-        return { put: { table: op.put.table, key: op.put.key, size: op.put.value.length } };
-      }
-      return { delete: op.delete };
-    });
-    return Effect.asVoid(this.#bridge.call("db.write", { ops: said }, concat(values)));
+
+  openDb(name: string): Effect.Effect<Sql, HostError | SqlError> {
+    return Effect.try({ try: () => new BridgeSql(this.#bridge, name), catch: (e) => sqlError(e) });
+  }
+
+  memoryDb(): Sql {
+    return new BridgeSql(this.#bridge, ":memory:");
+  }
+
+  deleteDb(name: string): Effect.Effect<void, HostError> {
+    return Effect.try({ try: () => void this.#bridge.sync("sql.delete", { name }), catch: (e) => (e instanceof HostError ? e : new HostError(String(e))) });
   }
 
   nowMs(): number {
@@ -221,6 +225,44 @@ export class BridgeHost implements Host {
   }
   emit(client: ClientId, message: CoreMessage): void {
     this.#bridge.native.emit(client, JSON.stringify(message));
+  }
+}
+
+/// An account's database in the shell (SQLite, its statements prepared once there and kept), asked synchronously.
+export class BridgeSql implements Sql {
+  readonly #bridge: Bridge;
+  readonly #id: number;
+  #closed = false;
+
+  constructor(bridge: Bridge, name: string) {
+    this.#bridge = bridge;
+    this.#id = (bridge.sync("sql.open", { name }) as { id: number }).id;
+  }
+
+  #ask(op: string, json: unknown): unknown {
+    try {
+      return this.#bridge.sync(op, json);
+    } catch (e) {
+      throw sqlError(e);
+    }
+  }
+
+  exec(sql: string): void {
+    this.#ask("sql.exec", { id: this.#id, sql });
+  }
+
+  run(sql: string, params: readonly SqlValue[] = []): number {
+    return this.#ask("sql.run", { id: this.#id, sql, params }) as number;
+  }
+
+  all(sql: string, params: readonly SqlValue[] = []): SqlRow[] {
+    return this.#ask("sql.all", { id: this.#id, sql, params }) as SqlRow[];
+  }
+
+  close(): void {
+    if (this.#closed) return;
+    this.#closed = true;
+    this.#ask("sql.close", { id: this.#id });
   }
 }
 

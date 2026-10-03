@@ -1,9 +1,10 @@
 // The core on Node (the desktop app's utility process; tests and the side-by-side runs): the Host over fetch, the `ws`
 // package, node:sqlite and files, as the Rust core's native host kept them — the same data directory, the same file per
-// storage key (`%XX` for what a file name cannot hold), the same `core.db` — so a desktop app moving from the Rust core
-// keeps its logins and what it had read. `start` is the API the Rust core's Node addon had: connect / receive(json) / disconnect, the
-// listener given `(client, json)`.
-import { mkdirSync } from "node:fs";
+// storage key (`%XX` for what a file name cannot hold) — so a desktop app moving from the Rust core keeps its logins.
+// Each signed-in account's database is `accounts/<name>.db` there; what the former `core.db` kept is brought into them
+// once (db/import.ts) and left as it was. `start` is the API the Rust core's Node addon had: connect /
+// receive(json) / disconnect, the listener given `(client, json)`.
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { open, readFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -13,9 +14,10 @@ import WebSocket from "ws";
 import { connect as tcpConnect } from "node:net";
 import { Core } from "../core.ts";
 import { nodeIroh } from "./node-iroh.ts";
+import { NodeSql } from "./node-sql.ts";
 import { HostWire } from "../station/wire.ts";
 import { HostError } from "../error.ts";
-import { SOCKET_PING, SOCKET_PING_MS, type TcpConnection, type DbOp, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
+import { SOCKET_PING, SOCKET_PING_MS, type TcpConnection, type DbRange, type Host, type Sql, SqlError, sqlError, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
 import { t } from "../i18n.ts";
@@ -37,7 +39,8 @@ export class NodeHost implements Host {
   readonly #origin: string;
   readonly #beta: boolean;
   readonly #dir: string;
-  #db: DatabaseSync | null = null;
+  #db: DatabaseSync | null | undefined = undefined;
+  readonly #open = new Map<string, NodeSql>();
   readonly #listener: Listener;
   readonly #started = performance.now();
 
@@ -193,44 +196,70 @@ export class NodeHost implements Host {
     return this.#file(() => rm(this.path(key), { force: true }), (e) => `删不掉：${e.message}`);
   }
 
-  #open(): DatabaseSync {
-    if (!this.#db) {
-      const db = new DatabaseSync(join(this.#dir, "core.db"), { timeout: 5000 });
-      db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; CREATE TABLE IF NOT EXISTS records (tbl TEXT NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (tbl, key)) WITHOUT ROWID;");
-      this.#db = db;
+  /// The former records store (`core.db`, its `records` table), opened to be read; none when there is none.
+  #legacy(): DatabaseSync | null {
+    if (this.#db === undefined) {
+      const path = join(this.#dir, "core.db");
+      this.#db = null;
+      if (existsSync(path)) {
+        try {
+          const db = new DatabaseSync(path, { timeout: 5000, readOnly: true });
+          const has = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'records'").get();
+          if (has) this.#db = db;
+          else db.close();
+        } catch {
+          this.#db = null;
+        }
+      }
     }
     return this.#db;
   }
 
-  dbRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
+  legacyRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
     return Effect.try({
-      try: () =>
-        (this.#open().prepare("SELECT key, value FROM records WHERE tbl = ? AND key >= ? AND key < ? ORDER BY key").all(range.table, range.from, range.to) as { key: string; value: Uint8Array }[]).map(
+      try: () => {
+        const db = this.#legacy();
+        if (!db) return [];
+        return (db.prepare("SELECT key, value FROM records WHERE tbl = ? AND key >= ? AND key < ? ORDER BY key").all(range.table, range.from, range.to) as { key: string; value: Uint8Array }[]).map(
           (r) => [r.key, new Uint8Array(r.value)] as [string, Uint8Array],
-        ),
+        );
+      },
       catch: (e) => new HostError(`数据库出错：${(e as Error).message}`),
     });
   }
 
-  dbWrite(ops: DbOp[]): Effect.Effect<void, HostError> {
+  /// Where an account's database is: `accounts/<name>.db` in the data directory.
+  dbPath(name: string): string {
+    return join(this.#dir, "accounts", `${name}.db`);
+  }
+
+  openDb(name: string): Effect.Effect<Sql, HostError | SqlError> {
     return Effect.try({
       try: () => {
-        const db = this.#open();
-        db.exec("BEGIN");
-        try {
-          const put = db.prepare("INSERT OR REPLACE INTO records (tbl, key, value) VALUES (?, ?, ?)");
-          const del = db.prepare("DELETE FROM records WHERE tbl = ? AND key = ?");
-          for (const op of ops) {
-            if ("put" in op) put.run(op.put.table, op.put.key, op.put.value);
-            else del.run(op.delete.table, op.delete.key);
-          }
-          db.exec("COMMIT");
-        } catch (e) {
-          db.exec("ROLLBACK");
-          throw e;
-        }
+        mkdirSync(join(this.#dir, "accounts"), { recursive: true });
+        const path = this.dbPath(name);
+        this.#open.get(path)?.close();
+        const sql = NodeSql.file(path);
+        this.#open.set(path, sql);
+        return sql;
       },
-      catch: (e) => new HostError(`数据库出错：${(e as Error).message}`),
+      catch: (e) => (e instanceof SqlError ? e : sqlError(e)),
+    });
+  }
+
+  memoryDb(): Sql {
+    return new NodeSql(new DatabaseSync(":memory:"));
+  }
+
+  deleteDb(name: string): Effect.Effect<void, HostError> {
+    const path = this.dbPath(name);
+    return Effect.try({
+      try: () => {
+        this.#open.get(path)?.close();
+        this.#open.delete(path);
+        for (const end of ["", "-wal", "-shm", "-journal"]) rmSync(`${path}${end}`, { force: true });
+      },
+      catch: (e) => new HostError(`删不掉：${(e as Error).message}`),
     });
   }
 
@@ -252,7 +281,9 @@ export class NodeHost implements Host {
 
   close(): void {
     this.#db?.close();
-    this.#db = null;
+    this.#db = undefined;
+    for (const sql of this.#open.values()) sql.close();
+    this.#open.clear();
   }
 }
 

@@ -21,21 +21,53 @@ function row(state: string | null, seq: number, unread: boolean, by: [string, st
   };
 }
 
+/// Notices as the core feeds them: each look tells the rows that changed since the one before (as a write of the
+/// station's rows says them, db/account.ts), a station's first rows where it starts from.
+class Looked {
+  readonly #notices: Notices;
+  readonly #rows: Map<string, J[]>;
+  readonly #was = new Map<string, Map<string, J>>();
+  constructor(notices: Notices, rows: Map<string, J[]>) {
+    this.#notices = notices;
+    this.#rows = rows;
+  }
+  look(stations: string[]): J[] {
+    this.#notices.keep(stations);
+    // What is no longer reached goes from the device (Data.retain): when it is again, its rows are its first.
+    for (const station of [...this.#was.keys()]) if (!stations.includes(station)) this.#was.delete(station);
+    const added: J[] = [];
+    for (const station of stations) {
+      const now = new Map((this.#rows.get(station) ?? []).map((r) => [r.id as string, r]));
+      const was = this.#was.get(station);
+      const changes = [...now].filter(([id, r]) => JSON.stringify(was?.get(id)) !== JSON.stringify(r)).map(([id, r]) => ({ id, before: was?.get(id), after: r }));
+      for (const [id, r] of was ?? []) if (!now.has(id)) changes.push({ id, before: r, after: undefined });
+      this.#was.set(station, now);
+      if (changes.length > 0) added.push(...this.#notices.changed(station, changes, was === undefined));
+    }
+    return added;
+  }
+  value(workspace: string | null): J {
+    return this.#notices.value(workspace);
+  }
+}
+
 function setup() {
   const host = new FakeHost();
   const rows = new Map<string, J[]>();
-  const notices = new Notices({
-    workspaces: new Workspaces(host, new Runner(host.time.clock)),
-    rows: (s) => rows.get(s),
-    members: () => [],
-    slackUsers: () => [],
-    emailOf: () => "me@x.y",
-    now: () => host.nowMs(),
-  });
+  const notices = new Looked(
+    new Notices({
+      workspaces: new Workspaces(host, new Runner(host.time.clock)),
+      members: () => [],
+      slackUsers: () => [],
+      emailOf: () => "me@x.y",
+      now: () => host.nowMs(),
+    }),
+    rows,
+  );
   return { rows, notices };
 }
 
-const kinds = (n: Notices) => n.value(null).items.map((i: J) => i.kind);
+const kinds = (n: Looked) => n.value(null).items.map((i: J) => i.kind);
 const agent: [string, string] = ["agent", "ds:C1:1.2"];
 
 test("a_reply_seen_while_running_is_noticed_once_when_the_turn_settles", () => {

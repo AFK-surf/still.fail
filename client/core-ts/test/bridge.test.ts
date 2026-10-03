@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { DatabaseSync } from "node:sqlite";
 import { Effect } from "effect";
 import { FakeCloud } from "../harness/cloud.ts";
 import { apply } from "../src/delta.ts";
@@ -42,16 +43,23 @@ test("storage_and_the_database_go_through_the_bridge", async () => {
   assert.equal(text(await run(host.storageGet("accounts"))), "[1]");
   await run(host.storageDelete("accounts"));
   assert.equal(await run(host.storageGet("accounts")), null);
-  await run(
-    host.dbWrite([
-      { put: { table: "row", key: "s\u0001a", value: bytes("1") } },
-      { put: { table: "row", key: "s\u0001b", value: bytes("22") } },
-      { put: { table: "row", key: "t\u0001a", value: bytes("333") } },
-    ]),
-  );
-  await run(host.dbWrite([{ delete: { table: "row", key: "s\u0001b" } }, { put: { table: "row", key: "s\u0001c", value: bytes("") } }]));
-  const rows = await run(host.dbRead({ table: "row", from: "s\u0001", to: "s\u0002" }));
+  // The former records store: only read, through the bridge.
+  {
+    const db = new DatabaseSync(join(dir, "core.db"));
+    db.exec("CREATE TABLE records (tbl TEXT NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (tbl, key)) WITHOUT ROWID");
+    for (const [k, v] of [["s\u0001a", "1"], ["s\u0001c", ""], ["t\u0001a", "333"]]) db.prepare("INSERT INTO records VALUES ('row', ?, ?)").run(k, bytes(v));
+    db.close();
+  }
+  const rows = await run(host.legacyRead({ table: "row", from: "s\u0001", to: "s\u0002" }));
   assert.deepEqual(rows.map(([k, v]) => [k, text(v)]), [["s\u0001a", "1"], ["s\u0001c", ""]]);
+  // An account's database: SQLite in the shell, asked synchronously.
+  const sql = await run(host.openDb("account-a"));
+  sql.exec("CREATE TABLE t (k TEXT PRIMARY KEY, n INTEGER, j TEXT)");
+  assert.equal(sql.run("INSERT INTO t VALUES (?, ?, ?)", ["a", 1, '{"x":"中"}']), 1);
+  assert.deepEqual(sql.all("SELECT k, n, j FROM t", []), [["a", 1, '{"x":"中"}']]);
+  assert.throws(() => sql.run("INSERT INTO t VALUES (?, 2, null)", ["a"]), /UNIQUE/);
+  sql.close();
+  await run(host.deleteDb("account-a"));
   assert.deepEqual(native.calls.slice(0, 3), ["storage.get", "storage.set", "storage.get"]);
   native.host.close();
   rmSync(dir, { recursive: true, force: true });

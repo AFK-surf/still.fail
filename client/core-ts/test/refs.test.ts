@@ -1,6 +1,7 @@
 // The Rust core's refs.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Effect } from "effect";
 import { Data } from "../src/data.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { draftAt, expand, KEPT, keep, link, mark, search, title } from "../src/refs.ts";
@@ -10,7 +11,9 @@ import { FakeHost } from "../src/testing.ts";
 holdLanguage();
 const data = () => {
   const host = new FakeHost();
-  return new Data(host, new Runner(host.time.clock));
+  const d = new Data(host, new Runner(host.time.clock), { owner: () => "s1" });
+  Effect.runSync(d.open(["s1"]));
+  return d;
 };
 
 test("a_reference_shows_the_start_of_the_title_on_one_line", () => {

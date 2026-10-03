@@ -1,10 +1,12 @@
 // What a person did here that their station has not confirmed yet (docs/core-ts.md, rules 3 and 4): messages on
 // their way (the outbox), chats asked for and not made (pending), messages to an agent before it has a chat (firsts),
-// chats renamed, pinned, kept or archived (changing, archiving). Each is a record in the data center, so it shows at
-// once, survives a restart, and goes on where it was; the views lay it over what the stations hold. Nothing here
-// waits on the network: the calls that change it answer as their station has it, the views show it meanwhile.
+// chats renamed, pinned, kept or archived (changing, archiving). Each is held here and kept in its account's database
+// (tables outbox, pending, first, changing: written again on their own if the rest could not be), so it shows at once,
+// survives a restart, and goes on where it was; the views lay it over what the stations hold. Nothing here waits on
+// the network: the calls that change it answer as their station has it, the views show it meanwhile.
 import type { Data } from "../data.ts";
 import { join, SEP } from "../data.ts";
+import type { AccountDb } from "../db/account.ts";
 import { t } from "../i18n.ts";
 import { arr as arrU, equal, get as getU, isObject } from "../util.ts";
 
@@ -47,8 +49,9 @@ export type Change = {
   row: Record<string, unknown>;
   /// Out of the archive (or into it): what its page says meanwhile.
   archived: boolean | null;
-  /// Done: its station's rows as they were when it answered (`undefined`: not answered).
-  done?: { rows: unknown };
+  /// Done: how often its station's rows had changed when it answered (`undefined`: not answered); shown so until they
+  /// change again.
+  done?: { rev: number };
 };
 
 /// What changed here, for the views to show it anew.
@@ -84,15 +87,21 @@ export class Local {
   constructor(data: Data, now: () => number) {
     this.#data = data;
     this.#now = now;
-    // What was kept: each record as it was left, the counters past what it used.
-    for (const [key, list] of data.records(OUTBOX)) {
-      if (Array.isArray(list) && list.length > 0) this.#outbox.set(key, list);
+  }
+
+  /// What was kept in the accounts' databases: each as it was left, the counters past what it used.
+  load(): void {
+    for (const db of this.#data.dbs()) this.opened(db);
+  }
+
+  /// What an account's database keeps of what was done here (it was opened: at start, or signed in).
+  opened(db: AccountDb): void {
+    for (const [station, thread, list] of db.locals(OUTBOX)) {
+      if (Array.isArray(list) && list.length > 0) this.#outbox.set(join([station, thread]), list);
     }
-    for (const [key, chat] of data.records(PENDING)) {
-      if (isObject(chat)) this.#pending.set(key.slice(key.indexOf(SEP) + 1), chat as unknown as Pending);
-    }
-    for (const [key, first] of data.records(FIRST)) if (isObject(first)) this.#firsts.set(key, first as unknown as First);
-    for (const [, change] of data.records(CHANGING)) if (isObject(change)) this.#changing.push(change as unknown as Change);
+    for (const [, key, chat] of db.locals(PENDING)) if (isObject(chat)) this.#pending.set(key, chat as unknown as Pending);
+    for (const [station, key, first] of db.locals(FIRST)) if (isObject(first)) this.#firsts.set(join([station, key]), first as unknown as First);
+    for (const [, , change] of db.locals(CHANGING)) if (isObject(change) && !this.#changing.some((c) => c.station === change.station && c.id === change.id)) this.#changing.push(change as unknown as Change);
     const ids = [...this.#outbox.values(), ...[...this.#pending.values()].map((p) => p.queue), ...[...this.#firsts.values()].map((f) => f.queue)].flat();
     for (const m of ids) {
       const n = Number(String(get(m, "id") ?? "").slice(4));
@@ -110,7 +119,7 @@ export class Local {
 
   #savePending(key: string): void {
     const chat = this.#pending.get(key);
-    if (chat) this.#data.put(PENDING, join([chat.station, key]), chat, false);
+    if (chat) this.#data.putLocal(PENDING, chat.station, key, chat);
   }
 
   pendingNew(station: string, ask: J): string {
@@ -174,7 +183,7 @@ export class Local {
     const gone = chat.queue.length === 0 && chat.failed !== null;
     if (gone) {
       this.#pending.delete(key);
-      this.#data.forgetRecord(PENDING, join([chat.station, key]));
+      this.#data.putLocal(PENDING, chat.station, key, undefined);
     } else this.#savePending(key);
     this.onChange({ kind: "pending", key });
     return gone;
@@ -215,22 +224,24 @@ export class Local {
     return sends;
   }
 
-  /// The rows of the chats asked for here on a station that its rows do not have yet (see views.rs `pending_rows`).
-  pendingRows(station: string, rows: J[]): J[] {
+  /// The rows of the chats asked for here on a station that its rows do not have yet (see views.rs `pending_rows`),
+  /// and of those it has, the ones still without a message titled as their first message here (by id).
+  pendingRows(station: string): { rows: J[]; titled: Map<string, J> } {
     const out: J[] = [];
+    const titled = new Map<string, J>();
     for (const [key, chat] of this.#pending) {
       if (chat.station !== station) continue;
       const first = chat.queue[0] ?? (chat.made ? this.outbox(station, chat.made[1])[0] : undefined);
       const text = String(get(first, "text") ?? "").trim();
       const title = text.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? null;
-      const theirs = rows.findIndex((r) => (chat.made ? get(r, "id") === chat.made[0] : get(r, "clientKey") === key));
-      if (theirs >= 0) {
+      const theirs: J = chat.made ? this.#data.chat(station, chat.made[0]) : this.#data.chatOfClientKey(station, key);
+      if (theirs !== undefined) {
         if (chat.made && !chat.listed) {
           chat.listed = true;
           this.#savePending(key);
         }
-        const last = get(rows[theirs], "last");
-        if (title !== null && (last === undefined || last === null)) rows[theirs] = { ...rows[theirs], title };
+        const last = get(theirs, "last");
+        if (title !== null && (last === undefined || last === null)) titled.set(theirs.id, { ...theirs, title });
         continue;
       }
       if (chat.listed) continue;
@@ -253,7 +264,7 @@ export class Local {
       if (chat.made === null) row.pending = true;
       out.push(row);
     }
-    return out;
+    return { rows: out, titled };
   }
 
   // ── an agent's first messages ──
@@ -264,8 +275,8 @@ export class Local {
 
   #saveFirst(k: string): void {
     const first = this.#firsts.get(k);
-    if (first) this.#data.put(FIRST, k, first, false);
-    else this.#data.forgetRecord(FIRST, k);
+    const at = k.indexOf(SEP);
+    this.#data.putLocal(FIRST, k.slice(0, at), k.slice(at + 1), first);
   }
 
   /// A message sent to an agent with no chat yet: its id, and whether its chat is to be asked for now.
@@ -359,11 +370,11 @@ export class Local {
   #outboxPut(station: string, thread: number, list: J[]): void {
     const k = join([station, thread]);
     if (list.length === 0) {
-      if (this.#outbox.delete(k)) this.#data.forgetRecord(OUTBOX, k);
+      if (this.#outbox.delete(k)) this.#data.putLocal(OUTBOX, station, String(thread), undefined);
       return;
     }
     this.#outbox.set(k, list);
-    this.#data.put(OUTBOX, k, list, false);
+    this.#data.putLocal(OUTBOX, station, String(thread), list);
   }
 
   /// What waits to go into a chat, oldest first.
@@ -445,34 +456,35 @@ export class Local {
     const id = ++this.#changes;
     const change: Change = { id, station, thread, session, row, archived };
     this.#changing.push(change);
-    this.#data.put(CHANGING, join([station, id]), change, false);
+    this.#data.putLocal(CHANGING, station, String(id), change);
     this.onChange({ kind: "changing", station });
     return id;
   }
 
-  /// Answered: refused (`ok` false), as it was at once; done, shown so until its station's rows change from `rows`.
-  changed(id: number, ok: boolean, rows: unknown): void {
+  /// Answered: refused (`ok` false), as it was at once; done, shown so until its station's rows change from how they
+  /// were then (`rev`: how often they had changed, data.rowsRev).
+  changed(id: number, ok: boolean, rev: number): void {
     const i = this.#changing.findIndex((c) => c.id === id);
     if (i < 0) return;
     const change = this.#changing[i];
     if (ok) {
-      change.done = { rows: rows ?? null };
-      this.#data.put(CHANGING, join([change.station, id]), change, false);
+      change.done = { rev };
+      this.#data.putLocal(CHANGING, change.station, String(id), change);
       return;
     }
     this.#changing.splice(i, 1);
-    this.#data.forgetRecord(CHANGING, join([change.station, id]));
+    this.#data.putLocal(CHANGING, change.station, String(id), undefined);
     this.onChange({ kind: "changing", station: change.station });
   }
 
-  /// Lets go of what is done that its station's rows have had since.
-  settle(station: string, rows: unknown): void {
+  /// Lets go of what is done that its station's rows have had since (they changed after it answered).
+  settle(station: string, rev: number): void {
     for (let i = this.#changing.length - 1; i >= 0; i--) {
       const c = this.#changing[i];
       if (c.station !== station || c.done === undefined) continue;
-      if (!equal(c.done.rows, rows ?? null)) {
+      if (c.done.rev !== rev) {
         this.#changing.splice(i, 1);
-        this.#data.forgetRecord(CHANGING, join([c.station, c.id]));
+        this.#data.putLocal(CHANGING, c.station, String(c.id), undefined);
       }
     }
   }
@@ -520,7 +532,7 @@ export class Local {
       const c = this.#changing[i];
       if (c.done !== undefined) continue;
       this.#changing.splice(i, 1);
-      this.#data.forgetRecord(CHANGING, join([c.station, c.id]));
+      this.#data.putLocal(CHANGING, c.station, String(c.id), undefined);
     }
   }
 

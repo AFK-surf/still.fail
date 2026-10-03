@@ -1,8 +1,9 @@
 // What a person hears about while a client runs (notices.rs; the `notices` topic, docs/notifications.md): a chat of
 // theirs whose agent is blocked on them, went wrong, or finished with something new to read, or where someone else
-// said something, or where a card newly waits for them. Noticed from the chat rows the core holds (records the sync
-// keeps current), by how each row changed: looked at as they change (rule 2), never polled. A station's first rows
-// are where it starts from. Each workspace hears of its own.
+// said something, or where a card newly waits for them. Noticed from the chat rows the core holds (what the sync keeps
+// current), by how each row changed in a write (db/account.ts says each row before and after): looked at as they change
+// (rule 2), never polled, and never all of them. A station's first rows are where it starts from. Each workspace hears
+// of its own.
 import * as decisions from "./decisions.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
@@ -24,13 +25,15 @@ export const BODY = 140;
 /// How a row stood when last looked at.
 type Seen = { state: string | null; seq: number; decision: number | null; pending: boolean };
 
-/// What a workspace has heard of its chats.
+/// What a workspace has heard of its chats: how the rows that changed this run stood when last looked at.
 type Heard = { seen: Map<string, Map<string, Seen>>; items: J[] };
+
+/// A row that changed: as it was and as it is (undefined: not there).
+export type Changed = { id: string; before: J | undefined; after: J | undefined };
 
 /// What notices read the rows with.
 export type NoticesEnv = {
   workspaces: Workspaces;
-  rows: (station: string) => J[] | undefined;
   members: (workspace: string) => J[];
   slackUsers: (station: string) => string[];
   emailOf: (workspace: string) => string | null;
@@ -64,42 +67,43 @@ export class Notices {
     return { items: all.slice(Math.max(all.length - KEEP, 0)) };
   }
 
-  /// Looks at the stations' rows as they are now (`stations`: those kept in sync); what changed since the last look
-  /// is noticed, each in its workspace, and answered.
-  look(stations: string[]): J[] {
-    const added: J[] = [];
+  /// Forgets the stations no longer kept in sync (`stations`: those that are).
+  keep(stations: string[]): void {
     for (const w of this.#env.workspaces.all()) {
       const seen = this.#heard(w).seen;
       for (const station of [...seen.keys()]) if (!stations.includes(station)) seen.delete(station);
     }
-    for (const station of stations) {
-      const its = this.#env.workspaces.ofStation(station);
-      const rows = this.#env.rows(station);
-      if (rows === undefined) continue;
-      const workspace = station.includes("/") ? station.slice(0, station.indexOf("/")) : "";
-      const email = this.#env.emailOf(workspace);
-      const me = { id: email, email };
-      const members = this.#env.members(workspace);
-      const slackUsers = this.#env.slackUsers(station);
-      const now = new Map<string, Seen>();
-      for (const row of rows) if (typeof get(row, "id") === "string") now.set(row.id, seen(row));
-      const heard = this.#heard(its);
-      const before = heard.seen.get(station);
-      if (before) {
-        for (const [id, next] of now) {
-          if (next.state === "run") {
-            const old = before.get(id);
-            next.pending = old !== undefined && (old.pending || next.seq > old.seq);
-          }
-        }
+  }
+
+  /// Rows of a station that changed (`first`: its rows read for the first time, where it starts from): what is worth
+  /// telling is noticed, in its workspace, and answered.
+  changed(station: string, rows: Changed[], first: boolean): J[] {
+    const added: J[] = [];
+    const its = this.#env.workspaces.ofStation(station);
+    const heard = this.#heard(its);
+    let seenHere = heard.seen.get(station);
+    if (!seenHere) {
+      seenHere = new Map();
+      heard.seen.set(station, seenHere);
+    }
+    const workspace = station.includes("/") ? station.slice(0, station.indexOf("/")) : "";
+    const email = this.#env.emailOf(workspace);
+    const me = { id: email, email };
+    const members = this.#env.members(workspace);
+    const slackUsers = this.#env.slackUsers(station);
+    for (const change of rows) {
+      const row = change.after;
+      if (row === undefined) {
+        seenHere.delete(change.id);
+        continue;
       }
-      heard.seen.set(station, now);
-      if (!before) continue;
-      for (const row of rows) {
-        if (typeof get(row, "id") !== "string") continue;
-        const found = noticed(row, before.get(row.id), me, slackUsers, members);
-        if (found !== null) added.push(this.#add(its, station, row, found[0], found[1]));
-      }
+      const old = seenHere.get(change.id) ?? (change.before !== undefined ? seen(change.before) : undefined);
+      const next = seen(row);
+      if (next.state === "run") next.pending = old !== undefined && (old.pending || next.seq > old.seq);
+      seenHere.set(change.id, next);
+      if (first) continue;
+      const found = noticed(row, old, me, slackUsers, members);
+      if (found !== null) added.push(this.#add(its, station, row, found[0], found[1]));
     }
     return added;
   }

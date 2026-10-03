@@ -1,6 +1,6 @@
 // The core's part of attention (core.rs, routing.rs, execute.rs for attend.rs and notices.rs): the `notices` and
-// `notify` topics, a chat's value as its UIs attend to it, the attention calls, push registration. The chat rows are
-// looked at as the data center changes them (rule 2: pushed, never polled): what changed is noticed, and what a page
+// `notify` topics, a chat's value as its UIs attend to it, the attention calls, push registration. The chat rows that
+// change are looked at as the data says them (rule 2: pushed, never polled): what changed is noticed, and what a page
 // is to show now goes out.
 import { Effect } from "effect";
 import { Attend } from "./attend.ts";
@@ -8,7 +8,7 @@ import type { Inner } from "./core.ts";
 import { handlers } from "./core/execute.ts";
 import type { Call } from "./core/calls.ts";
 import type { Owner } from "./core/routing.ts";
-import { Notices } from "./notices.ts";
+import { Notices, type Changed } from "./notices.ts";
 import * as prefs from "./prefs.ts";
 import type { Topic } from "./protocol.ts";
 import type { Value } from "./store.ts";
@@ -26,28 +26,24 @@ export class Attention implements Owner {
   readonly #core: Inner;
   readonly attend: Attend;
   readonly notices: Notices;
-  #looking = false;
 
   constructor(core: Inner, attend: Attend) {
     this.#core = core;
     this.attend = attend;
     this.notices = new Notices({
       workspaces: core.workspaces,
-      rows: (station) => {
-        const rows = core.data.get({ topic: "chatRows", station });
-        return Array.isArray(rows) ? rows : undefined;
-      },
-      members: (workspace) => arr(get(core.data.get({ topic: "workspace", workspace }), "members")),
-      slackUsers: (station) => arr(get(core.data.get({ topic: "overview", station }), "slackUsers")).filter((u): u is string => typeof u === "string"),
+      members: (workspace) => arr(get(core.data.shared({ topic: "workspace", workspace }), "members")),
+      slackUsers: (station) => arr(get(core.data.shared({ topic: "overview", station }), "slackUsers")).filter((u): u is string => typeof u === "string"),
       emailOf: (workspace) => {
         const sub = core.workspaces.of(workspace).owner;
         return sub === null ? null : (core.accounts.list().find((a) => a.sub === sub)?.email ?? null);
       },
       now: () => core.host.nowMs(),
     });
-    // The rows changed (an event, a read): looked at once what changed together has settled.
+    // Rows changed (an event, a read): what changed is looked at, as a write says it.
+    core.data.onChats((station, rows, first) => this.look(station, rows, first));
     core.data.onChange((topic) => {
-      if (topic.topic === "chatRows" || topic.topic === "workspace" || topic.topic === "workspaces") this.#lookSoon();
+      if (topic.topic === "workspace") this.notices.keep(this.#stations());
     });
   }
 
@@ -68,21 +64,11 @@ export class Attention implements Owner {
     );
   }
 
-  #lookSoon(): void {
-    if (this.#looking) return;
-    this.#looking = true;
-    this.#core.runner.fork(
-      Effect.sync(() => {
-        this.#looking = false;
-        this.look();
-      }),
-    );
-  }
-
-  /// Looks at the rows: what is new is noticed, and what a page is to show goes out.
-  look(): void {
+  /// Rows of a station that changed: what is new is noticed, and what a page is to show goes out.
+  look(station: string, rows: Changed[], first: boolean): void {
     const store = this.#core.store;
-    const added = this.notices.look(this.#stations());
+    if (!this.#stations().includes(station)) return;
+    const added = this.notices.changed(station, rows, first);
     if (added.length > 0) store.invalidateAll((t) => t.topic === "notices");
     const listened = store.liveTopics().some((t) => t.topic === "notify" && store.subscribed(t));
     if (this.attend.noticed(added, listened)) store.invalidateAll((t) => t.topic === "notify");

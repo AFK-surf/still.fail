@@ -64,7 +64,7 @@ export class CloudSync {
   nameOf(address: string): string | null {
     const at = address.indexOf("/");
     if (at < 0) return null;
-    const workspace = this.#core.data.get({ topic: "workspace", workspace: address.slice(0, at) });
+    const workspace = this.#core.data.shared({ topic: "workspace", workspace: address.slice(0, at) });
     const id = address.slice(at + 1);
     const stations = isObject(workspace) && Array.isArray(workspace.stations) ? workspace.stations : [];
     const station = stations.find((s) => isObject(s) && s.id === id);
@@ -190,7 +190,7 @@ export class CloudSync {
         const error = answer.failure;
         // Gone (deleted, or the account left it): what is held of it goes.
         if (error.status === 404 || error.status === 403) {
-          core.data.forgetRecord("workspace", id);
+          core.data.dropWorkspace(id);
           this.errors.set(id, error);
         } else if (core.data.get(topic) === undefined) this.errors.set(id, error);
         core.store.invalidate(topic);
@@ -249,18 +249,6 @@ export class CloudSync {
     const core = this.#core;
     const accounts = core.accounts.list();
     for (const sub of [...this.mes.keys()]) if (!accounts.some((a) => a.sub === sub)) this.mes.delete(sub);
-    for (const [sub, me] of core.data.records("me")) {
-      if (accounts.some((a) => a.sub === sub)) continue;
-      for (const w of isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []) {
-        if (!isObject(w) || typeof w.id !== "string") continue;
-        const key = `${CREDENTIAL_KEY}/${sub}/${w.id}`;
-        core.runner.fork(Effect.all([Effect.ignore(core.host.storageDelete(`${key}/${CREDENTIAL_OTHERS}`)), Effect.ignore(core.host.storageDelete(key))]));
-      }
-      core.data.forgetRecord("me", sub);
-    }
-    // What a signed-out account's own topics held goes too.
-    for (const [key] of core.data.records("login_sessions")) if (!accounts.some((a) => a.sub === key)) core.data.forgetRecord("login_sessions", key);
-    for (const [key] of core.data.records("admin")) if (!accounts.some((a) => key.startsWith(`${a.sub}\u0001`))) core.data.forgetRecord("admin", key);
     const owners = new Map<string, string>();
     for (const account of accounts) {
       const me = core.data.record("me", account.sub);
@@ -271,6 +259,16 @@ export class CloudSync {
     core.workspaces.setOwners(owners);
     core.store.invalidateAll((t) => t.topic === "status" && typeof t.workspace === "string");
     this.onReach?.();
+  }
+
+  /// An account signed out (its database goes with all it held): the credentials it had for its workspaces go too.
+  signedOut(sub: string, me: unknown): void {
+    const core = this.#core;
+    for (const w of isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []) {
+      if (!isObject(w) || typeof w.id !== "string") continue;
+      const key = `${CREDENTIAL_KEY}/${sub}/${w.id}`;
+      core.runner.fork(Effect.all([Effect.ignore(core.host.storageDelete(`${key}/${CREDENTIAL_OTHERS}`)), Effect.ignore(core.host.storageDelete(key))]));
+    }
   }
 
   /// What is held of stations no signed-in account reaches any more goes — decided only once every account's

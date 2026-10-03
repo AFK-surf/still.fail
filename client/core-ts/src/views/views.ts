@@ -5,6 +5,7 @@
 import { Effect, type Fiber } from "effect";
 import type { Inner } from "../core.ts";
 import type { Data } from "../data.ts";
+import type { Derive } from "../db/account.ts";
 import type { Host } from "../host.ts";
 import type { Runner } from "../runtime.ts";
 import type { Store } from "../store.ts";
@@ -38,8 +39,28 @@ const str = (v: J): string | null => (typeof v === "string" ? v : null);
 const u64 = (v: J): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
 const DAY_MS = 86_400_000;
+/// How many rows a list shows before its stations' rows are loaded: more than a screen holds; and from how many rows
+/// the stations hold on that is done (fewer are loaded at once).
+export const HEAD = 80;
+export const HEAD_FROM = 500;
 
 const VIEW_TOPICS = new Set(["chats", "chatSearch", "stations", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
+
+/// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
+/// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
+export const chatDerive: Derive = {
+  tone: marks.rowTone,
+  asks: (row) => {
+    const d = decisions.asked(row);
+    return d !== null && !decisions.dismissed(d);
+  },
+  desk: (row) => {
+    const d = decisions.asked(row);
+    if (d !== null && !decisions.dismissed(d)) return true;
+    if (arr(get(row, "answered")).length > 0) return true;
+    return u64(get(row, "thread")) !== null && get(row, "mine") === true && present.workingLine(row) !== null;
+  },
+};
 
 /// A station of a scope, as the workspace lists it.
 export type StationInfo = { address: string; id: string; name: string; online: boolean; lastSeen: J; version: J };
@@ -295,10 +316,13 @@ export class Views implements Owner {
   readonly #updateNoticesOpen = new Set<string>();
   /// Views whose words count seconds (a chat's jobs): each computed again when they next change.
   readonly #again = new Map<string, Fiber.Fiber<unknown, unknown>>();
+  /// The scopes whose stations' rows are being loaded (the list showed its first screen meanwhile).
+  readonly #loading = new Set<string>();
 
   constructor(core: ViewsEnv) {
     this.#core = core;
     this.local = new Local(core.data, () => core.host.nowMs());
+    this.local.load();
     this.local.onChange = (change) => this.#localChanged(change);
   }
 
@@ -552,17 +576,23 @@ export class Views implements Owner {
     return this.#core.relayName(host);
   }
 
-  /// The chat an agent's item has: the still.fail chat bound to it, as the station's items say, or its threads do.
-  boundThread(station: string, key: string): number | null {
-    const rows = arr(this.ok({ topic: "chatRows", station }));
-    const fromRows = u64(get(rows.find((r) => get(r, "session") === key), "thread"));
-    if (fromRows !== null) return fromRows;
-    const thread = arr(this.ok({ topic: "threads", station })).find((th) => (get(th, "surface") === "ember" || get(th, "surface") === "stillfail") && members(th)[0] === key);
-    return u64(get(thread, "id"));
+  /// The rows of these stations that ask something of their person or are unread (views/marks.ts).
+  marked(stations: string[]): [string, J][] {
+    return this.#core.data.marked(stations);
   }
 
+  /// The chat an agent's item has: the still.fail chat bound to it, as the station's items say, or its threads do.
+  boundThread(station: string, key: string): number | null {
+    const fromRows = u64(get(this.#core.data.chatOfSession(station, key), "thread"));
+    if (fromRows !== null) return fromRows;
+    return this.#core.data.threadOf(station, key);
+  }
+
+  /// A thread among the station's (null when it lists none such, or its threads were never read).
   threadOf(station: string, id: number): J {
-    return arr(this.ok({ topic: "threads", station })).find((th) => get(th, "id") === id) ?? null;
+    const data = this.#core.data;
+    if (typeof id !== "number") return null;
+    return data.listed(station, "threads") ? (data.listedThread(station, id) ?? null) : null;
   }
 
   /// The station's link as `{ state, message, last }`.
@@ -593,11 +623,14 @@ export class Views implements Owner {
     return this.stations(station.slice(0, at))?.find((s) => s.address === station)?.online === false;
   }
 
-  #rows(station: string): J[] | undefined {
-    const rows = this.ok({ topic: "chatRows", station });
-    if (rows === undefined) return undefined;
-    this.local.settle(station, rows);
-    return arr(rows);
+  /// A station's sidebar row of a thread or an agent, as changes from here have it; undefined while the station's rows
+  /// were never read (null: none such).
+  #row(station: string, by: { thread: number } | { session: string }): J | null | undefined {
+    const data = this.#core.data;
+    if (!data.listed(station, "chats")) return undefined;
+    this.local.settle(station, data.rowsRev(station));
+    const raw = "thread" in by ? data.chatOfThread(station, by.thread) : data.chat(station, by.session);
+    return raw === undefined ? null : this.local.asChanging(station, raw);
   }
 
   // ── computing ──
@@ -715,6 +748,7 @@ export class Views implements Owner {
   #chats(scope: string, mine: boolean, watching: boolean): Value | undefined {
     const stations = this.#stationsOr(scope);
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+    const data = this.#core.data;
     const me = this.me(scope);
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
     const states: J[] = [];
@@ -722,23 +756,29 @@ export class Views implements Owner {
     const rows: J[] = [];
     let loading = false;
     const unread: string[] = [];
+    // The first screen first (docs/core-db.md): while the stations' rows are not loaded, and they are many, the rows a
+    // list shows on top are read by one query, and the rest are loaded after, a station at a time.
+    const known = stations.filter((s) => data.listed(s.address, "chats")).map((s) => s.address);
+    const unloaded = known.filter((s) => !data.loaded({ topic: "chatRows", station: s }));
+    const head = unloaded.length > 0 && data.chatCount(unloaded) > HEAD_FROM ? this.#head(scope, known) : null;
     for (const s of stations) {
-      const read = this.value({ topic: "chatRows", station: s.address });
+      const read = head !== null && data.listed(s.address, "chats") ? ({ ok: head.get(s.address) ?? [] } as Value) : this.value({ topic: "chatRows", station: s.address });
       if (!(read && "ok" in read)) unread.push(s.address);
       if (read && "ok" in read) {
         const slackUsers = arr(get(this.ok({ topic: "overview", station: s.address }), "slackUsers")).filter((u): u is string => typeof u === "string");
-        this.local.settle(s.address, read.ok);
-        const listed = arr(read.ok).slice();
-        const asked = this.local.pendingRows(s.address, listed);
+        this.local.settle(s.address, data.rowsRev(s.address));
+        const listed = arr(read.ok);
+        const asked = this.local.pendingRows(s.address);
         // What a row is made with besides its record: a row whose record and these are as they were is the one made
         // before (rule 7: the list redoes only the rows that changed).
         const link = this.link(s.address);
         const sig = JSON.stringify([s.address, s.name, s.online, link.state ?? null, me, slackUsers, members_, watching]);
-        for (const raw of [...asked, ...listed]) {
+        for (const listedRaw of [...asked.rows, ...listed]) {
+          const raw = asked.titled.get(get(listedRaw, "id")) ?? listedRaw;
           if (mine && get(raw, "mine") !== true) continue;
           if (this.local.beingArchived(s.address, raw)) continue;
           const shown = this.local.asChanging(s.address, raw);
-          // Only a frozen record (data.ts) is surely as it was when its row was made.
+          // Only a frozen row (db/account.ts) is surely as it was when its row was made.
           const keepable = isObject(shown) && Object.isFrozen(shown);
           const kept = keepable ? this.#rowsMade.get(shown) : undefined;
           let row: J;
@@ -785,6 +825,28 @@ export class Views implements Owner {
     const ws = this.ok({ topic: "workspace", workspace: scope });
     const count = Array.isArray(get(ws, "members")) ? ws.members.length : null;
     return { ok: { me, stations: states, loading, days, trouble, members: count, leading: "agents", glyph, note } };
+  }
+
+  /// The rows a scope's list shows on top (HEAD of them), by station, while its stations' rows load: one is loaded
+  /// after another, the list computed again after each.
+  #head(scope: string, stations: string[]): Map<string, J[]> {
+    const data = this.#core.data;
+    const out = new Map<string, J[]>();
+    for (const [station, row] of data.chatHead(stations, HEAD)) out.set(station, [...(out.get(station) ?? []), row]);
+    if (!this.#loading.has(scope)) {
+      this.#loading.add(scope);
+      this.#core.runner.fork(
+        Effect.gen({ self: this }, function* () {
+          for (const station of stations) {
+            yield* Effect.yieldNow;
+            data.shared({ topic: "chatRows", station });
+          }
+          this.#loading.delete(scope);
+          this.#invalidate((v) => (v.topic === "chats" || v.topic === "chatSearch") && v.scope === scope);
+        }),
+      );
+    }
+    return out;
   }
 
   /// A station's row as the list shows it (null: not in this list).
@@ -949,13 +1011,14 @@ export class Views implements Owner {
     if ("err" in pageV) return pageV;
     const page = pageV.ok as J;
     let thread: J;
-    const threadsV = this.value({ topic: "threads", station });
-    if (threadsV !== undefined && "ok" in threadsV) {
-      const found = arr(threadsV.ok).find((th) => get(th, "id") === id);
+    const data = this.#core.data;
+    if (data.listed(station, "threads")) {
+      const found = data.listedThread(station, id);
       if (found === undefined) return { err: new CoreError("http_404", t("core-views.error.no_chat"), 404) };
       thread = structuredClone(found);
-    } else if (threadsV !== undefined && "err" in threadsV) return threadsV;
-    else {
+    } else {
+      const threadsV = this.value({ topic: "threads", station });
+      if (threadsV !== undefined && "err" in threadsV) return threadsV;
       if (!isObject(page.thread)) return undefined;
       thread = structuredClone(page.thread);
     }
@@ -1033,12 +1096,11 @@ export class Views implements Owner {
       }
     }
     const slackUrl = slack && workspaceUrl !== null ? `${workspaceUrl}archives/${channel}/p${strOf(thread, "threadTs").replaceAll(".", "")}` : null;
-    const rows = this.#rows(station);
-    const rawRow = rows?.find((r) => get(r, "thread") === id);
-    const row = rawRow !== undefined ? this.local.asChanging(station, rawRow) : undefined;
+    const found = this.#row(station, { thread: id });
+    const row = found ?? undefined;
     const open = (d: J) => !this.local.answered(station, id, u64(d.seq) ?? 0);
     let pendingCard: [number, boolean] | null | undefined;
-    if (rows !== undefined) {
+    if (found !== undefined) {
       const d = row !== undefined ? decisions.ofRow(row) : null;
       pendingCard = d !== null && open(d) ? [u64(d.seq) ?? 0, decisions.dismissed(d)] : null;
     }
@@ -1117,9 +1179,9 @@ export class Views implements Owner {
     if (v !== undefined && "ok" in v) detail = v.ok;
     else if (v !== undefined) return null;
     else {
-      const summaries = this.ok({ topic: "sessions", station });
-      if (summaries !== undefined) {
-        const found = arr(summaries).find((s) => get(s, "key") === key);
+      const data = this.#core.data;
+      if (data.listed(station, "sessions")) {
+        const found = data.listedSummary(station, key);
         if (found === undefined) return null;
         detail = { session: found };
       } else {
@@ -1163,16 +1225,14 @@ export class Views implements Owner {
     };
   }
 
-  /// An agent as a sidebar row lists it, with the connect its row came from.
+  /// An agent as its sidebar row lists it, with the connect its row came from.
   #rowAgent(station: string, key: string): J {
-    for (const row of arr(this.ok({ topic: "chatRows", station }))) {
-      const agent = arr(get(row, "agents")).find((a) => get(a, "key") === key);
-      if (agent === undefined) continue;
-      const out = structuredClone(agent);
-      if (get(row, "session") === key && typeof get(row, "connect") === "string") out.connect = row.connect;
-      return out;
-    }
-    return null;
+    const row: J = this.#core.data.chatOfSession(station, key);
+    const agent = arr(get(row, "agents")).find((a) => get(a, "key") === key);
+    if (agent === undefined) return null;
+    const out = structuredClone(agent);
+    if (typeof get(row, "connect") === "string") out.connect = row.connect;
+    return out;
   }
 
   /// The page of an item whose agent has no chat yet.
@@ -1183,10 +1243,9 @@ export class Views implements Owner {
       if (detail === undefined) return undefined;
       return { err: "err" in detail ? detail.err : new CoreError("http_404", t("core-views.error.no_agent"), 404) };
     }
-    const rows = this.#rows(station);
-    if (rows === undefined && this.value({ topic: "chatRows", station }) === undefined) return undefined;
-    const raw = rows?.find((r) => get(r, "id") === key);
-    const row = raw !== undefined ? this.local.asChanging(station, raw) : undefined;
+    const found = this.#row(station, { session: key });
+    if (found === undefined && this.value({ topic: "chatRows", station }) === undefined) return undefined;
+    const row = found ?? undefined;
     if (row === undefined) {
       const threads = this.value({ topic: "threads", station });
       if (threads === undefined) return undefined;
@@ -1266,16 +1325,19 @@ export class Views implements Owner {
     const items: [J, number, number | null][] = [];
     const answered: J[] = [];
     const working: J[] = [];
+    // Only the rows the 奏 page lists (found by their column, not loaded whole: db/account.ts).
+    const data = this.#core.data;
+    const desk = new Map<string, J[]>();
+    for (const [station, row] of data.desk(stations.map((s) => s.address))) desk.set(station, [...(desk.get(station) ?? []), row]);
     for (const s of stations) {
-      const v = this.value({ topic: "chatRows", station: s.address });
-      if (v === undefined) {
-        loading ||= s.online;
+      if (!data.listed(s.address, "chats")) {
+        const v = this.value({ topic: "chatRows", station: s.address });
+        if (v === undefined) loading ||= s.online;
         continue;
       }
-      if ("err" in v) continue;
-      this.local.settle(s.address, v.ok);
+      this.local.settle(s.address, data.rowsRev(s.address));
       const slackUsers = arr(get(this.ok({ topic: "overview", station: s.address }), "slackUsers")).filter((u): u is string => typeof u === "string");
-      for (const raw of arr(v.ok)) {
+      for (const raw of desk.get(s.address) ?? []) {
         if (this.local.beingArchived(s.address, raw)) continue;
         const row = this.local.asChanging(s.address, raw);
         const place = () => ({ station: s.address, stationName: s.name, session: row.id ?? null, thread: row.thread ?? null, title: row.title ?? "" });

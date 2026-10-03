@@ -1,6 +1,6 @@
 // `Core`: takes messages from connected UIs, answers calls, keeps subscriptions (docs/client-core.md; core.rs for the
-// protocol). Construction wires the modules together and starts the sync (sync/), which keeps everything the core
-// holds current by itself; subscriptions only read what is held (data.ts, store.ts).
+// protocol). Construction opens the signed-in accounts' databases (data.ts), wires the modules together and starts the
+// sync (sync/), which keeps everything the core holds current by itself; subscriptions only read what is held.
 import { Cause, Effect, type Clock, type Fiber } from "effect";
 import { Accounts, type AccountView } from "./accounts.ts";
 import * as brand from "./brand.ts";
@@ -8,8 +8,9 @@ import { Cloud } from "./cloud.ts";
 import { parseCall, cancellable, callStation, counts, type Call } from "./core/calls.ts";
 import { execute, handlers, hooks } from "./core/execute.ts";
 import { Router } from "./core/routing.ts";
-import { readKept } from "./kept.ts";
-import { Data } from "./data.ts";
+import { importFormer } from "./db/import.ts";
+import { Data, holds } from "./data.ts";
+import { chatDerive } from "./views/views.ts";
 import { Doing, FAILED_SHOWN_MS, heavy } from "./doing.ts";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
@@ -132,19 +133,33 @@ export class Core {
       inner.accounts.setTracer(inner.tracer);
       inner.status = new Status(inner.host, inner.runner);
       inner.cloud = new Cloud(inner.host, inner.accounts, inner.tracer, inner.status);
-      // What was last known is there before any network.
-      inner.data = new Data(inner.host, inner.runner);
-      yield* inner.data.load;
-      // What the Rust core kept of threads and transcripts, the first time (kept.ts).
-      yield* readKept(inner.host, inner.data);
-      prefs.followLang(inner.data);
       inner.workspaces = new Workspaces(inner.host, inner.runner);
       inner.store = new Store(inner.host, inner.runner);
       const store = inner.store;
+      // Each signed-in account's database, opened before any network: the first view is answered from it.
+      inner.data = new Data(inner.host, inner.runner, {
+        owner: (workspace) => inner.workspaces.owner(workspace),
+        derive: chatDerive,
+      });
+      // What the former records store and the Rust core's kept chunks held, brought into an account's new database once.
+      inner.data.onOpened = (db) =>
+        Effect.andThen(
+          importFormer(inner.host, inner.runner, inner.data, inner.accounts.list().map((a) => a.sub), db),
+          // What was done here and kept in it goes on (a database opened after the start: signed in).
+          Effect.sync(() => inner.views?.local.opened(db)),
+        );
+      inner.data.onSignedOut = (sub, me) => inner.cloudSync?.signedOut(sub, me);
+      inner.data.onNote = () => inner.status.setDb(inner.data.notes);
+      yield* inner.data.open(inner.accounts.list().map((a) => a.sub));
+      prefs.followLang(inner.data);
       // What goes out is what the clients' types say (client/core-ts/src/shapes/schema.ts).
       store.setShaped();
-      store.setHeld((topic) => inner.data.shared(topic));
-      inner.data.onChange((topic) => store.changed(topic));
+      store.setHeld((topic) => inner.data.shared(topic), (topic) => inner.data.release(topic));
+      inner.data.onChange((topic) => {
+        if (topic.topic === "*") {
+          for (const t of store.liveTopics()) if (holds(t)) store.changed(t);
+        } else store.changed(topic);
+      });
       inner.status.onChange(() => store.invalidateAll((t) => t.topic === "status"));
       inner.scheduler = new Scheduler(inner.runner, inner.runner.root);
       inner.cloudSync = new CloudSync(inner);
@@ -205,7 +220,10 @@ export class Core {
         const account = inner.accounts.list()[0];
         return account ? Effect.ignore(inner.cloud.traces(account.sub, body)) : Effect.void;
       });
-      inner.accounts.onChange(() => inner.cloudSync.accountsChanged());
+      // An account signed in has its database opened; one signed out, removed (before what it reached is let go).
+      inner.accounts.onChange(() => {
+        inner.runner.fork(Effect.andThen(inner.data.accounts(inner.accounts.list().map((a) => a.sub)), Effect.sync(() => inner.cloudSync.accountsChanged())));
+      });
       // From now on the core keeps what it holds current, whatever the UI shows.
       inner.cloudSync.start();
       inner.stations.reconcile();

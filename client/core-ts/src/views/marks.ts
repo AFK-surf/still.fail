@@ -78,19 +78,18 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
   for (const id of workspaceIds(views.ok({ topic: "workspaces" }))) {
     const counts = new Counts();
     let waiting = 0;
-    for (const s of views.stations(id) ?? []) {
-      const rows = arr(views.ok({ topic: "chatRows", station: s.address }));
-      for (const row of rows) {
-        if (local.beingArchived(s.address, row)) continue;
-        const d = decisions.forViewer(row, views.me(id));
-        const thread = get(row, "thread");
-        const waits = d !== null && !(typeof thread === "number" && local.answered(s.address, thread, typeof d.seq === "number" ? d.seq : 0));
-        if (waits) waiting++;
-        const tone = rowTone(row);
-        if (tone === "alert") counts.alert++;
-        else if (tone === "wait" || waits) counts.wait++;
-        else if (tone !== null) counts.unread++;
-      }
+    // Only the rows that ask something or are unread count (db/account.ts: found by their columns, not loaded whole).
+    const stations = (views.stations(id) ?? []).map((s) => s.address);
+    for (const [address, row] of views.marked(stations)) {
+      if (local.beingArchived(address, row)) continue;
+      const d = decisions.forViewer(row, views.me(id));
+      const thread = get(row, "thread");
+      const waits = d !== null && !(typeof thread === "number" && local.answered(address, thread, typeof d.seq === "number" ? d.seq : 0));
+      if (waits) waiting++;
+      const tone = rowTone(row);
+      if (tone === "alert") counts.alert++;
+      else if (tone === "wait" || waits) counts.wait++;
+      else if (tone !== null) counts.unread++;
     }
     if (currentWorkspace !== id) {
       others.alert += counts.alert;

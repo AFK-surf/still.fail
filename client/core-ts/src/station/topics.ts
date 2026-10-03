@@ -115,15 +115,8 @@ export class StationTopics implements Owner {
       const id = topic.thread as number;
       // A chat no list has (opened from an old notification's link): the sync is told of it, and brings it.
       if (this.summary(station, id) === null) this.#sync.syncEntries(station, id, Priority.shown);
-      this.#core.runner.fork(
-        Effect.gen({ self: this }, function* () {
-          yield* this.#core.data.log("entry", station, String(id));
-          yield* this.#place(station, id);
-          this.#core.store.invalidate(topic);
-        }),
-      );
+      this.#core.runner.fork(Effect.andThen(this.#place(station, id), Effect.sync(() => this.#core.store.invalidate(topic))));
     }
-    if (topic.topic === "live") this.#core.runner.fork(Effect.andThen(this.#core.data.log("transcript", station, topic.key as string), Effect.sync(() => this.#core.store.invalidate(topic))));
     if (topic.topic === "net") this.#sampleNet(topic);
     // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
     if (topic.topic === "jobLog") this.#sync.readLog(station, topic.job as string, topic.lines as number);
@@ -183,20 +176,20 @@ export class StationTopics implements Owner {
   #live(topic: Topic): Value | undefined {
     const station = topic.station as string;
     const key = topic.key as string;
-    const items = this.#core.data.loaded("transcript", station, key);
-    if (!items) return undefined;
+    const data = this.#core.data;
+    const span = data.logSpan("transcript", station, key);
     const link = this.#sync.link(station);
     const view = link?.lives.get(key);
-    const ns = [...items.keys()].sort((a, b) => a - b);
-    const end = ns.length > 0 ? ns[ns.length - 1] + 1 : 0;
+    const end = span ? span.max + 1 : 0;
     // Its latest page; `history.older` brings the pages before (and keeps them in view).
     const tk = topicKey(topic);
     let first = this.#firsts.get(tk);
     if (first === undefined) {
-      first = Math.max(end - TRANSCRIPT_PAGE, ns.length > 0 ? ns[0] : 0);
+      first = Math.max(end - TRANSCRIPT_PAGE, span ? span.min : 0);
       this.#firsts.set(tk, first);
     }
     // The unbroken run that ends the transcript, back as far as `first`.
+    const items = data.logRange("transcript", station, key, first, end - 1);
     let from = end;
     while (from > first && items.has(from - 1)) from--;
     this.#firsts.set(tk, from);
@@ -229,11 +222,10 @@ export class StationTopics implements Owner {
       const tk = topicKey(topic);
       const before = this.#firsts.get(tk);
       if (before === undefined || before === 0) return false;
-      const items = yield* this.#core.data.log("transcript", station, key);
+      const data = this.#core.data;
       const from = Math.max(0, before - TRANSCRIPT_PAGE);
-      let all = true;
-      for (let n = from; n < before; n++) if (!items.has(n)) all = false;
-      if (!all) yield* this.#sync.transcript(station, key, before);
+      if (data.logCount("transcript", station, key, from, before - 1) !== before - from) yield* this.#sync.transcript(station, key, before);
+      const items = data.logRange("transcript", station, key, from, before - 1);
       if (!items.has(before - 1)) return false;
       let first = before;
       while (first > from && items.has(first - 1)) first--;
@@ -247,14 +239,7 @@ export class StationTopics implements Owner {
 
   /// The thread's summary as the station's lists say.
   summary(station: string, id: number): unknown {
-    const listed = (this.#core.data.get({ topic: "threads", station }) as unknown[] | undefined)?.find((t) => u64(get(t, "id")) === id);
-    if (listed !== undefined) return listed;
-    for (const [key, detail] of this.#core.data.records("session")) {
-      if (!key.startsWith(`${station}\u0001`)) continue;
-      const found = ((get(detail, "threads") as unknown[] | undefined) ?? []).find((t) => u64(get(t, "id")) === id);
-      if (found !== undefined) return found;
-    }
-    return null;
+    return this.#core.data.thread(station, id) ?? null;
   }
 
   /// Where a chat was left (`chat.place`): as told this run, else as kept on the device.
@@ -280,20 +265,19 @@ export class StationTopics implements Owner {
   }
 
   /// How far a thread is known to go: its summary's last, or what is held past it.
-  #latest(station: string, id: number, held: Map<number, unknown>): number {
-    let latest = u64(get(this.summary(station, id), "last")) ?? 0;
-    for (const n of held.keys()) latest = Math.max(latest, n);
-    return latest;
+  #latest(station: string, id: number): number {
+    const held = this.#core.data.logSpan("entry", station, String(id));
+    return Math.max(u64(get(this.summary(station, id), "last")) ?? 0, held ? held.max : 0);
   }
 
   #thread(topic: Topic): Value | undefined {
     const station = topic.station as string;
     const id = topic.thread as number;
-    const held = this.#core.data.loaded("entry", station, String(id));
-    if (!held) return undefined;
+    const data = this.#core.data;
     const tk = topicKey(topic);
     const summary = this.summary(station, id);
-    const latest = this.#latest(station, id, held);
+    const span = data.logSpan("entry", station, String(id));
+    const latest = this.#latest(station, id);
     let window = this.#windows.get(tk);
     if (!window) {
       const placeKeyOf = `${station}\u0001${id}`;
@@ -308,31 +292,31 @@ export class StationTopics implements Owner {
       if (at !== null && at <= latest) {
         const from = Math.max(at - PAGE, 1);
         const to = Math.min(at + PAGE - 1, latest);
-        for (let n = from; n <= to; n++) {
-          if (!held.has(n)) {
-            // Not on the device yet: brought first.
-            this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.range(station, id, from, to, null))));
-            return undefined;
-          }
+        if (data.logCount("entry", station, String(id), from, to) !== to - from + 1) {
+          // Not on the device yet: brought first.
+          this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.range(station, id, from, to, null))));
+          return undefined;
         }
         window = { first: from, last: to >= latest ? null : to, at, atOffset, caught: to };
       } else {
-        if (held.size === 0) {
+        if (span === null) {
           // Nothing of it yet: it opens once its latest page is here (an empty thread opens empty).
           if (latest === 0 && summary !== null) window = { first: 1, last: null, at: null, atOffset: null, caught: 0 };
           else return undefined;
         } else {
           // The latest page held, as far back as it runs unbroken.
-          let first = Math.max(...held.keys());
-          while (first > 1 && held.has(first - 1) && first > latest - PAGE + 1) first--;
-          window = { first, last: null, at: null, atOffset: null, caught: Math.max(...held.keys()) };
+          const page = data.logRange("entry", station, String(id), Math.max(1, latest - PAGE + 1), span.max);
+          let first = span.max;
+          while (first > 1 && page.has(first - 1) && first > latest - PAGE + 1) first--;
+          window = { first, last: null, at: null, atOffset: null, caught: span.max };
         }
       }
       this.#windows.set(tk, window);
     }
+    const stop = window.last ?? Math.max(latest, span?.max ?? 0);
+    const held = data.logRange("entry", station, String(id), window.first, stop);
     const entries: unknown[] = [];
     let last = window.first - 1;
-    const stop = window.last ?? Infinity;
     for (let n = window.first; n <= stop && held.has(n); n++) {
       entries.push(held.get(n));
       last = n;
@@ -346,9 +330,8 @@ export class StationTopics implements Owner {
     }
     window.caught = Math.max(window.caught, caught);
     const end = window.last === null && last >= latest;
-    const rows = this.#core.data.get({ topic: "chatRows", station }) as unknown[] | undefined;
-    const title = rows?.find((r) => u64(get(r, "thread")) === id);
-    const value: Record<string, unknown> = { first: window.first, last, caught: Math.min(window.caught, last), entries, thread: summary, title: title === undefined ? null : (get(title, "title") ?? null), end: window.last === null ? end || last >= latest : false };
+    const row = data.chatOfThread(station, id);
+    const value: Record<string, unknown> = { first: window.first, last, caught: Math.min(window.caught, last), entries, thread: summary, title: row === undefined ? null : (get(row, "title") ?? null), end: window.last === null ? end || last >= latest : false };
     if (window.at !== null) value.at = window.at;
     if (window.atOffset !== null) value.atOffset = window.atOffset;
     return { ok: value };
@@ -370,13 +353,13 @@ export class StationTopics implements Owner {
       const before = window.first;
       if (before <= 1) return false;
       yield* this.#sync.older(station, id, before, null);
-      const held = yield* this.#core.data.log("entry", station, String(id));
+      const held = this.#core.data.logRange("entry", station, String(id), Math.max(1, before - PAGE), before - 1);
       let first = before;
       while (first > Math.max(1, before - PAGE) && held.has(first - 1)) first--;
       if (first === before) return false;
       window.first = first;
       // As many go at the other end: the window is short of its end from then on.
-      const top = window.last ?? this.#latest(station, id, held);
+      const top = window.last ?? this.#latest(station, id);
       if (top - first + 1 > WINDOW) window.last = first + WINDOW - 1;
       this.#core.store.invalidate({ topic: "thread", station, thread: id });
       return first > 1;
@@ -391,10 +374,10 @@ export class StationTopics implements Owner {
       if (!found || found[1].last === null) return false;
       const window = found[1];
       const after = window.last!;
-      const held = yield* this.#core.data.log("entry", station, String(id));
-      const latest = this.#latest(station, id, held);
+      const latest = this.#latest(station, id);
       const to = Math.min(after + PAGE, latest);
       yield* this.#sync.range(station, id, after + 1, to, null);
+      const held = this.#core.data.logRange("entry", station, String(id), after + 1, to);
       let last = after;
       while (last < to && held.has(last + 1)) last++;
       window.last = last >= latest ? null : last;
@@ -411,9 +394,9 @@ export class StationTopics implements Owner {
     return Effect.gen({ self: this }, function* () {
       const found = this.#window(station, id);
       if (!found || found[1].last === null) return;
-      const held = yield* this.#core.data.log("entry", station, String(id));
-      const latest = this.#latest(station, id, held);
+      const latest = this.#latest(station, id);
       yield* this.#sync.range(station, id, Math.max(1, latest - PAGE + 1), latest, null);
+      const held = this.#core.data.logRange("entry", station, String(id), Math.max(1, latest - PAGE), latest);
       let first = latest;
       while (first > 1 && held.has(first - 1) && first > latest - PAGE + 1) first--;
       found[1].first = first;

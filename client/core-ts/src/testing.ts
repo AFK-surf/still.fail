@@ -4,7 +4,9 @@ import { Deferred, Duration, Effect, Queue, Scope, type Clock } from "effect";
 import { TestClock } from "effect/testing";
 import { COALESCE_MS } from "./store.ts";
 import { HostError } from "./error.ts";
-import type { DbOp, DbRange, Host, HttpRequest, HttpResponse, Pull, StreamResponse, TcpConnection } from "./host.ts";
+import type { DbRange, Host, HttpRequest, HttpResponse, Pull, Sql, StreamResponse, TcpConnection } from "./host.ts";
+import { DatabaseSync } from "node:sqlite";
+import { NodeSql } from "./hosts/node-sql.ts";
 import type { ClientId, CoreMessage } from "./protocol.ts";
 import { compareKeys, toJsonBytes } from "./util.ts";
 
@@ -106,8 +108,14 @@ export class FakeHost implements Host {
   onTestChannel = false;
   readonly time: TestTime;
   readonly storage = new Map<string, Uint8Array>();
-  /// The core's database: `${table}\u0000${key}` → bytes.
+  /// The former records store (what db/import.ts brings over): `${table}\u0000${key}` → bytes.
   readonly db = new Map<string, Uint8Array>();
+  /// The accounts' databases, in memory, by name: a core started again on this host opens the same.
+  readonly sqls = new Map<string, NodeSql>();
+  /// What opening a database does instead (a test of one that cannot be opened).
+  openDbHook: ((name: string) => Sql | Error | null) | null = null;
+  /// A database in memory, where a test gives one.
+  memoryDb?: () => Sql | undefined;
   #responder: Responder | null = null;
   #streamResponder: ((request: HttpRequest) => Effect.Effect<StreamResponse, HostError, Scope.Scope>) | null = null;
   readonly sockets: FakeSocket[] = [];
@@ -252,7 +260,7 @@ export class FakeHost implements Host {
     return Effect.sync(() => void this.storage.delete(key));
   }
 
-  dbRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
+  legacyRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
     return Effect.sync(() => {
       const out: [string, Uint8Array][] = [];
       for (const [k, v] of this.db) {
@@ -265,13 +273,37 @@ export class FakeHost implements Host {
     });
   }
 
-  dbWrite(ops: DbOp[]): Effect.Effect<void, HostError> {
-    return Effect.sync(() => {
-      for (const op of ops) {
-        if ("put" in op) this.db.set(`${op.put.table}\u0000${op.put.key}`, op.put.value);
-        else this.db.delete(`${op.delete.table}\u0000${op.delete.key}`);
+  openDb(name: string): Effect.Effect<Sql, HostError> {
+    return Effect.suspend(() => {
+      const hooked = this.openDbHook?.(name) ?? null;
+      if (hooked instanceof Error) return Effect.fail(hooked as HostError);
+      if (hooked !== null) return Effect.succeed(hooked);
+      let sql = this.sqls.get(name);
+      if (!sql) {
+        sql = new NodeSql(new DatabaseSync(":memory:"), true);
+        this.sqls.set(name, sql);
       }
+      return Effect.succeed(sql as Sql);
     });
+  }
+
+  deleteDb(name: string): Effect.Effect<void, HostError> {
+    return Effect.sync(() => {
+      const sql = this.sqls.get(name);
+      this.sqls.delete(name);
+      sql?.db.close();
+    });
+  }
+
+  /// A row count of an account's table (tests).
+  rows(name: string, sql: string, params: (string | number | null)[] = []): unknown[][] {
+    const db = this.sqls.get(name);
+    return db ? (db.all(sql, params) as unknown[][]) : [];
+  }
+
+  /// Puts a record into the former records store (an import's test).
+  legacyPut(table: string, key: string, value: unknown): void {
+    this.db.set(`${table}\u0000${key}`, toJsonBytes(value));
   }
 
   dbKeys(table: string): string[] {
