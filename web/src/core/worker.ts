@@ -148,13 +148,20 @@ const loadIroh = () => (irohLoaded ??= initIroh().then(() => iroh));
 const loadSqlite = async (): Promise<WasmSqlite> => {
   const { default: init } = await import("@sqlite.org/sqlite-wasm");
   const sqlite3 = await init();
-  const pool = await sqlite3.installOpfsSAHPoolVfs({ name: "stillfail", directory: "/stillfail-core", initialCapacity: 6 });
+  // A browser without OPFS's synchronous handles has no pool: the databases are in memory this run (the core says so).
+  const pool = await sqlite3.installOpfsSAHPoolVfs({ name: "stillfail", directory: "/stillfail-core", initialCapacity: 6 }).catch((error: unknown) => {
+    console.error("still.fail core: no OPFS pool:", error);
+    return null;
+  });
+  const noPool = () => {
+    throw new Error("OPFS is not available here");
+  };
   return {
-    open: (path) => new pool.OpfsSAHPoolDb(path) as never,
+    open: (path) => (pool ? new pool.OpfsSAHPoolDb(path) : noPool()) as never,
     memory: () => new sqlite3.oo1.DB(":memory:") as never,
-    unlink: (path) => pool.unlink(path),
+    unlink: (path) => pool?.unlink(path) ?? false,
     reserve: async (files) => {
-      await pool.reserveMinimumCapacity(pool.getFileCount() + files);
+      if (pool) await pool.reserveMinimumCapacity(pool.getFileCount() + files);
     },
   };
 };
