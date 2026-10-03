@@ -1,4 +1,4 @@
-// One actor per session (mesh/app/src/session.rs): every change to a session's state runs through its serial queue, so
+// One actor per session (the Rust station's session.rs): every change to a session's state runs through its serial queue, so
 // runtime events, deliveries and tool calls never interleave halfway. Redesigned on two points (docs/station-ts.md):
 // - Where it stands is one value (`phase`): idle, starting, running, waiting, or closed; not three flags kept apart.
 // - What tools say of the running turn (its state, need, about, what it waits for) goes through the queue too, and the

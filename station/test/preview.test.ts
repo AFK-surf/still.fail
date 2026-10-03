@@ -1,4 +1,4 @@
-// mesh/app/src/preview.rs's tests ported (same names, same checks): a web service on this machine reached through the
+// the Rust station's preview.rs's tests ported (same names, same checks): a web service on this machine reached through the
 // preview proxy, and a service's WebSocket bridged to a client's stream in frames.
 import assert from "node:assert/strict";
 import { type Server, type Socket, createServer } from "node:net";

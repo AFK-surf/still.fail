@@ -1,4 +1,4 @@
-// Claude Code driver (mesh/app/src/runtime/claude.rs): one `claude -p` stream-json process per session, under a
+// Claude Code driver (the Rust station's runtime/claude.rs): one `claude -p` stream-json process per session, under a
 // runner whose id comes from the session key.
 //
 // Behaviour pinned by spikes (spike/README.md):

@@ -1,4 +1,4 @@
-// Other conversations and sessions of the station, for an agent to read (mesh/app/src/hub/others.rs: chat_list,
+// Other conversations and sessions of the station, for an agent to read (the Rust station's hub/others.rs: chat_list,
 // chat_read, session_history): people refer to another chat by its link, and the agent reads what was said there and
 // what its agents did.
 import { parseThreadAddress, threadAddress } from "../agents/instructions.ts";

@@ -1,4 +1,4 @@
-// The loopback port's answers, as mesh/station/src/local.rs's tests have them.
+// The loopback port's answers, as the Rust station's local.rs's tests have them.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type Place, answer, langOfBrowser } from "../src/ops/loopback.ts";

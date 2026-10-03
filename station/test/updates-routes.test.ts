@@ -1,5 +1,5 @@
 // POST /updates…, as admin/mod.rs answers them (admin/tests.rs), and `stillfail-station channel` asking a running
-// station (mesh/station/src/main.rs's tests). Temporary data directories, a cloud that answers nothing.
+// station (the Rust station's main.rs's tests). Temporary data directories, a cloud that answers nothing.
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

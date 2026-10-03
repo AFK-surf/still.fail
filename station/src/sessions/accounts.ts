@@ -1,4 +1,4 @@
-// Which account a session runs on (mesh/app/src/hub.rs: run_on, spend, pick, health_of, model_efforts, configure): the
+// Which account a session runs on (the Rust station's hub.rs: run_on, spend, pick, health_of, model_efforts, configure): the
 // pool's choice among the station's profiles, kept while usable, moved off one whose allowance ran out, and changed by
 // hand (profile, model, effort, fast). How profiles are doing comes from outside (the accounts module's checks and
 // allowances: `setHealth`); which ran into their allowance lately is kept here.

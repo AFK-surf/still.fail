@@ -1,4 +1,4 @@
-// Workspace file helpers for automatic cleanup of archived sessions (mesh/app/src/footprint.rs).
+// Workspace file helpers for automatic cleanup of archived sessions (the Rust station's footprint.rs).
 import { execFile } from "node:child_process";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { lstat, readdir } from "node:fs/promises";

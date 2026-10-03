@@ -1,4 +1,4 @@
-// Sessions and threads as the pages read them, ported from mesh/app/src/admin/views.rs (`summary`, `sessions`, `session`,
+// Sessions and threads as the pages read them, ported from the Rust station's admin/views.rs (`summary`, `sessions`, `session`,
 // `threads`, `thread`, `thread_view`), admin/mod.rs (GET /sessions/:key/timeline, /widget-state) and admin/files.rs
 // (`session_file`), with the same JSON, field for field and in serde_json's order.
 //

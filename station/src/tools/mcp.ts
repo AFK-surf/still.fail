@@ -1,4 +1,4 @@
-// The station's MCP endpoint (mesh/app/src/mcp.rs): streamable HTTP, JSON responses only. Every request carries the
+// The station's MCP endpoint (the Rust station's mcp.rs): streamable HTTP, JSON responses only. Every request carries the
 // session's bearer token; tools run on behalf of that session. This takes a request's method, authorization and body,
 // and gives its status and body; the HTTP wiring is the server's.
 import { log } from "../ops/log.ts";

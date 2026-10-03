@@ -1,4 +1,4 @@
-// Phones lent to the station's agents (mesh/adb.ts, from mesh/station/src/adb.rs): the Rust tests, the offer's states
+// Phones lent to the station's agents (mesh/adb.ts, from the Rust station's adb.rs): the Rust tests, the offer's states
 // and asks over in-memory streams, and an offer from a fake phone over a real mesh connection, its tunnels reaching
 // the phone, with a fake adb (test/fake/adb) — never a real device.
 import assert from "node:assert/strict";

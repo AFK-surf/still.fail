@@ -1,4 +1,4 @@
-// The agents' tools for their conversations (mesh/app/src/hub.rs `tools`): chat_post, chat_state, chat_history,
+// The agents' tools for their conversations (the Rust station's hub.rs `tools`): chat_post, chat_state, chat_history,
 // chat_list, chat_read, session_send, session_history. Names, descriptions and input schemas are the Rust station's,
 // byte for byte (test/hub-tools.test.ts reads them from hub.rs and compares); what they do is src/sessions/.
 import { chatHistory, chatPost, chatState } from "../sessions/conversations.ts";

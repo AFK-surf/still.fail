@@ -1,4 +1,4 @@
-// What the station posts to still.fail cloud signed with its key (mesh/station/src/feedback.rs `send`, notify.rs):
+// What the station posts to still.fail cloud signed with its key (the Rust station's feedback.rs `send`, notify.rs):
 // the body's sha256 under "<tag>:<origin>:<station>:<ts>:<digest>", in the x-stillfail-* headers (and x-ember-* where
 // the Rust sends those too).
 import { nowSecs } from "../ops/files.ts";

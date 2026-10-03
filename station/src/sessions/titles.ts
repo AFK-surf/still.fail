@@ -1,4 +1,4 @@
-// A chat named by its agent (mesh/app/src/hub/titles.rs, chat_post's title): the first name at once, a new one only when
+// A chat named by its agent (the Rust station's hub/titles.rs, chat_post's title): the first name at once, a new one only when
 // the talk has moved on (people said enough since, and it was not changed too often), never over a name people gave
 // it, and not while someone has the chat open: then it waits until they leave. Redesigned on one point: a name that
 // waits looks again when the chat would no longer count as open (its last read plus OPEN_MS), not every minute.

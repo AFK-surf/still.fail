@@ -1,4 +1,4 @@
-// An image's pixel size from its first bytes (mesh/app/src/image_size.rs): PNG, GIF, JPEG and WebP, the formats pages
+// An image's pixel size from its first bytes (the Rust station's image_size.rs): PNG, GIF, JPEG and WebP, the formats pages
 // show inline. Nothing is decoded; unknown files give null.
 import { closeSync, openSync, readSync } from "node:fs";
 

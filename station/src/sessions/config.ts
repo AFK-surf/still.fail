@@ -1,4 +1,4 @@
-// What the hub reads of config.json (mesh/app/src/config.rs `Config`, as parse_config fills it in): profiles, connects,
+// What the hub reads of config.json (the Rust station's config.rs `Config`, as parse_config fills it in): profiles, connects,
 // and the numbers that govern turns, warm processes and archiving. Read on every use (the hub is given a function), so
 // edits apply to the next decision. A profile stays config.json's object (the drivers read its access, env, model…),
 // its home made absolute and what parse_config derives added: name, runtimes, models, backgroundOnMessage.

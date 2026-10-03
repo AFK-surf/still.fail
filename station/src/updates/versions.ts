@@ -1,4 +1,4 @@
-// What the updates go by, as plain functions (mesh/app/src/updates.rs): versions and how they compare, the release
+// What the updates go by, as plain functions (the Rust station's updates.rs): versions and how they compare, the release
 // channels, what is offered, and the words the pages show while something updates.
 import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";

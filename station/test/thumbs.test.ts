@@ -1,7 +1,7 @@
 // Thumbnails and ThumbHashes (src/sessions/thumbs.ts, the addon's native/mesh/src/thumbs.rs): thumbs.rs's tests, and
 // the same answers as the Rust station: GET /sessions/:key/files?thumb=1 gives the very bytes the Rust gives, and a
 // message keeps the same ThumbHashes. What the Rust gives is test/fixtures/thumbs/golden.json, written by the Rust
-// station's own code (mesh/app/examples/thumbs_golden.rs, which also wrote the JPEG and WebP fixtures; the PNGs are made
+// station's own code (the Rust station's thumbs_golden.rs, which also wrote the JPEG and WebP fixtures; the PNGs are made
 // here with the same pixels).
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";

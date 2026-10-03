@@ -1,5 +1,5 @@
 // Who this machine's own Claude Code and Codex are signed in as, in their usual homes (~/.claude, ~/.codex)
-// (mesh/app/src/machine_logins.rs `MachineLogins`): for the pages that ask for a first profile, and for making a
+// (the Rust station's machine_logins.rs `MachineLogins`): for the pages that ask for a first profile, and for making a
 // `machine` profile. How such a profile uses the login is agents/machine-logins.ts's (and oauth.ts renews Claude's).
 //
 // Read at start, when a profile on it is made, after a runtime is installed, and when the overview is read with a

@@ -1,4 +1,4 @@
-// The store's schema (mesh/app/src/store.rs `// ── schema`): the tables as CREATE … IF NOT EXISTS, and the columns that
+// The store's schema (the Rust station's store.rs `// ── schema`): the tables as CREATE … IF NOT EXISTS, and the columns that
 // came after schema version 12 without changing it, added in place on open (add_*_columns), the same way and in the
 // same order as the Rust station does, so either station opens what the other kept.
 import type { DatabaseSync } from "node:sqlite";

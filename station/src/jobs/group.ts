@@ -1,4 +1,4 @@
-// Process groups as jobs use them (mesh/app/src/runtime/process.rs `signal_group`, `group_alive`, `still_ours`,
+// Process groups as jobs use them (the Rust station's runtime/process.rs `signal_group`, `group_alive`, `still_ours`,
 // `end_group`): a job runs in a group of its own, so it and what it starts are signalled together, and a group an
 // earlier station recorded is checked to still be that group before it is touched (pids are reused).
 import { execFileSync } from "node:child_process";

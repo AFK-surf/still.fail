@@ -1,4 +1,4 @@
-// The station's commands other than `run` (mesh/station/src/main.rs `main`): enroll, status, id. Their output is what
+// The station's commands other than `run` (the Rust station's main.rs `main`): enroll, status, id. Their output is what
 // people and `bin/stillfail` read, so its words are the catalog's, as the Rust station says them.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";

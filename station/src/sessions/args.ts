@@ -1,4 +1,4 @@
-// The agents' tool arguments as the station reads them (mesh/app/src/hub.rs, its argument functions): how a turn ends
+// The agents' tool arguments as the station reads them (the Rust station's hub.rs, its argument functions): how a turn ends
 // (`kind`, in today's words and those from before), what goes with it (`need`, `done`, `about`), the card a post carries
 // (`card`, or `options` from before cards; JSON text from a runtime whose tool list is older), and how posts with files
 // are kept. Every rule and every word of what an agent is told when it is refused is the Rust station's.

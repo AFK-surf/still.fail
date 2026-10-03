@@ -2,7 +2,7 @@ import { thumbHashToApproximateAspectRatio, thumbHashToDataURL } from "thumbhash
 
 /**
  * An image's ThumbHash as the station keeps it with the message (base64, made as it keeps the image,
- * mesh/app/src/thumbs.rs): a blurred likeness of it, shown until the image itself loads.
+ * the Rust station's thumbs.rs): a blurred likeness of it, shown until the image itself loads.
  */
 const drawn = new Map<string, { url: string; ratio: number } | null>();
 

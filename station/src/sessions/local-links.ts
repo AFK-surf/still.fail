@@ -1,4 +1,4 @@
-// Local Markdown destinations are files to deliver, not routes on the web client (mesh/app/src/local_links.rs). The
+// Local Markdown destinations are files to deliver, not routes on the web client (the Rust station's local_links.rs). The
 // Rust reads the Markdown with pulldown-cmark; this reads what that finds of links: inline links and images (`[x](d)`,
 // `![x](d)`, `<…>` destinations, nested ones), outside code spans and fenced code blocks, and reference links (which
 // are refused when they name a local file). With the native addon the Rust's own code reads it (native/mesh/src/local.rs); without it, raw HTML and indented code blocks

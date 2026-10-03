@@ -1,4 +1,4 @@
-// Cold storage for owned session workspaces and runtime transcripts (mesh/app/src/archive.rs). The caller holds the
+// Cold storage for owned session workspaces and runtime transcripts (the Rust station's archive.rs). The caller holds the
 // room's lock and has stopped its actor. Originals are removed only after a complete, checksummed archive has been read
 // back.
 //

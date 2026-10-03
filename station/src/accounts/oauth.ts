@@ -1,4 +1,4 @@
-// Renewing a Claude login without sending a prompt (mesh/app/src/claude_oauth.rs): under Claude Code's own locks (its
+// Renewing a Claude login without sending a prompt (the Rust station's claude_oauth.rs): under Claude Code's own locks (its
 // current one in the config directory and its legacy one beside it), read again once locked, and saved back where it
 // was (the keychain for the machine's login on macOS, else the file), never as a copy. Used for the machine profile's
 // token (the Claude driver's `machineToken`) and for reading a subscription's allowance.

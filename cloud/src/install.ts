@@ -8,7 +8,7 @@
 // (a container, another init) the station is started in the background, and said not to come back after a reboot.
 // Without a token, on a station already in a workspace, it updates the station (`stillfail update` runs it so). An update
 // does not stop the agents when it can help it: with the service's definition unchanged, the running station hands
-// over to the new release in its own process (SIGUSR2, mesh/station/src/main.rs), turns, runtimes and jobs going on;
+// over to the new release in its own process (SIGUSR2, the Rust station's main.rs), turns, runtimes and jobs going on;
 // else, or if that fails, the station is first drained (SIGUSR1: no new turns, and it says once none runs), then
 // restarted. A station older than these says neither (no run/station.json): it is restarted as before.
 // The service's PATH is the caller's (the agents are found on it), so it is not what makes a definition "changed": an
@@ -44,7 +44,7 @@ export const BETA_RELEASE_FILE = /^beta\/stillfail-station-(darwin-arm64|linux-x
  * latest (the desktop app's electron-updater, the Android app's Updates.kt), and the files it names.
  */
 const APP_FILES: [RegExp, string][] = [
-  // The station's latest release, for stations to say a newer one is out (mesh/app/src/updates.rs).
+  // The station's latest release, for stations to say a newer one is out (the Rust station's updates.rs).
   [/^station\.json$/, "application/json"],
   // The test channel's (scripts/release.sh --beta): the station's latest, and the beta apps' (fail.still.desktop.beta,
   // fail.still.android.beta, apps of their own beside the released ones): the desktop one's feed (electron-updater's
@@ -95,7 +95,7 @@ if [ "$data" = "$HOME/.stillfail" ] && { [ -e "$old_data" ] || [ -L "$old_data" 
 fi
 cur="$data"
 [ -n "$migrate" ] && cur="$old_data"
-# Where the update is, for the station to show on its pages (mesh/app/src/updates.rs): download, handoff, drain,
+# Where the update is, for the station to show on its pages (the Rust station's updates.rs): download, handoff, drain,
 # restart. Only for a station that is there to read it.
 step() { [ -d "$cur/run" ] && printf '%s\n' "$1" > "$cur/run/update.step" 2>/dev/null || true; }
 # A station already in a workspace is only updated: no token, and it stays the same station.
@@ -133,7 +133,7 @@ esac
 step download
 curl -fL --progress-bar "$origin/releases/$release" -o "$tmp/stillfail.tar.gz"
 tar -xzf "$tmp/stillfail.tar.gz" -C "$tmp"
-# Which channel the release came from, for the station (mesh/app/src/updates.rs: where it goes back from the beta).
+# Which channel the release came from, for the station (the Rust station's updates.rs: where it goes back from the beta).
 printf '%s\n' "$channel" > "$tmp/stillfail/CHANNEL"
 
 # The agents it starts are found on this PATH (Claude Code, Codex, and what they run). Each directory once: run from

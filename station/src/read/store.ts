@@ -1,4 +1,4 @@
-// The station's database as the admin API reads it, ported from mesh/app/src/store.rs: the same SQL over the same
+// The station's database as the admin API reads it, ported from the Rust station's store.rs: the same SQL over the same
 // file (opened read-only), and the same rows. A thread whose sessions are all archived lives in a zstd file under the
 // archive directory (`archive/threads/<id>.jsonl.zst` beside the database) and is read from there, as the Rust does.
 //

@@ -1,5 +1,5 @@
 // Claude Code on macOS keeps its login in the keychain, under a name made from its config directory's path, and falls
-// back to <config dir>/.credentials.json only when the keychain refuses (mesh/app/src/no_keychain.rs). A profile's login
+// back to <config dir>/.credentials.json only when the keychain refuses (the Rust station's no_keychain.rs). A profile's login
 // has to live in its home (homes are renamed after a sign-in, quota and checks read the file, the keychain is out of
 // reach outside the desktop session). So profile processes get a `security` first on their PATH that finds and stores
 // nothing of Claude Code's (exit 44, "not found"); anything else goes to the real one. Machine profiles are not touched.

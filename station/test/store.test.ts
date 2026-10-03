@@ -1,4 +1,4 @@
-// mesh/app/src/store/tests.rs ported (same names, same checks), and what else the write side promises: cards closed
+// the Rust station's store/tests.rs ported (same names, same checks), and what else the write side promises: cards closed
 // and withdrawn, turns, jobs, bindings and usage.
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";

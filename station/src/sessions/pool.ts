@@ -1,4 +1,4 @@
-// The account pool (mesh/app/src/pool.rs): which of a station's profiles a session runs on. Only profiles with the
+// The account pool (the Rust station's pool.rs): which of a station's profiles a session runs on. Only profiles with the
 // chosen model enabled qualify; of those, one whose check says it cannot sign in or was rejected, or whose allowance is
 // used up, is passed over. Of the rest, the one with the most allowance left wins; then the one running fewer
 // sessions; then the one picked least recently. A session keeps its profile while it is usable (its runtime's cache is

@@ -1,4 +1,4 @@
-// Cold storage's files (mesh/app/src/archive.rs and footprint.rs tests), and the tar it writes and reads.
+// Cold storage's files (the Rust station's archive.rs and footprint.rs tests), and the tar it writes and reads.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {

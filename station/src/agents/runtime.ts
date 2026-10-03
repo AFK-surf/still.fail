@@ -1,4 +1,4 @@
-// The seam between the station and a coding-agent runtime (Claude Code, Codex), as mesh/app/src/runtime/mod.rs has it:
+// The seam between the station and a coding-agent runtime (Claude Code, Codex), as the Rust station's runtime/mod.rs has it:
 // everything above is runtime-agnostic. A driver opens sessions; what a session's runtime does comes back as events,
 // in order, to the one listener it was opened with. Processes run under runners (./runner.ts): a station that starts
 // again takes its sessions up from the runners (`adopt`), from what the previous one left (`snapshot`) or, after a

@@ -49,7 +49,7 @@ export interface ProfileInput {
   fast?: boolean;
 }
 
-/** The groups of scopes and events a Slack app made here asks for (mesh/app/src/chat/slack_apps.rs). */
+/** The groups of scopes and events a Slack app made here asks for (the Rust station's chat/slack_apps.rs). */
 export type SlackGroup =
   | "base" | "public" | "dm" | "customize" | "files" | "reactions" | "channels" | "people" | "extras"
   | "canvases" | "lists" | "topics" | "usergroups" | "search" | "connect" | "more";

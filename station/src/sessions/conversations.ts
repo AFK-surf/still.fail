@@ -1,4 +1,4 @@
-// What agents do in their own conversations (mesh/app/src/hub.rs: chat_post, chat_state, chat_history, slack_api and
+// What agents do in their own conversations (the Rust station's hub.rs: chat_post, chat_state, chat_history, slack_api and
 // what they rest on): post (with files and a card, ending the turn or not), record how the turn ends, read a thread,
 // and call Slack as their bot. What a tool says of the turn reaches its session's actor, in turn with the rest.
 import { copyFileSync, mkdirSync, statSync } from "node:fs";

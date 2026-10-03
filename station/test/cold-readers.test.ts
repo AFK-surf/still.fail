@@ -1,4 +1,4 @@
-// Packed transcripts as the readers read them (mesh/app/src/transcript/tests.rs
+// Packed transcripts as the readers read them (the Rust station's transcript/tests.rs
 // `compressed_transcript_stays_discoverable_and_continues_after_restore`, usage/tests.rs
 // `compressed_history_keeps_usage_offsets_and_subagent_discovery`).
 import assert from "node:assert/strict";

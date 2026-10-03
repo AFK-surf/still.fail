@@ -1,4 +1,4 @@
-// mesh/app/src/jobs/tests.rs ported (same names, same checks): real jobs in temporary data directories, a real Store,
+// the Rust station's jobs/tests.rs ported (same names, same checks): real jobs in temporary data directories, a real Store,
 // and a notify that records what agents are told. Plus the restart pause on a TestClock and /jobs/notify.
 // The tests share nothing (each its own directory, store and jobs; their ports are only claims in that store), so they
 // run at once. No test waits a fixed time:

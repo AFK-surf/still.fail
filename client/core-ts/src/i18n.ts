@@ -1,4 +1,4 @@
-// The words people read, in their language (stillfail_i18n, client/i18n/src/lib.rs): the same catalog, read the same way.
+// The words people read, in their language: client/i18n/catalog (its README says how it is read).
 // A key a language lacks is said in Chinese; one neither has is shown as the key. `{name}` takes the value given as
 // `name`; words that change with a number (`{"one", "other"}`) are chosen by `n`.
 import zh_android_chat from "../../i18n/catalog/zh/android-chat.json" with { type: "json" };

@@ -1,4 +1,4 @@
-// The words people read, in their language: the catalog client/i18n reads (client/i18n/src/lib.rs says how), its
+// The words people read, in their language: client/i18n/catalog (its README says how it is read), its
 // station part (everything the station says is under `station.`; the rest is the clients'). `{name}` takes the value
 // given as `name`; `{"one", "other"}` is chosen by `n` (1: one). A key a language lacks is said in Chinese; one neither
 // has is the key.

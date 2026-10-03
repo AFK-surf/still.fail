@@ -1,4 +1,4 @@
-// The station's traces (mesh/station/src/telemetry.rs): the mesh's own spans (a request stream from accepted to fully
+// The station's traces (the Rust station's telemetry.rs): the mesh's own spans (a request stream from accepted to fully
 // answered; an event stream's to its head), under the caller's trace when it records one. Batched, sent at most every
 // 3 s to still.fail cloud's `/v1/telemetry/traces` signed with the station's key; the cloud forwards them to Axiom. A
 // batch that cannot be sent is dropped. Off unless the config turns traces on (telemetry.traces), read at start.

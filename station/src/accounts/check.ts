@@ -1,4 +1,4 @@
-// What config.json must be before it is taken (mesh/app/src/config.rs `parse_config`'s refusals, and the shapes its
+// What config.json must be before it is taken (the Rust station's config.rs `parse_config`'s refusals, and the shapes its
 // serde types insist on): `checkConfig` throws what is wrong, in the same words. Set as `ConfigFile.check`, so an edit
 // that does not pass is not written. What parse_config fills in is read elsewhere (sessions/config.ts `hubConfig`).
 import { accessKinds, needsKey, runtimesFor } from "./profiles.ts";

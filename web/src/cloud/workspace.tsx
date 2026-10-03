@@ -156,7 +156,7 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
       <Routes>
         <Route path="chats/:chat?" element={<ChatPage />} />
         <Route path="connects/:id" element={<ConnectPage />} />
-        {/* A station's 共享调试 is the Android app's (its agent links here: mesh/app/src/adb.rs). */}
+        {/* A station's 共享调试 is the Android app's (its agent links here: the Rust station's adb.rs). */}
         <Route path="adb" element={<Empty><p>{t("web-pages.workspace.adbOnPhone")}</p></Empty>} />
         {/* One Profile page for the workspace: a station's own list is it. */}
         <Route path="settings/accounts" element={<Navigate to={profilesPage(station)} replace />} />

@@ -1,6 +1,6 @@
 // The hub (src/sessions/hub.ts): routing, sessions, turns, nudges, waits, stops, sign-in retries, hold and release,
 // recover and handover, eviction, single-session connects, the station's own chat. Ported from
-// mesh/app/src/hub/tests.rs, on a real Store, a fake chat platform and fake runtimes.
+// the Rust station's hub/tests.rs, on a real Store, a fake chat platform and fake runtimes.
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

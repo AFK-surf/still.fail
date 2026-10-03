@@ -1,4 +1,4 @@
-// The workspace's stations calling each other (mesh/station/src/peer.rs): their own ALPN, and the peer's iroh key for
+// The workspace's stations calling each other (the Rust station's peer.rs): their own ALPN, and the peer's iroh key for
 // who it is, not a member's credential. Who belongs is only what still.fail cloud's presence socket said last
 // (`peers`, current while the socket holds): until a fresh roster comes, calls fail closed. One request a stream: a
 // JSON `{workspace, request}` the caller finishes, a JSON `{result}` or `{error}` back.

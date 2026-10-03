@@ -1,4 +1,4 @@
-// Keeps the station on still.fail's relays (mesh/station/src/main.rs `keep_relays`): the ones browsers reach (they
+// Keeps the station on still.fail's relays (the Rust station's main.rs `keep_relays`): the ones browsers reach (they
 // know no others), iroh homing on the nearest and the station kept on the rest too (keepers), so a device that reaches
 // only some of them still reaches it. Those the cloud adds or takes away are put in or taken out as it pushes them.
 // iroh's public relays come in only while none of ours answers (so the station can still be reached; the DHT says

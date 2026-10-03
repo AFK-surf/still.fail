@@ -1,5 +1,5 @@
 // An image's ThumbHash as the station keeps it with the message (base64, made as it keeps the image,
-// mesh/app/src/thumbs.rs): a blurred likeness of it, shown until the image itself loads (web/src/thumbhash.ts).
+// the Rust station's thumbs.rs): a blurred likeness of it, shown until the image itself loads (web/src/thumbhash.ts).
 // The decoder is thumbhash's own (Evan Wallace, MIT), as the web uses it.
 package fail.still.android.ui
 

@@ -1,4 +1,4 @@
-// Whether a profile works, and what models it offers (mesh/app/src/profiles.rs: the checks, and which access kinds a
+// Whether a profile works, and what models it offers (the Rust station's profiles.rs: the checks, and which access kinds a
 // runtime takes). How an access kind reaches its models (the environment, Codex's overrides) is agents/profiles.ts's.
 // The providers' addresses can be pointed elsewhere (`Urls`): tests give fake servers.
 import { execFile } from "node:child_process";

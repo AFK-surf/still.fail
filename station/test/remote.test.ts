@@ -1,4 +1,4 @@
-// mesh/app/src/remote.rs's tests ported (transfer paths, task_tests, session_tests, recovery_tests; same names, same
+// the Rust station's remote.rs's tests ported (transfer paths, task_tests, session_tests, recovery_tests; same names, same
 // checks), with the schedules on a TestClock; then two stations in one process, the source's tools reaching the target
 // through a direct `call` that answers as the transport does.
 import assert from "node:assert/strict";

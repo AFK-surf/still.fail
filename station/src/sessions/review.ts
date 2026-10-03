@@ -1,4 +1,4 @@
-// After an agent ends a turn all_done (or final), whether the chat has nothing left to do (mesh/app/src/hub.rs
+// After an agent ends a turn all_done (or final), whether the chat has nothing left to do (the Rust station's hub.rs
 // `suggest_archive`). As main has it since migration note 21: all_done is not reviewed before it is posted or recorded;
 // the review runs on its own afterwards, asked of the decision model with the latest messages that fit, newest first.
 // A chat it finds finished is recommended for the archive (until anyone says anything in it again); one it finds

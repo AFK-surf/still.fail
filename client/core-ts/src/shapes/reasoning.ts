@@ -1,4 +1,4 @@
-// Runtime-reported model capabilities (as the Rust station reads them: client/shapes/src/reasoning.rs). Missing metadata keeps old stations usable;
+// Runtime-reported model capabilities (as the station reads them). Missing metadata keeps old stations usable;
 // an explicitly empty list means the model has no adjustable reasoning.
 import { same } from "./model.ts";
 

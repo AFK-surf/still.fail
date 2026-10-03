@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["shapes", "i18n", "iroh-wasm", "shell"]
+members = ["iroh-wasm", "shell"]
 
 [workspace.package]
 edition = "2024"

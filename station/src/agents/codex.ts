@@ -1,4 +1,4 @@
-// Codex driver (mesh/app/src/runtime/codex.rs): one shared `codex app-server` per profile, under a runner whose id comes
+// Codex driver (the Rust station's runtime/codex.rs): one shared `codex app-server` per profile, under a runner whose id comes
 // from the profile, one thread per session.
 //
 // Pinned by spikes (spike/README.md):

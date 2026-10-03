@@ -1,4 +1,4 @@
-// Small copies of the images sent in chats, for the chat to show (mesh/app/src/thumbs.rs): a chat of screenshots would
+// Small copies of the images sent in chats, for the chat to show (the Rust station's thumbs.rs): a chat of screenshots would
 // otherwise have pages take in megabytes to show each at a few hundred pixels. Made when an image is kept (and on first
 // asking for one kept before), in <data>/thumbs, by the image's path; the image itself stays as it was, for the
 // preview. And each image's ThumbHash, kept with the message: a blurred likeness of it, a few dozen bytes, shown until it

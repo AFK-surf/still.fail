@@ -1,4 +1,4 @@
-// The store's rows (mesh/app/src/store.rs `// ── rows`), camelCase, and how they are read from and written to the database.
+// The store's rows (the Rust station's store.rs `// ── rows`), camelCase, and how they are read from and written to the database.
 // Option is `T | null`; where the Rust leaves a None Value out (EntryRow's agentIdentity, options, card) it is undefined.
 // The conversions are read/store.ts's, with the token fields the station needs (sessions, jobs) kept.
 

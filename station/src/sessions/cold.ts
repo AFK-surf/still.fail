@@ -1,4 +1,4 @@
-// Cold storage of archived sessions' files (mesh/app/src/hub.rs: archive_room, clean_rebuildable, pack_archive,
+// Cold storage of archived sessions' files (the Rust station's hub.rs: archive_room, clean_rebuildable, pack_archive,
 // archive_history_files, restore_archive, archive_has_jobs, archive_is_cold): once an archived session is idle, what a
 // build makes again is removed from its own directory, and the rest of its workspace and the transcripts its runtime
 // keeps in station storage are packed (archive.ts); they are restored before its runtime starts again, or when it is

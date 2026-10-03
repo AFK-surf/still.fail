@@ -1,4 +1,4 @@
-// The workspace's other stations, for agents (mesh/app/src/remote.rs `tools`): station_list, station_task,
+// The workspace's other stations, for agents (the Rust station's remote.rs `tools`): station_list, station_task,
 // station_file. Their definitions are the Rust station's, byte for byte; what they do is the station transport's
 // (remote.rs, ported in src/jobs/), reached through the hub's `Remote`. Their answer is its JSON, pretty-printed.
 import type { Remote } from "../sessions/neighbours.ts";

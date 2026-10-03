@@ -1,4 +1,4 @@
-// The loopback port (mesh/station/src/local.rs). The station has no page of its own any more (its pages are still.fail
+// The loopback port (the Rust station's local.rs). The station has no page of its own any more (its pages are still.fail
 // cloud's): the port is kept so that links to the page it had, sent to Slack and kept in browsers, still lead
 // somewhere: `/admin/...` is sent to the same page in the cloud's web app, or, while the station is in no workspace,
 // told how to join one. `/healthz` says whether the station answers. Nothing on it reaches the admin API.

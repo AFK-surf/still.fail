@@ -1,4 +1,4 @@
-// `stillfail-station channel [stable|beta] [--app DIR] [--data DIR]` (mesh/station/src/main.rs): the channel the
+// `stillfail-station channel [stable|beta] [--app DIR] [--data DIR]` (the Rust station's main.rs): the channel the
 // station is updated on, set when one is named, then said on the last line (`bin/stillfail update [--beta|--stable]`
 // reads it). A station running there holds the config (an edit of its own would write over one made beside it): it is
 // asked (SIGHUP to the pid in run/station.json, the channel in run/channel-ask) and its answer waited for; with none

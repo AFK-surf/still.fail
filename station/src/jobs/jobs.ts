@@ -1,4 +1,4 @@
-// Background jobs (mesh/app/src/jobs.rs): commands a session's agent starts that the station runs and keeps, apart from
+// Background jobs (the Rust station's jobs.rs): commands a session's agent starts that the station runs and keeps, apart from
 // the agent's turns. Each runs in a process group of its own with its output in a log file; the agent hears when it
 // ends, and whatever the job says on the way (`stillfail-job notify …`). A job with a port is a web service: kept up
 // (started again when it ends, with a growing pause), and seen by the workspace's members through the station's

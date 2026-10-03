@@ -1,4 +1,4 @@
-// Live view of sessions (mesh/app/src/live.rs): what a running turn is doing, told at its turning points — the phase
+// Live view of sessions (the Rust station's live.rs): what a running turn is doing, told at its turning points — the phase
 // (asking the model, thinking, working), each step starting (thinking, writing, a tool with its input) and ending — and
 // the transcript's entries as each is written whole. What a step writes as it goes (the runtime's deltas) is not sent:
 // a step's words come with its entry; how fast it writes is, now and then. Nothing here is stored: the steps in flight

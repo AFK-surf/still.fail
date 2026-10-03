@@ -1,4 +1,4 @@
-// The MCP endpoint, as mesh/app/src/mcp.rs's tests have it.
+// The MCP endpoint, as the Rust station's mcp.rs's tests have it.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { McpEndpoint, OUTWARD, type Tool, UNBOUND_REFUSAL } from "../src/tools/mcp.ts";

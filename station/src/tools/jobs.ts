@@ -1,4 +1,4 @@
-// The agents' tools for background jobs (mesh/app/src/jobs.rs `Jobs::tools`): job_start, job_list, job_log, job_stop,
+// The agents' tools for background jobs (the Rust station's jobs.rs `Jobs::tools`): job_start, job_list, job_log, job_stop,
 // run as the session whose token the MCP request carries. Names, descriptions and input schemas as the Rust's, word for
 // word (test/jobs-tools.test.ts reads them from it).
 import { type Jobs, LOG_LINES, named, tail } from "../jobs/jobs.ts";

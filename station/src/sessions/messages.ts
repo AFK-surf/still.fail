@@ -1,4 +1,4 @@
-// session_send (mesh/app/src/hub/messages.rs): one session's agent writes to another's, on this station or on another
+// session_send (the Rust station's hub/messages.rs): one session's agent writes to another's, on this station or on another
 // station of the workspace (through the station transport, as station_task goes). The message is posted in the other
 // chat for people to see, headed with a link back to the sender's chat, and handed to the sessions there like any
 // message; they answer the same way. Nothing limits how long two agents talk: that is theirs to judge.

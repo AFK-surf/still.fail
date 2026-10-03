@@ -1,4 +1,4 @@
-// slack_api (mesh/app/src/hub.rs): any Slack Web API method, as the session's bot (or the bot of one of its Slack
+// slack_api (the Rust station's hub.rs): any Slack Web API method, as the session's bot (or the bot of one of its Slack
 // conversations, `to`). The method's shape, what is not for agents, and the threads rule for writes (WRITES) are
 // src/sessions/conversations.ts's `slackApi`.
 import { jsString } from "../sessions/args.ts";

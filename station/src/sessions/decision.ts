@@ -1,4 +1,4 @@
-// Typed choices asked of a decision model (mesh/app/src/decision.rs), and the transport a profile gives them
+// Typed choices asked of a decision model (the Rust station's decision.rs), and the transport a profile gives them
 // (decision/profiles.rs), as far as the hub uses them: after an agent ends a turn all_done, whether the chat has
 // anything left in it (the archive suggestion). Token probabilities are not calibrated confidence. Discovery (probing
 // a profile's models) is the accounts module's; its result reaches here as the profile's check (`decision`).

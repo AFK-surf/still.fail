@@ -1,4 +1,4 @@
-// Sessions and chats as people make, change, archive and delete them (mesh/app/src/hub.rs: new_session, open_chat,
+// Sessions and chats as people make, change, archive and delete them (the Rust station's hub.rs: new_session, open_chat,
 // add_to_thread, say, bind_single, configure, archive, archive_chat, auto_archive, delete_session,
 // continue_machine_session). Archiving here is the record (archived, hidden) and what goes with it (the process ends,
 // other stations are told); packing an archived session's files is the hub's ColdStorage.

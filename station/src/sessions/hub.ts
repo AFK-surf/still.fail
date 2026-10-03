@@ -1,4 +1,4 @@
-// Routes chat messages to session actors and creates sessions (mesh/app/src/hub.rs). Several connects share one hub;
+// Routes chat messages to session actors and creates sessions (the Rust station's hub.rs). Several connects share one hub;
 // each has its own chat connection and its own sessions.
 //
 // A connect's mode decides the sessions: multi-session gives each thread its own session (started by an @mention);

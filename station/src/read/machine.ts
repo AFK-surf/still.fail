@@ -1,5 +1,5 @@
 // Sessions this machine's own Claude Code and Codex keep (run in a terminal, in ~/.claude and ~/.codex), for a person
-// to go on with one in a chat: ported from mesh/app/src/machine_sessions.rs (`list`, `find`, `conversation` and what
+// to go on with one in a chat: ported from the Rust station's machine_sessions.rs (`list`, `find`, `conversation` and what
 // they read with), and the routes' answers (admin/mod.rs GET /machine-sessions, GET /machine-sessions/:runtime/:id).
 // Only read; blocking (many transcripts), so it runs in a reader thread.
 //

@@ -1,4 +1,4 @@
-// The usage counter (src/usage/counter.ts): mesh/app/src/usage/tests.rs ported, the push-driven reads, and (when a
+// The usage counter (src/usage/counter.ts): the Rust station's usage/tests.rs ported, the push-driven reads, and (when a
 // copy of a real station is at $USAGE_WORK, default /tmp/usage-work) what it records against what the Rust recorded.
 import assert from "node:assert/strict";
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";

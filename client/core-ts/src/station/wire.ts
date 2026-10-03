@@ -120,7 +120,7 @@ export class HostWire implements StationWire {
   }
 }
 
-/// A WebSocket message on a socket stream (mesh/app/src/preview.rs): a kind byte (1 text, 2 binary, 8 close), the
+/// A WebSocket message on a socket stream (the Rust station's preview.rs): a kind byte (1 text, 2 binary, 8 close), the
 /// payload's length (4 bytes, big-endian), the payload; a close's is its code (2 bytes) and reason.
 export type Frame = { text: string } | { binary: Uint8Array } | { close: [number, string] };
 

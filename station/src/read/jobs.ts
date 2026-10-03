@@ -1,4 +1,4 @@
-// Background jobs as the pages read them (mesh/app/src/jobs.rs `shown`, `output_at`, `tail`; admin/views.rs
+// Background jobs as the pages read them (the Rust station's jobs.rs `shown`, `output_at`, `tail`; admin/views.rs
 // `open_jobs`; admin/mod.rs GET /jobs, /jobs/:id, /jobs/:id/log). What a job is comes from its record: the station's
 // hub, which runs them, keeps it current, so a read gives the state it last wrote.
 import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";

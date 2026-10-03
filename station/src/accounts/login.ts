@@ -1,4 +1,4 @@
-// Signing a subscription profile in from the pages (mesh/app/src/login.rs). The runtime's own login command runs here,
+// Signing a subscription profile in from the pages (the Rust station's login.rs). The runtime's own login command runs here,
 // on the station's machine, so the credentials land in the profile's home; the page only relays what the person has to
 // do in their browser:
 // - Claude: `claude auth login` prints an authorize link; after approving, the browser shows a code, which the person

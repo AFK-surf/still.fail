@@ -1,4 +1,4 @@
-// How a `machine` profile uses this machine's own login (mesh/app/src/machine_logins.rs). Never copied: both vendors
+// How a `machine` profile uses this machine's own login (the Rust station's machine_logins.rs). Never copied: both vendors
 // rotate single-use refresh tokens, so a copy would sign one side out later.
 // - Codex: the profile's home links auth.json to the machine's; Codex saves through the link, so both share one login.
 // - Claude Code: a link does not hold (it replaces the file when it refreshes), so the profile's processes are handed

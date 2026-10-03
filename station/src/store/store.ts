@@ -1,5 +1,5 @@
 import { latest as latestNote } from "../agents/migrations.ts";
-// All durable station state, in one SQLite file (mesh/app/src/store.rs ported: the same file, schema, SQL and rules, so
+// All durable station state, in one SQLite file (the Rust station's store.rs ported: the same file, schema, SQL and rules, so
 // the Rust station and this one open each other's data). One read-write connection, used synchronously; every method is
 // the Rust `Store` method of the same name in camelCase, with its parameters in the same order.
 //
@@ -36,8 +36,6 @@ export type { UsageCall, UsageFile, UsageFor, UsageGroup, UsageTurn } from "./us
 const ARCHIVE_CACHE = 32;
 /// How many of a job's notices are kept.
 const JOB_NOTICES = 50;
-/// migrations.rs `latest()`: the newest note's number; a new session begins with today's instructions (keep in step
-/// with mesh/app/src/migrations.rs NOTES until the notes are ported).
 
 type Changes = StoreChange[];
 type Arg = SQLInputValue;

@@ -1,4 +1,4 @@
-// The admin API (mesh/app/src/admin/mod.rs `route`): a table of routes, each a method, a path pattern and what answers
+// The admin API (the Rust station's admin/mod.rs `route`): a table of routes, each a method, a path pattern and what answers
 // it, gathered from src/api/routes (one module a part of the API). Reads go to the readers (off the main thread); what
 // is not here answers 404 as an unknown route does.
 import type { Readers } from "../read/pool.ts";

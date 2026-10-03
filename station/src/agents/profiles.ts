@@ -1,4 +1,4 @@
-// How a profile's account reaches its models (mesh/app/src/profiles.rs `access_env`, `codex_overrides`), and the
+// How a profile's account reaches its models (the Rust station's profiles.rs `access_env`, `codex_overrides`), and the
 // environment a profile's runtime is started with, as config.rs parse_config makes it (`envs`: what the access kind
 // needs there plus the profile's own variables, which win). A profile here is config.json's, its home made absolute.
 import type { Profile } from "./runtime.ts";

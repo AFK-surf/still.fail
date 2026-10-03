@@ -1,5 +1,5 @@
 // Which versions this station and the machine's runtimes (Claude Code, Codex) are, whether newer ones are out, and
-// updating them from the pages (mesh/app/src/updates.rs, whose rules this keeps):
+// updating them from the pages (the Rust station's updates.rs, whose rules this keeps):
 // - The station: its release says its version in BUILD (`0.1.<n>`); the latest is what still.fail cloud serves as
 //   releases/station.json, or on the test channel (`updateChannel: "beta"` in config.json; a release installed from the
 //   beta and not told otherwise is on it) releases/station-beta.json. Switched back from the beta, the older stable

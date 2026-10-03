@@ -1,7 +1,7 @@
 // This device's iroh endpoint and its links to stations (mesh.rs), over the iroh a host gives (iroh.ts). One endpoint
 // per core, its key the device key (storage `device`). A link is opened with this device's member credential for the
 // station's workspace and presents it again every RENEW_MS on its control stream; a closed link is opened again on the
-// next request. Wire format (mesh/station): ALPN `stillfail/admin/1` (or `ember/admin/1`); the first bi-stream
+// next request. Wire format (station/src/mesh/serve.ts): ALPN `stillfail/admin/1` (or `ember/admin/1`); the first bi-stream
 // carries `{"credential": …}` lines, each further bi-stream one request: a JSON head line `{method, path, headers}`
 // then the body; the reply a JSON head line `{status, headers}` then the body, streamed.
 //

@@ -1,4 +1,4 @@
-// Tasks on other stations of the workspace (mesh/app/src/remote.rs). Workspace peers call named operations over an
+// Tasks on other stations of the workspace (the Rust station's remote.rs). Workspace peers call named operations over an
 // authenticated station transport (`stillfail/station/1`, the mesh layer's); shell tasks are one service on it, never an
 // admin API proxy. An administrator explicitly trusts source station keys in config.json: remoteTasks.allow =
 // ["<station public key>"]. This grants shell execution as the station's OS user, not a sandbox. A source session's

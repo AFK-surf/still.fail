@@ -1,6 +1,6 @@
 // The station's accounts (docs/station-ts.md `accounts`): its profiles as the pages edit them, their checks and
 // allowances, sign-ins, profiles on the machine's own login, the machine login's renewed token, and the models the
-// automatic decisions may use (mesh/app/src/admin/edits.rs and decision.rs, the profile parts of admin/mod.rs and
+// automatic decisions may use (the Rust station's admin/edits.rs and decision.rs, the profile parts of admin/mod.rs and
 // views.rs, and what server.rs wires for them).
 //
 // What changes is pushed: `onChange` hears each change the overview shows (a check, an allowance, a sign-in, the

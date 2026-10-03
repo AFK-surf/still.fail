@@ -1,4 +1,4 @@
-// What the hub tests run on (mesh/app/src/hub/tests.rs's fakes and rig): a chat platform that records what is posted,
+// What the hub tests run on (the Rust station's hub/tests.rs's fakes and rig): a chat platform that records what is posted,
 // runtimes that script turns in-process, a real Store, and a hub over them in a temporary data directory.
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

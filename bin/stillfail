@@ -14,7 +14,7 @@
 #   stillfail station enroll <cloud-origin> <token>     joins a workspace in still.fail cloud
 #   stillfail station id
 # The data is in $STILLFAIL_DATA (else $EMBER_DATA), default ~/.stillfail; ~/.ember is the old default, which the
-# station moves there on its first start (mesh/app/src/former.rs).
+# station moves there on its first start (the Rust station's former.rs).
 set -eu
 # Called through a link (~/.local/bin/stillfail): the app is where the link points.
 self=$(readlink -f "$0" 2>/dev/null || echo "$0")

@@ -1,4 +1,4 @@
-// What the station needs from a chat platform (mesh/app/src/chat/mod.rs): Slack is one, the station's own chat
+// What the station needs from a chat platform (the Rust station's chat/mod.rs): Slack is one, the station's own chat
 // (./internal.ts) another. The hub routes what a surface says to sessions, and posts what agents write through it.
 import type { Attachment } from "../store/store.ts";
 import { tr, stationLang } from "../ops/i18n.ts";

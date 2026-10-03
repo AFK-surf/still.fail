@@ -1,4 +1,4 @@
-// Members' connections over the mesh (mesh/station/src/main.rs `serve`, `relay_request`). Wire format, on ALPN
+// Members' connections over the mesh (the Rust station's main.rs `serve`, `relay_request`). Wire format, on ALPN
 // `stillfail/admin/1` (and `ember/admin/1`, as clients from before the rename ask): the first bidirectional stream
 // carries credentials, one JSON line each, answered with one JSON line (a later line renews); every other stream is
 // one request: a JSON head line `{method, path, headers}`, then the body until the stream finishes, answered by a

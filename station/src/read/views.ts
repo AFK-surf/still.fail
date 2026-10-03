@@ -1,5 +1,5 @@
 // What the pages read: the sidebar (GET /chats) and thread entries (GET /threads/:id/entries), ported from
-// mesh/app/src/admin/views.rs with the same JSON, field for field and in serde_json's order (preserve_order).
+// the Rust station's admin/views.rs with the same JSON, field for field and in serde_json's order (preserve_order).
 //
 // What the Rust station keeps outside the database is taken as a station with none of it has it:
 // - the hub: no session has a runtime process (`process_state` "cold"), no client keys (`client_key` none);

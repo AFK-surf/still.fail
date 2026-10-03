@@ -1,4 +1,4 @@
-// What the agents spent, counted (mesh/app/src/usage.rs `Usage`): every model call their runtimes write to a transcript
+// What the agents spent, counted (the Rust station's usage.rs `Usage`): every model call their runtimes write to a transcript
 // (Claude Code's message usage, Codex's token counts) is recorded once in the store (store/usage.ts), with the turn it
 // was in and whom that turn worked for. The transcripts are read as they grow, from where the last read stopped: all of
 // them the first time (what was spent before the station counted), then those of the sessions that ran since.

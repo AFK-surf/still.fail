@@ -1,4 +1,4 @@
-// The presence socket to still.fail cloud (mesh/station/src/main.rs `presence`, `connect`, `apply_state`): open while
+// The presence socket to still.fail cloud (the Rust station's main.rs `presence`, `connect`, `apply_state`): open while
 // the station answers is the station online; the cloud pushes on it where the station is, its relays and roster, and
 // what it takes back. Signed at connect like enrollment. Reconnects with backoff; once removed from its workspace, asks
 // again only now and then, or at once when enrolled anew meanwhile.

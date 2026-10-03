@@ -1,4 +1,4 @@
-// feedback_send (mesh/app/src/feedback.rs): a bug report about still.fail itself, sent to the still.fail team, for a
+// feedback_send (the Rust station's feedback.rs): a bug report about still.fail itself, sent to the still.fail team, for a
 // station on the stable channel. The report is made here as the Rust makes it; sending it is still.fail cloud's
 // (`send`, the cloud module's signed /v1/stations/feedback, not ported yet): until it is given, the agent is told the
 // report cannot be sent, as the Rust station says when it is not connected to cloud.

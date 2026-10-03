@@ -1,4 +1,4 @@
-// Claude Code and Codex on this machine (mesh/app/src/updates.rs): where the station's PATH finds them, how each is
+// Claude Code and Codex on this machine (the Rust station's updates.rs): where the station's PATH finds them, how each is
 // updated the way it was installed (`claude update`, npm, Homebrew, Vite+, Codex's standalone installer) or installed
 // when it is not there, and running those commands.
 import { spawn } from "node:child_process";

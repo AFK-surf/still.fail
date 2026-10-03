@@ -1,4 +1,4 @@
-// Cold storage through the hub (mesh/app/src/hub/tests.rs: archiving compresses owned history and restores it before
+// Cold storage through the hub (the Rust station's hub/tests.rs: archiving compresses owned history and restores it before
 // resuming, cleans what can be made again, keeps running jobs and shared projects, the auto-archive timer does not sweep).
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";

@@ -1,4 +1,4 @@
-// GET /events (mesh/app/src/admin/events.rs): what changed, as it changes, pushed. Changes that come in a burst go out
+// GET /events (the Rust station's admin/events.rs): what changed, as it changes, pushed. Changes that come in a burst go out
 // as one event per session, and one round of sidebar rows; a thread's entries go out as they are written; `host` adds
 // host samples, `job` a job's output as it grows, `live` sessions as they run. Keepalives and host samples only while
 // someone follows. The same event names and data as the Rust station's; each event now also carries an `id:` (its

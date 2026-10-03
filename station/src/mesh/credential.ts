@@ -1,4 +1,4 @@
-// A member's credential, checked offline as mesh/station/src/main.rs `verify_member` does: an EdDSA JWT still.fail
+// A member's credential, checked offline as the Rust station's main.rs `verify_member` does: an EdDSA JWT still.fail
 // cloud signed with one of the workspace's grant keys, for this workspace and the device at the other end, unexpired
 // and not revoked.
 import { createPublicKey, verify } from "node:crypto";

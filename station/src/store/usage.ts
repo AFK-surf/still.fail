@@ -1,4 +1,4 @@
-// What the agents spent, as the station records it (mesh/app/src/store/usage.rs): one row per model call, with the
+// What the agents spent, as the station records it (the Rust station's store/usage.rs): one row per model call, with the
 // turn it was in, whom that turn worked for, in which thread and on which profile. The Store's usage methods call these.
 import type { DatabaseSync } from "node:sqlite";
 import { type Json, STILLFAIL_SURFACE } from "./rows.ts";
