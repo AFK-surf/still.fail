@@ -33,6 +33,25 @@ pub trait CoreListener: Send + Sync {
     fn on_message(&self, client: u64, json: String);
 }
 
+/// Secure key/value storage supplied by a native platform. Called only on the
+/// storage worker, never on the core event loop. There is no file fallback.
+#[uniffi::export(callback_interface)]
+pub trait SecureStorage: Send + Sync {
+    fn get(&self, key: String) -> Result<Option<Vec<u8>>, SecureStorageError>;
+    fn set(&self, key: String, value: Vec<u8>) -> Result<(), SecureStorageError>;
+    fn delete(&self, key: String) -> Result<(), SecureStorageError>;
+}
+
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum SecureStorageError {
+    #[error("secure storage unavailable")]
+    Unavailable,
+}
+
+impl From<uniffi::UnexpectedUniFFICallbackError> for SecureStorageError {
+    fn from(_: uniffi::UnexpectedUniFFICallbackError) -> Self { Self::Unavailable }
+}
+
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]
 pub enum StartError {
@@ -73,8 +92,16 @@ fn decode_input(input: Input) -> Option<Command> {
     }
 }
 
+#[derive(Default)]
+struct Lifecycle {
+    clients: BTreeSet<ClientId>,
+    fatal: Option<String>,
+}
+
 #[derive(uniffi::Object)]
 pub struct StillFailCoreFfi {
+    lifecycle: Arc<Mutex<Lifecycle>>,
+    listener: Arc<dyn CoreListener>,
     commands: std::sync::mpsc::Sender<Input>,
     /// Held while a connect is posted, so the ids given out reach the core in their order.
     next_client: Mutex<ClientId>,
@@ -91,6 +118,17 @@ pub fn start(data_dir: String, cloud_origin: String, listener: Box<dyn CoreListe
 /// to still.fail cloud say so, and its newer builds come from the beta feed.
 #[uniffi::export]
 pub fn start_as(data_dir: String, cloud_origin: String, beta: bool, listener: Box<dyn CoreListener>) -> Result<Arc<StillFailCoreFfi>, StartError> {
+    start_with_storage(data_dir, cloud_origin, beta, listener, None)
+}
+
+/// Starts a core with platform secure storage for ALL Host key/value data;
+/// SQLite's noncredential cache stays in data_dir. Legacy entry points retain files.
+#[uniffi::export]
+pub fn start_secure(data_dir: String, cloud_origin: String, beta: bool, listener: Box<dyn CoreListener>, storage: Box<dyn SecureStorage>) -> Result<Arc<StillFailCoreFfi>, StartError> {
+    start_with_storage(data_dir, cloud_origin, beta, listener, Some(Arc::from(storage)))
+}
+
+fn start_with_storage(data_dir: String, cloud_origin: String, beta: bool, listener: Box<dyn CoreListener>, storage: Option<Arc<dyn SecureStorage>>) -> Result<Arc<StillFailCoreFfi>, StartError> {
     let data_dir = PathBuf::from(data_dir);
     std::fs::create_dir_all(&data_dir).map_err(|e| StartError::Io(t!("core-misc.host.no_data_dir", dir = data_dir.display(), error = e)))?;
     let (commands, queue) = mpsc::unbounded_channel();
@@ -108,12 +146,15 @@ pub fn start_as(data_dir: String, cloud_origin: String, beta: bool, listener: Bo
         }
     }).map_err(|e| StartError::Io(t!("core-misc.host.no_input_thread", error = e)))?;
     let listener: Arc<dyn CoreListener> = Arc::from(listener);
+    let lifecycle = Arc::new(Mutex::new(Lifecycle::default()));
+    let core_lifecycle = lifecycle.clone();
+    let core_listener = listener.clone();
     let host_commands = commands.clone();
     std::thread::Builder::new()
         .name("stillfail-core".into())
-        .spawn(move || run(data_dir, cloud_origin.trim_end_matches('/').to_string(), beta, listener, host_commands, queue))
+        .spawn(move || run(data_dir, cloud_origin.trim_end_matches('/').to_string(), beta, core_listener, storage, host_commands, queue, core_lifecycle))
         .map_err(|e| StartError::Io(t!("core-misc.host.no_core_thread", error = e)))?;
-    Ok(Arc::new(StillFailCoreFfi { commands: input, next_client: Mutex::new(1) }))
+    Ok(Arc::new(StillFailCoreFfi { commands: input, next_client: Mutex::new(1), lifecycle, listener }))
 }
 
 #[uniffi::export]
@@ -123,7 +164,18 @@ impl StillFailCoreFfi {
         let mut next = self.next_client.lock().unwrap_or_else(|e| e.into_inner());
         let client = *next;
         *next += 1;
-        let _ = self.commands.send(Input::Connect(client));
+        let fatal = {
+            let mut lifecycle = self.lifecycle.lock().unwrap_or_else(|e| e.into_inner());
+            lifecycle.clients.insert(client);
+            lifecycle.fatal.clone()
+        };
+        if let Some(fatal) = fatal {
+            let listener = self.listener.clone();
+            // A failure during Core::new must reach clients that connect later too.
+            let _ = std::thread::Builder::new().name("stillfail-fatal-out".into()).spawn(move || listener.on_message(client, fatal));
+        } else {
+            let _ = self.commands.send(Input::Connect(client));
+        }
         client
     }
 
@@ -134,6 +186,7 @@ impl StillFailCoreFfi {
 
     /// The UI went away: its subscriptions end.
     pub fn disconnect(&self, client: u64) {
+        self.lifecycle.lock().unwrap_or_else(|e| e.into_inner()).clients.remove(&client);
         let _ = self.commands.send(Input::Disconnect(client));
     }
 }
@@ -145,10 +198,10 @@ pub fn utc_offset_min(at_ms: f64) -> i32 {
 }
 
 /// The core thread: builds the core, then serves commands until the app lets go of it or the core panics.
-fn run(data_dir: PathBuf, cloud_origin: String, beta: bool, listener: Arc<dyn CoreListener>, commands: UnboundedSender<Command>, queue: UnboundedReceiver<Command>) {
+fn run(data_dir: PathBuf, cloud_origin: String, beta: bool, listener: Arc<dyn CoreListener>, storage: Option<Arc<dyn SecureStorage>>, commands: UnboundedSender<Command>, queue: UnboundedReceiver<Command>, lifecycle: Arc<Mutex<Lifecycle>>) {
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("tokio runtime");
     let local = tokio::task::LocalSet::new();
-    let host = Rc::new(NativeHost::new(data_dir, cloud_origin, beta, listener.clone(), commands));
+    let host = Rc::new(NativeHost::with_storage(data_dir, cloud_origin, beta, listener.clone(), commands, storage));
     let mut clients = BTreeSet::new();
     let served = std::panic::catch_unwind(AssertUnwindSafe(|| local.block_on(&runtime, serve(host, queue, &mut clients))));
     let reason = match served {
@@ -157,7 +210,12 @@ fn run(data_dir: PathBuf, cloud_origin: String, beta: bool, listener: Arc<dyn Co
         Err(panic) => panic_message(&*panic),
     };
     let fatal = json!({ "fatal": reason }).to_string();
-    for client in clients {
+    let connected = {
+        let mut lifecycle = lifecycle.lock().unwrap_or_else(|e| e.into_inner());
+        lifecycle.fatal = Some(fatal.clone());
+        lifecycle.clients.clone()
+    };
+    for client in connected {
         listener.on_message(client, fatal.clone());
     }
 }
@@ -254,6 +312,29 @@ mod tests {
         let value = &seen.wait_for(1)[0].1["value"];
         assert_eq!(value[0]["sub"], "s1");
         assert_eq!(value[0]["email"], "a@b.c");
+    }
+
+    #[test]
+    fn secure_startup_failure_reaches_existing_and_late_clients() {
+        struct Unavailable;
+        impl SecureStorage for Unavailable {
+            fn get(&self, _: String) -> Result<Option<Vec<u8>>, SecureStorageError> { Err(SecureStorageError::Unavailable) }
+            fn set(&self, _: String, _: Vec<u8>) -> Result<(), SecureStorageError> { Err(SecureStorageError::Unavailable) }
+            fn delete(&self, _: String) -> Result<(), SecureStorageError> { Err(SecureStorageError::Unavailable) }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let seen = Arc::new(Collect::default());
+        let core = start_secure(dir.path().to_string_lossy().into(), "http://127.0.0.1:9".into(), false, Box::new(seen.clone()), Box::new(Unavailable)).unwrap();
+        let first = core.connect();
+        let initial = seen.wait_for(1);
+        assert_eq!(initial[0].0, first);
+        assert!(initial[0].1.get("fatal").is_some());
+        let second = core.connect();
+        let later = seen.wait_for(2);
+        assert_eq!(later[1].0, second);
+        assert!(later[1].1.get("fatal").is_some());
+        assert!(!dir.path().join("accounts").exists());
+        assert!(!dir.path().join("device").exists());
     }
 
     #[test]

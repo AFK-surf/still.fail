@@ -2,6 +2,23 @@
 use super::*;
 
 impl Inner {
+    /// Dispatch for the agreed native UI calls; deliberately separate from best-effort sign-out.
+    pub(super) async fn execute_native_auth(&self, call: super::calls::NativeAuthCall) -> Result<Value> {
+        use super::calls::NativeAuthCall;
+        match call {
+            NativeAuthCall::AppleBegin => self.accounts.apple_begin().await,
+            NativeAuthCall::AppleComplete { attempt, identity_token, authorization_code, name, state } =>
+                self.accounts.apple_complete(&attempt, &identity_token, &authorization_code, name, state).await,
+            NativeAuthCall::DeletionSummary { account } => self.accounts.deletion_summary(&account).await,
+            NativeAuthCall::DeleteAccount { account } => {
+                let receipt = self.accounts.delete_account(&account).await?;
+                self.recompute_owners();
+                self.forget_unreachable();
+                Ok(receipt)
+            }
+        }
+    }
+
     /// The device endpoint, bringing it up the first time.
     pub(super) async fn mesh(&self) -> Result<Rc<Mesh>> {
         let pending = self.mesh.borrow().clone();

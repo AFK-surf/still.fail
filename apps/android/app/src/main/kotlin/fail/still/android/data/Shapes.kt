@@ -1927,11 +1927,14 @@ sealed class HistoryBody {
 	data class Group(val content: HistoryGroup): HistoryBody()
 }
 
-/// One item of an execution history, and the transcript entries it draws (`entries`: first, last).
+/// One item of an execution history, the transcript entries it draws (`entries`: first, last), and when its first
+/// entry was written (`at`, epoch ms; absent when the transcript does not say): where a client puts it among a chat's
+/// messages.
 @Serializable
 data class HistoryItem (
 	val key: String,
 	val entries: List<Long>,
+	val at: Long? = null,
 	val body: HistoryBody
 )
 

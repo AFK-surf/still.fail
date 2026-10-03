@@ -385,7 +385,8 @@ pub fn present(live: &Value, cx: &Context) -> Value {
         };
         // Its kind, and what that kind says (shapes: HistoryBody).
         let kind = v.as_object_mut().and_then(|o| o.remove("kind")).unwrap_or(Value::Null);
-        json!({ "key": format!("e{}", base + first), "entries": [base + first, base + last], "body": { "kind": kind, "content": v } })
+        let at = timeline[*first].get("at").and_then(Value::as_str).and_then(epoch_ms).map(|ms| ms as i64);
+        json!({ "key": format!("e{}", base + first), "entries": [base + first, base + last], "at": at, "body": { "kind": kind, "content": v } })
     }).collect();
 
     // Only thinking and the reply stream here; a tool call shows once it is done, from the transcript.
@@ -573,7 +574,7 @@ mod tests {
                 {"kind": "tool_call", "tool": "Read", "text": "{\"file_path\":\"/a.ts\"}", "callId": "b"},
                 {"kind": "tool_call", "tool": "Bash", "text": "{\"command\":\"ls\",\"description\":\"看看目录\"}", "callId": "c"},
                 {"kind": "tool_result", "callId": "c", "ok": false, "text": "no"},
-                {"kind": "tool_call", "tool": "mcp__ember__chat_post", "text": "{\"to\":\"C1/1.0\",\"text\":\"done\",\"kind\":\"block\"}", "callId": "d"},
+                {"kind": "tool_call", "tool": "mcp__ember__chat_post", "text": "{\"to\":\"C1/1.0\",\"text\":\"done\",\"kind\":\"block\"}", "callId": "d", "at": "2026-09-27T00:00:05.000Z"},
                 {"kind": "tool_call", "tool": "mcp__ember__chat_state", "text": "{\"kind\":\"final\"}"},
                 {"kind": "assistant", "text": "ok"},
             ],
@@ -597,6 +598,8 @@ mod tests {
         assert_eq!(items[1]["entries"], json!([1, 6]));
         assert_eq!((items[2]["body"]["content"]["block"].as_bool(), items[2]["body"]["content"]["place"]["name"].as_str()), (Some(true), Some("#ops")));
         assert_eq!(items[3]["body"]["content"]["text"], "标记为做完了");
+        // When its first entry was written, for a client to place it among a chat's messages; unsaid, none.
+        assert_eq!((items[2]["at"].as_i64(), items[0].get("at")), (Some(1790467205000), Some(&Value::Null)));
         let waits = |args: &str| {
             let live = json!({"loaded": true, "timeline": [{"kind": "tool_call", "tool": "mcp__ember__chat_state", "text": args}]});
             present(&live, &cx(&threads, &members, &slack))["items"][0]["body"]["content"].clone()

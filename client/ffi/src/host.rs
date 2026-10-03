@@ -21,7 +21,7 @@ use tokio_tungstenite::Connector;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 
-use crate::{Command, CoreListener};
+use crate::{Command, CoreListener, SecureStorage, SecureStorageError};
 
 pub struct NativeHost {
     cloud_origin: String,
@@ -42,11 +42,15 @@ pub struct NativeHost {
 
 impl NativeHost {
     pub fn new(data_dir: PathBuf, cloud_origin: String, beta: bool, listener: Arc<dyn CoreListener>, commands: UnboundedSender<Command>) -> NativeHost {
+        Self::with_storage(data_dir, cloud_origin, beta, listener, commands, None)
+    }
+
+    pub fn with_storage(data_dir: PathBuf, cloud_origin: String, beta: bool, listener: Arc<dyn CoreListener>, commands: UnboundedSender<Command>, secure: Option<Arc<dyn SecureStorage>>) -> NativeHost {
         let tls = Arc::new(tls_config());
         let http = RefCell::new(http_client(&tls));
         let data_out = output("stillfail-data-out", listener.clone(), commands.clone());
         let api_out = output("stillfail-api-out", listener, commands.clone());
-        NativeHost { cloud_origin, beta, tls, http, storage: Storage::new(data_dir), data_out, api_out,
+        NativeHost { cloud_origin, beta, tls, http, storage: Storage::new(data_dir, secure, commands.clone()), data_out, api_out,
             calls: RefCell::new(HashSet::new()), commands, started: std::time::Instant::now() }
     }
 
@@ -242,6 +246,11 @@ impl Host for NativeHost {
     }
 
     fn storage_get(&self, key: &str) -> LocalBoxFuture<'static, Result<Option<Vec<u8>>, HostError>> {
+        if let Some(secure) = self.storage.secure.clone() {
+            let key = key.to_owned();
+            let commands = self.commands.clone();
+            return self.storage.run(move || secure_result(secure.get(key), &commands));
+        }
         let path = self.storage.path(key);
         self.storage.run(move || match std::fs::read(&path) {
             Ok(bytes) => Ok(Some(bytes)),
@@ -251,6 +260,11 @@ impl Host for NativeHost {
     }
 
     fn storage_set(&self, key: &str, value: Vec<u8>) -> LocalBoxFuture<'static, Result<(), HostError>> {
+        if let Some(secure) = self.storage.secure.clone() {
+            let key = key.to_owned();
+            let commands = self.commands.clone();
+            return self.storage.run(move || secure_result(secure.set(key, value), &commands));
+        }
         let path = self.storage.path(key);
         self.storage.run(move || {
             // Written aside and renamed over: a crash leaves the old value or the new one, never half.
@@ -272,6 +286,11 @@ impl Host for NativeHost {
     }
 
     fn storage_delete(&self, key: &str) -> LocalBoxFuture<'static, Result<(), HostError>> {
+        if let Some(secure) = self.storage.secure.clone() {
+            let key = key.to_owned();
+            let commands = self.commands.clone();
+            return self.storage.run(move || secure_result(secure.delete(key), &commands));
+        }
         let path = self.storage.path(key);
         self.storage.run(move || match std::fs::remove_file(&path) {
             Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(io_error("core-misc.host.storage.delete", error)),
@@ -344,12 +363,23 @@ fn io_error(key: &str, error: std::io::Error) -> HostError {
     HostError(t!(key, error = error))
 }
 
+// Core callers sometimes treat a missing storage read as a first install.
+// An unavailable secure store is NOT missing: terminate the engine, even if
+// such a caller swallowed the HostError, and never attempt a plaintext file.
+fn secure_result<T>(result: Result<T, SecureStorageError>, commands: &UnboundedSender<Command>) -> Result<T, HostError> {
+    result.map_err(|_| {
+        let _ = commands.send(Command::Fatal("secure storage unavailable".into()));
+        HostError("secure storage unavailable".into())
+    })
+}
+
 type Job = Box<dyn FnOnce() + Send>;
 
 /// Small values as files in the app's data directory, one per key. One thread
 /// does every file operation in the order they were asked for, so a write is
 /// never overtaken by an earlier one.
 struct Storage {
+    secure: Option<Arc<dyn SecureStorage>>,
     dir: PathBuf,
     jobs: mpsc::Sender<Job>,
     /// The core's database, `core.db` in the directory: opened by the first job that needs it.
@@ -411,18 +441,21 @@ fn db_error(error: rusqlite::Error) -> HostError {
 }
 
 impl Storage {
-    fn new(dir: PathBuf) -> Storage {
+    fn new(dir: PathBuf, secure: Option<Arc<dyn SecureStorage>>, commands: UnboundedSender<Command>) -> Storage {
         let (jobs, queue) = mpsc::channel::<Job>();
         std::thread::Builder::new()
             .name("stillfail-storage".into())
             .spawn(move || {
                 for job in queue {
-                    job();
+                    if std::panic::catch_unwind(AssertUnwindSafe(job)).is_err() {
+                        let _ = commands.send(Command::Fatal("storage worker failed".into()));
+                        break;
+                    }
                 }
             })
             .expect("storage thread");
         let db = Arc::new(std::sync::Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
-        Storage { dir, jobs, db }
+        Storage { dir, jobs, db, secure }
     }
 
     /// Keys may hold anything; file names only letters, digits, `-` and `_` (the rest is %XX).
@@ -453,6 +486,82 @@ impl Storage {
 mod tests {
     use super::*;
     use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+
+    #[test]
+    fn secure_callbacks_run_on_worker_without_file_fallback_and_keep_sqlite() {
+        #[derive(Default)]
+        struct Memory {
+            values: std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>,
+            threads: std::sync::Mutex<Vec<std::thread::ThreadId>>,
+        }
+        impl SecureStorage for Memory {
+            fn get(&self, key: String) -> Result<Option<Vec<u8>>, SecureStorageError> {
+                self.threads.lock().unwrap().push(std::thread::current().id());
+                Ok(self.values.lock().unwrap().get(&key).cloned())
+            }
+            fn set(&self, key: String, value: Vec<u8>) -> Result<(), SecureStorageError> {
+                self.threads.lock().unwrap().push(std::thread::current().id());
+                self.values.lock().unwrap().insert(key, value); Ok(())
+            }
+            fn delete(&self, key: String) -> Result<(), SecureStorageError> {
+                self.threads.lock().unwrap().push(std::thread::current().id());
+                self.values.lock().unwrap().remove(&key); Ok(())
+            }
+        }
+        struct Quiet;
+        impl CoreListener for Quiet { fn on_message(&self, _: u64, _: String) {} }
+        let dir = tempfile::tempdir().unwrap();
+        // Even if an old plaintext file is present, the secure path never reads it.
+        std::fs::write(dir.path().join("accounts"), b"legacy").unwrap();
+        let secure = Arc::new(Memory::default());
+        let (commands, _) = tokio::sync::mpsc::unbounded_channel();
+        let host = NativeHost::with_storage(dir.path().into(), String::new(), false, Arc::new(Quiet), commands, Some(secure.clone()));
+        let caller = std::thread::current().id();
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        tokio::task::LocalSet::new().block_on(&runtime, async {
+            assert_eq!(host.storage_get("accounts").await.unwrap(), None);
+            for key in ["accounts", "device", "login", "member:ws"] {
+                host.storage_set(key, b"secure-value".to_vec()).await.unwrap();
+                assert_eq!(host.storage_get(key).await.unwrap(), Some(b"secure-value".to_vec()));
+                host.storage_delete(key).await.unwrap();
+                assert_eq!(host.storage_get(key).await.unwrap(), None);
+            }
+            host.db_write(vec![DbOp::Put { table: "row".into(), key: "a".into(), value: b"cache".to_vec() }]).await.unwrap();
+            assert_eq!(host.db_read(DbRange { table: "row".into(), from: "a".into(), to: "b".into() }).await.unwrap().len(), 1);
+        });
+        assert!(secure.threads.lock().unwrap().iter().all(|thread| *thread != caller));
+        assert_eq!(std::fs::read(dir.path().join("accounts")).unwrap(), b"legacy");
+        assert!(!dir.path().join("device").exists());
+        assert!(!dir.path().join("login").exists());
+        assert!(dir.path().join("core.db").exists());
+    }
+
+    #[test]
+    fn unavailable_secure_storage_is_fatal_and_never_uses_files() {
+        struct Unavailable;
+        impl SecureStorage for Unavailable {
+            fn get(&self, _: String) -> Result<Option<Vec<u8>>, SecureStorageError> { Err(SecureStorageError::Unavailable) }
+            fn set(&self, _: String, _: Vec<u8>) -> Result<(), SecureStorageError> { Err(SecureStorageError::Unavailable) }
+            fn delete(&self, _: String) -> Result<(), SecureStorageError> { Err(SecureStorageError::Unavailable) }
+        }
+        struct Quiet;
+        impl CoreListener for Quiet { fn on_message(&self, _: u64, _: String) {} }
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("accounts"), b"legacy").unwrap();
+        let (commands, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let host = NativeHost::with_storage(dir.path().into(), String::new(), false, Arc::new(Quiet), commands, Some(Arc::new(Unavailable)));
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        tokio::task::LocalSet::new().block_on(&runtime, async {
+            assert!(host.storage_get("accounts").await.is_err());
+            assert!(matches!(received.recv().await, Some(Command::Fatal(_))));
+            assert!(host.storage_set("device", b"secret".to_vec()).await.is_err());
+            assert!(matches!(received.recv().await, Some(Command::Fatal(_))));
+            assert!(host.storage_delete("accounts").await.is_err());
+            assert!(matches!(received.recv().await, Some(Command::Fatal(_))));
+        });
+        assert_eq!(std::fs::read(dir.path().join("accounts")).unwrap(), b"legacy");
+        assert!(!dir.path().join("device").exists());
+    }
 
     #[test]
     fn the_database_keeps_records_across_opens() {

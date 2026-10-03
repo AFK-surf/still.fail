@@ -1,3 +1,8 @@
 [bindings.kotlin]
 package_name = "fail.still.core.ffi"
 cdylib_name = "stillfail_core_ffi"
+
+[bindings.swift]
+module_name = "StillFailCore"
+ffi_module_name = "StillFailCoreFFI"
+generate_module_map = true

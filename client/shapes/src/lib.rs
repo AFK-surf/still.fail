@@ -3231,14 +3231,20 @@ pub enum HistoryBody {
     Group(HistoryGroup),
 }
 
-/// One item of an execution history, and the transcript entries it draws (`entries`: first, last).
+/// One item of an execution history, the transcript entries it draws (`entries`: first, last), and when its first
+/// entry was written (`at`, epoch ms; absent when the transcript does not say): where a client puts it among a chat's
+/// messages.
 #[typeshare]
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryItem {
     pub key: String,
     #[typeshare(serialized_as = "Vec<I54>")]
     pub entries: Vec<i64>,
+    #[typeshare(serialized_as = "Option<I54>")]
+    #[serde(default)]
+    pub at: Option<i64>,
     pub body: HistoryBody,
 }
 

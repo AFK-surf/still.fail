@@ -29,6 +29,8 @@ use crate::trace::{Kind, Tracer};
 pub const STORAGE_KEY: &str = "accounts";
 /// Storage key of the sign-in in progress (verifier, state, return_to).
 pub const LOGIN_KEY: &str = "login";
+const APPLE_LOGIN_KEY: &str = "login/apple";
+const DELETED_KEY: &str = "accounts/deleted";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StoredAccount {
@@ -63,6 +65,8 @@ struct PendingLogin {
     state: String,
     return_to: String,
     redirect_uri: String,
+    #[serde(default)]
+    epoch: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,6 +95,14 @@ struct LegacyAccount {
     access_expires: f64,
 }
 
+#[derive(Serialize, Deserialize)]
+struct AppleAttempt {
+    attempt: String,
+    nonce: String,
+    state: String,
+    epoch: u64,
+}
+
 type Refresh = Shared<LocalBoxFuture<'static, Result<String>>>;
 
 pub struct Accounts {
@@ -105,15 +117,22 @@ pub struct Accounts {
     /// Since when (monotonic ms) a refresh has had no answer: still.fail cloud may have rotated the credential all the
     /// same, and the next refresh says how long ago that was.
     unanswered: Cell<Option<f64>>,
+    epoch: Cell<u64>,
+    /// Minimal local replay fence, without profile or credentials, expires at the reviewed server receipt deadline (no client-invented retention policy).
+    deleted: RefCell<HashMap<String, f64>>,
 }
 
 impl Accounts {
     /// Loads the stored accounts.
     pub async fn load(host: Rc<dyn Host>) -> Rc<Accounts> {
-        let list = match host.storage_get(STORAGE_KEY).await {
+        let mut list: Vec<StoredAccount> = match host.storage_get(STORAGE_KEY).await {
             Ok(Some(bytes)) => serde_json::from_slice(&bytes).unwrap_or_default(),
             _ => Vec::new(),
         };
+        let mut deleted: HashMap<String, f64> = host.storage_get(DELETED_KEY).await.ok().flatten()
+            .and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+        deleted.retain(|_, until| *until > host.now_ms() / 1000.0);
+        list.retain(|account| !deleted.contains_key(&account.sub));
         Rc::new_cyclic(|me| Accounts {
             host,
             me: me.clone(),
@@ -122,6 +141,8 @@ impl Accounts {
             refreshing: RefCell::default(),
             tracer: RefCell::default(),
             unanswered: Cell::default(),
+            epoch: Cell::new(0),
+            deleted: RefCell::new(deleted),
         })
     }
 
@@ -148,6 +169,7 @@ impl Accounts {
             state: state.clone(),
             return_to: return_to.into(),
             redirect_uri: redirect_uri.into(),
+            epoch: self.epoch.get(),
         };
         self.host.storage_set(LOGIN_KEY, serde_json::to_vec(&pending).unwrap()).await?;
         let query = [
@@ -189,6 +211,9 @@ impl Accounts {
             return Err(expired().with_status(response.status));
         }
         let tokens: Tokens = serde_json::from_slice(&response.body).map_err(|_| expired())?;
+        if pending.epoch != self.epoch.get() || self.deleted.borrow().contains_key(&tokens.subject) {
+            return Err(CoreError::new("login_superseded", "账号状态已改变，请重新登录"));
+        }
         let mut account = StoredAccount {
             sub: tokens.subject,
             email: tokens.email,
@@ -202,7 +227,9 @@ impl Accounts {
         // The picture comes with the profile; fetched once, best effort.
         if let Some(picture) = self.picture(&account.access).await {
             account.picture = picture;
-            let _ = self.put(account.clone()).await;
+            if pending.epoch == self.epoch.get() && self.get(&account.sub).is_some() {
+                let _ = self.put(account.clone()).await;
+            }
         }
         let return_to = if pending.return_to.is_empty() || pending.return_to.starts_with("/auth/") { "/".into() } else { pending.return_to };
         Ok((AccountView::from(&account), return_to))
@@ -237,6 +264,81 @@ impl Accounts {
         refresh.await
     }
 
+    /// The nonce is sent verbatim to AuthenticationServices; the caller MUST compare response state to this state.
+    pub async fn apple_begin(&self) -> Result<Value> {
+        let epoch = self.epoch.get();
+        let response = self.post("/v1/auth/apple/challenge", None, json!({}), None).await?;
+        let value = self.auth_response(response)?;
+        let field = |key: &str| value.get(key).and_then(Value::as_str).filter(|v| v.len() == 43).map(str::to_string)
+            .ok_or_else(|| CoreError::new("apple_login_failed", "Apple 登录挑战无效"));
+        let pending = AppleAttempt { attempt: field("attempt")?, nonce: field("nonce")?, state: field("state")?, epoch };
+        if epoch != self.epoch.get() { return Err(CoreError::new("login_superseded", "账号状态已改变")); }
+        self.host.storage_set(APPLE_LOGIN_KEY, serde_json::to_vec(&pending).unwrap()).await?;
+        Ok(json!({"attempt": pending.attempt, "nonce": pending.nonce, "state": pending.state}))
+    }
+
+    pub async fn apple_complete(&self, attempt: &str, identity_token: &str, authorization_code: &str, name: Option<String>, state: Option<String>) -> Result<Value> {
+        let pending = self.host.storage_get(APPLE_LOGIN_KEY).await?.and_then(|b| serde_json::from_slice::<AppleAttempt>(&b).ok())
+            .ok_or_else(|| CoreError::new("login_expired", "请重新发起 Apple 登录"))?;
+        if attempt != pending.attempt || pending.epoch != self.epoch.get() || state.as_ref().is_some_and(|s| s != &pending.state) {
+            return Err(CoreError::new("login_state_mismatch", "Apple 登录状态不匹配"));
+        }
+        self.host.storage_delete(APPLE_LOGIN_KEY).await?;
+        let response = self.post("/v1/auth/apple/token", None, json!({"attempt": attempt, "identityToken": identity_token,
+            "authorizationCode": authorization_code, "state": pending.state, "name": name.unwrap_or_default()}), None).await?;
+        let value = self.auth_response(response)?;
+        let tokens: Tokens = serde_json::from_value(value).map_err(|_| CoreError::new("apple_login_failed", "Apple 登录回复无效"))?;
+        if pending.epoch != self.epoch.get() || self.deleted.borrow().contains_key(&tokens.subject) {
+            return Err(CoreError::new("login_superseded", "账号状态已改变，请重新登录"));
+        }
+        let account = StoredAccount { sub: tokens.subject, email: tokens.email, name: tokens.name.unwrap_or_default(), picture: String::new(),
+            access: tokens.access_token, refresh: tokens.refresh_token, access_expires: tokens.expires_at };
+        self.put(account.clone()).await?;
+        Ok(json!({"account": AccountView::from(&account), "accounts": self.list()}))
+    }
+
+    pub async fn deletion_summary(&self, sub: &str) -> Result<Value> {
+        let access = self.access_token(sub).await?;
+        let response = self.post("/v1/auth/deletion-summary", Some(&access), json!({}), None).await?;
+        self.auth_response(response)
+    }
+
+    /// Unlike sign_out, failures retain the account. Only an explicit completed server receipt can forget it.
+    pub async fn delete_account(&self, sub: &str) -> Result<Value> {
+        let access = self.access_token(sub).await?;
+        let response = self.post("/v1/auth/delete-account", Some(&access), json!({}), None).await?;
+        let receipt = self.auth_response(response)?;
+        if receipt.get("deleted") != Some(&Value::Bool(true)) || receipt.get("state").and_then(Value::as_str) != Some("completed") || receipt.get("account").and_then(Value::as_str) != Some(sub) {
+            return Err(CoreError::new("deletion_incomplete", "服务器尚未完成账号删除"));
+        }
+        let until = receipt.get("fence_expires_at").and_then(Value::as_f64).filter(|n| n.is_finite() && *n > self.host.now_ms() / 1000.0)
+            .ok_or_else(|| CoreError::new("deletion_incomplete", "删除回执尚缺少已核实的旧凭据到期时间"))?;
+        self.epoch.set(self.epoch.get().wrapping_add(1));
+        self.deleted.borrow_mut().insert(sub.into(), until);
+        let fence = serde_json::to_vec(&*self.deleted.borrow()).unwrap();
+        self.host.storage_set(DELETED_KEY, fence).await?;
+        let _ = self.host.storage_delete(LOGIN_KEY).await;
+        let _ = self.host.storage_delete(APPLE_LOGIN_KEY).await;
+        self.forget(sub).await?;
+        Ok(receipt)
+    }
+
+    fn auth_response(&self, response: HttpResponse) -> Result<Value> {
+        let value: Value = serde_json::from_slice(&response.body).unwrap_or(Value::Null);
+        if !ok(&response) {
+            let code = value.get("error").and_then(Value::as_str).filter(|c| c.len() <= 80 && c.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')).unwrap_or("auth_failed");
+            let message = match code {
+                "apple_not_configured" => "Apple 登录尚未配置，请使用 Google 登录",
+                "deletion_coverage_incomplete" => "远端个人数据删除尚未支持，账号未被删除",
+                "reauth_required" => "请重新登录后再删除账号",
+                "last_owner" => "请先转移所有权或单独删除工作区",
+                _ => "请求未完成，请重试",
+            };
+            return Err(CoreError::new(code, message).with_status(response.status));
+        }
+        Ok(value)
+    }
+
     pub async fn sign_out(&self, sub: &str) -> Result<()> {
         if let Some(account) = self.get(sub) {
             let _ = self.post("/v1/auth/logout", Some(&account.refresh), json!({ "all": false }), None).await;
@@ -260,6 +362,7 @@ impl Accounts {
             let mut list = self.list.borrow_mut();
             for item in items {
                 let Ok(old) = serde_json::from_value::<LegacyAccount>(item) else { continue };
+                if self.deleted.borrow().contains_key(&old.sub) { continue; }
                 let account = StoredAccount {
                     sub: old.sub,
                     email: old.email,
@@ -340,6 +443,10 @@ impl Accounts {
                 span.fail();
             }
             span.end();
+        }
+        // A late refresh cannot resurrect a removed account, or overwrite a newer login.
+        if self.get(sub).is_none_or(|current| current.refresh != account.refresh) {
+            return Err(CoreError::signed_out("账号状态已改变"));
         }
         if response.status == 401 {
             let _ = self.forget(sub).await;
@@ -905,4 +1012,79 @@ mod tests {
             assert!(accounts.migrate(json!({ "sub": "s" })).await.is_err());
         });
     }
+
+    #[test]
+    fn apple_capability_error_retains_existing_google_account() {
+        run(async {
+            let host = FakeHost::new();
+            let accounts = with_stored(&host, &[account("google-existing", now() + 3600.0)]).await;
+            host.on_fetch(|_| json_response(503, json!({"error": "apple_not_configured"})));
+            assert_eq!(accounts.apple_begin().await.unwrap_err().code, "apple_not_configured");
+            assert_eq!(accounts.list()[0].sub, "google-existing");
+            assert!(host.stored(APPLE_LOGIN_KEY).is_none());
+        });
+    }
+
+    #[test]
+    fn apple_tokens_are_installed_only_after_verified_server_response_and_state_matches() {
+        run(async {
+            let host = FakeHost::new();
+            host.on_fetch(|req| {
+                if req.url.ends_with("/challenge") {
+                    json_response(200, json!({"attempt": "a".repeat(43), "nonce": "n".repeat(43), "state": "s".repeat(43)}))
+                } else { json_response(200, tokens("verified-access", "verified-refresh", now() + 3600.0)) }
+            });
+            let accounts = Accounts::load(host.clone()).await;
+            let begin = accounts.apple_begin().await.unwrap();
+            assert!(accounts.list().is_empty());
+            assert_eq!(accounts.apple_complete(begin["attempt"].as_str().unwrap(), "synthetic-token", "synthetic-code", None, Some("wrong".into())).await.unwrap_err().code, "login_state_mismatch");
+            assert_eq!(host.requests.borrow().len(), 1);
+            let result = accounts.apple_complete(begin["attempt"].as_str().unwrap(), "synthetic-token", "synthetic-code", Some("名称".into()), Some("s".repeat(43))).await.unwrap();
+            assert_eq!(result["account"]["sub"], "sub1");
+            assert!(result["account"].get("refresh").is_none());
+            assert!(result["account"].get("access").is_none());
+            assert!(host.stored(APPLE_LOGIN_KEY).is_none());
+            assert!(accounts.apple_complete(begin["attempt"].as_str().unwrap(), "synthetic-token", "synthetic-code", None, None).await.is_err());
+        });
+    }
+
+    #[test]
+    fn deletion_requires_true_completed_ack_and_preserves_other_local_accounts() {
+        run(async {
+            let host = FakeHost::new();
+            let accounts = with_stored(&host, &[account("sub1", now() + 3600.0), account("sub2", now() + 3600.0)]).await;
+            host.on_fetch(|_| json_response(409, json!({"error": "deletion_coverage_incomplete", "deleted": false})));
+            assert_eq!(accounts.delete_account("sub1").await.unwrap_err().code, "deletion_coverage_incomplete");
+            assert_eq!(accounts.list().len(), 2);
+            host.on_fetch(|_| json_response(200, json!({"deleted": true})));
+            assert_eq!(accounts.delete_account("sub1").await.unwrap_err().code, "deletion_incomplete");
+            assert_eq!(accounts.list().len(), 2);
+            host.on_fetch(|_| json_response(200, json!({"deleted": true, "state": "completed", "account": "sub1", "fence_expires_at": now() + 3600.0})));
+            accounts.delete_account("sub1").await.unwrap();
+            assert_eq!(accounts.list().iter().map(|a| a.sub.as_str()).collect::<Vec<_>>(), vec!["sub2"]);
+            let reloaded = Accounts::load(host.clone()).await;
+            assert_eq!(reloaded.list()[0].sub, "sub2");
+            assert!(host.requests.borrow().iter().all(|r| !r.url.ends_with("/logout")), "deletion never uses best-effort sign-out");
+        });
+    }
+
+    #[test]
+    fn deletion_fences_a_late_refresh_and_legacy_reimport() {
+        run(async {
+            let host = FakeHost::new();
+            host.store(STORAGE_KEY, serde_json::to_vec(&vec![account("sub1", now() + 3600.0)]).unwrap());
+            host.on_fetch(|req| {
+                if req.url.ends_with("/delete-account") { json_response(200, json!({"deleted": true, "state": "completed", "account": "sub1", "fence_expires_at": now() + 3600.0})) }
+                else { json_response(200, tokens("late-access", "late-refresh", now() + 3600.0)) }
+            });
+            let accounts = Accounts::load(Rc::new(SlowHost(host.clone()))).await;
+            let (deleted, late) = futures::join!(accounts.delete_account("sub1"), accounts.refresh("sub1"));
+            assert!(deleted.is_ok());
+            assert!(late.is_err());
+            assert!(accounts.list().is_empty());
+            accounts.migrate(json!([{ "sub": "sub1", "email": "old@example.test", "access": "late", "refresh": "late", "accessExpires": now() + 3600.0 }])).await.unwrap();
+            assert!(accounts.list().is_empty());
+        });
+    }
+
 }
