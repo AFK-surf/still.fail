@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["core", "shapes", "i18n", "wasm", "ffi", "node"]
+members = ["core", "shapes", "i18n", "wasm", "iroh-wasm", "ffi", "node"]
 
 [workspace.package]
 edition = "2024"

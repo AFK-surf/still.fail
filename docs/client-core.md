@@ -6,7 +6,7 @@ one Rust crate, `stillfail-core`, shared by every client:
 
 | Client | Where the core runs | Binding |
 | --- | --- | --- |
-| Web (app.still.fail) | a SharedWorker (a dedicated Worker where SharedWorker is missing, e.g. Chrome on Android) | `client/wasm` (wasm-bindgen) |
+| Web (app.still.fail) | a SharedWorker (a dedicated Worker where SharedWorker is missing, e.g. Chrome on Android) | `client/core-ts` (`src/hosts/web.ts`), iroh from `client/iroh-wasm` (wasm-bindgen, relay only) |
 | Desktop (Electron) | a `utilityProcess` | `client/core-ts` on Node (`src/hosts/node.ts`), iroh from the station's `mesh.node` addon (docs/core-ts.md) |
 | Android (iOS later) | a core thread in the app | `client/ffi` (uniffi) |
 
@@ -446,7 +446,8 @@ account topics again. The station's events bring the same a moment later.
 ```
 client/
   core/    stillfail-core  the core: host trait, protocol, store, accounts, cloud, mesh, station, views
-  wasm/    stillfail-core-wasm web host (IndexedDB, fetch) + SharedWorker entry
+  wasm/    stillfail-core-wasm web host (IndexedDB, fetch) + SharedWorker entry (the Rust core; the web now runs core-ts)
+  iroh-wasm/ stillfail-iroh-wasm: iroh alone for the browser, which core-ts's web host binds
   ffi/     stillfail-core-ffi  native host (reqwest, files) on a core thread, exported with uniffi
   node/    stillfail-core-node client/ffi's core thread for Node, exported with napi-rs (the desktop app)
 ```

@@ -1,0 +1,22 @@
+[package]
+name = "stillfail-iroh-wasm"
+description = "iroh in the browser for the core in TypeScript (client/core-ts, iroh.ts): a relay-only endpoint, its connections and streams, exported with wasm-bindgen. Nothing else of the core is in it."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+iroh = { version = "=1.0.3", default-features = false, features = ["tls-ring"] }
+noq-proto = { version = "1", default-features = false }
+# Must match the wasm-bindgen CLI that build.sh runs.
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+futures = "0.3"
+hex = "0.4"
+console_error_panic_hook = "0.1"

@@ -69,8 +69,9 @@ export default defineConfig(({ mode }) => {
       // Where a station's web services are shown (cloud/src/preview.ts); the dev rig gives its own.
       __PREVIEW_ORIGIN__: JSON.stringify(process.env.STILLFAIL_PREVIEW_ORIGIN ?? process.env.EMBER_PREVIEW_ORIGIN ?? "https://preview.still.fail"),
     },
-    // The core's worker (src/core/worker.ts) is a module worker that loads its wasm.
+    // The core's worker (src/core/worker.ts) is a module worker: the TypeScript core and iroh's wasm.
     worker: { format: "es" },
+    resolve: { alias: [{ find: "@stillfail/core-ts/web", replacement: here("../client/core-ts/src/hosts/web.ts") }] },
     build: {
       outDir: here(consoleBuild ? "../dist/cloud-admin" : "../dist/cloud-web"),
       emptyOutDir: true,

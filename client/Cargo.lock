@@ -4015,6 +4015,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "stillfail-iroh-wasm"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "futures",
+ "hex",
+ "iroh",
+ "js-sys",
+ "noq-proto",
+ "serde",
+ "serde-wasm-bindgen",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "stillfail-shapes"
 version = "0.1.0"
 dependencies = [

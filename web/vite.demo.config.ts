@@ -22,7 +22,7 @@ const betaHead: Plugin = {
 
 // The official site (site/index.html → src/site), with the web app itself in it on made-up data (src/demo), into
 // dist/site; `pnpm build:site` also builds the page to HTML (web/site-prerender.mjs).
-// No wasm core: its generated files are stood in for, so this builds without client/wasm/build.sh.
+// No core: the worker's modules are stood in for, so this builds without client/iroh-wasm/build.sh.
 export default defineConfig({
   root: here("../site"),
   publicDir: here("public"),
@@ -36,8 +36,9 @@ export default defineConfig({
   },
   resolve: {
     alias: [
-      { find: /^\.\/pkg\/built\.js$/, replacement: here("src/demo/stubs/built.js") },
-      { find: /^\.\/pkg\/stillfail_core_wasm\.js$/, replacement: here("src/demo/stubs/stillfail_core_wasm.js") },
+      { find: /^\.\/iroh-pkg\/built\.js$/, replacement: here("src/demo/stubs/built.js") },
+      { find: /^\.\/iroh-pkg\/stillfail_iroh_wasm\.js$/, replacement: here("src/demo/stubs/stillfail_iroh_wasm.js") },
+      { find: "@stillfail/core-ts/web", replacement: here("src/demo/stubs/core-ts-web.js") },
     ],
   },
   server: {

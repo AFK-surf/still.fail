@@ -53,28 +53,23 @@ has() { command -v "$1" > /dev/null 2>&1; }
 # pnpm links from its store, and does nothing when all is there: quick either way.
 deps() { (cd "$1" && pnpm install --frozen-lockfile --prefer-offline > /dev/null 2>&1); }
 
-# The web core's types come from its wasm build (web/src/core/pkg, not committed). A machine that cannot build it
-# checks the web against stand-ins for the two modules it imports from there; main's deploy checks the real ones.
+# The web core's iroh comes from its wasm build (web/src/core/iroh-pkg, not committed; the core itself is client/core-ts).
+# A machine that cannot build it checks the web against stand-ins for the two modules it imports from there; main's
+# deploy checks the real ones.
 wasm_pkg() {
-  pkg=web/src/core/pkg
-  # A real build kept from before is current only while the core is unchanged: built again when it changed.
-  [ -f "$pkg/stillfail_core_wasm.d.ts" ] && [ ! -f "$pkg/.stand-in" ] && ! touches '^client/' && return 0
-  if has cargo && has wasm-bindgen && sh client/wasm/build.sh > /dev/null 2>&1; then return 0; fi
+  pkg=web/src/core/iroh-pkg
+  # A real build kept from before is current only while iroh's binding is unchanged: built again when it changed.
+  [ -f "$pkg/stillfail_iroh_wasm.d.ts" ] && [ ! -f "$pkg/.stand-in" ] && ! touches '^client/iroh-wasm/' && return 0
+  if has cargo && has wasm-bindgen && sh client/iroh-wasm/build.sh > /dev/null 2>&1; then return 0; fi
   mkdir -p "$pkg"
-  cat > "$pkg/stillfail_core_wasm.d.ts" <<'TS'
-// A stand-in written by scripts/check.sh where the wasm core cannot be built (client/wasm/build.sh replaces it):
-// what web/src/core/worker.ts uses of client/wasm's exports.
-export class StillFailCore {
-  private constructor();
-  free(): void;
-  connect(): number;
-  disconnect(client: number): void;
-  receive(client: number, message: any): void;
-}
-export function start(emit: Function, test_channel?: boolean | null): Promise<StillFailCore>;
+  cat > "$pkg/stillfail_iroh_wasm.d.ts" <<'TS'
+// A stand-in written by scripts/check.sh where iroh's wasm cannot be built (client/iroh-wasm/build.sh replaces it):
+// what web/src/core/worker.ts uses of its exports.
+export function bind(options: { secretKey: Uint8Array; relayUrls: string[] }): Promise<unknown>;
 export default function init(module_or_path?: any): Promise<unknown>;
 TS
   printf 'export declare const BUILT_AT: number;\n' > "$pkg/built.d.ts"
+  printf 'export const BUILT_AT = 0;\n' > "$pkg/built.js"
   : > "$pkg/.stand-in"
 }
 
@@ -87,6 +82,7 @@ if part ts; then
   ts_web='^web/|^client/shapes/'
   ts_cloud='^cloud/'
   ts_desktop='^apps/desktop/'
+  ts_core='^client/core-ts/|^web/src/core/delta\.ts$'
 
   if touches '^design/icons/|^scripts/icons\.py$|^web/src/icons\.tsx$|/ui/Icons\.kt$'; then
     step icons python3 scripts/icons.py --check
@@ -107,7 +103,7 @@ if part ts; then
   if touches "$ts_root"; then step "typecheck: scripts and tests" pnpm exec tsgo -p tsconfig.json; fi
   if touches "$ts_web"; then
     step "typecheck: web" pnpm exec tsgo -p web/tsconfig.json
-    [ -f web/src/core/pkg/.stand-in ] && later "web against the real wasm core"
+    [ -f web/src/core/iroh-pkg/.stand-in ] && later "web against the real iroh wasm"
   fi
   if touches "$ts_cloud"; then
     deps cloud
@@ -115,14 +111,18 @@ if part ts; then
     step "typecheck: cloud" sh -c 'cd cloud && pnpm run check'
   fi
   if touches "$ts_desktop"; then deps apps/desktop; step "typecheck: desktop" sh -c 'cd apps/desktop && pnpm run typecheck'; fi
+  # The TypeScript core (docs/core-ts.md): its own tsconfig.
+  if touches "$ts_core"; then deps client/core-ts; step "typecheck: core-ts" sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
 
 fi
 
 if [ $full = 1 ]; then
   # The tests drive the web core itself (test/core-client.test.ts): only with a real build of it.
   if part ts && [ $core_tests = 1 ]; then
-    if [ -f web/src/core/pkg/.stand-in ] || [ ! -f web/src/core/pkg/built.js ]; then later "tests (need the wasm core)"; else step "tests" pnpm test; fi
+    if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" pnpm test; fi
   fi
+  # The TypeScript core's own tests; its mesh tests use the station's addon where it is built (station/native/mesh).
+  if part ts && touches "$ts_core"; then step "tests: core-ts" sh -c 'cd client/core-ts && pnpm test'; fi
   if part ts && touches "$ts_cloud"; then step "tests: cloud" sh -c 'cd cloud && pnpm test'; fi
   if part core && touches '^client/shapes/|^web/src/core/shapes\.ts$|/data/Shapes\.kt$'; then
     if has cargo; then step "shapes" sh scripts/shapes.sh --check; else later "shapes"; fi

@@ -1,8 +1,12 @@
 // The worker that runs the core (docs/client-core.md). As a SharedWorker every
 // tab connects a port; as a dedicated Worker (no SharedWorker, e.g. Chrome on
 // Android) the global scope is the one port. Each port is one core client.
+// The core is the TypeScript one (client/core-ts, its web host; docs/core-ts.md);
+// of Rust only iroh is left, client/iroh-wasm, loaded once the mesh is first
+// needed while the core starts from its database.
+import { startWeb, type WebCore } from "@stillfail/core-ts/web";
 import { BUILT_AT } from "./built.ts";
-import init, { start, type StillFailCore } from "./pkg/stillfail_core_wasm.js";
+import initIroh, * as iroh from "./iroh-pkg/stillfail_iroh_wasm.js";
 import type { WorkerFault } from "./client.ts";
 
 // Typed by hand: the web tsconfig has the DOM lib, not the worker's.
@@ -20,7 +24,7 @@ const scope = globalThis as unknown as Port & {
 
 const clients = new Map<number, Port>();
 const ports = new Set<Port>();
-let core: StillFailCore | null = null;
+let core: WebCore | null = null;
 let dead = false;
 
 function emit(client: number, message: unknown): void {
@@ -41,8 +45,9 @@ function gone(client: number): void {
 }
 
 /**
- * A panic aborts the wasm instance (a RuntimeError from then on): this core is
- * finished. Tell every page, which starts a new worker, and end this one.
+ * A bug that ended one of the core's fibers (or a panic in iroh's wasm, a
+ * RuntimeError from then on): this core is finished. Tell every page, which
+ * starts a new worker, and end this one.
  */
 function fatal(reason: string): void {
   if (dead) return;
@@ -112,10 +117,13 @@ function retire(): void {
   scope.close();
 }
 
-const ready: Promise<StillFailCore> = (async () => {
-  await init();
+/** iroh's wasm, loaded once, the first time the core's mesh binds. */
+let irohLoaded: Promise<typeof iroh> | null = null;
+const loadIroh = () => (irohLoaded ??= initIroh().then(() => iroh));
+
+const ready: Promise<WebCore> = (async () => {
   // On the test channel the page names the worker so (core/client.ts workerName): the core's words say youdid.wtf.
-  core = await start(emit, (globalThis as { name?: string }).name?.endsWith("-test") ?? false);
+  core = await startWeb(emit, (globalThis as { name?: string }).name?.endsWith("-test") ?? false, loadIroh, fatal);
   return core;
 })();
 ready.catch((error: unknown) => fatal(`核心没有启动：${String(error)}`));

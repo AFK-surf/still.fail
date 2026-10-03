@@ -206,13 +206,21 @@ cloud 的端口、`doing` 的 `since`。
   验证（studio）：`DEV=1 SKIP_WEB=1 SKIP_STATION=1 sh apps/desktop/build.sh` 通过；Electron 44.4.5（Node 24.21）里
   utilityProcess + MessagePort 跑通订阅和调用、`core.db` 写入；`node harness/handover.ts <Rust addon>`：Rust 写的目录 TS
   打开、TS 写的目录 Rust 打开，账号/workspace/偏好/草稿都一样。
+- 网页：worker（`web/src/core/worker.ts`）跑 TS core（`src/hosts/web.ts`：fetch、WebSocket、IndexedDB 同库同表
+  `stillfail-core` v2 的 `values`/`records`，第一次打开照旧从 `ember-core` 搬），iroh 来自新的 `client/iroh-wasm`
+  （只有 iroh，2.7 MB；原来整个 Rust core 的 wasm 6.2 MB），在 mesh 第一次 bind 时才加载。web 的 tsconfig 更严，所以 worker
+  经 `@stillfail/core-ts/web` 引用（vite alias 指到源码，类型见 `web/src/core/core-ts.d.ts`），core-ts 用自己的 tsconfig 检查。
+  `pnpm build`/`build:cloud` 改编 iroh-wasm 并装 core-ts 的依赖；`scripts/check.sh` 的替身和测试步骤跟着换，加了 core-ts 的
+  typecheck 和测试。验证（studio）：`build:cloud`、`build:site` 通过；dev cloud（`cloud/test/dev.ts`）+ 本地 relay + 临时 station，
+  Chrome 打开登录 → 页面经 iroh-wasm 读到 station（「给 studio 添加一个 Profile」）→ 发新对话，消息立刻出现、station 建出
+  chat 并回 agent 的错误；刷新后 82 ms 内从 IndexedDB 出来。
 - 规则 7：按 key 的增量（`src/collections.ts`、`src/output.ts`、Data 冻结记录 + `shared()`、视图按记录复用行）、web 和安卓
   应用器、安卓 `ChatsDecoder`、2000 行测量（见上面「按 key 的增量」）。
 
 还没做（接手从这里开始）：
 - 剩下的 Rust 测试：`core/tests.rs`（56）、`station/tests.rs`（45）、`kept.rs`、`data.rs`、`sync.rs`、`account_state`、
   mesh 里要 relay 服务器的几个。
-- host：web worker host + 只含 iroh 的 wasm；安卓 Hermes + JNI iroh。
+- host：安卓 Hermes + JNI iroh。
 - 对照运行加上 station（假 station 走 HostWire）的步骤，更新刻意不同的清单。
 
 此前（第一版，照 Rust 写的，已被上面取代）：
