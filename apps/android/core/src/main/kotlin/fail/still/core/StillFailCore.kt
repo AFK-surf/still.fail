@@ -46,7 +46,7 @@ data class TopicState(val value: JsonElement?, val error: CoreException?, val lo
  * The app's side of the core (docs/client-core.md), as web/src/core/client.ts
  * and react.ts are the web's: calls with request ids, topics shared by
  * everyone who collects the same one, deltas applied. The core runs on a
- * thread of its own (client/ffi); if it dies it is started again and the
+ * thread of its own (client/core-ts in Hermes, HermesEngine); if it dies it is started again and the
  * topics are subscribed anew, while calls in flight fail with `core_restarted`.
  */
 class StillFailCore internal constructor(
@@ -68,9 +68,9 @@ class StillFailCore internal constructor(
                 return core
             }
             val dataDir = File(context.applicationContext.filesDir, "stillfail-core").path
-            // Loads the library off the caller's thread; it is the slow part of starting.
-            withContext(Dispatchers.IO) { fail.still.core.ffi.utcOffsetMin(0.0) }
-            val core = StillFailCore(ffiEngines(dataDir, cloudOrigin, beta))
+            // Loads the engine's libraries off the caller's thread; it is the slow part of starting.
+            withContext(Dispatchers.IO) { HermesNative }
+            val core = StillFailCore(hermesEngines(context.applicationContext, dataDir, cloudOrigin, beta))
             core.cloudOrigin = cloudOrigin
             withContext(core.confined) { core.open() }
             instance = core

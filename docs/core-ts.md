@@ -214,13 +214,22 @@ cloud 的端口、`doing` 的 `since`。
   typecheck 和测试。验证（studio）：`build:cloud`、`build:site` 通过；dev cloud（`cloud/test/dev.ts`）+ 本地 relay + 临时 station，
   Chrome 打开登录 → 页面经 iroh-wasm 读到 station（「给 studio 添加一个 Profile」）→ 发新对话，消息立刻出现、station 建出
   chat 并回 agent 的错误；刷新后 82 ms 内从 IndexedDB 出来。
+- 安卓：`Engine` 后面换成 Hermes（`apps/android/core/src/main/cpp/engine.cpp`：每个 core 一个线程跑 Hermes 0.81.4
+  ——`com.facebook.react:hermes-android`，jsi 用同版本源码自编 libjsi.so——任务队列、CLOCK_BOOTTIME 定时器、每个任务后清
+  microtask；JS 的 `__native` 调 Rust 壳）。Rust 壳 `client/shell`（C ABI）做 HTTP、cloud 的 WebSocket、按 key 的文件和
+  `core.db`（与 client/ffi 同目录同格式）、TCP、iroh（含 LAN/DHT 查找）。JS 端 `src/hosts/bridge.ts`（操作名 + JSON + 字节），
+  入口 `src/hosts/hermes.ts` + `hermes-globals.ts`（定时器、TextEncoder/Decoder、structuredClone、AbortController、URL…）。
+  `scripts/hermes-bundle.ts`：esbuild 到 ES2020，Babel 把 class 变函数（Hermes 0.81 的实验 class 会崩），hermesc
+  `-block-scoping` 编成字节码 `core.hbc`（1.8 MB，放 assets）。`build.py` 编壳（带 SONAME）、打包 core，Gradle 用 CMake 编引擎。
+  uniffi/JNA 不再用。验证（studio）：`test/bridge.test.ts`（Node 里的 JS 壳：登录、cloud socket、mesh）、`cargo test -p
+  stillfail-shell`、Hermes CLI 跑 bundle（`scripts/hermes-check*.js`）、模拟器上 `-PmotionTest` 包：开发账号登录 → 经 iroh
+  读到 station 的 chat 列表 → 打开 chat 发消息，station 库里有这条 → 强杀重开，列表立刻从库里出来；PSS 约 144 MB。
 - 规则 7：按 key 的增量（`src/collections.ts`、`src/output.ts`、Data 冻结记录 + `shared()`、视图按记录复用行）、web 和安卓
   应用器、安卓 `ChatsDecoder`、2000 行测量（见上面「按 key 的增量」）。
 
 还没做（接手从这里开始）：
 - 剩下的 Rust 测试：`core/tests.rs`（56）、`station/tests.rs`（45）、`kept.rs`、`data.rs`、`sync.rs`、`account_state`、
   mesh 里要 relay 服务器的几个。
-- host：安卓 Hermes + JNI iroh。
 - 对照运行加上 station（假 station 走 HostWire）的步骤，更新刻意不同的清单。
 
 此前（第一版，照 Rust 写的，已被上面取代）：

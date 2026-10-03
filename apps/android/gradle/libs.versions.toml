@@ -2,7 +2,7 @@
 agp = "9.0.1"
 coroutines = "1.10.2"
 serialization = "1.9.0"
-jna = "5.17.0"
+hermes = "0.81.4"
 junit = "4.13.2"
 activity = "1.12.3"
 kotlin = "2.2.10"
@@ -18,7 +18,8 @@ androidx-test-runner = "1.7.0"
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
-jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
+# The engine of the core (core/src/main/cpp): React Native's Hermes, its jsi built beside it from the same release.
+hermes-android = { module = "com.facebook.react:hermes-android", version.ref = "hermes" }
 junit = { module = "junit:junit", version.ref = "junit" }
 androidx-activity = { module = "androidx.activity:activity", version.ref = "activity" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }

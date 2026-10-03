@@ -1,7 +1,6 @@
 package fail.still.core
 
-import fail.still.core.ffi.CoreListener
-import fail.still.core.ffi.StillFailCoreFfi
+import android.content.Context
 
 /** One running core as [StillFailCore] sees it: a client id, JSON messages each way. Tests put a fake in its place. */
 internal interface Engine {
@@ -15,13 +14,38 @@ internal interface Engine {
 /** Starts an engine whose messages go to `onMessage`, tagged with the engine they came from. */
 internal typealias EngineFactory = (onMessage: (from: Engine, json: String) -> Unit) -> Engine
 
-/** The Rust core through uniffi (client/ffi); `beta`: a beta app's (its calls say so, its builds are the beta feed's). */
-internal fun ffiEngines(dataDir: String, cloudOrigin: String, beta: Boolean = false): EngineFactory = { deliver ->
-    object : Engine, CoreListener {
-        private val core: StillFailCoreFfi = fail.still.core.ffi.startAs(dataDir, cloudOrigin, beta, this)
-        override fun onMessage(client: ULong, json: String) = deliver(this, json)
-        override fun connect() = core.connect().toLong()
-        override fun receive(client: Long, json: String) = core.receive(client.toULong(), json)
-        override fun close() = core.close()
+/** What the core's engine (cpp/engine.cpp) calls back with: what the core says, as UTF-8. */
+internal fun interface HermesListener {
+    fun onBytes(json: ByteArray)
+}
+
+/** The engine's JNI (cpp/engine.cpp): Hermes running the core in TypeScript, its IO in the Rust shell (client/shell). */
+internal object HermesNative {
+    init {
+        System.loadLibrary("stillfail_hermes")
+    }
+
+    external fun start(script: ByteArray, url: String, dataDir: String, cloudOrigin: String, beta: Boolean, listener: HermesListener): Long
+    external fun connect(handle: Long): Long
+    external fun receive(handle: Long, client: Long, json: String)
+    external fun close(handle: Long)
+}
+
+/** The core's script as the app carries it (apps/android/build.py: client/core-ts as Hermes bytecode). */
+internal const val CORE_SCRIPT = "core.hbc"
+
+/**
+ * The core in TypeScript (client/core-ts) in Hermes, its files in `dataDir` as the Rust core kept them; `beta`: a beta
+ * app's (its calls say so, its builds are the beta feed's).
+ */
+internal fun hermesEngines(context: Context, dataDir: String, cloudOrigin: String, beta: Boolean = false): EngineFactory {
+    val script by lazy { context.assets.open(CORE_SCRIPT).use { it.readBytes() } }
+    return { deliver ->
+        object : Engine {
+            private val handle: Long = HermesNative.start(script, CORE_SCRIPT, dataDir, cloudOrigin, beta, HermesListener { deliver(this, String(it, Charsets.UTF_8)) })
+            override fun connect() = HermesNative.connect(handle)
+            override fun receive(client: Long, json: String) = HermesNative.receive(handle, client, json)
+            override fun close() = HermesNative.close(handle)
+        }
     }
 }

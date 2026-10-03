@@ -4042,6 +4042,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "stillfail-shell"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "hex",
+ "iroh",
+ "iroh-mainline-address-lookup",
+ "iroh-mdns-address-lookup",
+ "libc",
+ "noq-proto",
+ "reqwest",
+ "rusqlite",
+ "rustls",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+ "webpki-roots 1.0.9",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

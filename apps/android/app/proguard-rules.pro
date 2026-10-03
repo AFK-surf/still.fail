@@ -1,6 +1,6 @@
-# The core is reached through JNA (uniffi): its classes and the generated bindings are found by reflection.
--keep class com.sun.jna.** { *; }
--keep class * implements com.sun.jna.** { *; }
+# The core's engine calls back into its listener by name from JNI (core/src/main/cpp/engine.cpp), and Hermes's
+# fbjni finds its classes the same way.
 -keep class fail.still.core.** { *; }
--dontwarn java.awt.**
--dontwarn com.sun.jna.**
+-keep class com.facebook.jni.** { *; }
+-keep class com.facebook.hermes.** { *; }
+-dontwarn com.facebook.**
