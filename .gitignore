@@ -23,6 +23,11 @@ __pycache__/
 
 .claude/
 
+# Local iOS toolchains, build caches, and Xcode user state
+/.airbuild/
+xcuserdata/
+*.xcuserstate
+
 # built by client/wasm/build.sh
 web/src/core/pkg/
 client/target/

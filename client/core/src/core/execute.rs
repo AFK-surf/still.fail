@@ -95,6 +95,7 @@ impl Inner {
                 self.store.invalidate(&topic);
                 Ok(self.slack_tokens.value(&topic))
             }
+            Call::NativeAuth(call) => self.execute_native_auth(call).await,
             Call::AuthBegin { redirect_uri, return_to, device_name } => {
                 // Named by the UI (those from before `client.device`), else as the device is.
                 let device_name = device_name.or_else(|| crate::prefs::device_name(&self.data)).unwrap_or_else(|| crate::brand::name().into());

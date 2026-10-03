@@ -19,6 +19,7 @@ pub(crate) enum Call {
     /// `device_name`: as the device is (`client.device`) when not given.
     AuthBegin { redirect_uri: String, return_to: String, device_name: Option<String> },
     AuthComplete { query: String },
+    NativeAuth(NativeAuthCall),
     SignOut { account: String },
     /// Something to have done on a station or still.fail cloud, by its name (ops.rs): the UI never makes a request itself.
     Op(crate::ops::Request),
@@ -118,7 +119,7 @@ impl Call {
             Call::DecisionAnswer { station, .. } | Call::DecisionReply { station, .. } | Call::DecisionDefer { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatNewer { station, .. } | Call::ChatLatest { station, .. } | Call::ChatPlace { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
             Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } | Call::StationMeasure { station } | Call::StationUpdateNotice { station, .. } => Some(station),
-            Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
+            Call::NativeAuth(_) | Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
             Call::PushKey | Call::PushRegister { .. } | Call::PushUnregister => None,
             Call::DraftPut { station, .. } | Call::DraftGet { station, .. } | Call::ChatRef { station, .. } => Some(station),
             Call::Attend(_) | Call::ChatRefsKeep { .. } => None,
@@ -136,6 +137,7 @@ impl Call {
 }
 
 pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
+    if let Some(native) = parse_native_auth(name, params.clone()) { return native.map(Call::NativeAuth); }
     if let Some(action @ ("open" | "edit" | "save" | "drop")) = name.strip_prefix("automaticDecisions.form.") {
         let form: stillfail_shapes::SlackTokenForm = serde_json::from_value(params.clone()).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))?;
         StationAddr::parse(&form.station)?;
@@ -323,7 +325,7 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
     }
 
     Ok(match name {
-        "auth.begin" => {
+        "auth.begin" | "auth.beginGoogle" => {
             let p: Begin = read(params)?;
             Call::AuthBegin { redirect_uri: p.redirect_uri, return_to: p.return_to, device_name: p.device_name }
         }
@@ -593,4 +595,45 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
 /// Missing params read as `{}`, so the error names the missing field.
 fn params_or_empty(params: Value) -> Value {
     if params.is_null() { json!({}) } else { params }
+}
+
+/// Additive native-auth contract; provider credentials are never exposed in Debug/Doing views.
+#[derive(PartialEq)]
+pub(super) enum NativeAuthCall {
+    AppleBegin,
+    AppleComplete { attempt: String, identity_token: String, authorization_code: String, name: Option<String>, state: Option<String> },
+    DeletionSummary { account: String },
+    DeleteAccount { account: String },
+}
+
+pub(super) fn parse_native_auth(name: &str, params: Value) -> Option<Result<NativeAuthCall>> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct AppleComplete { attempt: String, identity_token: String, authorization_code: String, name: Option<String>, state: Option<String> }
+    #[derive(Deserialize)]
+    struct Account { account: String }
+    let read_account = || serde_json::from_value::<Account>(params.clone()).map_err(|_| CoreError::invalid("缺少 account"));
+    Some(match name {
+        "auth.appleBegin" => Ok(NativeAuthCall::AppleBegin),
+        "auth.appleComplete" => serde_json::from_value::<AppleComplete>(params).map_err(|_| CoreError::invalid("Apple 登录参数无效")).and_then(|p| {
+            if p.attempt.len() != 43 || p.identity_token.is_empty() || p.identity_token.len() > 4096 || p.authorization_code.is_empty() || p.authorization_code.len() > 4096 || p.name.as_ref().is_some_and(|n| n.len() > 120) {
+                return Err(CoreError::invalid("Apple 登录参数无效"));
+            }
+            Ok(NativeAuthCall::AppleComplete { attempt: p.attempt, identity_token: p.identity_token, authorization_code: p.authorization_code, name: p.name, state: p.state })
+        }),
+        "auth.deletionSummary" => read_account().map(|p| NativeAuthCall::DeletionSummary { account: p.account }),
+        "auth.deleteAccount" => read_account().map(|p| NativeAuthCall::DeleteAccount { account: p.account }),
+        _ => return None,
+    })
+}
+
+impl std::fmt::Debug for NativeAuthCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::AppleBegin => "AppleBegin",
+            Self::AppleComplete { .. } => "AppleComplete { credentials: [REDACTED] }",
+            Self::DeletionSummary { .. } => "DeletionSummary",
+            Self::DeleteAccount { .. } => "DeleteAccount",
+        })
+    }
 }

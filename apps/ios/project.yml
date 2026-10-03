@@ -1,0 +1,95 @@
+name: StillFail
+options:
+  bundleIdPrefix: fail.still
+  deploymentTarget:
+    iOS: '26.0'
+  createIntermediateGroups: true
+  developmentLanguage: zh-Hans
+packages:
+  MarkdownView:
+    url: https://github.com/Lakr233/MarkdownView.git
+    exactVersion: 4.6.5
+  Litext:
+    url: https://github.com/Lakr233/Litext.git
+    exactVersion: 3.3.2
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    IPHONEOS_DEPLOYMENT_TARGET: '26.0'
+    TARGETED_DEVICE_FAMILY: '1,2'
+    SUPPORTS_MACCATALYST: NO
+    SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+    ARCHS: arm64
+    CURRENT_PROJECT_VERSION: '1'
+    MARKETING_VERSION: '0.1.0'
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    CLANG_ENABLE_MODULES: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+    HEADER_SEARCH_PATHS: '$(inherited) "$(SRCROOT)/../../.airbuild/generated/core"'
+    SWIFT_INCLUDE_PATHS: '$(inherited) "$(SRCROOT)/../../.airbuild/generated/core"'
+    LIBRARY_SEARCH_PATHS: '$(inherited) "$(SRCROOT)/../../.airbuild/generated/core"'
+    OTHER_LDFLAGS: '$(inherited) -lstillfail_core_ffi -framework Security -framework SystemConfiguration -lresolv'
+targets:
+  StillFail:
+    type: application
+    platform: iOS
+    sources:
+      - path: StillFail
+      - path: ../../.airbuild/generated/core/StillFailCore.swift
+    preBuildScripts:
+      - name: Prepare project-local Rust core
+        shell: /bin/bash
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e -o pipefail
+          cd "$SRCROOT/../.."
+          export PATH="$PWD/.airbuild/cargo/bin:/opt/homebrew/bin:$PATH"
+          /bin/bash apps/ios/bootstrap-rust.sh
+          /bin/bash apps/ios/build-core.sh
+    settings:
+      base:
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone
+        PRODUCT_NAME: StillFail
+        INFOPLIST_FILE: Info.plist
+        CODE_SIGN_ENTITLEMENTS: StillFail.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - package: MarkdownView
+        product: MarkdownView
+      - package: MarkdownView
+        product: MarkdownParser
+      - package: Litext
+        product: Litext
+      - sdk: AuthenticationServices.framework
+      - sdk: Security.framework
+      - sdk: PhotosUI.framework
+      - sdk: UniformTypeIdentifiers.framework
+  StillFailTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: StillFailTests
+    dependencies:
+      - target: StillFail
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone.tests
+        GENERATE_INFOPLIST_FILE: YES
+        OTHER_LDFLAGS: '$(inherited)'
+schemes:
+  StillFail:
+    build:
+      targets:
+        StillFail: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+    test:
+      config: Debug
+      targets:
+        - StillFailTests
