@@ -10,6 +10,7 @@ import { webcrypto } from "node:crypto";
 import { Effect, Queue, Scope } from "effect";
 import WebSocket from "ws";
 import { Core } from "../core.ts";
+import { nodeIroh } from "./node-iroh.ts";
 import { HostError } from "../error.ts";
 import { SOCKET_PING, SOCKET_PING_MS, type DbOp, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
@@ -243,7 +244,7 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
   service.os = process.platform === "darwin" ? "macos" : process.platform;
   const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener);
   // Messages that arrive while the core starts wait, in order (client/ffi's queue).
-  const ready = Core.create(host).then((core) => {
+  const ready = Core.create(host, { iroh: nodeIroh() }).then((core) => {
     core.keepTime();
     return core;
   });
