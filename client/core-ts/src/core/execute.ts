@@ -15,6 +15,12 @@ import type { Call } from "./calls.ts";
 /// What later parts of the core execute (station calls, views, choose, attend…): each module adds its kinds here.
 export const handlers: Partial<Record<Call["kind"], (inner: Inner, call: Call, progress: Progress, at: [ClientId, RequestId], ctx: SpanContext, signal: AbortSignal) => Promise<unknown>>> = {};
 
+/// What other modules hear of calls the core runs itself (the changelog of the device, the views of a notice).
+export const hooks: {
+  device?: (inner: Inner, facts: unknown) => void;
+  updateNoticeOpen?: (inner: Inner, station: string, open: boolean) => void;
+} = {};
+
 /// Runs a call; `at` is the client and id it came with, `ctx` its trace.
 export async function execute(inner: Inner, call: Call, progress: Progress, at: [ClientId, RequestId], ctx: SpanContext, signal: AbortSignal): Promise<unknown> {
   switch (call.kind) {
@@ -80,6 +86,17 @@ export async function execute(inner: Inner, call: Call, progress: Progress, at: 
     case "prefsSet":
       prefs.set(inner.data, call.patch, call.fill, inner.host.nowMs());
       return null;
+    case "clientDevice":
+      prefs.device(inner.data, call.facts);
+      hooks.device?.(inner, call.facts);
+      return null;
+    case "stationUpdateNotice":
+      if (call.action === "dismiss") {
+        prefs.dismissStationUpdate(inner.data, call.station, call.version!);
+        inner.store.invalidate({ topic: "prefs" });
+      }
+      hooks.updateNoticeOpen?.(inner, call.station, call.action === "open");
+      return {};
     case "decisionDefer":
       prefs.deferDecision(inner.data, `${call.station}\t${call.thread}\t${call.seq}`, inner.host.nowMs());
       return null;
