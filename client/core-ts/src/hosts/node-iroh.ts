@@ -3,9 +3,8 @@
 // (mesh.node), or where cargo built it in a checkout.
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Effect } from "effect";
-import { HostError } from "../error.ts";
-import type { BindOptions, CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohStream } from "../iroh.ts";
+import type { BindOptions, CloseReason, Iroh, IrohAddr } from "../iroh.ts";
+import { type BoundEndpoint, wrapIroh } from "../iroh-bindings.ts";
 
 type NStream = {
   read(): Promise<Buffer | null>;
@@ -60,61 +59,14 @@ export function loadAddon(): Addon | null {
   return loaded;
 }
 
-const host = (e: unknown) => new HostError(e instanceof Error ? e.message : String(e));
-const call = <A>(f: () => Promise<A>): Effect.Effect<A, HostError> => Effect.tryPromise({ try: f, catch: host });
-
-function stream(s: NStream): IrohStream {
-  return {
-    read: () => call(async () => {
-      const b = await s.read();
-      return b === null ? null : new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
-    }),
-    write: (bytes) => call(() => s.write(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength))),
-    finish: () => call(() => s.finish()),
-    stopped: () => call(async () => {
-      const code = await s.stopped();
-      return typeof code === "number" ? code : null;
-    }),
-    reset: (code) => void s.reset?.(code).catch(() => {}),
-  };
-}
-
-function connection(c: NConnection): IrohConnection {
-  return {
-    remoteId: () => c.remoteId(),
-    openBi: () => Effect.map(call(() => c.openBi()), stream),
-    acceptBi: () => Effect.orElseSucceed(Effect.map(call(() => c.acceptBi()), (s) => (s === null ? null : stream(s))), () => null),
-    openUni: () => Effect.map(call(() => c.openUni()), stream),
-    close: (code, reason) => c.close(code, reason),
-    closeReason: () => c.closeReason() ?? null,
-    closed: () => Effect.promise(() => c.closedInfo()),
-    paths: () => c.paths().map((p) => ({ selected: p.selected, relay: p.relay ?? null, rttMs: p.rttMs })),
-    stats: () => c.stats(),
-  };
-}
-
-function endpoint(e: NEndpoint): IrohEndpoint {
-  return {
-    id: () => e.id(),
-    connect: (addr, alpn, additional) => Effect.map(call(() => e.connect(addr, Buffer.from(alpn), additional.map((a) => Buffer.from(a)))), connection),
-    addAddr: (addr) => e.addAddr(addr),
-    networkChange: () => Effect.promise(() => e.networkChange()),
-    relayStatus: () => e.relayStatus(),
-    close: () => Effect.promise(() => e.close()),
-  };
-}
-
 /// The iroh of the addon; null where there is none.
 export function nodeIroh(): Iroh | null {
   const addon = loadAddon();
   if (addon === null) return null;
-  return {
-    bind: (o: BindOptions) =>
-      Effect.map(
-        call(() => addon.bind({ secretKey: Buffer.from(o.secretKey), alpns: [], relayUrls: o.relayUrls, discovery: false, lookup: o.lookup, relayOnly: o.relayOnly })),
-        endpoint,
-      ),
-  };
+  return wrapIroh(
+    (o: BindOptions) => addon.bind({ secretKey: Buffer.from(o.secretKey), alpns: [], relayUrls: o.relayUrls, discovery: false, lookup: o.lookup, relayOnly: o.relayOnly }) as Promise<BoundEndpoint>,
+    (bytes) => Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+  );
 }
 
 /// A station-side endpoint for tests: accepts the client's ALPNs.
