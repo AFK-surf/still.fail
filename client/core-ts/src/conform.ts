@@ -1,15 +1,11 @@
-// stillfail_shapes::conform: a value put through its shape (client/shapes): what the shape does not declare is dropped,
+// A value put through its shape (src/shapes/schema.ts): what the shape does not declare is dropped,
 // an absent option left out, a default filled in where the shape says so, and a value of the wrong type is an error
 // naming the field ("items[0].since: invalid type: …"), as serde_path_to_error says it.
-import { SHAPES } from "./shapes-schema.ts";
+import { SHAPES } from "./shapes/schema.ts";
+import type { Ty } from "./shapes/dsl.ts";
 import { shaped } from "./util.ts";
 
-export type Ty = string | { opt: Ty } | { vec: Ty } | { map: Ty } | { tuple: Ty[] };
-export type Field = { name: string; ty: Ty; default: boolean; skipNone: boolean };
-export type Shape =
-  | { kind: "struct"; fields: Field[]; default: boolean }
-  | { kind: "enum"; values: string[]; default: string | null }
-  | { kind: "tagged"; tag: string; content: string; variants: Record<string, Ty> };
+export type { Field, Shape, Ty } from "./shapes/dsl.ts";
 
 class Wrong extends Error {
   readonly path: string;

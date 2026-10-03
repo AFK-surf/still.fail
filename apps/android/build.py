@@ -85,8 +85,10 @@ def main():
 
     profile = "release" if args.release else "debug"
     target_dir = Path(env.get("CARGO_TARGET_DIR", CLIENT / "target"))
-    # The app's shapes are what the core declares it sends (client/shapes): a stale Shapes.kt stops the build.
-    run(["sh", "scripts/shapes.sh", "--check"], env, cwd=ROOT)
+    # The app's types are what the core declares it sends and takes (client/core-ts/src/shapes/schema.ts, src/ops.ts):
+    # a stale Shapes.kt or Operations.kt stops the build.
+    run(["node", "client/core-ts/scripts/shapes.ts", "--check"], env, cwd=ROOT)
+    run(["node", "client/core-ts/scripts/operations.ts", "--check"], env, cwd=ROOT)
     # And its icons are still.fail's set as drawn (design/icons).
     run(["python3", "scripts/icons.py", "--check"], env, cwd=ROOT)
     # Named by its file (SONAME): the engine that links it is then given its name, not where it was built.

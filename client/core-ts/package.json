@@ -2,10 +2,10 @@
   "name": "@stillfail/core-ts",
   "private": true,
   "type": "module",
-  "description": "The still.fail client core in TypeScript (docs/core-ts.md): the same protocol, data and words as client/core",
+  "description": "The still.fail client core in TypeScript (docs/core-ts.md): the same protocol, data and words as client/core-ts",
   "scripts": {
     "check": "tsgo --noEmit",
-    "shapes": "node scripts/shapes-schema.ts",
+    "shapes": "node scripts/shapes.ts",
     "build": "esbuild src/index.ts src/hosts/node.ts --outbase=src --bundle --platform=node --format=esm --target=node24 --outdir=dist --external:*.node",
     "test": "node --test --test-force-exit test/*.test.ts",
     "hermes": "node scripts/hermes-bundle.ts"

@@ -2,8 +2,8 @@
 # The checks for what changed. Two kinds:
 #   quick: what a commit or push touches, in seconds (icons, TypeScript); the git hooks (.githooks) run it, on
 #          whoever commits or pushes, so merging stays quick.
-#   full:  that, the tests, cloud's tests, the web against the real wasm core, the clients' shapes, Rust and
-#          Android: minutes. Run before a deploy (~/bin/ember-deploy on studio runs it on what the deploy carries).
+#   full:  that, the tests, cloud's tests, the core's tests, the web against the real iroh wasm, Rust and Android:
+#          minutes. Run before a deploy (~/bin/ember-deploy on studio runs it on what the deploy carries).
 #
 #   sh scripts/check.sh commit        quick, on what is staged (pre-commit)
 #   sh scripts/check.sh push <range>  quick, on what a push carries (pre-push), e.g. origin/main..HEAD
@@ -11,8 +11,9 @@
 #   sh scripts/check.sh all           full, as if every file changed
 #
 # STILLFAIL_CHECK_PART=ts|station|core|android runs only that part of it (CI runs the four side by side): ts the
-# icons, bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud); station mesh/'s Rust;
-# core client/'s Rust and the shapes; android the app. Unset: all of them.
+# icons, the clients' types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the
+# core: client/core-ts); station mesh/'s Rust; core client/'s Rust (the core's native shells: iroh for the web and
+# Android's IO, the words); android the app. Unset: all of them.
 #
 # STILLFAIL_SKIP_CHECKS=1 (or EMBER_SKIP_CHECKS=1) skips it all (git's --no-verify does too); say why when you do.
 set -eu
@@ -74,21 +75,25 @@ TS
 }
 
 if part ts; then
-  if touches '^client/core/src/(ops|doing)\.rs$|^scripts/operations\.py$|^web/src/core/operations\.ts$|/data/Operations\.kt$'; then
-    step "operation bindings" python3 scripts/operations.py --check
-  fi
-
   ts_root='^(scripts|test|spike)/.*\.ts$|^(tsconfig\.json|package\.json|pnpm-lock\.yaml)$'
-  ts_web='^web/|^client/shapes/'
+  ts_web='^web/'
   ts_cloud='^cloud/'
   ts_desktop='^apps/desktop/'
   ts_core='^client/core-ts/|^web/src/core/delta\.ts$'
 
+  # The clients' types and the UIs' operation bindings are made from the core's (client/core-ts/src/shapes/schema.ts,
+  # src/ops.ts): checked in, and never other than what those make.
+  if touches '^client/core-ts/(src/shapes/|src/ops\.ts$|scripts/(shapes|operations)\.ts$)|^web/src/core/(shapes|operations)\.ts$|/data/(Shapes|Operations)\.kt$'; then
+    deps client/core-ts
+    step "clients' types" node client/core-ts/scripts/shapes.ts --check
+    step "operation bindings" node client/core-ts/scripts/operations.ts --check
+  fi
+
   if touches '^design/icons/|^scripts/icons\.py$|^web/src/icons\.tsx$|/ui/Icons\.kt$'; then
     step icons python3 scripts/icons.py --check
   fi
-  # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done (client/core/src/
-  # ops.rs), and the core, which knows what it changes, brings every topic that shows it up to date.
+  # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
+  # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
   if touches '^(web/src|apps/desktop/src|apps/android)/'; then
     step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src apps/desktop/src apps/android'
   fi
@@ -124,14 +129,13 @@ if [ $full = 1 ]; then
   # The TypeScript core's own tests; its mesh tests use the station's addon where it is built (station/native/mesh).
   if part ts && touches "$ts_core"; then step "tests: core-ts" sh -c 'cd client/core-ts && pnpm test'; fi
   if part ts && touches "$ts_cloud"; then step "tests: cloud" sh -c 'cd cloud && pnpm test'; fi
-  if part core && touches '^client/shapes/|^web/src/core/shapes\.ts$|/data/Shapes\.kt$'; then
-    if has cargo; then step "shapes" sh scripts/shapes.sh --check; else later "shapes"; fi
-  fi
   if part station && touches '^(mesh|vendor)/'; then
     if has cargo; then step "Rust: station" sh -c 'cd mesh && cargo test --workspace -q'; else later "Rust: station"; fi
   fi
-  if part core && touches '^client/'; then
-    if has cargo; then step "Rust: client core" sh -c 'cd client && cargo test --workspace --exclude stillfail-core-wasm -q'; else later "Rust: client core"; fi
+  # The core's native shells (client/shell for Android, client/iroh-wasm for the web), the words, the shapes the Rust
+  # station shares.
+  if part core && touches '^client/(shell|iroh-wasm|i18n|shapes)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
+    if has cargo; then step "Rust: client" sh -c 'cd client && cargo test --workspace -q'; else later "Rust: client"; fi
   fi
   if part android && touches '^(apps/android|client)/'; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}

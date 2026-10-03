@@ -5,6 +5,7 @@ import { callText, epochMs, present } from "../src/activity.ts";
 import { name, setTestChannel, STABLE, TEST } from "../src/brand.ts";
 import { Core } from "../src/core.ts";
 import { Doing } from "../src/doing.ts";
+import { conformTy } from "../src/conform.ts";
 import { merge } from "../src/entries.ts";
 import { Counts, lastChat, rowTone } from "../src/views/marks.ts";
 import { FakeHost } from "../src/testing.ts";
@@ -156,4 +157,12 @@ test("marks_are_said_in_english_too", () => {
   assert.equal(counts(2, 1, 1).labelIn("en"), "2 need attention · 1 waiting for you · 1 unread");
   assert.equal(counts(1, 0, 3).labelIn("en"), "1 needs attention · 3 unread");
   assert.equal(counts(0, 0, 1).labelIn("zh"), "1 个有新消息");
+});
+
+// The shapes (src/shapes/schema.ts): a union's words are serde's camelCase of its variants (the TS core's first table,
+// read from the Rust source, had them capitalized, and a history item would not have gone out).
+test("a_history_item_goes_out_through_its_shape", () => {
+  const item = { key: "k", entries: [1, 2], body: { kind: "mark", content: { text: "等 CI", wait: { since: 5 } } } };
+  assert.deepEqual(conformTy("HistoryItem", item), { ok: item });
+  assert.match((conformTy("HistoryBody", { kind: "Mark", content: { text: "x" } }) as J).error, /unknown variant `Mark`/);
 });

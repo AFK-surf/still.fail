@@ -1,5 +1,5 @@
 // What the clients show of a value, decided once (present.rs): times in words beside the times, and each topic's
-// value through its shape (client/shapes) as it goes out.
+// value through its shape (client/core-ts/src/shapes/schema.ts) as it goes out.
 import { conform, type Ty } from "./conform.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
@@ -11,7 +11,7 @@ import * as jobsMod from "./jobs.ts";
 import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
-import { SHAPES } from "./shapes-schema.ts";
+import { SHAPES } from "./shapes/schema.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
