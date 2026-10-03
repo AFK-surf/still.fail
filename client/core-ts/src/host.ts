@@ -80,4 +80,11 @@ export interface Host {
 
   /// Delivers a message to one connected UI.
   emit(client: ClientId, message: CoreMessage): void;
+
+  /// A TCP connection to this machine's `port` (adbd, for the adb share: adb.ts), open while the scope is; only a
+  /// native host has one.
+  tcp?(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope>;
 }
+
+/// A TCP connection: what comes in, as it comes; what goes out; `end`, no more goes out.
+export type TcpConnection = { read: Pull<Uint8Array>; write(bytes: Uint8Array): Effect.Effect<void, HostError>; end(): void };

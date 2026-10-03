@@ -9,10 +9,11 @@ import { DatabaseSync } from "node:sqlite";
 import { webcrypto } from "node:crypto";
 import { Effect, Queue, Scope } from "effect";
 import WebSocket from "ws";
+import { connect as tcpConnect } from "node:net";
 import { Core } from "../core.ts";
 import { nodeIroh } from "./node-iroh.ts";
 import { HostError } from "../error.ts";
-import { SOCKET_PING, SOCKET_PING_MS, type DbOp, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
+import { SOCKET_PING, SOCKET_PING_MS, type TcpConnection, type DbOp, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
 
@@ -127,6 +128,10 @@ export class NodeHost implements Host {
   }
 
   resetConnections(): void {}
+
+  tcp(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope> {
+    return nodeTcp(port);
+  }
 
   /// Keys may hold anything; file names only letters, digits, `-` and `_` (the rest is %XX).
   path(key: string): string {
@@ -270,4 +275,38 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
       host.close();
     },
   };
+}
+
+/// A TCP connection to this machine's `port` (adbd), open while the scope is.
+export function nodeTcp(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope> {
+  return Effect.gen(function* () {
+    const incoming = yield* Queue.unbounded<Uint8Array | null | HostError>();
+    const socket = yield* Effect.acquireRelease(
+      Effect.callback<import("node:net").Socket, HostError>((resume) => {
+        const socket = tcpConnect({ host: "127.0.0.1", port });
+        let open = false;
+        socket.on("connect", () => {
+          open = true;
+          resume(Effect.succeed(socket));
+        });
+        socket.on("data", (data: Buffer) => Queue.offerUnsafe(incoming, new Uint8Array(data)));
+        socket.on("end", () => Queue.offerUnsafe(incoming, null));
+        socket.on("close", () => Queue.offerUnsafe(incoming, null));
+        socket.on("error", (e) => {
+          if (!open) resume(Effect.fail(new HostError(e.message)));
+          else Queue.offerUnsafe(incoming, new HostError(e.message));
+        });
+        return Effect.sync(() => socket.destroy());
+      }),
+      (socket) => Effect.sync(() => socket.destroy()),
+    );
+    return {
+      read: { take: Effect.flatMap(Queue.take(incoming), (v) => (v instanceof HostError ? Effect.fail(v) : Effect.succeed(v))) },
+      write: (bytes: Uint8Array) =>
+        Effect.callback<void, HostError>((resume) => {
+          socket.write(bytes, (e) => resume(e ? Effect.fail(new HostError(e.message)) : Effect.void));
+        }),
+      end: () => socket.end(),
+    };
+  });
 }

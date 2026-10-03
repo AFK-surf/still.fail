@@ -394,21 +394,32 @@ impl UniStream {
 pub struct Stream {
     send: Arc<Mutex<SendStream>>,
     recv: Arc<Mutex<RecvStream>>,
+    /// Set by `reset`: a read waiting on the other end gives up (it holds the receiving half meanwhile).
+    reset: tokio::sync::watch::Sender<bool>,
 }
 
 impl Stream {
     fn new(send: SendStream, recv: RecvStream) -> Stream {
-        Stream { send: Arc::new(Mutex::new(send)), recv: Arc::new(Mutex::new(recv)) }
+        Stream { send: Arc::new(Mutex::new(send)), recv: Arc::new(Mutex::new(recv)), reset: tokio::sync::watch::channel(false).0 }
     }
 }
 
 #[napi]
 impl Stream {
-    /// What came next, up to 64 KiB; null at its end.
+    /// What came next, up to 64 KiB; null at its end (or once it was reset).
     #[napi]
     pub async fn read(&self) -> napi::Result<Option<Buffer>> {
+        let mut reset = self.reset.subscribe();
+        if *reset.borrow() {
+            return Ok(None);
+        }
         let mut buf = vec![0u8; 64 * 1024];
-        match self.recv.lock().await.read(&mut buf).await.map_err(failed)? {
+        let mut recv = self.recv.lock().await;
+        let read = tokio::select! {
+            read = recv.read(&mut buf) => read.map_err(failed)?,
+            _ = reset.changed() => None,
+        };
+        match read {
             Some(n) => {
                 buf.truncate(n);
                 Ok(Some(buf.into()))
@@ -435,9 +446,10 @@ impl Stream {
         let _ = stopped.await;
     }
 
-    /// Ends it at once, both ways.
+    /// Ends it at once, both ways: a read waiting gives up first, so the receiving half can be stopped.
     #[napi]
     pub async fn reset(&self, code: u32) {
+        let _ = self.reset.send(true);
         let _ = self.send.lock().await.reset(code.into());
         let _ = self.recv.lock().await.stop(code.into());
     }
