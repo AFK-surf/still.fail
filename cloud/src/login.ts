@@ -5,6 +5,7 @@ import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import type { Env } from "./env";
 import { CODE_TTL_SEC, LOGIN_TTL_SEC, REFRESH_RETRY_SEC, digest, googleIdentity, limited, nowSeconds, randomSecret, readText, reply, seal, unseal, validRedirect, validSecret, type Identity, type Tokens } from "./auth";
+import { appleAuthorizeUrl, appleBundleIds, appleIdentity, appleName, verifyAppleToken } from "./apple";
 
 type Attempt = {
   redirect: string;
@@ -15,8 +16,13 @@ type Attempt = {
   nonce: string;
   googleVerifier: string;
   expires: number;
-  phase: "waiting" | "started" | "callback" | "complete" | "used" | "cancelled";
+  phase: "waiting" | "started" | "posted" | "callback" | "complete" | "used" | "cancelled";
   device?: boolean;
+  /** Signing in with Apple (apple.ts) rather than Google: in the browser, or `native`ly in the iOS app. */
+  provider?: "apple";
+  native?: boolean;
+  /** What Apple posted back, kept for the callback's GET: its code (none when it said no) and the name it gave. */
+  posted?: { code?: string; name: string };
   nextPoll?: number;
   receipt?: string;
   identity?: Identity;
@@ -59,6 +65,9 @@ export class LoginAttempt extends DurableObject<Env> {
     }))
       url.searchParams.set(key, value);
     return redirect(url.toString(), cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC));
+  }
+  private apple(id: string, attempt: Attempt, browser: string): Response {
+    return redirect(appleAuthorizeUrl(this.env, id, attempt.nonce), cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC));
   }
   async startDevice(id: string, challenge: string, name: string): Promise<Response> {
     return this.ctx.blockConcurrencyWhile(async () => {
@@ -160,7 +169,7 @@ export class LoginAttempt extends DurableObject<Env> {
       return result;
     });
   }
-  async start(id: string, params: { redirect: string; state: string; challenge: string; name: string }): Promise<Response> {
+  async start(id: string, params: { redirect: string; state: string; challenge: string; name: string }, provider?: "apple"): Promise<Response> {
     return this.ctx.blockConcurrencyWhile(async () => {
       if (this.ctx.storage.kv.get("attempt")) return reply({ error: "login_exists" }, 409);
       if (!validSecret(id) || !validRedirect(this.env, params.redirect) || !validSecret(params.state) || !validSecret(params.challenge) || params.name.length > 80) return reply({ error: "invalid_login" }, 400);
@@ -172,10 +181,76 @@ export class LoginAttempt extends DurableObject<Env> {
         googleVerifier: randomSecret(),
         expires: nowSeconds() + LOGIN_TTL_SEC,
         phase: "started",
+        ...(provider ? { provider } : {}),
       };
       this.ctx.storage.kv.put("attempt", attempt);
       await this.ctx.storage.setAlarm(attempt.expires * 1000);
-      return this.google(id, attempt, browser);
+      return provider === "apple" ? this.apple(id, attempt, browser) : this.google(id, attempt, browser);
+    });
+  }
+
+  /**
+   * Apple's answer, posted cross-site (without the login's cookie): kept, and the browser sent on to the callback's
+   * GET, which has the cookie and finishes as Google's does. The first post is the one kept.
+   */
+  async applePosted(id: string, form: { code: string | null; error: boolean; user: string | null }): Promise<Response> {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
+      if (!attempt || attempt.provider !== "apple" || attempt.native || attempt.expires <= nowSeconds() || attempt.phase !== "started") return reply({ error: "invalid_login_state" }, 400);
+      const { code } = form;
+      let user: unknown;
+      try {
+        user = JSON.parse(form.user ?? "null");
+      } catch {}
+      attempt.posted = { ...(code && code.length <= 4096 && !form.error ? { code } : {}), name: appleName(user) };
+      attempt.phase = "posted";
+      this.ctx.storage.kv.put("attempt", attempt);
+      return new Response(null, {
+        status: 303,
+        headers: { location: `${this.env.PUBLIC_ORIGIN}/v1/auth/apple/callback?state=${id}`, "cache-control": "no-store", "referrer-policy": "no-referrer" },
+      });
+    });
+  }
+
+  /** The iOS app's sign-in: a nonce for it to give Apple (as its SHA-256, hex), good for one identity token. */
+  async startNative(id: string, name: string): Promise<Response> {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      if (this.ctx.storage.kv.get("attempt")) return reply({ error: "login_exists" }, 409);
+      if (!validSecret(id) || !name.trim() || name.length > 80) return reply({ error: "invalid_login" }, 400);
+      const attempt: Attempt = {
+        redirect: "",
+        state: id,
+        challenge: "",
+        name,
+        browserHash: "",
+        nonce: randomSecret(),
+        googleVerifier: "",
+        expires: nowSeconds() + LOGIN_TTL_SEC,
+        phase: "started",
+        provider: "apple",
+        native: true,
+      };
+      this.ctx.storage.kv.put("attempt", attempt);
+      await this.ctx.storage.setAlarm(attempt.expires * 1000);
+      return reply({ id, nonce: attempt.nonce, expires_at: attempt.expires });
+    });
+  }
+
+  /** The identity token the iOS app got for the nonce: a session, once. `user` is the name Apple gave the app, if any. */
+  async completeNative(token: string, user: unknown): Promise<Response> {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
+      if (!attempt?.native || attempt.expires <= nowSeconds() || attempt.phase !== "started") return reply({ error: "invalid_grant" }, 401);
+      // Consumed before Apple's keys are fetched: a token is tried once.
+      attempt.phase = "used";
+      this.ctx.storage.kv.put("attempt", attempt);
+      let identity: Identity;
+      try {
+        identity = await verifyAppleToken(token, appleBundleIds(this.env), await sha256Hex(attempt.nonce), appleName(user));
+      } catch {
+        return reply({ error: "apple_login_failed" }, 401);
+      }
+      return this.env.ACCOUNTS.getByName(identity.sub).create(identity, ulid(), attempt.name);
     });
   }
 
@@ -184,19 +259,22 @@ export class LoginAttempt extends DurableObject<Env> {
       const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
       const cookies = (request.headers.get("cookie") ?? "").split(";").map((value) => value.trim());
       const value = cookies.find((value) => value.startsWith(cookieName(this.env.PUBLIC_ORIGIN, id) + "="))?.split("=")[1] ?? "";
-      if (!attempt || attempt.expires <= nowSeconds() || attempt.phase !== "started" || !validSecret(value) || (await digest(value)) !== attempt.browserHash) return reply({ error: "invalid_login_state" }, 400);
-      // Consume before any external I/O; a repeated callback cannot replay Google.
+      const apple = attempt?.provider === "apple";
+      if (!attempt || attempt.native || attempt.expires <= nowSeconds() || attempt.phase !== (apple ? "posted" : "started") || !validSecret(value) || (await digest(value)) !== attempt.browserHash) return reply({ error: "invalid_login_state" }, 400);
+      // Consume before any external I/O; a repeated callback cannot replay Google (or Apple).
       attempt.phase = "callback";
       this.ctx.storage.kv.put("attempt", attempt);
       const url = new URL(request.url);
       const finish = new URL(attempt.device ? `${this.env.PUBLIC_ORIGIN}/v1/auth/device/complete` : attempt.redirect);
       finish.searchParams.set("state", attempt.state);
-      const code = url.searchParams.get("code");
-      if (url.searchParams.has("error") || !code || code.length > 4096) {
+      const code = apple ? attempt.posted?.code : url.searchParams.get("code");
+      if ((!apple && url.searchParams.has("error")) || !code || code.length > 4096) {
         finish.searchParams.set("error", "login_cancelled");
       } else {
         try {
-          attempt.identity = await googleIdentity(this.env, code, attempt.googleVerifier, attempt.nonce, url.origin);
+          attempt.identity = apple
+            ? await appleIdentity(this.env, code, attempt.nonce, attempt.posted?.name ?? "")
+            : await googleIdentity(this.env, code, attempt.googleVerifier, attempt.nonce, url.origin);
           const secret = randomSecret();
           if (!attempt.device) attempt.codeHash = await digest(secret);
           attempt.phase = "complete";
@@ -208,7 +286,7 @@ export class LoginAttempt extends DurableObject<Env> {
           this.ctx.storage.kv.put("attempt", attempt);
           await this.ctx.storage.setAlarm(attempt.expires * 1000);
         } catch {
-          finish.searchParams.set("error", "google_login_failed");
+          finish.searchParams.set("error", apple ? "apple_login_failed" : "google_login_failed");
         }
       }
       if (attempt.device) {
@@ -228,6 +306,7 @@ export class LoginAttempt extends DurableObject<Env> {
       if (
         !attempt ||
         attempt.device ||
+        attempt.native ||
         attempt.phase !== "complete" ||
         attempt.expires <= nowSeconds() ||
         !attempt.identity ||
@@ -280,7 +359,8 @@ export class LoginLimiter extends DurableObject<Env> {
   }
 }
 
-export async function googleStart(env: Env, request: Request): Promise<Response> {
+/** A browser's sign-in, with Google or (`provider`) Apple: both take the same parameters and come back the same way. */
+export async function googleStart(env: Env, request: Request, provider?: "apple"): Promise<Response> {
   const url = new URL(request.url);
   const state = url.searchParams.get("state") ?? "";
   const challenge = url.searchParams.get("code_challenge") ?? "";
@@ -289,7 +369,12 @@ export async function googleStart(env: Env, request: Request): Promise<Response>
   if (!(await consumeLoginRate(env, request))) return limited();
   const id = randomSecret();
   const name = (url.searchParams.get("name") ?? "still.fail").slice(0, 80);
-  return env.LOGINS.getByName(id).start(id, { redirect: callback, state, challenge, name });
+  return env.LOGINS.getByName(id).start(id, { redirect: callback, state, challenge, name }, provider);
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+  return [...hash].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export async function consumeLoginRate(env: Env, request: Request): Promise<boolean> {

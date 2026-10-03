@@ -1,6 +1,6 @@
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions, Response as MFResponse, Log, LogLevel } from "miniflare";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { exportJWK, exportPKCS8, generateKeyPair, jwtVerify, SignJWT } from "jose";
 import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
 import { createRequire } from "node:module";
@@ -32,6 +32,8 @@ export async function harness(
     port?: number;
     signingKey?: string;
     noGoogle?: boolean;
+    /** Without Sign in with Apple (its keys and bundle IDs unset). */
+    noApple?: boolean;
     relayUrl?: string;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
@@ -72,6 +74,21 @@ export async function harness(
     use: "sig",
   };
   const codes = new Map<string, { nonce: string; challenge: string; sub: string; invalid?: string }>();
+  // Apple: its signing key, the team's key that signs client secrets, and the codes Apple "posted".
+  const apple = await generateKeyPair("RS256");
+  const applePublicJwk = { ...(await exportJWK(apple.publicKey)), kid: "test-apple", alg: "RS256", use: "sig" };
+  const appleTeamKey = await generateKeyPair("ES256", { extractable: true });
+  const appleTeamPem = await exportPKCS8(appleTeamKey.privateKey);
+  const appleCodes = new Map<string, { nonce: string; sub: string; email?: string; invalid?: string }>();
+  /** An identity token as Apple signs it (sub, email, nonce, aud given; issuer and times as Apple's unless said). */
+  const appleToken = (claims: Record<string, unknown>, aud = "test-apple-services", key = apple.privateKey) =>
+    new SignJWT({ email_verified: "true", is_private_email: "false", ...claims })
+      .setProtectedHeader({ alg: "RS256", kid: "test-apple" })
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .setIssuer("https://appleid.apple.com")
+      .setAudience(aud)
+      .sign(key);
   const grantPair = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
   const grantJwk = { ...(await exportJWK(grantPair.privateKey)), kid: "test-grant" };
   const grantPublicJwk = { ...(await exportJWK(grantPair.publicKey)), kid: "test-grant" };
@@ -128,6 +145,7 @@ export async function harness(
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
+        ...(options.noApple ? {} : { APPLE_CLIENT_ID: "test-apple-services", APPLE_TEAM_ID: "TEAMID1234", APPLE_KEY_ID: "KEYID12345", APPLE_PRIVATE_KEY: appleTeamPem, APPLE_BUNDLE_IDS: "fail.still.ios, fail.still.ios.beta" }),
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
@@ -161,6 +179,22 @@ export async function harness(
             .setAudience(code.invalid === "aud" ? "wrong" : "test-google-client")
             .sign(privateKey);
           return MFResponse.json({ id_token: idToken });
+        }
+        if (url.href === "https://appleid.apple.com/auth/keys") {
+          return MFResponse.json({ keys: [applePublicJwk] }, { headers: { "cache-control": "max-age=3600" } });
+        }
+        if (url.href === "https://appleid.apple.com/auth/token") {
+          const body = new URLSearchParams(await request.text());
+          const code = appleCodes.get(body.get("code") ?? "");
+          appleCodes.delete(body.get("code") ?? "");
+          // The client secret: signed by the team's key, for the Services ID.
+          const secret = await jwtVerify(body.get("client_secret") ?? "", appleTeamKey.publicKey, { issuer: "TEAMID1234", subject: "test-apple-services", audience: "https://appleid.apple.com" }).catch(() => null);
+          if (!code || !secret || secret.protectedHeader.kid !== "KEYID12345" || body.get("client_id") !== "test-apple-services" || body.get("redirect_uri") !== origin + "/v1/auth/apple/callback") return new MFResponse(null, { status: 400 });
+          const idToken = await appleToken(
+            { sub: code.sub, nonce: code.invalid === "nonce" ? "incorrect" : code.nonce, ...(code.invalid === "email" ? { email_verified: "false" } : {}), ...(code.invalid === "noEmail" ? {} : { email: code.email ?? "apple-user@privaterelay.appleid.com" }) },
+            code.invalid === "aud" ? "wrong" : "test-apple-services",
+          );
+          return MFResponse.json({ id_token: idToken, access_token: "a", refresh_token: "r", token_type: "Bearer" });
         }
         if (url.origin === "https://api.axiom.co" && options.axiom) {
           if (options.axiom !== "real") return options.axiom(request as unknown as Request) as any;
@@ -245,6 +279,32 @@ export async function harness(
       body: JSON.stringify({ code, code_verifier: verifier, redirect_uri: flow.callback }),
     });
   }
+  /**
+   * A browser's sign-in with Apple up to Apple's post back (the `user` field, a first sign-in's name, with `name`), and
+   * on through the callback's GET with the login's cookie; returns where the browser ends up.
+   */
+  async function appleLogin(sub: string, options: { invalid?: string; email?: string; name?: { firstName: string; lastName: string }; callback?: string; cookie?: false } = {}) {
+    const verifier = randomSecret(),
+      state = randomSecret();
+    const callback = options.callback ?? "http://127.0.0.1:32145/oauth/callback";
+    const start = await fetch("/v1/auth/apple/start?" + new URLSearchParams({ state, redirect_uri: callback, code_challenge: await digest(verifier), code_challenge_method: "S256" }), { redirect: "manual" });
+    if (start.status !== 302) throw new Error("apple start: " + start.status);
+    const authorize = new URL(start.headers.get("location")!);
+    const cookie = start.headers.get("set-cookie")!.split(";")[0];
+    const appleCode = ulid();
+    appleCodes.set(appleCode, { nonce: authorize.searchParams.get("nonce")!, sub, email: options.email, invalid: options.invalid });
+    const form = new URLSearchParams({ state: authorize.searchParams.get("state")!, code: appleCode });
+    if (options.name) form.set("user", JSON.stringify({ name: options.name, email: options.email }));
+    if (options.invalid === "cancel") {
+      form.delete("code");
+      form.set("error", "user_cancelled_authorize");
+    }
+    // Cross-site: no cookie on Apple's post.
+    const posted = await fetch("/v1/auth/apple/callback", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://appleid.apple.com" }, body: form, redirect: "manual" });
+    const again = posted.status === 303 ? new URL(posted.headers.get("location")!) : null;
+    const back = again ? await fetch(again.pathname + again.search, { headers: options.cookie === false ? {} : { cookie }, redirect: "manual" }) : null;
+    return { verifier, state, callback, authorize, posted, again, back, redirect: back?.status === 302 ? new URL(back.headers.get("location")!) : null };
+  }
   async function login(sub?: string) {
     const flow = await begin(sub);
     const result = await complete(flow);
@@ -278,6 +338,8 @@ export async function harness(
     fetchOld,
     fetchWorker,
     begin,
+    appleLogin,
+    appleToken,
     complete,
     exchange,
     login,

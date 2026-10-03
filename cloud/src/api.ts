@@ -172,7 +172,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     if (byId[2] === "accept") return directory(() => dir.acceptById(sub, claims.email, byId[1]!));
     return directory(() => dir.declineById(claims.email, byId[1]!));
   }
-  if (path === "/v1/workspaces" && method === "POST") return directory(() => dir.createWorkspace(sub, text("name"), isAdmin(env, claims.email), input.invite_code));
+  if (path === "/v1/workspaces" && method === "POST") return directory(() => dir.createWorkspace(sub, text("name"), isAdmin(env, sub, claims.email), input.invite_code));
   if (path === "/v1/invitations/preview" && method === "POST") return directory(() => dir.previewInvitation(text("token")));
   if (path === "/v1/invitations/accept" && method === "POST") return directory(() => dir.acceptInvitation(sub, claims.email, text("token")));
 
@@ -234,7 +234,7 @@ export async function blockAccount(env: Env, sub: string, on: boolean): Promise<
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
   const claims = await account(bearerToken(request), env);
-  if (!claims || !isAdmin(env, claims.email)) return notFound();
+  if (!claims || !isAdmin(env, claims.sub, claims.email)) return notFound();
   let input: Record<string, unknown>;
   try {
     input = await body(request);

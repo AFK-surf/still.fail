@@ -366,7 +366,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 
 | Call | Params | Result |
 | --- | --- | --- |
-| `auth.begin` | `redirect_uri`, `return_to`, `device_name` | `{ url }` to open (web: navigate; native: system browser) |
+| `auth.begin` | `redirect_uri`, `return_to`, `device_name`, `provider?` (`"google"` by default, or `"apple"`) | `{ url }` to open (web: navigate; native: system browser) |
 | `auth.complete` | `query` (the callback's query string) | `{ account, return_to }` |
 | `auth.signOut` | `account` | — |
 | `slack.tokens.edit` | `station`, `form` (the generated `SlackTokenForm`), `input` (changed `appToken`, `botToken`, `connect`, `install`; `clear` invalidates verification) | the transient draft; also published as `{ topic: "slackTokens", station, form }` (`SlackTokensView`) |

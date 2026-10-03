@@ -22,7 +22,7 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 | 对象 | 是什么 | 标识 |
 |---|---|---|
-| 账号 | 一个 Google 身份 | Google `sub` |
+| 账号 | 一个 Google 或 Apple 身份 | Google `sub`；Apple 的是 `apple_` 加上它的 `sub`（`.` 换成 `_`） |
 | 客户端 | 一个浏览器或 App 安装，持有一把 iroh 设备密钥；可以同时登录多个账号 | 设备公钥 |
 | workspace | 一组人和一组 station；账号在其中的角色是 owner / admin / member | ULID |
 | station | 一台 still.fail 节点，属于一个 workspace | station 的 iroh 公钥 |
@@ -38,6 +38,16 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 Google OAuth（`openid email profile`），access token 5 分钟，refresh token 轮换、闲置 7 天 / 最长 30 天过期，重放旧 refresh token 会吊销整个会话。
 
 网页版在同一域名下走标准的授权码 + PKCE：页面生成 verifier，跳到 `/v1/auth/google/start`，回到 `/auth/callback?code=…`，再用 verifier 换 token。回调地址只允许本域的 `/auth/callback`（网页）和 `127.0.0.1` 回环地址（命令行）。token 不出现在 URL 里。
+
+### Sign in with Apple
+
+Apple 登录（`cloud/src/apple.ts`）是另一种进入账号的方式。Apple 账号和同邮箱的 Google 账号是两个账号，彼此不关联（以后再做关联合并）。
+
+- **浏览器**（网页版、桌面、Android；`auth.begin` 带 `provider: "apple"`）：`/v1/auth/apple/start`，参数和 Google 的一样。用 Services ID 跳到 Apple；要邮箱就必须 `response_mode=form_post`，Apple 跨站 POST 回 `/v1/auth/apple/callback`，这时带不上 `SameSite=Lax` 的登录 cookie。所以 POST 只把 code 和名字记进登录尝试，303 到同一路径的 GET，GET 带着 cookie 校验浏览器后，用团队 key 现签的 client secret 换 identity token，之后和 Google 一样回到 `/auth/callback?code=…`。
+- **iOS app**（原生）：`POST /v1/auth/apple/native {name}` 得到 `{id, nonce}`；app 把 nonce 的 SHA-256（hex）交给 Apple，拿到 identity token 后 `POST /v1/auth/apple/native/token {id, identity_token, user?}` 直接得到 token。audience 是 `APPLE_BUNDLE_IDS` 里的 bundle ID。
+- Apple 只在第一次登录给名字（浏览器是 Apple POST 里的 `user`；iOS app 要把 `fullName` 的 `givenName` / `familyName` 照同样的形状放进 `user`：`{"name": {"firstName": …, "lastName": …}}`），之后的登录保留原来的名字（第一次登录在 Apple POST 之后失败的话，名字就拿不到了）；没有头像。邮箱必须有且已验证；用户隐藏邮箱时是 `@privaterelay.appleid.com` 的转发地址，按邮箱发的邀请到不了这种账号。
+- 邀请、按邮箱添加成员都按邮箱匹配：同一个人有同邮箱的 Google 和 Apple 两个账号时，添加时已存在的账号都会加进去；还没登录过而挂起的添加（`#joinAdded`）只给第一个用这个邮箱登录的账号，另一个不会再加入；其中一个已是成员后，再邀请这个邮箱会得到 `already_member`。管理后台只认 Google 账号（`isAdmin` 不接受 `apple_` 账号，即使邮箱是 `ADMIN_EMAIL`）。
+- 还没做：用 refresh token 撤销授权、Apple 的服务器通知、删除账号（iOS 上架要求 app 内能删账号并撤销 Apple 授权）。
 
 ## station 登记
 
@@ -113,6 +123,6 @@ still.fail cloud 由以下 Worker 组成（`cloud/wrangler*.jsonc`）：
 
 同一个域名上，路由优先于 Custom Domain，所以 API 和 relay 的路径到各自的 Worker，其余都是静态站点。域名没变，客户端不用改。
 
-`cloud/deploy.py [api relay web admin preview]`（在维护者的部署机上运行，需要 `wrangler login` 和 docker）逐个部署，不写就是全部；维护者的部署脚本只部署改动涉及的那几个，只有 relay 改了才会断开 relay 连接。线上地址 `https://app.still.fail`，Google 登录用单独的 OAuth 客户端，客户端 JSON 在部署目录的 `google-oauth.json`。默认部署目录是 `~/stillfail-deploy`（`STILLFAIL_DEPLOY_DIR` 可覆盖；只有旧 `~/ember-deploy` 存在时仍沿用它）。密钥在 `keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。PostHog 的项目 key 在部署目录的 `posthog.json`，构建网页版时带进去（见 [telemetry.md](telemetry.md)）。Axiom 的写入令牌和数据集在部署目录的 `axiom.json`（`{dataset, token}`），部署时写成 API Worker 的 `AXIOM_TOKEN` / `AXIOM_DATASET`；客户端和 station 的 trace 发到 `POST /v1/telemetry/traces`，由 Worker 转给 Axiom，令牌不出 Worker（见 `docs/telemetry.md`）。
+`cloud/deploy.py [api relay web admin preview]`（在维护者的部署机上运行，需要 `wrangler login` 和 docker）逐个部署，不写就是全部；维护者的部署脚本只部署改动涉及的那几个，只有 relay 改了才会断开 relay 连接。线上地址 `https://app.still.fail`，Google 登录用单独的 OAuth 客户端，客户端 JSON 在部署目录的 `google-oauth.json`；Apple 登录的 Services ID、团队、key 和 iOS bundle ID 在 `apple.json`（格式见 `deploy.py` 开头，没有就不开 Apple 登录）。默认部署目录是 `~/stillfail-deploy`（`STILLFAIL_DEPLOY_DIR` 可覆盖；只有旧 `~/ember-deploy` 存在时仍沿用它）。密钥在 `keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。PostHog 的项目 key 在部署目录的 `posthog.json`，构建网页版时带进去（见 [telemetry.md](telemetry.md)）。Axiom 的写入令牌和数据集在部署目录的 `axiom.json`（`{dataset, token}`），部署时写成 API Worker 的 `AXIOM_TOKEN` / `AXIOM_DATASET`；客户端和 station 的 trace 发到 `POST /v1/telemetry/traces`，由 Worker 转给 Axiom，令牌不出 Worker（见 `docs/telemetry.md`）。
 
 本地联调（不需要 Cloudflare）：`cloud/test/dev.ts` 在 miniflare 里按线上的路由起全部 Worker（Google 用模拟），配合 `iroh-relay --dev`，步骤见 [development.md](development.md)。

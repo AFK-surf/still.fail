@@ -21,7 +21,7 @@ type Session = {
   rotated?: number;
 };
 type AccountData = Identity & { blocked: boolean; sessions: Session[]; ended?: Ended[] };
-/** One Google account's sessions. What it may reach is the Directory's business. */
+/** One account's sessions (a Google account's, or an Apple one's: apple.ts). What it may reach is the Directory's business. */
 export class Account extends DurableObject<Env> {
   private data(): AccountData | undefined {
     return this.ctx.storage.kv.get<AccountData>("account");
@@ -89,9 +89,10 @@ export class Account extends DurableObject<Env> {
       this.prune(data);
       if (data.sessions.length >= LIMITS.sessions || !this.charge()) return limited();
       data.email = identity.email;
-      data.name = identity.name;
+      // Apple gives the name only at the first sign-in: later ones keep it.
+      data.name = identity.name || data.name;
       data.picture = identity.picture;
-      await this.env.DIRECTORY.getByName("primary").upsertUser(identity);
+      await this.env.DIRECTORY.getByName("primary").upsertUser({ ...identity, name: data.name });
       const session: Session = {
         id,
         name,

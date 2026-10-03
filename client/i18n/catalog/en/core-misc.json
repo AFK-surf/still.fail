@@ -122,6 +122,7 @@
   "core-misc.params.language": "Invalid params: language must be zh or en",
   "core-misc.params.missing": "Invalid params: missing {field}",
   "core-misc.params.missing_form": "Missing form",
+  "core-misc.params.invalid_provider": "Sign in with google or apple",
   "core-misc.params.missing_station": "Missing station",
   "core-misc.params.not_bool": "Must be true or false",
   "core-misc.params.not_object": "Invalid params: must be an object",

@@ -58,7 +58,7 @@ fn unknown_calls_are_refused() {
 fn parses_each_call() {
     assert_eq!(
         parse_call("auth.begin", json!({"redirect_uri": "r", "return_to": "/", "device_name": "Mac"})).unwrap(),
-        Call::AuthBegin { redirect_uri: "r".into(), return_to: "/".into(), device_name: Some("Mac".into()) }
+        Call::AuthBegin { redirect_uri: "r".into(), return_to: "/".into(), device_name: Some("Mac".into()), apple: false }
     );
     assert_eq!(parse_call("auth.complete", json!({"query": "?code=c&state=s"})).unwrap(), Call::AuthComplete { query: "?code=c&state=s".into() });
     assert_eq!(parse_call("auth.signOut", json!({"account": "sub1"})).unwrap(), Call::SignOut { account: "sub1".into() });
@@ -148,6 +148,11 @@ fn checks_params() {
     let missing = parse_call("auth.begin", json!({"redirect_uri": "r"})).unwrap_err();
     assert_eq!(missing.code, "invalid_params");
     assert!(missing.message.contains("return_to"), "{}", missing.message);
+    assert_eq!(
+        parse_call("auth.begin", json!({"redirect_uri": "r", "return_to": "/", "provider": "apple"})).unwrap(),
+        Call::AuthBegin { redirect_uri: "r".into(), return_to: "/".into(), device_name: None, apple: true }
+    );
+    assert_eq!(code(parse_call("auth.begin", json!({"redirect_uri": "r", "return_to": "/", "provider": "github"}))), "invalid_params");
     assert_eq!(code(parse_call("auth.signOut", Value::Null)), "invalid_params");
     assert_eq!(code(parse_call("workspace.rename", json!({"account": "a", "name": "n"}))), "invalid_params");
     assert_eq!(code(parse_call("station.upload", json!({"station": "w/s", "name": "n", "bytes": "not base64!"}))), "invalid_params");
