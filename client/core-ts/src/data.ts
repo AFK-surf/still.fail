@@ -128,7 +128,7 @@ export class Data {
   readonly #host: Host;
   readonly #runner: Runner;
   readonly #records = new Map<string, Map<string, unknown>>();
-  #changed: ((topic: Topic) => void) | null = null;
+  readonly #changed: ((topic: Topic) => void)[] = [];
   readonly #writes: Queue.Queue<Write>;
   readonly #soon = new Map<string, [string, string, Uint8Array]>();
   #flushing = false;
@@ -136,7 +136,7 @@ export class Data {
   /// Threads' entries and sessions' transcripts loaded from the database, by `<table>␁<station>␁<thread or session>`.
   readonly #logs = new Map<string, Items>();
   /// Told when entries or transcript items of a log change: `(table, station, id)`.
-  #logChanged: ((table: string, station: string, id: string) => void) | null = null;
+  readonly #logChanged: ((table: string, station: string, id: string) => void)[] = [];
 
   constructor(host: Host, runner: Runner) {
     this.#host = host;
@@ -152,12 +152,13 @@ export class Data {
     );
   }
 
+  /// Hears every held topic that changes (each listener added is told).
   onChange(listener: (topic: Topic) => void): void {
-    this.#changed = listener;
+    this.#changed.push(listener);
   }
 
   onLogChange(listener: (table: string, station: string, id: string) => void): void {
-    this.#logChanged = listener;
+    this.#logChanged.push(listener);
   }
 
   #table(table: string): Map<string, unknown> {
@@ -485,7 +486,7 @@ export class Data {
       }
       if (ops.length > 0) {
         this.#write(ops);
-        this.#logChanged?.(table, station, id);
+        for (const l of this.#logChanged) l(table, station, id);
       }
     });
   }
@@ -497,13 +498,13 @@ export class Data {
       log.clear();
       if (ops.length > 0) {
         this.#write(ops);
-        this.#logChanged?.(table, station, id);
+        for (const l of this.#logChanged) l(table, station, id);
       }
     });
   }
 
   #tell(topic: Topic): void {
-    this.#changed?.(topic);
+    for (const l of this.#changed) l(topic);
   }
 
   #tellAll(): void {

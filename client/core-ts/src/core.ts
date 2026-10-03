@@ -30,6 +30,8 @@ import { StationTopics } from "./station/topics.ts";
 import type { StationWire } from "./station/wire.ts";
 import { meshWire } from "./mesh.ts";
 import { ViewCalls } from "./views/calls.ts";
+import { Attend } from "./attend.ts";
+import { Attention } from "./attention.ts";
 import { envOf, Views } from "./views/views.ts";
 import { isObject } from "./util.ts";
 
@@ -73,6 +75,7 @@ export class Inner {
   stations!: StationsSync;
   stationTopics!: StationTopics;
   views!: Views;
+  attention!: Attention;
   viewCalls!: ViewCalls;
   router!: Router;
   /// The calls under way that a UI can stop, by `client/id`.
@@ -140,6 +143,10 @@ export class Core {
       inner.router.owners.push(inner.views);
       inner.viewCalls = new ViewCalls(inner, inner.views);
       inner.viewCalls.install();
+      inner.attention = new Attention(inner, yield* Attend.load(inner.host));
+      inner.router.owners.push(inner.attention);
+      inner.router.after = (topic, value) => inner.attention.attended(topic, value);
+      inner.attention.install();
       // The stations every account reaches are linked, as the workspaces say (once a burst of changes settles).
       let reconciling = false;
       inner.cloudSync.onReach = () => {
@@ -180,6 +187,7 @@ export class Core {
   /// A UI went away: its subscriptions end, its calls that hold something open for it stop.
   disconnect(client: ClientId): void {
     this.inner.store.dropClient(client);
+    this.inner.attention.attend.gone(client);
     for (const [key, fiber] of [...this.inner.calls]) {
       if (key.startsWith(`${client}/`)) {
         this.inner.calls.delete(key);
