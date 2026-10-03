@@ -19,7 +19,9 @@ import { Reader, writeLine } from "../src/mesh/serve.ts";
 const FAKE = fileURLToPath(new URL("./fake", import.meta.url));
 process.env.PATH = `${FAKE}${delimiter}${process.env.PATH ?? ""}`;
 const viewer: Viewer = { sub: "u1", email: "pat@example.com", name: "Pat", role: "member", workspace: "ws", device: "d" };
-const PHONE = "cd".repeat(32);
+// A phone of this run's own: its offers listen on its usual port (`bind`, from its key), which another run of these
+// tests at once on this machine would otherwise share, each one's adb and tunnels reaching the other's.
+const PHONE = randomBytes(32).toString("hex");
 
 /// A fresh FAKE_ADB_DIR: what the fake adb was asked, and what it says.
 function fakeAdb(files: Record<string, string> = {}) {

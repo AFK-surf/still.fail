@@ -276,6 +276,8 @@ test("editing a connect keeps tokens that were left blank and writes config.json
     assert.equal(status, 200, JSON.stringify(answer));
     // Known by its bot's name in its Slack workspace, kept through the edit (and as Slack says once connected: T1).
     await until("the workspace as Slack says", () => t.saved().connects[0].slack.team.id === "T1");
+    // (T1 may be what its first connection said: the edit's reconnection is waited for too.)
+    await until("connected again after the edit", () => t.overview().connects[0].connection.state === "connected");
     const saved = t.saved();
     assert.deepEqual([saved.connects[0].slack.team, saved.connects[0].slack.botName], [{ id: "T1", name: "Acme" }, "ember"]);
     const view = t.overview().connects[0];

@@ -1,7 +1,8 @@
 // The Rust core's mesh.rs tests, ported: a station on localhost over the native addon (station/native/mesh), the
 // client's mesh over the same addon. Real time here (iroh needs its own clock).
+// Each test has its own station, endpoints, runner and relays: they all run at once (the suite at the end).
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { suite, test as register, type TestOptions } from "node:test";
 import { Clock, Duration, Effect } from "effect";
 import type { Credential } from "../src/cloud.ts";
 import { CoreError } from "../src/error.ts";
@@ -24,6 +25,12 @@ type J = any;
 const addon = loadAddon() as J;
 const skip = addon === null ? "the mesh addon is not built here" : false;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+type Body = () => Promise<void> | void;
+const tests: [string, TestOptions, Body][] = [];
+function test(name: string, options: TestOptions | Body, body?: Body) {
+  if (typeof options === "function") tests.push([name, {}, options]);
+  else tests.push([name, options, body!]);
+}
 const text = (b: Uint8Array) => new TextDecoder().decode(b);
 
 /// Grants "<prefix>-1", "<prefix>-2", … and counts them.
@@ -36,11 +43,13 @@ function grants(prefix: string, count: { n: number }): CredentialSource {
     });
 }
 
-/// Timers as mesh.rs's tests' QuickHost has them: renewals every 150 ms, a connection unanswered after 200 ms, a link
-/// replaced let go after 200 ms.
-function quickClock(): Clock.Clock {
+/// Real time but for `times`: each timer of a duration there lasts as long as it says instead, read as the timer starts
+/// (changed later, it changes the timers started after). By default renewals every 150 ms, as mesh.rs's tests'
+/// QuickHost had them. (CONNECT_TIMEOUT_MS and RETIRE_MS are both 10 s: one entry is both. Shortened, a connection on a
+/// machine busy with other tests may well take longer: a test shortens them only while nothing it needs is connecting.)
+function quickClock(times = new Map([[RENEW_MS, 150]])): Clock.Clock {
   const base = Effect.runSync(Clock.clockWith(Effect.succeed));
-  const quick = (ms: number) => (ms === RENEW_MS ? 150 : ms === RETIRE_MS || ms === CONNECT_TIMEOUT_MS ? 200 : ms);
+  const quick = (ms: number) => times.get(ms) ?? ms;
   return {
     currentTimeMillisUnsafe: () => base.currentTimeMillisUnsafe(),
     currentTimeMillis: base.currentTimeMillis,
@@ -188,6 +197,8 @@ test("a_link_that_answers_as_the_network_changes_is_kept", { skip }, async () =>
   const { mesh, station, runner, host } = await setup(undefined, new FakeHost(), wakes);
   const link = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
   await request(runner, link, head("/admin/api/overview"));
+  // The one opened beside it never is: it answering decides, not which of the two is quicker on this machine.
+  station.unanswered(1);
   wakes.wake(network(host));
   await sleep(500);
   assert.equal(mesh.current(station.id()), link);
@@ -256,7 +267,8 @@ test("renews_the_grant_until_the_link_closes", { skip }, async () => {
   const { mesh, station, runner } = await setup(undefined, new FakeHost(), new Wakes(), quickClock());
   const count = { n: 0 };
   const link = await runner.run(mesh.link(station.id(), grants("ok", count)));
-  await sleep(400);
+  // Renewed every 150 ms: three by some 300 ms, waited for as long as a busy machine takes.
+  for (let i = 0; i < 250 && station.grants.length < 3; i++) await sleep(20);
   const seen = [...station.grants];
   assert.ok(seen.length >= 3, JSON.stringify(seen));
   assert.deepEqual(seen.slice(0, 3), ["ok-1", "ok-2", "ok-3"]);
@@ -275,7 +287,8 @@ test("a_refused_renewal_makes_the_next_link_reopen", { skip }, async () => {
   let n = 0;
   const refuseLater: CredentialSource = () => Effect.sync(() => ({ credential: ++n === 1 ? "ok" : "revoked", issued_at: 0, expires_at: 0, relay_url: "" }) as Credential);
   const first = await runner.run(mesh.link(station.id(), refuseLater));
-  await sleep(300);
+  // Its renewal (150 ms on) refused, as a busy machine takes.
+  for (let i = 0; i < 250 && first.usable(); i++) await sleep(20);
   const second = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
   assert.notEqual(first, second);
   await close(station, runner, mesh);
@@ -325,7 +338,10 @@ test("a_write_whose_link_went_before_its_answer_is_asked_again_once_its_station_
 });
 
 test("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", { skip }, async () => {
-  const { mesh, station, runner } = await setup(undefined, new FakeHost(), new Wakes(), quickClock());
+  // A connection unanswered after 1 s (time enough, on a busy machine, for the try to reach the station, which holds it
+  // unanswered: given up on sooner, the next would be the one held).
+  const times = new Map([[CONNECT_TIMEOUT_MS, 1000]]);
+  const { mesh, station, runner } = await setup(undefined, new FakeHost(), new Wakes(), quickClock(times));
   station.unanswered(1);
   const before = mesh.endpoint();
   const device = mesh.deviceId();
@@ -334,6 +350,7 @@ test("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", { skip },
     (e) => e as CoreError,
   );
   assert.equal(error?.message, "连不上这台 station：没有回应");
+  times.clear();
   const link = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
   assert.equal((await request(runner, link, head("/admin/api/overview"))).status, 200);
   // Another endpoint (other sockets), the same device.
@@ -373,11 +390,21 @@ import { join } from "node:path";
 
 const RELAY_BIN = process.env.STILLFAIL_RELAY_BIN ?? join(homedir(), ".config/ember-spike/relay/iroh-relay");
 const noRelay = skip || (existsSync(RELAY_BIN) ? false : "no iroh-relay here (STILLFAIL_RELAY_BIN)");
-let relayPort = 3361 + (process.pid % 200) * 2;
+/// A port free now: the system's choice, let go for the relay to take (another run of these tests at once on this
+/// machine has relays too).
+function freePort(): Promise<number> {
+  return new Promise((resolve) => {
+    const server = tcpServer();
+    server.listen(0, "127.0.0.1", () => {
+      const port = (server.address() as J).port;
+      server.close(() => resolve(port));
+    });
+  });
+}
 
 /// A relay on localhost: its url, and a way to stop it.
 async function relay(): Promise<[string, ChildProcess]> {
-  const port = relayPort++;
+  const port = await freePort();
   const config = join(tmpdir(), `relay-${process.pid}-${port}.toml`);
   writeFileSync(config, `enable_relay = true\nhttp_bind_addr = "127.0.0.1:${port}"\nenable_metrics = false\nenable_quic_addr_discovery = false\n`);
   const child = spawn(RELAY_BIN, ["--dev", "--config-path", config], { stdio: "ignore" });
@@ -389,24 +416,26 @@ async function relay(): Promise<[string, ChildProcess]> {
   return [url, child];
 }
 
-/// The relay at `url` reached through a proxy that holds what goes through it, either way, `delay` ms a piece: its url
-/// for those who should find it slow.
-async function slowed(url: string, delay: number): Promise<string> {
+/// The relay at `url` reached through a proxy that holds what goes through it, either way, `delay` ms (a delay line:
+/// what comes meanwhile is held as long, behind it, as a far away relay is): its url for those who should find it slow.
+/// The first `quick` relay connections through it (asking to upgrade to the relay's protocol) are not held.
+async function slowed(url: string, delay: number, quick = 0): Promise<string> {
   const upstream = new URL(url);
-  const pump = (from: import("node:net").Socket, to: import("node:net").Socket) => {
-    from.on("data", (chunk) => {
-      from.pause();
-      setTimeout(() => {
-        to.write(chunk);
-        from.resume();
-      }, delay);
+  type Way = { held: number | null };
+  const pump = (from: import("node:net").Socket, to: import("node:net").Socket, way: Way) => {
+    const pass = (f: () => void) => (way.held === 0 ? f() : setTimeout(f, way.held!));
+    from.on("data", (chunk: Buffer) => {
+      if (way.held === null) way.held = quick > 0 && /^upgrade:/im.test(chunk.toString("latin1")) && quick-- > 0 ? 0 : delay;
+      pass(() => to.write(chunk));
     });
-    from.on("close", () => to.destroy());
+    from.on("close", () => (way.held === null ? to.destroy() : pass(() => to.destroy())));
   };
   const server = tcpServer((down) => {
     const up = tcpConnect(Number(upstream.port), upstream.hostname);
-    pump(down, up);
-    pump(up, down);
+    // The client speaks first: what it says first decides.
+    const way: Way = { held: null };
+    pump(down, up, way);
+    pump(up, down, way);
     up.on("error", () => down.destroy());
     down.on("error", () => up.destroy());
   });
@@ -444,12 +473,16 @@ test("a_direct_rtt_is_never_reported_as_a_relay_measurement", { skip }, async ()
 /// A phone's link to a station abroad went through the relay nearest the phone, the station's way there slow
 /// (2026-10-01, bft: 11 s a round trip); measured, it moves to the relay that is quicker the whole way.
 test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, async () => {
-  const [[a, ra], [b, rb]] = [await relay(), await relay()];
-  // The station reaches a slowly, b at once; the device reaches both at once.
-  const station = await Station.on(b, await slowed(a, 150));
+  const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
+  // The station reaches a slowly (130 ms each way: a round trip through a at least 260 ms, QUIC's estimate never below
+  // its least sample), b at once; the device reaches both at once. (Its keeper on a (keep.rs), on the relay before the
+  // station dials it there, is the first relay connection through: not held, not being what is measured.)
+  const station = await Station.on(b, await slowed(a, 130, 1));
   const id = station.id();
   const host = new FakeHost();
-  const e = env(host);
+  // Real timers until the last measuring (connecting through the slow relay takes its time), then quick ones.
+  const times = new Map<number, number>();
+  const e = env(host, new Wakes(), quickClock(times));
   // As it went: through a, the only relay the device was on then.
   const mesh = await e.runner.run(Mesh.make(e, [a]));
   const runner = e.runner;
@@ -460,7 +493,8 @@ test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, 
     else await sleep(250);
   }
   assert.ok(link, "reached through a");
-  for (let i = 0; i < 3; i++) assert.equal((await request(runner, link, head("/admin/api/overview"))).status, 200);
+  const asked = await Promise.all([1, 2, 3].map(() => request(runner, link!, head("/admin/api/overview"))));
+  for (const reply of asked) assert.equal(reply.status, 200);
   const slow = link.net().rttMs!;
   assert.ok(sameRelay(link.via(), a), `${link.via()}`);
   assert.ok(slow > 250, `${slow}`);
@@ -482,16 +516,21 @@ test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, 
   assert.equal(shown.moved, new URL(b).hostname);
   assert.equal(shown.relays.length, 2);
   assert.ok(shown.relays.every(([, ms]) => ms !== null), JSON.stringify(shown));
-  // Measured again, as a person asks: it stays, nothing is quicker than where it is.
+  // Measured again, as a person asks: it stays, nothing is quicker than where it is. What is let go after it goes soon:
+  // no link is opened from here on (the probes have their own timeout), so of the 10 s timers only RETIRE_MS is to come.
+  const retired = 100;
+  times.set(RETIRE_MS, retired);
   await runner.run(mesh.remeasure(id));
   assert.equal(mesh.measured(id)!.moved, null);
   assert.equal(mesh.current(id), moved);
   // The endpoint only measured on is let go (RETIRE_MS after measuring); b's, with the link on it, stays.
-  await sleep(RETIRE_MS + 500);
+  await sleep(retired + 300);
   assert.equal((await request(runner, moved, head("/admin/api/overview"))).status, 200);
-  await station.close();
   await runner.run(mesh.close());
   runner.shutdown();
+  // The station's close waits out the draining of its connection to its keeper on a (keep.rs), its close never
+  // acknowledged (the keeper goes first) and the round trip there long: some 8 s, over by itself, not waited for.
+  void station.close();
   ra.kill();
   rb.kill();
 });
@@ -580,4 +619,8 @@ test("reads_its_calls", () => {
   assert.throws(() => parseAdb("adb.share", {}));
   assert.deepEqual(parseAdb("adb.pair", { code: "123456" }), { kind: "pair", code: "123456" });
   assert.equal(parseAdb("job.stop", {}), null);
+});
+
+suite("mesh", { concurrency: true }, () => {
+  for (const [name, options, body] of tests) register(name, options, body);
 });

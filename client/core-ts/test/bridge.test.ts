@@ -68,11 +68,12 @@ test("storage_and_the_database_go_through_the_bridge", async () => {
 
 test("a_core_on_the_bridge_signs_in_and_hears_the_cloud", async () => {
   const cloud = new FakeCloud();
-  await cloud.listen(47_331);
+  // A port of its own: another run of these tests at once on this machine has its cloud too.
+  await cloud.listen(0);
   const dir = mkdtempSync(join(tmpdir(), "bridge-core-"));
   const native = new NodeShell(dir);
   const fatal: string[] = [];
-  const core = startBridged(native, "http://127.0.0.1:47331", false, "android", (r) => fatal.push(r));
+  const core = startBridged(native, `http://127.0.0.1:${cloud.port()}`, false, "android", (r) => fatal.push(r));
   native.bridge = core.bridge;
   const client = core.connect();
   const states = new Map<number, unknown>();

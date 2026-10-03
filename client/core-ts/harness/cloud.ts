@@ -239,6 +239,11 @@ export class FakeCloud {
     return new Promise((resolve) => this.#server!.listen(port, "127.0.0.1", () => resolve()));
   }
 
+  /// The port it listens on (`listen(0)`: one the system chose).
+  port(): number {
+    return (this.#server!.address() as { port: number }).port;
+  }
+
   close(): Promise<void> {
     this.station.close();
     for (const s of this.sockets) s.ws.terminate();
