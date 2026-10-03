@@ -1276,3 +1276,47 @@ test("the_core_keeps_its_workspaces_stations_and_agents_at_work_with_nobody_look
   assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?live=k&from=0&last=200"]);
   core.close();
 });
+
+// The device's limit on entries and transcripts (docs/core-db.md): the least recently opened chats' entries go, and
+// are not brought back until they are opened.
+test("a_chat_let_go_to_keep_within_the_limit_is_brought_back_only_when_opened", async () => {
+  const of = (thread: number, from: number, to: number) => entries(from, to).map((e) => ({ ...e, thread, text: `${e.text} ${"字".repeat(40)}` }));
+  const answers: J = {
+    ...base(),
+    "GET /threads": [threadView(7, 50), { ...threadView(8, 50), createdAt: 6 }],
+    "GET /threads/7/entries?limit=50": { last: 50, entries: of(7, 1, 50) },
+    "GET /threads/8/entries?limit=50": { last: 50, entries: of(8, 1, 50) },
+  };
+  const s = (await import("./station-fixture.ts")).stationHost(answers);
+  const { Core } = await import("../src/core.ts");
+  const one = new TextEncoder().encode(JSON.stringify(of(7, 1, 50))).length;
+  // Room for one of the two chats.
+  const core = await Core.create(s.host, { clock: s.host.time.clock, sample: 0, wire: () => new HostWire(s.host), keptLimit: one + 500 });
+  await s.host.time.pass(2_000, 50);
+  const held = async (id: number) => (await run(core.inner.data.log("entry", ST, String(id)))).size;
+  // Both read, one let go (the first written: neither was opened).
+  assert.deepEqual([await held(7), await held(8)], [0, 50]);
+  assert.ok(core.inner.data.evicted("entry", ST, "7"));
+  // Said meanwhile, and the station read again: nothing of chat 7 is brought back, so nothing goes round again.
+  const asked = () => s.host.requests.filter((r) => r.url.includes("/threads/7/entries")).length;
+  const before = asked();
+  s.push("thread", { id: 7, entries: of(7, 51, 51) });
+  s.end();
+  await s.host.time.pass(RECONNECT_MS * 3, 100);
+  assert.equal(asked(), before, "not read again while let go");
+  assert.equal(await held(7), 0);
+  // Opened: read again, as urgently as it is shown; shown whole from then on.
+  answers["GET /threads"] = [threadView(7, 51), { ...threadView(8, 50), createdAt: 6 }];
+  answers["GET /threads/7/entries?limit=50"] = { last: 51, entries: of(7, 2, 51) };
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, thread7);
+  await s.host.time.pass(1_000, 50);
+  apply(s.host, values);
+  assert.equal(asked(), before + 1 + 1, "its latest page, then the one before it");
+  assert.equal(v(values, 1).last, 51);
+  assert.ok(!core.inner.data.evicted("entry", ST, "7"));
+  // And chat 8, now the least recently opened, went to make room.
+  assert.equal(await held(8), 0);
+  core.close();
+});
