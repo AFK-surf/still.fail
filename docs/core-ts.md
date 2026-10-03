@@ -67,7 +67,11 @@ Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」�
 4. **用户操作不等网络**：操作在 core 里立刻生效（outbox、待建的 chat、改名/置顶/归档的覆盖层、已回答），`doing` 跟踪，
    失败回滚并说明原因；跨 station 的话题是流式的：到了多少显示多少，station 陆续补进来，不用 loading 挡住已有的内容。
 5. **UI 不发请求**：一切都是 core 的具名 call；数据和逻辑（草稿、选择、状态、PC 和手机的差别）都在 core 里。
-6. **workspace 互相隔离**（docs/client-core.md、client/core/src/workspace.rs 的意图）；本地先建的东西和 station 的对应项只靠
+6. **core 把一切缓存在数据库里，UI 读几乎总是命中缓存**：core 和 station/cloud 之间的同步一直自己跑，不看 UI 显示什么、
+   订阅什么；UI 最多改同步任务的**优先级**（比如打开的 chat 的消息先同步），不能开始或停止同步。所以订阅只读记录，从不
+   触发网络请求；所有 station/cloud 的流量归一个同步调度器（Effect）管，优先级由 UI 的 focus/订阅调整；数据还没同步到的
+   视图显示已有的，记录到了再补上。
+7. **workspace 互相隔离**（docs/client-core.md、client/core/src/workspace.rs 的意图）；本地先建的东西和 station 的对应项只靠
    确切的 clientKey 对上，绝不猜。
 
 对照运行因此只比两件事：协议形状，和同一个脚本下 UI 最终看到的结果。下面「刻意不同」一节列出 TS core 因为 Rust 违反
@@ -77,6 +81,11 @@ Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」�
 
 （随做随补；每条写明违反了哪条规则。）
 
+- 规则 6：Rust 的话题在被订阅时才去读（`Stations::start` → `refetch`，`start_topic` → `spawn_refresh`，chat 打开时
+  `open_thread` 读窗口，`job`/`jobLog`/`slackApp`/`footprint`/`stationUsage`/`loginSessions`/`admin` 都是订阅时读）；TS 的订阅
+  只读记录，读请求都由同步调度器发起，订阅和 `client.focus` 只调高相关任务的优先级。
+- 规则 6：Rust 的 `sync.rs` 只同步 workspace、station 的 rows/sessions/threads/overview 和在跑的 agent 的 live；消息由
+  `warm` 顺带拉。TS 的同步调度器同步全部业务数据（含每个 chat 的 entries），按优先级排队。
 - 规则 2：老 station 不跟随 job 日志时，Rust 每 2 秒起退避重读 `/jobs/:id/log`；TS 不重读，只在事件里更新（老 station 上
   日志面板不再自动增长，打开时读一次）。
 - 规则 2：`job` 话题 Rust 每半分钟（老 station 每 4 秒）重读 `/jobs/:id`；TS 只靠 `job` 事件。
