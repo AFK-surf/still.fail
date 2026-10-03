@@ -38,6 +38,7 @@ import { installChoose } from "./choose-calls.ts";
 import { Changelog } from "./changelog.ts";
 import { installForms, type Forms } from "./forms-calls.ts";
 import { Loads } from "./preview-load.ts";
+import { Asks } from "./asks.ts";
 import { envOf, Views } from "./views/views.ts";
 import { isObject } from "./util.ts";
 
@@ -158,6 +159,8 @@ export class Core {
       inner.attention.install();
       inner.choose = installChoose(inner);
       inner.forms = installForms(inner);
+      const asks = new Asks(inner.host);
+      handlers.ask = (_i, call) => asks.run((call as Extract<Call, { kind: "ask" }>).ask, inner.accounts);
       inner.changelog = new Changelog(inner.host, inner.store, inner.data);
       inner.router.owners.push(inner.changelog);
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
