@@ -8,6 +8,7 @@
 #include <mach/mach.h>
 #include <sys/random.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <condition_variable>
 #include <cstdio>
@@ -23,6 +24,7 @@
 #include <unordered_map>
 
 #include <hermes/hermes.h>
+#include <jsi/instrumentation.h>
 #include <jsi/jsi.h>
 
 namespace jsi = facebook::jsi;
