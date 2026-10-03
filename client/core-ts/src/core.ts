@@ -28,7 +28,8 @@ import { install as installStationCalls } from "./station/calls.ts";
 import { StationsSync } from "./station/sync.ts";
 import { StationTopics } from "./station/topics.ts";
 import type { StationWire } from "./station/wire.ts";
-import { meshWire } from "./mesh.ts";
+import { meshWire, type Mesh } from "./mesh.ts";
+import type { Iroh } from "./iroh.ts";
 import { ViewCalls } from "./views/calls.ts";
 import { Attend } from "./attend.ts";
 import { Attention } from "./attention.ts";
@@ -60,6 +61,8 @@ export type Options = {
   sample?: number;
   /// The clock the core's timers run on (a TestClock in tests).
   clock?: Clock.Clock;
+  /// The iroh this host has (iroh.ts); none: stations are not reached over the mesh.
+  iroh?: Iroh | null;
 };
 
 /// What the core holds: every module.
@@ -82,6 +85,10 @@ export class Inner {
   stations!: StationsSync;
   stationTopics!: StationTopics;
   views!: Views;
+  /// The iroh this host has, and the mesh over it once up (mesh.ts).
+  iroh: Iroh | null = null;
+  mesh!: () => Effect.Effect<Mesh, CoreError>;
+  meshNow: () => Mesh | null = () => null;
   attention!: Attention;
   choose!: Choose;
   changelog!: Changelog;
@@ -145,6 +152,7 @@ export class Core {
       );
       inner.router = new Router(inner);
       store.setSource(inner.router);
+      inner.iroh = options.iroh ?? null;
       inner.stations = new StationsSync(inner, options.wire ? options.wire(inner) : meshWire(inner));
       inner.stationTopics = new StationTopics(inner, inner.stations);
       inner.router.owners.push(inner.stationTopics);

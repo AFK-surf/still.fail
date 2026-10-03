@@ -39,6 +39,11 @@ pub struct Options {
     pub discovery: Option<bool>,
     /// Where to listen; any free port when not said.
     pub bind_addr: Option<String>,
+    /// A client's endpoint (the core in TypeScript, client/core-ts): it looks stations up on the LAN and in the DHT
+    /// without being announced itself (a device is never dialed).
+    pub lookup: Option<bool>,
+    /// Relays alone, no IP transports: what measures the way through a relay must not go direct.
+    pub relay_only: Option<bool>,
 }
 
 #[napi]
@@ -57,12 +62,20 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
     let mut builder = IrohEndpoint::builder(Minimal)
         .secret_key(key.clone())
         .alpns(options.alpns.iter().map(|a| a.to_vec()).collect())
-        .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays)) })
+        .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays.clone())) })
         .transport_config(QuicTransportConfig::builder().congestion_controller_factory(Arc::new(cubic)).build());
     if let Some(addr) = &options.bind_addr {
         builder = builder.bind_addr(addr.parse::<std::net::SocketAddr>().map_err(failed)?).map_err(failed)?;
     }
-    if options.discovery.unwrap_or(true) {
+    if options.relay_only.unwrap_or(false) {
+        builder = builder.clear_ip_transports();
+    }
+    if options.lookup.unwrap_or(false) && !relays.is_empty() {
+        builder = builder
+            .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
+            .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false))
+            .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish());
+    } else if options.discovery.unwrap_or(true) {
         builder = builder
             .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE))
             .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE))
@@ -177,11 +190,35 @@ impl Endpoint {
         None
     }
 
-    /// A connection to another endpoint (a peer station).
+    /// A connection to another endpoint (a peer station; a station, from a client), offering `alpn` and, for one from
+    /// before a rename, the `additional` ones too.
     #[napi]
-    pub async fn connect(&self, addr: Addr, alpn: Buffer) -> napi::Result<Connection> {
-        let conn = self.inner.connect(endpoint_addr(&addr)?, &alpn).await.map_err(failed)?;
+    pub async fn connect(&self, addr: Addr, alpn: Buffer, additional: Option<Vec<Buffer>>) -> napi::Result<Connection> {
+        let options = iroh::endpoint::ConnectOptions::new().with_additional_alpns(additional.unwrap_or_default().iter().map(|a| a.to_vec()).collect());
+        let connecting = self.inner.connect_with_opts(endpoint_addr(&addr)?, &alpn, options).await.map_err(failed)?;
+        let conn = connecting.await.map_err(failed)?;
         Ok(Connection { inner: conn })
+    }
+
+    /// Tells it where an endpoint is without looking it up (tests, a LAN with no relay).
+    #[napi]
+    pub fn add_addr(&self, addr: Addr) -> napi::Result<()> {
+        let addr = endpoint_addr(&addr)?;
+        let lookup = self.inner.address_lookup().map_err(failed)?;
+        lookup.add(iroh::address_lookup::MemoryLookup::from_endpoint_info([addr]));
+        Ok(())
+    }
+
+    /// The network changed (a phone's, after it slept): its sockets and relay connection looked at anew.
+    #[napi]
+    pub async fn network_change(&self) {
+        self.inner.network_change().await;
+    }
+
+    /// Its home relays, and whether it is connected to each now.
+    #[napi]
+    pub fn relay_status(&self) -> Vec<RelayState> {
+        self.inner.home_relay_status().get().iter().map(|s| RelayState { url: s.url().to_string(), connected: s.is_connected() }).collect()
     }
 
     #[napi]
@@ -190,6 +227,47 @@ impl Endpoint {
             task.abort();
         }
         self.inner.close().await;
+    }
+}
+
+#[napi(object)]
+pub struct RelayState {
+    pub url: String,
+    pub connected: bool,
+}
+
+/// One way a connection can go: through a relay (its URL) or direct; the one chosen now, and its round trip.
+#[napi(object)]
+pub struct PathState {
+    pub selected: bool,
+    pub relay: Option<String>,
+    pub rtt_ms: f64,
+}
+
+/// What went over a connection since it opened, both ways.
+#[napi(object)]
+pub struct Stats {
+    pub rx_bytes: f64,
+    pub tx_bytes: f64,
+    pub tx_packets: f64,
+    pub lost_packets: f64,
+}
+
+/// Why a connection went: `application` (the other end closed it, saying `reason`), `local`, `timeout`, or `other`
+/// (`reason` in words).
+#[napi(object)]
+pub struct CloseInfo {
+    pub kind: String,
+    pub reason: String,
+}
+
+fn close_info(error: &iroh::endpoint::ConnectionError) -> CloseInfo {
+    use iroh::endpoint::ConnectionError;
+    match error {
+        ConnectionError::ApplicationClosed(close) => CloseInfo { kind: "application".into(), reason: String::from_utf8_lossy(&close.reason).into_owned() },
+        ConnectionError::LocallyClosed => CloseInfo { kind: "local".into(), reason: String::new() },
+        ConnectionError::TimedOut => CloseInfo { kind: "timeout".into(), reason: String::new() },
+        other => CloseInfo { kind: "other".into(), reason: other.to_string() },
     }
 }
 
@@ -245,6 +323,70 @@ impl Connection {
     #[napi]
     pub async fn closed(&self) -> String {
         self.inner.closed().await.to_string()
+    }
+
+    /// Resolves when it is gone, with why, told apart (`CloseInfo`).
+    #[napi]
+    pub async fn closed_info(&self) -> CloseInfo {
+        close_info(&self.inner.closed().await)
+    }
+
+    /// Why it is gone, if it is.
+    #[napi]
+    pub fn close_reason(&self) -> Option<CloseInfo> {
+        self.inner.close_reason().map(|e| close_info(&e))
+    }
+
+    /// Every way it can go now.
+    #[napi]
+    pub fn paths(&self) -> Vec<PathState> {
+        self.inner.paths().iter().map(|p| PathState {
+            selected: p.is_selected(),
+            relay: match p.remote_addr() {
+                iroh::TransportAddr::Relay(url) => Some(url.to_string()),
+                _ => None,
+            },
+            rtt_ms: p.rtt().as_secs_f64() * 1000.0,
+        }).collect()
+    }
+
+    #[napi]
+    pub fn stats(&self) -> Stats {
+        let stats = self.inner.stats();
+        Stats { rx_bytes: stats.udp_rx.bytes as f64, tx_bytes: stats.udp_tx.bytes as f64, tx_packets: stats.udp_tx.datagrams as f64, lost_packets: stats.lost_packets as f64 }
+    }
+
+    /// A stream one way: what measures a round trip sends a byte on it (mesh.rs `sample_relay_rtt`).
+    #[napi]
+    pub async fn open_uni(&self) -> napi::Result<UniStream> {
+        let send = self.inner.open_uni().await.map_err(failed)?;
+        Ok(UniStream { send: Arc::new(Mutex::new(send)) })
+    }
+}
+
+#[napi]
+pub struct UniStream {
+    send: Arc<Mutex<SendStream>>,
+}
+
+#[napi]
+impl UniStream {
+    #[napi]
+    pub async fn write(&self, bytes: Buffer) -> napi::Result<()> {
+        self.send.lock().await.write_all(&bytes).await.map_err(failed)
+    }
+
+    #[napi]
+    pub async fn finish(&self) -> napi::Result<()> {
+        self.send.lock().await.finish().map_err(failed)
+    }
+
+    /// Resolves once what was sent is acknowledged: null, or the code the other end stopped it with.
+    #[napi]
+    pub async fn stopped(&self) -> napi::Result<Option<u32>> {
+        let stopped = self.send.lock().await.stopped();
+        let code = stopped.await.map_err(failed)?;
+        Ok(code.map(|c| u32::try_from(c.into_inner()).unwrap_or(u32::MAX)))
     }
 }
 
