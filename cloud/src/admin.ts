@@ -5,9 +5,9 @@
 // /v1/admin/accounts and /v1/admin/relay routes use ADMIN_TOKEN instead; see index.ts.)
 import type { Env } from "./env";
 
-/** Whether this verified email is the admin's; without ADMIN_EMAIL, nobody is. */
-export function isAdmin(env: Env, email: string): boolean {
-  return !!env.ADMIN_EMAIL && email.toLowerCase() === env.ADMIN_EMAIL.toLowerCase();
+/** Whether this account is the admin's: a Google account (not an Apple one, apple_…) with ADMIN_EMAIL; without it, nobody is. */
+export function isAdmin(env: Env, sub: string, email: string): boolean {
+  return !!env.ADMIN_EMAIL && !sub.startsWith("apple_") && email.toLowerCase() === env.ADMIN_EMAIL.toLowerCase();
 }
 
 export const CODE_TTL_DAYS = 14;

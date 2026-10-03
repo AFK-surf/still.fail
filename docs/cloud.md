@@ -45,7 +45,8 @@ Apple 登录（`cloud/src/apple.ts`）是另一种进入账号的方式。Apple 
 
 - **浏览器**（网页版、桌面、Android；`auth.begin` 带 `provider: "apple"`）：`/v1/auth/apple/start`，参数和 Google 的一样。用 Services ID 跳到 Apple；要邮箱就必须 `response_mode=form_post`，Apple 跨站 POST 回 `/v1/auth/apple/callback`，这时带不上 `SameSite=Lax` 的登录 cookie。所以 POST 只把 code 和名字记进登录尝试，303 到同一路径的 GET，GET 带着 cookie 校验浏览器后，用团队 key 现签的 client secret 换 identity token，之后和 Google 一样回到 `/auth/callback?code=…`。
 - **iOS app**（原生）：`POST /v1/auth/apple/native {name}` 得到 `{id, nonce}`；app 把 nonce 的 SHA-256（hex）交给 Apple，拿到 identity token 后 `POST /v1/auth/apple/native/token {id, identity_token, user?}` 直接得到 token。audience 是 `APPLE_BUNDLE_IDS` 里的 bundle ID。
-- Apple 只在第一次登录给名字（浏览器是 POST 里的 `user`，iOS 是 `fullName`），之后的登录保留原来的名字；没有头像。邮箱必须有且已验证；用户隐藏邮箱时是 `@privaterelay.appleid.com` 的转发地址，按邮箱发的邀请到不了这种账号。
+- Apple 只在第一次登录给名字（浏览器是 Apple POST 里的 `user`；iOS app 要把 `fullName` 的 `givenName` / `familyName` 照同样的形状放进 `user`：`{"name": {"firstName": …, "lastName": …}}`），之后的登录保留原来的名字；没有头像。邮箱必须有且已验证；用户隐藏邮箱时是 `@privaterelay.appleid.com` 的转发地址，按邮箱发的邀请到不了这种账号。
+- 邀请、`#joinAdded` 都按邮箱匹配：同一个人有同邮箱的 Google 和 Apple 两个账号时，两个账号都会被加进按邮箱加入的 workspace；其中一个已是成员后，再邀请这个邮箱会得到 `already_member`。管理后台只认 Google 账号（`isAdmin` 不接受 `apple_` 账号，即使邮箱是 `ADMIN_EMAIL`）。
 - 还没做：用 refresh token 撤销授权、Apple 的服务器通知、删除账号（iOS 上架要求 app 内能删账号并撤销 Apple 授权）。
 
 ## station 登记

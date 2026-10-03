@@ -334,7 +334,7 @@ export class Directory extends DurableObject<Env> {
   #plan(workspace: string): Plan {
     const creator = this.#one("SELECT u.sub, u.email FROM workspaces w JOIN users u ON u.sub = w.created_by WHERE w.id = ?", workspace);
     if (!creator) return "free";
-    return isAdmin(this.env, creator.email as string) ? "admin" : this.#standard(creator.sub as string) ? "standard" : "free";
+    return isAdmin(this.env, creator.sub as string, creator.email as string) ? "admin" : this.#standard(creator.sub as string) ? "standard" : "free";
   }
 
   /** How many people a workspace may hold, its creator among them. */
@@ -693,7 +693,7 @@ export class Directory extends DurableObject<Env> {
     return this.#rows("SELECT sub, email, name, picture, created_at, last_seen, admitted, beta, blocked FROM users ORDER BY created_at DESC").map((row) => {
       const sub = row.sub as string;
       const workspaces = memberships.get(sub) ?? [];
-      const admin = isAdmin(this.env, row.email as string);
+      const admin = isAdmin(this.env, sub, row.email as string);
       const admission: Admission | null = admin ? "admin" : (row.admitted as Admission | null) ?? (workspaces.length ? "early" : null);
       // As #standard has it, without a query per account.
       const mayCreate = admin || row.admitted === "code" || row.admitted === "granted" || (row.admitted === null && workspaces.length > 0);
@@ -720,7 +720,7 @@ export class Directory extends DurableObject<Env> {
       const member = this.#one("SELECT 1 AS x FROM members WHERE sub = ? LIMIT 1", sub);
       this.#run("UPDATE users SET admitted = ? WHERE sub = ?", creator ? "free" : member ? "invitation" : null, sub);
     }
-    return { sub, may_create: isAdmin(this.env, row!.email as string) || this.#standard(sub) };
+    return { sub, may_create: isAdmin(this.env, sub, row!.email as string) || this.#standard(sub) };
   }
 
   /** Notes that the admin blocked the account or let it back (the account's own object is what keeps it out). */
@@ -765,7 +765,7 @@ export class Directory extends DurableObject<Env> {
     const invitations = group<AdminWorkspace["invitations"][number]>(this.#rows(`SELECT i.workspace, i.id, i.role, i.email, i.created_by, i.expires_at,
       COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.expires_at > ? ORDER BY i.expires_at`, now));
     // As #plan has it, in the same read.
-    const plan = (w: Row): Plan => w.sub === null ? "free" : isAdmin(this.env, w.email as string) ? "admin"
+    const plan = (w: Row): Plan => w.sub === null ? "free" : isAdmin(this.env, w.sub as string, w.email as string) ? "admin"
       : w.admitted === "code" || w.admitted === "granted" || (w.admitted === null && w.member) ? "standard" : "free";
     return this.#rows(`SELECT w.id, w.name, w.created_at, u.sub, u.email, u.name AS user_name, u.picture, u.admitted,
       EXISTS (SELECT 1 FROM members m WHERE m.sub = u.sub) AS member FROM workspaces w

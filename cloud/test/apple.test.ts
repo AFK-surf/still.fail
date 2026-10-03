@@ -101,6 +101,14 @@ test("the iOS app signs in with Apple natively: a nonce, then the identity token
     assert.equal((await h.fetch("/v1/auth/sessions", { headers: { authorization: `Bearer ${tokens.access_token}` } })).status, 200);
     assert.equal((await post("/v1/auth/apple/native/token", { id: attempt.id, identity_token: token })).status, 401, "an attempt is used once");
 
+    // The console stays Google's: an Apple account with ADMIN_EMAIL is not the admin.
+    const admin = await begin();
+    const adminToken = await h.appleToken({ sub: "000999.abc.0001", email: "alice@example.test", nonce: hex(admin.nonce) }, "fail.still.ios");
+    const apple = (await (await post("/v1/auth/apple/native/token", { id: admin.id, identity_token: adminToken })).json()) as Tokens;
+    assert.equal(apple.email, "alice@example.test");
+    assert.equal((await h.as(apple, "admin")("GET", "/v1/admin/me")).status, 404);
+    assert.equal((await h.as(await h.login("alice"), "admin")("GET", "/v1/admin/me")).status, 200, "Google's alice still is");
+
     const other = await generateKeyPair("RS256");
     for (const [why, claims, aud, key] of [
       ["raw nonce", (n: string) => ({ sub: APPLE_SUB, email: "p@example.test", nonce: n }), "fail.still.ios", undefined],
