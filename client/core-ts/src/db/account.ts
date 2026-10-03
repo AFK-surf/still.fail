@@ -11,7 +11,7 @@
 // Reads: a row asked for by key is kept (by identity, frozen) until it is written; a station's list a view shows (its
 // chats, sessions, threads, jobs) is loaded by one indexed query the first time it is asked for and from then on kept
 // current by the writer, row by row, until no topic reads it. Nothing is loaded at start.
-import { Deferred, Effect, Queue } from "effect";
+import { Deferred, Effect, type Fiber, Queue } from "effect";
 import type { Sql, SqlRow, SqlValue } from "../host.ts";
 import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
@@ -227,6 +227,7 @@ export class AccountDb {
   /// What could not be written even so, written again with the next burst.
   #unwritten: [string, readonly SqlValue[]][] = [];
   readonly #bursts: Queue.Queue<void>;
+  readonly #writer: Fiber.Fiber<never, never>;
   #waiting: Deferred.Deferred<void>[] = [];
   readonly #cache = new Cache(4096);
   readonly #logCache = new Cache(8192);
@@ -252,7 +253,7 @@ export class AccountDb {
     }
     this.#bursts = Effect.runSync(Queue.unbounded<void>());
     // The one write fiber: a burst is committed once what started it has run.
-    runner.fork(Effect.forever(Effect.andThen(Queue.take(this.#bursts), Effect.andThen(Effect.yieldNow, Effect.sync(() => this.#commit())))));
+    this.#writer = runner.fork(Effect.forever(Effect.andThen(Queue.take(this.#bursts), Effect.andThen(Effect.yieldNow, Effect.sync(() => this.#commit())))));
   }
 
   // ── writing ──
@@ -380,6 +381,7 @@ export class AccountDb {
     if (this.#closed) return;
     if (this.#inTx) this.#commit();
     this.#closed = true;
+    this.#runner.interrupt(this.#writer as Fiber.Fiber<unknown, unknown>);
     this.sql.close();
   }
 

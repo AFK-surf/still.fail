@@ -202,6 +202,7 @@ export class WebHost implements Host {
   #db: Promise<IDBDatabase> | null = null;
   readonly #sqlite: () => Promise<WasmSqlite>;
   #loaded: WasmSqlite | null = null;
+  #loading: Promise<WasmSqlite> | null = null;
   readonly #open = new Map<string, WasmSql>();
 
   constructor(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, sqlite: () => Promise<WasmSqlite>) {
@@ -361,7 +362,7 @@ export class WebHost implements Host {
   openDb(name: string): Effect.Effect<Sql, HostError | SqlError> {
     return Effect.tryPromise({
       try: async () => {
-        const sqlite = (this.#loaded ??= await this.#sqlite());
+        const sqlite = await this.#load();
         await sqlite.reserve(2);
         const db = sqlite.open(`/${name}.sqlite3`);
         // One worker holds the pool's files (worker.ts): the lock is ours alone; no WAL (no shared memory here).
@@ -375,6 +376,12 @@ export class WebHost implements Host {
     });
   }
 
+  /// SQLite's module, loaded once.
+  #load(): Promise<WasmSqlite> {
+    this.#loading ??= this.#sqlite().then((sqlite) => (this.#loaded = sqlite));
+    return this.#loading;
+  }
+
   memoryDb(): Sql | undefined {
     return this.#loaded ? new WasmSql(this.#loaded.memory()) : undefined;
   }
@@ -384,7 +391,7 @@ export class WebHost implements Host {
       try: async () => {
         this.#open.get(name)?.close();
         this.#open.delete(name);
-        const sqlite = (this.#loaded ??= await this.#sqlite());
+        const sqlite = await this.#load();
         for (const end of ["", "-journal", "-wal"]) sqlite.unlink(`/${name}.sqlite3${end}`);
       },
       catch: failed,
