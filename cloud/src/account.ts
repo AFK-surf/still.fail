@@ -1,3 +1,4 @@
+import { deletionCoverage } from "./deletion";
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./env";
 import { noted, type SpanNotes } from "./tracing";
@@ -21,7 +22,7 @@ type Session = {
   rotated?: number;
 };
 type AccountData = Identity & { blocked: boolean; sessions: Session[]; ended?: Ended[] };
-/** One Google account's sessions. What it may reach is the Directory's business. */
+/** One account's sessions. What it may reach is the Directory's business. */
 export class Account extends DurableObject<Env> {
   private data(): AccountData | undefined {
     return this.ctx.storage.kv.get<AccountData>("account");
@@ -47,13 +48,13 @@ export class Account extends DurableObject<Env> {
   private async access(data: AccountData, session: Session): Promise<{ access_token: string; expires_at: number }> {
     const now = nowSeconds();
     const expires = Math.min(now + ACCESS_TTL_SEC, session.expires, session.idle);
-    const claims = { sub: data.sub, email: data.email, name: data.name ?? "", sid: session.id };
+    const claims = { sub: data.sub, email: data.email, name: data.name ?? "", sid: session.id, ...(data.provider === "apple" ? { provider: "apple" } : {}) };
     return { access_token: await signToken(this.env, "access", claims, expires, now), expires_at: expires };
   }
 
   private async mint(data: AccountData, session: Session): Promise<Tokens> {
     const now = nowSeconds();
-    const claims = { sub: data.sub, email: data.email, name: data.name ?? "", sid: session.id };
+    const claims = { sub: data.sub, email: data.email, name: data.name ?? "", sid: session.id, ...(data.provider === "apple" ? { provider: "apple" } : {}) };
     const { access_token: access, expires_at: expires } = await this.access(data, session);
     const refresh = await signToken(
       this.env,
@@ -80,7 +81,7 @@ export class Account extends DurableObject<Env> {
     };
   }
 
-  async create(identity: Identity, id: string, name: string): Promise<Response> {
+  async create(identity: Identity, id: string, name: string, appleGrant?: string): Promise<Response> {
     return this.ctx.blockConcurrencyWhile(async () => {
       const now = nowSeconds();
       const data = this.data() ?? { ...identity, blocked: false, sessions: [] };
@@ -88,10 +89,21 @@ export class Account extends DurableObject<Env> {
       if (data.blocked) return reply({ error: "account_blocked" }, 403);
       this.prune(data);
       if (data.sessions.length >= LIMITS.sessions || !this.charge()) return limited();
-      data.email = identity.email;
-      data.name = identity.name;
-      data.picture = identity.picture;
-      await this.env.DIRECTORY.getByName("primary").upsertUser(identity);
+      if (identity.provider === "apple") {
+        if (!appleGrant) return reply({ error: "apple_grant_missing" }, 401);
+        // Apple supplies email/name only on the first consent. Returning tokens cannot erase them.
+        data.provider = "apple";
+        data.email = identity.email || data.email;
+        data.name = identity.name || data.name;
+        const grants = this.ctx.storage.kv.get<string[]>("apple_grants") ?? [];
+        grants.push(appleGrant);
+        this.ctx.storage.kv.put("apple_grants", grants);
+      } else {
+        data.email = identity.email;
+        data.name = identity.name;
+        data.picture = identity.picture;
+      }
+      await this.env.DIRECTORY.getByName("primary").upsertUser({ sub: data.sub, email: data.email, name: data.name, picture: data.picture, ...(data.provider === "apple" ? { provider: "apple" as const } : {}) });
       const session: Session = {
         id,
         name,
@@ -235,6 +247,23 @@ export class Account extends DurableObject<Env> {
     if (!claims || !this.session(data, claims)) return denied();
     if (!this.charge()) return limited();
     const path = new URL(request.url).pathname;
+    if ((path === "/v1/auth/deletion-summary" || path === "/v1/auth/delete-account") && request.method === "POST") {
+      // A refresh mint's iat is NOT re-authentication. Use the verified login session's creation time.
+      const session = this.session(data, claims)!;
+      const reauthNeeded = nowSeconds() - session.created > 5 * 60;
+      let impact;
+      try { impact = await this.env.DIRECTORY.getByName("primary").deletionImpact(claims.sub); }
+      catch { return reply({ error: "deletion_summary_unavailable", deleted: false }, 503); }
+      const blockers = [
+        ...(impact.lastOwnerWorkspaces.length ? [{ code: "last_owner", workspaces: impact.lastOwnerWorkspaces }] : []),
+        ...(reauthNeeded ? [{ code: "reauth_required" }] : []),
+        { code: "coverage_incomplete", categories: ["cloud_private_objects", "cloud_shared_attribution", "logs_telemetry", "local_preferences"] },
+      ];
+      const summary = { account: claims.sub, ...deletionCoverage, ...impact, sessions: data!.sessions.length, reauthNeeded, blockers };
+      if (path === "/v1/auth/deletion-summary") return reply(summary);
+      // No partial destructive cleanup while cloud coverage and retention await Product review. Retrying is safe and retains the account.
+      return reply({ error: "deletion_coverage_incomplete", deleted: false, state: "blocked", summary }, 409);
+    }
     if (path === "/v1/auth/session" && request.method === "GET")
       return reply({
         subject: claims.sub,

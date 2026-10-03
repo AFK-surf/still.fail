@@ -14,9 +14,9 @@ const ACCEPTED_ISSUERS = [ISSUER, "ember-cloud"];
 const encoder = new TextEncoder();
 const googleKeys = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 
-/** A Google account. name and picture come from the profile scope and may be empty. */
-export type Identity = { sub: string; email: string; name: string; picture: string };
-export type Claims = { sub: string; email: string; name?: string; sid: string; exp: number; iat: number; gen?: number };
+/** Existing Google subjects remain authoritative; Apple uses a separate canonical subject. */
+export type Identity = { sub: string; email: string; name: string; picture: string; provider?: "apple" };
+export type Claims = { sub: string; email: string; name?: string; sid: string; exp: number; iat: number; gen?: number; provider?: "apple" };
 export type Tokens = {
   access_token: string;
   refresh_token: string;
@@ -69,8 +69,11 @@ export function bearerToken(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
+export function sessionConfigured(env: Env): boolean {
+  return Boolean(env.AUTH_SIGNING_KEY?.length >= 43 && env.PUBLIC_ORIGIN);
+}
 export function authConfigured(env: Env): boolean {
-  return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.AUTH_SIGNING_KEY?.length >= 43 && env.PUBLIC_ORIGIN);
+  return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && sessionConfigured(env));
 }
 
 export function reply(body: unknown, status = 200, headers: HeadersInit = {}): Response {
@@ -135,6 +138,7 @@ export async function verifyToken(env: Env, token: string, type: "access" | "ref
     });
     if (
       payload.type !== type ||
+      (payload.provider !== undefined && payload.provider !== "apple") ||
       typeof payload.sub !== "string" ||
       !/^[A-Za-z0-9_-]{1,128}$/.test(payload.sub) ||
       !validId(payload.sid) ||

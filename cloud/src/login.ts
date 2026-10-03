@@ -1,3 +1,4 @@
+import { appleConfigured, appleIdentity } from "./apple";
 import { devicePage, escape } from "./page";
 import { requestLang, tr } from "./i18n.ts";
 export { devicePage } from "./page";
@@ -44,6 +45,35 @@ function redirect(location: string, cookies: string): Response {
 
 /** One login attempt, single-use callback and PKCE code, removed on its alarm. */
 export class LoginAttempt extends DurableObject<Env> {
+  /** Native Apple challenge: nonce is bound to the signed provider token; state binds the native request/response. */
+  async appleBegin(id: string): Promise<Response> {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      if (!appleConfigured(this.env)) return reply({ error: "apple_not_configured" }, 503);
+      if (!validSecret(id) || this.ctx.storage.kv.get("apple")) return reply({ error: "invalid_login" }, 400);
+      const attempt = { nonce: randomSecret(), state: randomSecret(), expires: nowSeconds() + LOGIN_TTL_SEC, used: false };
+      this.ctx.storage.kv.put("apple", attempt);
+      await this.ctx.storage.setAlarm(attempt.expires * 1000);
+      return reply({ attempt: id, nonce: attempt.nonce, state: attempt.state, expires_at: attempt.expires });
+    });
+  }
+  async appleComplete(params: { identityToken: string; authorizationCode: string; state: string; name?: string }): Promise<Response> {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      if (!appleConfigured(this.env)) return reply({ error: "apple_not_configured" }, 503);
+      const attempt = this.ctx.storage.kv.get<{ nonce: string; state: string; expires: number; used: boolean }>("apple");
+      if (!attempt || attempt.used || attempt.expires <= nowSeconds() || params.state !== attempt.state) return reply({ error: "invalid_login_state" }, 401);
+      // Consume before code exchange/JWKS network I/O, including on provider failure.
+      attempt.used = true;
+      this.ctx.storage.kv.put("apple", attempt);
+      try {
+        const profile = await appleIdentity(this.env, params.identityToken, params.authorizationCode, attempt.nonce, params.name);
+        const sub = await this.env.DIRECTORY.getByName("primary").appleSubject(profile.providerSub);
+        return await this.env.ACCOUNTS.getByName(sub).create({ sub, email: profile.email, name: profile.name, picture: "", provider: "apple" }, ulid(), "iPhone", profile.grant);
+      } catch {
+        return reply({ error: "apple_login_failed" }, 401);
+      }
+    });
+  }
+
   private async google(id: string, attempt: Attempt, browser: string): Promise<Response> {
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     for (const [key, value] of Object.entries({
