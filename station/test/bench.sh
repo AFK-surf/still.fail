@@ -4,7 +4,7 @@
 set -u
 work=$1 rust=$2 secs=${3:-30} conc=${4:-8}
 here=$(cd "$(dirname "$0")/.." && pwd)
-load=$here/tools/load/target/release/station-load
+load=${E2E_LOAD:-$(node "$here/../scripts/native.ts" file station-load)} # prebuilt, or built here (scripts/native.ts)
 node=${NODE:-node}
 NODE_ARGS=${NODE_ARGS:-}
 id=$(cat "$work/station-id")

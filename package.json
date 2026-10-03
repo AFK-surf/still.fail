@@ -8,8 +8,8 @@
   },
   "packageManager": "pnpm@10.11.1",
   "scripts": {
-    "build": "sh client/iroh-wasm/build.sh && node scripts/posthog-key.ts",
-    "build:cloud": "sh client/iroh-wasm/build.sh && (cd client/core-ts && pnpm install --frozen-lockfile) && vite build --config web/vite.config.ts --mode cloud && vite build --config web/vite.config.ts --mode cloud-admin && node cloud/build-static.ts",
+    "build": "node scripts/native.ts iroh-pkg && node scripts/posthog-key.ts",
+    "build:cloud": "node scripts/native.ts iroh-pkg && (cd client/core-ts && pnpm install --frozen-lockfile) && vite build --config web/vite.config.ts --mode cloud && vite build --config web/vite.config.ts --mode cloud-admin && node cloud/build-static.ts",
     "dev:web": "vite --config web/vite.config.ts --mode cloud",
     "build:site": "vite build --config web/vite.demo.config.ts && vite build --config web/vite.demo.config.ts --ssr ../web/src/site/prerender.tsx --outDir ../dist/site-ssr && node web/site-prerender.mjs",
     "build:site-beta": "STILLFAIL_SITE=beta pnpm run build:site",

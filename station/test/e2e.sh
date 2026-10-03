@@ -3,11 +3,12 @@
 # client asks (tools/load): a chat is made, a message starts a turn, and while it runs the station hands over to a new
 # process (SIGUSR2, as an update does). The turn goes on under the new process: the agent's chat_post reaches it through
 # the agents' door, and the turn ends all_done. The launcher's pid stays the same throughout.
-# e2e.sh <work>   (the bundle built: pnpm run build; the native parts built in native/*)
+# e2e.sh <work>   (the bundle built: pnpm run build; the native parts prebuilt: scripts/native.ts)
 set -eu
 work=$1
 here=$(cd "$(dirname "$0")/.." && pwd)
-load=${E2E_LOAD:-$here/tools/load/target/release/station-load}
+native() { node "$here/../scripts/native.ts" file "$1"; } # prebuilt, or built here (scripts/native.ts)
+load=${E2E_LOAD:-$(native station-load)}
 # E2E_APP: a release (scripts/station-bundle.sh with STILLFAIL_STATION=ts) instead of this checkout: its launcher, its
 # Node, its runner and mesh addon, as an installed station runs them.
 rm -rf "$work" && mkdir -p "$work/data/homes/cc"
@@ -20,11 +21,11 @@ else
   ln -s "$here/dist" "$app/station"
   ln -s "$(command -v node)" "$app/node/bin/node"
   export PATH="$here/test/fake:$PATH" STILLFAIL_NO_DISCOVERY=1
-  export STILLFAIL_MESH_NATIVE=$here/native/mesh/target/release/libstillfail_mesh.dylib
-  export STILLFAIL_RUNNER=$here/native/runner/target/release/stillfail-runner
+  export STILLFAIL_MESH_NATIVE=${STILLFAIL_MESH_NATIVE:-$(native mesh)}
+  export STILLFAIL_RUNNER=${STILLFAIL_RUNNER:-$(native runner)}
 fi
 launch=${E2E_APP:+$app/mesh/target/release/stillfail-station}
-launch=${launch:-$here/native/launcher/target/release/stillfail-station}
+launch=${launch:-${STILLFAIL_LAUNCHER:-$(native launcher)}}
 id=$("$load" setup "$work/data")
 echo '{"profiles":[{"id":"cc","runtime":"claude","home":"homes/cc"}],"autoUpdate":false}' > "$work/data/config.json"
 echo '{}' > "$work/data/homes/cc/.credentials.json"

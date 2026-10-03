@@ -12,8 +12,13 @@
 #
 # STILLFAIL_CHECK_PART=ts|station|core|android runs only that part of it (CI runs the four side by side): ts the
 # icons, the clients' types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the
-# core: client/core-ts); station mesh/'s Rust; core client/'s Rust (the core's native shells: iroh for the web and
-# Android's IO, the words); android the app. Unset: all of them.
+# core: client/core-ts); station the station in TypeScript (station/, its typecheck and tests), its native parts'
+# own tests (station/native) and the Rust station (mesh/); core client/'s Rust (the core's native shells: iroh for the
+# web and Android's IO, the words); android the app. Unset: all of them.
+#
+# The native parts the TypeScript builds and tests use (the station's mesh addon and runner, the web's iroh, the
+# Android shell and engine, …) are prebuilt (scripts/native.ts): Rust is compiled only where Rust changed, for its
+# own tests, or for a native part whose source changed and that nobody has published yet.
 #
 # STILLFAIL_SKIP_CHECKS=1 (or EMBER_SKIP_CHECKS=1) skips it all (git's --no-verify does too); say why when you do.
 set -eu
@@ -34,6 +39,8 @@ case "$mode" in
   *) echo "usage: sh scripts/check.sh commit | push <range> | full <range> | all" >&2; exit 2 ;;
 esac
 [ -n "$changed" ] || exit 0
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
 touches() { printf '%s\n' "$changed" | grep -qE "$1"; }
 # Whether this run does a part (STILLFAIL_CHECK_PART): any when it says none.
 part() { [ -z "${STILLFAIL_CHECK_PART:-}" ] || [ "$STILLFAIL_CHECK_PART" = "$1" ]; }
@@ -54,14 +61,13 @@ has() { command -v "$1" > /dev/null 2>&1; }
 # pnpm links from its store, and does nothing when all is there: quick either way.
 deps() { (cd "$1" && pnpm install --frozen-lockfile --prefer-offline > /dev/null 2>&1); }
 
-# The web core's iroh comes from its wasm build (web/src/core/iroh-pkg, not committed; the core itself is client/core-ts).
-# A machine that cannot build it checks the web against stand-ins for the two modules it imports from there; main's
-# deploy checks the real ones.
+# The web core's iroh comes from its wasm build (web/src/core/iroh-pkg, not committed; the core itself is client/core-ts),
+# prebuilt for its source (scripts/native.ts iroh-pkg). A machine that can neither get nor build it checks the web
+# against stand-ins for the two modules it imports from there; main's deploy checks the real ones.
 wasm_pkg() {
   pkg=web/src/core/iroh-pkg
-  # A real build kept from before is current only while iroh's binding is unchanged: built again when it changed.
-  [ -f "$pkg/stillfail_iroh_wasm.d.ts" ] && [ ! -f "$pkg/.stand-in" ] && ! touches '^client/iroh-wasm/' && return 0
-  if has cargo && has wasm-bindgen && sh client/iroh-wasm/build.sh > /dev/null 2>&1; then return 0; fi
+  if node scripts/native.ts iroh-pkg > /dev/null 2>"$tmp/native.log"; then return 0; fi
+  sed 's/^/    /' "$tmp/native.log"
   mkdir -p "$pkg"
   cat > "$pkg/stillfail_iroh_wasm.d.ts" <<'TS'
 // A stand-in written by scripts/check.sh where iroh's wasm cannot be built (client/iroh-wasm/build.sh replaces it):
@@ -126,10 +132,24 @@ if [ $full = 1 ]; then
   if part ts && [ $core_tests = 1 ]; then
     if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" pnpm test; fi
   fi
-  # The TypeScript core's own tests; its mesh tests use the station's addon where it is built (station/native/mesh).
-  if part ts && touches "$ts_core"; then step "tests: core-ts" sh -c 'cd client/core-ts && pnpm test'; fi
+  # The TypeScript core's own tests; its mesh tests use the station's addon and n0's relay, prebuilt (its package.json).
+  if part ts && touches "$ts_core|^station/native/mesh/|^vendor/"; then deps client/core-ts; step "tests: core-ts" sh -c 'cd client/core-ts && pnpm test'; fi
   if part ts && touches "$ts_cloud"; then step "tests: cloud" sh -c 'cd cloud && pnpm test'; fi
-  if part station && touches '^(mesh|vendor)/'; then
+  # The station in TypeScript, with its native parts prebuilt (mesh addon, runner, the Rust archive for the
+  # compatibility tests): its tests run whenever it or one of them changed.
+  if part station && touches '^station/|^vendor/|^mesh/app/src/(archive\.rs|skills/)|^scripts/native\.ts$'; then
+    deps station
+    step "typecheck: station" sh -c 'cd station && pnpm exec tsgo --noEmit'
+    step "tests: station" sh -c 'cd station && pnpm test'
+  fi
+  # The native parts' own tests, where their Rust changed.
+  for crate in launcher runner mesh; do
+    if part station && touches "^station/native/$crate/"; then
+      if has cargo; then step "Rust: station/native/$crate" sh -c "cd station/native/$crate && cargo test --locked -q"; else later "Rust: station/native/$crate"; fi
+    fi
+  done
+  # The Rust station (mesh/, which shares client/shapes and client/i18n), only when it changed.
+  if part station && touches '^(mesh|vendor)/|^client/(shapes|i18n)/'; then
     if has cargo; then step "Rust: station" sh -c 'cd mesh && cargo test --workspace -q'; else later "Rust: station"; fi
   fi
   # The core's native shells (client/shell for Android, client/iroh-wasm for the web), the words, the shapes the Rust
@@ -137,9 +157,10 @@ if [ $full = 1 ]; then
   if part core && touches '^client/(shell|iroh-wasm|i18n|shapes)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
     if has cargo; then step "Rust: client" sh -c 'cd client && cargo test --workspace -q'; else later "Rust: client"; fi
   fi
+  # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed.
   if part android && touches '^(apps/android|client)/'; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
-    if has cargo && [ -d "$sdk/ndk/28.2.13676358" ]; then
+    if [ -d "$sdk/platforms" ]; then
       step "Android" python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest
     else later "Android"; fi
   fi

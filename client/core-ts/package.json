@@ -7,7 +7,7 @@
     "check": "tsgo --noEmit",
     "shapes": "node scripts/shapes.ts",
     "build": "esbuild src/index.ts src/hosts/node.ts --outbase=src --bundle --platform=node --format=esm --target=node24 --outdir=dist --external:*.node",
-    "test": "node --test --test-force-exit test/*.test.ts",
+    "test": "node ../../scripts/native.ts run mesh iroh-relay -- node --test --test-force-exit test/*.test.ts",
     "hermes": "node scripts/hermes-bundle.ts"
   },
   "dependencies": {

@@ -1,9 +1,12 @@
 // The core and its Kotlin API: the core in TypeScript (client/core-ts) run by Hermes (cpp/engine.cpp), its IO in the
 // Rust shell (client/shell). build.py puts the shell's .so and the core's bytecode under build/generated; neither is
-// committed.
+// committed. The engine is prebuilt too (scripts/native.ts, part engine): build.py puts its .so files beside the shell's
+// and says so with -PstillfailPrebuiltEngine; without it, CMake builds it here (how the prebuilt one is made).
 plugins {
     alias(libs.plugins.android.library)
 }
+
+val prebuiltEngine = providers.gradleProperty("stillfailPrebuiltEngine").isPresent
 
 android {
     namespace = "fail.still.core"
@@ -12,10 +15,10 @@ android {
     defaultConfig {
         minSdk = 29
         ndk { abiFilters += "arm64-v8a" }
-        externalNativeBuild { cmake { arguments += listOf("-DANDROID_STL=c++_shared") } }
+        if (!prebuiltEngine) externalNativeBuild { cmake { arguments += listOf("-DANDROID_STL=c++_shared") } }
     }
-    buildFeatures { prefab = true }
-    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt") } }
+    buildFeatures { prefab = !prebuiltEngine }
+    if (!prebuiltEngine) externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt") } }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

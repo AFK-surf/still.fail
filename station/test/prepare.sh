@@ -6,7 +6,7 @@
 set -eu
 tarball=$1 work=$2
 here=$(cd "$(dirname "$0")/.." && pwd)
-load=$here/tools/load/target/release/station-load
+load=${E2E_LOAD:-$(node "$here/../scripts/native.ts" file station-load)} # prebuilt, or built here (scripts/native.ts)
 rm -rf "$work" && mkdir -p "$work"
 $load setup "$work/rust" > /dev/null
 python3 - "$work/rust/mesh/cloud.json" <<'PY'

@@ -5,7 +5,7 @@
 set -u
 work=$1 rust=$2
 here=$(cd "$(dirname "$0")/.." && pwd)
-load=$here/tools/load/target/release/station-load
+load=${E2E_LOAD:-$(node "$here/../scripts/native.ts" file station-load)} # prebuilt, or built here (scripts/native.ts)
 node=${NODE:-node}
 id=$(cat "$work/station-id")
 stop() { pkill -f "data $work/" 2>/dev/null; sleep 2; }

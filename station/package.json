@@ -6,7 +6,7 @@
   "scripts": {
     "check": "tsgo --noEmit",
     "build": "esbuild src/main.ts src/read/worker.ts --outbase=src --bundle --platform=node --format=esm --target=node24 --outdir=dist --external:*.node --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" && mkdir -p dist/skills && cp ../mesh/app/src/skills/*.md dist/skills/",
-    "test": "node --test test/*.test.ts"
+    "test": "node ../scripts/native.ts run mesh runner archive-rs -- node --test test/*.test.ts"
   },
   "dependencies": {
     "effect": "4.0.0",

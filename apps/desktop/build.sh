@@ -10,7 +10,8 @@
 # build:cloud`, dist/cloud-web) as build/web, a
 # station (scripts/station-bundle.sh) as build/station, the app's own code as
 # build/app, then electron-builder puts them together.
-# CARGO_TARGET_DIR is honoured (for the mesh addon). SKIP_WEB=1 takes dist/cloud-web and dist/admin as they are. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops at build/: no packing, no
+# The native parts (the mesh addon, the Rust station, the web's iroh) are prebuilt (scripts/native.ts): no Rust is
+# compiled here unless one of them changed and is not published yet. SKIP_WEB=1 takes dist/cloud-web and dist/admin as they are. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops at build/: no packing, no
 # signing, for Electron's own app to run as it is (dev.sh).
 # UNSIGNED=1 makes either channel's package without the maintainer's signing certificate, for local testing.
 # Packed, the app is also zipped (stillfail-<version>-arm64-mac.zip) with stillfail-mac.yml beside it in out/: what
@@ -27,21 +28,21 @@ beta=${BETA:-}
 export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/Library/pnpm:$HOME/.local/node-v24.15.0-darwin-arm64/bin:$PATH"
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
-target=${CARGO_TARGET_DIR:-$root/station/native/mesh/target}
-(cd "$root/station/native/mesh" && CARGO_TARGET_DIR="$target" cargo build --release --target aarch64-apple-darwin)
+mesh=$(node "$root/scripts/native.ts" file mesh darwin-arm64)
 (cd "$root/client/core-ts" && pnpm install --frozen-lockfile --silent)
 # The web app carries PostHog when its key is at hand (docs/telemetry.md), as the cloud's does.
 deploy="$HOME/stillfail-deploy"; [ -d "$deploy" ] || deploy="$HOME/ember-deploy"
 posthog="$deploy/posthog.json"
 [ -n "${SKIP_WEB:-}" ] || (cd "$root" && if [ -f "$posthog" ]; then STILLFAIL_POSTHOG="$posthog" pnpm run build:cloud; else pnpm run build:cloud; fi)
 # The station's dist/admin (only the PostHog key its error reports use: `pnpm build` without building the core again)
-# and stillfail-station, which keeps its target in mesh/.
+# and stillfail-station (the Rust one, prebuilt: native.ts station-rs).
 [ -n "${SKIP_WEB:-}${SKIP_STATION:-}" ] || (cd "$root" && if [ -f "$posthog" ]; then STILLFAIL_POSTHOG="$posthog" node scripts/posthog-key.ts; else node scripts/posthog-key.ts; fi)
-[ -n "${SKIP_STATION:-}" ] || (cd "$root/mesh" && env -u CARGO_TARGET_DIR cargo build --release -p stillfail-station)
+[ -n "${SKIP_STATION:-}" ] || STILLFAIL_STATION_RS=$(node "$root/scripts/native.ts" file station-rs darwin-arm64)
+export STILLFAIL_STATION_RS
 rm -rf "$here/build" "$here/out"
 mkdir -p "$here/build/station"
 [ -n "${SKIP_STATION:-}" ] || sh "$root/scripts/station-bundle.sh" "$here/build/station"
-cp "$target/aarch64-apple-darwin/release/libstillfail_mesh.dylib" "$here/build/mesh.node"
+cp "$mesh" "$here/build/mesh.node"
 rsync -a "$root/dist/cloud-web/" "$here/build/web/"
 cd "$here"
 # electron-builder packs the Electron that electron's install script fetches (pnpm may have skipped it).
