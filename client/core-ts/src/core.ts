@@ -36,6 +36,7 @@ import { Pills } from "./pill.ts";
 import type { Choose } from "./choose.ts";
 import { installChoose } from "./choose-calls.ts";
 import { Changelog } from "./changelog.ts";
+import { installForms, type Forms } from "./forms-calls.ts";
 import { envOf, Views } from "./views/views.ts";
 import { isObject } from "./util.ts";
 
@@ -82,6 +83,7 @@ export class Inner {
   attention!: Attention;
   choose!: Choose;
   changelog!: Changelog;
+  forms!: Forms;
   viewCalls!: ViewCalls;
   router!: Router;
   /// The calls under way that a UI can stop, by `client/id`.
@@ -154,6 +156,7 @@ export class Core {
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);
       inner.attention.install();
       inner.choose = installChoose(inner);
+      inner.forms = installForms(inner);
       inner.changelog = new Changelog(inner.host, inner.store, inner.data);
       inner.router.owners.push(inner.changelog);
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
@@ -203,6 +206,7 @@ export class Core {
   disconnect(client: ClientId): void {
     this.inner.store.dropClient(client);
     this.inner.attention.attend.gone(client);
+    this.inner.forms.disconnect(this.inner, client);
     for (const [key, fiber] of [...this.inner.calls]) {
       if (key.startsWith(`${client}/`)) {
         this.inner.calls.delete(key);
