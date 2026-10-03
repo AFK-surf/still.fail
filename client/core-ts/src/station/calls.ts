@@ -7,6 +7,8 @@ import type { Call } from "../core/calls.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { base64 } from "../util.ts";
+import * as looks from "../looks.ts";
+import { machineMeta } from "../views/models.ts";
 import { StationAddr } from "./addr.ts";
 import { readAll, replyHeader, takeFrames, encodeFrame, type Frame } from "./wire.ts";
 
@@ -18,7 +20,22 @@ const sockets = new Map<string, (frame: Frame) => void>();
 export function install(): void {
   handlers.op = (inner, call, _progress, _at, ctx) => {
     const c = call as Extract<Call, { kind: "op" }>;
-    return Effect.andThen(parse((c.op.target as { station: string }).station), inner.stations.perform(c.op, ctx));
+    const op = c.op;
+    return Effect.andThen(
+      parse((op.target as { station: string }).station),
+      Effect.map(inner.stations.perform(op, ctx), (answer) => {
+        // The machine's own sessions, each in a line (choose.rs `machine_meta`).
+        if (op.method === "GET" && op.path.startsWith("/machine-sessions") && answer !== null && typeof answer === "object") {
+          const now = inner.host.nowMs();
+          const a = answer as { sessions?: unknown; session?: unknown };
+          if (Array.isArray(a.sessions)) for (const s of a.sessions) machineMeta(s, now);
+          if (a.session !== undefined) machineMeta(a.session, now);
+        }
+        // What the clients show of it, put in here.
+        looks.answer(op.method, op.path, answer);
+        return answer;
+      }),
+    );
   };
   handlers.chatOlder = (inner, call) => {
     const c = call as Extract<Call, { kind: "chatOlder" }>;
