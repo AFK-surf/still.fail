@@ -4,6 +4,10 @@
 //
 //   node harness/run.ts <path to stillfail_core.node> [--only rust|ts] [--keep]
 //
+// The Rust addon: `cargo build --release -p stillfail-core-node --features testing` in client/ (from a
+// commit that still has the Rust core, docs/core-ts.md); its stations then answer at the cloud's origin, as the TS
+// core's do here (harness/station.ts).
+//
 // Normalized, as truly nondeterministic: the PKCE `state` and `code_challenge` in auth.begin's url (random), a
 // `doing` item's `since` (when it was asked) and the access tokens in nothing (they never reach a UI). Everything else
 // must be equal: the messages' order per subscription, values, deltas, answers, errors and their words.
@@ -46,7 +50,11 @@ async function run(name: string, start: Start): Promise<Recorded> {
   const ctx: Ctx = {
     cloud,
     answer: (id) => answers.get(id),
-    send: (message) => core.receive(client, typeof message === "string" ? message : JSON.stringify(message)),
+    send: (message) => {
+      // What the UI lets go of it no longer holds.
+      if (typeof message === "object" && message !== null && "unsubscribe" in message) states.delete((message as unknown as { id: number }).id);
+      core.receive(client, typeof message === "string" ? message : JSON.stringify(message));
+    },
     disconnect: () => core.disconnect(client),
   };
   for (const step of SCRIPT) {
@@ -72,6 +80,18 @@ async function run(name: string, start: Start): Promise<Recorded> {
   return recorded;
 }
 
+/// Where two values differ: a path and both sides, a few at most.
+function diff(a: unknown, b: unknown, path = "", out: string[] = []): string[] {
+  if (out.length >= 12 || isDeepStrictEqual(a, b)) return out;
+  const short = (v: unknown) => (v === undefined ? "(none)" : JSON.stringify(v).slice(0, 160));
+  if (a !== null && b !== null && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b)) {
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) diff((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], `${path}.${k}`, out);
+    return out;
+  }
+  out.push(`${path || "."}: rust ${short(a)} | ts ${short(b)}`);
+  return out;
+}
+
 /// What differs between runs by nature, made the same.
 function normalize(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(normalize);
@@ -91,8 +111,12 @@ const addon = process.argv[2];
 const only = process.argv.includes("--only") ? process.argv[process.argv.indexOf("--only") + 1] : null;
 const require = createRequire(import.meta.url);
 const results: Record<string, Recorded> = {};
-if (only !== "ts") results.rust = await run("rust", (require(addon) as { start: Start }).start);
-if (only !== "rust") results.ts = await run("ts", startTs as Start);
+if (only !== "ts") {
+  // Its stations at the cloud's origin (an addon built with stillfail-core's `testing` feature).
+  process.env.STILLFAIL_HOST_WIRE = "1";
+  results.rust = await run("rust", (require(addon) as { start: Start }).start);
+}
+if (only !== "rust") results.ts = await run("ts", ((dir, origin, listener) => startTs(dir, origin, listener, undefined, { hostWire: true })) as Start);
 void T0;
 
 if (results.rust && results.ts) {
@@ -121,13 +145,17 @@ if (results.rust && results.ts) {
     } else {
       differ++;
       console.log(`✖ ${r.step}: ${exact ? "messages equal" : reordered ? "same messages, another order" : "messages differ"}; ${states ? "states equal" : "states differ"}`);
-      if (!exact) {
-        console.log(`  rust: ${JSON.stringify(r.messages)}`);
-        console.log(`  ts:   ${JSON.stringify(t.messages)}`);
+      if (!exact && !reordered) {
+        const [rm, tm] = [byId(r.messages), byId(t.messages)];
+        for (const id of new Set([...Object.keys(rm), ...Object.keys(tm)])) {
+          if (isDeepStrictEqual(rm[id], tm[id])) continue;
+          const show = (ms: unknown[] | undefined) => (ms === undefined ? "none" : JSON.stringify(ms).slice(0, 600));
+          console.log(`  messages to ${id}:\n    rust ${show(rm[id])}\n    ts   ${show(tm[id])}`);
+        }
       }
       if (!states) {
         for (const k of new Set([...Object.keys(r.states), ...Object.keys(t.states)])) {
-          if (!isDeepStrictEqual(r.states[k], t.states[k])) console.log(`  state ${k}:\n    rust ${JSON.stringify(r.states[k])}\n    ts   ${JSON.stringify(t.states[k])}`);
+          if (!isDeepStrictEqual(r.states[k], t.states[k])) console.log(`  state ${k}:\n${diff(r.states[k], t.states[k]).map((d) => `    ${d}`).join("\n")}`);
         }
       }
     }

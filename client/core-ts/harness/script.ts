@@ -16,6 +16,7 @@ export type Step = { name: string; run(ctx: Ctx): void | Promise<void>; wait?: n
 
 const call = (id: number, name: string, params?: unknown) => (ctx: Ctx) => ctx.send(params === undefined ? { id, call: name } : { id, call: name, params });
 const sub = (id: number, topic: unknown) => (ctx: Ctx) => ctx.send({ id, subscribe: topic });
+const SUMMARY = "rule 3: the thread topic's summary (`thread`) is the record, kept current by the station's events and the summary read after them; the Rust core kept it as it was when the window opened";
 const stateOf = (ctx: Ctx, id: number) => new URL(String((ctx.answer(id) as { url: string }).url)).searchParams.get("state");
 
 export const SCRIPT: Step[] = [
@@ -55,6 +56,22 @@ export const SCRIPT: Step[] = [
   { name: "prefs refused", run: call(118, "prefs.set", { appearance: "blue" }) },
   { name: "a draft", run: call(119, "draft.put", { station: "ws1/st1", chat: "new", text: "你好" }) },
   { name: "the draft read back", run: call(120, "draft.get", { station: "ws1/st1", chat: "new" }) },
+  // ── a station of hers (harness/station.ts, over the host wire) ──
+  { name: "her chats", run: sub(20, { topic: "chats", scope: "ws1", mine: false }), wait: 1500 },
+  { name: "the station's link", run: sub(21, { topic: "link", station: "ws1/st1" }) },
+  { name: "the station's sessions", run: sub(22, { topic: "sessions", station: "ws1/st1" }) },
+  { name: "opens the chat", run: sub(23, { topic: "chat", station: "ws1/st1", thread: 7 }), wait: 1000 },
+  { name: "its thread's window", run: sub(24, { topic: "thread", station: "ws1/st1", thread: 7 }), wait: 1000 },
+  {
+    name: "sends a message",
+    run: call(130, "chat.send", { station: "ws1/st1", thread: 7, text: "你好" }),
+    wait: 1000,
+    deliberate: `rule 4: the message shows in the outbox at once, before the station answers; and ${SUMMARY}`,
+  },
+  { name: "the agent replies", run: (ctx) => ctx.cloud.station.say("agent", "收到"), wait: 1000, deliberate: SUMMARY },
+  { name: "reads the chat to its end", run: (ctx) => call(131, "chat.read", { station: "ws1/st1", thread: 7, seq: ctx.cloud.station.last })(ctx), wait: 500, deliberate: SUMMARY },
+  { name: "a message from elsewhere", run: (ctx) => ctx.cloud.station.say("person", "我在手机上"), wait: 1000, deliberate: SUMMARY },
+  { name: "closes the chat", run: (ctx) => (ctx.send({ id: 23, unsubscribe: true }), ctx.send({ id: 24, unsubscribe: true })) },
   { name: "bob signs in beside her", run: call(121, "auth.begin", { redirect_uri: "stillfail://auth/callback", return_to: "/" }) },
   { name: "bob's sign-in completes", run: (ctx) => call(122, "auth.complete", { query: `?code=code-bob&state=${stateOf(ctx, 121)}` })(ctx), wait: 500 },
   { name: "bob's own workspace now reached", run: sub(8, { topic: "workspace", workspace: "ws2" }) },

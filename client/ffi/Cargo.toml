@@ -16,6 +16,8 @@ required-features = ["bindgen"]
 
 [features]
 bindgen = ["uniffi/cli"]
+# Stations answering at the cloud's origin (STILLFAIL_HOST_WIRE): the side-by-side run, client/core-ts/harness.
+testing = ["stillfail-core/testing"]
 
 [dependencies]
 # Its tunnels to the phone's adbd (adb.rs) too.

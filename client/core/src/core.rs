@@ -173,6 +173,11 @@ impl Core {
     }
 
     pub async fn new(host: Rc<dyn Host>) -> Core {
+        // The side-by-side run (client/core-ts/harness): its stations answer at the cloud's origin, not on the mesh.
+        #[cfg(feature = "testing")]
+        if std::env::var_os("STILLFAIL_HOST_WIRE").is_some() {
+            return Core::built(host, trace::SAMPLE, Some(Box::new(|h: Rc<dyn Host>| crate::testing::HostWire::new(h) as Rc<dyn station::StationWire>))).await;
+        }
         Core::traced(host, trace::SAMPLE).await
     }
 
