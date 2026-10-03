@@ -3,6 +3,18 @@ import { Miniflare, convertV4MiniflareOptions, Response as MFResponse, Log, LogL
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
+import { createRequire } from "node:module";
+
+// workerd keeps a WebSocket's TCP connection open some ten seconds after a close the Worker began (Cloudflare does
+// not), and the ws client miniflare hands sockets through says "close" only once it ends: a test waiting on a close
+// code waited those ten seconds (events.test.ts, 30 of the cloud tests' 35). The client ends it itself once both
+// close frames have passed.
+const WS = createRequire(createRequire(import.meta.url).resolve("miniflare"))("ws");
+const wsClose = WS.prototype.close;
+WS.prototype.close = function (this: any, ...args: unknown[]) {
+  wsClose.apply(this, args);
+  if (this._closeFrameReceived) setTimeout(() => this._socket?.destroy(), 20);
+};
 
 /** A request the Worker made to somewhere outside (a push service, say), as a stand-in sees it. */
 export interface OutboundRequest {
