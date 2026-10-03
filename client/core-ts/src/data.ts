@@ -47,18 +47,7 @@ const TABLES = [
   "pending",
   "first",
   "changing",
-  "log",
 ];
-
-/// How much of threads' entries and sessions' transcripts the device keeps (docs/core-db.md; kept.rs's limit): past
-/// it the logs of the chats least recently opened go — their items only. Rows, sessions, threads, read positions, the
-/// outbox are small and always kept; an evicted log is brought back (by the sync, as urgently as it is shown) once its
-/// chat is opened, and kept current again from then on.
-export const KEPT_LIMIT = 50 * 1024 * 1024;
-
-/// A log's size on the device, when its chat was last opened (or the log first written), and whether it was let go
-/// (the `log` table, keyed `<table>␁<station>␁<id>`).
-export type LogMeta = { bytes: number; opened: number; evicted?: true };
 
 export function join(parts: (string | number)[]): string {
   return parts.join(SEP);
@@ -158,14 +147,9 @@ export class Data {
   /// Told when entries or transcript items of a log change: `(table, station, id)`.
   readonly #logChanged: ((table: string, station: string, id: string) => void)[] = [];
 
-  /// The most the logs may take (KEPT_LIMIT); the logs a UI shows now, with how many show each.
-  readonly #limit: number;
-  readonly #open = new Map<string, number>();
-
-  constructor(host: Host, runner: Runner, limit = KEPT_LIMIT) {
+  constructor(host: Host, runner: Runner) {
     this.#host = host;
     this.#runner = runner;
-    this.#limit = limit;
     this.#writes = Effect.runSync(Queue.unbounded<Write>());
     // The one writer: batches in the order they were made, a failed one left (the next change writes it again).
     runner.fork(
@@ -212,25 +196,6 @@ export class Data {
         if (!t.has(key)) t.set(key, frozen(value));
       }
       this.#tellAll();
-      // Logs written before their sizes were kept (or by the Rust core's import): measured once.
-      if (this.#table("log").size === 0) yield* this.#measureLogs;
-    });
-  }
-
-  /// Every log's size, from the database (each log's items summed), into its meta.
-  get #measureLogs(): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      const now = this.#host.nowMs();
-      for (const table of ["entry", "transcript"] as const) {
-        const rows = yield* Effect.orElseSucceed(this.#host.dbRead({ table, from: "", to: "\u{10ffff}" }), () => [] as [string, Uint8Array][]);
-        const sizes = new Map<string, number>();
-        for (const [key, bytes] of rows) {
-          const parts = key.split(SEP);
-          const name = join([table, parts[0], parts.slice(1, -1).join(SEP)]);
-          sizes.set(name, (sizes.get(name) ?? 0) + bytes.length);
-        }
-        for (const [name, bytes] of sizes) if (!this.#table("log").has(name)) this.put("log", name, { bytes, opened: now } satisfies LogMeta, false);
-      }
     });
   }
 
@@ -426,8 +391,6 @@ export class Data {
           return key;
         case "list":
           return at >= 0 ? key.slice(at + 1) : null;
-        case "log":
-          return key.split(SEP)[1] ?? null;
         case "confirmed": {
           const [t, ...rest] = key.split(SEP);
           return stationOf(t, rest.join(SEP));
@@ -534,89 +497,34 @@ export class Data {
   /// Items into a log, by number (an entry's `n`, a transcript item's index); those it has that are the same change
   /// nothing. `cutAfter`: nothing past that number is kept (a transcript written anew, ending there).
   putItems(table: "entry" | "transcript", station: string, id: string, items: [number, unknown][], cutAfter: number | null = null): Effect.Effect<void> {
-    return Effect.flatMap(this.log(table, station, id), (log) => {
+    return Effect.map(this.log(table, station, id), (log) => {
       const ops: DbOp[] = [];
-      let grew = 0;
       for (const [n, value] of items) {
         const before = log.get(n);
         if (before !== undefined && equal(before, value)) continue;
-        const bytes = toJsonBytes(value);
-        grew += bytes.length - (before === undefined ? 0 : toJsonBytes(before).length);
         log.set(n, copy(value));
-        ops.push({ put: { table, key: join([station, id, num(n)]), value: bytes } });
+        ops.push({ put: { table, key: join([station, id, num(n)]), value: toJsonBytes(value) } });
       }
       if (cutAfter !== null) {
         for (const n of [...log.keys()]) {
           if (n > cutAfter) {
-            grew -= toJsonBytes(log.get(n)).length;
             log.delete(n);
             ops.push({ delete: { table, key: join([station, id, num(n)]) } });
           }
         }
       }
-      if (ops.length === 0) return Effect.void;
-      this.#write(ops);
-      const name = join([table, station, id]);
-      const meta = this.#meta(name);
-      // Written: kept (again), its size as it is now; when it was last opened stays (a new one: now).
-      this.put("log", name, { bytes: Math.max(0, (meta?.bytes ?? 0) + grew), opened: meta?.opened ?? this.#host.nowMs() } satisfies LogMeta, false);
-      for (const l of this.#logChanged) l(table, station, id);
-      return this.#evictIfFull;
-    });
-  }
-
-  #meta(name: string): LogMeta | undefined {
-    return this.#records.get("log")?.get(name) as LogMeta | undefined;
-  }
-
-  /// Whether a log was let go to keep within the limit (and its chat not opened since): the sync leaves it alone.
-  evicted(table: "entry" | "transcript", station: string, id: string): boolean {
-    const name = join([table, station, id]);
-    return this.#meta(name)?.evicted === true && !this.#open.has(name);
-  }
-
-  /// A UI shows the log's chat (`open`), or no longer does: it is the most recently opened, and not let go while shown.
-  /// Answers whether it had been let go (the sync is to bring it back).
-  opened(table: "entry" | "transcript", station: string, id: string, open: boolean): boolean {
-    const name = join([table, station, id]);
-    const count = (this.#open.get(name) ?? 0) + (open ? 1 : -1);
-    if (count > 0) this.#open.set(name, count);
-    else this.#open.delete(name);
-    const meta = this.#meta(name);
-    const was = meta?.evicted === true;
-    this.put("log", name, { bytes: meta?.bytes ?? 0, opened: this.#host.nowMs() } satisfies LogMeta, false);
-    return open && was;
-  }
-
-  /// Past the limit: the logs not shown now, the least recently opened first, let go until it is kept to.
-  get #evictIfFull(): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      const metas = [...(this.#records.get("log") ?? new Map()).entries()] as [string, LogMeta][];
-      let total = metas.reduce((sum, [, m]) => sum + m.bytes, 0);
-      if (total <= this.#limit) return;
-      const candidates = metas.filter(([name, m]) => m.bytes > 0 && !this.#open.has(name)).sort(([a, x], [b, y]) => x.opened - y.opened || compareKeys(a, b));
-      for (const [name, m] of candidates) {
-        if (total <= this.#limit) break;
-        const [table, station, ...rest] = name.split(SEP);
-        yield* this.forgetLog(table as "entry" | "transcript", station, rest.join(SEP), true);
-        total -= m.bytes;
+      if (ops.length > 0) {
+        this.#write(ops);
+        for (const l of this.#logChanged) l(table, station, id);
       }
     });
   }
 
-  /// A log known no more (its thread or session went), or let go to keep within the limit (`evict`: its meta says so,
-  /// and when it was last opened).
-  forgetLog(table: "entry" | "transcript", station: string, id: string, evict = false): Effect.Effect<void> {
+  /// A log known no more (its thread or session went).
+  forgetLog(table: "entry" | "transcript", station: string, id: string): Effect.Effect<void> {
     return Effect.map(this.log(table, station, id), (log) => {
       const ops: DbOp[] = [...log.keys()].map((n) => ({ delete: { table, key: join([station, id, num(n)]) } }));
       log.clear();
-      const name = join([table, station, id]);
-      const meta = this.#meta(name);
-      if (evict) this.put("log", name, { bytes: 0, opened: meta?.opened ?? this.#host.nowMs(), evicted: true } satisfies LogMeta, false);
-      else if (meta) {
-        this.#records.get("log")!.delete(name);
-        ops.push({ delete: { table: "log", key: name } });
-      }
       if (ops.length > 0) {
         this.#write(ops);
         for (const l of this.#logChanged) l(table, station, id);
