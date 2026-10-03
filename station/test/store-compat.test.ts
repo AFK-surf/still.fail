@@ -107,7 +107,11 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
       .get() as any ??
       // A station whose chats are all in the archive: any thread with a session (writing brings it back).
       (store.db.prepare(`SELECT thread, session FROM thread_sessions ORDER BY thread DESC LIMIT 1`).get() as any);
-    assert.ok(live, "a thread to write in");
+    if (!live) {
+      // A station with no chat yet (a new one): nothing to write a message into.
+      t.diagnostic("no thread with a session in this station's data: the write cycle is not run");
+      return;
+    }
     {
       const last = store.lastEntry(live.thread);
       const [n, fresh] = store.insertMessage(newMessage(live.thread, "compat.1", "person", "local", "compat test"));
