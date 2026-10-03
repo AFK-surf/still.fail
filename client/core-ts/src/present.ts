@@ -10,7 +10,8 @@ import * as footprint from "./footprint.ts";
 import * as jobsMod from "./jobs.ts";
 import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
-import { arr as arrU, equal, get as getU, isObject, str, u64 } from "./util.ts";
+import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
+import { SHAPES } from "./shapes-schema.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -59,6 +60,7 @@ function windows(list: Record<string, unknown>[], c: Clock): void {
 /// Every time in a value, in words beside it: an object with some gets `time: { <field>: stamp }`; a quota's windows
 /// are put as they are drawn.
 export function times(value: unknown, c: Clock): void {
+  if (value !== null && typeof value === "object" && shaped.has(value)) return;
   if (Array.isArray(value)) {
     for (const v of value) times(v, c);
     return;
@@ -149,6 +151,33 @@ const SHAPED: Record<string, Ty> = {
 
 /// A topic's value through the shape the clients are generated from: what it does not declare is dropped, and a value
 /// it does not allow is an error naming the field.
+/// A topic's shape; undefined for one that goes out as it is.
+export function shapeOf(topic: Topic): Ty | undefined {
+  return SHAPED[topic.topic];
+}
+
+/// The shape of a list's items (`Vec<T>`, `Option<Vec<T>>`).
+export function itemOf(ty: Ty): Ty | undefined {
+  if (typeof ty === "object" && "opt" in ty) return itemOf(ty.opt);
+  return typeof ty === "object" && "vec" in ty ? ty.vec : undefined;
+}
+
+/// The shape of a struct's field.
+export function fieldOf(ty: Ty, field: string): Ty | undefined {
+  if (typeof ty === "object" && "opt" in ty) return fieldOf(ty.opt, field);
+  if (typeof ty !== "string") return undefined;
+  const shape = SHAPES[ty];
+  return shape?.kind === "struct" ? shape.fields.find((f) => f.name === field)?.ty : undefined;
+}
+
+/// An item of a keyed list as `decorate` would make it inside its whole (output.ts).
+export function decorateItem(topic: Topic, item: unknown, c: Clock): unknown {
+  if (!ticks(topic)) return item;
+  if (topic.topic === "sessions") session(item as J);
+  times(item, c);
+  return item;
+}
+
 export function conformTopic(topic: Topic, value: unknown): { ok: unknown } | { error: string } {
   const ty = SHAPED[topic.topic];
   if (ty === undefined) return { ok: value };

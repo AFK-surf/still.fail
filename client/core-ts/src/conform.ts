@@ -2,6 +2,7 @@
 // an absent option left out, a default filled in where the shape says so, and a value of the wrong type is an error
 // naming the field ("items[0].since: invalid type: …"), as serde_path_to_error says it.
 import { SHAPES } from "./shapes-schema.ts";
+import { shaped } from "./util.ts";
 
 export type Ty = string | { opt: Ty } | { vec: Ty } | { map: Ty } | { tuple: Ty[] };
 export type Field = { name: string; ty: Ty; default: boolean; skipNone: boolean };
@@ -100,6 +101,8 @@ export function defaultOf(ty: Ty): unknown {
 }
 
 function walk(v: unknown, ty: Ty, path: string): unknown {
+  // What already went out through its shape (output.ts) is as it went.
+  if (v !== null && typeof v === "object" && shaped.has(v)) return v;
   if (typeof ty === "object") {
     if ("opt" in ty) return v === null || v === undefined ? null : walk(v, ty.opt, path);
     if ("vec" in ty) {
@@ -175,8 +178,13 @@ function walk(v: unknown, ty: Ty, path: string): unknown {
 
 /// The value through the shape `ty`, or why not (`path: what`).
 export function conform(ty: Ty, value: unknown): { ok: unknown } | { error: string } {
+  return conformTy(ty, value);
+}
+
+/// `conform` of a value found at `at` (its errors say where in the whole it is).
+export function conformTy(ty: Ty, value: unknown, at = ""): { ok: unknown } | { error: string } {
   try {
-    return { ok: walk(value, ty, "") };
+    return { ok: walk(value, ty, at) };
   } catch (e) {
     if (e instanceof Wrong) return { error: `${e.path === "" ? "." : e.path}: ${e.inner}` };
     throw e;

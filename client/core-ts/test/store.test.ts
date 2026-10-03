@@ -301,3 +301,21 @@ test("a_first_value_goes_out_without_waiting_the_window", async () => {
     [1, value(2, "s")],
   ]);
 });
+
+test("a_keyed_subscriber_gets_keyed_ops_and_the_others_the_old_ones", async () => {
+  const { host, store, pass } = setup();
+  const rows: Topic = { topic: "chatRows", station: "ws/st" };
+  store.subscribe(1, 10, rows, true);
+  store.subscribe(2, 20, rows);
+  const list = Array.from({ length: 50 }, (_, i) => ({ id: `t${i}`, title: `chat ${i}` }));
+  store.set(rows, { ok: list });
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+  store.set(rows, { ok: [list[30], ...list.filter((_, i) => i !== 30)] });
+  await pass(COALESCE_MS * 2);
+  const [[c1, keyed], [c2, old]] = host.takeEmitted() as [number, { id: number; delta?: unknown; value?: unknown }][];
+  assert.equal(c1, 1);
+  assert.deepEqual(keyed, { id: 10, delta: [{ path: [], key: ["id"], move: "t30", before: "t0" }] });
+  assert.equal(c2, 2);
+  assert.ok(Array.isArray(old.delta) || "value" in old);
+});

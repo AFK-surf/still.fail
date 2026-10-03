@@ -192,6 +192,9 @@ export function compareKeys(a: string, b: string): number {
   return la < lb ? -1 : la > lb ? 1 : 0;
 }
 
+/// What went out of the store as it is (output.ts): never changed after, so it is shared and not shaped again.
+export const shaped = new WeakSet<object>();
+
 /// JSON text as serde_json writes it: keys sorted.
 export function toJson(v: unknown): string {
   return JSON.stringify(sorted(v));

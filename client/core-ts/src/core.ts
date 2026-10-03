@@ -142,7 +142,7 @@ export class Core {
       const store = inner.store;
       // What goes out is what the clients' types say (client/shapes).
       store.setShaped();
-      store.setHeld((topic) => inner.data.shown(topic));
+      store.setHeld((topic) => inner.data.shared(topic));
       inner.data.onChange((topic) => store.changed(topic));
       inner.status.onChange(() => store.invalidateAll((t) => t.topic === "status"));
       inner.scheduler = new Scheduler(inner.runner, inner.runner.root);
@@ -267,7 +267,7 @@ export class Core {
     const inner = this.inner;
     switch (message.kind) {
       case "subscribe":
-        return inner.store.subscribe(client, message.id, message.subscribe);
+        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true);
       case "unsubscribe":
         return inner.store.unsubscribe(client, message.id);
       case "cancel": {

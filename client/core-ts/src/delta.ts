@@ -14,6 +14,7 @@ export function diff(old: unknown, next: unknown): Op[] {
 }
 
 function diffAt(path: Segment[], old: unknown, next: unknown, ops: Op[]): void {
+  if (old === next) return;
   if (isObject(old) && isObject(next)) {
     for (const key of Object.keys(next).sort(compareKeys)) {
       path.push(key);

@@ -88,14 +88,41 @@ Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」�
 声明了的订阅，话题里按 key 的集合（每个话题在 `src/collections.ts` 里声明哪些路径是集合、key 是哪个字段）变了时收到：
 
 ```jsonc
-{ "path": ["days", 0, "items"], "key": "id", "put": { … }, "before": "k2" }   // 插入或整项替换；before：放在 key 为 k2 的项前面，null 放最后；省略：原地
-{ "path": ["days", 0, "items"], "key": "id", "patch": "k1", "ops": [ … ] }    // 只改 key 为 k1 的那一项：ops 是相对那一项的老式/新式 op
-{ "path": ["days", 0, "items"], "key": "id", "drop": "k1" }                   // 删掉
-{ "path": ["days", 0, "items"], "key": "id", "move": "k1", "before": null }    // 只挪位置
+{ "path": ["days"], "key": ["daysAgo"], "patch": 0, "ops": [ … ] }                          // 只改 key 为 0 的那一项：ops 相对那一项（可以再是按 key 的）
+{ "path": ["days", 0, "items"], "key": ["station", "id"], "put": { … }, "before": ["ws/a", "k2"] } // 插到 key 为 k2 的项前面；before 为 null 放最后；没有 before：原地整项替换
+{ "path": ["days", 0, "items"], "key": ["station", "id"], "drop": ["ws/a", "k1"] }           // 删掉
+{ "path": ["days", 0, "items"], "key": ["station", "id"], "move": ["ws/a", "k1"], "before": null } // 只挪位置
 ```
 
-老式 op（`set`、`append`、`remove`）照旧可用；集合以外的部分照旧用它们。没声明 `keyed` 的订阅收到的是同一变化的老式
-表达（集合整列 `set`，或整值）。
+`key` 是组成 key 的字段名列表；key 的值是那个字段的值（一个字段时），或各字段的值按顺序组成的数组（缺的字段算 null）。
+同一列表里 key 重复（或缺）时，这个列表照老式 op 发。老式 op（`set`、`append`、`remove`）照旧可用；集合以外的部分照旧用它们。
+没声明 `keyed` 的订阅收到同一变化的老式表达（按下标 diff，比整值大就发整值），和 Rust 一样。
+
+集合（`src/collections.ts` 的 `SPECS`）：`chats`（days 按 `daysAgo`，每天的 items 按 `station`+`id`）、`chatSearch`、`chat`
+（messages 按 `seq`+`outgoing`，outbox 按 `id`）、`decisions`（items 按 `station`+`session`+`seq`）、`archive`、`chatRows`、
+`archivedRows`、`threads`、`sessions`（`key`）、`jobs`。
+
+应用器：web `web/src/core/delta.ts`（页面和桌面主进程共用）、安卓 `apps/android/core/.../Delta.kt`；两边只复制路径上的
+数组/对象，没动的项是原来的对象。安卓的 `ChatsDecoder`（和原有的 `ChatDecoder`）按 JSON 对象的同一性复用解码好的
+`ChatItem`，所以 Compose 只重组变了的行。web 的 client 和安卓的 bridge 订阅时都带 `keyed: true`（Rust core 忽略它）。
+
+core 这边怎么做到「一行变只算一行」：
+- 记录在 `Data` 里冻结（只会被整条替换），`store` 读持有的话题用 `data.shared()`，不复制；没变的记录每次读都是同一个对象。
+- 视图按记录做行（`views.ts` 的 `#rowsMade`：记录对象 + 这行用到的其余东西的签名 → 做好的行，冻结），没变的行不再做。
+- 输出（`src/output.ts`）按集合逐项装饰（时间文字）和过 shape，项和上次是同一个对象（或相等）且在同一分钟内，就直接用上次
+  发出去的那个对象；diff 遇到同一对象直接跳过。
+
+测量（studio，`node bench/keyed.ts`，2000 个 chat 分在 3 台 station，30 次取中位数；「整算」= 本分支 rule 7 之前的 TS core，
+即 Rust 的做法：整个视图重算、整值装饰和过 shape、按下标 diff）：
+
+| 变化 | 方式 | 发出字节 | core 耗时 | UI 解析+应用 | UI 拿到的新行对象 |
+|---|---|---|---|---|---|
+| 一行 unread 变了（原地） | 整算 + 老式 op | 122 | 101 ms | 0.10 ms | 1 |
+| | 按 key | 208 | 5.1 ms | 0.09 ms | 1 |
+| 一行来了新消息、挪到最上面 | 整算 + 老式 op | 110 682 | 100 ms | 0.43 ms | 136 |
+| | 按 key | 1 109 | 5.4 ms | 0.10 ms | 1 |
+
+（同样的改动下老式订阅者的 core 耗时也降到 17–19 ms：行和输出的复用对两种订阅都有效，差的是按下标 diff 和整值称重。）
 
 ## 刻意和 Rust core 不同的地方
 
@@ -111,7 +138,8 @@ Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」�
   列表也由同步维护，不靠订阅触发。
 - 规则 1：Host 的接口是 Effect（Rust 是 future），流式的 body 和 WebSocket 是在 scope 里的 pull 句柄，scope 关了就关。
 - 规则 7：Rust 每次把话题整个重算再和上次发的整值做 JSON diff（数组按下标比，开头插一行后面全部 set）；TS 按记录变化
-  只重算受影响的项，集合按 key 发增量（声明 `keyed` 的订阅）。
+  只重算受影响的项，集合按 key 发增量（声明 `keyed` 的订阅）。没变的项在同一分钟内直接用上次发出的对象，所以它的
+  时间文字（「3 分钟前」）跟着每分钟的整体刷新走，不会因为别的行变了而顺带刷新（Rust 每次发都重算全部时间文字）。
 - 规则 2：老 station 不跟随 job 日志时，Rust 每 2 秒起退避重读 `/jobs/:id/log`；TS 不重读，只在事件里更新（老 station 上
   日志面板不再自动增长，打开时读一次）。
 - 规则 2：`job` 话题 Rust 每半分钟（老 station 每 4 秒）重读 `/jobs/:id`；TS 只靠 `job` 事件。
@@ -172,11 +200,12 @@ cloud 的端口、`doing` 的 `since`。
   pill、choose、changelog、asks、forms、preview_load、mesh 的大部分；合计 252 个测试通过（`node --test --test-force-exit`）。
 - adb 共享（`src/adb.ts`，host 给 TCP：Node 用 `net`）；Rust kept 分块的一次性导入（`src/kept.ts`，存储标记 `kept-read`，
   原分块不删，退回 Rust 仍可用）。
+- 规则 7：按 key 的增量（`src/collections.ts`、`src/output.ts`、Data 冻结记录 + `shared()`、视图按记录复用行）、web 和安卓
+  应用器、安卓 `ChatsDecoder`、2000 行测量（见上面「按 key 的增量」）。
 
 还没做（接手从这里开始）：
 - 剩下的 Rust 测试：`core/tests.rs`（56）、`station/tests.rs`（45）、`kept.rs`、`data.rs`、`sync.rs`、`account_state`、
   mesh 里要 relay 服务器的几个。
-- 规则 7（按 key 的增量）：`src/collections.ts`、Store 支持 `keyed`、web 和安卓的 delta 应用器、2000 行的对比测量。
 - host：桌面 utilityProcess 换成 `src/hosts/node.ts`；web worker host + 只含 iroh 的 wasm；安卓 Hermes + JNI iroh。
 - 对照运行加上 station（假 station 走 HostWire）的步骤，更新刻意不同的清单。
 

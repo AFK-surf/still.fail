@@ -33,3 +33,28 @@ internal class ChatDecoder {
         return view.copy(messages = messages)
     }
 }
+
+/**
+ * One chat list subscription's typed rows: a row whose JSON is the instance it was (a keyed delta touches only the
+ * rows that changed, and the bridge keeps the rest) is the `ChatItem` decoded before, so the list redraws only the
+ * rows that changed. Only the rows of the current value are retained.
+ */
+internal class ChatsDecoder {
+    private var decoded = IdentityHashMap<JsonElement, ChatItem>()
+
+    fun read(value: JsonElement): ChatsView {
+        val body = value as? JsonObject ?: return decode(ChatsView.serializer(), value)
+        val days = body["days"] as? JsonArray ?: return decode(ChatsView.serializer(), value)
+        // Everything but the rows through the generated serializer (it checks every field); the rows each with theirs.
+        val bare = JsonArray(days.map { day -> (day as? JsonObject)?.let { JsonObject(it + ("items" to JsonArray(emptyList()))) } ?: day })
+        val view = decode(ChatsView.serializer(), JsonObject(body + ("days" to bare)))
+        val next = IdentityHashMap<JsonElement, ChatItem>()
+        val filled = view.days.mapIndexed { i, day ->
+            val items = ((days[i] as? JsonObject)?.get("items") as? JsonArray).orEmpty()
+            day.copy(items = items.map { item -> (decoded[item] ?: decode(ChatItem.serializer(), item)).also { next[item] = it } })
+        }
+        // Kept only once the whole value decoded: a malformed one must not poison it.
+        decoded = next
+        return view.copy(days = filled)
+    }
+}

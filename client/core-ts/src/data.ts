@@ -114,6 +114,15 @@ function idText(id: unknown): string | null {
   return null;
 }
 
+/// Frozen all through (a record as kept: replaced, never changed).
+function frozen<T>(v: T): T {
+  if (v !== null && typeof v === "object" && !Object.isFrozen(v)) {
+    for (const k of Object.keys(v)) frozen((v as Record<string, unknown>)[k]);
+    Object.freeze(v);
+  }
+  return v;
+}
+
 function copy<T>(v: T): T {
   return v === null || v === undefined || typeof v !== "object" ? v : structuredClone(v);
 }
@@ -184,7 +193,7 @@ export class Data {
       }
       for (const [table, key, value] of found) {
         const t = this.#table(table);
-        if (!t.has(key)) t.set(key, value);
+        if (!t.has(key)) t.set(key, frozen(value));
       }
       this.#tellAll();
     });
@@ -204,6 +213,27 @@ export class Data {
       if (typeof id !== "string") continue;
       const item = items?.get(join([scope, id]));
       if (item !== undefined) out.push(copy(item));
+    }
+    return out;
+  }
+
+  /// A held topic's value as it is kept, not copied: its records are frozen (they are replaced, never changed), so
+  /// what reads it shares them and a record that did not change is the same object from one read to the next (what
+  /// the views keep their rows by: rule 7). A list is a new array of them.
+  shared(topic: Topic): unknown {
+    const s = shape(topic);
+    if (!s) return undefined;
+    if (topic.topic === "overview" && [...this.#modelEdits.keys()].some((k) => k.startsWith(String(topic.station) + SEP))) return this.shown(topic);
+    if ("one" in s) return this.#records.get(s.one.table)?.get(s.one.key);
+    const { table, scope } = s.list;
+    const ids = this.#records.get("list")?.get(join([table, scope]));
+    if (!Array.isArray(ids)) return undefined;
+    const items = this.#records.get(table);
+    const out: unknown[] = [];
+    for (const id of ids) {
+      if (typeof id !== "string") continue;
+      const item = items?.get(join([scope, id]));
+      if (item !== undefined) out.push(item);
     }
     return out;
   }
@@ -248,7 +278,7 @@ export class Data {
     const t = this.#table(table);
     if (t.has(key) && equal(t.get(key), value)) return;
     ops.push({ put: { table, key, value: toJsonBytes(value) } });
-    t.set(key, copy(value));
+    t.set(key, frozen(copy(value)));
   }
 
   /// When the record was last confirmed by its source; null if never.
@@ -304,7 +334,7 @@ export class Data {
     const t = this.#table(table);
     if (t.has(key) && equal(t.get(key), value)) return;
     this.#soon.set(join([table, key]), [table, key, toJsonBytes(value)]);
-    t.set(key, copy(value));
+    t.set(key, frozen(copy(value)));
     this.#tell(topic);
     if (this.#flushing) return;
     this.#flushing = true;

@@ -63,10 +63,11 @@ fun <T> decode(serializer: KSerializer<T>, json: JsonElement): T = try {
 /** A topic's states, decoded: what both ways of following one below read. */
 private fun <T> follow(core: StillFailCore, topic: JsonObject, serializer: KSerializer<T>): Flow<Topic<T>> {
     val chat = if (serializer.descriptor == ChatView.serializer().descriptor) ChatDecoder() else null
+    val chats = if (serializer.descriptor == ChatsView.serializer().descriptor) ChatsDecoder() else null
     return core.topic(topic).conflate().map<TopicState, Topic<T>> { state ->
         try {
             @Suppress("UNCHECKED_CAST")
-            Topic(state.value?.takeIf { it !is JsonNull }?.let { if (chat != null) chat.read(it) as T else decode(serializer, it) }, state.error, state.loading)
+            Topic(state.value?.takeIf { it !is JsonNull }?.let { if (chat != null) chat.read(it) as T else if (chats != null) chats.read(it) as T else decode(serializer, it) }, state.error, state.loading)
         } catch (e: CoreException) {
             // What this app cannot read is its bug or the core's: recorded with the rest of the trace, not only shown.
             core.reportError("android.decode", "${topic["topic"]}: ${e.message}")

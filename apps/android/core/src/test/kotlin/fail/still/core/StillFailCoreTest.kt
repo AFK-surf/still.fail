@@ -209,7 +209,7 @@ class StillFailCoreTest {
         // The same topic written in another order is the same subscription.
         val second = launch { core.topic(obj("""{"station":"w/s","topic":"sessions"}""")).collect {} }
         runCurrent()
-        assertEquals(listOf(json("""{"id":1,"subscribe":{"topic":"sessions","station":"w/s"}}""")), engines.last.sent)
+        assertEquals(listOf(json("""{"id":1,"subscribe":{"topic":"sessions","station":"w/s"},"keyed":true}""")), engines.last.sent)
         engines.last.reply("""{"id":1,"value":[]}""")
         runCurrent()
         engines.last.reply("""{"id":1,"error":{"code":"offline","message":"离线"}}""")
@@ -240,7 +240,7 @@ class StillFailCoreTest {
         val again = mutableListOf<TopicState>()
         val third = launch { core.topic(obj("""{"topic":"sessions","station":"w/s"}""")).collect { again += it } }
         runCurrent()
-        assertEquals(json("""{"id":2,"subscribe":{"topic":"sessions","station":"w/s"}}"""), engines.last.sent.last())
+        assertEquals(json("""{"id":2,"subscribe":{"topic":"sessions","station":"w/s"},"keyed":true}"""), engines.last.sent.last())
         assertEquals(listOf(TopicState(null, null, true)), again)
         third.cancel()
     }
@@ -258,7 +258,7 @@ class StillFailCoreTest {
         val back = launch { core.topic(topic).collect { seen += it } }
         advanceTimeBy(5000)
         runCurrent()
-        assertEquals(listOf(json("""{"id":1,"subscribe":{"topic":"accounts"}}""")), engines.last.sent)
+        assertEquals(listOf(json("""{"id":1,"subscribe":{"topic":"accounts"},"keyed":true}""")), engines.last.sent)
         assertEquals(listOf(TopicState(json("[]"), null, false)), seen)
         back.cancel()
     }
@@ -322,7 +322,7 @@ class StillFailCoreTest {
         expectError("core_restarted") { pending.await() }
         assertTrue(old.closed)
         assertEquals(2, engines.opened.size)
-        assertEquals(listOf(json("""{"id":1,"subscribe":{"topic":"accounts"}}""")), engines.last.sent)
+        assertEquals(listOf(json("""{"id":1,"subscribe":{"topic":"accounts"},"keyed":true}""")), engines.last.sent)
         // The old core's late words are not the new one's.
         old.reply("""{"id":1,"value":"stale"}""")
         engines.last.reply("""{"id":1,"value":["a"]}""")
@@ -395,5 +395,20 @@ class DeltaTest {
         )) {
             assertEquals(op, value, applyDelta(value, Json.parseToJsonElement("[$op]") as JsonArray))
         }
+    }
+
+    @Test
+    fun appliesKeyedOpsKeepingUntouchedItems() {
+        val value = Json.parseToJsonElement("""{"days":[{"daysAgo":0,"items":[{"station":"a","id":"1"},{"station":"b","id":"1"},{"station":"a","id":"2","n":1}]}]}""")
+        fun apply(ops: String) = applyDelta(value, Json.parseToJsonElement(ops) as JsonArray)
+        val k = """"key":["station","id"]"""
+        val patched = apply("""[{"path":["days"],"key":["daysAgo"],"patch":0.0,"ops":[{"path":["items"],$k,"patch":["a","2"],"ops":[{"path":["n"],"set":2}]}]}]""")
+        assertEquals(Json.parseToJsonElement("""{"days":[{"daysAgo":0,"items":[{"station":"a","id":"1"},{"station":"b","id":"1"},{"station":"a","id":"2","n":2}]}]}"""), patched)
+        val items = { v: JsonElement -> v.jsonObject["days"]!!.jsonArray[0].jsonObject["items"]!!.jsonArray }
+        assertTrue(items(patched)[0] === items(value)[0])
+        val moved = apply("""[{"path":["days",0,"items"],$k,"move":["a","2"],"before":["a","1"]},{"path":["days",0,"items"],$k,"drop":["b","1"]},{"path":["days",0,"items"],$k,"put":{"station":"c","id":"9"},"before":null}]""")
+        assertEquals(Json.parseToJsonElement("""[{"station":"a","id":"2","n":1},{"station":"a","id":"1"},{"station":"c","id":"9"}]"""), items(moved))
+        val replaced = apply("""[{"path":["days",0,"items"],$k,"put":{"station":"b","id":"1","x":true}}]""")
+        assertEquals(Json.parseToJsonElement("""{"station":"b","id":"1","x":true}"""), items(replaced)[1])
     }
 }

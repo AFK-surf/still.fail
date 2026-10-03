@@ -44,7 +44,7 @@ test("subscription values and errors go to their subscriber until it unsubscribe
   const client = workers.client();
   const seen: unknown[] = [];
   const stop = client.subscribe({ topic: "sessions", station: "w/s" }, (v) => seen.push(v), (e) => seen.push(e.code));
-  assert.deepEqual(workers.last.sent, [{ id: 1, subscribe: { topic: "sessions", station: "w/s" } }]);
+  assert.deepEqual(workers.last.sent, [{ id: 1, subscribe: { topic: "sessions", station: "w/s" }, keyed: true }]);
   workers.last.reply({ id: 1, value: [] });
   workers.last.reply({ id: 1, error: { code: "offline", message: "离线" } });
   workers.last.reply({ id: 1, value: [{ key: "k" }] });
@@ -69,7 +69,7 @@ test("a failed worker is replaced: calls in flight fail, subscriptions come back
   await assert.rejects(pending, (error: unknown) => error instanceof CoreError && error.code === "core_restarted");
   assert.equal(old.closed, true);
   assert.equal(workers.opened.length, 2);
-  assert.deepEqual(workers.last.sent, [{ id: 1, subscribe: { topic: "accounts" } }]);
+  assert.deepEqual(workers.last.sent, [{ id: 1, subscribe: { topic: "accounts" }, keyed: true }]);
   // The old worker's late words are not the new one's.
   old.reply({ id: 1, value: "stale" });
   workers.last.reply({ id: 1, value: ["a"] });
@@ -115,7 +115,7 @@ test("calls made while the worker is being replaced are sent once it is up", () 
   assert.equal(workers.opened.length, 1);
   assert.ok(later);
   (later as () => void)();
-  assert.deepEqual(workers.last.sent, [{ id: 2, subscribe: { topic: "workspaces" } }, { id: 1, call: "auth.begin", params: { redirect_uri: "r" } }]);
+  assert.deepEqual(workers.last.sent, [{ id: 2, subscribe: { topic: "workspaces" }, keyed: true }, { id: 1, call: "auth.begin", params: { redirect_uri: "r" } }]);
 });
 
 test("back from the back/forward cache: bye, then everything subscribed again", async () => {
@@ -126,7 +126,7 @@ test("back from the back/forward cache: bye, then everything subscribed again", 
   client.suspend();
   client.resume();
   await assert.rejects(pending);
-  assert.deepEqual(workers.last.sent.slice(2), [{ bye: true }, { id: 1, subscribe: { topic: "session", station: "local", key: "k" } }]);
+  assert.deepEqual(workers.last.sent.slice(2), [{ bye: true }, { id: 1, subscribe: { topic: "session", station: "local", key: "k" }, keyed: true }]);
 });
 
 test("back after being away: the core is told, and a worker that was up and now says nothing is replaced", () => {
@@ -151,7 +151,7 @@ test("back after being away: the core is told, and a worker that was up and now 
   assert.equal(old.closed, true);
   assert.deepEqual(old.sent.at(-1), { bye: true });
   assert.equal(workers.opened.length, 2);
-  assert.deepEqual(workers.last.sent, [{ id: 1, subscribe: { topic: "accounts" } }]);
+  assert.deepEqual(workers.last.sent, [{ id: 1, subscribe: { topic: "accounts" }, keyed: true }]);
 });
 
 test("desktop: posts wait for the core's port, go out as objects and come back as its JSON; the core exiting fails the channel", async () => {
