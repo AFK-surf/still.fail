@@ -8,6 +8,10 @@ license.workspace = true
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+# Stations answering at the cloud's origin (STILLFAIL_HOST_WIRE): the side-by-side run, client/core-ts/harness.
+testing = ["stillfail-core-ffi/testing"]
+
 [dependencies]
 stillfail-core-ffi = { path = "../ffi" }
 napi = "3"

@@ -13,6 +13,7 @@ import WebSocket from "ws";
 import { connect as tcpConnect } from "node:net";
 import { Core } from "../core.ts";
 import { nodeIroh } from "./node-iroh.ts";
+import { HostWire } from "../station/wire.ts";
 import { HostError } from "../error.ts";
 import { SOCKET_PING, SOCKET_PING_MS, type TcpConnection, type DbOp, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
@@ -258,7 +259,9 @@ export class NodeHost implements Host {
 /// client/node's `start`: a core whose messages go to `listener(client, json)`; `channel` "beta" for a beta app's.
 /// A bug that ends a fiber ends the core as a panic ends client/ffi's: each client is told `{"fatal": …}` and the host
 /// starts another (apps/desktop/src/core.ts).
-export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string) {
+/// `hostWire`: its stations answer at the cloud's origin over plain HTTP, not on the mesh (the side-by-side run,
+/// harness/run.ts).
+export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean } = {}) {
   service.name = "stillfail-native";
   service.os = process.platform === "darwin" ? "macos" : process.platform;
   const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener);
@@ -273,7 +276,7 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
     void ready.then((core) => core.close(), () => {});
   };
   // Messages that arrive while the core starts wait, in order (client/ffi's queue).
-  const ready = Core.create(host, { iroh: nodeIroh() }).then((core) => {
+  const ready = Core.create(host, options.hostWire ? { iroh: null, wire: () => new HostWire(host) } : { iroh: nodeIroh() }).then((core) => {
     core.inner.runner.onDefect = fatal;
     core.keepTime();
     return core;

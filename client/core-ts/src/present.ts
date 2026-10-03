@@ -829,7 +829,7 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
   const v = value as J;
   switch (topic.topic) {
     case "sessions":
-      for (const s of arr(v) ?? []) session(s);
+      for (const s of arr(v) ?? []) if (!shaped.has(s)) session(s);
       break;
     case "session":
       if (isObject(v) && v.session !== undefined) session(v.session);

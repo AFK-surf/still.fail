@@ -3,6 +3,7 @@
 // change it between steps and push events as the real cloud would.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
+import { FakeStation } from "./station.ts";
 
 export type User = { sub: string; email: string; name: string; picture: string; beta?: boolean };
 export type Workspace = { id: string; name: string; role: string; created_at: number; members: unknown[]; stations: Station[]; invitations: unknown[] };
@@ -30,6 +31,8 @@ export class FakeCloud {
   #next = 1;
   /// Answer pings with pong (a cloud from before them does not).
   pongs = true;
+  /// Every station of every workspace, answering at this origin (harness/station.ts).
+  readonly station = new FakeStation();
 
   constructor() {
     this.addUser({ sub: "u-alice", email: "alice@x.test", name: "Alice", picture: "https://pic.test/alice" });
@@ -98,6 +101,7 @@ export class FakeCloud {
     const path = url.pathname;
     const method = req.method ?? "GET";
     this.log.push(`${method} ${path}`);
+    if (this.station.handle(req, res, url, body)) return;
     const send = (status: number, value: unknown) => {
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(value));
@@ -235,6 +239,7 @@ export class FakeCloud {
   }
 
   close(): Promise<void> {
+    this.station.close();
     for (const s of this.sockets) s.ws.terminate();
     this.#wss?.close();
     return new Promise((resolve) => (this.#server ? this.#server.close(() => resolve()) : resolve()));
