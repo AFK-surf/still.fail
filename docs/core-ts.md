@@ -154,6 +154,25 @@ core 这边怎么做到「一行变只算一行」：
   进来时由同步发（每次运行每个 profile 一次），和页面开没开无关。
 - 规则 6：更新日志（`changelog`）Rust 在页面打开时读（一小时最多一次）；TS 在 core 启动和每次账号的 events socket 打开时
   由同步读，页面只读记录。
+- 规则 6：station 的 `/events` 流在 station 能到时一直开着（Rust 在没有任何 station 话题时关掉它）；断了按退避重连，每次打开
+  把 station 整个读一遍（交给调度器）。
+- 规则 3、6：Rust 每个 thread 只保留一段连续的 entries（`kept.rs` 的 extend：隔着缺口的丢掉），前面只预读一页；TS 把每个
+  thread 的全部 entries 都同步到本机（先最新一页，再往前一页一页补，缺口按 `from..to` 只读缺的那段），听到的每条都留下。
+  所以「往上翻」「打开 chat」基本不再请求。
+- 规则 3、6：Rust 的 kept 分块有 50 MB 上限，最久没打开的先丢；TS 保留能到的 station 的全部记录，只在没有任何已登录账号
+  能到某台 station 时删它的记录（`Data.retain`）。
+- 规则 3：transcript 收到「比已有的更后」的一页（中间有缺口）时 Rust 丢掉之前的，TS 留着，`live` 话题显示结尾那一段连续的；
+  被改写得更短时（`start` 小于已有的末尾，哪怕 entries 为空）都从 `start` 截断。
+- 规则 3：`thread` 话题里的 `thread`（摘要）就是记录，跟着事件和事件后的摘要重读更新；Rust 停在窗口打开时的样子
+  （对照运行里「发消息」「agent 回复」「读到底」「别处来的消息」四步因此不同）。
+- 规则 6：一次读失败（5xx、链路断）由同步过一会再读（2 秒起翻倍，最多 5 次）；Rust 是话题自己在 RETRY_MS 后重读。
+- 规则 6：打开一个哪个列表里都没有的 chat（旧通知的链接）时，同步被告知它存在，去读它的 entries；读到 403/404/410 时话题
+  报错（Rust 是话题打开时自己读）。
+- 规则 6：发消息后 station 回答了 `n`，TS 先把 thread 记录的 `last` 提到 `n`，再读 `after=<已有的末尾>`（Rust 读 `after`
+  也是这样，但它的 `last` 不在记录里）。
+- 测试：mesh 的「慢 relay 换到快的」Rust 手工经 relay a 建链；TS 先只给 relay a 建链，再把 b 加进 relay 列表后测量
+  （`remeasure`），行为相同。`mesh/app` 里 automatic decisions 的测试原来用 `stillfail_shapes::conform` 检查形状，
+  Rust 的客户端形状删掉后改成检查字段和类型。
 
 ## 进度与交接（随做随更新）
 
@@ -162,16 +181,23 @@ core 这边怎么做到「一行变只算一行」：
 在 studio 上跑：`rsync` 到 `~/ember-wt/core-ts/`，`cd client/core-ts && pnpm install && node --test test/*.test.ts`。
 
 写法：
-- 异步 IO 是 Promise；定时一律走 `Runner`（`src/runtime.ts`，Effect 的 Clock），长活（cloud 的 events socket）是 Effect fiber；
-  测试用 `TestTime`（`src/testing.ts`，TestClock 外包一层记下每次 sleep），`host.time.pass(ms)` 推时间。
-- 发给 UI 的值经过 `conform`（`src/conform.ts`）：形状表 `src/shapes-schema.ts` 由 `scripts/shapes-schema.ts` 从
-  `client/shapes` 的 Rust 源生成（`--check` 检查是否过期），报错文字照 serde 的写法。
+- 一切异步都是 Effect：Host 的每个操作返回 Effect，call、订阅、station 链路、cloud socket、同步都是 `Runner`
+  （`src/runtime.ts`）的 scope 里的 fiber，取消就是 interrupt；定时一律走 Effect 的 Clock（不直接用 setTimeout）。
+  测试用 `TestTime`（`src/testing.ts`，TestClock 外包一层记下每次 sleep），`host.time.pass(ms)` 推时间；mesh 测试用真时间，
+  要快的计时用 `quickClock()`（test/mesh.test.ts，照 mesh.rs 测试的 QuickHost）。
+- 发给 UI 的值经过 `conform`（`src/conform.ts`）：形状的源头是 `src/shapes/schema.ts`（`struct`/`words`/`tagged`，带文档，
+  `src/shapes/dsl.ts`）；`node scripts/shapes.ts` 由它生成 `web/src/core/shapes.ts` 和安卓的 `data/Shapes.kt`（`--check`
+  在 typecheck、check.sh、安卓构建里跑，防漂移）。操作的参数约定是 `src/ops.ts` 的 `PARAMS`，`scripts/operations.ts` 生成
+  两端的 bindings，`test/ops-contracts.test.ts` 检查每个操作读的正好是约定的字段。报错文字照 serde 的写法。
 - trace 的上下文在 JS 里没法跨 await 自动带，所以显式传（`ctx` 参数）。
 - 参数校验的错误文字照 serde（`src/core/params.ts`），UI 看到的和 Rust core 一样。
 - JSON 的对象键按 serde_json 的顺序（排序）写盘和算 delta（`util.ts` 的 `toJson`/`compareKeys`）。
 
-对照运行：`client/core-ts/harness/`（假 cloud `cloud.ts`、脚本 `script.ts`、`run.ts`）。Rust 一侧是 studio 上
-`cd client && cargo build --release -p stillfail-core-node` 出的 `target/release/libstillfail_core_node.dylib`（拷成 `.node`）。
+对照运行：`client/core-ts/harness/`（假 cloud `cloud.ts`、假 station `station.ts`、脚本 `script.ts`、`run.ts`）。Rust core
+已删（2d8a53ab）；Rust 一侧要从还有它的提交 7091dc84 编：在那个提交的检出里 `cd client && cargo build --release -p
+stillfail-core-node --features testing`，把 `target/release/libstillfail_core_node.dylib` 拷成 `.node`。两边的 station 都经
+host wire 走 cloud 的 origin（Rust：`STILLFAIL_HOST_WIRE=1`；TS：`start(…, { hostWire: true })`）。结果（2026-10-03）：
+54 步里 48 步一样、6 步按设计不同（脚本里 `deliberate` 写了原因），最终状态一样。
 `node harness/run.ts <addon>`：每一步比较两边发给 UI 的全部消息（同一订阅/调用内的顺序必须一样；不同订阅之间的先后
 按各自 core 的调度，Rust 那边本来就随 HashMap 顺序变）和每个订阅应用 delta 后的值。只抹掉 PKCE 的 state/challenge、
 cloud 的端口、`doing` 的 `since`。
@@ -227,10 +253,17 @@ cloud 的端口、`doing` 的 `since`。
 - 规则 7：按 key 的增量（`src/collections.ts`、`src/output.ts`、Data 冻结记录 + `shared()`、视图按记录复用行）、web 和安卓
   应用器、安卓 `ChatsDecoder`、2000 行测量（见上面「按 key 的增量」）。
 
+- Rust 的测试全部移植（2026-10-03）：`station/tests.rs`、`kept.rs`（改成对记录的测试，`test/data.test.ts`）、`data.rs`、
+  `sync.rs`、`wake.rs`、mesh 里要 relay 的（测试自己起 `iroh-relay --dev`，`STILLFAIL_RELAY_BIN`，默认
+  `~/.config/ember-spike/relay/iroh-relay`）、entries/activity/brand/doing/marks。Rust 的 357 个测试名在 `test/` 里都有；
+  core-ts 共 384 个测试。mesh 插件为「握手不答」的测试加了 `holdIncoming(n)`。
+- 对照运行加了 station（见上）。
+- Rust core 删了（2d8a53ab）：`client/core`、`client/wasm`、`client/node`、`client/ffi`；`client/shapes` 只剩 Rust station
+  （mesh/）共用的词和读法；客户端类型和操作 bindings 由 TS 生成（见「写法」）；check.sh、CI 的检查跟着改（构建步骤本来就
+  走 `apps/desktop/build.sh`、`apps/android/build.py`、`build:cloud`，它们已是 TS core）；`docs/client-core.md` 重写。
+
 还没做（接手从这里开始）：
-- 剩下的 Rust 测试：`core/tests.rs`（56）、`station/tests.rs`（45）、`kept.rs`、`data.rs`、`sync.rs`、`account_state`、
-  mesh 里要 relay 服务器的几个。
-- 对照运行加上 station（假 station 走 HostWire）的步骤，更新刻意不同的清单。
+- studio 上的整套验证和测量（见下「测量」），以及安卓模拟器端到端。
 
 此前（第一版，照 Rust 写的，已被上面取代）：
 1. 第 1 期（2026-10-03）：协议、Host、Store/delta、data center、accounts、cloud、status、workspace、wake、trace、ops、
