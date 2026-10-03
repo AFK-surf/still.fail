@@ -547,7 +547,10 @@ export class StationsSync {
         else {
           const missing = this.#missing(address, id, held);
           if (missing === null) return;
-          path = `/threads/${id}/entries?from=${Math.max(1, missing - PAGE + 1)}&to=${missing}`;
+          // The gap only: from just past the held entry below it, a page at most.
+          let below = 0;
+          for (const n of held.keys()) if (n < missing && n > below) below = n;
+          path = `/threads/${id}/entries?from=${Math.max(below + 1, missing - PAGE + 1)}&to=${missing}`;
         }
       }
       const answer = yield* Effect.result(this.requests.call(link.addr, "GET", path, null, { quiet: true }));
