@@ -15,7 +15,7 @@ import {
   rmSync, statSync, symlinkSync, watch, writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { Clock, Effect, Exit, FiberSet, Scope } from "effect";
+import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store, nowMs } from "../store/store.ts";
@@ -38,6 +38,8 @@ const AWAKE_MS = 5 * 60_000;
 /// How long a stop waits for a job's group to end before it is killed, and then for its end to be taken in.
 const STOP_GRACE_MS = 5000;
 const STOP_SETTLE_MS = 3000;
+/// How often a stopping job's group is looked at, once its leader is gone, for members it left behind.
+const STOP_LOOK_MS = 100;
 /// How often a job an earlier station started is looked at (its end when it wrote no exit file).
 const FOLLOW_LOOK_MS = 1000;
 /// What /jobs/notify takes at most.
@@ -165,6 +167,8 @@ export class Jobs {
   private scope: Scope.Closeable;
   /// Runs an effect as a fiber of these jobs' (a service's restart pause, a followed job's end): they end with it.
   private run: (effect: Effect.Effect<void>) => Promise<void>;
+  /// Runs an effect on the jobs' clock but apart from them (a stop's grace goes on through a shutdown).
+  private timed: (effect: Effect.Effect<void>) => Promise<void>;
   /// What waits for an exit file to appear, by job id; the watch on jobs/exit that tells them.
   private exitHeard = new Map<string, () => void>();
   private exitWatch: FSWatcher | null = null;
@@ -194,6 +198,8 @@ export class Jobs {
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
+    const clock = options.clock;
+    this.timed = (effect) => Effect.runPromise(clock ? effect.pipe(Effect.provideService(Clock.Clock, clock)) : effect);
   }
 
   /// Where `stillfail-job notify` posts, once the endpoint listens.
@@ -319,29 +325,30 @@ export class Jobs {
     ).catch(() => undefined);
   }
 
-  /// The end of a job an earlier station started (not this one's child): its exit file appearing, or its leader gone.
+  /// The end of a job an earlier station started (not this one's child): its exit file appearing (heard from the watch
+  /// on jobs/exit), or its leader gone (looked at once a second: that end writes no file and has no event).
   private leaderGone(id: string, pgid: number): Effect.Effect<void> {
-    return Effect.callback<void>((resume) => {
-      const exit = this.exitFile(id);
+    const exit = this.exitFile(id);
+    const over = () => existsSync(exit) || !pidAlive(pgid);
+    const heard = Effect.callback<void>((resume) => {
       let done = false;
       const look = () => {
-        if (done) return;
-        if (existsSync(exit) || !pidAlive(pgid)) {
-          done = true;
-          resume(Effect.void);
-        }
+        if (done || !existsSync(exit)) return;
+        done = true;
+        resume(Effect.void);
       };
       this.exitHeard.set(id, look);
       this.watchExits();
-      const timer = setInterval(look, FOLLOW_LOOK_MS);
-      timer.unref();
-      look();
       return Effect.sync(() => {
         done = true;
-        clearInterval(timer);
         if (this.exitHeard.get(id) === look) this.exitHeard.delete(id);
       });
     });
+    const looked = Effect.sync(over).pipe(
+      Effect.repeat({ schedule: Schedule.spaced(FOLLOW_LOOK_MS), until: (gone) => gone }),
+      Effect.asVoid,
+    );
+    return Effect.race(looked, heard);
   }
 
   /// The watch on jobs/exit (one for all followed jobs), while any is followed.
@@ -437,15 +444,21 @@ export class Jobs {
     ).catch(() => undefined);
   }
 
-  /// Waits for `promise` at most `ms`; whether it came.
-  private within(promise: Promise<void>, ms: number): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => resolve(false), ms);
-      timer.unref();
-      void promise.then(() => {
-        clearTimeout(timer);
-        resolve(true);
-      });
+  /// A stop's wait for a job's end: its leader's comes as an event; members it left behind have none, and are looked at
+  /// within the grace. Killed if not ended by then, and its end taken in.
+  private grace(running: Running): Effect.Effect<void> {
+    return Effect.gen(function* () {
+      yield* Effect.promise(() => running.gone).pipe(
+        Effect.andThen(
+          Effect.repeat(Effect.sync(() => groupAlive(running.pgid)), {
+            schedule: Schedule.spaced(STOP_LOOK_MS),
+            until: (alive) => !alive,
+          }),
+        ),
+        Effect.timeoutOption(STOP_GRACE_MS),
+      );
+      if (groupAlive(running.pgid)) signalGroup(running.pgid, "SIGKILL");
+      yield* Effect.promise(() => running.settled).pipe(Effect.timeoutOption(STOP_SETTLE_MS));
     });
   }
 
@@ -457,12 +470,7 @@ export class Jobs {
     if (running) {
       running.stopping = true;
       signalGroup(running.pgid, "SIGTERM");
-      // Its leader's end comes as an event; members it left behind have none, and are looked at within the grace.
-      const began = Date.now();
-      await this.within(running.gone, STOP_GRACE_MS);
-      while (groupAlive(running.pgid) && Date.now() - began < STOP_GRACE_MS) await new Promise((r) => setTimeout(r, 100));
-      if (groupAlive(running.pgid)) signalGroup(running.pgid, "SIGKILL");
-      await this.within(running.settled, STOP_SETTLE_MS);
+      await this.timed(this.grace(running));
     } else if (job.state === "running" || job.state === "exited") {
       // A service waiting to start again, or one on record only: it stays stopped. One an earlier station left running
       // and this one does not follow (it started out of its workspace, so took nothing up): its group is ended too.
@@ -470,7 +478,7 @@ export class Jobs {
       if (entry) {
         if (stillOurs(entry)) {
           log.warn("jobs", "ending a job an earlier station left running", { job: job.id, pgid: entry.pgid });
-          await endGroup(entry.pgid, STOP_GRACE_MS);
+          await this.timed(endGroup(entry.pgid, STOP_GRACE_MS));
         }
         this.store.forgetProcess(entry.pgid);
       }
@@ -584,7 +592,7 @@ export class Jobs {
       if (followed.has(pgid)) continue;
       if (stillOurs(entry)) {
         log.warn("jobs", "ending the group of a job no longer running", { pgid, label: entry.label });
-        void endGroup(pgid, STOP_GRACE_MS);
+        void this.timed(endGroup(pgid, STOP_GRACE_MS));
       }
       this.store.forgetProcess(pgid);
     }

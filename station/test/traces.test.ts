@@ -13,7 +13,7 @@ test("a traceparent is read as W3C says", () => {
   }
 });
 
-test("spans only when on and sampled", () => {
+test("spans only when on and sampled", async () => {
   const parent = parseParent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
   assert.equal(new Traces(false).start(parent), null);
   const on = new Traces(true);
@@ -28,6 +28,7 @@ test("spans only when on and sampled", () => {
   assert.equal(recorded.attributes[0].value.intValue, "200");
   assert.equal(traceparent.slice(36, 52), recorded.spanId);
   on.spans.length = 0;
+  await on.close();
 });
 
 test("routes hide ids", () => {

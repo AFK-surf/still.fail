@@ -2,7 +2,7 @@
 // thread/resume, turn/start, turn/steer, turn/interrupt, thread/unsubscribe, model/list, account/rateLimits/read) and the
 // notifications of a turn (turn/started, item/*, turn/completed), driven by what the input says:
 //   say:<text>    a reply                       fail:auth|rate|model   turn/completed failed with codexErrorInfo
-//   slow:<n>      n deltas, 100 ms apart         cmd                    a command with output, then a reply
+//   slow:<n>      n deltas, 50 ms apart          cmd                    a command with output, then a reply
 //   again         a reply, then a turn of its own                      ask   asks the client something first
 //   exit          exits 4 in the middle of the turn
 // FAKE_DUMP: its argv and env are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin.
@@ -69,7 +69,7 @@ async function runTurn(threadId, text) {
   }
   if (text.startsWith("slow:")) {
     const count = Number(text.slice(5));
-    await agentMessage(threadId, t, Array.from({ length: count }, (_, i) => `d${i} `), 100);
+    await agentMessage(threadId, t, Array.from({ length: count }, (_, i) => `d${i} `), 50);
   } else {
     await agentMessage(threadId, t, [text.startsWith("say:") ? text.slice(4) : text], 0);
   }

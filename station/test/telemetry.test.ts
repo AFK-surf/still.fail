@@ -49,6 +49,8 @@ test("reports go out scrubbed, with the station and release; turning off stops t
   on = false;
   reports.report("after turning off", "nope");
   await reports.shutdown();
+  // fetch keeps its connection for the next request: closed here, the server is not waited on to time it out.
+  server.closeAllConnections();
   server.close();
   const events = bodies.flatMap((b) => b.batch);
   assert.equal(events.length, 1);

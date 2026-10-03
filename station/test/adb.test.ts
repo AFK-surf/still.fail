@@ -9,7 +9,9 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { GRACE, PORTS, Shares, answerAdb, bind, isPackage, text } from "../src/mesh/adb.ts";
+import { Clock, Duration, Effect, Exit, Scope } from "effect";
+import { TestClock } from "effect/testing";
+import { GRACE, PORTS, SETTLE, Shares, answerAdb, bind, isPackage, text } from "../src/mesh/adb.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import { loadMesh, type Connection, type Stream } from "../src/mesh/native.ts";
 import { Reader, writeLine } from "../src/mesh/serve.ts";
@@ -43,6 +45,39 @@ async function until<T>(what: () => T | undefined | null | false, ms = 10_000): 
     if (Date.now() > deadline) throw new Error("timed out waiting");
     await sleep(20);
   }
+}
+
+const turn = async () => {
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+};
+
+/// A TestClock for a `Shares`, which also says when a wait on it begins: `asleep(ms)` resolves once the next wait begun
+/// (in the order they began) is there, and fails if it is not of `ms`; `adjust(ms)` moves the clock on.
+function testClock() {
+  const scope = Effect.runSync(Scope.make());
+  const test = Effect.runSync(Scope.provide(TestClock.make(), scope));
+  const begun: number[] = [];
+  let heard: (() => void) | null = null;
+  const clock: Clock.Clock = {
+    ...test,
+    sleep: (d) =>
+      Effect.suspend(() => {
+        begun.push(Duration.toMillis(d));
+        heard?.();
+        return test.sleep(d);
+      }),
+  };
+  let seen = 0;
+  const asleep = async (ms: number) => {
+    while (seen === begun.length) await new Promise<void>((r) => (heard = r));
+    heard = null;
+    assert.equal(begun[seen++], ms, "the wait begun");
+    // Its sleep is on the clock once the fiber that began it has gone on.
+    await turn();
+  };
+  const adjust = (ms: number) => Effect.runPromise(test.adjust(ms));
+  const close = () => Effect.runPromise(Scope.close(scope, Exit.void));
+  return { clock, asleep, adjust, close };
 }
 
 /// A stream's other end in memory: what the station wrote, and stopping it as a phone that stops reading.
@@ -108,7 +143,8 @@ test("an ask about no offer, or an unknown one, is answered in the asker's langu
 
 test("without adb the offer says missing; a phone the station cannot reach says why", async () => {
   fakeAdb();
-  const missing = new Shares({ adb: () => null, grace: 50 });
+  const time = testClock();
+  const missing = new Shares({ adb: () => null, clock: time.clock });
   const stream = new Memory();
   const offered = answerAdb(missing, nowhere, viewer, asking({ op: "share", phone: PHONE, device: "Pixel 8" }), stream as unknown as Stream);
   const said = await until(() => stream.lines().find((l) => l.adb === "missing"));
@@ -117,38 +153,52 @@ test("without adb the offer says missing; a phone the station cannot reach says 
   assert.deepEqual(stream.lines()[0], { status: 200, headers: { "content-type": "application/x-ndjson" } });
   assert.deepEqual(missing.list(), [{ serial: said.serial, device: "Pixel 8", android: "", owner: { name: "Pat", email: "pat@example.com" }, adb: "missing", message: said.message }]);
   await stream.reset();
+  await time.asleep(GRACE);
+  await time.adjust(GRACE);
   await offered;
   assert.deepEqual(missing.list(), []);
   assert.ok(stream.finished);
 
   // Its tunnel refused (here: no stream on the connection), adb not getting in is put down to that.
   const adb = fakeAdb();
-  const shares = new Shares({ grace: 50, settle: 600 });
+  const shares = new Shares({ clock: time.clock });
   const failing = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE }), failing as unknown as Stream);
+  // Not in yet after `connect`: its state looked at again after 500 ms, and once SETTLE is over taken as it is.
+  await time.asleep(500);
+  assert.equal(failing.lines().find((l) => l.adb === "failed"), undefined);
+  await time.adjust(SETTLE);
   const failed = await until(() => failing.lines().find((l) => l.adb === "failed"));
   assert.equal(failed.message, "no streams here");
   assert.ok(adb.calls().some((c) => c[0] === "connect" && c[1] === failed.serial));
   await failing.reset();
+  await time.asleep(GRACE);
+  await time.adjust(GRACE);
   await offer;
   await until(() => adb.calls().filter((c) => c[0] === "disconnect").length === 2);
+  await time.close();
 });
 
 test("Wireless debugging off: adb is not left trying, and the offer says so", async () => {
   const adb = fakeAdb();
-  const shares = new Shares({ grace: 50 });
+  const time = testClock();
+  const shares = new Shares({ clock: time.clock });
   const stream = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE, adbd: false }, { "stillfail-lang": "en-US" }), stream as unknown as Stream);
   const off = await until(() => stream.lines().find((l) => l.adb === "off"));
   assert.equal(off.message, "Wireless debugging is off on the phone");
   assert.deepEqual(adb.calls(), [["disconnect", off.serial]]);
   await stream.reset();
+  await time.asleep(GRACE);
+  await time.adjust(GRACE);
   await offer;
+  await time.close();
 });
 
 test("a newer offer of the same phone takes the older's place, its port and all", async () => {
   fakeAdb();
-  const shares = new Shares({ adb: () => null, grace: 100 });
+  const time = testClock();
+  const shares = new Shares({ adb: () => null, clock: time.clock });
   const first = new Memory();
   const second = new Memory();
   const one = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE, device: "A" }), first as unknown as Stream);
@@ -159,9 +209,13 @@ test("a newer offer of the same phone takes the older's place, its port and all"
   assert.deepEqual(shares.list().map((p) => p.device), ["B"]);
   // The older one ending does not take the phone away.
   await first.reset();
+  await time.asleep(GRACE);
+  await time.adjust(GRACE);
   await one;
   assert.deepEqual(shares.list().map((p) => p.device), ["B"]);
   await second.reset();
+  await time.asleep(GRACE);
+  await time.adjust(GRACE);
   await two;
   assert.deepEqual(shares.list(), []);
   // Another person's phone with the same key is another phone.
@@ -170,22 +224,30 @@ test("a newer offer of the same phone takes the older's place, its port and all"
   await until(() => theirs.lines().find((l) => l.adb));
   assert.equal(shares.list().length, 1);
   await theirs.reset();
+  await time.asleep(GRACE);
+  await time.adjust(GRACE);
   await three;
+  await time.close();
 });
 
 test("the station removed from its workspace ends offers at once", async () => {
   const adb = fakeAdb();
   let removed = false;
   const listeners = new Set<() => void>();
-  const shares = new Shares({ grace: 60_000, settle: 300, cloud: { removed: () => removed, listen: (f) => (listeners.add(f), () => listeners.delete(f)) } });
+  const time = testClock();
+  const shares = new Shares({ clock: time.clock, cloud: { removed: () => removed, listen: (f) => (listeners.add(f), () => listeners.delete(f)) } });
   const stream = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE }), stream as unknown as Stream);
+  await time.asleep(500);
+  await time.adjust(SETTLE);
   await until(() => stream.lines().find((l) => l.adb === "failed"));
   removed = true;
   for (const f of listeners) f();
+  // Not GRACE: the clock is not moved on.
   await offer;
   assert.deepEqual(shares.list(), []);
   assert.deepEqual(adb.calls().at(-1)?.[0], "disconnect");
+  await time.close();
 });
 
 // ---- Over a real mesh connection.
@@ -269,7 +331,8 @@ function through(port: number, line: string): Promise<string> {
 
 test("a phone offered over the mesh: adb connects through its tunnel, asks reach it, and it goes after GRACE", async () => {
   const adb = fakeAdb();
-  const shares = new Shares();
+  const time = testClock();
+  const shares = new Shares({ clock: time.clock });
   const mesh = await link(shares);
   try {
     const offer = { op: "share", phone: PHONE, device: "Pixel\n8", android: "14", package: "fail.still.android", adbd: true, pair: true };
@@ -306,28 +369,34 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
     // The phone stops reading the offer: the phone is kept for GRACE, then adb lets it go and its port closes.
     const disconnects = () => adb.calls().filter((c) => c[0] === "disconnect").length;
     const before = disconnects();
-    const stopped = Date.now();
     await offered.reset(0);
-    await sleep(1000);
-    assert.equal(disconnects(), before);
-    assert.equal(shares.list().length, 1);
-    await until(() => disconnects() === before + 1, GRACE + 5000);
-    assert.ok(Date.now() - stopped >= GRACE - 100, "not before GRACE");
+    await time.asleep(GRACE);
+    await time.adjust(GRACE - 1);
+    await turn();
+    assert.equal(disconnects(), before, "not before GRACE");
+    assert.equal(shares.list().length, 1, "not before GRACE");
+    await time.adjust(1);
+    await until(() => disconnects() === before + 1);
     assert.deepEqual(adb.calls().at(-1), ["disconnect", serial]);
     assert.deepEqual(shares.list(), []);
     await assert.rejects(through(port, "x\n"), /ECONNREFUSED/);
   } finally {
     await shares.close();
     await mesh.close();
+    await time.close();
   }
 });
 
 test("over the mesh: a phone adb is not paired with, or whose adbd turned the tunnel down", async () => {
   const adb = fakeAdb({ "on-connect": "offline" });
-  const shares = new Shares({ settle: 1000, grace: 50 });
+  const time = testClock();
+  const shares = new Shares({ clock: time.clock });
   const mesh = await link(shares);
   try {
     const { stream, reader } = await mesh.ask({ op: "share", phone: PHONE }, { "stillfail-lang": "en" });
+    // `offline` after `connect`: looked at again until SETTLE is over.
+    await time.asleep(500);
+    await time.adjust(SETTLE);
     await reader.line();
     let state;
     do state = await reader.line();
@@ -335,11 +404,15 @@ test("over the mesh: a phone adb is not paired with, or whose adbd turned the tu
     assert.deepEqual(state, { serial: state.serial, adb: "unpaired", message: "This station isn't paired with the phone yet" });
     assert.deepEqual(adb.dialed(), ["phone:CNXN"]);
     await stream.reset(0);
+    await time.asleep(GRACE);
+    await time.adjust(GRACE);
 
     // A new offer (another link, say) after adb forgot it: the phone's adbd is not there.
     await until(() => shares.list().length === 0);
     mesh.phoneSide.refuse = "connection refused";
     const again = await mesh.ask({ op: "share", phone: PHONE });
+    await time.asleep(500);
+    await time.adjust(SETTLE);
     await again.reader.line();
     do state = await again.reader.line();
     while (state.adb === "connecting");
@@ -348,5 +421,6 @@ test("over the mesh: a phone adb is not paired with, or whose adbd turned the tu
   } finally {
     await shares.close();
     await mesh.close();
+    await time.close();
   }
 });

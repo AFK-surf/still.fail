@@ -2,6 +2,7 @@
 // `end_group`): a job runs in a group of its own, so it and what it starts are signalled together, and a group an
 // earlier station recorded is checked to still be that group before it is touched (pids are reused).
 import { execFileSync } from "node:child_process";
+import { Effect } from "effect";
 import type { ProcessRow } from "../store/store.ts";
 import { nowMs } from "../store/store.ts";
 
@@ -70,15 +71,19 @@ export function stillOurs(entry: ProcessRow): boolean {
   return ours && groupAlive(entry.pgid);
 }
 
-const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref());
+/// How often a group being ended is looked at.
+const LOOK_MS = 100;
 
 /// SIGTERM a group, SIGKILL it if it is still there after `graceMs`. A group that is not this process's children has
-/// no exit to wait on: it is looked at every 100 ms within the grace (as the Rust does), and only then.
-export async function endGroup(pgid: number, graceMs: number): Promise<void> {
-  signalGroup(pgid, "SIGTERM");
-  for (let i = 0; i < Math.max(1, Math.floor(graceMs / 100)); i++) {
-    await pause(100);
-    if (!groupAlive(pgid)) return;
-  }
-  signalGroup(pgid, "SIGKILL");
+/// no exit to wait on: it is looked at every 100 ms within the grace (as the Rust does), and only then. On the clock of
+/// whoever runs it.
+export function endGroup(pgid: number, graceMs: number): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    signalGroup(pgid, "SIGTERM");
+    for (let i = 0; i < Math.max(1, Math.floor(graceMs / LOOK_MS)); i++) {
+      yield* Effect.sleep(LOOK_MS);
+      if (!groupAlive(pgid)) return;
+    }
+    signalGroup(pgid, "SIGKILL");
+  });
 }

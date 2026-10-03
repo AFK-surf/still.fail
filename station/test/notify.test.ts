@@ -5,6 +5,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { Effect, Exit, Scope } from "effect";
+import { TestClock } from "effect/testing";
 import { Notifier } from "../src/cloud/notify.ts";
 import { ops } from "../src/read/ops.ts";
 import { openStore } from "../src/read/store.ts";
@@ -30,13 +32,28 @@ test("a turn is told by how it ended", () => {
   assert.equal(turnNotice(turn("waiting", "completed"), mine, "k", "file"), null);
 });
 
-test("a chat's people hear of its turns and of each other, once, gathered", async () => {
+test("a chat's people hear of its turns and of each other, once, gathered", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "notify-"));
   const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"));
   const reader = openStore(dir);
-  const readers: any = { read: async (op: string, a: any) => JSON.stringify(ops[op]!(reader, a)) };
+  // What the notifier asks of the readers, followed: the notices it gathers are all made once none is left.
+  let asking = 0;
+  const readers: any = {
+    read: async (op: string, a: any) => {
+      asking++;
+      try {
+        return JSON.stringify(ops[op]!(reader, a));
+      } finally {
+        asking--;
+      }
+    },
+  };
   const cloud: any = { state: { origin: "http://x", station: "s" }, removed: () => false };
-  const notifier = new Notifier(store, readers, cloud, null as any);
+  // Its gathering second, on a clock of the test's.
+  const scope = Effect.runSync(Scope.make());
+  t.after(() => Effect.runPromise(Scope.close(scope, Exit.void)));
+  const clock = Effect.runSync(Scope.provide(TestClock.make(), scope));
+  const notifier = new Notifier(store, readers, cloud, null as any, { clock });
   const posted: any[][] = [];
   notifier.post = async (n) => void posted.push(n);
   store.insertSession({ key: "k", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
@@ -47,7 +64,14 @@ test("a chat's people hear of its turns and of each other, once, gathered", asyn
   store.insertMessage({ ...newMessage(chat.id, "1.3", "agent", "k", "好了"), declared: "final" });
   store.endTurn("t1", "completed", null, "final", null);
   store.insertMessage(newMessage(chat.id, "1.4", "ember", "ember", "⚠️ 没能启动"));
-  await new Promise((r) => setTimeout(r, 1300));
+  const settle = () => new Promise((r) => setImmediate(r));
+  for (let i = 0; i < 5 || asking > 0; i++) await settle();
+  assert.equal(posted.length, 0, "nothing before the second is up");
+  // The second goes by (again, should its wait have begun only after the clock moved).
+  for (let i = 0; i < 100 && posted.length === 0; i++) {
+    await Effect.runPromise(clock.adjust("1 second"));
+    for (let j = 0; j < 5; j++) await settle();
+  }
   const all = posted.flat().map((n) => [n.kind, n.to.join(","), n.text]);
   assert.equal(posted.length, 1, "gathered into one post");
   assert.deepEqual(all.sort(), [
