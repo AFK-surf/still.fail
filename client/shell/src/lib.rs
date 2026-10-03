@@ -3,7 +3,8 @@
 //! a thread for the disk, and answered through a C callback. What it does is what the Rust core's native host (client/ffi) did (reqwest,
 //! tokio-tungstenite, a file per storage key in the data directory, TCP to adbd) and what the station's addon does for
 //! Node (iroh), so a phone moving from the Rust core keeps its sign-in. Each signed-in account's database is SQLite,
-//! `accounts/<name>.db`, used synchronously by the core's thread (`sql.*`); the former `core.db` is only read, once.
+//! `databases/<name>.db` (beside the storage keys' files: `accounts` is one), used synchronously by the core's thread
+//! (`sql.*`); the former `core.db` is only read, once.
 //!
 //! Operations are named and take JSON and maybe bytes; bridge.ts lists them. `sf_shell_call` answers later through
 //! `complete(ctx, id, json, error, bytes)` from any thread; `sf_shell_call_sync` answers at once.
@@ -595,7 +596,7 @@ impl Inner {
                     if name.contains('/') || name.contains('\\') || name.starts_with('.') {
                         return Err(format!("not a database name: {name}"));
                     }
-                    let dir = self.dir.join("accounts");
+                    let dir = self.dir.join("databases");
                     std::fs::create_dir_all(&dir).map_err(err)?;
                     let path = dir.join(format!("{name}.db"));
                     (Some(path.clone()), rusqlite::Connection::open(&path).map_err(err)?)
@@ -610,7 +611,7 @@ impl Inner {
             }
             "sql.delete" => {
                 let name = str_of(a, "name")?;
-                let path = self.dir.join("accounts").join(format!("{name}.db"));
+                let path = self.dir.join("databases").join(format!("{name}.db"));
                 sqls.retain(|_, (p, _)| p.as_ref() != Some(&path));
                 for end in ["", "-wal", "-shm", "-journal"] {
                     let file = PathBuf::from(format!("{}{end}", path.display()));
@@ -881,7 +882,7 @@ mod tests {
         let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
         let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
         let id = sync("sql.open", r#"{"name":"account-a"}"#)["value"]["id"].as_u64().unwrap();
-        assert!(dir.path().join("accounts/account-a.db").exists());
+        assert!(dir.path().join("databases/account-a.db").exists());
         assert_eq!(sync("sql.exec", &format!(r#"{{"id":{id},"sql":"CREATE TABLE t (k TEXT PRIMARY KEY, n INTEGER, x REAL, j TEXT)"}}"#))["value"], Value::Null);
         assert_eq!(sync("sql.run", &format!(r#"{{"id":{id},"sql":"INSERT INTO t VALUES (?, ?, ?, ?)","params":["a",1,1.5,"{{\"x\":\"中\"}}"]}}"#))["value"], json!(1));
         assert_eq!(sync("sql.run", &format!(r#"{{"id":{id},"sql":"INSERT INTO t VALUES (?, ?, ?, ?)","params":["b",null,null,null]}}"#))["value"], json!(1));
@@ -892,7 +893,7 @@ mod tests {
         assert_eq!(sync("sql.close", &format!(r#"{{"id":{id}}}"#))["value"], Value::Null);
         assert!(sync("sql.all", &format!(r#"{{"id":{id},"sql":"SELECT 1"}}"#))["error"].is_string());
         assert_eq!(sync("sql.delete", r#"{"name":"account-a"}"#)["value"], Value::Null);
-        assert!(!dir.path().join("accounts/account-a.db").exists());
+        assert!(!dir.path().join("databases/account-a.db").exists());
         assert!(sync("sql.open", r#"{"name":"../x"}"#)["error"].is_string());
         let memory = sync("sql.open", r#"{"name":":memory:"}"#)["value"]["id"].as_u64().unwrap();
         assert_eq!(sync("sql.all", &format!(r#"{{"id":{memory},"sql":"SELECT 2"}}"#))["value"], json!([[2]]));

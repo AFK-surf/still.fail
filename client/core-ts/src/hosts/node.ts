@@ -1,7 +1,7 @@
 // The core on Node (the desktop app's utility process; tests and the side-by-side runs): the Host over fetch, the `ws`
 // package, node:sqlite and files, as the Rust core's native host kept them — the same data directory, the same file per
 // storage key (`%XX` for what a file name cannot hold) — so a desktop app moving from the Rust core keeps its logins.
-// Each signed-in account's database is `accounts/<name>.db` there; what the former `core.db` kept is brought into them
+// Each signed-in account's database is `databases/<name>.db` there; what the former `core.db` kept is brought into them
 // once (db/import.ts) and left as it was. `start` is the API the Rust core's Node addon had: connect /
 // receive(json) / disconnect, the listener given `(client, json)`.
 import { existsSync, mkdirSync, rmSync } from "node:fs";
@@ -228,15 +228,16 @@ export class NodeHost implements Host {
     });
   }
 
-  /// Where an account's database is: `accounts/<name>.db` in the data directory.
+  /// Where an account's database is: `databases/<name>.db` in the data directory (beside the storage keys' files:
+  /// `accounts` is one).
   dbPath(name: string): string {
-    return join(this.#dir, "accounts", `${name}.db`);
+    return join(this.#dir, "databases", `${name}.db`);
   }
 
   openDb(name: string): Effect.Effect<Sql, HostError | SqlError> {
     return Effect.try({
       try: () => {
-        mkdirSync(join(this.#dir, "accounts"), { recursive: true });
+        mkdirSync(join(this.#dir, "databases"), { recursive: true });
         const path = this.dbPath(name);
         this.#open.get(path)?.close();
         const sql = NodeSql.file(path);
