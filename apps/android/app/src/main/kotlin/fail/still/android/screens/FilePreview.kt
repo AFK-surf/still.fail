@@ -196,7 +196,7 @@ internal class ViewerOpen(val station: String, val opened: Shown, val gallery: (
 }
 
 /** Where a thumbnail in the chat is (in the window), what it shows, and whether any of it is on the screen. */
-internal class Thumb(val bounds: Rect, val visible: Boolean, val radius: Float, val picture: () -> ImageBitmap?)
+internal class Thumb(val bounds: Rect, val visible: Boolean, val radius: Float, val letterbox: Boolean, val picture: () -> ImageBitmap?)
 
 /** The viewer open, if one is; the chat's thumbnails by the file each shows; the one hidden while the viewer is its picture. */
 object FileViewers {
@@ -216,10 +216,10 @@ object FileViewers {
  * A thumbnail in the chat the viewer opens from (`id`: FileViewers.id): where it is, kept as it moves; hidden while the
  * viewer shows its picture in its place (one picture on the screen, never two).
  */
-internal fun Modifier.viewerThumb(id: String, radius: Float, picture: () -> ImageBitmap?): Modifier =
+internal fun Modifier.viewerThumb(id: String, radius: Float, letterbox: Boolean = false, picture: () -> ImageBitmap?): Modifier =
     onGloballyPositioned { c ->
         val at = c.positionInRoot()
-        FileViewers.thumbs[id] = Thumb(Rect(at, Size(c.size.width.toFloat(), c.size.height.toFloat())), c.boundsInRoot().let { it.width > 0 && it.height > 0 }, radius, picture)
+        FileViewers.thumbs[id] = Thumb(Rect(at, Size(c.size.width.toFloat(), c.size.height.toFloat())), c.boundsInRoot().let { it.width > 0 && it.height > 0 }, radius, letterbox, picture)
     }.graphicsLayer { alpha = if (FileViewers.hidden == id) 0f else 1f }
 
 @Composable
@@ -243,6 +243,8 @@ internal class ViewerFlight {
     /** The thumbnail's box on the stage. */
     var from: Rect? = null
     var radius = 0f
+    /** The picture is letterboxed in the thumbnail's box (ChatFiles.kt's imageBox): fitted inside it, not cropped. */
+    var letterbox = false
     /** The picture's box on the stage, as it is now (null until known). */
     var target: () -> Rect? = { null }
     /** A video's frame as it shows now, and where it is (null for a picture, or before the player has one). */
@@ -251,13 +253,20 @@ internal class ViewerFlight {
     val chrome: Float get() = when (phase) { Phase.Waiting -> 0f; Phase.Flying -> p.value; else -> 1f }
 }
 
+/** Where a picture proportioned like `to` shows letterboxed in the box `box`: fitted inside it, centred. */
+private fun fitted(box: Rect, to: Rect): Rect {
+    if (to.width <= 0f || to.height <= 0f) return box
+    val k = minOf(box.width / to.width, box.height / to.height)
+    return Rect(box.center - Offset(to.width * k / 2, to.height * k / 2), Size(to.width * k, to.height * k))
+}
+
 /** The stage (what shows the picture) carried from the thumbnail's box to its own place, or back. */
 internal fun Modifier.viewerFlying(f: ViewerFlight): Modifier = graphicsLayer {
     when (f.phase) {
         ViewerFlight.Phase.Waiting -> alpha = 0f
         ViewerFlight.Phase.Flying -> {
-            val from = f.from
             val to = f.target()
+            val from = f.from?.let { if (f.letterbox && to != null) fitted(it, to) else it }
             if (from == null || to == null || to.width <= 0f || to.height <= 0f) return@graphicsLayer
             val t = f.p.value
             // Covering the thumbnail's box at the start, as a cropped picture does.
@@ -313,6 +322,7 @@ private fun ViewerLayer(open: ViewerOpen) {
         if (thumb != null && known) {
             flight.from = thumb.bounds.translate(-origin)
             flight.radius = thumb.radius
+            flight.letterbox = thumb.letterbox
             flight.p.snapTo(0f)
             FileViewers.hidden = idOf(open.opened)
             flight.phase = ViewerFlight.Phase.Flying
@@ -333,6 +343,7 @@ private fun ViewerLayer(open: ViewerOpen) {
             if (thumb != null && flight.target() != null) {
                 flight.from = thumb.bounds.translate(-origin)
                 flight.radius = thumb.radius
+                flight.letterbox = thumb.letterbox
                 if (flight.phase != ViewerFlight.Phase.Flying) flight.p.snapTo(1f)
                 // The thumbnail it lands in shows the frame it goes back with (hidden until then, so never seen changing).
                 flight.frame()?.let { FileViewers.frames[idOf(current)] = it }

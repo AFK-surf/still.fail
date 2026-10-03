@@ -1152,11 +1152,11 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
     revealed.add(key);
   };
   const preview = sessionKey !== null && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />;
-  const { letterbox, ...size } = look.box(file);
+  const { letterbox, ...size } = look.box(file, video ? 96 : undefined);
   if (video && sessionKey !== null) {
     return (
       <>
-        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={thumbId(station.address, sessionKey, file.path)} onClick={() => setOpen(true)} aria-label={t(videoFailed ? "web-main.file.view" : "web-main.file.play", { name: file.name })} style={size} data-letterbox={letterbox} data-unavailable={videoFailed || undefined}>
+        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={thumbId(station.address, sessionKey, file.path)} onClick={() => setOpen(true)} aria-label={t(videoFailed ? "web-main.file.view" : "web-main.file.play", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined} data-unavailable={videoFailed || undefined}>
           {url && !videoFailed && <video src={url} muted playsInline preload="auto" aria-hidden="true" onError={() => setVideoFailed(true)} />}
           <span className={videoFailed ? css.msgVideoUnavailable : css.msgVideoPlay} aria-hidden="true">
             {videoFailed ? <><Read size={24} /><span>{t("web-main.file.noPreview")}</span><small>{fileSize(file.size)}</small></> : "▶"}
@@ -1170,10 +1170,10 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <button ref={box} type="button" className={look.image} data-send-image={sentImageKey(file.path)} onClick={() => (url || failed) && setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox}
+        <button ref={box} type="button" className={look.image} data-send-image={sentImageKey(file.path)} onClick={() => (url || failed) && setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
           data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
           data-loaded={loaded ?? undefined} data-failed={failed || undefined}>
-          {loaded !== "instant" && <Waiting hash={file.thumbhash} />}
+          {loaded !== "instant" && <Waiting hash={file.thumbhash} fit={letterbox} />}
           {failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>{t("web-main.file.noPreview")}</span></span>}
           {url && <img src={url} alt={file.name} onLoad={shown} />}
         </button>
@@ -1191,15 +1191,16 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
 }
 
 /** What an image's box shows until it loads: its ThumbHash drawn, sent with it; else the blots drifting. */
-function Waiting({ hash }: { hash: string | undefined }) {
+/** `fit`: a letterboxed image's share of its box, all the placeholder takes. */
+function Waiting({ hash, fit }: { hash: string | undefined; fit?: { width: string; height: string } | undefined }) {
   const likeness = thumbhashUrl(hash);
   return likeness
-    ? <span className={look.wait} style={{ backgroundImage: `url(${likeness})` }} data-likeness="" aria-hidden="true" />
-    : <span className={look.wait} aria-hidden="true"><i /><i /><i /></span>;
+    ? <span className={look.wait} style={{ ...fit, backgroundImage: `url(${likeness})` }} data-likeness="" aria-hidden="true" />
+    : <span className={look.wait} style={fit} aria-hidden="true"><i /><i /><i /></span>;
 }
 
 /** How the chat draws a file: an image's button, the box it takes before it loads and what shows until then; a file's card and its button. */
-const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment) => imageBox(f), open: css.fileCardOpen, card: (f: Attachment) => <FileCard file={f} /> };
+const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment, least?: number) => imageBox(f, least), open: css.fileCardOpen, card: (f: Attachment) => <FileCard file={f} /> };
 
 function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; error?: string | null }) {
   return (
