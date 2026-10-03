@@ -7,7 +7,8 @@
 //! POST /v1/auth/refresh (Bearer refresh) {request_id: ULID},
 //! POST /v1/auth/logout (Bearer refresh) {all:false}; tokens answer
 //! {access_token, refresh_token, subject, email, name?, expires_at}.
-//! Sign-in starts at GET /v1/auth/google/start?state&code_challenge&code_challenge_method=S256&redirect_uri&name.
+//! Sign-in starts at GET /v1/auth/google/start?state&code_challenge&code_challenge_method=S256&redirect_uri&name
+//! (/v1/auth/apple/start, the same, with Apple).
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -139,8 +140,8 @@ impl Accounts {
         self.listeners.borrow_mut().push(listener);
     }
 
-    /// Starts a sign-in: stores the PKCE verifier and state, returns the URL to open.
-    pub async fn begin_sign_in(&self, redirect_uri: &str, return_to: &str, device_name: &str) -> Result<String> {
+    /// Starts a sign-in (with Google, or with `apple`): stores the PKCE verifier and state, returns the URL to open.
+    pub async fn begin_sign_in(&self, redirect_uri: &str, return_to: &str, device_name: &str, apple: bool) -> Result<String> {
         let verifier = self.secret();
         let state = self.secret();
         let pending = PendingLogin {
@@ -161,7 +162,7 @@ impl Accounts {
         .map(|(k, v)| format!("{k}={}", encode_component(v)))
         .collect::<Vec<_>>()
         .join("&");
-        Ok(format!("{}/v1/auth/google/start?{query}", self.host.cloud_origin()))
+        Ok(format!("{}/v1/auth/{}/start?{query}", self.host.cloud_origin(), if apple { "apple" } else { "google" }))
     }
 
     /// Finishes a sign-in from the callback's query string. Returns the account and where to go next.
@@ -623,7 +624,7 @@ mod tests {
         run(async {
             let host = FakeHost::new();
             let accounts = Accounts::load(host.clone()).await;
-            let url = accounts.begin_sign_in("https://stillfail.test/auth/callback", "/w/ws1", "still.fail 网页版 · Chrome").await.unwrap();
+            let url = accounts.begin_sign_in("https://stillfail.test/auth/callback", "/w/ws1", "still.fail 网页版 · Chrome", false).await.unwrap();
             assert!(url.starts_with("https://stillfail.test/v1/auth/google/start?state="));
             let pending: PendingLogin = serde_json::from_slice(&host.stored(LOGIN_KEY).unwrap()).unwrap();
             assert_eq!(pending.verifier.len(), 43);
@@ -635,6 +636,8 @@ mod tests {
             assert_eq!(q["code_challenge_method"], "S256");
             assert_eq!(q["redirect_uri"], "https://stillfail.test/auth/callback");
             assert_eq!(q["name"], "still.fail 网页版 · Chrome");
+            let apple = accounts.begin_sign_in("https://stillfail.test/auth/callback", "/w/ws1", "Mac", true).await.unwrap();
+            assert!(apple.starts_with("https://stillfail.test/v1/auth/apple/start?state="));
         });
     }
 
@@ -652,7 +655,7 @@ mod tests {
             let changes = Rc::new(Cell::new(0));
             let counter = changes.clone();
             accounts.on_change(Rc::new(move || counter.set(counter.get() + 1)));
-            let url = accounts.begin_sign_in("https://stillfail.test/auth/callback", "/w/ws1", "dev").await.unwrap();
+            let url = accounts.begin_sign_in("https://stillfail.test/auth/callback", "/w/ws1", "dev", false).await.unwrap();
             let state = query_of(&url)["state"].clone();
             let pending: PendingLogin = serde_json::from_slice(&host.stored(LOGIN_KEY).unwrap()).unwrap();
 
@@ -686,7 +689,7 @@ mod tests {
                     if req.url.ends_with("/v1/me") { Err(HostError("offline".into())) } else { json_response(200, tokens("acc", "ref", expires)) }
                 });
                 let accounts = Accounts::load(host.clone()).await;
-                let url = accounts.begin_sign_in("https://stillfail.test/auth/callback", return_to, "dev").await.unwrap();
+                let url = accounts.begin_sign_in("https://stillfail.test/auth/callback", return_to, "dev", false).await.unwrap();
                 let state = query_of(&url)["state"].clone();
                 let (view, to) = accounts.complete_sign_in(&format!("code=c&state={state}")).await.unwrap();
                 assert_eq!(view.picture, "");
@@ -701,7 +704,7 @@ mod tests {
             let host = FakeHost::new();
             host.on_fetch(|_| json_response(400, json!({ "error": "invalid_grant" })));
             let accounts = Accounts::load(host.clone()).await;
-            let begin = || accounts.begin_sign_in("https://stillfail.test/auth/callback", "/", "dev");
+            let begin = || accounts.begin_sign_in("https://stillfail.test/auth/callback", "/", "dev", false);
 
             begin().await.unwrap();
             let e = accounts.complete_sign_in("error=login_cancelled").await.unwrap_err();

@@ -122,6 +122,7 @@
   "core-misc.params.language": "参数不对：language 要是 zh 或 en",
   "core-misc.params.missing": "参数不对：缺少 {field}",
   "core-misc.params.missing_form": "缺少 form",
+  "core-misc.params.invalid_provider": "登录方式只能是 google 或 apple",
   "core-misc.params.missing_station": "缺少 station",
   "core-misc.params.not_bool": "参数应为是或否",
   "core-misc.params.not_object": "参数不对：要是一个对象",

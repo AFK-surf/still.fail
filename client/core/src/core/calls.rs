@@ -17,7 +17,8 @@ pub(crate) enum Call {
     /// network changed, which also tries everything again.
     Wake { away: f64, network: bool, retry: bool },
     /// `device_name`: as the device is (`client.device`) when not given.
-    AuthBegin { redirect_uri: String, return_to: String, device_name: Option<String> },
+    /// `apple`: signs in with Apple rather than Google.
+    AuthBegin { redirect_uri: String, return_to: String, device_name: Option<String>, apple: bool },
     AuthComplete { query: String },
     SignOut { account: String },
     /// Something to have done on a station or still.fail cloud, by its name (ops.rs): the UI never makes a request itself.
@@ -170,6 +171,9 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
         return_to: String,
         #[serde(default)]
         device_name: Option<String>,
+        /// "google" (the default) or "apple".
+        #[serde(default)]
+        provider: Option<String>,
     }
     #[derive(Deserialize)]
     struct Complete {
@@ -325,7 +329,12 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
     Ok(match name {
         "auth.begin" => {
             let p: Begin = read(params)?;
-            Call::AuthBegin { redirect_uri: p.redirect_uri, return_to: p.return_to, device_name: p.device_name }
+            let apple = match p.provider.as_deref() {
+                None | Some("google") => false,
+                Some("apple") => true,
+                Some(_) => return Err(CoreError::invalid(t!("core-misc.params.invalid_provider"))),
+            };
+            Call::AuthBegin { redirect_uri: p.redirect_uri, return_to: p.return_to, device_name: p.device_name, apple }
         }
         "auth.complete" => Call::AuthComplete { query: read::<Complete>(params)?.query },
         "auth.signOut" => Call::SignOut { account: read::<SignOut>(params)?.account },

@@ -95,10 +95,10 @@ impl Inner {
                 self.store.invalidate(&topic);
                 Ok(self.slack_tokens.value(&topic))
             }
-            Call::AuthBegin { redirect_uri, return_to, device_name } => {
+            Call::AuthBegin { redirect_uri, return_to, device_name, apple } => {
                 // Named by the UI (those from before `client.device`), else as the device is.
                 let device_name = device_name.or_else(|| crate::prefs::device_name(&self.data)).unwrap_or_else(|| crate::brand::name().into());
-                let url = self.accounts.begin_sign_in(&redirect_uri, &return_to, &device_name).await?;
+                let url = self.accounts.begin_sign_in(&redirect_uri, &return_to, &device_name, apple).await?;
                 Ok(json!({ "url": url }))
             }
             Call::AuthComplete { query } => {

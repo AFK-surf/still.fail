@@ -7,7 +7,8 @@
 import { installScript, releaseType } from "./install.ts";
 import { requestLang, tr } from "./i18n.ts";
 import { latestDownload, serveRelease } from "./releases.ts";
-import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
+import { authConfigured, bearerToken, denied, digest, randomSecret, readJson, readText, reply, validId, validSecret, verifyToken } from "./auth";
+import { appleBundleIds, appleConfigured } from "./apple";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
@@ -25,6 +26,9 @@ export { LoginAttempt, LoginLimiter } from "./login";
 const CONSOLE_CALLS = new Set(["/v1/auth/token", "/v1/auth/refresh", "/v1/auth/logout", "/v1/me"]);
 
 const notFound = () => new Response("Not found", { status: 404 });
+
+/** Where a browser's sign-in starts: on PUBLIC_ORIGIN, whose callbacks Google and Apple know. */
+const BROWSER_STARTS = new Set(["/v1/auth/google/start", "/v1/auth/apple/start"]);
 
 // The test channel is for the accounts the admin let in (Directory `beta`): the web app on BETA_ORIGIN
 // (app.youdid.wtf), with the API on its paths as on PUBLIC_ORIGIN, and the beta apps (fail.still.android.beta,
@@ -63,7 +67,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
   const path = url.pathname;
   if (path === "/healthz" && request.method === "GET") {
     // The Worker's name, which it keeps (Cloudflare knows it by it).
-    return Response.json({ service: "stillfail-cloud", google_login: authConfigured(env) });
+    return Response.json({ service: "stillfail-cloud", google_login: authConfigured(env), apple_login: authConfigured(env) && appleConfigured(env) });
   }
   const onPublic = publicOrigins(env).includes(url.origin);
   const onBeta = url.origin === betaOrigin(env);
@@ -95,14 +99,18 @@ async function handle(request: Request, env: Env): Promise<Response> {
     if (ofBeta && !path.startsWith("/v1/auth/") && (await notBeta(request, env))) return notBetaReply(env, request);
   }
   if (onConsole) {
-    if (path === "/v1/auth/google/start" && request.method === "GET") return toPublic(env, url);
+    if (BROWSER_STARTS.has(path) && request.method === "GET") return toPublic(env, url);
     if (path.startsWith("/v1/admin/")) return adminApi(request, env, path);
     if (!CONSOLE_CALLS.has(path)) return notFound();
   }
   // A browser signing in on an old host, or on the test channel's, goes on to the new one, which Google calls back.
-  if (url.origin !== env.PUBLIC_ORIGIN && request.method === "GET" && (path === "/v1/auth/google/start" || /^\/v1\/auth\/device\/[A-Za-z0-9_-]{43}$/.test(path))) return toPublic(env, url);
+  if (url.origin !== env.PUBLIC_ORIGIN && request.method === "GET" && (BROWSER_STARTS.has(path) || /^\/v1\/auth\/device\/[A-Za-z0-9_-]{43}$/.test(path))) return toPublic(env, url);
   if (path === "/v1/auth/google/start" && request.method === "GET") {
     return googleStart(env, request);
+  }
+  if (path.startsWith("/v1/auth/apple/")) {
+    const apple = await appleCall(request, env, url);
+    if (apple) return apple;
   }
   if (path === "/v1/auth/device/complete" && request.method === "GET") {
     const lang = requestLang(request);
@@ -192,6 +200,40 @@ async function handle(request: Request, env: Env): Promise<Response> {
     return env.ACCOUNTS.getByName(claims.sub).fetch(request);
   }
   return notFound();
+}
+
+/** Sign in with Apple's calls (apple.ts): the browser's start and callback, and the iOS app's native sign-in. */
+async function appleCall(request: Request, env: Env, url: URL): Promise<Response | null> {
+  const path = url.pathname;
+  const native = path === "/v1/auth/apple/native" || path === "/v1/auth/apple/native/token";
+  if (native ? request.method !== "POST" : path === "/v1/auth/apple/start" ? request.method !== "GET" : path !== "/v1/auth/apple/callback") return null;
+  if (native ? appleBundleIds(env).length === 0 : !appleConfigured(env)) return reply({ error: "apple_not_configured" }, 503);
+  if (path === "/v1/auth/apple/start") return googleStart(env, request, "apple");
+  if (path === "/v1/auth/apple/callback" && request.method === "GET") {
+    const state = url.searchParams.get("state");
+    if (!validSecret(state)) return reply({ error: "invalid_login_state" }, 400);
+    return env.LOGINS.getByName(state).callback(state, request);
+  }
+  try {
+    if (path === "/v1/auth/apple/callback") {
+      if (request.method !== "POST" || request.headers.get("content-type")?.split(";")[0] !== "application/x-www-form-urlencoded") return null;
+      const form = new URLSearchParams(await readText(request, 16384));
+      const state = form.get("state");
+      if (!validSecret(state)) return reply({ error: "invalid_login_state" }, 400);
+      return env.LOGINS.getByName(state).applePosted(state, { code: form.get("code"), error: form.has("error"), user: form.get("user") });
+    }
+    const body = await readJson(request);
+    if (path.endsWith("/token")) {
+      if (!validSecret(body.id) || typeof body.identity_token !== "string") return reply({ error: "invalid_grant" }, 401);
+      return env.LOGINS.getByName(body.id).completeNative(body.identity_token, body.user);
+    }
+    if (typeof body.name !== "string") return reply({ error: "invalid_login" }, 400);
+    if (!(await consumeLoginRate(env, request))) return reply({ error: "rate_limited" }, 429, { "retry-after": "60" });
+    const id = randomSecret();
+    return env.LOGINS.getByName(id).startNative(id, body.name);
+  } catch {
+    return reply({ error: "invalid_request" }, 400);
+  }
 }
 
 /**

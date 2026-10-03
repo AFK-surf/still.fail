@@ -36,6 +36,9 @@ like, nothing else changes):
             (docs/telemetry.md). Without it the web app is built without analytics.
   axiom     <deploy>/axiom.json, {"dataset", "token"}: where traces go (docs/telemetry.md).
             Without it the cloud takes no traces.
+  apple     <deploy>/apple.json, {"services_id", "team_id", "key_id", "private_key", "bundle_ids"}: Sign in with
+            Apple (cloud/src/apple.ts). The Services ID's return URL is <origin>/v1/auth/apple/callback; private_key
+            is the PEM of the team's Sign in with Apple key (.p8); bundle_ids, the iOS apps'. Without it, no Apple.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
 import argparse
@@ -77,6 +80,7 @@ AXIOM = DEPLOY / "axiom.json"
 # Push notifications (docs/notifications.md): the VAPID key ({public, private, subject}) and Firebase's service account.
 VAPID = DEPLOY / "vapid.json"
 FCM = DEPLOY / "fcm-service-account.json"
+APPLE = DEPLOY / "apple.json"
 
 
 def write_private(path: Path, value) -> None:
@@ -164,6 +168,15 @@ def push() -> dict:
     else:
         print(f"note: {FCM} is missing; no pushes to Android")
     return value
+
+
+def apple() -> dict:
+    if not APPLE.exists():
+        print(f"note: {APPLE} is missing; no Sign in with Apple")
+        return {}
+    value = json.loads(APPLE.read_text())
+    return {"APPLE_CLIENT_ID": value["services_id"], "APPLE_TEAM_ID": value["team_id"], "APPLE_KEY_ID": value["key_id"],
+            "APPLE_PRIVATE_KEY": value["private_key"], "APPLE_BUNDLE_IDS": ",".join(value.get("bundle_ids", []))}
 
 
 @contextmanager
@@ -313,6 +326,7 @@ def main() -> None:
         print("axiom", "present" if AXIOM.exists() else f"missing: no traces without {AXIOM}")
         print("vapid", "present" if VAPID.exists() else f"missing: no Web Push without {VAPID}")
         print("fcm", "present" if FCM.exists() else f"missing: no pushes to Android without {FCM}")
+        print("apple", "present" if APPLE.exists() else f"missing: no Sign in with Apple without {APPLE}")
         print("beta zone", beta_zone(), "active" if beta_ready(account_id()) else "not active: web-beta and site-beta will be skipped")
         return
 
@@ -342,7 +356,7 @@ def main() -> None:
     # Read only for the parts that take them: keys() makes keys.json where there is none, which a deploy of the static
     # sites alone (CI's web-beta, on a machine without the deploy directory's keys) must not do.
     secrets_of = {
-        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push()},
+        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **apple()},
         "relay": lambda: {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
     def deploy(part: str, env) -> None:

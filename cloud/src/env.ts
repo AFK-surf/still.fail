@@ -32,6 +32,17 @@ export interface Env {
   RELAY_NAMES?: Record<string, string>;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  /**
+   * Sign in with Apple (apple.ts), from the deploy directory's apple.json; unset, there is none. The Services ID the
+   * browser signs in with, the team and its Sign in with Apple key (Key ID, and the .p8 file's PEM) that signs the
+   * client secret.
+   */
+  APPLE_CLIENT_ID?: string;
+  APPLE_TEAM_ID?: string;
+  APPLE_KEY_ID?: string;
+  APPLE_PRIVATE_KEY?: string;
+  /** The iOS apps' bundle IDs (comma-separated) whose identity tokens sign in; unset, the native sign-in is off. */
+  APPLE_BUNDLE_IDS?: string;
   AUTH_SIGNING_KEY: string;
   ADMIN_TOKEN?: string;
   /** The console admin's Google email (wrangler.jsonc; the tests and the dev cloud set their own). Unset: no admin. */
