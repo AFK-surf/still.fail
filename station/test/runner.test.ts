@@ -11,8 +11,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 test("lines in order; a station that lets go and comes back reads on where it acknowledged", async () => {
   const data = mkdtempSync(join(tmpdir(), "runner-test-"));
-  // Says 1..6, a line every 100 ms, then echoes what it is sent, then exits 3.
-  const script = "for i in 1 2 3 4 5 6; do echo line$i; sleep 0.1; done; read x; echo got:$x; echo oops >&2; exit 3";
+  // Says 1..6, a line every 50 ms, then echoes what it is sent, then exits 3.
+  const script = "for i in 1 2 3 4 5 6; do echo line$i; sleep 0.05; done; read x; echo got:$x; echo oops >&2; exit 3";
   const info = await startRunner(data, "t1", "/bin/sh", ["-c", script], process.env, data);
   assert.equal(info.id, "t1");
 
@@ -22,7 +22,8 @@ test("lines in order; a station that lets go and comes back reads on where it ac
   a.detach();
   const seenByA = first.length;
 
-  await sleep(300);
+  // Lines come meanwhile, with nobody to read them.
+  await sleep(150);
   assert.equal(existingRunners(data).length, 1, "the runner outlives the connection");
   const second: string[] = [];
   const b = new RunnerConnection(info, (stream, text) => void second.push(`${stream}:${text}`));
@@ -34,6 +35,6 @@ test("lines in order; a station that lets go and comes back reads on where it ac
   assert.deepEqual(all, ["line1", "line2", "line3", "line4", "line5", "line6", "got:hello"], "no line twice, none lost");
   assert.ok(second.includes("err:oops"));
   b.done();
-  await sleep(300);
+  for (let t = 0; existingRunners(data).length > 0 && t < 5000; t += 20) await sleep(20);
   assert.equal(existingRunners(data).length, 0, "done: the runner is gone");
 });

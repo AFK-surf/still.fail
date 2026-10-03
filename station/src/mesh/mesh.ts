@@ -45,7 +45,10 @@ export const MeshLive = Layer.effectDiscard(
       );
       const connections = yield* FiberSet.make();
       // The mesh's spans, when the config turns traces on (read at start, as the Rust does).
-      const traces = new Traces(agents.config.raw()?.telemetry?.traces === true);
+      const traces = yield* Effect.acquireRelease(
+        Effect.sync(() => new Traces(agents.config.raw()?.telemetry?.traces === true)),
+        (traces) => Effect.promise(() => traces.close()),
+      );
       if (traces.enabled) traces.exportTo(cloud.state, key);
       const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), shares, traces };
       for (;;) {

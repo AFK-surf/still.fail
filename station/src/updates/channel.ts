@@ -7,8 +7,9 @@
 // Unlike the Rust command, Node cannot try run/station.lock (flock): whether a station runs is told by run/station.json
 // (its pid there, alive, a station's command, and saying it takes the ask: `channel: 1`), as the installer tells it.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, watch } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { Effect, Latch, Option } from "effect";
 import { ConfigFile } from "../ops/config.ts";
 import { flag } from "../ops/files.ts";
 import { stationLang, tr } from "../ops/i18n.ts";
@@ -67,22 +68,52 @@ export async function setChannel(data: string, channel: Channel, waitMs: number,
     rmSync(join(run, CHANNEL_ASK), { force: true });
     throw new Error(tr(stationLang(), "station.cli.signalFailed", { pid, error: (e as Error).message }));
   }
-  const until = Date.now() + waitMs;
-  while (Date.now() < until) {
-    let text: string | null = null;
-    try {
-      text = readFileSync(answer, "utf8");
-    } catch {}
-    if (text !== null) {
-      rmSync(answer, { force: true });
-      const t = text.trim();
-      if (t.startsWith("ok")) return;
-      throw new Error(t.startsWith("error ") ? t.slice(6) : t);
-    }
-    await new Promise((r) => setTimeout(r, 100));
+  const text = Option.getOrNull(await Effect.runPromise(answerIn(answer, waitMs)));
+  if (text !== null) {
+    rmSync(answer, { force: true });
+    const t = text.trim();
+    if (t.startsWith("ok")) return;
+    throw new Error(t.startsWith("error ") ? t.slice(6) : t);
   }
   rmSync(join(run, CHANNEL_ASK), { force: true });
   throw new Error(tr(stationLang(), "station.cli.noAnswer"));
+}
+
+/// The running station's answer in `path`, once it is there: looked at as its directory changes (the answer is written
+/// aside and moved in) and every 100 ms besides (a change can go unheard); none after `waitMs`.
+function answerIn(path: string, waitMs: number): Effect.Effect<Option.Option<string>> {
+  const read = () => {
+    try {
+      return readFileSync(path, "utf8");
+    } catch {
+      return null;
+    }
+  };
+  return Effect.scoped(
+    Effect.gen(function* () {
+      const changed = Latch.makeUnsafe(false);
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          try {
+            const watcher = watch(dirname(path), (_, name) => {
+              if (name === null || name === basename(path)) changed.openUnsafe();
+            });
+            watcher.on("error", () => {});
+            return watcher;
+          } catch {
+            return null;
+          }
+        }),
+        (watcher) => Effect.sync(() => watcher?.close()),
+      );
+      for (;;) {
+        changed.closeUnsafe();
+        const text = read();
+        if (text !== null) return text;
+        yield* Effect.raceFirst(Effect.sleep(100), changed.await);
+      }
+    }),
+  ).pipe(Effect.timeoutOption(waitMs));
 }
 
 /// The command: `args` as the station was given them (after `channel`, a channel or none; `--app`, `--data`). Says

@@ -3,6 +3,7 @@
 // 3 s to still.fail cloud's `/v1/telemetry/traces` signed with the station's key; the cloud forwards them to Axiom. A
 // batch that cannot be sent is dropped. Off unless the config turns traces on (telemetry.traces), read at start.
 import { randomBytes } from "node:crypto";
+import { Clock, Effect, Exit, FiberSet, Scope } from "effect";
 import { nowSecs } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { type StationKey, sha256hex } from "../cloud/key.ts";
@@ -57,12 +58,25 @@ function attribute(key: string, value: unknown) {
 export class Traces {
   readonly enabled: boolean;
   readonly spans: unknown[] = [];
-  private timer: ReturnType<typeof setTimeout> | null = null;
+  /// A flush is due (its wait is running).
+  private armed = false;
   /// Where batches go (set once the station is in still.fail cloud).
   private sink: ((spans: unknown[]) => Promise<void>) | null = null;
+  /// Runs an effect as a fiber of these traces' (the wait before a flush): they end at `close`.
+  private run: (effect: Effect.Effect<void>) => Promise<void>;
+  private scope: Scope.Closeable;
 
-  constructor(enabled: boolean) {
+  /// `clock`: the clock the batching wait runs on (a TestClock in tests).
+  constructor(enabled: boolean, options: { clock?: Clock.Clock } = {}) {
     this.enabled = enabled;
+    this.scope = Effect.runSync(Scope.make());
+    const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
+    this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
+  }
+
+  /// Stops batching: a flush still waiting is not made (its spans are dropped, as a batch that cannot be sent is).
+  async close() {
+    await Effect.runPromise(Scope.close(this.scope, Exit.void));
   }
 
   /// A span under `parent`, when traces are on and the caller records this trace.
@@ -95,11 +109,13 @@ export class Traces {
   private record(span: unknown) {
     if (!this.enabled) return;
     if (this.spans.length < MAX_BUFFER) this.spans.push(span);
-    this.timer ??= setTimeout(() => void this.flush(), EXPORT_MS);
+    if (this.armed) return;
+    this.armed = true;
+    void this.run(Effect.sleep(EXPORT_MS).pipe(Effect.andThen(Effect.promise(() => this.flush())))).catch(() => {});
   }
 
   private async flush() {
-    this.timer = null;
+    this.armed = false;
     while (this.spans.length > 0) {
       const batch = this.spans.splice(0, MAX_BATCH);
       if (this.sink === null) continue;

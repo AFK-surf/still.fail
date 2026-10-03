@@ -1,13 +1,13 @@
 // A fake `claude -p --input-format stream-json --output-format stream-json`: frames as the real CLI writes them
 // (system/init, status, stream_event partial messages, assistant/user messages, result), driven by what the prompt says:
 //   say:<text>    a reply                       fail:auth|rate|model   a result with is_error
-//   slow:<n>      n deltas, 100 ms apart         retry401               api_retry 401 frames until interrupted
+//   slow:<n>      n deltas, 50 ms apart          retry401               api_retry 401 frames until interrupted
 //   tool          a Bash call that waits until background_tasks (or interrupt)
 //   again         a reply, then a turn of its own (no prompt of ours)
 //   exit          exits 3 in the middle of the turn
 //   …post:<text>  (anywhere in a message the station hands it) calls chat_post through the MCP endpoint of --mcp-config
 //                 with its token, to the message's thread, ending the turn all_done; then a reply with what it answered
-//                 (`slow:<n> post:<text>`: n deltas, 100 ms apart, before it)
+//                 (`slow:<n> post:<text>`: n deltas, 50 ms apart, before it)
 // Input while busy is read into the turn (a delta "steer:<text>"); "queue:<text>" becomes a turn after it.
 // FAKE_DUMP: its argv and env are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin.
 import fs from "node:fs";
@@ -21,6 +21,16 @@ const sessionId = flag("--session-id") || flag("--resume") || "none";
 
 const say = (frame) => fs.writeSync(1, JSON.stringify(frame) + "\n");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/// A wait that a control request (interrupt, background_tasks) ends at once.
+let wake = () => {};
+const pause = (ms) =>
+  new Promise((r) => {
+    const timer = setTimeout(r, ms);
+    wake = () => {
+      clearTimeout(timer);
+      r();
+    };
+  });
 
 let busy = false;
 let interrupted = false;
@@ -70,16 +80,16 @@ async function turn(text) {
   else if (text === "retry401") {
     for (let attempt = 1; !interrupted && attempt < 200; attempt++) {
       say({ type: "system", subtype: "api_retry", attempt, retry_delay_ms: 100, error_status: 401, error: "invalid token", session_id: sessionId });
-      await sleep(100);
+      await pause(100);
     }
     result({ subtype: "error_during_execution", is_error: true, result: "" });
   } else if (text.includes("post:")) {
     const server = JSON.parse(flag("--mcp-config")).mcpServers.stillfail;
     const to = /thread="([^"]+)"/.exec(text)?.[1] ?? "";
     const said = text.slice(text.indexOf("post:") + 5).split("\n")[0];
-    // `slow:<n>` before it: n deltas, 100 ms apart, first (a turn long enough to hand over in the middle of).
+    // `slow:<n>` before it: n deltas, 50 ms apart, first (a turn long enough to hand over in the middle of).
     const slow = /slow:(\d+)/.exec(text.slice(0, text.indexOf("post:")));
-    if (slow) await message(Array.from({ length: Number(slow[1]) }, (_, i) => `d${i} `), 100);
+    if (slow) await message(Array.from({ length: Number(slow[1]) }, (_, i) => `d${i} `), 50);
     const call = (id, method, params) =>
       fetch(server.url, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${process.env.STILLFAIL_MCP_TOKEN}` }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) }).then((r) => r.json());
     await call(1, "initialize", { protocolVersion: "2025-06-18" });
@@ -96,13 +106,13 @@ async function turn(text) {
     stream({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: '"sleep 60"}' } });
     stream({ type: "content_block_stop", index: 0 });
     stream({ type: "message_stop" });
-    for (let i = 0; i < 100 && !backgrounded && !interrupted; i++) await sleep(100);
+    if (!backgrounded && !interrupted) await pause(10_000);
     say({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "call_1", content: backgrounded ? "moved to background" : "interrupted" }] } });
     if (interrupted) result({ subtype: "error_during_execution", is_error: true, result: "" });
     else result({ result: await message(["done"], 0) });
   } else if (text.startsWith("slow:")) {
     const count = Number(text.slice(5));
-    const all = await message(Array.from({ length: count }, (_, i) => `d${i} `), 100);
+    const all = await message(Array.from({ length: count }, (_, i) => `d${i} `), 50);
     if (interrupted) result({ subtype: "error_during_execution", is_error: true, result: "" });
     else result({ result: all });
   } else {
@@ -127,6 +137,7 @@ rl.on("line", (line) => {
     const subtype = msg.request && msg.request.subtype;
     if (subtype === "interrupt") interrupted = true;
     if (subtype === "background_tasks") backgrounded = true;
+    wake();
     say({ type: "control_response", response: { subtype: "success", request_id: msg.request_id } });
     return;
   }

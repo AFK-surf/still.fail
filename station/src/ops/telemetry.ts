@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { Effect } from "effect";
 import { iso } from "../read/transcript.ts";
 
 /// The project key and build, written next to the admin page by its build (web/vite.config.ts).
@@ -117,6 +118,8 @@ export class ErrorReports {
   /// Sends what is queued (at most 5 s), then nothing more.
   async shutdown() {
     this.closed = true;
-    if (this.sending) await Promise.race([this.sending, new Promise((r) => setTimeout(r, 5_000))]);
+    const sending = this.sending;
+    // The wait ends with the sending: nothing is left to hold the process once it is done.
+    if (sending) await Effect.runPromise(Effect.timeoutOption(Effect.promise(() => sending), "5 seconds"));
   }
 }

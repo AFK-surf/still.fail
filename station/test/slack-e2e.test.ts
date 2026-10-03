@@ -7,6 +7,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { Effect, Exit, Scope } from "effect";
+import { TestClock } from "effect/testing";
 import { ClaudeDriver } from "../src/agents/claude.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { hubConfig } from "../src/sessions/config.ts";
@@ -47,7 +49,10 @@ test("an app_mention over Socket Mode starts a turn; the agent's chat_post lands
   const driver = new ClaudeDriver({ data });
   let url = "";
   let hub: Hub | undefined;
-  const slack = makeConnections({ data, store, config, receive: (id, event) => hub!.receive(id, event), bound: () => true, client: new SlackClient(slackStandIn.base) });
+  // The surface's own timing (its status line's pace, its pings) on a clock of the test's.
+  const scope = Effect.runSync(Scope.make());
+  const clock = Effect.runSync(Scope.provide(TestClock.make(), scope));
+  const slack = makeConnections({ data, store, config, receive: (id, event) => hub!.receive(id, event), bound: () => true, client: new SlackClient(slackStandIn.base), clock });
   hub = new Hub({ config: () => hubConfig(config.raw(), data), store, chats: slack.chats, drivers: [driver], mcpUrl: () => url, internal: new InternalChat() });
   const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, chatTools(hub));
   const served = await openAgentsDoor({ port: 0 }, mcp, () => ({ status: 400, body: { error: "no jobs" } }));
@@ -81,8 +86,14 @@ test("an app_mention over Socket Mode starts a turn; the agent's chat_post lands
     const turns = store.listTurns(key);
     assert.equal(turns.length, 1, "not nudged");
     assert.deepEqual([turns[0]!.summary.outcome, turns[0]!.summary.ending], ["completed", "all_done"]);
-    // While it worked, the thread said so, and the line was cleared at the end.
-    await slackStandIn.until("the status cleared", () => slackStandIn.calls("assistant.threads.setStatus").some((c) => c.params.status === ""));
+    // While it worked, the thread said so, and the line was cleared at the end: at once, or (the line changed just
+    // before) once its couple of seconds are up.
+    const cleared = () => slackStandIn.calls("assistant.threads.setStatus").some((c) => c.params.status === "");
+    for (let i = 0; i < 10 && !cleared(); i++) {
+      await Effect.runPromise(clock.adjust("1 second"));
+      await slackStandIn.until("the status cleared", cleared, 100).catch(() => {});
+    }
+    assert.ok(cleared(), "the status cleared");
     assert.equal(slackStandIn.calls("assistant.threads.setStatus")[0]!.params.thread_ts, "1700000000.000100");
   } finally {
     await slack.close();
@@ -90,6 +101,7 @@ test("an app_mention over Socket Mode starts a turn; the agent's chat_post lands
     await served.close(1000);
     store.close();
     await slackStandIn.close();
+    await Effect.runPromise(Scope.close(scope, Exit.void));
     rmSync(data, { recursive: true, force: true });
   }
 });

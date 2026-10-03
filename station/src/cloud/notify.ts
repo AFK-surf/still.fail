@@ -3,6 +3,7 @@
 // (src/read/notices.ts), gathered over a second and posted to still.fail cloud's `/v1/stations/notify`, signed with the
 // station's key, which pushes them to people's devices. Only what happens from now on is noticed. A batch that cannot be
 // sent is dropped; an older cloud (404) has no pushes.
+import { Clock, Effect, Exit, FiberSet, Scope } from "effect";
 import { stationLang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Readers } from "../read/pool.ts";
@@ -21,7 +22,11 @@ export class Notifier {
   /// Each session's last turn noticed (when it ended), so one turn is noticed once.
   private ended = new Map<string, number>();
   private waiting: Notice[] = [];
-  private timer: ReturnType<typeof setTimeout> | null = null;
+  /// A batch is being gathered (its wait is running).
+  private gathering = false;
+  /// Runs an effect as a fiber of the notifier's (the wait while a batch gathers): they end at `close`.
+  private run: (effect: Effect.Effect<void>) => Promise<void>;
+  private scope: Scope.Closeable;
   private stop: () => void;
   private readers: Readers;
   private store: Store;
@@ -30,7 +35,11 @@ export class Notifier {
   /// Where a batch goes (tests give their own); still.fail cloud's by default.
   post: (notices: Notice[]) => Promise<void>;
 
-  constructor(store: Store, readers: Readers, cloud: Cloud, key: StationKey) {
+  /// `clock`: the clock a batch gathers on (a TestClock in tests).
+  constructor(store: Store, readers: Readers, cloud: Cloud, key: StationKey, options: { clock?: Clock.Clock } = {}) {
+    this.scope = Effect.runSync(Scope.make());
+    const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
+    this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
     this.store = store;
     this.readers = readers;
     this.cloud = cloud;
@@ -44,7 +53,7 @@ export class Notifier {
 
   close() {
     this.stop();
-    if (this.timer) clearTimeout(this.timer);
+    Effect.runFork(Scope.close(this.scope, Exit.void));
   }
 
   /// A turn that ended since the last look: its chats hear how. Looked at here first, so most changes ask nothing.
@@ -74,16 +83,20 @@ export class Notifier {
   private queue(notices: Notice[]) {
     if (notices.length === 0) return;
     this.waiting.push(...notices);
-    this.timer ??= setTimeout(() => {
-      this.timer = null;
-      const batch = this.waiting.splice(0, MAX_BATCH);
-      if (this.waiting.length > 0) this.queue(this.waiting.splice(0));
-      if (this.cloud.removed() || this.cloud.state === null) return;
-      this.post(batch).then(
-        () => log.info("notify", "notices sent", { n: batch.length }),
-        (error) => log.warn("notify", "notices dropped", { n: batch.length, error: (error as Error).message }),
-      );
-    }, GATHER_MS);
+    if (this.gathering) return;
+    this.gathering = true;
+    void this.run(Effect.sleep(GATHER_MS).pipe(Effect.andThen(Effect.sync(() => this.gathered())))).catch(() => {});
+  }
+
+  private gathered() {
+    this.gathering = false;
+    const batch = this.waiting.splice(0, MAX_BATCH);
+    if (this.waiting.length > 0) this.queue(this.waiting.splice(0));
+    if (this.cloud.removed() || this.cloud.state === null) return;
+    this.post(batch).then(
+      () => log.info("notify", "notices sent", { n: batch.length }),
+      (error) => log.warn("notify", "notices dropped", { n: batch.length, error: (error as Error).message }),
+    );
   }
 
   /// One batch, signed over "ember-station-notify-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>", its headers

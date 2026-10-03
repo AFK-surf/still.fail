@@ -2,7 +2,7 @@
 // the Web API for what the station and its agents say and ask. One SlackSurface per connected connect; its Socket Mode
 // loop is a fiber in the surface's scope, and stopping the surface closes the scope (the socket with it).
 import { readFile } from "node:fs/promises";
-import { Effect, Exit, FiberSet, Result, Scope } from "effect";
+import { Clock, Deferred, Effect, Exit, FiberSet, Result, Scope } from "effect";
 import WebSocket from "ws";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
@@ -161,6 +161,8 @@ export type SlackSurfaceOptions = {
   staleMs?: number;
   /// The first wait before connecting again after a failure (doubling up to a minute).
   backoffMs?: number;
+  /// The clock its pings, its waits for a socket and between tries run on (a TestClock in tests).
+  clock?: Clock.Clock;
 };
 
 const MAX_BACKOFF_MS = 60_000;
@@ -180,6 +182,7 @@ export class SlackSurface implements ChatSurface {
   private pingMs: number;
   private staleMs: number;
   private backoffMs: number;
+  private clock: Clock.Clock | undefined;
   private stopped = false;
   private scope: Scope.Closeable;
   private run: (effect: Effect.Effect<void, never>) => Promise<void>;
@@ -195,8 +198,10 @@ export class SlackSurface implements ChatSurface {
     this.pingMs = options.pingMs ?? 5_000;
     this.staleMs = options.staleMs ?? 20_000;
     this.backoffMs = options.backoffMs ?? 1_000;
+    this.clock = options.clock;
     this.scope = Effect.runSync(Scope.make());
-    this.run = Effect.runSync(Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope));
+    const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
+    this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
   }
 
   identity(): SlackIdentity | null {
@@ -290,85 +295,105 @@ export class SlackSurface implements ChatSurface {
   /// pinged every `pingMs`, and taken for dead when it said nothing (not even a pong) for `staleMs`. Each event is
   /// acknowledged once its handler kept it; one that failed is not, and Slack sends it again.
   runSocket(url: string, handler: Handler): Effect.Effect<void, Error> {
-    return Effect.callback<void, Error>((resume) => {
-      const ws = new WebSocket(url);
-      let heard = Date.now();
-      let finished = false;
-      let ping: ReturnType<typeof setInterval> | undefined;
-      const opening = setTimeout(() => end(new Error(`slack socket did not open within ${this.staleMs / 1000}s`)), this.staleMs);
-      const end = (error: Error | null) => {
-        if (finished) return;
-        finished = true;
-        clearTimeout(opening);
-        clearInterval(ping);
-        ws.removeAllListeners();
-        ws.on("error", () => {});
-        if (ws.readyState !== WebSocket.CLOSED) ws.terminate();
-        if (error !== null) resume(Effect.fail(error));
-        else {
-          this.setStatus(false, this.status.lastError);
-          resume(Effect.void);
-        }
-      };
-      const bot = this.botUserId();
-      const botId = this.me?.botId ?? "";
-      ws.on("open", () => {
-        clearTimeout(opening);
-        heard = Date.now();
-        this.setStatus(true, null);
-        ping = setInterval(() => {
-          const quiet = Date.now() - heard;
-          if (quiet >= this.staleMs) return end(new Error(`slack socket said nothing for ${quiet / 1000}s`));
+    const self = this;
+    const socket = Effect.gen(function* () {
+      const clock = yield* Clock.Clock;
+      const opened = yield* Deferred.make<void>();
+      let ws: WebSocket | undefined;
+      let heard = clock.currentTimeMillisUnsafe();
+      // The socket itself: ends when it closes, fails on its error. Interrupted (it went quiet, or the surface stops),
+      // it is cut off.
+      const open = Effect.callback<void, Error>((resume) => {
+        const socket = new WebSocket(url);
+        ws = socket;
+        let finished = false;
+        const cut = () => {
+          finished = true;
+          socket.removeAllListeners();
+          socket.on("error", () => {});
+          if (socket.readyState !== WebSocket.CLOSED) socket.terminate();
+        };
+        const end = (error: Error | null) => {
+          if (finished) return;
+          cut();
+          if (error !== null) resume(Effect.fail(error));
+          else {
+            self.setStatus(false, self.status.lastError);
+            resume(Effect.void);
+          }
+        };
+        const bot = self.botUserId();
+        const botId = self.me?.botId ?? "";
+        socket.on("open", () => {
+          heard = clock.currentTimeMillisUnsafe();
+          self.setStatus(true, null);
+          Deferred.doneUnsafe(opened, Effect.void);
+        });
+        const alive = () => (heard = clock.currentTimeMillisUnsafe());
+        socket.on("pong", alive);
+        socket.on("ping", alive);
+        socket.on("message", (data, binary) => {
+          alive();
+          if (binary) return;
+          let envelope: Json;
           try {
-            ws.ping();
-          } catch {}
-        }, this.pingMs);
-      });
-      const alive = () => (heard = Date.now());
-      ws.on("pong", alive);
-      ws.on("ping", alive);
-      ws.on("message", (data, binary) => {
-        alive();
-        if (binary) return;
-        let envelope: Json;
-        try {
-          envelope = JSON.parse(data.toString());
-        } catch {
-          return;
-        }
-        if (envelope?.type === "disconnect") {
-          log.info("slack", "slack asked to reconnect", { reason: JSON.stringify(envelope.reason ?? null) });
-          try {
-            ws.close();
-          } catch {}
-          return end(null);
-        }
-        if (envelope?.type !== "events_api") return;
-        const event = toEvent(envelope.payload?.event ?? null, bot, botId);
-        const envelopeId = envelope.envelope_id ?? null;
-        void (async () => {
-          try {
-            if (event !== null) await handler(event);
-          } catch (error) {
-            // Not acknowledged: Slack redelivers, and the store dedupes.
-            log.error("slack", "failed to accept slack event", { error: (error as Error).message });
+            envelope = JSON.parse(data.toString());
+          } catch {
             return;
           }
-          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ envelope_id: envelopeId }));
-        })();
+          if (envelope?.type === "disconnect") {
+            log.info("slack", "slack asked to reconnect", { reason: JSON.stringify(envelope.reason ?? null) });
+            try {
+              socket.close();
+            } catch {}
+            return end(null);
+          }
+          if (envelope?.type !== "events_api") return;
+          const event = toEvent(envelope.payload?.event ?? null, bot, botId);
+          const envelopeId = envelope.envelope_id ?? null;
+          void (async () => {
+            try {
+              if (event !== null) await handler(event);
+            } catch (error) {
+              // Not acknowledged: Slack redelivers, and the store dedupes.
+              log.error("slack", "failed to accept slack event", { error: (error as Error).message });
+              return;
+            }
+            if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ envelope_id: envelopeId }));
+          })();
+        });
+        socket.on("close", () => end(null));
+        socket.on("error", (error) => end(error));
+        return Effect.sync(() => {
+          if (!finished) cut();
+        });
       });
-      ws.on("close", () => end(null));
-      ws.on("error", (error) => end(error));
-      return Effect.sync(() => {
-        if (finished) return;
-        finished = true;
-        clearTimeout(opening);
-        clearInterval(ping);
-        ws.removeAllListeners();
-        ws.on("error", () => {});
-        ws.terminate();
-      });
+      // Its watch: open within `staleMs`, then a ping every `pingMs`; it fails once the socket said nothing for `staleMs`.
+      const watch = Deferred.await(opened).pipe(
+        Effect.timeoutOrElse({
+          duration: self.staleMs,
+          orElse: () => Effect.fail(new Error(`slack socket did not open within ${self.staleMs / 1000}s`)),
+        }),
+        Effect.andThen(
+          Effect.forever(
+            Effect.sleep(self.pingMs).pipe(
+              Effect.andThen(
+                Effect.suspend(() => {
+                  const quiet = clock.currentTimeMillisUnsafe() - heard;
+                  if (quiet >= self.staleMs) return Effect.fail(new Error(`slack socket said nothing for ${quiet / 1000}s`));
+                  try {
+                    ws?.ping();
+                  } catch {}
+                  return Effect.void;
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
+      return yield* Effect.raceFirst(open, watch);
     });
+    return this.clock ? socket.pipe(Effect.provideService(Clock.Clock, this.clock)) : socket;
   }
 
   /// Posted as written (the agent writes Slack's formatting); a long message goes out in parts, the first part's ts
