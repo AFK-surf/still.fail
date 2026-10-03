@@ -24,6 +24,11 @@ import { Scheduler } from "./sync/scheduler.ts";
 import { Kind, SAMPLE, Tracer } from "./trace.ts";
 import { Wakes, WakingHost } from "./wake.ts";
 import { Workspaces } from "./workspace.ts";
+import { install as installStationCalls } from "./station/calls.ts";
+import { StationsSync } from "./station/sync.ts";
+import { StationTopics } from "./station/topics.ts";
+import type { StationWire } from "./station/wire.ts";
+import { meshWire } from "./mesh.ts";
 import { isObject } from "./util.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
@@ -38,6 +43,8 @@ export const PUSH_KEY = "push";
 export type Progress = (value: unknown) => void;
 
 export type Options = {
+  /// How the core reaches stations: the mesh by default; tests' stations answer over the host's fetch.
+  wire?: (inner: Inner) => StationWire;
   /// The share of traces recorded (0: none).
   sample?: number;
   /// The clock the core's timers run on (a TestClock in tests).
@@ -61,6 +68,8 @@ export class Inner {
   wakes!: Wakes;
   scheduler!: Scheduler;
   cloudSync!: CloudSync;
+  stations!: StationsSync;
+  stationTopics!: StationTopics;
   router!: Router;
   /// The calls under way that a UI can stop, by `client/id`.
   calls = new Map<string, Fiber.Fiber<unknown, unknown>>();
@@ -119,6 +128,22 @@ export class Core {
       );
       inner.router = new Router(inner);
       store.setSource(inner.router);
+      inner.stations = new StationsSync(inner, options.wire ? options.wire(inner) : meshWire(inner));
+      inner.stationTopics = new StationTopics(inner, inner.stations);
+      inner.router.owners.push(inner.stationTopics);
+      installStationCalls();
+      // The stations every account reaches are linked, as the workspaces say (once a burst of changes settles).
+      let reconciling = false;
+      inner.cloudSync.onReach = () => {
+        if (reconciling) return;
+        reconciling = true;
+        inner.runner.fork(
+          Effect.sync(() => {
+            reconciling = false;
+            inner.stations.reconcile();
+          }),
+        );
+      };
       inner.shownAccounts = inner.accounts.list();
       inner.tracer.setExport((body) => {
         const account = inner.accounts.list()[0];
@@ -127,6 +152,7 @@ export class Core {
       inner.accounts.onChange(() => inner.cloudSync.accountsChanged());
       // From now on the core keeps what it holds current, whatever the UI shows.
       inner.cloudSync.start();
+      inner.stations.reconcile();
       return new Core(inner);
     });
   }

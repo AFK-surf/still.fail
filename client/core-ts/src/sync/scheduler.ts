@@ -120,7 +120,7 @@ export class Scheduler {
   }
 
   /// Makes what matches `prefix` at least `priority` while `who` says so (a UI's focus); `null` lets it go.
-  prioritize(who: string, prefix: string | null, priority = Priority.focused): void {
+  prioritize(who: string, prefix: string | null, priority: number = Priority.focused): void {
     if (prefix === null) this.#boosts.delete(who);
     else this.#boosts.set(who, [prefix, priority]);
     if (prefix === null) return;
