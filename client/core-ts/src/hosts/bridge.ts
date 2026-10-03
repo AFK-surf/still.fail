@@ -1,7 +1,7 @@
 // The core on a native shell that is not Node (the Android app's: Hermes in C++, its IO in Rust, apps/android/core):
 // the Host and the iroh over one narrow bridge. The JS asks for an operation by name with JSON and maybe bytes; the
 // shell does it on its own threads and answers (`complete`) with JSON and maybe bytes. What the shell does is what
-// client/ffi's host did (HTTP, the cloud's WebSocket, files per storage key and `core.db`, TCP to adbd) and what the
+// the Rust core's native host did (HTTP, the cloud's WebSocket, files per storage key and `core.db`, TCP to adbd) and what the
 // station's addon does for Node (iroh), so a phone moving from the Rust core keeps its files.
 //
 // Operations (`op`, its JSON → its answer):
@@ -256,8 +256,8 @@ export function bridgeIroh(bridge: Bridge): Iroh {
   return { bind: (o) => Effect.map(bridge.call("iroh.bind", { relayUrls: o.relayUrls, lookup: o.lookup, relayOnly: o.relayOnly }, o.secretKey), (a) => endpoint(handle(a))) };
 }
 
-/// A core on a shell: client/node's API (connect / receive(json) / disconnect). A bug that ends a fiber ends it as a
-/// panic ended client/ffi's: `onFatal` (each UI is told `{"fatal": …}` by the shell, which starts another).
+/// A core on a shell: the API the Rust core's Node addon had (connect / receive(json) / disconnect). A bug that ends a fiber ends it as a
+/// panic ended the Rust core: `onFatal` (each UI is told `{"fatal": …}` by the shell, which starts another).
 export function startBridged(native: Native, cloudOrigin: string, beta: boolean, os: string, onFatal: (reason: string) => void) {
   service.name = "stillfail-native";
   service.os = os;

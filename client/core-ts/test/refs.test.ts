@@ -1,4 +1,4 @@
-// client/core/src/refs.rs tests, ported.
+// The Rust core's refs.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Data } from "../src/data.ts";

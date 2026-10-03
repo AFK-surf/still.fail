@@ -1,4 +1,4 @@
-// The API providers a profile can reach with a key, and where each speaks which protocol (client/shapes providers.rs:
+// The API providers a profile can reach with a key, and where each speaks which protocol (client/core-ts/src/shapes/schema.ts providers.rs:
 // what the runtimes' environment is made from, so it follows the same list). Only what setting up a runtime needs:
 // `find`, `endpoints`, `cleanEndpoint`, `uses`.
 

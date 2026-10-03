@@ -32,7 +32,7 @@ let inWorkspace: string | undefined;
 
 /**
  * This page is in `workspace` (an id, or `local`): the core is told (`client.focus`), so what it tells the viewer is
- * of it (client/core/src/attend.rs), and so are the notices this page shows.
+ * of it (client/core-ts/src/attend.ts), and so are the notices this page shows.
  */
 export function useInWorkspace(workspace: string): void {
   useEffect(() => {
@@ -147,7 +147,7 @@ function equal(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 /**
- * Shows the notices the core says are to be shown now (docs/notifications.md; client/core/src/attend.rs decides:
+ * Shows the notices the core says are to be shown now (docs/notifications.md; client/core-ts/src/attend.ts decides:
  * not for a chat looked at, not while pushes say them), each from the one page that takes it, and opens a chat when
  * one is clicked (here, or in the service worker's notification).
  */

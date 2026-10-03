@@ -11,7 +11,7 @@ import { applyDelta, type DeltaOp } from "./delta.ts";
 import { captureException } from "../telemetry.ts";
 import { t } from "../i18n.ts";
 
-/** What a UI can subscribe to (`Topic` in client/core/src/protocol.rs). */
+/** What a UI can subscribe to (`Topic` in client/core-ts/src/protocol.ts). */
 export type Topic =
   | { topic: "decisionForm"; station: string; form: string }
   | { topic: "profileFlow"; station: string; form: string }
@@ -51,7 +51,7 @@ export type Topic =
   // What the core is waiting on, when it is worth saying (a core from before it answers an error: nothing to say): a
   // workspace's (its stations, its account's socket, the relay), or with none all of it.
   | { topic: "status"; workspace?: string }
-  // What a chat on a station says of its connection, when it says it all decided (client/core/src/pill.rs).
+  // What a chat on a station says of its connection, when it says it all decided (client/core-ts/src/pill.ts).
   | { topic: "connection"; station: string }
   // What a person hears about while the client runs (docs/notifications.md): a workspace's, or every one's.
   | { topic: "notices"; workspace?: string }
@@ -63,7 +63,7 @@ export type Topic =
   // The chats of a scope a few words find, titles first (only `station`'s, not `exclude`, `limit` at most): the
   // composer's `@` menu and the switcher. A core from before it answers an error.
   | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number }
-  // The archived chats of a scope's stations online, newest first by day (client/core/src/views/archive.rs).
+  // The archived chats of a scope's stations online, newest first by day (client/core-ts/src/views/archive.ts).
   | { topic: "archive"; scope: string }
   // A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here.
   | { topic: "newChat"; scope: string }
@@ -75,31 +75,31 @@ export type Topic =
   // The services and jobs left up a long while on the scope's stations that are up.
   | { topic: "longJobs"; scope: string }
   // What the agents of a scope's stations spent over its last `days` (7 or 30), by day, person, chat, profile and model
-  // (client/core/src/views/usage.rs). A core from before it answers an error.
+  // (client/core-ts/src/views/usage.ts). A core from before it answers an error.
   | { topic: "usage"; scope: string; days?: number }
   // A job as it is now (kept current by its events).
   | { topic: "job"; station: string; id: string }
   // How its person likes it on this device, and what the device is (prefs.ts).
   | { topic: "prefs" }
   // What people set going on this device and the core has not finished: each call that changes something, until it
-  // answers (client/core/src/doing.rs; doing.ts).
+  // answers (client/core-ts/src/doing.ts; doing.ts).
   | { topic: "doing" }
   | { topic: "previewLoad"; station: string; port: number }
   // What changed in still.fail, as this app shows it, and what an update brought until `changelog.seen`
-  // (client/core/src/changelog.rs).
+  // (client/core-ts/src/changelog.ts).
   | { topic: "changelog" }
   // What each workspace has waiting (how many chats want their person, how many are unread) and the chat last open in
-  // it; of those other than `workspace` (the one in view), the most urgent (client/core/src/views/marks.rs).
+  // it; of those other than `workspace` (the one in view), the most urgent (client/core-ts/src/views/marks.ts).
   | { topic: "workspaceMarks"; workspace?: string }
   // The decisions waiting for the viewer in a workspace's chats, those set aside last, and how many
-  // (client/core/src/decisions.rs). A core from before it answers an error.
+  // (client/core-ts/src/decisions.ts). A core from before it answers an error.
   | { topic: "decisions"; workspace: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }
 
 /**
- * Where this page's attention is (`client.focus`, client/core/src/attend.rs): in view, looked at, the chat it shows,
+ * Where this page's attention is (`client.focus`, client/core-ts/src/attend.ts): in view, looked at, the chat it shows,
  * the workspace it is in (an id, or `local`). Each field given changes; `chat: null` shows none; `left` says the chat
  * named is not shown any more.
  */
@@ -278,7 +278,7 @@ export class CoreClient {
 
   /**
    * The page is back after `away` ms hidden (a phone's page frozen in the background): the core gives up what went
-   * out before and reconnects (client/core/src/wake.rs). A worker that was up and now says nothing at all is gone
+   * out before and reconnects (client/core-ts/src/wake.ts). A worker that was up and now says nothing at all is gone
    * (the system can end it without a word to its port): a new one is started.
    */
   wake(away: number): void {
@@ -298,7 +298,7 @@ export class CoreClient {
 
   /**
    * The device's network changed (it came back online): every connection the core has was on the old one, so all
-   * that is under way is given up and opened anew (client/core/src/wake.rs). A core from before this takes it for a
+   * that is under way is given up and opened anew (client/core-ts/src/wake.ts). A core from before this takes it for a
    * wake after no time away, which does nothing.
    */
   networkChanged(): void {
@@ -308,7 +308,7 @@ export class CoreClient {
 
   /**
    * A person asked to try again (重试 where a station or still.fail cloud shows down): what waits stops waiting, and
-   * the connections are tried against new ones, but nothing under way is failed (client/core/src/wake.rs). `network`
+   * the connections are tried against new ones, but nothing under way is failed (client/core-ts/src/wake.ts). `network`
    * goes with it for a core from before `retry`, which takes it for the network changed.
    */
   retry(): void {
@@ -616,7 +616,7 @@ export function connectCore(): CoreClient {
     if (document.visibilityState === "hidden") hidden ??= Date.now();
     else back();
   });
-  // In view, and looked at: what is read and which notices this page leaves out follow (client/core/src/attend.rs).
+  // In view, and looked at: what is read and which notices this page leaves out follow (client/core-ts/src/attend.ts).
   const attend = () => void client.focus({ visible: document.visibilityState === "visible", focused: document.hasFocus() }).catch(() => undefined);
   attend();
   document.addEventListener("visibilitychange", attend);

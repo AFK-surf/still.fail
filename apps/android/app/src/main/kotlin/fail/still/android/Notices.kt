@@ -1,6 +1,6 @@
 // Notifications (docs/notifications.md → Clients): one channel (消息), one notification per chat (its tag), opening the
 // workspace’s decisions page. Local notices are those the core's `notify` says to show while the app is in front
-// (MainActivity; client/core/src/attend.rs decides), pushes come from FCM while it is not (Push.kt). 我 → 通知 turns
+// (MainActivity; client/core-ts/src/attend.ts decides), pushes come from FCM while it is not (Push.kt). 我 → 通知 turns
 // both off (kept in the core).
 package fail.still.android
 
@@ -100,7 +100,7 @@ object Notifier {
 
 /**
  * While the app is in front: the notices the core's `notify` says to show now (not while off, not for the chat looked
- * at, only of the workspace the app is in; client/core/src/attend.rs), each shown once it is taken (`notice.claim`).
+ * at, only of the workspace the app is in; client/core-ts/src/attend.ts), each shown once it is taken (`notice.claim`).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 suspend fun showNotices(context: Context, app: AppState) {

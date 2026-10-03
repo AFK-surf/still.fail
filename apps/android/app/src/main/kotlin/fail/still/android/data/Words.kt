@@ -1,5 +1,5 @@
 // Names of the choices the app offers: fixed words, not worked out from any data (what data says in words is the
-// core's, client/core/src/present.rs and format.rs). As web/src/format.ts.
+// core's, client/core-ts/src/present.ts and format.ts). As web/src/format.ts.
 package fail.still.android.data
 
 import fail.still.android.ui.t

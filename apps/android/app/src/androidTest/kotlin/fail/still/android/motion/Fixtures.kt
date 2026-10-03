@@ -41,7 +41,7 @@ object Fixtures {
         sessions = emptyList(), last = last, read = read, unread = 0, people = emptyList(),
     )
 
-    /** `said`: said while the chat shows, as the core marks it (attend.rs): it comes in. */
+    /** `said`: said while the chat shows, as the core marks it (attend.ts): it comes in. */
     fun mine(seq: Long, text: String, at: Long = NOW, said: Boolean? = null) = ChatMessage(
         seq = seq, thread = THREAD, ts = "t$seq", authorKind = "person", author = account.email, authorName = "Alice", text = text,
         attachments = emptyList(), quotes = emptyList(), createdAt = at, mine = true, system = false, by = MessageBy("Alice"), waiting = false, said = said, time = stamp(at),

@@ -68,8 +68,8 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 
-// What a job's dot says, its word, the line under its name and every time in words are the core's (client/core/src/
-// jobs.rs): `tone`, `meta`, `detail`, a notice's `ago` and `clock`; a chat's all together, what matters first, is its
+// What a job's dot says, its word, the line under its name and every time in words are the core's (client/core-ts/src/
+// jobs.ts): `tone`, `meta`, `detail`, a notice's `ago` and `clock`; a chat's all together, what matters first, is its
 // `chatJobs` view.
 
 /** What a job's dot says: a service up, a job alive, a service restarting, one that died, one that is over. */

@@ -1,4 +1,4 @@
-// client/core/src/store.rs tests, ported (same names, same checks): time on a TestClock.
+// The Rust core's store.rs tests, ported (same names, same checks): time on a TestClock.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CoreError } from "../src/error.ts";

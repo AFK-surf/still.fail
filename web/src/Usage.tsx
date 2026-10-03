@@ -1,4 +1,4 @@
-// What the agents spent (the core's `usage` view, client/core/src/views/usage.rs): a few totals, each day's cost split by
+// What the agents spent (the core's `usage` view, client/core-ts/src/views/usage.ts): a few totals, each day's cost split by
 // who it was for, and who, which chats, which accounts and which models spent the most. The settings page draws it on
 // the wide screen (cloud/settings.tsx UsageSettings), the phone's its own page around the same chart
 // (mobile/Usage.tsx). Everything shown is the core's: the page only picks 7 or 30 days and which list to show.

@@ -1,5 +1,5 @@
 // What changed in still.fail, as the narrow web has it (web/src/mobile/Changelog.tsx), from the core's `changelog` topic
-// (client/core/src/changelog.rs): the settings' 更新日志 page, by day on cards, each change with where it is and whether
+// (client/core-ts/src/changelog.ts): the settings' 更新日志 page, by day on cards, each change with where it is and whether
 // this app has it; and at the top of the list, what the last update brought, until the page is opened or it is put
 // away (`changelog.seen`).
 package fail.still.android.screens

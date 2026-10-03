@@ -42,7 +42,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 构建时由环境变量 `STILLFAIL_POSTHOG`（改名前是 `EMBER_POSTHOG`，也认）指向这个文件，`web/vite.config.ts`（网页）和 `scripts/posthog-key.ts`（station）读它：
 
 - `cloud/deploy.py` 构建网页版时自动设置（文件不存在就构建一个没有分析的版本，并提示）。
-- station 的构建：`STILLFAIL_POSTHOG=~/stillfail-deploy/posthog.json pnpm build`。station 没有自己的页面了，`pnpm build` 只编 wasm core 并把 key 写到 `dist/admin/posthog.json`（scripts/posthog-key.ts），发布包带着它，station 启动时从那里读，所以管理者只需打开配置，不需要别的设置。
+- station 的构建：`STILLFAIL_POSTHOG=~/stillfail-deploy/posthog.json pnpm build`。station 没有自己的页面了，`pnpm build` 只编 iroh 的 wasm 并把 key 写到 `dist/admin/posthog.json`（scripts/posthog-key.ts），发布包带着它，station 启动时从那里读，所以管理者只需打开配置，不需要别的设置。
 - 不设 `STILLFAIL_POSTHOG` 的构建（本地、开发）没有任何分析，station 也无从上报。
 
 # Telemetry
@@ -56,7 +56,7 @@ OpenTelemetry (OTLP JSON) and end up in Axiom, dataset `ember`.
 
 ### What is traced
 
-A **trace** starts in the client core (`client/core/src/trace.rs`) for each
+A **trace** starts in the client core (`client/core-ts/src/trace.ts`) for each
 user-facing operation:
 
 | Trace (root span) | When |

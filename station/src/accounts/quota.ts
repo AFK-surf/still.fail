@@ -48,7 +48,7 @@ function percent(value: unknown): number {
 
 const roundHalfAway = (n: number) => Math.sign(n) * Math.round(Math.abs(n));
 
-/// A window's label. Labels are not translated: cores read them (client/core/src/format.rs `window_mark`).
+/// A window's label. Labels are not translated: cores read them (client/core-ts/src/format.ts `window_mark`).
 export function windowLabel(minutes: number | null | undefined, fallback: string): string {
   if (typeof minutes !== "number" || !(minutes > 0)) return fallback;
   if (minutes <= 60 * 6) return `${roundHalfAway(minutes / 60)} 小时`;

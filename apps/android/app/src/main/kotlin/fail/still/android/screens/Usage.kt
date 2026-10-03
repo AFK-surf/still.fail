@@ -1,5 +1,5 @@
 // What the agents spent, from settings, as the narrow web has it (web/src/mobile/Usage.tsx): the core's `usage` view
-// (client/core/src/views/usage.rs) for the last 7 or 30 days. A few totals, each day's cost as a bar split by who it was
+// (client/core-ts/src/views/usage.ts) for the last 7 or 30 days. A few totals, each day's cost as a bar split by who it was
 // for (tapped, the day says its numbers: there is no hover here), and who, which chats, which accounts and which
 // models spent the most. Everything shown is the core's; the page only picks the days and the list.
 package fail.still.android.screens

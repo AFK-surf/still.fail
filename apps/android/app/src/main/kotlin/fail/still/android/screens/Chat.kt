@@ -428,7 +428,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val api = app.api(station)
     val messages = view.messages
 
-    // The unread line, as the core puts it (client/core/src/attend.rs): over the first message not read when the chat
+    // The unread line, as the core puts it (client/core-ts/src/attend.ts): over the first message not read when the chat
     // opened, not the viewer's, held for the visit; while it lies above what is loaded, the core loads older pages
     // first (none meanwhile).
     val lineAt = view.unreadLine
@@ -545,7 +545,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val rows = if (reveal.count < all.size) all.takeLast(reveal.count) else all
     host.rows = all.mapTo(HashSet()) { it.id }
     // What was in the list the last time it was drawn: an item new to it rises in; one scrolled to does not, nor one
-    // caught up on rather than said while the chat is open: the core says which (attend.rs: a message `said`, an agent
+    // caught up on rather than said while the chat is open: the core says which (attend.ts: a message `said`, an agent
     // `started` while the chat shows).
     val known = remember { HashSet<String>() }
     val started = agents.filter { it.view.started == true }.mapTo(HashSet()) { it.key }
@@ -778,7 +778,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     LaunchedEffect(watched) { if (!watched) motion.release() }
     LaunchedEffect(motion.current) { motion.current?.let { motion.play(it) } }
     // The core is told this chat shows, and whether its end is (`seen`): what is read, where the unread line goes and
-    // which notices are left out follow there (client/core/src/attend.rs).
+    // which notices are left out follow there (client/core-ts/src/attend.ts).
     val session = (of as? ChatOf.Session)?.key ?: view.key ?: agents.firstOrNull()?.key
     val shownAs = { end: Boolean? -> buildJsonObject {
         put("station", station); put("thread", thread?.id); put("session", session); end?.let { put("end", it) }

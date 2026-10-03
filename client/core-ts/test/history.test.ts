@@ -1,4 +1,4 @@
-// client/core/src/history.rs tests, ported.
+// The Rust core's history.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as format from "../src/format.ts";

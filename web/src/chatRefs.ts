@@ -1,6 +1,6 @@
 // References to other chats in what is written (ChatRef.tsx): in the composer a short mark, `@[its title]`, drawn as a
 // chip; sent, a link, `[its title](its page)`, which the agent reads the chat by and a message draws as the same chip.
-// The core makes the mark of a chat picked and keeps its link until it is sent (`chat.ref`, client/core/src/refs.rs).
+// The core makes the mark of a chat picked and keeps its link until it is sent (`chat.ref`, client/core-ts/src/refs.ts).
 
 /** A reference as the composer holds it. */
 export const REF_MARK = /@\[([^\]\n]{1,120})\]/g;

@@ -1,4 +1,4 @@
-// client/core/src/core/tests.rs, the rest ported (same names; the checks as the TS core's design has them, its
+// The Rust core's core/tests.rs, the rest ported (same names; the checks as the TS core's design has them, its
 // deliberate differences in docs/core-ts.md): workspaces kept apart, the beta channel, previews, traces, choices,
 // drafts, decisions, the chat list's local overlays, jobs, the archive, forms, the changelog.
 import assert from "node:assert/strict";

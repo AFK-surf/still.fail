@@ -65,7 +65,7 @@ import kotlinx.serialization.json.put
 
 private fun themes() = listOf("system" to t("android-settings.theme.system"), "light" to t("android-settings.theme.light"), "dark" to t("android-settings.theme.dark"))
 
-/** The languages to choose: null follows the phone (the core's `language`, client/core/src/prefs.rs). */
+/** The languages to choose: null follows the phone (the core's `language`, client/core-ts/src/prefs.ts). */
 private fun languages() = listOf(null to t("common.language.system"), "zh" to t("common.language.zh"), "en" to t("common.language.en"))
 
 /** A row that opens a page: its name, how things stand (`bad` in red; `dot`, a red dot before it), a chevron. */

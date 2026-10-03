@@ -1,7 +1,7 @@
 // The relays stations and devices use. The first is still.fail's own (RELAY_URL, or PUBLIC_ORIGIN's /relay:
 // relay-worker.ts), handed out alone as `relay_url` to what came before there were several; RELAY_URLS adds others
 // (comma-separated), such as one inside mainland China, where Cloudflare's is slow or out of reach. Each endpoint
-// has all of them in its map: a station homes on the nearest, and a device dials it on every one (client/core mesh.rs).
+// has all of them in its map: a station homes on the nearest, and a device dials it on every one (client/core-ts mesh.ts).
 // RELAY_NAMES says what each is called where people see which one a connection goes through (经中继北京).
 import { originList } from "./compat";
 

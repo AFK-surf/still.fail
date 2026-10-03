@@ -14,8 +14,8 @@ import * as css from "./Jobs.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import { t } from "./i18n.ts";
 
-// What a job's dot says, its word, the line under its name and every time in words are the core's (client/core/src/
-// jobs.rs): `tone` (up, live, restart, fail, off), `meta`, `detail`, a notice's `ago` and `clock`; a chat's all
+// What a job's dot says, its word, the line under its name and every time in words are the core's (client/core-ts/src/
+// jobs.ts): `tone` (up, live, restart, fail, off), `meta`, `detail`, a notice's `ago` and `clock`; a chat's all
 // together, what matters first, is its `chatJobs` view.
 
 /** A chat's jobs before the core has said (or from a core that does not know them): none. */

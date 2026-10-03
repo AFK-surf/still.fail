@@ -79,7 +79,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   useEffect(() => window.stillfailDesktop?.inWorkspace(entry.account.sub, entry.id), [entry.account.sub, entry.id]);
   useInWorkspace(entry.id);
   // The views the workspace's pages and settings show, subscribed from the start: a page opened the first time draws at
-  // once, with no frame waiting for the core's first answer. What the core keeps in sync is its own call (sync.rs);
+  // once, with no frame waiting for the core's first answer. What the core keeps in sync is its own call (sync/scheduler.ts);
   // these only read it.
   useTopics<unknown>([
     { topic: "connects", scope: entry.id, mine: false },

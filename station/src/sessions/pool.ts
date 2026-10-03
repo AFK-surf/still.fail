@@ -59,7 +59,7 @@ export function pickProfile(candidates: Profile[], model: string | null | undefi
   return rank[pool[0]!]![0];
 }
 
-// ── reasoning levels (client/shapes/src/reasoning.rs) ──
+// ── reasoning levels (client/core-ts/src/shapes/reasoning.ts) ──
 
 /// Runtime-reported model capabilities: runtime → model → levels.
 export type Catalog = Record<string, Record<string, string[]>>;

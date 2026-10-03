@@ -1,6 +1,6 @@
 //! The native shell of the core in TypeScript on Android (client/core-ts `hosts/bridge.ts`; apps/android/core runs it
 //! in Hermes from C++): everything the core asks of its host that a JS engine has not, done on tokio's threads and on
-//! a thread for the disk, and answered through a C callback. What it does is what client/ffi's host did (reqwest,
+//! a thread for the disk, and answered through a C callback. What it does is what the Rust core's native host (client/ffi) did (reqwest,
 //! tokio-tungstenite, a file per storage key and `core.db` in the data directory, TCP to adbd) and what the station's
 //! addon does for Node (iroh), so a phone moving from the Rust core keeps its sign-in and what it had read.
 //!
@@ -81,7 +81,7 @@ struct Inner {
     complete: Complete,
     ctx: Ctx,
     dir: PathBuf,
-    /// One thread does every file and database job, in the order they were asked for (client/ffi's storage thread).
+    /// One thread does every file and database job, in the order they were asked for (as the Rust core's did).
     disk: Mutex<mpsc::Sender<Job>>,
     db: Arc<Mutex<DbHandle>>,
     tls: Arc<rustls::ClientConfig>,
@@ -125,7 +125,7 @@ fn tls_config() -> rustls::ClientConfig {
         .with_no_client_auth()
 }
 
-/// As client/ffi's: HTTP/2 pings and TCP keepalive find connections a sleep or a new network left dead.
+/// As the Rust core's native host had it: HTTP/2 pings and TCP keepalive find connections a sleep or a new network left dead.
 fn http_client(tls: &rustls::ClientConfig) -> reqwest::Client {
     use std::time::Duration;
     reqwest::Client::builder()
@@ -159,7 +159,7 @@ fn ws_error(error: WsError) -> String {
     }
 }
 
-/// File names hold only letters, digits, `-` and `_`; the rest is %XX (client/ffi's).
+/// File names hold only letters, digits, `-` and `_`; the rest is %XX (as the Rust core had them).
 fn storage_path(dir: &std::path::Path, key: &str) -> PathBuf {
     let mut name = String::new();
     for byte in key.bytes() {
@@ -573,7 +573,7 @@ impl Inner {
         if a.get("relayOnly").and_then(Value::as_bool).unwrap_or(false) {
             builder = builder.clear_ip_transports();
         }
-        // Stations on the LAN (mDNS, never announced itself) and which relay they are on (the DHT), as client/core's.
+        // Stations on the LAN (mDNS, never announced itself) and which relay they are on (the DHT), as client/core-ts's.
         if a.get("lookup").and_then(Value::as_bool).unwrap_or(false) && !relays.is_empty() {
             builder = builder
                 .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
@@ -727,7 +727,7 @@ pub unsafe extern "C" fn sf_shell_stop(shell: *mut Shell) {
 }
 
 /// The viewer's time zone at `at_ms` (minutes east of UTC), from the C library, which on Android follows the system's
-/// zone setting and its DST rules (client/ffi's).
+/// zone setting and its DST rules (as the Rust core had them).
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_utc_offset_min(at_ms: f64) -> i32 {
     let at = (at_ms / 1000.0).floor() as libc::time_t;

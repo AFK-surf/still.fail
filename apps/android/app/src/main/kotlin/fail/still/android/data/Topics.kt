@@ -37,7 +37,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.serializer
 
-// What the core sends has its shape (Shapes.kt, generated from client/shapes): a value that does not fit is an error,
+// What the core sends has its shape (Shapes.kt, generated from client/core-ts/src/shapes/schema.ts): a value that does not fit is an error,
 // never a default put in its place. still.fail cloud's topics are not shaped yet: what they add is passed over.
 val StillFailJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
@@ -159,7 +159,7 @@ object Topics {
         put("topic", "chats"); put("scope", scope); put("mine", mine); if (watching) put("watching", true)
     }
     fun stations(scope: String) = buildJsonObject { put("topic", "stations"); put("scope", scope) }
-    /** The archived chats of a scope's stations online, newest first by the day archived (client/core/src/views/archive.rs). */
+    /** The archived chats of a scope's stations online, newest first by the day archived (client/core-ts/src/views/archive.ts). */
     fun archive(scope: String) = buildJsonObject { put("topic", "archive"); put("scope", scope) }
     fun connects(scope: String, mine: Boolean) = buildJsonObject { put("topic", "connects"); put("scope", scope); put("mine", mine) }
     fun workspace(id: String) = buildJsonObject { put("topic", "workspace"); put("workspace", id) }
@@ -181,7 +181,7 @@ object Topics {
     }
     /** The services and jobs left up a long while on the scope's stations that are up (OpenJobs.kt). */
     fun longJobs(scope: String) = buildJsonObject { put("topic", "longJobs"); put("scope", scope) }
-    /** What the agents of a scope's stations spent over its last `days` (7 or 30): client/core/src/views/usage.rs. */
+    /** What the agents of a scope's stations spent over its last `days` (7 or 30): client/core-ts/src/views/usage.ts. */
     fun usage(scope: String, days: Int) = buildJsonObject { put("topic", "usage"); put("scope", scope); put("days", days) }
     /** A job as it is now (kept current by the core). */
     fun job(station: String, id: String) = buildJsonObject { put("topic", "job"); put("station", station); put("id", id) }
@@ -195,23 +195,23 @@ object Topics {
     /** What wants the viewer in the chats they take part in, the last 20 (docs/notifications.md; Notices.kt). */
     val notices = buildJsonObject { put("topic", "notices") }
     /**
-     * Notifications on this device: on or off, asked, whether to hold pushes, what to show now (attend.rs; Notices.kt),
+     * Notifications on this device: on or off, asked, whether to hold pushes, what to show now (attend.ts; Notices.kt),
      * only `workspace`'s if given.
      */
     fun notify(workspace: String? = null) = buildJsonObject { put("topic", "notify"); workspace?.let { put("workspace", it) } }
     /** How its person likes it on this device, and what the device is (Prefs.kt). */
     val prefs = buildJsonObject { put("topic", "prefs") }
-    /** What people set going here and the core has not finished, until it answers (client/core/src/doing.rs; AppState.isDoing). */
+    /** What people set going here and the core has not finished, until it answers (client/core-ts/src/doing.ts; AppState.isDoing). */
     val doing = buildJsonObject { put("topic", "doing") }
-    /** This phone's adb as lent to a station's agents (client/core/src/adb.rs; AdbShare.kt). */
+    /** This phone's adb as lent to a station's agents (client/core-ts/src/adb.ts; AdbShare.kt). */
     val adbShare = buildJsonObject { put("topic", "adbShare") }
-    /** The decisions waiting for the viewer in a workspace's chats, one at a time on its page (client/core/src/decisions.rs; Decisions.kt). */
+    /** The decisions waiting for the viewer in a workspace's chats, one at a time on its page (client/core-ts/src/decisions.ts; Decisions.kt). */
     fun decisions(workspace: String) = buildJsonObject { put("topic", "decisions"); put("workspace", workspace) }
     /** What changed in still.fail, as this app shows it, and what an update brought until `changelog.seen` (Changelog.kt). */
     val changelog = buildJsonObject { put("topic", "changelog") }
     /**
      * What each workspace has waiting (how many chats want their person, how many are unread) and the chat last open in
-     * it; of those other than `workspace` (the one in view), the most urgent (client/core/src/views/marks.rs).
+     * it; of those other than `workspace` (the one in view), the most urgent (client/core-ts/src/views/marks.ts).
      */
     fun workspaceMarks(workspace: String) = buildJsonObject { put("topic", "workspaceMarks"); put("workspace", workspace) }
     /** What is written to a chat on this device until sent (`chat`: its key, `thread:<id>`, or `new`; Drafts). */

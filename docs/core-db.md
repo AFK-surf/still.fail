@@ -1,14 +1,15 @@
 # The core's database
 
-Status: partly built (`client/core/src/data.rs`, `client/core/src/sync.rs`).
-Workspaces, stations and each station's rows, sessions, threads and overview
-are records in the core's database; thread entries and transcripts are still
-in `kept.rs`; read positions and the outbox are not records yet.
+Status: built (the TS core, docs/core-ts.md: `client/core-ts/src/data.ts`, the
+sync in `client/core-ts/src/sync/` and `src/station/sync.ts`). Everything below
+is a record, entries, transcripts, read positions and the outbox included; what
+the Rust core kept in `kept.rs` chunks is read into records once
+(`client/core-ts/src/kept.ts`).
 
 ## Why
 
 The core used to hold what it read in memory, per topic, and kept only thread
-entries and transcripts on the device (`kept.rs`). A cold start, or a chat not
+entries and transcripts on the device (the Rust core's `kept.rs`). A cold start, or a chat not
 opened before, waited for the station; views filled in piecemeal (a chat's
 messages before its agents), and the UIs were starting to paper over that with
 data from other views. The rule stays: the UI subscribes to views and draws
@@ -27,15 +28,15 @@ The core keeps still.fail's business data as records, per account:
 | session | station, key | `/sessions/:key`, `session` events | yes |
 | thread | station, id | `/threads`, `thread` events | yes |
 | overview | station | `/overview`, `overview` events (connects, profiles, Slack bindings) | yes |
-| entry | station, thread, n | `/threads/:id/entries`, `thread` events (append-only) | no: `kept.rs` |
-| transcript item | station, session, n | `/sessions/:key/live` (append-only) | no: `kept.rs` |
-| read position | station, thread | `read` events, `chat.read` | no |
-| outbox message | station, thread, local id | `chat.send` (until its entry comes) | no |
+| entry | station, thread, n | `/threads/:id/entries`, `thread` events (append-only) | yes (table `entry`) |
+| transcript item | station, session, n | `/sessions/:key/live` (append-only) | yes (table `transcript`) |
+| read position | station, thread | `read` events, `chat.read` | yes (in the thread and row records) |
+| outbox message | station, thread, local id | `chat.send` (until its entry comes) | yes (table `outbox`; also `pending`, `first`, `changing`) |
 
 A list (rows, session summaries, threads) is one record per item plus a
 `list` record with the ids in order, so an empty list read is told apart from
-one never read. Not built yet: each record carrying when it was last
-confirmed by its source. Nothing is derived and stored: views (chats, chat, stations,
+one never read. Each record carries when it was last confirmed by its source
+(table `confirmed`). Nothing is derived and stored: views (chats, chat, stations,
 …) are computed from records.
 
 ## How data moves
@@ -46,13 +47,14 @@ confirmed by its source. Nothing is derived and stored: views (chats, chat, stat
 - **Out**: a write marks the records it changed; the topics and views that
   read them are recomputed and their deltas pushed (the store's existing
   coalescing window). What the core is waiting on (slow requests, links down)
-  is said once, by the `status` topic (`status.rs`), not per view.
-- **Sync** (`sync.rs`): for as long as the core runs, whatever the UI shows, it
-  keeps the accounts' workspaces, each workspace's stations, and of each
-  reachable station its link, overview, chat rows, sessions and threads, plus
-  the live state of every agent at work. Messages are kept by the stations
-  module: the latest chats' pages (`warm`) and a page ahead of what a chat
-  shows. Events keep it current. No polling.
+  is said once, by the `status` topic (`status.ts`), not per view.
+- **Sync** (`sync/scheduler.ts`, `sync/cloud.ts`, `station/sync.ts`): for as long as
+  the core runs, whatever the UI shows, it keeps the accounts' workspaces, each
+  workspace's stations, and of each reachable station everything it holds: link,
+  overview, chat rows, sessions and their details, threads and every thread's
+  entries (latest page first, then back to the first), transcripts, jobs, usage,
+  footprint, the live state of every agent at work. A UI only makes some of it
+  more urgent (`client.focus`, a topic shown). Events keep it current. No polling.
 - **Startup**: the core loads the records before any network, so views are
   answered at once; offline, they stay as last seen.
 
@@ -62,17 +64,19 @@ The records live in memory, by table and key, and are written through to a
 database the host provides (`Host::db_read` / `db_write`: ranges of keys in a
 table, and batches of puts and deletes written at once or not at all):
 
-- natively (desktop, Android): SQLite, `core.db` in the app's data directory
-  (`client/ffi/src/host.rs`);
-- on the web: IndexedDB (`client/wasm/src/idb.rs`).
+- on the desktop: SQLite (`node:sqlite`), `core.db` in the app's data directory
+  (`client/core-ts/src/hosts/node.ts`);
+- on Android: the same SQLite file, kept by the native shell
+  (`client/shell`, asked through `client/core-ts/src/hosts/bridge.ts`);
+- on the web: IndexedDB (`client/core-ts/src/hosts/web.ts`).
 
 ## Order of work
 
 1. Done: records and the write path for workspaces, stations, rows,
    sessions, threads, overview; topics read them; startup from the database.
-2. Entries and transcripts move from `kept.rs` into records (same chunking),
-   with a size cap and least-recently-opened eviction (metadata is small and
-   always kept).
-3. Done: background sync (`sync.rs`).
-4. Tests: views from a database with no network, restarts, lists, updates
-   (done, `data.rs`); eviction once entries move.
+2. Done: entries and transcripts are records (one per entry); the Rust core's
+   chunks are read in once. No size cap: everything the reached stations hold
+   is kept, and a station's records go once no signed-in account reaches it
+   (`Data.retain`).
+3. Done: background sync (`sync/`, `station/sync.ts`).
+4. Done: tests (client/core-ts/test/data.test.ts, station-flows.test.ts).

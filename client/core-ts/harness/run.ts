@@ -1,5 +1,5 @@
 // The side-by-side run (docs/core-ts.md, 怎么验证): the same script of UI messages, against the same fake still.fail
-// cloud (harness/cloud.ts, started afresh for each), given to the Rust core (client/node's napi addon) and to the TS
+// cloud (harness/cloud.ts, started afresh for each), given to the Rust core (its Node addon, built from a commit that still has it: 7091dc84) and to the TS
 // core (hosts/node.ts); every message each sends to the UI is recorded per step and compared.
 //
 //   node harness/run.ts <path to stillfail_core.node> [--only rust|ts] [--keep]

@@ -1,4 +1,4 @@
-// client/core/src/asks.rs tests, ported.
+// The Rust core's asks.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";

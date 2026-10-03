@@ -37,7 +37,7 @@ export function useWorkspace(id: string): TopicState<WorkspaceView> {
   return useTopic<WorkspaceView>({ topic: "workspace", workspace: id });
 }
 
-/** Has the core do `name` (client/core/src/ops.rs) on still.fail cloud as the account `sub`, with `params`. */
+/** Has the core do `name` (client/core-ts/src/ops.ts) on still.fail cloud as the account `sub`, with `params`. */
 const operations = (account: string) => bindCloudOperations((name, params) => core().call(name, { ...params, account }));
 
 export interface LoginSession { id: string; name: string; created_at: number; expires_at: number; current: boolean }

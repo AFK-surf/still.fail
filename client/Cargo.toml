@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["core", "shapes", "i18n", "wasm", "iroh-wasm", "shell", "ffi", "node"]
+members = ["shapes", "i18n", "iroh-wasm", "shell"]
 
 [workspace.package]
 edition = "2024"
@@ -16,7 +16,7 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 debug = false
 
-# The browser build (client/wasm/build.sh): small over fast. A profile of its
+# The browser's iroh (client/iroh-wasm/build.sh): small over fast. A profile of its
 # own so native release builds keep the defaults.
 [profile.wasm-release]
 inherits = "release"

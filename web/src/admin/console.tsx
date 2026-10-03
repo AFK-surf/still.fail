@@ -1,6 +1,6 @@
 // The admin's console, on its own host: every user and workspace in still.fail cloud, the invite codes that let
 // a new person create a workspace, and the bug reports people's agents sent about still.fail. Only the admin's account reaches it (still.fail cloud answers 404 to everyone
-// else). The core puts each page together (views/admin.rs: found, filtered, sorted, counted); this draws it. Where
+// else). The core puts each page together (views/admin.ts: found, filtered, sorted, counted); this draws it. Where
 // the page is (a list's words, filter and sort, the item open) is in its URL, so a link shows the same.
 import { useTopic } from "../core/react.ts";
 import type { CoreError, Topic } from "../core/client.ts";
@@ -42,7 +42,7 @@ export function useAdminAccount(): Account | null | undefined {
   return list.find((a) => known[a.sub]) ?? (list.every((a) => a.sub in known) ? null : undefined);
 }
 
-// ── what the core gives (views/admin.rs) ───────────────────────────────
+// ── what the core gives (views/admin.ts) ───────────────────────────────
 
 type List = "users" | "workspaces" | "invite-codes" | "feedback";
 type Timed = { time?: Record<string, Stamp> };

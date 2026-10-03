@@ -6,8 +6,8 @@ import { t } from "./i18n.ts";
 const ToastContext = createContext<(message: string) => void>(() => {});
 
 /**
- * What a toast says. A write its station did not answer may have been done (the core's `unconfirmed`, client/core/src/
- * station.rs): said as not known, whatever the page put before it ("没能固定：不确定做没做成：…" → "固定：不确定做没做成：…").
+ * What a toast says. A write its station did not answer may have been done (the core's `unconfirmed`, client/core-ts/src/
+ * station/sync.ts): said as not known, whatever the page put before it ("没能固定：不确定做没做成：…" → "固定：不确定做没做成：…").
  */
 export function said(message: string): string {
   return message.replace(/^没能([^：]*)：(不确定做没做成：)/, "$1：$2");

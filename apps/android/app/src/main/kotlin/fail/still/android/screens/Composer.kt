@@ -303,7 +303,7 @@ fun rememberDraft(key: String): Draft {
  * References to other chats in what is written: in the composer a short mark, `@[its title]`, drawn in the accent; sent,
  * a link, `[its title](<cloud>/w/<workspace>/s/<station>/chats/<key>)`, which the agent reads the chat by and a message
  * draws as a chip. The core makes the mark of a chat picked and keeps its link until the mark is sent (`chat.ref`,
- * client/core/src/refs.rs).
+ * client/core-ts/src/refs.ts).
  */
 object ChatRefs {
     val MARK = Regex("@\\[([^\\]\\n]{1,120})\\]")

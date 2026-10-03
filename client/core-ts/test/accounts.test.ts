@@ -1,4 +1,4 @@
-// client/core/src/accounts.rs tests, ported.
+// The Rust core's accounts.rs tests, ported.
 import { Effect } from "effect";
 import { run } from "./run.ts";
 import assert from "node:assert/strict";

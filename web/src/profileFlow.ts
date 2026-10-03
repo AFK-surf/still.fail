@@ -1,4 +1,4 @@
-// The add-profile pages' state is the core's (client/core/src/profile_flow.rs): what is picked and typed, what each step
+// The add-profile pages' state is the core's (client/core-ts/src/forms.ts): what is picked and typed, what each step
 // shows, what the profile will be usable for. A page opens its draft, names what changed and submits; it draws what
 // the core says.
 import { useEffect, useId } from "react";

@@ -1,6 +1,6 @@
 // 奏 with none left (both screens): it stays, for the next to come, and says how the day went (how many answered, how
 // long they waited for the viewer, how many agents are at work), where the next may come from (the viewer's chats with
-// an agent at work or waiting) and what was answered today (core decisions.rs `today`). Each opens its chat.
+// an agent at work or waiting) and what was answered today (core decisions.ts `today`). Each opens its chat.
 import type { DecisionsView } from "./core/shapes.ts";
 import { stationBase } from "./station.tsx";
 import { IdleFace } from "./brand.tsx";

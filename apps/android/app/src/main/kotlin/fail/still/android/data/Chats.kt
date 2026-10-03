@@ -1,4 +1,4 @@
-// What the app makes of the core's marks. Every shape the core sends is in Shapes.kt, generated from client/shapes
+// What the app makes of the core's marks. Every shape the core sends is in Shapes.kt, generated from client/core-ts/src/shapes/schema.ts
 // (scripts/shapes.sh): nothing of it is written here.
 package fail.still.android.data
 

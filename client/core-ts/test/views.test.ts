@@ -1,4 +1,4 @@
-// client/core/src/views.rs tests, ported: a store whose topics the test sets, the views routed as core.ts does.
+// The Rust core's views.rs tests, ported: a store whose topics the test sets, the views routed as core.ts does.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CoreError } from "../src/error.ts";

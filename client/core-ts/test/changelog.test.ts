@@ -1,4 +1,4 @@
-// client/core/src/changelog.rs tests, ported.
+// The Rust core's changelog.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { item } from "../src/changelog.ts";

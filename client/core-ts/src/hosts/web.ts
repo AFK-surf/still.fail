@@ -1,5 +1,5 @@
 // The core in a browser's worker (web/src/core/worker.ts): the Host over the worker's own fetch, WebSocket, IndexedDB,
-// crypto and clocks, as client/wasm's host keeps them — the same IndexedDB database (`stillfail-core`, its `values` by
+// crypto and clocks, as the Rust core's wasm host kept them — the same IndexedDB database (`stillfail-core`, its `values` by
 // key and `records` by [table, key]; what `ember-core` had copied over on the first open) — so a browser moving from the
 // Rust core keeps its logins and what it had read. Its iroh is client/iroh-wasm (relay only), loaded while the core
 // starts from its database.
@@ -305,8 +305,8 @@ export function webIroh(load: () => Promise<IrohModule>): Iroh {
 /// A core in this worker: one client per port.
 export type WebCore = { connect(): number; disconnect(client: number): void; receive(client: number, message: unknown): void };
 
-/// A core in this worker (client/wasm's `start`): `emit(client, message)` gets what it says to each client;
-/// `testChannel` the page is the test channel's. A bug that ends a fiber ends it as a panic ended client/wasm's:
+/// A core in this worker (as the Rust core's wasm `start` was): `emit(client, message)` gets what it says to each client;
+/// `testChannel` the page is the test channel's. A bug that ends a fiber ends it as a panic ended the Rust core's:
 /// `onFatal` is told, and the worker tells the pages and closes.
 export function startWeb(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string) => void): Promise<WebCore> {
   service.name = "stillfail-web";

@@ -1,4 +1,4 @@
-// What the app has done, through the core's calls by name (docs/client-core.md → Calls; client/core/src/ops.rs), as
+// What the app has done, through the core's calls by name (docs/client-core.md → Calls; client/core-ts/src/ops.ts), as
 // the web pages do (web/src/api.ts → stationApi). The app never makes a request itself: the core knows the request
 // and brings the topics it touches up to date before it answers; nothing here keeps a cache.
 package fail.still.android.data
@@ -217,7 +217,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Clears a session's ended jobs (stopped, failed, ended by itself) off its pages, as the station keeps them. */
     suspend fun clearEndedJobs(session: String) { ops.jobClearEnded(session = session) }
 
-    // ── decisions (client/core/src/decisions.rs) ──
+    // ── decisions (client/core-ts/src/decisions.ts) ──
 
     /** Answers a decision with one of its options: the viewer's message in its chat, the label quoting the post. */
     suspend fun answerDecision(thread: Long, seq: Long, option: String) {
@@ -248,7 +248,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Deletes a session for good: its chat, its history and its workspace directory. */
     suspend fun deleteSession(key: String) { ops.sessionDelete(key = key) }
 
-    // ── what a chat runs on, chosen (client/core/src/choose.rs; web/src/pick.ts) ──
+    // ── what a chat runs on, chosen (client/core-ts/src/choose.ts; web/src/pick.ts) ──
 
     /**
      * A new chat, there at once, made with what is picked on this station (web/src/NewChat.tsx → useEnsureChat): the

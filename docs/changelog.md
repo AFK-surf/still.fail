@@ -43,7 +43,7 @@ parts: [web, station, android, desktop, cloud]   # 这次发出去的端
 
 - `node scripts/changelog.ts` 从 main 的历史生成 JSON（新的在前）。CI 的 pipeline 在 main 每次部署完（api 没失败）跑它，把结果放进 releases 桶的 `changelog.json`。
 - cloud `GET /v1/changelog`（cloud/src/changelog.ts，谁都能读）给 `{ entries, released }`。`released` 是这个通道（按域名或 `x-stillfail-channel`）各端已经发出去的版本，来自更新器读的那些文件：`station(-beta).json`、`android/(beta/)latest.json`、`desktop/stillfail(-beta)-mac.yml`，以及 deploy.py 部署或转正网页时写的 `web(-beta).json`（取自构建出的 `build.json`）。
-- core 的 `changelog` topic（client/core/src/changelog.rs）显示时最多每小时读一次，存在本机。它按这个 app（`client.device` 说的 app 和 build）算出每条的 `has`/`note`：你的版本已包含、更新到 0.1.n 后就有、还没发布、已发布、已上线。`news` 是这次更新带来的、这个 app 的改动（上次看过的 build 之后、当前 build 之前），一直显示到 `changelog.seen`；第一次见到的 build 不算更新。
+- core 的 `changelog` topic（client/core-ts/src/changelog.ts）显示时最多每小时读一次，存在本机。它按这个 app（`client.device` 说的 app 和 build）算出每条的 `has`/`note`：你的版本已包含、更新到 0.1.n 后就有、还没发布、已发布、已上线。`news` 是这次更新带来的、这个 app 的改动（上次看过的 build 之后、当前 build 之前），一直显示到 `changelog.seen`；第一次见到的 build 不算更新。
 - 界面：PC 设置 →「更新日志」（web/src/pages/Changelog.tsx），侧栏底部的「已更新到 …」卡片；手机 web 和安卓在设置 →「更新日志」，首页列表顶上有卡片（web/src/mobile/Changelog.tsx、screens/Changelog.kt）。打开日志页或点 × 就算看过。
 
 ## 反馈修好了，告诉提的人

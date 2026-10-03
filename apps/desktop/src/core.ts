@@ -7,7 +7,7 @@
 import { join } from "node:path";
 import type { MessagePortMain } from "electron";
 
-/** client/core-ts's Node start (the API client/node had). */
+/** client/core-ts's Node start (the API the Rust core's Node addon had). */
 interface NodeCore {
   connect(): number;
   receive(client: number, json: string): void;

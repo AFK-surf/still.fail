@@ -2183,7 +2183,9 @@ async fn automatic_decisions_configure_purpose_and_model_without_separate_creden
     let (status,view)=t.call("PUT","/automatic-decisions",Some(input.clone())).await;
     assert_eq!(status,200,"{view}");
     assert_eq!(view["automaticDecisions"]["models"].as_array().unwrap().len(),2);
-    stillfail_shapes::conform::<stillfail_shapes::AutomaticDecisionView>(view["automaticDecisions"].clone()).unwrap();
+    // The clients' shape of it (client/core-ts/src/shapes/schema.ts, AutomaticDecisionView): these fields, as their types.
+    let shown=&view["automaticDecisions"];
+    assert!(shown["canEdit"].is_boolean()&&shown["settings"].is_object()&&shown["models"].is_array()&&shown["recent"].is_array(),"{shown}");
     assert!(!view["automaticDecisions"].to_string().contains("private-existing-key"));
     assert_eq!(t.saved()["automaticDecisions"],input);
     assert_eq!(t.call("PUT","/automatic-decisions",Some(json!({"completion":{"enabled":true,"model":"invented"}}))).await.0,400);

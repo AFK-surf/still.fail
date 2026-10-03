@@ -1,14 +1,16 @@
 # still.fail client core
 
 The logic of a still.fail client — accounts, still.fail cloud, the mesh links to
-stations, requests and live streams, the cache of what has been read — lives in
-one Rust crate, `stillfail-core`, shared by every client:
+stations, requests and live streams, everything read kept on the device — lives
+in one TypeScript core, `client/core-ts` (on Effect; docs/core-ts.md for how it
+came to replace the Rust core and the rules it is built to), shared by every
+client. Only iroh and, on Android, the IO are native:
 
-| Client | Where the core runs | Binding |
-| --- | --- | --- |
-| Web (app.still.fail) | a SharedWorker (a dedicated Worker where SharedWorker is missing, e.g. Chrome on Android) | `client/core-ts` (`src/hosts/web.ts`), iroh from `client/iroh-wasm` (wasm-bindgen, relay only) |
-| Desktop (Electron) | a `utilityProcess` | `client/core-ts` on Node (`src/hosts/node.ts`), iroh from the station's `mesh.node` addon (docs/core-ts.md) |
-| Android (iOS later) | a core thread in the app | `client/ffi` (uniffi) |
+| Client | Where the core runs | Host (network, storage, time) | iroh |
+| --- | --- | --- | --- |
+| Web (app.still.fail) | a SharedWorker (a dedicated Worker where SharedWorker is missing, e.g. Chrome on Android) | `src/hosts/web.ts`: fetch, WebSocket, IndexedDB | `client/iroh-wasm` (wasm-bindgen, relay only), loaded on the first link |
+| Desktop (Electron) | a `utilityProcess` (Node) | `src/hosts/node.ts`: fetch, ws, `node:sqlite`, files | the station's napi addon (`station/native/mesh`, `mesh.node`) |
+| Android (iOS later) | Hermes on a thread of its own (`apps/android/core/src/main/cpp/engine.cpp`), the core as Hermes bytecode | `src/hosts/bridge.ts` over the Rust shell `client/shell` (HTTP, the cloud's WebSocket, files, `core.db`, TCP) | in `client/shell` |
 
 The UI never talks to still.fail cloud or a station itself. It sends **calls** and
 holds **subscriptions** to the core over one message channel, and renders the
@@ -17,48 +19,47 @@ device key, one link per station, one token refresh, one cache.
 
 ## Execution model
 
-The core is single-threaded and async. Its futures are `!Send`; shared state
-is `Rc<RefCell<…>>`. On the web it runs on the worker's event loop
-(`wasm-bindgen-futures`); natively on a dedicated thread running a tokio
-current-thread runtime with a `LocalSet`. Network waits yield to other work.
+The core is single-threaded: every piece of work is an Effect fiber in a scope
+(`src/runtime.ts`, `Runner`); a call that can be cancelled is a fiber that is
+interrupted, a subscription's work ends with its scope. Every timer is on
+Effect's Clock (a TestClock in the tests): nothing in the core calls
+`setTimeout`. Network waits yield to other work.
 
-Native input JSON and call parameters (including base64 uploads) are decoded on
-an input thread with `Core::prepare`, then applied in order on the core thread.
-Pure, payload-sized conversion uses `Host::background` (the native blocking pool).
-Outgoing topic messages and API messages have separate FIFO worker queues for
-JSON serialization and foreign callbacks. An API's progress and answer share
-its queue, so the terminal answer cannot overtake its stream. Callbacks may run
-concurrently across the two queues; consumers must hand them off safely.
+It is cache-first: everything still.fail cloud and the stations say is a record
+in the core's database (`src/data.ts`, docs/core-db.md), and a topic is read
+from the records only — subscribing never asks the network. One sync scheduler
+(`src/sync/scheduler.ts`; `src/sync/cloud.ts`, `src/station/sync.ts`) owns all
+traffic to still.fail cloud and the stations, keeps everything current by itself
+whatever the UI shows, and takes the UI's attention (`client.focus`, a topic
+shown) only as priority. Stations and still.fail cloud push what changes
+(events, sockets); nothing is read again on a timer.
 
-Android likewise separates outgoing serialization, incoming topic parsing and
-API parsing from the queue that owns client state. Topic deltas are applied in
-order. Its chat decoder retains unchanged message objects by JSON identity,
-bounded to the current message window. Markdown parsing and code highlighting
-and shaping run off Main; the UI draws the prepared code layout. These boundaries
-avoid blocking the UI on payload processing; they do not eliminate layout costs,
-GC pauses, or contention for CPU and memory.
+Topics are keyed collections (`src/collections.ts`): a change to a record
+recomputes only the items that read it, and a subscription that says `keyed`
+gets per-key insert/update/remove/move ops (docs/core-ts.md, 按 key 的增量).
 
 ## Host
 
-What differs per platform comes in through one trait, `Host`
-(`client/core/src/host.rs`):
+What differs per platform comes in through one interface, `Host`
+(`client/core-ts/src/host.ts`), every operation an Effect:
 
-- `fetch` — one HTTP request to still.fail cloud, whole body; `fetch_stream` — a
-  streamed response (only tests' stations use it: stations are reached over mesh links only);
+- `fetch` — one HTTP request to still.fail cloud, whole body; `fetchStream` — a
+  streamed response in a scope (tests' stations, the side-by-side run);
   `websocket` — a receive-only WebSocket (still.fail cloud's `/v1/events`) with the
-  subprotocols given, resolving once it is open; its text frames end when it
-  closes, and dropping them closes it.
-- `storage_get` / `storage_set` / `storage_delete` — small persistent values by
-  key (accounts and tokens, the device key, UI preferences). Web: IndexedDB
-  (a worker has no localStorage); native: a file in the app's data directory.
-- `now_ms`, `monotonic_ms` (for timing spans: `performance.now()` on the web, a
-  monotonic clock natively), `utc_offset_min` (the viewer's time zone), `sleep`, `spawn`, `random_bytes`.
-  `sleep` serves reconnect backoff, coalescing windows, evictions and the
-  midnight clock of `chats` — never polling: nothing is read again on a timer.
+  subprotocols given, open once it resolves, closed with its scope.
+- `storageGet` / `storageSet` / `storageDelete` — small persistent values by
+  key (accounts and tokens, the device key, UI preferences); `dbRead` / `dbWrite`
+  — the core's database: ranges of keys in a table, batches written at once.
+  Web: IndexedDB (`stillfail-core`, as the Rust core kept it); desktop and
+  Android: files and `core.db` in the app's data directory, as the Rust core
+  kept them, so an update keeps the sign-in and everything read.
+- `nowMs`, `monotonicMs`, `utcOffsetMin` (the viewer's time zone), `randomBytes`,
+  `resetConnections`, `tcp` (adbd, native hosts).
 - `emit` — delivers a message to one connected UI (by its client id).
 
-iroh is used directly by the core: the wasm build uses relay-only connections
-(browsers have no UDP), native builds the full endpoint.
+iroh comes from the host too (`src/iroh.ts`): the browser's is relay-only (no
+UDP), the native ones are the full endpoint. The credential, renewal, request
+lines and the choice of relay are the core's (`src/mesh.ts`).
 
 ## Protocol (UI ↔ core)
 
@@ -116,7 +117,7 @@ is refused with the error `gone`. The core knows which signed-in account reaches
 which workspace (from each account's `/v1/me`) and uses that account's token
 for its member credential (30 days, kept on the device: docs/cloud.md).
 
-Workspaces are kept apart (`workspace.rs`): each holds the account that
+Workspaces are kept apart (`workspace.ts`): each holds the account that
 reaches it, its stations' state, what is waited on for them, the notices of its
 chats, what is kept in sync of it and what its new chats were last started on
 (`choice` records `ws:<workspace>:station:<id>`, `ws:<workspace>:last`; the
@@ -124,7 +125,7 @@ keys from before are read where there is none yet). Nothing of one is read or
 dropped through another. What is the device's stays shared (the mesh endpoint,
 relays, what is kept on the device, notification settings), and what is an
 account's is kept by account. A UI says which workspace it is in (`client.focus {workspace}`);
-notices are only of the workspace the viewer is in (attend.rs).
+notices are only of the workspace the viewer is in (attend.ts).
 
 ### Topics
 
@@ -142,16 +143,16 @@ notices are only of the workspace the viewer is in (attend.rs).
 | `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns, jobs }` (no messages, no transcript) |
 | `jobs` | `station` | `/jobs`: its background jobs still up (running, or a service being started again), newest first, each with the `chat` it is in as the viewer's sidebar has it |
 | `stationUsage` | `station` | `/usage?from=&tz=`: what its agents spent from this device's midnight 29 days ago, days as its clock has them (`rows` added up by day, thread, person, profile and model, each with `cost` at the model's API prices; the `threads`, `people` and `profiles` they name; `since`, the earliest call recorded; `reading` while the transcripts are read for the first time). Read again on its `usage` event (it recorded more, about once a minute while agents work); a station from before it answers 404 |
-| `job` | `station`, `id` | `/jobs/:id` as it is now, with what the clients show of it (client/core/src/jobs.rs): kept current by its events, read again each half minute (every 4 s from a station too old to say whose it is) |
-| `jobLog` | `station`, `job` (id), `lines` | `{ text, outputAt, last, said }`: the job's last `lines` lines of output and when it last grew (below); `last` its last line, `said` (最后输出 · 3 分钟前) goes out fresh as it changes (jobs.rs) |
+| `job` | `station`, `id` | `/jobs/:id` as it is now, with what the clients show of it (jobs.ts): kept current by its events, read again each half minute (every 4 s from a station too old to say whose it is) |
+| `jobLog` | `station`, `job` (id), `lines` | `{ text, outputAt, last, said }`: the job's last `lines` lines of output and when it last grew (below); `last` its last line, `said` (最后输出 · 3 分钟前) goes out fresh as it changes (jobs.ts) |
 | `thread` | `station`, `thread` (id) | `{ first, last, caught, end, entries, thread }`: a window of the thread's entries `first ..= last` (`EntryView`s, never changed once read), at most 150 (`WINDOW`). It opens where the chat is to be read — the page before the first entry not read and the page from it while something is unread, else where it was left (`chat.place`), else the latest page — and its first value is whole: from what is kept when all of it is and it is current (the station's `threads` say how far each goes), else read first. `chat.older` / `chat.newer` bring in the page before / after (a page is kept ahead either way), as many going at the other end; `end`: it reaches the thread's latest entry, so what is said joins it; short of it, what is said waits on the device. `caught`: its last entry read rather than told as it was said. `thread` is its summary |
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
-| `status` | `workspace?` | what the core is waiting on, when it is worth saying (`StatusView`, status.rs): of a workspace its stations' waits (the relay and links opened for them too), its account's still.fail cloud socket down and the relay opened for no station; with none, all of it |
-| `connection` | `station` | what a chat on the station says of its connection (`ConnectionView`, pill.rs): its link down or coming back, else its workspace's `status`; trouble at once, coming back only after 1.5 s, `back` (已连上) 1.5 s only after one was shown. No page shows it any more (the phones dropped the pill over a chat); kept for apps from before |
+| `status` | `workspace?` | what the core is waiting on, when it is worth saying (`StatusView`, status.ts): of a workspace its stations' waits (the relay and links opened for them too), its account's still.fail cloud socket down and the relay opened for no station; with none, all of it |
+| `connection` | `station` | what a chat on the station says of its connection (`ConnectionView`, pill.ts): its link down or coming back, else its workspace's `status`; trouble at once, coming back only after 1.5 s, `back` (已连上) 1.5 s only after one was shown. No page shows it any more (the phones dropped the pill over a chat); kept for apps from before |
 | `notices` | `workspace?` | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md); a workspace's, or every one's |
 | `notify` | `workspace?` | notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (docs/notifications.md), only the workspace's for a page in one |
-| `adbShare` | — | this phone's adb as lent to a station's agents (`AdbShareView`, adb.rs; docs/adb-share.md): whether it is and to which, how the offer goes (`phase`), how the station's adb holds the phone (`adb`, `serial`, `message`), until when, the tunnels open now. Kept in memory only |
+| `adbShare` | — | this phone's adb as lent to a station's agents (`AdbShareView`, adb.ts; docs/adb-share.md): whether it is and to which, how the offer goes (`phase`), how the station's adb holds the phone (`adb`, `serial`, `message`), until when, the tunnels open now. Kept in memory only |
 
 ```jsonc
 // live
@@ -255,7 +256,7 @@ the thread as kept beside them; its agents fill in after (an agent whose
 `session` is not read yet is its summary from `sessions`, without turns or
 threads; one that fails is left out). A failed `threads` or `thread` is its
 error, and so is its thread missing from `threads` once read (404). Its
-`messages` are its entries merged (entries.rs): each message with its latest
+`messages` are its entries merged (entries.ts): each message with its latest
 edit's text, attachments and quotes (`editedAt`). With `session` instead of
 `thread`, `chat` watches that `session`, `sessions`, `chatRows`, `overview`
 and `link`.
@@ -273,9 +274,9 @@ the views.
 | `connects` | `scope`, `mine` | every connect of every online station: `{ me, items: [{ station, stationName, connect }], loading }`; with `mine`, those whose `createdBy.id` is me |
 | `chat` | `station`, and `thread` (id) or `session` (key) | an item's page: `{ me, thread, title, people, agents, messages, more, outbox, link }` |
 | `archive` | `scope` | the archive: `{ days, errors, loading, note }`, every online station's archived chats newest first by the day they were archived |
-| `chatJobs` | as `chat` | the chat's services and jobs as its pages show them (`ChatJobsView`, jobs.rs): every one, what matters first, each with its dot (`tone`), word, line (`meta`) and times in words (computed again when they next change, to the second); the button's `alarm`, the groups' notes, how many are current and ended, whose ended ones clearing takes |
-| `usage` | `scope`, `days?` (7, the default, or 30) | what the agents of the scope's online stations spent (`UsageView`, views/usage.rs): `tiles` (cost, calls, input and output tokens), `daily` (each day's cost split by `series`, the four people who spent most and 其他), `lists` (按人 / 按对话 / 按账号 / 按模型, the most spent first, each with its share; a person merged across Slack and the page by email), `notes` (stations offline or too old, the first read under way, models without a price, since when anything is recorded) |
-| `decisions` | `workspace` | the 奏 page: the cards waiting for the viewer in the workspace's chats (`DecisionsView`, decisions.rs; the name is from when the only cards were decisions), whatever their agents' states: `{ items, count, loading }`, each item `{ station, stationName, session, thread, title, seq, message, before, card, options, deferred?, text }` (the post with the card and the one or two messages before it as `chat` shows messages; `card` is `{type: "options", options}` or `{type: "text", placeholder?}`; `options` an options card's, the recommended one last, empty for a text card); pending and not dismissed by the viewer, oldest asked first, those set aside on this device (`decision.defer`) last; `count` for 奏 N |
+| `chatJobs` | as `chat` | the chat's services and jobs as its pages show them (`ChatJobsView`, jobs.ts): every one, what matters first, each with its dot (`tone`), word, line (`meta`) and times in words (computed again when they next change, to the second); the button's `alarm`, the groups' notes, how many are current and ended, whose ended ones clearing takes |
+| `usage` | `scope`, `days?` (7, the default, or 30) | what the agents of the scope's online stations spent (`UsageView`, views/usage.ts): `tiles` (cost, calls, input and output tokens), `daily` (each day's cost split by `series`, the four people who spent most and 其他), `lists` (按人 / 按对话 / 按账号 / 按模型, the most spent first, each with its share; a person merged across Slack and the page by email), `notes` (stations offline or too old, the first read under way, models without a price, since when anything is recorded) |
+| `decisions` | `workspace` | the 奏 page: the cards waiting for the viewer in the workspace's chats (`DecisionsView`, decisions.ts; the name is from when the only cards were decisions), whatever their agents' states: `{ items, count, loading }`, each item `{ station, stationName, session, thread, title, seq, message, before, card, options, deferred?, text }` (the post with the card and the one or two messages before it as `chat` shows messages; `card` is `{type: "options", options}` or `{type: "text", placeholder?}`; `options` an options card's, the recommended one last, empty for a text card); pending and not dismissed by the viewer, oldest asked first, those set aside on this device (`decision.defer`) last; `count` for 奏 N |
 | `longJobs` | `scope` | the services and jobs up longer than an hour on the scope's stations that are up (their `jobs`), oldest first, in groups: `{ groups: [{ key, head, jobs }] }`, each job with `whereText` and `age` |
 
 `live` (above) stays its own topic: its steps change many times a second,
@@ -375,8 +376,8 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | *an operation* | `station` or `account`, and its own | what the station or still.fail cloud answers; see below |
 | `chat.send` | `station`, `thread`, `text`, `attachments?`, `quotes?`, `client?` (the app it is sent from, for the chat's agent) | `{ seq }`, once the station has it and the chat's `thread` topic (when read) holds it. Only chats on still.fail's page take messages (the station refuses the rest). Meanwhile the message is in the view's `outbox` as `sending` (a failure leaves it there as `failed`, with `error`) |
 | `chat.retry` / `chat.discard` | `station`, `thread`, `id` | sends a failed outbox message again / drops it |
-| `decision.answer` | `station`, `thread`, `seq`, `option` (an option's `label`) | as `chat.send`: the viewer's message in the chat, the option's label quoting the post that asked (decisions.rs); refused once the chat's row no longer has that card pending, or for a card that is not an options card |
-| `decision.reply` | `station`, `thread`, `seq`, `text` | as `chat.send`: what the viewer wrote in a text card's field, quoting the post that asked (decisions.rs); refused once the chat's row no longer has that card pending, or for a card that is not a text card |
+| `decision.answer` | `station`, `thread`, `seq`, `option` (an option's `label`) | as `chat.send`: the viewer's message in the chat, the option's label quoting the post that asked (decisions.ts); refused once the chat's row no longer has that card pending, or for a card that is not an options card |
+| `decision.reply` | `station`, `thread`, `seq`, `text` | as `chat.send`: what the viewer wrote in a text card's field, quoting the post that asked (decisions.ts); refused once the chat's row no longer has that card pending, or for a card that is not a text card |
 | `decision.defer` | `station`, `thread`, `seq` | — ; 待定: set aside on this device (the prefs' `decisionsDeferred`), last on the `decisions` page, still pending. Nothing is sent |
 | `decision.dismiss` | `station`, `thread`, `seq` | `PUT /threads/:thread/dismissed {n}`: the viewer will not take it up; off their rows' line, marks and `decisions`, on every device of theirs (the station keeps it); still pending for everyone else |
 | `chat.older` | `station`, `thread` | `{ more }`: loads the page (50 entries) before the chat's oldest loaded entry into its `thread` topic — from what is kept, else from the station — so `messages` grows in front |
@@ -384,7 +385,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `chat.latest` | `station`, `thread` | — ; the chat's latest page in place of its window (the reader goes to its end); sending from a window short of its end does it too |
 | `chat.place` | `station`, `thread`, `seq?` | — ; where the reader leaves the chat: the entry at the top of what shows, short of its end, or none at its end. It opens there next while nothing is unread (held while the core runs) |
 | `history.older` | `station`, `key` | `{ more }`: loads the page (200 entries) of the session's transcript before its `live` topic's `first` into it — from what is kept, else from the station — so the `history` view's `items` grow in front (`more` in the view: there are older ones) |
-| `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to entry `seq` (`PUT /threads/:id/read {n}`); nothing is sent when it is read that far already. `unread` in `chats` follows. The clients no longer call it: the core reads a chat up to its newest message while a UI shows its end on a page in view (`client.focus`, attend.rs) |
+| `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to entry `seq` (`PUT /threads/:id/read {n}`); nothing is sent when it is read that far already. `unread` in `chats` follows. The clients no longer call it: the core reads a chat up to its newest message while a UI shows its end on a page in view (`client.focus`, attend.ts) |
 | `client.focus` | `visible?`, `focused?`, `chat?`, `left?`, `workspace?` | — ; where this UI's attention is (docs/notifications.md): what is read, a chat's `unreadLine` (held for the visit, older pages loaded first while `unreadAbove`) and which notices show follow from it; `workspace`, the one it is in (else its chat's) |
 | `station.upload` | `station`, `key`, `name`, `bytes` | the attachment (into that session's workspace; a message may carry uploads of any session in its chat) |
 | `station.file` | `station`, `key`, `name` | `{ type, bytes }` |
@@ -404,7 +405,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 
 A UI never makes a request of a station or still.fail cloud itself (no method, no
 path): it names what it wants done, and the core knows the request that does it
-and what that changes (`ops.rs`; `scripts/check.sh` fails on a UI that asks
+and what that changes (`ops.ts`; `scripts/check.sh` fails on a UI that asks
 for a request). Station operations take `station`: `session.stop`,
 `session.warm`, `session.evict`, `session.delete`, `session.settings`,
 `session.new`, `chat.archive` (by its thread, else its session; a station from
@@ -441,65 +442,60 @@ would); otherwise the touched topics are read again (sessions → `session`,
 `overview` (its answer) and `chatRows`). A write to still.fail cloud reads the
 account topics again. The station's events bring the same a moment later.
 
-## Crates
+## Layout
 
 ```
 client/
-  core/    stillfail-core  the core: host trait, protocol, store, accounts, cloud, mesh, station, views
-  wasm/    stillfail-core-wasm web host (IndexedDB, fetch) + SharedWorker entry (the Rust core; the web now runs core-ts)
-  iroh-wasm/ stillfail-iroh-wasm: iroh alone for the browser, which core-ts's web host binds
-  ffi/     stillfail-core-ffi  native host (reqwest, files) on a core thread, exported with uniffi
-  node/    stillfail-core-node client/ffi's core thread for Node, exported with napi-rs (the desktop app)
+  core-ts/    the core (TypeScript, Effect): protocol, store, data, sync, accounts, cloud, mesh, station, views
+    src/hosts/  web.ts (the worker), node.ts (the desktop's utilityProcess), bridge.ts + hermes.ts (Android's shell)
+    src/shapes/ schema.ts: what the core gives its clients, declared once (the clients' types are made from it)
+    scripts/    shapes.ts, operations.ts (the clients' types and operation bindings), hermes-bundle.ts
+    test/       the core's tests (the Rust core's, ported, and the TS core's own); harness/ the side-by-side run
+  iroh-wasm/  iroh alone for the browser (wasm-bindgen), which hosts/web.ts binds
+  shell/      Android's native shell (C ABI): HTTP, the cloud's WebSocket, files, core.db, TCP, iroh
+  i18n/       the words (catalog/<lang>/*.json), shared with the Rust station
+  shapes/     words and model/provider reading the Rust station (mesh/) shares; not where the clients' types are
 ```
 
-`stillfail-core` modules:
+The core's modules (`client/core-ts/src`):
 
-- `host.rs` — the `Host` trait and its request/response types.
-- `protocol.rs` — the messages above (serde).
-- `core.rs` — `Core`: accepts client messages, routes calls, manages subscriptions. `core/calls.rs` holds the named calls and input validation.
-- `ops.rs` — requests and their explicit update effects together. Compatibility fallbacks have their own effects; `station.rs` applies only the successful request's effect, before answering.
-- `slack_tokens.rs` — transient token drafts and verification shared by Web and Android. Input controls echo keystrokes immediately; readiness and verification belong to core. Web retains the previous form for desktop cores without these calls.
-- `store.rs` — topics: values, subscribers and watches, coalesced emission as deltas, eviction.
-- `delta.rs` — the ops between two values of a topic.
-- `accounts.rs` — sign-in (PKCE), token refresh (single flight per account), persistence.
-- `cloud.rs` — still.fail cloud API: errors, `/v1/me`, workspaces, member credentials. (Its events socket is held in `core.rs`, with the account topics.)
-- `mesh.rs` — the device endpoint (mDNS and the DHT to find stations, still.fail's and iroh's relays) and station links: the credential, reconnection, requests and streamed replies (wire format: `mesh/station/src/main.rs`).
-- `station.rs` — the admin API over a mesh link: the station topics kept current from its events and live streams, threads (entries by number, gaps, paging, posting, read positions), uploads.
-- `kept.rs` — threads' entries and transcripts kept on the device in 256-entry chunks through `Host` storage, bounded (least recently opened go first), forgotten for stations out of reach.
-- `entries.rs` — a thread's entries merged into messages (edits applied): the one place that does it.
-- `data.rs` — the data center (docs/core-db.md): what still.fail cloud and the stations said, held as records.
-- `sync.rs` — what the core keeps in sync by itself, whatever the UI shows.
-- `workspace.rs` — the workspaces, each with what is its own: its account, its stations' state, its waits, its notices, what is kept in sync of it.
-- `notices.rs` — what a person hears about while the client runs (the `notices` topic), from how the chat rows change, each workspace's apart.
-- `attend.rs` — where each UI's attention is (`client.focus`): chats' unread lines and what is read, notifications' settings and which notices show (the `notify` topic).
-- `status.rs` — what the core is waiting on (the `status` topic): slow requests and links, sockets that are down; each workspace's waits, and the device's.
-- `adb.rs` — this phone's adb lent to a station's agents (the `adbShare` topic, `adb.*`): the offer on the station's link, tunnels the station opens to adbd (docs/adb-share.md).
-- `pill.rs` — what a chat says of its connection (the `connection` topic), and when.
-- `activity.rs`, `history.rs`, `present.rs`, `format.rs` — what the clients show (an agent's current activity, its execution history, sessions' and rows' state, words and times), decided once for every client.
-- `error.rs` — the one error type calls and topics report.
-- `views.rs` — the view topics, put together from the others.
-- `testing.rs` — a host for tests.
-- `trace.rs` — traces of user actions: spans, the `traceparent` every station request carries, batched export to still.fail cloud (docs/telemetry.md).
+- `host.ts` — the `Host` interface; `runtime.ts` — `Runner`: scopes, fibers, the Clock.
+- `protocol.ts` — the messages above.
+- `core.ts` — `Core`: accepts client messages, routes calls, manages subscriptions. `core/calls.ts` parses the named calls and validates input; `core/execute.ts` runs them; `core/routing.ts` routes topics; `core/account_state.ts` reconciles accounts, workspaces and their sockets.
+- `ops.ts` — station and cloud operations: their requests, their effects on the records, and their contracts (`PARAMS`).
+- `store.ts` — topics: values, subscribers, coalesced emission as deltas (`delta.ts`; keyed by `collections.ts`, shaped by `output.ts` and `conform.ts`), eviction.
+- `data.ts` — the records (docs/core-db.md): what still.fail cloud and the stations said, entries and transcripts included, and what is local (outbox, pending chats, overlays).
+- `sync/scheduler.ts`, `sync/cloud.ts`, `station/sync.ts` — everything kept current, by itself; `station/topics.ts` — the station topics, read from the records; `station/requests.ts`, `station/wire.ts` — requests over a link.
+- `accounts.ts` — sign-in (PKCE), token refresh (one at a time per account), persistence. `cloud.ts` — still.fail cloud's API.
+- `mesh.ts` — the device endpoint and station links: the credential and its renewal, reopening, hedging on a wake, relay measurement and moving.
+- `kept.ts` — what the Rust core kept in `kept` chunks, read into records once.
+- `entries.ts` — a thread's entries merged into messages (edits applied): the one place that does it.
+- `workspace.ts` — the workspaces, each with what is its own. `notices.ts`, `attend.ts` (`client.focus`, `notify`), `status.ts`, `pill.ts`, `doing.ts`, `adb.ts`.
+- `activity.ts`, `history.ts`, `present.ts`, `format.ts`, `decisions.ts`, `jobs.ts`, `looks.ts`, `changelog.ts` — what the clients show, decided once for every client.
+- `views/` — the view topics (chats, chat, stations, decisions, usage, admin…), and `views/local.ts`, the local overlays (outbox, pending chats, renames and pins under way).
+- `choose.ts`, `forms.ts` — the new-chat and model pickers, the forms (automatic decisions, Slack tokens, the connect wizard, adding a profile).
+- `trace.ts` — traces of user actions (docs/telemetry.md). `testing.ts` — a host for tests.
 
 ## Native (Android)
 
-`client/ffi` runs the core on a thread of its own: a tokio current-thread
-runtime with a `LocalSet`. `start(data_dir, cloud_origin, listener)` returns an
-object whose `connect()` / `receive(client, json)` / `disconnect(client)` only
-post to that thread, so they never block the caller; the core answers on its
-thread through `listener.on_message(client, json)`. The host fetches with
-reqwest (rustls, Mozilla's roots like iroh's own TLS), keeps storage as one
-file per key under `data_dir` (written aside and renamed, on a storage thread
-so writes keep their order), and takes the time zone from the C library,
-which on Android follows the system setting. A panic ends the core: every
-client gets `{"fatal": "…"}` and the app starts a new one.
+`apps/android/core` runs the core in Hermes (React Native's prebuilt
+`hermes-android`, without React Native): `engine.cpp` gives each core a thread
+with a task queue, timers on CLOCK_BOOTTIME and the microtasks drained after
+each task, and `__native` calls into the Rust shell (`client/shell`), which does
+the IO the core asks of its host — HTTP (reqwest, rustls), the cloud's
+WebSocket, files per storage key and `core.db` (the same directory and format as
+the Rust core's), TCP to adbd, iroh — on threads of its own and answers through a
+C callback. The core is bundled for Hermes and compiled to its bytecode
+(`client/core-ts/scripts/hermes-bundle.ts` → `core.hbc` in the app's assets).
+A bug that ends a fiber ends the core: every client gets `{"fatal": "…"}` and the
+app starts a new one.
 
-`apps/android` is the app (Gradle; `build.py` builds the core with the NDK,
-generates the uniffi Kotlin bindings from the built library, then runs
-Gradle). Its `:core` module is `fail.still.core.StillFailCore`: `call(name, params)`
-and `topic(topic)` as a `Flow<TopicState>` — shared by everyone who collects
-the same topic, deltas applied as on the web, unsubscribed 2 s after the last
-collector leaves.
+`apps/android/build.py` builds the shell with the NDK and the core's bytecode,
+checks the generated types (`Shapes.kt`, `Operations.kt`), then runs Gradle.
+The `:core` module is `fail.still.core.StillFailCore` (behind its `Engine`
+interface): `call(name, params)` and `topic(topic)` as a `Flow<TopicState>` —
+shared by everyone who collects the same topic, deltas applied as on the web
+(keyed ones too: `Delta.kt`), unsubscribed 2 s after the last collector leaves.
 
 ## Desktop
 
@@ -511,7 +507,7 @@ Nothing in the pages differs but the host underneath:
 - The core runs in a `utilityProcess` (`src/core.ts`): the TypeScript core
   (`client/core-ts`, its Node host bundled as `core-ts.js`; docs/core-ts.md),
   with its data in the app's `userData/core` (the same files and `core.db` the
-  Rust core of `client/node` kept, so an update keeps the sign-in and what was
+  Rust core kept, so an update keeps the sign-in and what was
   read, and going back to it does too). Its iroh endpoint is the full native one
   (the station's napi addon, `mesh.node`), so links go direct once the relay has
   introduced both sides.
@@ -522,8 +518,8 @@ Nothing in the pages differs but the host underneath:
   SharedWorker (`desktopOpener`); the protocol is the same, posted as objects
   and answered as the core's JSON. A port that closes disconnects its client;
   a core process that exits is announced to every page, which opens a new
-  channel (the main process starts a new core); a panic's `{"fatal"}` makes
-  the core process start a new core for the channels that follow.
+  channel (the main process starts a new core); a `{"fatal"}` (a fiber that
+  failed with a bug) makes the core process start a new core for the channels that follow.
 - Sign-in: `auth.begin` with `redirect_uri` `stillfail://auth/callback` (a scheme
   the app registers). Leaving `app://ember` opens the system browser instead
   (so does `window.open`); still.fail cloud sends the browser back to
@@ -548,33 +544,28 @@ IndexedDB data remain accessible.
 `web/src/core/` is the UI side: it starts the worker (SharedWorker, else
 Worker), speaks the protocol over its port, and gives React
 `useTopic(topic)` (built on `useSyncExternalStore`) and `call(name, params)`.
-In development the core can also run on the page itself, for debugging.
-
-## Order of work
-
-1. `stillfail-core` with a fake host in tests: protocol, store, accounts, cloud, mesh, station.
-2. `stillfail-core-wasm` and `web/src/core`; the web app moves onto the core.
-3. Electron shell (`client/node`).
-4. Native apps (`client/ffi`; Android first), with push notifications through still.fail cloud.
+The worker (`web/src/core/worker.ts`) runs the TS core (`@stillfail/core-ts/web`,
+aliased to `client/core-ts/src/hosts/web.ts`), which loads `client/iroh-wasm`'s
+module on its first link. `web/src/core/delta.ts` applies deltas (keyed ones
+too) for the pages and the desktop's main process alike.
 
 ## Operation contracts and module boundaries
 
-`core.rs` owns initialization and the client protocol. `core/execute.rs` executes
-named calls; `core/account_state.rs` reconciles accounts/workspaces and their
-sockets; `core/routing.rs` routes topics. `station.rs` owns station state, with
-wire types in `station/wire.rs`, requests in `station/transport.rs`, event and
-reconnect handling in `station/events.rs`, and thread subscriptions/lifetimes in
-`station/threads.rs`. Tests live beside those boundaries in their `tests.rs`.
+The ordinary station and cloud HTTP operations declare what they take beside
+their requests, in `ops.ts` (`PARAMS`); `client/core-ts/test/ops-contracts.test.ts`
+checks that each reads exactly that. `node client/core-ts/scripts/operations.ts`
+generates `web/src/core/operations.ts` and Android's `data/Operations.kt` from
+them; `--check` (CI, `scripts/check.sh`, the Android build) rejects drift. These
+bindings own named calls and parameter packing; the hand-written facades provide
+convenient return types and adapters. Special core calls (chat streaming, picks,
+local drafts) keep their own adapters. Optional fields distinguish absence (leave
+unchanged) from explicit `null` (reset). Kotlin's optional-fields builder records
+assignments, including null; it must not serialize every unassigned property.
 
-The 81 ordinary station/cloud HTTP operations declare their scalar parameters
-beside the routes in `ops.rs` (`@params`). `python3 scripts/operations.py` generates
-`web/src/core/operations.ts` and Android's `data/Operations.kt`; `--check` rejects
-drift and missing route inputs. These bindings own named calls and parameter
-packing; the hand-written facades provide convenient return types and adapters.
-Special core calls (chat streaming, picks, local drafts) keep their own adapters.
-Optional fields distinguish absence (leave unchanged) from explicit `null`
-(reset). Kotlin's optional-fields builder records assignments, including null;
-it must not serialize every unassigned property. Tests cover both languages.
+The clients' types are made the same way, from `src/shapes/schema.ts` (the
+shapes every topic's value passes through on its way out): `node
+client/core-ts/scripts/shapes.ts` writes `web/src/core/shapes.ts` and Android's
+`data/Shapes.kt`, and `--check` keeps them from drifting.
 
 `connectFlow {station, form}` owns the complete Slack connection wizard: team,
 configuration token, app settings, installation, token verification, model binding
@@ -591,7 +582,7 @@ Web `action.ts` replaces the station and cloud action implementations. It observ
 named calls and shows their `doing` state; synchronous thin wrappers preserve this
 metadata through `captureCall`. Android's `CallObserver` carries call metadata in
 the coroutine context (isolated across concurrent actions), and `Action` observes
-`doing`. Read-only exclusions are generated from `ops.rs` and `doing.rs`. Neither
+`doing`. Read-only exclusions are generated from `ops.ts` (`QUIET_WRITES` and the reads). Neither
 adapter retains token/password/code parameters. A local entry lock prevents a
 second click before the core's first update.
 

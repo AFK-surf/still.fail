@@ -1,4 +1,4 @@
-// client/core/src/station/tests.rs, ported (same names; the checks as the TS core's design has them: the station is
+// The Rust core's station/tests.rs, ported (same names; the checks as the TS core's design has them: the station is
 // read into records by its sync, and its topics read only those; docs/core-ts.md). The Rust tests drove the station
 // module with a fake wire and sink; these drive a core over the host's fetch (station-fixture.ts).
 import assert from "node:assert/strict";

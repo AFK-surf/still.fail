@@ -1,4 +1,4 @@
-// What a chat runs on, as the core has it chosen (client/core/src/choose.rs): a new chat's page (`newChat`: its
+// What a chat runs on, as the core has it chosen (client/core-ts/src/choose.ts): a new chat's page (`newChat`: its
 // stations, the one it starts on and what it runs there, as last picked on this device) and a model control (`pick`:
 // what it runs on now and what its panel picked). The pages only show them and say what was picked.
 import { useMemo } from "react";

@@ -1,5 +1,5 @@
-// What changed in still.fail, as the core puts it together for this app (its `changelog` topic, client/core/src/
-// changelog.rs): the changelog's pages (pages/Changelog.tsx, mobile/Changelog.tsx) and what an update brought, shown
+// What changed in still.fail, as the core puts it together for this app (its `changelog` topic, client/core-ts/src/
+// changelog.ts): the changelog's pages (pages/Changelog.tsx, mobile/Changelog.tsx) and what an update brought, shown
 // once (`news`) until the changelog is opened or it is put away (`changelog.seen`).
 import { useCallback } from "react";
 import { useCall, useTopic } from "./core/react.ts";
