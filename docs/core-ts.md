@@ -52,6 +52,38 @@
 - 安卓的 Hermes 是自己编（不带 React Native）还是用 RN 发布的预编译库：倾向后者，第 6 期再定。
 - iOS：现在没有，将来也走 Hermes（同安卓）。
 
+## 设计规则（2026-10-03 用户定：照设计做，不照 Rust 逐行搬）
+
+Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」为目标。只有两样必须和 Rust 完全一样：UI 协议（call/topic
+的名字和 JSON 形状）和设备上的存储（storage 的键和格式、`core.db` 的表和记录），这样老 UI 不用改、登录和缓存升级不丢、
+也能退回 Rust core。其余一律按下面的规则：
+
+1. **异步全是 Effect**：call、订阅、station 链路、cloud socket、同步，都是挂在 scope 里的 fiber；取消就是 interrupt；
+   重试和退避用 Schedule；计时走 Clock（测试用 TestClock）。Host 的接口也返回 Effect。
+2. **推送，不轮询**：订阅先给当前值，再给变化；station 和 cloud 的状态靠事件来，任何数据都不定时重读。只有显示在屏幕上的
+   测量值（链路速率、RTT、「已等 3 秒」）可以在被看着的时候采样。
+3. **docs/core-db.md 全做完**：所有业务数据都是记录，包括 Rust 还放在 kept.rs 里的消息 entries 和 transcript、已读位置、
+   outbox；视图从记录算出来，推 delta；启动先从数据库出值，再联网；每条记录带最后一次被来源确认的时间。
+4. **用户操作不等网络**：操作在 core 里立刻生效（outbox、待建的 chat、改名/置顶/归档的覆盖层、已回答），`doing` 跟踪，
+   失败回滚并说明原因；跨 station 的话题是流式的：到了多少显示多少，station 陆续补进来，不用 loading 挡住已有的内容。
+5. **UI 不发请求**：一切都是 core 的具名 call；数据和逻辑（草稿、选择、状态、PC 和手机的差别）都在 core 里。
+6. **workspace 互相隔离**（docs/client-core.md、client/core/src/workspace.rs 的意图）；本地先建的东西和 station 的对应项只靠
+   确切的 clientKey 对上，绝不猜。
+
+对照运行因此只比两件事：协议形状，和同一个脚本下 UI 最终看到的结果。下面「刻意不同」一节列出 TS core 因为 Rust 违反
+上面某条规则而故意做得不一样的每一处。
+
+## 刻意和 Rust core 不同的地方
+
+（随做随补；每条写明违反了哪条规则。）
+
+- 规则 2：老 station 不跟随 job 日志时，Rust 每 2 秒起退避重读 `/jobs/:id/log`；TS 不重读，只在事件里更新（老 station 上
+  日志面板不再自动增长，打开时读一次）。
+- 规则 2：`job` 话题 Rust 每半分钟（老 station 每 4 秒）重读 `/jobs/:id`；TS 只靠 `job` 事件。
+- 规则 3：消息 entries、transcript、已读位置、outbox 在 TS 里是 `core.db` 的记录（新表），不再用 kept.rs 的 storage 分块；
+  第一次启动时把 Rust 留下的 kept 分块导入成记录（老数据不丢），之后不再写 kept 分块（退回 Rust 时它会从 station 重新读）。
+- 规则 3：每条记录带「最后确认时间」（新表 `confirmed`，键 `<表>␁<键>`），Rust 没有。
+
 ## 进度与交接（随做随更新）
 
 代码在 `client/core-ts/`（pnpm 包，`node --test test/*.test.ts`，`npx tsgo --noEmit`），文件按 Rust 模块一一对应
