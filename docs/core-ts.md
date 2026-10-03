@@ -51,3 +51,34 @@
 
 - 安卓的 Hermes 是自己编（不带 React Native）还是用 RN 发布的预编译库：倾向后者，第 6 期再定。
 - iOS：现在没有，将来也走 Hermes（同安卓）。
+
+## 进度与交接（随做随更新）
+
+代码在 `client/core-ts/`（pnpm 包，`node --test test/*.test.ts`，`npx tsgo --noEmit`），文件按 Rust 模块一一对应
+（`src/core.ts` + `src/core/{calls,execute,routing,account_state}.ts` 对应 `core.rs` + `core/*.rs`，其余同名）。
+在 studio 上跑：`rsync` 到 `~/ember-wt/core-ts/`，`cd client/core-ts && pnpm install && node --test test/*.test.ts`。
+
+写法：
+- 异步 IO 是 Promise；定时一律走 `Runner`（`src/runtime.ts`，Effect 的 Clock），长活（cloud 的 events socket）是 Effect fiber；
+  测试用 `TestTime`（`src/testing.ts`，TestClock 外包一层记下每次 sleep），`host.time.pass(ms)` 推时间。
+- 发给 UI 的值经过 `conform`（`src/conform.ts`）：形状表 `src/shapes-schema.ts` 由 `scripts/shapes-schema.ts` 从
+  `client/shapes` 的 Rust 源生成（`--check` 检查是否过期），报错文字照 serde 的写法。
+- trace 的上下文在 JS 里没法跨 await 自动带，所以显式传（`ctx` 参数）。
+- 参数校验的错误文字照 serde（`src/core/params.ts`），UI 看到的和 Rust core 一样。
+- JSON 的对象键按 serde_json 的顺序（排序）写盘和算 delta（`util.ts` 的 `toJson`/`compareKeys`）。
+
+对照运行：`client/core-ts/harness/`（假 cloud `cloud.ts`、脚本 `script.ts`、`run.ts`）。Rust 一侧是 studio 上
+`cd client && cargo build --release -p stillfail-core-node` 出的 `target/release/libstillfail_core_node.dylib`（拷成 `.node`）。
+`node harness/run.ts <addon>`：每一步比较两边发给 UI 的全部消息（同一订阅/调用内的顺序必须一样；不同订阅之间的先后
+按各自 core 的调度，Rust 那边本来就随 HashMap 顺序变）和每个订阅应用 delta 后的值。只抹掉 PKCE 的 state/challenge、
+cloud 的端口、`doing` 的 `since`。
+
+已完成：
+1. 第 1 期（2026-10-03）：协议、Host、Store/delta、data center、accounts、cloud、status、workspace、wake、trace、ops、
+   calls（全部 call 的解析）、prefs、doing、format、shapes 的 model/reasoning、i18n、Node host、假 Host。
+   对照运行 44 步全部一致（账号登录登出、accounts/workspaces/workspace/loginSessions/status/prefs/doing 话题、
+   cloud 写操作和 events socket 推送与断线重连、草稿、各种错误）。移植测试 79 个通过。
+
+下一步（按顺序）：mesh（iroh 走 station 的 `mesh.node` 形状，见 `station/src/mesh/native.ts`）→ station 链路
+（`station.rs`、`station/{wire,transport,events,threads}.rs`、`kept.rs`、`entries.rs`、`sync.rs`）→ views →
+其余模块 → 桌面/web/安卓 host。
