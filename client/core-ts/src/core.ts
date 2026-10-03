@@ -65,6 +65,8 @@ export type Options = {
   clock?: Clock.Clock;
   /// The iroh this host has (iroh.ts); none: stations are not reached over the mesh.
   iroh?: Iroh | null;
+  /// The most threads' entries and transcripts may take on the device (data.ts KEPT_LIMIT by default).
+  keptLimit?: number;
 };
 
 /// What the core holds: every module.
@@ -133,7 +135,7 @@ export class Core {
       inner.status = new Status(inner.host, inner.runner);
       inner.cloud = new Cloud(inner.host, inner.accounts, inner.tracer, inner.status);
       // What was last known is there before any network.
-      inner.data = new Data(inner.host, inner.runner);
+      inner.data = new Data(inner.host, inner.runner, options.keptLimit);
       yield* inner.data.load;
       // What the Rust core kept of threads and transcripts, the first time (kept.ts).
       yield* readKept(inner.host, inner.data);

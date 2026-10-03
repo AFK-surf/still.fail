@@ -159,8 +159,11 @@ core 这边怎么做到「一行变只算一行」：
 - 规则 3、6：Rust 每个 thread 只保留一段连续的 entries（`kept.rs` 的 extend：隔着缺口的丢掉），前面只预读一页；TS 把每个
   thread 的全部 entries 都同步到本机（先最新一页，再往前一页一页补，缺口按 `from..to` 只读缺的那段），听到的每条都留下。
   所以「往上翻」「打开 chat」基本不再请求。
-- 规则 3、6：Rust 的 kept 分块有 50 MB 上限，最久没打开的先丢；TS 保留能到的 station 的全部记录，只在没有任何已登录账号
-  能到某台 station 时删它的记录（`Data.retain`）。
+- 本机上限和 Rust 一样（docs/core-db.md）：entries 和 transcript 记录合计超过 50 MB（`KEPT_LIMIT`，`Core.create` 的
+  `keptLimit` 可改）时，没在显示的、最久没打开的 chat 的 entries/transcript 先删（只删条目；行、会话、thread、已读位置、
+  outbox、pending 这些元数据从不删）；表 `log` 记每个 log 的大小、上次打开时间、是否被删。被删的不再被后台同步和事件写回，
+  打开时才由同步按显示的优先级重新读，所以不会读了删、删了读地循环。和 Rust 不同的只是单位：Rust 按 256 条的分块计，
+  TS 按每条记录的字节计；也照样在没有已登录账号能到某台 station 时删它的记录（`Data.retain`）。
 - 规则 3：transcript 收到「比已有的更后」的一页（中间有缺口）时 Rust 丢掉之前的，TS 留着，`live` 话题显示结尾那一段连续的；
   被改写得更短时（`start` 小于已有的末尾，哪怕 entries 为空）都从 `start` 截断。
 - 规则 3：`thread` 话题里的 `thread`（摘要）就是记录，跟着事件和事件后的摘要重读更新；Rust 停在窗口打开时的样子
@@ -263,7 +266,7 @@ cloud 的端口、`doing` 的 `since`。
   走 `apps/desktop/build.sh`、`apps/android/build.py`、`build:cloud`，它们已是 TS core）；`docs/client-core.md` 重写。
 
 验证（studio，2026-10-03，d521cec8，独立 worktree `~/ember-wt/core-ts-final`）：
-- core-ts 测试 384 个，连跑 5 遍全绿（mesh 的 20 个要插件：`STILLFAIL_MESH_NATIVE=<station/native/mesh 编出的 dylib>`，
+- core-ts 测试 384 个（加上本机上限后 386 个），各连跑 5 遍全绿（mesh 的 20 个要插件：`STILLFAIL_MESH_NATIVE=<station/native/mesh 编出的 dylib>`，
   没编到默认位置时它们跳过，check.sh 里就是这样）；`tsgo --noEmit` 通过。
 - `sh scripts/check.sh all` 16 步全过（类型和 bindings、图标、各处 typecheck、web/core-ts/cloud 测试、Rust station、
   Rust client、Android）。
@@ -314,4 +317,4 @@ TS 这时已经把 12 000 条 entries 都同步到本机（规则 6），Rust �
 
 接手：计划里的事都做完了（2026-10-03）。剩下的是合并：分支 `core-ts` 等用户看过证据后合进 main（照 ember 的合并流程，
 部署时注意 web、桌面、安卓三个包都换成 TS core，数据两个方向都能打开，可以随时退回）。可以接着做的：`kept.rs` 那种
-本机存储上限（现在不设上限，见「刻意不同」）、安卓真机上量内存和流畅度。
+安卓真机上量内存和流畅度。
