@@ -115,7 +115,7 @@ export function counts(call: Call, name: string): boolean {
     case "profileModels":
       return true;
     case "op":
-      return call.op.method !== "GET" && !["session.warm", "widget.setState", "login.drop"].includes(name);
+      return call.op.method !== "GET" && !ops.QUIET_WRITES.includes(name);
     case "chatArchive":
     case "chatChange":
     case "chatRetry":

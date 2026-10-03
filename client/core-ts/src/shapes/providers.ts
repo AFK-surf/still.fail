@@ -1,4 +1,4 @@
-// The API providers a profile can reach with a key (client/shapes/src/providers.rs): where each one is, and which
+// The API providers a profile can reach with a key (the Rust station has the same list: client/shapes/src/providers.rs): where each one is, and which
 // protocols it speaks there. The station sets the runtimes up from the same list.
 
 export type Protocol = "chat_completions" | "responses" | "anthropic";

@@ -1,4 +1,4 @@
-// Models by what they are rather than how a provider spells them (client/shapes/src/model.rs).
+// Models by what they are rather than how a provider spells them (the Rust station reads them alike: client/shapes/src/model.rs).
 
 const isDigits = (s: string) => s.length > 0 && /^[0-9]+$/.test(s);
 const isAlpha = (s: string) => s.length > 0 && /^[A-Za-z]+$/.test(s);
