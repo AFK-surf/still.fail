@@ -559,6 +559,7 @@ async function main(argv: string[]) {
         const before = complete(cached(p, t, k), p, t);
         const started = Date.now();
         const dir = await get(p, t);
+        const took = ((Date.now() - started) / 1000).toFixed(0);
         const how = before ? "cached" : JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")).from === "built" ? "built" : "downloaded";
         let note = "";
         if (!there && publish) {
@@ -569,7 +570,7 @@ async function main(argv: string[]) {
           pack(dir, name, outbox);
           note = " → outbox";
         }
-        summary.push(`${p} ${t} ${k}: ${how} (${((Date.now() - started) / 1000).toFixed(0)} s)${there ? ", published already" : note}`);
+        summary.push(`${p} ${t} ${k}: ${how} (${took} s)${there ? ", published already" : note}`);
       }
       rmSync(work, { recursive: true, force: true });
       for (const line of summary) console.log(line);
