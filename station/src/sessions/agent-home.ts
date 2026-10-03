@@ -1,8 +1,8 @@
-// The shared agent home (mesh/app/src/agent_home.rs): one MEMORY.md and one skills/ directory used by every profile of
+// The shared agent home (from the Rust station's agent_home.rs): one MEMORY.md and one skills/ directory used by every profile of
 // both runtimes. It lives in the data dir, not the repository, since it holds team-specific memory. Each profile home
 // links to it under the name its runtime loads automatically; the station's own skills are written into it at start.
-// Their text is the Rust station's own files (mesh/app/src/skills/*.md), read from there when running from source and
-// from dist/skills/ (copied there by the build) when bundled, so the two stations write the same.
+// Their text is src/skills/*.md, read from there when running from source and from dist/skills/ (copied there by the
+// build) when bundled.
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
@@ -21,7 +21,7 @@ const FEEDBACK_SKILL = "stillfail-feedback";
 const FORMER_BUILTIN_SKILLS = ["ember-jobs", "ember-show", "ember-viz"];
 
 /// Where the skills' text is.
-const skillsSource = (): URL => (import.meta.url.endsWith(".ts") ? new URL("../../../mesh/app/src/skills/", import.meta.url) : new URL("./skills/", import.meta.url));
+const skillsSource = (): URL => (import.meta.url.endsWith(".ts") ? new URL("../skills/", import.meta.url) : new URL("./skills/", import.meta.url));
 
 /// A built-in skill's SKILL.md, as the station has it.
 export const builtinSkill = (name: string): string => readFileSync(new URL(`${name}.md`, skillsSource()), "utf8");

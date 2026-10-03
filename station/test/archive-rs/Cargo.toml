@@ -1,5 +1,6 @@
-# The Rust station's cold storage (mesh/app/src/archive.rs, compiled as it is) as a command, for test/cold-compat.test.ts:
-# what one station packed, the other restores. Built on its own: `cargo build --release` here.
+# The Rust station's cold storage (src/archive.rs, its archive.rs as the last Rust station had it) as a command, for
+# test/cold-compat.test.ts: what a Rust station packed (data from before the TypeScript station), this one restores, and
+# what this one packs, a Rust station (a rollback) restores. Built on its own: `cargo build --release` here.
 [package]
 name = "archive-rs"
 version = "0.0.0"
@@ -12,6 +13,6 @@ publish = false
 anyhow = "1"
 libc = "0.2"
 serde_json = "1"
-# The versions mesh/Cargo.lock has.
+# The versions the Rust station had.
 tar = "=0.4.46"
 zstd = "=0.13.3"

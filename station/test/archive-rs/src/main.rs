@@ -1,7 +1,6 @@
 //! `archive-rs pack|restore <room>`, `archive-rs file <room> <relative>` (the file's bytes on stdout, exit 3 when it is
 //! not there), `archive-rs pack-file|restore-file <path>`: archive.rs as the Rust station runs it, under its lock.
 #[allow(dead_code)]
-#[path = "../../../../mesh/app/src/archive.rs"]
 mod archive;
 
 use std::io::Write;

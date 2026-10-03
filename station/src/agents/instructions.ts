@@ -1,6 +1,5 @@
-// What the agent is told about its situation (mesh/app/src/instructions.rs), appended to the runtime's own system
-// prompt, and how messages are put to it. The words are the Rust station's, kept equal by test/instructions.test.ts
-// (it reads instructions.rs): one set of instructions while both stations run.
+// What the agent is told about its situation, appended to the runtime's own system prompt, and how messages are put to
+// it. A change to how agents work gets a note in migrations.ts too, for the sessions begun before it.
 import type { MessageRow, PendingMessage, WidgetModel } from "../store/store.ts";
 
 /// The connect and surface of the station's own chats.

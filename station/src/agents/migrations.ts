@@ -1,6 +1,7 @@
-// What changed in how agents work, told to sessions that began before it (mesh/app/src/migrations.rs): each turn, the
-// notes newer than the last one the session was told come before its messages, once. The notes are the Rust station's,
-// kept equal by test/instructions.test.ts.
+// What changed in how agents work, told to sessions that began before it: each turn, the notes newer than the last one
+// the session was told come before its messages, once. A change to the instructions (instructions.ts), the tools'
+// parameters or rules adds one at the end (the next number, a sentence or two saying what changed; the details are in
+// the instructions file the session's workspace has).
 
 /// The notes, oldest first, each with its number (counting up from 1, never reused).
 export const NOTES: [number, string][] = [

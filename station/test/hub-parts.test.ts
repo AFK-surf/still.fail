@@ -244,7 +244,7 @@ test("the station's own skills are written and kept as the station has them; the
   assert.ok(existsSync(join(home, "skills", "ember-viz", "notes.md")));
   const path = join(home, "skills", "stillfail-jobs", "SKILL.md");
   assert.ok(readFileSync(path, "utf8").startsWith("---\nname: stillfail-jobs\n"));
-  assert.equal(readFileSync(path, "utf8"), readFileSync(new URL("../../mesh/app/src/skills/stillfail-jobs.md", import.meta.url), "utf8"), "the Rust station's text");
+  assert.equal(readFileSync(path, "utf8"), readFileSync(new URL("../src/skills/stillfail-jobs.md", import.meta.url), "utf8"), "the station's text");
   writeFileSync(path, "edited by hand");
   writeBuiltinSkills(home, false);
   assert.ok(readFileSync(path, "utf8").includes("job_start"), "the station's own, as it has it");

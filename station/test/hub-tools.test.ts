@@ -1,7 +1,6 @@
-// The agents' tools (src/tools/chat.ts, slack.ts, stations.ts, adb.ts, feedback.ts) on the hub: their definitions are
-// the Rust station's byte for byte (read from hub.rs, remote.rs, adb.rs, feedback.rs and compared), and what they do is
-// ported from mesh/app/src/hub/tests.rs: posts, cards, states and what they are about, history, other chats,
-// session_send, slack_api, files, titles, the archive suggestion after all_done.
+// The agents' tools (src/tools/chat.ts, slack.ts, stations.ts, adb.ts, feedback.ts) on the hub: their definitions, and
+// what they do (ported from the Rust station's hub tests): posts, cards, states and what they are about, history, other
+// chats, session_send, slack_api, files, titles, the archive suggestion after all_done.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -23,78 +22,21 @@ import { Rig, matches, message, reply, say, settle } from "./hub-fakes.ts";
 
 type Json = any;
 
-// ── the definitions, as the Rust station has them ──
+// ── the definitions ──
 
-/// A json! literal of the Rust's as JSON: names (variables, constants) replaced, trailing commas dropped.
-function rustJson(body: string, names: Record<string, unknown>): Json {
-  let out = "";
-  for (let i = 0; i < body.length; ) {
-    if (body[i] === '"') {
-      let j = i + 1;
-      while (body[j] !== '"') j += body[j] === "\\" ? 2 : 1;
-      out += body.slice(i, j + 1);
-      i = j + 1;
-      continue;
-    }
-    const name = /^[A-Za-z_][A-Za-z0-9_.]*(\(\))?/.exec(body.slice(i));
-    if (name) {
-      out += name[0] in names ? JSON.stringify(names[name[0]]) : name[0];
-      i += name[0].length;
-      continue;
-    }
-    out += body[i++];
-  }
-  return JSON.parse(out.replace(/,(\s*[}\]])/g, "$1"));
-}
-
-/// Where the bracket opening at `at` closes, strings skipped.
-function closing(s: string, at: number): number {
-  let depth = 0;
-  for (let i = at; i < s.length; i++) {
-    if (s[i] === '"') {
-      for (i++; s[i] !== '"'; i += s[i] === "\\" ? 2 : 1);
-      continue;
-    }
-    if ("([{".includes(s[i]!)) depth++;
-    else if (")]}".includes(s[i]!) && --depth === 0) return i;
-  }
-  throw new Error("unbalanced");
-}
-
-function rustTools(file: string, names: Record<string, unknown>, pattern: RegExp): Map<string, Json> {
-  const src = readFileSync(new URL(`../../mesh/app/src/${file}`, import.meta.url), "utf8");
-  const out = new Map<string, Json>();
-  for (const m of src.matchAll(pattern)) {
-    const start = m.index! + m[0].length;
-    out.set(m[1]!, { name: m[1], description: JSON.parse(m[2]!), inputSchema: rustJson(src.slice(start + 1, closing(src, start)), names) });
-  }
-  return out;
-}
-
-const TOOL = /name: "([a-z_]+)"\.into\(\),\s*description: ("(?:[^"\\]|\\.)*")\.into\(\),\s*input_schema: json!/g;
-const literals = { true: true, false: false };
-
-test("every tool's name, description and input schema is the Rust station's, byte for byte", () => {
-  const to = { type: "string", description: "CHANNEL/THREAD_TS: the thread attribute of the message you are answering." };
-  const rust = new Map([
-    ...rustTools("hub.rs", { ...literals, "to.clone()": to, to, MIN_WAIT_SECONDS: 10, MAX_WAIT_SECONDS: 3600 }, TOOL),
-    ...rustTools("adb.rs", literals, TOOL),
-    ...rustTools("feedback.rs", { ...literals, AREAS: ["station", "web", "android", "desktop", "slack", "cloud", "unknown"] }, TOOL),
-    ...rustTools("remote.rs", literals, /\(\s*"(station_[a-z]+)",\s*("(?:[^"\\]|\\.)*"),\s*json!/g),
-  ]);
+test("every tool has a name, a description and an object's input schema; the chat tools in their order", () => {
   const r = new Rig();
   const ours = [...chatTools(r.hub), ...stationTools(() => null), ...adbTools(() => [], () => null), ...feedbackTools(r.store, () => null, () => null)];
   assert.deepEqual(
     chatTools(r.hub).map((t) => t.name),
     ["chat_post", "slack_api", "chat_state", "chat_history", "chat_list", "chat_read", "session_send", "session_history"],
-    "in the Rust's order",
   );
-  assert.equal(ours.length, rust.size);
+  assert.equal(new Set(ours.map((t) => t.name)).size, ours.length, "no name twice");
   for (const tool of ours) {
-    const theirs = rust.get(tool.name);
-    assert.ok(theirs, tool.name);
-    assert.equal(tool.description, theirs.description, tool.name);
-    assert.equal(JSON.stringify(tool.inputSchema), JSON.stringify(theirs.inputSchema), tool.name);
+    assert.match(tool.name, /^[a-z_]+$/);
+    assert.ok(tool.description.length > 0, tool.name);
+    assert.equal((tool.inputSchema as Json).type, "object", tool.name);
+    for (const required of (tool.inputSchema as Json).required ?? []) assert.ok(required in (tool.inputSchema as Json).properties, `${tool.name}: ${required}`);
   }
   void r.close();
 });

@@ -81,7 +81,7 @@ function fail(message: string): never {
 const STATION: Target[] = ["darwin-arm64", "linux-x64", "linux-arm64"];
 
 /// A Rust crate of its own (station/native/*), for a station platform: Linux from a Mac with cargo-zigbuild, for
-/// glibc 2.28 and later (as scripts/linux-station.sh builds the Rust station).
+/// glibc 2.28 and later (Debian 10, Ubuntu 20.04, RHEL 8 on).
 function stationCrate(dir: string, artifact: (t: Target) => string, name: string, extra: string[] = []): Part {
   return {
     files: () => [name],
@@ -112,26 +112,11 @@ const PARTS: Record<string, Part> = {
   // For the station's tests: the Rust station's cold storage as a command (test/cold-compat.test.ts), and a member's
   // client asking a station over iroh (tools/load: test/e2e.sh, compare.sh). This machine's only.
   "archive-rs": {
-    ...stationCrate("station/test/archive-rs", () => "archive-rs", "archive-rs", ["mesh/app/src/archive.rs"]),
+    ...stationCrate("station/test/archive-rs", () => "archive-rs", "archive-rs"),
     env: "ARCHIVE_RS",
     publish: ["darwin-arm64"],
   },
   "station-load": { ...stationCrate("station/tools/load", () => "station-load", "station-load", VENDORED), env: "E2E_LOAD", publish: ["darwin-arm64"] },
-  // The Rust station (mesh/), which the desktop app still carries.
-  "station-rs": {
-    files: () => ["stillfail-station"],
-    targets: STATION,
-    // The desktop app's; the station's own releases still build it (.github/release.sh).
-    publish: ["darwin-arm64"],
-    env: "STILLFAIL_STATION_RS",
-    inputs: ["mesh", "client/shapes", "client/i18n", ...VENDORED],
-    recipe: (t) => ({ cargo: cargoCommand(t, ["-p", "stillfail-station"]) }),
-    build(t, out) {
-      const target = targetDir(join(ROOT, "mesh/target"), "station-rs");
-      cargo(cargoCommand(t, ["-p", "stillfail-station"]), join(ROOT, "mesh"), { CARGO_TARGET_DIR: target });
-      copyFileSync(join(target, TRIPLE(t), "release/stillfail-station"), join(out, "stillfail-station"));
-    },
-  },
   // The browser's iroh (web/src/core/iroh-pkg): wasm-bindgen's module, by client/iroh-wasm/build.sh.
   "iroh-wasm": {
     files: () => ["stillfail_iroh_wasm.js", "stillfail_iroh_wasm.d.ts", "stillfail_iroh_wasm_bg.wasm", "stillfail_iroh_wasm_bg.wasm.d.ts"],
