@@ -1,10 +1,13 @@
 #!/bin/sh
-# Builds the browser iroh into web/src/core/iroh-pkg (not committed), which
-# the TS core's web host (client/core-ts/src/hosts/web.ts) loads. Needs a clang that targets wasm32 for ring:
-# LLVM from LLVM_BIN, Homebrew, or PATH.
+# Builds the browser iroh into DIR (default web/src/core/iroh-pkg, not committed), which
+# the TS core's web host (client/core-ts/src/hosts/web.ts) loads. The builds and checks get it prebuilt instead
+# (scripts/native.ts iroh-pkg, part iroh-wasm), which runs this only when no prebuilt one has this source.
+# Needs a clang that targets wasm32 for ring: LLVM from LLVM_BIN, Homebrew, or PATH.
+#   build.sh [DIR]
 set -eu
 # rustup's toolchain (with the wasm32 target), ahead of any Homebrew rust.
 export PATH="$HOME/.cargo/bin:$PATH"
+out=${1:-}
 cd "$(dirname "$0")/.."
 llvm=${LLVM_BIN:-}
 if [ -z "$llvm" ]; then
@@ -32,7 +35,7 @@ CC_wasm32_unknown_unknown="$cc" AR_wasm32_unknown_unknown="$ar" \
   RUSTFLAGS='--cfg getrandom_backend="wasm_js"' \
   cargo build --locked -p stillfail-iroh-wasm --profile wasm-release --target wasm32-unknown-unknown
 target=${CARGO_TARGET_DIR:-target}
-out=../web/src/core/iroh-pkg
+out=${out:-../web/src/core/iroh-pkg}
 rm -rf "$out"
 wasm-bindgen --target web --out-dir "$out" "$target/wasm32-unknown-unknown/wasm-release/stillfail_iroh_wasm.wasm"
 # When this core was built: a page on a newer one starts its own worker, and the older retires (web/src/core/built.ts).
