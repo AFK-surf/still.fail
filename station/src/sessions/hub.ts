@@ -63,10 +63,11 @@ export const newToken = () => randomBytes(24).toString("base64url");
 export type Hold = "drain" | "unbound";
 
 /// Cold storage of archived sessions' files (archive.rs, footprint.rs): an archived, idle session's workspace and
-/// transcripts packed, and restored before its runtime starts again. Not ported here: the default keeps nothing cold.
+/// transcripts packed, and restored before its runtime starts again or when it is shown again. The station's is
+/// cold.ts; the default keeps nothing cold.
 export interface ColdStorage {
   isCold(key: string): boolean;
-  restore(key: string): void;
+  restore(key: string): void | Promise<void>;
   /// Packs what it can of an archived, idle session.
   pack(key: string): void | Promise<void>;
 }

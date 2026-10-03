@@ -7,6 +7,7 @@ import { type Answer, type Request, error, param, percentDecode } from "../reque
 import type { Route, Tools } from "../admin.ts";
 import { ioMessage } from "../../read/sessions.ts";
 import { thumbnail } from "../../sessions/thumbs.ts";
+import { withLock, workspaceFile } from "../../sessions/archive.ts";
 
 /// admin/mod.rs `segment_decode`.
 const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
@@ -15,13 +16,23 @@ const noRoute = (r: Request) => error(404, `no route ${r.method} ${r.path}`);
 
 /// The bytes of a file read (`sessionFile`), answered as files.rs does; an error as it came. An image whose thumbnail is
 /// not made yet (`thumb=1`) has it made here, by the image codecs off this thread (sessions/thumbs.ts), and is answered
-/// with it, or with the image itself when it gets none.
+/// with it, or with the image itself when it gets none. One packed with its archived workspace is read out of the archive
+/// here, under the room's lock (files.rs `session_file`; sessions/archive.ts).
 async function file(read: Tools["read"], r: Request, args: unknown): Promise<Answer> {
   const answer = await read(r, "sessionFile", args);
   if (answer.status !== 200 || !Buffer.isBuffer(answer.body)) return answer;
-  const found = JSON.parse(answer.body.toString("utf8")) as { contentType: string; base64: string } | { contentType: string; image: string; thumbs: string };
+  const found = JSON.parse(answer.body.toString("utf8")) as
+    | { contentType: string; base64: string }
+    | { contentType: string; image: string; thumbs: string }
+    | { contentType: string; archived: { room: string; path: string; relative: string }; notFound: string };
   const answered = (contentType: string, body: Buffer): Answer => ({ status: 200, headers: { "content-type": contentType, "cache-control": "private, max-age=3600" }, body });
   if ("base64" in found) return answered(found.contentType, Buffer.from(found.base64, "base64"));
+  if ("archived" in found) {
+    const { room, path, relative } = found.archived;
+    // Restored meanwhile: it is back in its upload directory.
+    const bytes = await withLock(room, async () => (await readFile(path).catch(() => null)) ?? workspaceFile(room, relative));
+    return bytes === null ? error(404, found.notFound) : answered(found.contentType, bytes);
+  }
   const made = await thumbnail(found.image, found.thumbs);
   const [path, kind] = made !== null ? [made.path, made.type] : [found.image, found.contentType];
   try {

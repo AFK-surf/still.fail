@@ -4,7 +4,7 @@
 // routes/chats.ts's and routes/sessions.ts's (GET /sessions/:key/files among them).
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { tr } from "../../ops/i18n.ts";
@@ -27,6 +27,8 @@ import {
   say,
 } from "../../sessions/lifecycle.ts";
 import { shown } from "../../jobs/jobs.ts";
+import { withLock, workspaceFile } from "../../sessions/archive.ts";
+import { roomOf } from "../../sessions/footprint.ts";
 import { dir as thumbsDir, keep } from "../../sessions/thumbs.ts";
 
 const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
@@ -195,12 +197,16 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         path = into;
       }
       const owner = dirs.find((d) => inside(path, d.dir));
-      if (!exists(path) && owner !== undefined && path.slice(owner.dir.length + 1).indexOf("/") < 0) {
-        // Packed with its archived workspace: read back out of it (the readers know how).
-        const found = await read(r, "sessionFile", { key: owner.key, name: fileName(path), thumb: false, lang: r.lang });
-        if (found.status === 200 && Buffer.isBuffer(found.body)) {
-          mkdirSync(owner.dir, { recursive: true });
-          writeFileSync(path, Buffer.from(JSON.parse(found.body.toString("utf8")).base64, "base64"));
+      if (!exists(path) && owner !== undefined) {
+        // Packed with its archived workspace: read back out of its archive, under its lock.
+        const workspace = dirname(owner.dir);
+        const room = roomOf(a.hub.config().dataDir, workspace);
+        if (room !== null) {
+          const bytes = await withLock(room, () => workspaceFile(room, path.slice(workspace.length + 1)));
+          if (bytes !== null) {
+            mkdirSync(dirname(path), { recursive: true });
+            writeFileSync(path, bytes);
+          }
         }
       }
       if (owner === undefined || !exists(path)) throw new Refused(400, tr(r.lang, "station.files.notUploaded"));
@@ -315,10 +321,10 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         method,
         pattern: /^\/*sessions\/+([^/]+)\/+archive(?:\/.*)?$/,
         handle: (r, [k]) =>
-          write((s, a) => {
+          write(async (s, a) => {
             const key = segment(k!);
             session(s, key);
-            archive(a.hub, key, method === "POST");
+            await archive(a.hub, key, method === "POST");
             return read(r, "summary", { key, lang: r.lang });
           }),
       }),

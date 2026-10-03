@@ -87,7 +87,7 @@ export type SessionDeps = {
   live?: { event(key: string, event: LiveEvent): void; turnEnded(key: string): void };
   idle(key: string): void;
   archiveIsCold(key: string): boolean;
-  restoreArchive(key: string): void;
+  restoreArchive(key: string): void | Promise<void>;
   /// An archived session's process is gone: its files may go to cold storage now (session.rs `clean_archive`).
   cleanArchive?(key: string): void | Promise<void>;
   /// Turns are held (the station is about to stop or hand over): none starts, messages stay pending.
@@ -191,7 +191,7 @@ export class SessionActor {
   /// Archived and idle: its files go to cold storage, in turn with the rest (session.rs `clean_archive`).
   cleanArchive(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.agent || this.turn) return;
+      if (this.agent || this.turn || this.waiting !== null || this.notices.length > 0) return;
       await this.deps.cleanArchive?.(this.key);
     });
   }
@@ -611,7 +611,7 @@ export class SessionActor {
 
   private async ensureAgent(): Promise<AgentSession> {
     if (this.agent) return this.agent.session;
-    if (this.deps.archiveIsCold(this.key)) this.deps.restoreArchive(this.key);
+    if (this.deps.archiveIsCold(this.key)) await this.deps.restoreArchive(this.key);
     const store = this.deps.store;
     const row = store.getSession(this.key);
     if (!row) throw new Error(`session ${this.key} disappeared`);

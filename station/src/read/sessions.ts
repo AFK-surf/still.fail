@@ -11,7 +11,6 @@
 import { knownChannel, knownPerson, slackCreator } from "./slack-known.ts";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join, isAbsolute } from "node:path";
-import { zstdDecompressSync } from "node:zlib";
 import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { watching } from "./store.ts";
@@ -347,71 +346,6 @@ function roomOf(dataDir: string, workspace: string): string | null {
   return dirname(path);
 }
 
-/// archive.rs `workspace_file`: a file of an archived workspace (`workspace.tar.zst` in its room), by its path in it.
-function workspaceFile(room: string, relative: string): Buffer | null {
-  const archive = join(room, "workspace.tar.zst");
-  if (!existsSync(archive)) return null;
-  const tar = zstdDecompressSync(readFileSync(archive));
-  const wanted = relative.split("/").filter((p) => p !== "" && p !== ".").join("/");
-  for (const entry of tarEntries(tar)) {
-    if (entry.path === wanted && entry.file) return entry.data;
-  }
-  return null;
-}
-
-/// The entries of a tar archive as the tar crate reads them: each named by the GNU long name or pax path before it,
-/// else its ustar name with its prefix; the path as components (`.` left out, a leading `/` kept); the archive ends
-/// at a zero block.
-function* tarEntries(tar: Buffer): Generator<{ path: string; file: boolean; data: Buffer }> {
-  const text = (b: Buffer) => {
-    const nul = b.indexOf(0);
-    return (nul < 0 ? b : b.subarray(0, nul)).toString("utf8");
-  };
-  const octal = (b: Buffer): number => {
-    // Base-256 when its first byte's high bit is set (GNU).
-    if (b[0]! & 0x80) return b.subarray(1).reduce((n, x) => n * 256 + x, b[0]! & 0x7f);
-    const t = text(b).trim();
-    return t === "" ? 0 : parseInt(t, 8);
-  };
-  let longName: string | null = null;
-  let paxPath: string | null = null;
-  for (let at = 0; at + 512 <= tar.length; ) {
-    const head = tar.subarray(at, at + 512);
-    if (head.every((x) => x === 0)) return;
-    const size = octal(head.subarray(124, 136));
-    const kind = String.fromCharCode(head[156]!);
-    const data = tar.subarray(at + 512, at + 512 + size);
-    at += 512 + Math.ceil(size / 512) * 512;
-    if (kind === "L") {
-      longName = text(data);
-      continue;
-    }
-    if (kind === "x") {
-      // Records of "<length> <key>=<value>\n", the length in bytes and counting itself.
-      for (let rest = data; rest.length > 0; ) {
-        const space = rest.indexOf(0x20);
-        const len = space < 0 ? NaN : parseInt(rest.subarray(0, space).toString("latin1"), 10);
-        if (!(len > space + 1) || len > rest.length) break;
-        const record = rest.subarray(space + 1, len - 1);
-        rest = rest.subarray(len);
-        const eq = record.indexOf(0x3d);
-        if (eq >= 0 && record.subarray(0, eq).toString("latin1") === "path") paxPath = record.subarray(eq + 1).toString("utf8");
-      }
-      continue;
-    }
-    if (kind === "g" || kind === "K") continue;
-    const ustar = head.subarray(257, 263).toString("latin1") === "ustar\0";
-    const prefix = ustar ? text(head.subarray(345, 500)) : "";
-    const name = text(head.subarray(0, 100));
-    const raw = longName ?? paxPath ?? (prefix !== "" ? `${prefix}/${name}` : name);
-    longName = null;
-    paxPath = null;
-    const parts = raw.split("/").filter((p, i) => p !== "." && (p !== "" || i === 0));
-    const path = parts.map((p) => (p === "" ? "/" : p)).join("/");
-    yield { path, file: kind === "0" || kind === "\0", data };
-  }
-}
-
 /// thumbs.rs `thumbnail`, as far as a reader goes: the image's thumbnail as kept; else whether one is to be made (an
 /// image by its name, over 24 KiB), which the route asks the image codecs for (sessions/thumbs.ts: the addon is not
 /// loaded in the readers, and a reader is not held up decoding); else null, the image shown itself.
@@ -442,17 +376,15 @@ export function sessionFile(s: Store, key: string, name: string, thumb: boolean,
   setLang(lang);
   const row = sessionRow(s, key);
   const room = roomOf(s.dataDir, row.workspace);
-  // The archive's lock is the writer's (it packs and unpacks the room): a reader reads what is there.
   const uploads = clean(join(row.workspace, "uploads"));
   const base = name.split(/[/\\]/).at(-1) ?? "";
   const path = clean(`${uploads}/${base}`);
   const notFound = () => new HttpError(404, tr("station.files.notFound"));
   if (base === "" || !within(path, uploads) || path === uploads) throw notFound();
   if (!isFile(path)) {
-    if (room === null) throw notFound();
-    const bytes = workspaceFile(room, `uploads/${base}`);
-    if (bytes === null) throw notFound();
-    return { contentType: mime(path), base64: bytes.toString("base64") };
+    // Packed with its archived workspace: the route reads it out of the archive (sessions/archive.ts), under its lock.
+    if (room === null || !existsSync(join(room, "workspace.tar.zst"))) throw notFound();
+    return { contentType: mime(path), archived: { room, path, relative: `uploads/${base}` }, notFound: tr("station.files.notFound") };
   }
   const small = thumb ? thumbnail(path, s.dataDir) : null;
   if (small === "make") return { contentType: mime(path), image: path, thumbs: thumbsDir(s.dataDir) };
