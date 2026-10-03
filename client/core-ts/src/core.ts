@@ -6,7 +6,7 @@ import { Accounts, type AccountView } from "./accounts.ts";
 import * as brand from "./brand.ts";
 import { Cloud } from "./cloud.ts";
 import { parseCall, cancellable, callStation, counts, type Call } from "./core/calls.ts";
-import { execute } from "./core/execute.ts";
+import { execute, handlers, hooks } from "./core/execute.ts";
 import { Router } from "./core/routing.ts";
 import { Data } from "./data.ts";
 import { Doing, FAILED_SHOWN_MS, heavy } from "./doing.ts";
@@ -20,7 +20,7 @@ import { stationId } from "./station/addr.ts";
 import { Status } from "./status.ts";
 import { Store } from "./store.ts";
 import { CloudSync } from "./sync/cloud.ts";
-import { Scheduler } from "./sync/scheduler.ts";
+import { Priority, Scheduler } from "./sync/scheduler.ts";
 import { Kind, SAMPLE, Tracer } from "./trace.ts";
 import { Wakes, WakingHost } from "./wake.ts";
 import { Workspaces } from "./workspace.ts";
@@ -35,6 +35,7 @@ import { Attention } from "./attention.ts";
 import { Pills } from "./pill.ts";
 import type { Choose } from "./choose.ts";
 import { installChoose } from "./choose-calls.ts";
+import { Changelog } from "./changelog.ts";
 import { envOf, Views } from "./views/views.ts";
 import { isObject } from "./util.ts";
 
@@ -80,6 +81,7 @@ export class Inner {
   views!: Views;
   attention!: Attention;
   choose!: Choose;
+  changelog!: Changelog;
   viewCalls!: ViewCalls;
   router!: Router;
   /// The calls under way that a UI can stop, by `client/id`.
@@ -152,6 +154,10 @@ export class Core {
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);
       inner.attention.install();
       inner.choose = installChoose(inner);
+      inner.changelog = new Changelog(inner.host, inner.store, inner.data);
+      inner.router.owners.push(inner.changelog);
+      handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
+      hooks.device = (_inner, facts) => inner.changelog.device(facts);
       inner.router.owners.push(new Pills(inner.store, inner.runner, () => inner.host.nowMs(), (station) => inner.views.stationName(station)));
       // The stations every account reaches are linked, as the workspaces say (once a burst of changes settles).
       let reconciling = false;
@@ -176,6 +182,9 @@ export class Core {
       inner.stations.reconcile();
       // What was on its way when the core last stopped goes on.
       inner.viewCalls.resume();
+      // What changed in still.fail: read now, and again each time an account's events socket opens.
+      inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
+      inner.cloudSync.onOpen = () => inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
       return new Core(inner);
     });
   }

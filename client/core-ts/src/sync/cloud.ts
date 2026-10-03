@@ -32,6 +32,8 @@ export class CloudSync {
   readonly #core: Inner;
   /// Whether each account's latest `/v1/me` answered this run (null), or why it failed.
   readonly mes = new Map<string, CoreError | null>();
+  /// Told each time an account's events socket opens (what else is read again then).
+  onOpen: () => void = () => {};
   /// What a workspace read last failed with, while nothing is held of it.
   readonly errors = new Map<string, CoreError>();
   /// Each account's socket, while it is signed in.
@@ -500,6 +502,7 @@ export class CloudSync {
           let socket = opened.success;
           let frames = socket.frames;
           const openedAt = core.host.nowMs();
+          self.onOpen();
           core.status.socketUp(sub);
           // Nothing is replayed: what changed while it was closed is read now.
           core.scheduler.enqueue("cloud", `me/${sub}`, Priority.shown, self.#account(sub));
