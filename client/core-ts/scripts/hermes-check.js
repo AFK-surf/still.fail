@@ -1,5 +1,7 @@
-// A check of the Hermes bundle in Hermes's own CLI (scripts/hermes-bundle.ts): a shell faked in JS (storage and the
-// database in memory, no network), the core started, subscribed to and called; what it says is printed.
+// A check of the Hermes bundle in Hermes's own CLI (scripts/hermes-bundle.ts): a shell faked in JS (storage in memory,
+// no network; no SQLite, so the accounts' databases cannot be opened and the core keeps nothing, which its status
+// says — bench/hermes-host runs the bundle on the real shell), the core started, subscribed to and called; what it
+// says is printed.
 //   cat scripts/hermes-check.js <bundle.js> scripts/hermes-check-run.js > x.js && hermes -Xes6-class -block-scoping -Xmicrotask-queue x.js
 var store = {}, records = {}, emitted = [], timers = {};
 var enc = function (s) { var out = []; s = unescape(encodeURIComponent(s)); for (var i = 0; i < s.length; i++) out.push(s.charCodeAt(i)); return new Uint8Array(out).buffer; };
@@ -11,10 +13,9 @@ globalThis.__native = {
     if (op === "storage.set") { store[a.key] = bytes; return answer({}); }
     if (op === "storage.delete") { delete store[a.key]; return answer({}); }
     if (op === "db.read") { var keys = Object.keys(records[a.table] || {}).filter(function (k) { return k >= a.from && k < a.to; }).sort(); var parts = keys.map(function (k) { return new Uint8Array(records[a.table][k]); }); var size = parts.reduce(function (n, p) { return n + p.length; }, 0), all = new Uint8Array(size), at = 0; parts.forEach(function (p) { all.set(p, at); at += p.length; }); return answer({ keys: keys, sizes: parts.map(function (p) { return p.length; }) }, all.buffer); }
-    if (op === "db.write") { var v = new Uint8Array(bytes || new ArrayBuffer(0)), at2 = 0; a.ops.forEach(function (o) { if (o.put) { (records[o.put.table] = records[o.put.table] || {})[o.put.key] = v.slice(at2, at2 + o.put.size).buffer; at2 += o.put.size; } else if (records[o["delete"].table]) delete records[o["delete"].table][o["delete"].key]; }); return answer({}); }
     return answer(null, undefined, "offline in the check: " + op);
   },
-  callSync: function () { return JSON.stringify({ error: "none" }); },
+  callSync: function (op) { return JSON.stringify({ error: op.indexOf("sql.") === 0 ? "no SQLite in the Hermes CLI" : "none" }); },
   emit: function (client, json) { emitted.push(json); },
   fatal: function (reason) { print("FATAL " + reason); },
   now: function () { return Date.now(); },
