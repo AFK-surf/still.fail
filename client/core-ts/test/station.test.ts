@@ -109,8 +109,7 @@ test("a_thread_is_brought_whole_onto_the_device_from_its_latest_page_back", asyn
   answers["GET /threads/7/entries?from=1&to=20"] = { last: 120, entries: entries(1, 20) };
   const { host, core } = await started(answers);
   await host.time.pass(500);
-  const held = core.inner.data.loaded("entry", "ws/st", "7");
-  assert.equal(held?.size, 120);
+  assert.equal(core.inner.data.logSpan("entry", "ws/st", "7")?.count, 120);
   core.close();
 });
 

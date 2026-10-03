@@ -21,7 +21,7 @@ import { CoreError } from "../src/error.ts";
 import { tokensOf } from "../src/forms.ts";
 import * as present from "../src/present.ts";
 import { PUSH_KEY } from "../src/attention.ts";
-import { SOON_MS } from "../src/data.ts";
+import { dbName, SOON_MS } from "../src/data.ts";
 import { PENDING_PREFIX } from "../src/views/local.ts";
 import { deferralKey } from "../src/decisions.ts";
 import { encode } from "../src/ops.ts";
@@ -452,7 +452,7 @@ test("a_draft_written_as_it_is_typed_is_one_write_and_read_by_its_key", async ()
   const ui = core.connect();
   for (const [id, text] of [[1, "修"], [2, "修一"], [3, "修一下"]] as const) call(core, ui, id, "draft.put", { key: "ws/st:thread:7", text, quotes: [], files: [] });
   await host.settle();
-  const kept = () => [...host.db].filter(([k]) => k.startsWith("draft\u0000")).map(([, val]) => JSON.parse(new TextDecoder().decode(val)).text);
+  const kept = () => host.rows(dbName("s1"), "SELECT json FROM draft ORDER BY station, chat").map(([json]) => JSON.parse(json as string).text);
   // There at once; on the device a moment after the last change, as it is then.
   assert.deepEqual(kept(), []);
   assert.equal((await ask(host, core, ui, 4, "draft.get", { key: "ws/st:thread:7" })).text, "修一下");

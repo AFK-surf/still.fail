@@ -141,8 +141,7 @@ export class ViewCalls {
 
   /// The card a row asks with, still pending: else it was answered already.
   #pendingCard(station: string, thread: number, seq: number): Effect.Effect<J, CoreError> {
-    const rows = arr(this.#views.ok({ topic: "chatRows", station }));
-    const row = rows.find((r) => get(r, "thread") === thread);
+    const row = this.#inner.data.chatOfThread(station, thread);
     const card = row !== undefined ? decisions.asked(row) : null;
     return card !== null && get(card, "seq") === seq ? Effect.succeed(card) : Effect.fail(CoreError.invalid(t("core-misc.call.already_answered")));
   }
@@ -242,7 +241,7 @@ export class ViewCalls {
         const change = local.changing(station, c.thread, c.session, {}, c.archived);
         const result = yield* Effect.result(handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx));
         if (c.archived) local.archiving(station, c.thread, c.session, false);
-        local.changed(change, result._tag === "Success", views.ok({ topic: "chatRows", station }));
+        local.changed(change, result._tag === "Success", inner.data.rowsRev(station));
         return yield* settle(result);
       });
     };
@@ -257,7 +256,7 @@ export class ViewCalls {
         if (c.keep) row.archiveReminderDismissed = true;
         const change = local.changing(station, c.thread, c.session, row, null);
         const result = yield* Effect.result(handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx));
-        local.changed(change, result._tag === "Success", views.ok({ topic: "chatRows", station }));
+        local.changed(change, result._tag === "Success", inner.data.rowsRev(station));
         return yield* settle(result);
       });
     };
@@ -273,7 +272,7 @@ export class ViewCalls {
           const op = yield* request("decision.close", { station: c.station, thread: c.thread, seq: c.seq, option: c.option });
           const change = local.changing(c.station, c.thread, "", { card: null, decision: null }, null);
           const result = yield* Effect.result(handlers.op!(inner, { kind: "op", op }, progress, at, ctx));
-          local.changed(change, result._tag === "Success", views.ok({ topic: "chatRows", station: c.station }));
+          local.changed(change, result._tag === "Success", inner.data.rowsRev(c.station));
           return yield* settle(result);
         }
         const [text, quotes] = answer;

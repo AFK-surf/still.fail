@@ -55,32 +55,6 @@ export type EventsFor = { host: boolean; live: string[]; logs: [string, number][
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
-/// Threads as the station lists them: the latest message first, then the newest thread.
-export function sortThreads(threads: unknown[]): void {
-  const f = (v: unknown) => (typeof v === "number" ? v : 0);
-  threads.sort((a, b) => f(get(get(b, "lastMessage"), "createdAt")) - f(get(get(a, "lastMessage"), "createdAt")) || f(get(b, "createdAt")) - f(get(a, "createdAt")) || f(get(b, "id")) - f(get(a, "id")));
-}
-
-/// Puts a thread's summary into a list, replacing the one with its id.
-export function upsertThread(list: unknown[], view: unknown): void {
-  const id = get(view, "id");
-  const i = list.findIndex((t) => equal(get(t, "id"), id));
-  if (i >= 0) list[i] = structuredClone(view);
-  else list.push(structuredClone(view));
-  sortThreads(list);
-}
-
-/// Whether the turns a session detail lists still end as its summary says.
-export function sameTurns(turns: unknown, summary: unknown): boolean {
-  const list = Array.isArray(turns) ? turns : [];
-  if (get(summary, "turns") !== list.length) return false;
-  const lastTurn = get(summary, "lastTurn") ?? null;
-  const record = list.length > 0 ? list[list.length - 1] : null;
-  if (record === null && lastTurn === null) return true;
-  if (record === null || lastTurn === null) return false;
-  return ["kind", "outcome", "declared", "detail", "startedAt", "endedAt"].every((k) => equal(get(record, k), get(lastTurn, k)));
-}
-
 /// One `step` event, as useLiveSession applies it.
 export function applyStep(view: LiveView, event: unknown, now: number): void {
   const kind = str(get(event, "kind")) ?? "";
@@ -175,7 +149,7 @@ export class StationsSync {
     const core = this.#core;
     const wanted = new Set<string>();
     for (const [id] of core.workspaces.owned()) {
-      const workspace = core.data.get({ topic: "workspace", workspace: id });
+      const workspace = core.data.shared({ topic: "workspace", workspace: id });
       for (const s of isObject(workspace) && Array.isArray(workspace.stations) ? workspace.stations : []) {
         if (isObject(s) && typeof s.id === "string") wanted.add(`${id}/${s.id}`);
       }
@@ -236,7 +210,7 @@ export class StationsSync {
   #wants(address: string): EventsFor {
     const shown = this.wanted(address);
     const live = new Set(shown.live);
-    for (const row of (this.#core.data.get({ topic: "chatRows", station: address }) as unknown[] | undefined) ?? []) {
+    for (const row of this.#core.data.running(address)) {
       for (const agent of (get(row, "agents") as unknown[] | undefined) ?? []) {
         const key = str(get(agent, "key"));
         if (key && get(agent, "process") === "running") live.add(key);
@@ -270,8 +244,8 @@ export class StationsSync {
     const query: string[] = [];
     if (wants.host) query.push("host=1");
     for (const key of wants.live) {
-      const held = this.#core.data.loaded("transcript", address, key);
-      const from = held && held.size > 0 ? Math.max(...held.keys()) + 1 : 0;
+      const held = this.#core.data.logSpan("transcript", address, key);
+      const from = held ? held.max + 1 : 0;
       query.push(`live=${encode(key)}&from=${from}&last=${TRANSCRIPT_PAGE}`);
     }
     for (const [job, lines] of wants.logs) query.push(`job=${encode(job)}&lines=${lines}`);
@@ -303,7 +277,6 @@ export class StationsSync {
         const ended = yield* Effect.scoped(
           Effect.gen(function* () {
             // Asked anew each time: a session is followed from what is held of it by then.
-            for (const key of wants.live) yield* core.data.log("transcript", address, key);
             const path = self.#path(address, wants);
             const sent = core.host.nowMs();
             const races = self.wire.races?.() ?? false;
@@ -462,7 +435,7 @@ export class StationsSync {
   }
 
   #slackConnects(address: string): string[] {
-    const overview = this.#core.data.get({ topic: "overview", station: address });
+    const overview = this.#core.data.shared({ topic: "overview", station: address });
     return ((get(overview, "connects") as unknown[] | undefined) ?? []).flatMap((c) => {
       const id = str(get(c, "id"));
       return id && (get(c, "kind") === "slack" || get(c, "slack") !== undefined || get(c, "surface") === "slack") ? [id] : [];
@@ -480,7 +453,7 @@ export class StationsSync {
       if (answer._tag === "Success") {
         link.errors.delete(key);
         this.#core.data.set(topic, shape ? shape(answer.success) : answer.success);
-      } else if (this.#core.data.get(topic) === undefined && answer.failure.status !== undefined && answer.failure.status >= 400 && answer.failure.status < 500) {
+      } else if (this.#core.data.shared(topic) === undefined && answer.failure.status !== undefined && answer.failure.status >= 400 && answer.failure.status < 500) {
         link.errors.set(key, answer.failure);
         this.onChange(address, "errors", key);
       } else if ((answer.failure.status === undefined || answer.failure.status >= 500) && attempt < READ_RETRIES) {
@@ -504,13 +477,11 @@ export class StationsSync {
     });
   }
 
-  /// Each shown session's detail (turns, threads, jobs), and the latest page of its transcript.
+  /// Each listed session's detail (turns, threads, jobs) where it is not held or its turns changed, and the latest page
+  /// of its transcript.
   #details(address: string): void {
-    for (const s of (this.#core.data.get({ topic: "sessions", station: address }) as unknown[] | undefined) ?? []) {
-      const key = str(get(s, "key"));
-      if (!key) continue;
-      const detail = this.#core.data.get({ topic: "session", station: address, key });
-      if (detail === undefined || !sameTurns(get(detail, "turns"), s)) this.#enqueue(address, `session/${key}`, Priority.background, this.#session(address, key));
+    for (const [key, again] of this.#core.data.sessionsToRead(address)) {
+      if (again) this.#enqueue(address, `session/${key}`, Priority.background, this.#session(address, key));
       this.#enqueue(address, `transcript/${key}`, Priority.background - 1, this.transcript(address, key, null));
     }
   }
@@ -521,10 +492,7 @@ export class StationsSync {
 
   /// Every thread's entries, the latest first.
   #entries(address: string): void {
-    for (const thread of (this.#core.data.get({ topic: "threads", station: address }) as unknown[] | undefined) ?? []) {
-      const id = u64(get(thread, "id"));
-      if (id !== null) this.syncEntries(address, id, Priority.background);
-    }
+    for (const id of this.#core.data.threadIds(address)) this.syncEntries(address, id, Priority.background);
   }
 
   /// Brings a thread's entries onto the device: what came after what is held, then any gap, then the pages before,
@@ -533,12 +501,14 @@ export class StationsSync {
     this.#enqueue(address, `entries/${id}`, priority, this.#entriesPage(address, id, priority));
   }
 
-  /// The highest entry a thread is missing on the device, as far as it is known to go.
-  #missing(address: string, id: number, held: Map<number, unknown>): number | null {
-    const summary = ((this.#core.data.get({ topic: "threads", station: address }) as unknown[] | undefined) ?? []).find((t) => u64(get(t, "id")) === id);
-    let latest = u64(get(summary, "last")) ?? 0;
-    for (const n of held.keys()) latest = Math.max(latest, n);
-    for (let n = latest; n >= 1; n--) if (!held.has(n)) return n;
+  /// The highest entry a thread is missing on the device, as far as it is known to go (`held`: the numbers held, in
+  /// order).
+  #missing(address: string, id: number, held: number[]): number | null {
+    let n = Math.max(this.#core.data.threadLast(address, id), held.length > 0 ? held[held.length - 1] : 0);
+    for (let i = held.length - 1; n >= 1; n--) {
+      while (i >= 0 && held[i] > n) i--;
+      if (i < 0 || held[i] !== n) return n;
+    }
     return null;
   }
 
@@ -546,20 +516,20 @@ export class StationsSync {
     return Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
       if (!link || !this.reachable(address)) return;
-      const held = yield* this.#core.data.log("entry", address, String(id));
+      const data = this.#core.data;
+      const held = data.logNumbers("entry", address, String(id));
       let path: string;
-      if (held.size === 0) path = `/threads/${id}/entries?limit=${PAGE}`;
+      if (held.length === 0) path = `/threads/${id}/entries?limit=${PAGE}`;
       else {
-        const top = Math.max(...held.keys());
-        const summary = ((this.#core.data.get({ topic: "threads", station: address }) as unknown[] | undefined) ?? []).find((t) => u64(get(t, "id")) === id);
-        const listed = u64(get(summary, "last")) ?? 0;
+        const top = held[held.length - 1];
+        const listed = data.threadLast(address, id);
         if (listed > top) path = `/threads/${id}/entries?after=${top}`;
         else {
           const missing = this.#missing(address, id, held);
           if (missing === null) return;
           // The gap only: from just past the held entry below it, a page at most.
           let below = 0;
-          for (const n of held.keys()) if (n < missing && n > below) below = n;
+          for (const n of held) if (n < missing && n > below) below = n;
           path = `/threads/${id}/entries?from=${Math.max(below + 1, missing - PAGE + 1)}&to=${missing}`;
         }
       }
@@ -568,8 +538,8 @@ export class StationsSync {
       if (answer._tag === "Failure") {
         // A thread that is gone: what is held of it goes. One not to be read (no longer this viewer's): said so.
         const status = answer.failure.status;
-        if (status === 404) yield* this.#threadGone(address, id);
-        else if (status !== undefined && status >= 400 && status < 500 && held.size === 0) {
+        if (status === 404) this.#threadGone(address, id);
+        else if (status !== undefined && status >= 400 && status < 500 && held.length === 0) {
           link.errors.set(topic, answer.failure);
           this.onChange(address, "errors", topic);
         }
@@ -577,19 +547,19 @@ export class StationsSync {
       }
       if (link.errors.delete(topic)) this.onChange(address, "errors", topic);
       const entries = (get(answer.success, "entries") as unknown[] | undefined) ?? [];
-      yield* this.putEntries(address, id, entries);
+      this.putEntries(address, id, entries);
       // More to bring: asked again, behind what is more urgent.
-      if (entries.length > 0 && this.#missing(address, id, held) !== null) this.syncEntries(address, id, priority);
+      if (entries.length > 0 && this.#missing(address, id, data.logNumbers("entry", address, String(id))) !== null) this.syncEntries(address, id, priority);
     });
   }
 
   /// Entries into a thread's log.
-  putEntries(address: string, id: number, entries: unknown[]): Effect.Effect<void> {
+  putEntries(address: string, id: number, entries: unknown[]): void {
     const items: [number, unknown][] = entries.flatMap((e) => {
       const n = nOf(e);
       return n === null ? [] : [[n, e] as [number, unknown]];
     });
-    return items.length === 0 ? Effect.void : this.#core.data.putItems("entry", address, String(id), items);
+    if (items.length > 0) this.#core.data.putItems("entry", address, String(id), items);
   }
 
   /// A session's transcript: its latest page when none is held, or the page before `before` (history.older).
@@ -597,14 +567,13 @@ export class StationsSync {
     return Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
       if (!link || !this.reachable(address)) return;
-      const held = yield* this.#core.data.log("transcript", address, key);
-      if (before === null && held.size > 0) return;
+      if (before === null && this.#core.data.logSpan("transcript", address, key) !== null) return;
       const at = before ?? 1e15;
       const page = yield* this.requests.call(link.addr, "GET", `/sessions/${encode(key)}/timeline?before=${at}&limit=${TRANSCRIPT_PAGE}`, null, { quiet: before === null });
       const start = u64(get(page, "start")) ?? 0;
       const items = (get(page, "entries") as unknown[] | undefined) ?? [];
       if (items.length === 0) return;
-      yield* this.#core.data.putItems(
+      this.#core.data.putItems(
         "transcript",
         address,
         key,
@@ -613,17 +582,15 @@ export class StationsSync {
     });
   }
 
-  #threadGone(address: string, id: number): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      this.#removeThread(address, id);
-      yield* this.#core.data.forgetLog("entry", address, String(id));
-      const link = this.#links.get(address);
-      if (link) {
-        const key = topicKey({ topic: "thread", station: address, thread: id });
-        link.errors.set(key, new CoreError("http_404", t("station.core.noChat"), 404));
-        this.onChange(address, "errors", key);
-      }
-    });
+  /// A thread gone from its station: its row and its entries go, and its topic says so.
+  #threadGone(address: string, id: number): void {
+    this.#core.data.dropThread(address, id);
+    const link = this.#links.get(address);
+    if (link) {
+      const key = topicKey({ topic: "thread", station: address, thread: id });
+      link.errors.set(key, new CoreError("http_404", t("station.core.noChat"), 404));
+      this.onChange(address, "errors", key);
+    }
   }
 
   // ── events ──
@@ -646,20 +613,16 @@ export class StationsSync {
         const entries = (get(data, "entries") as unknown[] | undefined) ?? [];
         const newest = Math.max(-1, ...entries.map((e) => nOf(e) ?? -1));
         // How far the thread goes, at once; the rest of its summary is read below.
-        if (newest >= 0) {
-          core.data.update({ topic: "threads", station: address }, (list) => {
-            for (const t of Array.isArray(list) ? list : []) if (isObject(t) && u64(t.id) === id && (u64(t.last) ?? 0) < newest) t.last = newest;
-            return list;
-          });
-        }
+        if (newest >= 0) core.data.raiseLast(address, id, newest);
         this.onTold(address, id, entries);
-        core.runner.fork(Effect.andThen(this.putEntries(address, id, entries), Effect.sync(() => this.syncEntries(address, id, Priority.shown))));
+        this.putEntries(address, id, entries);
+        this.syncEntries(address, id, Priority.shown);
         this.#markDirty(address, id);
         return;
       }
       case "thread-removed": {
         const id = u64(get(data, "id"));
-        if (id !== null) core.runner.fork(this.#threadGone(address, id));
+        if (id !== null) this.#threadGone(address, id);
         return;
       }
       case "read": {
@@ -672,12 +635,12 @@ export class StationsSync {
         return this.putRow(address, data);
       case "chat-removed": {
         const id = str(get(data, "id"));
-        if (id) core.data.update({ topic: "chatRows", station: address }, (rows) => (Array.isArray(rows) ? rows.filter((r) => get(r, "id") !== id) : rows));
+        if (id) core.data.dropChat(address, id);
         return;
       }
       case "live": {
         const key = str(get(data, "key"));
-        if (key) core.runner.fork(this.#onLive(address, key, data));
+        if (key) this.#onLive(address, key, data);
         return;
       }
       case "job":
@@ -686,9 +649,8 @@ export class StationsSync {
         const id = str(get(data, "id"));
         const key = str(get(data, "session"));
         if (id && key) {
-          core.data.update({ topic: "session", station: address, key }, (detail) => {
+          core.data.patchDetail(address, key, (detail) => {
             if (isObject(detail) && Array.isArray(detail.jobs)) detail.jobs = detail.jobs.filter((j) => get(j, "id") !== id);
-            return detail;
           });
         }
         return;
@@ -724,46 +686,23 @@ export class StationsSync {
     }
   }
 
-  /// A session's summary changed: it replaces the one in `sessions` and in its detail; the detail's turns are read
-  /// again when the summary says they changed.
+  /// A session's summary changed: in place among the listed (and in its detail); its detail is read again when its
+  /// turns changed.
   #onSession(address: string, summary: unknown): void {
     const key = str(get(summary, "key"));
     if (!key) return;
-    const core = this.#core;
-    const shown = (get(summary, "archivedAt") ?? null) === null;
-    core.data.update({ topic: "sessions", station: address }, (list) => {
-      if (!Array.isArray(list)) return list;
-      const i = list.findIndex((s) => get(s, "key") === key);
-      if (i >= 0 && shown) list[i] = summary;
-      else if (i >= 0) list.splice(i, 1);
-      else if (shown) list.unshift(summary);
-      return list;
-    });
-    let changed = false;
-    core.data.update({ topic: "session", station: address, key }, (detail) => {
-      changed = !sameTurns(get(detail, "turns"), summary);
-      if (isObject(detail)) detail.session = summary as never;
-      return detail;
-    });
-    if (changed || core.data.get({ topic: "session", station: address, key }) === undefined) this.#enqueue(address, `session/${key}`, Priority.shown, this.#session(address, key));
+    if (this.#core.data.putSummary(address, summary)) this.#enqueue(address, `session/${key}`, Priority.shown, this.#session(address, key));
   }
 
   #onSessionRemoved(address: string, key: string): void {
     const core = this.#core;
-    core.data.update({ topic: "sessions", station: address }, (list) => (Array.isArray(list) ? list.filter((s) => get(s, "key") !== key) : list));
-    core.data.forgetTopic({ topic: "session", station: address, key });
+    core.data.dropSession(address, key);
     const link = this.#links.get(address);
     if (link) {
       const topic = topicKey({ topic: "session", station: address, key });
       link.errors.set(topic, new CoreError("http_404", t("station.core.sessionDeleted"), 404));
       this.onChange(address, "errors", topic);
     }
-    core.runner.fork(core.data.forgetLog("transcript", address, key));
-    core.data.update({ topic: "threads", station: address }, (list) => {
-      if (!Array.isArray(list)) return list;
-      for (const thread of list) if (isObject(thread) && Array.isArray(thread.sessions)) thread.sessions = thread.sessions.filter((m) => get(m, "session") !== key);
-      return list.filter((t) => Array.isArray(get(t, "sessions")) && (get(t, "sessions") as unknown[]).length > 0);
-    });
   }
 
   /// A job as it is now: in place in its session's jobs, and among the station's open ones while it is open.
@@ -772,116 +711,34 @@ export class StationsSync {
     const key = str(get(job, "session"));
     if (!id || !key) return;
     const core = this.#core;
-    core.data.set({ topic: "job", station: address, id }, job);
-    core.data.update({ topic: "session", station: address, key }, (detail) => {
-      if (!isObject(detail) || !Array.isArray(detail.jobs)) return detail;
+    core.data.patchDetail(address, key, (detail) => {
+      if (!isObject(detail) || !Array.isArray(detail.jobs)) return;
       const i = detail.jobs.findIndex((j) => get(j, "id") === id);
       if (i >= 0) detail.jobs[i] = job as never;
       else detail.jobs.unshift(job as never);
-      return detail;
     });
     const state = get(job, "state");
     const open = state === "running" || (state === "exited" && (get(job, "port") ?? null) !== null);
-    let unknown = false;
-    core.data.update({ topic: "jobs", station: address }, (list) => {
-      if (!Array.isArray(list)) return list;
-      const i = list.findIndex((j) => get(j, "id") === id);
-      if (i >= 0 && open) {
-        const chat = get(list[i], "chat");
-        list[i] = structuredClone(job);
-        if (chat !== undefined && isObject(list[i])) (list[i] as Record<string, unknown>).chat = chat;
-      } else if (i >= 0) list.splice(i, 1);
-      else if (open) unknown = true;
-      return list;
-    });
     // A new one: which chat it is in is the station's to say.
-    if (unknown) this.#enqueue(address, "jobs", Priority.shown, this.#read(address, { topic: "jobs", station: address }, "/jobs"));
+    if (core.data.putJob(address, job, open)) this.#enqueue(address, "jobs", Priority.shown, this.#read(address, { topic: "jobs", station: address }, "/jobs"));
   }
 
   /// A row of the viewer's sidebar, new or changed.
   putRow(address: string, row: unknown): void {
-    const id = str(get(row, "id"));
-    if (!id) return;
-    this.#core.data.update({ topic: "chatRows", station: address }, (rows) => {
-      if (!Array.isArray(rows)) return rows;
-      const i = rows.findIndex((r) => get(r, "id") === id);
-      if (i >= 0) rows[i] = row;
-      else rows.push(row);
-      return rows;
-    });
+    this.#core.data.putChat(address, row);
     // An agent starting or ending its turn: the stream follows what is at work.
     this.openEvents(address, false);
   }
 
-  /// A thread's summary into every list that has it: `threads`, and the details of the sessions taking part.
+  /// A thread's summary into the station's threads, and the details of the sessions taking part.
   putThread(address: string, view: unknown): void {
-    const id = u64(get(view, "id"));
-    if (id === null) return;
-    const core = this.#core;
-    const members = ((get(view, "sessions") as unknown[] | undefined) ?? []).flatMap((m) => (typeof get(m, "session") === "string" ? [get(m, "session") as string] : []));
-    core.data.update({ topic: "threads", station: address }, (list) => {
-      if (Array.isArray(list)) upsertThread(list, view);
-      return list;
-    });
-    for (const [key] of core.data.records("session")) {
-      const [station, session] = key.split("\u0001");
-      if (station !== address) continue;
-      core.data.update({ topic: "session", station: address, key: session }, (detail) => {
-        if (!isObject(detail) || !Array.isArray(detail.threads)) return detail;
-        if (members.includes(session)) upsertThread(detail.threads, view);
-        else detail.threads = detail.threads.filter((t) => u64(get(t, "id")) !== id);
-        return detail;
-      });
-    }
-  }
-
-  #removeThread(address: string, id: number): void {
-    const core = this.#core;
-    const drop = (list: unknown) => (Array.isArray(list) ? list.filter((t) => u64(get(t, "id")) !== id) : list);
-    core.data.update({ topic: "threads", station: address }, drop);
-    for (const [key] of core.data.records("session")) {
-      const [station, session] = key.split("\u0001");
-      if (station === address)
-        core.data.update({ topic: "session", station: address, key: session }, (detail) => {
-          if (isObject(detail) && Array.isArray(detail.threads)) detail.threads = drop(detail.threads) as never;
-          return detail;
-        });
-    }
+    this.#core.data.putThread(address, view);
   }
 
   /// The viewer read a thread up to entry `n`: its read position moves there, nothing unread once it covers the last
   /// entry (otherwise the count is read again).
   putRead(address: string, thread: number, n: number): void {
-    const core = this.#core;
-    let stale = false;
-    const apply = (list: unknown) => {
-      for (const t of Array.isArray(list) ? list : []) {
-        if (!isObject(t) || u64(t.id) !== thread || (u64(t.read) ?? -1) >= n) continue;
-        t.read = n;
-        const last = u64(t.last);
-        if (last === null || n >= last) t.unread = 0;
-        else stale = true;
-      }
-      return list;
-    };
-    core.data.update({ topic: "threads", station: address }, apply);
-    core.data.update({ topic: "chatRows", station: address }, (rows) => {
-      for (const row of Array.isArray(rows) ? rows : []) {
-        if (!isObject(row) || u64(row.thread) !== thread) continue;
-        const last = u64(get(row.last, "seq"));
-        if (last === null || n >= last) row.unread = false;
-      }
-      return rows;
-    });
-    for (const [key] of core.data.records("session")) {
-      const [station, session] = key.split("\u0001");
-      if (station === address)
-        core.data.update({ topic: "session", station: address, key: session }, (detail) => {
-          if (isObject(detail)) apply(detail.threads);
-          return detail;
-        });
-    }
-    if (stale) this.#markDirty(address, thread);
+    if (this.#core.data.setRead(address, thread, n)) this.#markDirty(address, thread);
   }
 
   /// A thread's summary read again once the burst of events is over.
@@ -912,13 +769,13 @@ export class StationsSync {
       if (!link) return;
       const view = yield* Effect.result(this.requests.call(link.addr, "GET", `/threads/${id}`, null, { quiet: true }));
       if (view._tag === "Success") this.putThread(address, view.success);
-      else if (view.failure.status === 404) this.#removeThread(address, id);
+      else if (view.failure.status === 404) this.#core.data.unlistThread(address, id);
     });
   }
 
   /// One message of the live stream: transcript items into the records, steps and phase into the live view.
-  #onLive(address: string, key: string, message: unknown): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
+  #onLive(address: string, key: string, message: unknown): void {
+    {
       const core = this.#core;
       const link = this.#links.get(address);
       if (!link) return;
@@ -934,9 +791,9 @@ export class StationsSync {
         const entries = (get(message, "entries") as unknown[] | undefined) ?? [];
         // Written anew from before what is held ends: what came after it goes. Past what is held (the latest page
         // only): it is put as it is, and the topic shows the run that ends the transcript.
-        const held = yield* core.data.log("transcript", address, key);
-        const top = held.size > 0 ? Math.max(...held.keys()) + 1 : 0;
-        yield* core.data.putItems("transcript", address, key, entries.map((e, i) => [start + i, e] as [number, unknown]), start < top ? start + entries.length - 1 : null);
+        const held = core.data.logSpan("transcript", address, key);
+        const top = held ? held.max + 1 : 0;
+        core.data.putItems("transcript", address, key, entries.map((e, i) => [start + i, e] as [number, unknown]), start < top ? start + entries.length - 1 : null);
         view.usage = get(message, "usage") ?? null;
         // Ended steps stay until the entries that record them arrive.
         if (entries.length > 0) view.steps = view.steps.filter((s) => get(s, "ended") !== true);
@@ -954,7 +811,7 @@ export class StationsSync {
         if (event !== undefined) applyStep(view, event, now);
       } else return;
       this.onChange(address, "live", key);
-    });
+    }
   }
 
   /// What the chat shows of a session at work (activity.ts), from its live view.
@@ -1104,13 +961,9 @@ export class StationsSync {
       const answer = yield* this.requests.call(addr, "POST", `/threads/${thread}/messages`, message, { ctx, headers });
       const n = u64(get(answer, "n"));
       if (n === null) return yield* Effect.fail(new CoreError("bad_response", t("station.core.noMessageNumber")));
-      const held = yield* this.#core.data.log("entry", address, String(thread));
       // The thread goes that far now: what came after what is held is read.
-      this.#core.data.update({ topic: "threads", station: address }, (list) => {
-        for (const t of Array.isArray(list) ? list : []) if (isObject(t) && u64(t.id) === thread && (u64(t.last) ?? 0) < n) t.last = n;
-        return list;
-      });
-      if (!held.has(n)) yield* Effect.ignore(this.ask(address, `entries/${thread}`, this.#entriesPage(address, thread, Priority.asked)));
+      this.#core.data.raiseLast(address, thread, n);
+      if (this.#core.data.logCount("entry", address, String(thread), n, n) === 0) yield* Effect.ignore(this.ask(address, `entries/${thread}`, this.#entriesPage(address, thread, Priority.asked)));
       return n;
     });
   }
@@ -1125,31 +978,20 @@ export class StationsSync {
     });
   }
 
-  /// How far the viewer has read a thread, as the lists that have it say.
+  /// How far the viewer has read a thread, as its summary says.
   readPosition(address: string, thread: number): number | null {
-    let best: number | null = null;
-    const look = (list: unknown) => {
-      for (const t of Array.isArray(list) ? list : []) if (u64(get(t, "id")) === thread) {
-        const r = u64(get(t, "read"));
-        if (r !== null) best = best === null ? r : Math.max(best, r);
-      }
-    };
-    look(this.#core.data.get({ topic: "threads", station: address }));
-    for (const [key, detail] of this.#core.data.records("session")) if (key.startsWith(`${address}\u0001`)) look(get(detail, "threads"));
-    return best;
+    return this.#core.data.readPosition(address, thread);
   }
 
   /// The page of a thread's entries before `before`, onto the device (a person scrolled up): from what is held, else
   /// read now. Answers whether older ones exist.
   older(address: string, thread: number, before: number, ctx: SpanContext | null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      const held = yield* this.#core.data.log("entry", address, String(thread));
       const from = Math.max(1, before - PAGE);
-      let all = true;
-      for (let n = from; n < before; n++) if (!held.has(n)) all = false;
+      const all = this.#core.data.logCount("entry", address, String(thread), from, before - 1) === before - from;
       if (all || before <= 1) return;
       const page = yield* this.requests.call(StationAddr.parse(address), "GET", `/threads/${thread}/entries?before=${before}&limit=${PAGE}`, null, { ctx });
-      yield* this.putEntries(address, thread, ((get(page, "entries") as unknown[] | undefined) ?? []).filter((e) => (nOf(e) ?? Infinity) < before));
+      this.putEntries(address, thread, ((get(page, "entries") as unknown[] | undefined) ?? []).filter((e) => (nOf(e) ?? Infinity) < before));
     });
   }
 
@@ -1157,12 +999,9 @@ export class StationsSync {
   range(address: string, thread: number, from: number, to: number, ctx: SpanContext | null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (to < from) return;
-      const held = yield* this.#core.data.log("entry", address, String(thread));
-      let all = true;
-      for (let n = from; n <= to; n++) if (!held.has(n)) all = false;
-      if (all) return;
+      if (this.#core.data.logCount("entry", address, String(thread), from, to) === to - from + 1) return;
       const page = yield* this.requests.call(StationAddr.parse(address), "GET", `/threads/${thread}/entries?from=${from}&to=${to}`, null, { ctx });
-      yield* this.putEntries(address, thread, ((get(page, "entries") as unknown[] | undefined) ?? []).filter((e) => {
+      this.putEntries(address, thread, ((get(page, "entries") as unknown[] | undefined) ?? []).filter((e) => {
         const n = nOf(e);
         return n !== null && n >= from && n <= to;
       }));

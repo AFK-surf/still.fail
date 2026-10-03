@@ -3,7 +3,7 @@
 import { Effect, Exit, Scope } from "effect";
 import { loadAddon } from "../src/hosts/node-iroh.ts";
 import { NodeHost } from "../src/hosts/node.ts";
-import type { Pull, TcpConnection } from "../src/host.ts";
+import type { Pull, Sql, TcpConnection } from "../src/host.ts";
 import type { Bridge, Native } from "../src/hosts/bridge.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -89,7 +89,7 @@ export class NodeShell implements Native {
         await run(h.storageDelete(a.key));
         return done({});
       case "db.read": {
-        const rows = await run(h.dbRead(a));
+        const rows = await run(h.legacyRead(a));
         const out = new Uint8Array(rows.reduce((n, [, v]) => n + v.length, 0));
         let at = 0;
         for (const [, v] of rows) {
@@ -97,19 +97,6 @@ export class NodeShell implements Native {
           at += v.length;
         }
         return done({ keys: rows.map(([k]) => k), sizes: rows.map(([, v]) => v.length) }, out);
-      }
-      case "db.write": {
-        let at = 0;
-        const ops = (a.ops as J[]).map((o) => {
-          if (o.put) {
-            const value = (bytes ?? new Uint8Array(0)).slice(at, at + o.put.size);
-            at += o.put.size;
-            return { put: { table: o.put.table, key: o.put.key, value } };
-          }
-          return { delete: o.delete };
-        });
-        await run(h.dbWrite(ops));
-        return done({});
       }
       case "tcp.open": {
         const { value, scope } = await this.#scoped(h.tcp(a.port));
@@ -176,8 +163,47 @@ export class NodeShell implements Native {
     }
   }
 
+  /// The accounts' databases (as client/shell's `sql.*`), by id.
+  readonly #sqls = new Map<number, Sql>();
+
+  #sql(op: string, a: J): unknown {
+    if (op === "sql.open") {
+      const sql = a.name === ":memory:" ? this.host.memoryDb() : Effect.runSync(this.host.openDb(a.name));
+      const id = this.#next++;
+      this.#sqls.set(id, sql);
+      return { id };
+    }
+    if (op === "sql.delete") {
+      Effect.runSync(Effect.ignore(this.host.deleteDb(a.name)));
+      return null;
+    }
+    const sql = this.#sqls.get(a.id);
+    if (!sql) throw new Error(`no database ${a.id}`);
+    switch (op) {
+      case "sql.exec":
+        sql.exec(a.sql);
+        return null;
+      case "sql.run":
+        return sql.run(a.sql, a.params ?? []);
+      case "sql.all":
+        return sql.all(a.sql, a.params ?? []);
+      case "sql.close":
+        this.#sqls.delete(a.id);
+        sql.close();
+        return null;
+    }
+    throw new Error(`no operation ${op}`);
+  }
+
   callSync(op: string, json: string): string {
     const a = JSON.parse(json) as J;
+    if (op.startsWith("sql.")) {
+      try {
+        return JSON.stringify({ value: this.#sql(op, a) ?? null });
+      } catch (e) {
+        return JSON.stringify({ error: e instanceof Error ? e.message : String(e) });
+      }
+    }
     const it = this.#handles.get(a.id);
     const value = (() => {
       switch (op) {

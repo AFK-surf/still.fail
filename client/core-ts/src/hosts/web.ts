@@ -1,14 +1,17 @@
 // The core in a browser's worker (web/src/core/worker.ts): the Host over the worker's own fetch, WebSocket, IndexedDB,
-// crypto and clocks, as the Rust core's wasm host kept them — the same IndexedDB database (`stillfail-core`, its `values` by
-// key and `records` by [table, key]; what `ember-core` had copied over on the first open) — so a browser moving from the
-// Rust core keeps its logins and what it had read. Its iroh is client/iroh-wasm (relay only), loaded while the core
+// SQLite, crypto and clocks. The device's small values (logins, the device key, preferences) stay where the Rust core's
+// wasm host kept them — IndexedDB `stillfail-core`, its `values` by key (what `ember-core` had copied over on the first
+// open) — so a browser moving from the Rust core keeps its logins. Each signed-in account's database is SQLite's
+// official WASM build on OPFS (its `opfs-sahpool` VFS: synchronous access handles, which only one worker holds at a
+// time — the tab whose worker holds them runs the core, worker.ts); what the former IndexedDB `records` kept is read
+// once into them (db/import.ts) and left there. Its iroh is client/iroh-wasm (relay only), loaded while the core
 // starts from its database.
 import { Effect, Queue, type Scope } from "effect";
 import { Core } from "../core.ts";
 import { HostError } from "../error.ts";
 import type { BindOptions, Iroh } from "../iroh.ts";
 import { type BoundEndpoint, wrapIroh } from "../iroh-bindings.ts";
-import { SOCKET_PING, SOCKET_PING_MS, type DbOp, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
+import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, SqlError, sqlError } from "../host.ts";
 import { t } from "../i18n.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
@@ -22,6 +25,92 @@ const RECORDS = "records";
 
 /// What client/iroh-wasm's module gives (web/src/core/iroh-pkg).
 export type IrohModule = { bind(options: { secretKey: Uint8Array; relayUrls: string[] }): Promise<unknown> };
+
+/// What the core uses of SQLite's WASM build (`@sqlite.org/sqlite-wasm`, its oo1 API), as worker.ts loads it: a
+/// database on the pool of OPFS files (`opfs-sahpool`), and one in memory.
+export type WasmDb = { exec(sql: string): unknown; prepare(sql: string): WasmStmt; changes(): number; close(): void };
+export type WasmStmt = { bind(params: readonly SqlValue[]): WasmStmt; step(): boolean; get(into: unknown[]): unknown[]; reset(clearBindings?: boolean): WasmStmt; finalize(): void };
+export type WasmSqlite = {
+  /// A database file in the pool by its path, made if it is not there.
+  open(path: string): WasmDb;
+  memory(): WasmDb;
+  /// A file of the pool gone (false: it was not there).
+  unlink(path: string): boolean;
+  /// Room in the pool for this many files more than it holds.
+  reserve(files: number): Promise<void>;
+};
+
+/// SQLite's error in the browser: a write OPFS refused (SQLITE_IOERR: the origin's quota is used up, as a rule) is
+/// taken for no room left.
+function webSqlError(e: unknown): SqlError {
+  const err = sqlError(e);
+  const code = (e as { resultCode?: unknown } | null)?.resultCode;
+  if (err.kind === "other" && typeof code === "number" && (code & 0xff) === 10) return new SqlError(err.message, "full");
+  return err;
+}
+
+/// An account's database in SQLite's WASM build: statements prepared once and kept.
+export class WasmSql implements Sql {
+  readonly #db: WasmDb;
+  readonly #statements = new Map<string, WasmStmt>();
+  #closed = false;
+
+  constructor(db: WasmDb) {
+    this.#db = db;
+  }
+
+  #prepare(sql: string): WasmStmt {
+    let s = this.#statements.get(sql);
+    if (!s) {
+      s = this.#db.prepare(sql);
+      this.#statements.set(sql, s);
+    }
+    return s;
+  }
+
+  exec(sql: string): void {
+    try {
+      this.#db.exec(sql);
+    } catch (e) {
+      throw webSqlError(e);
+    }
+  }
+
+  run(sql: string, params: readonly SqlValue[] = []): number {
+    const s = this.#prepare(sql);
+    try {
+      if (params.length > 0) s.bind(params);
+      s.step();
+      return this.#db.changes();
+    } catch (e) {
+      throw webSqlError(e);
+    } finally {
+      s.reset(true);
+    }
+  }
+
+  all(sql: string, params: readonly SqlValue[] = []): SqlRow[] {
+    const s = this.#prepare(sql);
+    const rows: SqlRow[] = [];
+    try {
+      if (params.length > 0) s.bind(params);
+      while (s.step()) rows.push(s.get([]) as SqlRow);
+      return rows;
+    } catch (e) {
+      throw webSqlError(e);
+    } finally {
+      s.reset(true);
+    }
+  }
+
+  close(): void {
+    if (this.#closed) return;
+    this.#closed = true;
+    for (const s of this.#statements.values()) s.finalize();
+    this.#statements.clear();
+    this.#db.close();
+  }
+}
 
 const failed = (e: unknown) => new HostError(e instanceof Error ? e.message : e instanceof DOMException ? e.message : String(e));
 
@@ -111,10 +200,14 @@ export class WebHost implements Host {
   readonly #emit: (client: ClientId, message: unknown) => void;
   readonly #testChannel: boolean;
   #db: Promise<IDBDatabase> | null = null;
+  readonly #sqlite: () => Promise<WasmSqlite>;
+  #loaded: WasmSqlite | null = null;
+  readonly #open = new Map<string, WasmSql>();
 
-  constructor(emit: (client: ClientId, message: unknown) => void, testChannel: boolean) {
+  constructor(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, sqlite: () => Promise<WasmSqlite>) {
     this.#emit = emit;
     this.#testChannel = testChannel;
+    this.#sqlite = sqlite;
   }
 
   cloudOrigin(): string {
@@ -250,7 +343,8 @@ export class WebHost implements Host {
     );
   }
 
-  dbRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
+  /// The former records store, read once (db/import.ts).
+  legacyRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
     return Effect.flatMap(this.#tx(RECORDS, "readonly"), (tx) =>
       Effect.tryPromise({ try: async () => {
         const store = tx.objectStore(RECORDS);
@@ -263,17 +357,38 @@ export class WebHost implements Host {
     );
   }
 
-  dbWrite(ops: DbOp[]): Effect.Effect<void, HostError> {
-    return Effect.flatMap(this.#tx(RECORDS, "readwrite"), (tx) =>
-      Effect.tryPromise({ try: () => {
-        const store = tx.objectStore(RECORDS);
-        for (const op of ops) {
-          if ("put" in op) store.put(op.put.value, [op.put.table, op.put.key]);
-          else store.delete([op.delete.table, op.delete.key]);
-        }
-        return committed(tx);
-      }, catch: failed }),
-    );
+  /// An account's database: `/<name>.sqlite3` in the pool of OPFS files (room made for it and its journal).
+  openDb(name: string): Effect.Effect<Sql, HostError | SqlError> {
+    return Effect.tryPromise({
+      try: async () => {
+        const sqlite = (this.#loaded ??= await this.#sqlite());
+        await sqlite.reserve(2);
+        const db = sqlite.open(`/${name}.sqlite3`);
+        // One worker holds the pool's files (worker.ts): the lock is ours alone; no WAL (no shared memory here).
+        db.exec("PRAGMA locking_mode = EXCLUSIVE; PRAGMA journal_mode = TRUNCATE; PRAGMA synchronous = NORMAL;");
+        const sql = new WasmSql(db);
+        this.#open.get(name)?.close();
+        this.#open.set(name, sql);
+        return sql as Sql;
+      },
+      catch: (e) => sqlError(e),
+    });
+  }
+
+  memoryDb(): Sql | undefined {
+    return this.#loaded ? new WasmSql(this.#loaded.memory()) : undefined;
+  }
+
+  deleteDb(name: string): Effect.Effect<void, HostError> {
+    return Effect.tryPromise({
+      try: async () => {
+        this.#open.get(name)?.close();
+        this.#open.delete(name);
+        const sqlite = (this.#loaded ??= await this.#sqlite());
+        for (const end of ["", "-journal", "-wal"]) sqlite.unlink(`/${name}.sqlite3${end}`);
+      },
+      catch: failed,
+    });
   }
 
   nowMs(): number {
@@ -308,10 +423,10 @@ export type WebCore = { connect(): number; disconnect(client: number): void; rec
 /// A core in this worker (as the Rust core's wasm `start` was): `emit(client, message)` gets what it says to each client;
 /// `testChannel` the page is the test channel's. A bug that ends a fiber ends it as a panic ended the Rust core's:
 /// `onFatal` is told, and the worker tells the pages and closes.
-export function startWeb(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string) => void): Promise<WebCore> {
+export function startWeb(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string) => void, loadSqlite: () => Promise<WasmSqlite>): Promise<WebCore> {
   service.name = "stillfail-web";
   service.os = "browser";
-  const host = new WebHost(emit, testChannel);
+  const host = new WebHost(emit, testChannel, loadSqlite);
   return Core.create(host, { iroh: webIroh(loadIroh) }).then((core) => {
     core.inner.runner.onDefect = (error) => onFatal(t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }));
     core.keepTime();

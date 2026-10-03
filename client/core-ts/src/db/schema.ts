@@ -1,0 +1,125 @@
+// An account's database (docs/core-db.md): its tables, and the migrations that bring a database to this version, in
+// order, by `PRAGMA user_version`. A database a newer core wrote (its version past ours) is opened to be read only.
+//
+// Each table keeps the station's payload of a row as JSON (`json`), passed through as it is, so a field a station adds
+// needs no migration; next to it, the columns the core finds, sorts and filters rows by, and the fields that change
+// often on their own (a thread's read position), which are columns only and updated in place.
+import type { Sql } from "../host.ts";
+
+/// The version this core writes.
+export const VERSION = 1;
+
+/// Each migration takes a database from the version before it to its own (index + 1).
+export const MIGRATIONS: string[] = [
+  `
+  CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+
+  -- The account's own: its /v1/me ('me'), its signed-in devices ('login_sessions'), an operator's lists ('admin/<list>').
+  CREATE TABLE IF NOT EXISTS account_doc (name TEXT PRIMARY KEY, json TEXT NOT NULL, confirmed INTEGER);
+  CREATE TABLE IF NOT EXISTS workspace (id TEXT PRIMARY KEY, json TEXT NOT NULL, confirmed INTEGER);
+
+  -- A station's single answers: its overview, footprint, usage.
+  CREATE TABLE IF NOT EXISTS station (
+    address TEXT NOT NULL, kind TEXT NOT NULL, json TEXT NOT NULL, confirmed INTEGER,
+    PRIMARY KEY (address, kind)
+  );
+  CREATE TABLE IF NOT EXISTS slack_app (station TEXT NOT NULL, connect TEXT NOT NULL, json TEXT NOT NULL, confirmed INTEGER, PRIMARY KEY (station, connect));
+
+  -- Which of a station's lists have been read (an empty one is not one never read), when, and how often its rows changed.
+  CREATE TABLE IF NOT EXISTS list (station TEXT NOT NULL, list TEXT NOT NULL, confirmed INTEGER, rev INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (station, list));
+
+  -- The chats the viewer's sidebar lists (archived = 0) and the archived ones (1), as GET /chats gives them.
+  CREATE TABLE IF NOT EXISTS chat (
+    station TEXT NOT NULL, id TEXT NOT NULL, archived INTEGER NOT NULL, ord REAL NOT NULL,
+    thread INTEGER, session TEXT, client_key TEXT,
+    last_active INTEGER NOT NULL DEFAULT 0, pinned_at INTEGER,
+    unread INTEGER, mine INTEGER NOT NULL DEFAULT 0, running INTEGER NOT NULL DEFAULT 0,
+    tone TEXT, asks INTEGER NOT NULL DEFAULT 0, desk INTEGER NOT NULL DEFAULT 0,
+    json TEXT NOT NULL,
+    PRIMARY KEY (station, archived, id)
+  );
+  CREATE INDEX IF NOT EXISTS chat_recent ON chat (archived, pinned_at DESC, last_active DESC);
+  CREATE INDEX IF NOT EXISTS chat_ord ON chat (station, archived, ord);
+  CREATE INDEX IF NOT EXISTS chat_thread ON chat (station, thread) WHERE thread IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS chat_session ON chat (station, session);
+  CREATE INDEX IF NOT EXISTS chat_running ON chat (station) WHERE running = 1;
+  CREATE INDEX IF NOT EXISTS chat_marked ON chat (station) WHERE archived = 0 AND (tone IS NOT NULL OR asks = 1);
+  CREATE INDEX IF NOT EXISTS chat_desk ON chat (station) WHERE archived = 0 AND desk = 1;
+
+  -- Agents: the summary (GET /sessions, session events), listed while not archived; the detail (GET /sessions/:key) but
+  -- its threads, which are the thread rows it takes part in (thread_member).
+  CREATE TABLE IF NOT EXISTS session (
+    station TEXT NOT NULL, key TEXT NOT NULL, listed INTEGER NOT NULL DEFAULT 0, ord REAL NOT NULL DEFAULT 0,
+    last_active INTEGER, process TEXT, connect TEXT, archived_at INTEGER, turns INTEGER,
+    summary TEXT, detail TEXT,
+    PRIMARY KEY (station, key)
+  );
+  CREATE INDEX IF NOT EXISTS session_listed ON session (station, listed, ord);
+
+  -- Threads (GET /threads, a session's detail, thread events); last, read and unread are columns only.
+  CREATE TABLE IF NOT EXISTS thread (
+    station TEXT NOT NULL, id INTEGER NOT NULL, listed INTEGER NOT NULL DEFAULT 0,
+    last INTEGER, read INTEGER, unread INTEGER,
+    sort_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL DEFAULT 0,
+    surface TEXT, first_member TEXT,
+    json TEXT NOT NULL,
+    PRIMARY KEY (station, id)
+  );
+  CREATE INDEX IF NOT EXISTS thread_listed ON thread (station, listed, sort_at DESC, created_at DESC, id DESC);
+  CREATE INDEX IF NOT EXISTS thread_first ON thread (station, first_member);
+  CREATE TABLE IF NOT EXISTS thread_member (station TEXT NOT NULL, session TEXT NOT NULL, thread INTEGER NOT NULL, PRIMARY KEY (station, session, thread));
+  CREATE INDEX IF NOT EXISTS thread_member_thread ON thread_member (station, thread);
+
+  -- A thread's messages and a session's transcript, item by item.
+  CREATE TABLE IF NOT EXISTS entry (station TEXT NOT NULL, thread INTEGER NOT NULL, n INTEGER NOT NULL, json TEXT NOT NULL, PRIMARY KEY (station, thread, n)) WITHOUT ROWID;
+  CREATE TABLE IF NOT EXISTS transcript (station TEXT NOT NULL, session TEXT NOT NULL, i INTEGER NOT NULL, json TEXT NOT NULL, PRIMARY KEY (station, session, i)) WITHOUT ROWID;
+
+  -- Jobs: as each is now (job events, a session's detail), open = among the station's open ones (GET /jobs, with chat).
+  CREATE TABLE IF NOT EXISTS job (
+    station TEXT NOT NULL, id TEXT NOT NULL, session TEXT, open INTEGER NOT NULL DEFAULT 0, ord REAL NOT NULL DEFAULT 0,
+    chat TEXT, json TEXT NOT NULL,
+    PRIMARY KEY (station, id)
+  );
+  CREATE INDEX IF NOT EXISTS job_open ON job (station, open, ord);
+
+  -- What this device did and its station has not confirmed yet (views/local.ts), and what is being written here.
+  CREATE TABLE IF NOT EXISTS outbox (station TEXT NOT NULL, thread INTEGER NOT NULL, json TEXT NOT NULL, PRIMARY KEY (station, thread));
+  CREATE TABLE IF NOT EXISTS pending (key TEXT PRIMARY KEY, station TEXT NOT NULL, json TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS first (station TEXT NOT NULL, session TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY (station, session));
+  CREATE TABLE IF NOT EXISTS changing (station TEXT NOT NULL, id INTEGER NOT NULL, json TEXT NOT NULL, PRIMARY KEY (station, id));
+  CREATE TABLE IF NOT EXISTS draft (station TEXT NOT NULL, chat TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY (station, chat));
+
+  -- What this device keeps of a workspace: a new chat's picks (choose.ts), chats' links (refs.ts).
+  CREATE TABLE IF NOT EXISTS workspace_pref (workspace TEXT NOT NULL, key TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY (workspace, key));
+  `,
+];
+
+/// The database's version.
+export function versionOf(sql: Sql): number {
+  const v = sql.all("PRAGMA user_version")[0]?.[0];
+  return typeof v === "number" ? v : 0;
+}
+
+/// Brings the database to VERSION, each migration in a transaction of its own. A database past it is left as it is:
+/// false then (it is read only).
+export function migrate(sql: Sql): boolean {
+  let version = versionOf(sql);
+  if (version > VERSION) return false;
+  while (version < VERSION) {
+    sql.exec("BEGIN IMMEDIATE");
+    try {
+      sql.exec(MIGRATIONS[version]);
+      sql.exec(`PRAGMA user_version = ${version + 1}`);
+      sql.exec("COMMIT");
+    } catch (e) {
+      try {
+        sql.exec("ROLLBACK");
+      } catch {
+        // Rolled back already.
+      }
+      throw e;
+    }
+    version++;
+  }
+  return true;
+}

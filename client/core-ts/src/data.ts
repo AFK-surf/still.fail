@@ -1,53 +1,23 @@
-// The core's data center (docs/core-db.md): every piece of business data still.fail cloud and the stations said, as
-// records by table and key, in memory and written through to the host's database (one writer fiber, batches in the
-// order they were made). Topics of this data have no value of their own: their value is read from here, and a change
-// here tells the store, which pushes what changed.
+// The core's data (docs/core-db.md): one SQLite database per signed-in account (db/account.ts, its tables in
+// db/schema.ts), and the few values that are the device's (preferences, the changelog seen) in the host's storage.
+// What is a station's or a workspace's is kept in the database of the account that reaches it (Workspaces' owner);
+// what an account did is in its own. Signing out removes the account's database.
 //
-// The tables the Rust core has keep its keys and JSON (either core opens the other's database). The TS core adds:
-// - `confirmed`: when each record was last confirmed by its source (`<table>␁<key>` → ms);
-// - `entry`: a thread's entries, `<station>␁<thread>␁<n, 12 digits>`; `transcript`: a session's transcript items,
-//   `<station>␁<session>␁<i, 12 digits>` — what kept.rs kept in storage chunks;
-// - `outbox`: messages sent from this device not yet in their thread, `<station>␁<thread>␁<local id>`;
-// - `archived_row`, `job_open`, `job`, `slack_app`, `usage`, `footprint`, `login_sessions`, `admin`: the rest of what
-//   the topics show, so every topic is read from here.
-import { Deferred, Effect, Queue } from "effect";
-import type { DbOp, Host } from "./host.ts";
+// Topics of this data have no value of their own: their value is read from here (`shared`), by query, when it goes
+// out; each database's writer says which topics a burst changed, and the store pushes what changed (keyed deltas).
+import { Effect, Queue } from "effect";
+import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type RowChange, frozen } from "./db/account.ts";
+import type { Host, Sql } from "./host.ts";
+import { HostError, SqlError } from "./host.ts";
 import type { Topic } from "./protocol.ts";
 import type { Runner } from "./runtime.ts";
-import { compareKeys, equal, isObject, parseJson, toJsonBytes } from "./util.ts";
+import { equal, isObject, parseJson, toJsonBytes } from "./util.ts";
+
+export { frozen };
+export type { ListKind, RowChange };
 
 /// Between the parts of a key: sorts before every character a part can hold.
 export const SEP = "\u0001";
-
-/// The tables loaded whole at start (entries and transcripts are loaded a thread at a time).
-const TABLES = [
-  "me",
-  "workspace",
-  "overview",
-  "session",
-  "row",
-  "session_summary",
-  "thread",
-  "list",
-  "draft",
-  "chat_ref",
-  "choice",
-  "prefs",
-  "changelog",
-  "confirmed",
-  "outbox",
-  "archived_row",
-  "job_open",
-  "job",
-  "slack_app",
-  "usage",
-  "footprint",
-  "login_sessions",
-  "admin",
-  "pending",
-  "first",
-  "changing",
-];
 
 export function join(parts: (string | number)[]): string {
   return parts.join(SEP);
@@ -58,189 +28,334 @@ export function num(n: number): string {
   return String(n).padStart(12, "0");
 }
 
-type Shape = { one: { table: string; key: string } } | { list: { table: string; scope: string; idField: string } };
+/// How long a value changing as it is typed (a draft) waits before it is written.
+export const SOON_MS = 300;
 
-function shape(topic: Topic): Shape | null {
-  const s = (k: string) => String(topic[k]);
-  switch (topic.topic) {
-    case "workspace":
-      return { one: { table: "workspace", key: s("workspace") } };
-    case "overview":
-      return { one: { table: "overview", key: s("station") } };
-    case "session":
-      return { one: { table: "session", key: join([s("station"), s("key")]) } };
-    case "chatRows":
-      return { list: { table: "row", scope: s("station"), idField: "id" } };
-    case "sessions":
-      return { list: { table: "session_summary", scope: s("station"), idField: "key" } };
-    case "threads":
-      return { list: { table: "thread", scope: s("station"), idField: "id" } };
-    case "archivedRows":
-      return { list: { table: "archived_row", scope: s("station"), idField: "id" } };
-    case "jobs":
-      return { list: { table: "job_open", scope: s("station"), idField: "id" } };
-    case "job":
-      return { one: { table: "job", key: join([s("station"), s("id")]) } };
-    case "slackApp":
-      return { one: { table: "slack_app", key: join([s("station"), s("connect")]) } };
-    case "stationUsage":
-      return { one: { table: "usage", key: s("station") } };
-    case "footprint":
-      return { one: { table: "footprint", key: s("station") } };
-    case "loginSessions":
-      return { one: { table: "login_sessions", key: s("account") } };
-    case "admin":
-      return { one: { table: "admin", key: join([s("account"), s("list")]) } };
-    case "draft":
-      return { one: { table: "draft", key: join([s("station"), s("chat")]) } };
-    case "prefs":
-      return { one: { table: "prefs", key: "device" } };
-    default:
-      return null;
-  }
-}
+/// The topics whose values are held here.
+const HELD = new Set(["workspace", "overview", "session", "chatRows", "sessions", "threads", "archivedRows", "jobs", "job", "slackApp", "stationUsage", "footprint", "loginSessions", "admin", "draft", "prefs"]);
 
 /// Whether a topic's value is held here.
 export function holds(topic: Topic): boolean {
-  return shape(topic) !== null;
+  return HELD.has(topic.topic);
 }
 
-/// How long a record changing as it is typed waits before it is written.
-export const SOON_MS = 300;
-
-function idText(id: unknown): string | null {
-  if (typeof id === "string") return id;
-  if (typeof id === "number") return String(id);
-  return null;
+/// The workspace a station's address is in.
+function workspaceOf(station: string): string {
+  const at = station.indexOf("/");
+  return at >= 0 ? station.slice(0, at) : station;
 }
 
-/// Frozen all through (a record as kept: replaced, never changed).
-function frozen<T>(v: T): T {
-  if (v !== null && typeof v === "object" && !Object.isFrozen(v)) {
-    for (const k of Object.keys(v)) frozen((v as Record<string, unknown>)[k]);
-    Object.freeze(v);
-  }
-  return v;
+/// An account's database's name: its subject, with what a file name cannot hold as `_xx`.
+export function dbName(sub: string): string {
+  return `account-${[...new TextEncoder().encode(sub)].map((b) => (/[A-Za-z0-9-]/.test(String.fromCharCode(b)) ? String.fromCharCode(b) : `_${b.toString(16).padStart(2, "0")}`)).join("")}`;
 }
 
-function copy<T>(v: T): T {
-  return v === null || v === undefined || typeof v !== "object" ? v : structuredClone(v);
-}
+/// The device's own values (not an account's): kept in the host's storage, one storage value per table, read at start.
+export const DEVICE_TABLES = ["prefs", "changelog", "choice", "chat_ref"] as const;
+export type DeviceTable = (typeof DEVICE_TABLES)[number];
 
-/// What was asked of the writer: a batch, or a mark to tell once every batch before it is written.
-type Write = { ops: DbOp[] } | { mark: Deferred.Deferred<void> };
-
-/// A log of a thread or a transcript, loaded: its items by number.
-type Items = Map<number, unknown>;
-
-export class Data {
-  readonly #host: Host;
-  readonly #runner: Runner;
-  readonly #records = new Map<string, Map<string, unknown>>();
-  readonly #changed: ((topic: Topic) => void)[] = [];
-  readonly #writes: Queue.Queue<Write>;
-  readonly #soon = new Map<string, [string, string, Uint8Array]>();
-  #flushing = false;
-  readonly #modelEdits = new Map<string, [unknown, unknown]>();
-  /// Threads' entries and sessions' transcripts loaded from the database, by `<table>␁<station>␁<thread or session>`.
-  readonly #logs = new Map<string, Items>();
-  /// Told when entries or transcript items of a log change: `(table, station, id)`.
-  readonly #logChanged: ((table: string, station: string, id: string) => void)[] = [];
+class Device {
+  readonly #tables = new Map<string, Record<string, unknown>>();
+  readonly #dirty = new Set<string>();
+  readonly #writes: Queue.Queue<string>;
 
   constructor(host: Host, runner: Runner) {
-    this.#host = host;
-    this.#runner = runner;
-    this.#writes = Effect.runSync(Queue.unbounded<Write>());
-    // The one writer: batches in the order they were made, a failed one left (the next change writes it again).
+    this.#writes = Effect.runSync(Queue.unbounded<string>());
+    // One writer: a table's latest value, in the order they changed.
     runner.fork(
       Effect.forever(
-        Effect.flatMap(Queue.take(this.#writes), (w) =>
-          "ops" in w ? Effect.ignore(Effect.suspend(() => host.dbWrite(w.ops))) : Deferred.succeed(w.mark, undefined),
+        Effect.flatMap(Queue.take(this.#writes), (table) =>
+          Effect.suspend(() => {
+            if (!this.#dirty.delete(table)) return Effect.void;
+            return Effect.ignore(host.storageSet(`device/${table}`, toJsonBytes(this.#tables.get(table) ?? {})));
+          }),
         ),
       ),
     );
   }
 
-  /// Hears every held topic that changes (each listener added is told).
-  onChange(listener: (topic: Topic) => void): void {
-    this.#changed.push(listener);
-  }
-
-  onLogChange(listener: (table: string, station: string, id: string) => void): void {
-    this.#logChanged.push(listener);
-  }
-
-  #table(table: string): Map<string, unknown> {
-    let t = this.#records.get(table);
-    if (!t) {
-      t = new Map();
-      this.#records.set(table, t);
-    }
-    return t;
-  }
-
-  /// Reads every record from the host's database (all but the logs, read a thread at a time). What arrived meanwhile
-  /// is newer and stays.
-  get load(): Effect.Effect<void> {
+  load(host: Host): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      const found: [string, string, unknown][] = [];
-      for (const table of TABLES) {
-        const rows = yield* Effect.orElseSucceed(this.#host.dbRead({ table, from: "", to: "\u{10ffff}" }), () => [] as [string, Uint8Array][]);
-        for (const [key, bytes] of rows) {
-          const value = parseJson(bytes);
-          if (value !== undefined) found.push([table, key, value]);
+      for (const table of DEVICE_TABLES) {
+        const bytes = yield* Effect.orElseSucceed(host.storageGet(`device/${table}`), () => null);
+        const v = bytes ? parseJson(bytes) : undefined;
+        if (isObject(v) && !this.#tables.has(table)) this.#tables.set(table, v as Record<string, unknown>);
+      }
+    });
+  }
+
+  get(table: string, key: string): unknown {
+    return this.#tables.get(table)?.[key];
+  }
+
+  /// Puts a value (undefined: none); whether it changed.
+  put(table: string, key: string, value: unknown): boolean {
+    let t = this.#tables.get(table);
+    if (!t) {
+      t = {};
+      this.#tables.set(table, t);
+    }
+    if (value === undefined) {
+      if (!(key in t)) return false;
+      delete t[key];
+    } else {
+      if (equal(t[key], value)) return false;
+      t[key] = frozen(structuredClone(value));
+    }
+    this.#dirty.add(table);
+    Queue.offerUnsafe(this.#writes, table);
+    return true;
+  }
+
+  keys(table: string): string[] {
+    return Object.keys(this.#tables.get(table) ?? {});
+  }
+}
+
+export type DataOptions = {
+  /// The signed-in account that reaches a workspace (Workspaces' owner): its database keeps the workspace's.
+  owner: (workspace: string) => string | null;
+  derive?: Derive;
+};
+
+/// What a database's state says through the `status` topic: a burst not written for want of room, a database a newer
+/// core wrote (read only), one another process holds.
+export type DbNote = { kind: "full" | "newer" | "busy" | "failed"; detail: string | null };
+
+const NO_DERIVE: Derive = { tone: () => null, asks: () => false };
+
+export class Data {
+  readonly #host: Host;
+  readonly #runner: Runner;
+  readonly #owner: (workspace: string) => string | null;
+  readonly #derive: Derive;
+  readonly #dbs = new Map<string, AccountDb>();
+  readonly device: Device;
+  readonly #changed: ((topic: Topic) => void)[] = [];
+  readonly #logChanged: ((table: string, station: string, id: string) => void)[] = [];
+  readonly #chatsChanged: ((station: string, changes: RowChange[], first: boolean) => void)[] = [];
+  readonly #modelEdits = new Map<string, [unknown, unknown]>();
+  /// Values as typed, there at once and written a moment after their last change (drafts).
+  readonly #soon = new Map<string, [Topic, unknown]>();
+  #flushing = false;
+  /// What each database's state says, by account.
+  readonly notes = new Map<string, DbNote>();
+  onNote: () => void = () => {};
+  /// Told of an account signed out, with its last `/v1/me`, before its database goes.
+  onSignedOut: (sub: string, me: unknown) => void = () => {};
+  /// Told once an account's database is opened (a sign-in), to bring in what it may (db/import.ts).
+  onOpened: (db: AccountDb) => Effect.Effect<void> = () => Effect.void;
+
+  constructor(host: Host, runner: Runner, options: DataOptions) {
+    this.#host = host;
+    this.#runner = runner;
+    this.#owner = options.owner;
+    this.#derive = options.derive ?? NO_DERIVE;
+    this.device = new Device(host, runner);
+  }
+
+  // ── the databases ──
+
+  /// Opens the signed-in accounts' databases (and reads the device's values): what the first view is answered from.
+  open(subs: string[]): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.device.load(this.#host);
+      for (const sub of subs) yield* this.#open(sub);
+    });
+  }
+
+  /// The accounts signed in now: a new one's database is opened; one signed out has its database removed.
+  accounts(subs: string[]): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      for (const [sub, db] of [...this.#dbs]) {
+        if (subs.includes(sub)) continue;
+        this.onSignedOut(sub, db.accountDoc("me"));
+        this.#dbs.delete(sub);
+        this.#setNote(sub, null);
+        db.close();
+        if (this.#host.deleteDb) yield* Effect.ignore(this.#host.deleteDb(db.name));
+        this.#tellAll();
+      }
+      for (const sub of subs) if (!this.#dbs.has(sub)) yield* this.#open(sub);
+    });
+  }
+
+  #open(sub: string): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.#dbs.has(sub)) return;
+      const name = dbName(sub);
+      let sql: Sql | null = null;
+      let note: DbNote | null = null;
+      if (this.#host.openDb) {
+        const opened = yield* Effect.result(this.#host.openDb(name));
+        if (opened._tag === "Success") sql = opened.success;
+        else note = { kind: opened.failure instanceof SqlError && opened.failure.kind === "busy" ? "busy" : "failed", detail: opened.failure.message };
+      }
+      if (sql === null) {
+        // Nothing to keep it in (another process holds it, or this host keeps nothing): kept in memory this run.
+        try {
+          sql = this.#host.memoryDb?.() ?? null;
+        } catch {
+          sql = null;
+        }
+        if (sql === null) {
+          if (note) this.#setNote(sub, note);
+          return;
         }
       }
-      for (const [table, key, value] of found) {
-        const t = this.#table(table);
-        if (!t.has(key)) t.set(key, frozen(value));
+      let db: AccountDb;
+      try {
+        db = new AccountDb(sub, name, sql, this.#runner, this.#derive);
+      } catch (e) {
+        this.#setNote(sub, { kind: "failed", detail: e instanceof Error ? e.message : String(e) });
+        return;
       }
+      if (db.readOnly) note = { kind: "newer", detail: null };
+      db.onCommit = (changes) => this.#committed(changes);
+      db.onFull = (full, error) => this.#setNote(sub, full ? { kind: "full", detail: error } : null);
+      this.#dbs.set(sub, db);
+      if (note) this.#setNote(sub, note);
+      yield* this.onOpened(db);
       this.#tellAll();
     });
   }
 
-  /// A held topic's value; undefined while nothing is known of it.
-  get(topic: Topic): unknown {
-    const s = shape(topic);
-    if (!s) return undefined;
-    if ("one" in s) return copy(this.#records.get(s.one.table)?.get(s.one.key));
-    const { table, scope } = s.list;
-    const ids = this.#records.get("list")?.get(join([table, scope]));
-    if (!Array.isArray(ids)) return undefined;
-    const items = this.#records.get(table);
-    const out: unknown[] = [];
-    for (const id of ids) {
-      if (typeof id !== "string") continue;
-      const item = items?.get(join([scope, id]));
-      if (item !== undefined) out.push(copy(item));
-    }
-    return out;
+  #setNote(sub: string, note: DbNote | null): void {
+    const was = this.notes.get(sub);
+    if (note === null ? was === undefined : equal(was, note)) return;
+    if (note === null) this.notes.delete(sub);
+    else this.notes.set(sub, note);
+    this.onNote();
   }
 
-  /// A held topic's value as it is kept, not copied: its records are frozen (they are replaced, never changed), so
-  /// what reads it shares them and a record that did not change is the same object from one read to the next (what
-  /// the views keep their rows by: rule 7). A list is a new array of them.
-  shared(topic: Topic): unknown {
-    const s = shape(topic);
-    if (!s) return undefined;
-    if (topic.topic === "overview" && [...this.#modelEdits.keys()].some((k) => k.startsWith(String(topic.station) + SEP))) return this.shown(topic);
-    if ("one" in s) return this.#records.get(s.one.table)?.get(s.one.key);
-    const { table, scope } = s.list;
-    const ids = this.#records.get("list")?.get(join([table, scope]));
-    if (!Array.isArray(ids)) return undefined;
-    const items = this.#records.get(table);
-    const out: unknown[] = [];
-    for (const id of ids) {
-      if (typeof id !== "string") continue;
-      const item = items?.get(join([scope, id]));
-      if (item !== undefined) out.push(item);
+  /// The database of an account.
+  db(sub: string): AccountDb | undefined {
+    return this.#dbs.get(sub);
+  }
+
+  /// The databases open now.
+  dbs(): AccountDb[] {
+    return [...this.#dbs.values()];
+  }
+
+  #ofWorkspace(workspace: string): AccountDb | undefined {
+    const sub = this.#owner(workspace);
+    return sub === null ? undefined : this.#dbs.get(sub);
+  }
+
+  /// The database that keeps a station's.
+  of(station: string): AccountDb | undefined {
+    return this.#ofWorkspace(workspaceOf(station));
+  }
+
+  #committed(changes: Changes): void {
+    for (const topic of changes.topics.values()) this.#tell(topic);
+    for (const [table, station, id] of changes.logs.values()) for (const l of this.#logChanged) l(table, station, id);
+    for (const [station, rows] of changes.chats) {
+      const list = [...rows.values()];
+      for (const l of this.#chatsChanged) l(station, list, changes.firstChats.has(station));
     }
-    return out;
+  }
+
+  /// Hears every held topic that changes.
+  onChange(listener: (topic: Topic) => void): void {
+    this.#changed.push(listener);
+  }
+
+  /// Hears the entries or transcript items of a log that changed.
+  onLogChange(listener: (table: string, station: string, id: string) => void): void {
+    this.#logChanged.push(listener);
+  }
+
+  /// Hears a station's sidebar rows that changed in a burst, before and after (`first`: they were read for the first
+  /// time).
+  onChats(listener: (station: string, changes: RowChange[], first: boolean) => void): void {
+    this.#chatsChanged.push(listener);
+  }
+
+  #tell(topic: Topic): void {
+    for (const l of this.#changed) l(topic);
+  }
+
+  /// Every held topic may have changed (a database opened or gone): those live are read again.
+  #tellAll(): void {
+    this.#tell({ topic: "*" });
+  }
+
+  /// Resolves once every write asked for so far is committed.
+  get written(): Effect.Effect<void> {
+    return Effect.suspend(() => Effect.all([...this.#dbs.values()].map((db) => db.written), { discard: true }));
+  }
+
+  // ── held topics ──
+
+  /// A held topic's value, kept as it is (frozen: shared, the same object while it does not change); undefined while
+  /// nothing is known of it. A list is loaded the first time it is asked for.
+  shared(topic: Topic): unknown {
+    const s = (k: string) => String(topic[k]);
+    if (topic.topic === "prefs") return this.device.get("prefs", "device");
+    if (topic.topic === "draft") {
+      const soon = this.#soon.get(`${s("station")}${SEP}${s("chat")}`);
+      if (soon) return soon[1];
+      return this.of(s("station"))?.draft(s("station"), s("chat"));
+    }
+    if (topic.topic === "loginSessions") return this.#dbs.get(s("account"))?.accountDoc("login_sessions");
+    if (topic.topic === "admin") return this.#dbs.get(s("account"))?.accountDoc(`admin/${s("list")}`);
+    if (topic.topic === "workspace") return this.#ofWorkspace(s("workspace"))?.workspace(s("workspace"));
+    const station = typeof topic.station === "string" ? topic.station : null;
+    if (station === null) return undefined;
+    const db = this.of(station);
+    if (!db) return undefined;
+    const kind = LIST_OF[topic.topic];
+    if (kind) return db.list(station, kind);
+    switch (topic.topic) {
+      case "overview":
+        if ([...this.#modelEdits.keys()].some((k) => k.startsWith(station + SEP))) return this.shown(topic);
+        return db.stationDoc(station, "overview");
+      case "footprint":
+        return db.stationDoc(station, "footprint");
+      case "stationUsage":
+        return db.stationDoc(station, "usage");
+      case "session":
+        return db.detail(station, s("key"));
+      case "job":
+        return db.job(station, s("id"));
+      case "slackApp":
+        return db.slackApp(station, s("connect"));
+    }
+    return undefined;
+  }
+
+  /// A held topic's value, a copy to change.
+  get(topic: Topic): unknown {
+    const v = topic.topic === "overview" ? this.#rawOverview(topic) : this.shared(topic);
+    return v === undefined ? undefined : structuredClone(v);
+  }
+
+  #rawOverview(topic: Topic): unknown {
+    const station = String(topic.station);
+    return this.of(station)?.stationDoc(station, "overview");
+  }
+
+  /// Whether a list topic's rows are loaded (a view reads them at once), or it holds none.
+  loaded(topic: Topic): boolean {
+    const kind = LIST_OF[topic.topic];
+    const station = typeof topic.station === "string" ? topic.station : null;
+    if (!kind || station === null) return true;
+    const db = this.of(station);
+    return !db || !db.listed(station, kind) || db.loaded(station, kind);
+  }
+
+  /// A topic nobody reads any more: what was loaded for it goes.
+  release(topic: Topic): void {
+    const kind = LIST_OF[topic.topic];
+    const station = typeof topic.station === "string" ? topic.station : null;
+    if (kind && station !== null) this.of(station)?.release(station, kind);
   }
 
   /// The visible selection over confirmed data (a profile's models being saved shown as picked).
   shown(topic: Topic): unknown {
-    const value = this.get(topic);
+    const value = topic.topic === "overview" ? structuredClone(this.#rawOverview(topic)) : this.get(topic);
     if (value === undefined) return undefined;
     if (topic.topic === "overview" && isObject(value) && Array.isArray(value.profiles)) {
       for (const p of value.profiles) {
@@ -257,7 +372,7 @@ export class Data {
 
   beginModels(station: string, id: string, models: unknown): boolean {
     const key = join([station, id]);
-    const overview = this.get({ topic: "overview", station });
+    const overview = this.#rawOverview({ topic: "overview", station });
     const profile = isObject(overview) && Array.isArray(overview.profiles) ? overview.profiles.find((p) => isObject(p) && p.id === id) : undefined;
     const before: unknown[] = isObject(profile) && Array.isArray(profile.models) ? profile.models : [];
     const after: unknown[] = Array.isArray(models) ? models : [];
@@ -274,67 +389,56 @@ export class Data {
     this.#tell({ topic: "overview", station });
   }
 
-  #put(ops: DbOp[], table: string, key: string, value: unknown): void {
-    const t = this.#table(table);
-    if (t.has(key) && equal(t.get(key), value)) return;
-    ops.push({ put: { table, key, value: toJsonBytes(value) } });
-    t.set(key, frozen(copy(value)));
-  }
-
-  /// When the record was last confirmed by its source; null if never.
-  confirmedAt(table: string, key: string): number | null {
-    const at = this.#records.get("confirmed")?.get(join([table, key]));
-    return typeof at === "number" ? at : null;
-  }
-
-  /// A held topic's new value (read, or as an event left it): its records that differ are written, those of items no
-  /// longer in a list removed. `confirmed`: it came from its source just now (else it is the core's own change).
+  /// A held topic's new value (read, or as an event left it). `confirmed`: it came from its source just now (else it
+  /// is the core's own change).
   set(topic: Topic, value: unknown, confirmed = true): void {
-    const s = shape(topic);
-    if (!s) return;
-    const ops: DbOp[] = [];
-    let at: [string, string];
-    if ("one" in s) {
-      this.#put(ops, s.one.table, s.one.key, value);
-      at = [s.one.table, s.one.key];
-    } else {
-      const { table, scope, idField } = s.list;
-      const items = Array.isArray(value) ? value : [];
-      const ids: string[] = [];
-      for (const item of items) {
-        const id = idText(isObject(item) ? item[idField] : undefined);
-        if (id === null) continue;
-        ids.push(id);
-        this.#put(ops, table, join([scope, id]), item);
-      }
-      const kept = new Set(ids.map((id) => join([scope, id])));
-      const prefix = scope + SEP;
-      const t = this.#table(table);
-      for (const key of [...t.keys()].sort(compareKeys)) {
-        if (key.startsWith(prefix) && !kept.has(key)) {
-          t.delete(key);
-          ops.push({ delete: { table, key } });
-        }
-      }
-      this.#put(ops, "list", join([table, scope]), ids);
-      at = ["list", join([table, scope])];
+    const s = (k: string) => String(topic[k]);
+    const at = confirmed ? this.#host.nowMs() : null;
+    if (topic.topic === "prefs") {
+      if (this.device.put("prefs", "device", value)) this.#tell(topic);
+      return;
     }
-    if (confirmed) this.#put(ops, "confirmed", join(at), this.#host.nowMs());
-    if (ops.length > 0) {
-      this.#write(ops);
-      if (ops.some((op) => !("put" in op && op.put.table === "confirmed"))) this.#tell(topic);
+    if (topic.topic === "draft") return this.of(s("station"))?.putDraft(s("station"), s("chat"), value);
+    if (topic.topic === "loginSessions") return this.#dbs.get(s("account"))?.putAccountDoc("login_sessions", value, at, topic);
+    if (topic.topic === "admin") return this.#dbs.get(s("account"))?.putAccountDoc(`admin/${s("list")}`, value, at, topic);
+    if (topic.topic === "workspace") return this.#ofWorkspace(s("workspace"))?.putWorkspace(s("workspace"), value, at);
+    const station = typeof topic.station === "string" ? topic.station : null;
+    if (station === null) return;
+    const db = this.of(station);
+    if (!db) return;
+    const list = Array.isArray(value) ? value : [];
+    switch (topic.topic) {
+      case "chatRows":
+        return db.setChats(station, false, list, at);
+      case "archivedRows":
+        return db.setChats(station, true, list, at);
+      case "sessions":
+        return db.setSessions(station, list, at);
+      case "threads":
+        return db.setThreads(station, list, at);
+      case "jobs":
+        return db.setJobs(station, list, at);
+      case "overview":
+        return db.putStationDoc(station, "overview", value, at, topic);
+      case "footprint":
+        return db.putStationDoc(station, "footprint", value, at, topic);
+      case "stationUsage":
+        return db.putStationDoc(station, "usage", value, at, topic);
+      case "session":
+        return db.setDetail(station, s("key"), value);
+      case "job":
+        return void db.putJob(station, value, false);
+      case "slackApp":
+        return db.putSlackApp(station, s("connect"), value, at);
     }
   }
 
-  /// A held topic's new value, as it is typed (a draft): there at once, written a moment after its last change.
+  /// A held value as it is typed (a draft): there at once, written a moment after its last change.
   setSoon(topic: Topic, value: unknown): void {
-    const s = shape(topic);
-    if (!s || !("one" in s)) return this.set(topic, value, false);
-    const { table, key } = s.one;
-    const t = this.#table(table);
-    if (t.has(key) && equal(t.get(key), value)) return;
-    this.#soon.set(join([table, key]), [table, key, toJsonBytes(value)]);
-    t.set(key, frozen(copy(value)));
+    const key = `${String(topic.station)}${SEP}${String(topic.chat)}`;
+    const was = this.#soon.get(key)?.[1] ?? this.shared(topic);
+    if (was !== undefined && equal(was, value)) return;
+    this.#soon.set(key, [topic, frozen(structuredClone(value))]);
     this.#tell(topic);
     if (this.#flushing) return;
     this.#flushing = true;
@@ -343,263 +447,317 @@ export class Data {
         Effect.andThen(
           Effect.sync(() => {
             this.#flushing = false;
-            const ops: DbOp[] = [...this.#soon.values()].map(([table, key, value]) => ({ put: { table, key, value } }));
+            const soon = [...this.#soon.values()];
             this.#soon.clear();
-            if (ops.length > 0) this.#write(ops);
+            for (const [t, v] of soon) this.set(t, v, false);
           }),
         ),
       ),
     );
   }
 
-  /// Changes a held topic's value in place (an event); does nothing while nothing is known of it.
+  /// Changes a held document in place (an event); does nothing while nothing is known of it.
   update(topic: Topic, change: (value: unknown) => unknown): void {
+    if (LIST_OF[topic.topic]) throw new Error(`a list is changed row by row: ${topic.topic}`);
     const value = this.get(topic);
     if (value === undefined) return;
     const next = change(value);
     this.set(topic, next === undefined ? value : next);
   }
 
-  /// A record the core keeps itself, by table and key.
+  /// A held topic known no more (a draft sent or emptied).
+  forgetTopic(topic: Topic): void {
+    if (topic.topic !== "draft") return;
+    const key = `${String(topic.station)}${SEP}${String(topic.chat)}`;
+    const soon = this.#soon.delete(key);
+    const station = String(topic.station);
+    const db = this.of(station);
+    if (db && db.draft(station, String(topic.chat)) !== undefined) db.putDraft(station, String(topic.chat), undefined);
+    else if (soon) this.#tell(topic);
+  }
+
+  // ── records by table and key: the account's own and the device's ──
+
+  /// A value the core keeps itself: `me` by account; a new chat's picks (`choice`) and chats' links (`chat_ref`), a
+  /// workspace's in its account's database (`ws:<id>:…`, `links:<id>`), the rest the device's; the changelog's.
   record(table: string, key: string): unknown {
-    return copy(this.#records.get(table)?.get(key));
+    const [db, k] = this.#recordAt(table, key);
+    if (db === "device") return this.device.get(table, key);
+    if (db === null) return undefined;
+    if (table === "me") return db.accountDoc("me");
+    return db.workspacePref(k[0], k[1]);
   }
 
   put(table: string, key: string, value: unknown, confirmed = true): void {
-    const ops: DbOp[] = [];
-    this.#put(ops, table, key, value);
-    if (ops.length === 0) return;
-    if (confirmed) this.#put(ops, "confirmed", join([table, key]), this.#host.nowMs());
-    this.#write(ops);
-  }
-
-  /// Every record of a table, by key, in key order.
-  records(table: string): [string, unknown][] {
-    const t = this.#records.get(table);
-    if (!t) return [];
-    return [...t.keys()].sort(compareKeys).map((k) => [k, copy(t.get(k))]);
-  }
-
-  /// Keeps only the stations `keep` picks and, where given, the `workspaces`: what no signed-in account reaches goes.
-  retain(keep: (station: string) => boolean, workspaces: Set<string> | null): void {
-    const stationOf = (table: string, key: string): string | null => {
-      const at = key.indexOf(SEP);
-      switch (table) {
-        case "overview":
-        case "usage":
-        case "footprint":
-          return key;
-        case "list":
-          return at >= 0 ? key.slice(at + 1) : null;
-        case "confirmed": {
-          const [t, ...rest] = key.split(SEP);
-          return stationOf(t, rest.join(SEP));
-        }
-        case "session":
-        case "row":
-        case "session_summary":
-        case "thread":
-        case "archived_row":
-        case "job_open":
-        case "job":
-        case "slack_app":
-        case "outbox":
-        case "pending":
-        case "first":
-        case "changing":
-        case "entry":
-        case "transcript":
-          return at >= 0 ? key.slice(0, at) : null;
-        default:
-          return null;
-      }
-    };
-    this.#forget((table, key) => {
-      if (table === "workspace") return workspaces !== null && !workspaces.has(key);
-      if (table === "confirmed" && key.startsWith(`workspace${SEP}`)) return workspaces !== null && !workspaces.has(key.slice(10));
-      const station = stationOf(table, key);
-      return station !== null && !keep(station);
-    });
-    // What is not loaded is gone from the database too.
-    this.#runner.fork(
-      Effect.gen({ self: this }, function* () {
-        for (const table of ["entry", "transcript"]) {
-          const rows = yield* Effect.orElseSucceed(this.#host.dbRead({ table, from: "", to: "\u{10ffff}" }), () => [] as [string, Uint8Array][]);
-          const gone = rows.filter(([key]) => !keep(key.slice(0, key.indexOf(SEP))));
-          if (gone.length > 0) this.#write(gone.map(([key]) => ({ delete: { table, key } })));
-        }
-      }),
-    );
-    for (const name of [...this.#logs.keys()]) {
-      const [, station] = name.split(SEP);
-      if (!keep(station)) this.#logs.delete(name);
-    }
-  }
-
-  /// A held topic known no more (a draft sent or emptied).
-  forgetTopic(topic: Topic): void {
-    const s = shape(topic);
-    if (!s || !("one" in s)) return;
-    const { table, key } = s.one;
-    this.#soon.delete(join([table, key]));
-    if (this.#records.get(table)?.delete(key)) {
-      this.#write([{ delete: { table, key } }]);
-      this.#tell(topic);
-    }
+    const [db, k] = this.#recordAt(table, key);
+    if (db === "device") return void this.device.put(table, key, value);
+    if (db === null) return;
+    if (table === "me") return db.putAccountDoc("me", value, confirmed ? this.#host.nowMs() : null, null);
+    db.putWorkspacePref(k[0], k[1], value);
   }
 
   forgetRecord(table: string, key: string): void {
-    this.#forget((t, k) => (t === table && k === key) || (t === "confirmed" && k === join([table, key])));
+    const [db, k] = this.#recordAt(table, key);
+    if (db === "device") return void this.device.put(table, key, undefined);
+    if (db === null) return;
+    if (table === "me") return db.dropAccountDoc("me", null);
+    db.putWorkspacePref(k[0], k[1], undefined);
   }
 
-  #forget(doomed: (table: string, key: string) => boolean): void {
-    const gone: [string, string][] = [];
-    for (const table of [...this.#records.keys()].sort(compareKeys)) {
-      for (const key of [...this.#records.get(table)!.keys()].sort(compareKeys)) if (doomed(table, key)) gone.push([table, key]);
+  #recordAt(table: string, key: string): [AccountDb | "device" | null, [string, string]] {
+    if (table === "me") return [this.#dbs.get(key) ?? null, ["", ""]];
+    if (table === "choice" && key.startsWith("ws:")) {
+      const at = key.indexOf(":", 3);
+      const ws = at < 0 ? key.slice(3) : key.slice(3, at);
+      return [this.#ofWorkspace(ws) ?? null, [ws, `choice:${at < 0 ? "" : key.slice(at + 1)}`]];
     }
-    if (gone.length === 0) return;
-    for (const [table, key] of gone) this.#records.get(table)!.delete(key);
-    this.#write(gone.map(([table, key]) => ({ delete: { table, key } })));
-    this.#tellAll();
+    if (table === "chat_ref" && key.startsWith("links:")) {
+      const ws = key.slice(6);
+      return [this.#ofWorkspace(ws) ?? null, [ws, "links"]];
+    }
+    return ["device", ["", ""]];
   }
 
-  // ── logs: threads' entries, sessions' transcripts ──
+  /// What is held of a workspace goes (it is gone, or the account left it).
+  dropWorkspace(id: string): void {
+    for (const db of this.#dbs.values()) if (db.workspace(id) !== undefined) db.dropWorkspace(id);
+  }
 
-  /// A log's items, loaded from the database the first time.
-  log(table: "entry" | "transcript", station: string, id: string): Effect.Effect<Items> {
-    return Effect.suspend(() => {
-      const name = join([table, station, id]);
-      const loaded = this.#logs.get(name);
-      if (loaded) return Effect.succeed(loaded);
-      const prefix = join([station, id]) + SEP;
-      return Effect.orElseSucceed(this.#host.dbRead({ table, from: prefix, to: join([station, id]) + "\u0002" }), () => [] as [string, Uint8Array][]).pipe(
-        Effect.map((rows) => {
-          // Loaded meanwhile (and told of what came since): that one.
-          const again = this.#logs.get(name);
-          if (again) return again;
-          const items: Items = new Map();
-          for (const [key, bytes] of rows) {
-            const value = parseJson(bytes);
-            if (value !== undefined) items.set(Number(key.slice(prefix.length)), value);
-          }
-          this.#logs.set(name, items);
-          return items;
-        }),
-      );
+  /// Every account's `me`, by account.
+  mes(): [string, unknown][] {
+    return [...this.#dbs].flatMap(([sub, db]) => {
+      const me = db.accountDoc("me");
+      return me === undefined ? [] : [[sub, me] as [string, unknown]];
     });
   }
 
-  /// A log's items if it is loaded (synchronously; views read what is there).
-  loaded(table: "entry" | "transcript", station: string, id: string): Items | null {
-    return this.#logs.get(join([table, station, id])) ?? null;
-  }
-
-  /// Items into a log, by number (an entry's `n`, a transcript item's index); those it has that are the same change
-  /// nothing. `cutAfter`: nothing past that number is kept (a transcript written anew, ending there).
-  putItems(table: "entry" | "transcript", station: string, id: string, items: [number, unknown][], cutAfter: number | null = null): Effect.Effect<void> {
-    return Effect.map(this.log(table, station, id), (log) => {
-      const ops: DbOp[] = [];
-      for (const [n, value] of items) {
-        const before = log.get(n);
-        if (before !== undefined && equal(before, value)) continue;
-        log.set(n, copy(value));
-        ops.push({ put: { table, key: join([station, id, num(n)]), value: toJsonBytes(value) } });
-      }
-      if (cutAfter !== null) {
-        for (const n of [...log.keys()]) {
-          if (n > cutAfter) {
-            log.delete(n);
-            ops.push({ delete: { table, key: join([station, id, num(n)]) } });
-          }
-        }
-      }
-      if (ops.length > 0) {
-        this.#write(ops);
-        for (const l of this.#logChanged) l(table, station, id);
-      }
-    });
-  }
-
-  /// A log known no more (its thread or session went).
-  forgetLog(table: "entry" | "transcript", station: string, id: string): Effect.Effect<void> {
-    return Effect.map(this.log(table, station, id), (log) => {
-      const ops: DbOp[] = [...log.keys()].map((n) => ({ delete: { table, key: join([station, id, num(n)]) } }));
-      log.clear();
-      if (ops.length > 0) {
-        this.#write(ops);
-        for (const l of this.#logChanged) l(table, station, id);
-      }
-    });
-  }
-
-  #tell(topic: Topic): void {
-    for (const l of this.#changed) l(topic);
-  }
-
-  #tellAll(): void {
-    const topics = new Map<string, Topic>();
-    for (const [table, rows] of this.#records) {
-      for (const key of rows.keys()) {
-        const topic = topicOf(table, key);
-        if (topic) topics.set(JSON.stringify(topic), topic);
+  /// Keeps only the stations `keep` picks and, where given, the `workspaces`, each in the database of the account
+  /// that reaches it: what no signed-in account reaches goes.
+  retain(keep: (station: string) => boolean, workspaces: Set<string> | null): void {
+    for (const [sub, db] of this.#dbs) {
+      if (db.readOnly) continue;
+      for (const id of db.workspaceIds()) if ((workspaces !== null && !workspaces.has(id)) || (this.#owner(id) !== null && this.#owner(id) !== sub)) db.dropWorkspace(id);
+      for (const station of db.stations()) {
+        const owner = this.#owner(workspaceOf(station));
+        if (!keep(station) || (owner !== null && owner !== sub)) db.forgetStation(station);
       }
     }
-    for (const topic of topics.values()) this.#tell(topic);
   }
 
-  #write(ops: DbOp[]): void {
-    Queue.offerUnsafe(this.#writes, { ops });
+  // ── what this device did and its station has not confirmed (views/local.ts) ──
+
+  /// Every row of one of those tables, of every account: [station, key, value].
+  locals(table: "outbox" | "pending" | "first" | "changing"): [string, string, unknown][] {
+    return [...this.#dbs.values()].flatMap((db) => db.locals(table));
   }
 
-  /// Resolves once every write asked for so far is done.
-  get written(): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      const mark = yield* Deferred.make<void>();
-      Queue.offerUnsafe(this.#writes, { mark });
-      yield* Deferred.await(mark);
-    });
+  putLocal(table: "outbox" | "pending" | "first" | "changing", station: string, key: string, value: unknown): void {
+    this.of(station)?.putLocal(table, station, key, value);
   }
-}
 
-/// The topic a record is (part) of.
-function topicOf(table: string, key: string): Topic | null {
-  const parts = key.split(SEP);
-  switch (table) {
-    case "workspace":
-      return { topic: "workspace", workspace: key };
-    case "overview":
-      return { topic: "overview", station: key };
-    case "usage":
-      return { topic: "stationUsage", station: key };
-    case "footprint":
-      return { topic: "footprint", station: key };
-    case "session":
-      return parts.length === 2 ? { topic: "session", station: parts[0], key: parts[1] } : null;
-    case "job":
-      return parts.length === 2 ? { topic: "job", station: parts[0], id: parts[1] } : null;
-    case "slack_app":
-      return parts.length === 2 ? { topic: "slackApp", station: parts[0], connect: parts[1] } : null;
-    case "login_sessions":
-      return { topic: "loginSessions", account: key };
-    case "admin":
-      return parts.length === 2 ? { topic: "admin", account: parts[0], list: parts[1] } : null;
-    case "row":
-      return { topic: "chatRows", station: parts[0] };
-    case "session_summary":
-      return { topic: "sessions", station: parts[0] };
-    case "thread":
-      return { topic: "threads", station: parts[0] };
-    case "archived_row":
-      return { topic: "archivedRows", station: parts[0] };
-    case "job_open":
-      return { topic: "jobs", station: parts[0] };
-    case "list": {
-      if (parts.length !== 2) return null;
-      const [t, scope] = parts;
-      const of: Record<string, string> = { row: "chatRows", session_summary: "sessions", thread: "threads", archived_row: "archivedRows", job_open: "jobs" };
-      return of[t] ? { topic: of[t], station: scope } : null;
+  // ── a station's rows ──
+
+  /// Whether a station's list has been read.
+  listed(station: string, kind: ListKind): boolean {
+    return this.of(station)?.listed(station, kind) ?? false;
+  }
+
+  /// A sidebar row as an event has it.
+  putChat(station: string, row: unknown): void {
+    this.of(station)?.putChat(station, row);
+  }
+
+  dropChat(station: string, id: string): void {
+    this.of(station)?.dropChat(station, id);
+  }
+
+  chat(station: string, id: string): unknown {
+    return this.of(station)?.chat(station, id);
+  }
+
+  chatOfThread(station: string, thread: number): unknown {
+    if (!Number.isInteger(thread)) return undefined;
+    return this.of(station)?.chatOfThread(station, thread);
+  }
+
+  chatOfSession(station: string, session: string): unknown {
+    return this.of(station)?.chatOfSession(station, session);
+  }
+
+  chatOfClientKey(station: string, key: string): unknown {
+    return this.of(station)?.chatOfClientKey(station, key);
+  }
+
+  /// How often a station's sidebar rows changed.
+  rowsRev(station: string): number {
+    return this.of(station)?.rowsRev(station) ?? 0;
+  }
+
+  /// The rows of these stations a list shows first, across their databases.
+  chatHead(stations: string[], limit: number): [string, any][] {
+    const by = new Map<AccountDb, string[]>();
+    for (const s of stations) {
+      const db = this.of(s);
+      if (!db) continue;
+      by.set(db, [...(by.get(db) ?? []), s]);
     }
-    default:
-      return null;
+    return [...by].flatMap(([db, list]) => db.chatHead(list, limit));
+  }
+
+  /// How many sidebar rows these stations have.
+  chatCount(stations: string[]): number {
+    const by = new Map<AccountDb, string[]>();
+    for (const s of stations) {
+      const db = this.of(s);
+      if (db) by.set(db, [...(by.get(db) ?? []), s]);
+    }
+    return [...by].reduce((n, [db, list]) => n + db.chatCount(list), 0);
+  }
+
+  /// The rows of these stations that ask something of their person or have something unread.
+  marked(stations: string[]): [string, any][] {
+    const by = new Map<AccountDb, string[]>();
+    for (const s of stations) {
+      const db = this.of(s);
+      if (!db) continue;
+      by.set(db, [...(by.get(db) ?? []), s]);
+    }
+    return [...by].flatMap(([db, list]) => db.marked(list));
+  }
+
+  /// The rows of these stations the 奏 page lists.
+  desk(stations: string[]): [string, any][] {
+    const by = new Map<AccountDb, string[]>();
+    for (const s of stations) {
+      const db = this.of(s);
+      if (db) by.set(db, [...(by.get(db) ?? []), s]);
+    }
+    return [...by].flatMap(([db, list]) => db.desk(list));
+  }
+
+  running(station: string): unknown[] {
+    return this.of(station)?.running(station) ?? [];
+  }
+
+  putSummary(station: string, summary: unknown): boolean {
+    return this.of(station)?.putSummary(station, summary) ?? false;
+  }
+
+  dropSession(station: string, key: string): void {
+    this.of(station)?.dropSession(station, key);
+  }
+
+  summary(station: string, key: string): unknown {
+    return this.of(station)?.summary(station, key);
+  }
+
+  detail(station: string, key: string): unknown {
+    return this.of(station)?.detail(station, key);
+  }
+
+  hasDetail(station: string, key: string): boolean {
+    return this.of(station)?.hasDetail(station, key) ?? false;
+  }
+
+  patchDetail(station: string, key: string, change: (detail: any) => void): void {
+    this.of(station)?.patchDetail(station, key, change);
+  }
+
+  sessionsToRead(station: string): [string, boolean][] {
+    return this.of(station)?.sessionsToRead(station) ?? [];
+  }
+
+  listedThread(station: string, id: number): any {
+    if (!Number.isInteger(id)) return undefined;
+    return this.of(station)?.listedThread(station, id);
+  }
+
+  listedSummary(station: string, key: string): unknown {
+    return this.of(station)?.listedSummary(station, key);
+  }
+
+  thread(station: string, id: number): unknown {
+    if (!Number.isInteger(id)) return undefined;
+    return this.of(station)?.thread(station, id);
+  }
+
+  threadOf(station: string, session: string): number | null {
+    return this.of(station)?.threadOf(station, session) ?? null;
+  }
+
+  threadIds(station: string): number[] {
+    return this.of(station)?.threadIds(station) ?? [];
+  }
+
+  threadLast(station: string, id: number): number {
+    if (!Number.isInteger(id)) return 0;
+    return this.of(station)?.threadLast(station, id) ?? 0;
+  }
+
+  putThread(station: string, view: unknown): void {
+    this.of(station)?.putThread(station, view);
+  }
+
+  dropThread(station: string, id: number): void {
+    this.of(station)?.dropThread(station, id);
+  }
+
+  unlistThread(station: string, id: number): void {
+    this.of(station)?.unlistThread(station, id);
+  }
+
+  raiseLast(station: string, id: number, n: number): void {
+    if (!Number.isInteger(id)) return;
+    this.of(station)?.raiseLast(station, id, n);
+  }
+
+  setRead(station: string, id: number, n: number): boolean {
+    if (!Number.isInteger(id)) return false;
+    return this.of(station)?.setRead(station, id, n) ?? false;
+  }
+
+  readPosition(station: string, id: number): number | null {
+    if (!Number.isInteger(id)) return null;
+    return this.of(station)?.readPosition(station, id) ?? null;
+  }
+
+  job(station: string, id: string): unknown {
+    return this.of(station)?.job(station, id);
+  }
+
+  putJob(station: string, job: unknown, open: boolean): boolean {
+    return this.of(station)?.putJob(station, job, open) ?? false;
+  }
+
+  // ── logs: a thread's entries, a session's transcript ──
+
+  logNumbers(table: "entry" | "transcript", station: string, id: string): number[] {
+    return this.of(station)?.logNumbers(table, station, id) ?? [];
+  }
+
+  logRange(table: "entry" | "transcript", station: string, id: string, from: number, to: number): Map<number, unknown> {
+    return this.of(station)?.logRange(table, station, id, from, to) ?? new Map();
+  }
+
+  logSpan(table: "entry" | "transcript", station: string, id: string): { min: number; max: number; count: number } | null {
+    return this.of(station)?.logSpan(table, station, id) ?? null;
+  }
+
+  logCount(table: "entry" | "transcript", station: string, id: string, from: number, to: number): number {
+    return this.of(station)?.logCount(table, station, id, from, to) ?? 0;
+  }
+
+  /// Items into a log, by number (an entry's `n`, a transcript item's index). `cutAfter`: nothing past it is kept.
+  putItems(table: "entry" | "transcript", station: string, id: string, items: [number, unknown][], cutAfter: number | null = null): void {
+    this.of(station)?.putLog(table, station, id, items, cutAfter);
+  }
+
+  forgetLog(table: "entry" | "transcript", station: string, id: string): void {
+    this.of(station)?.forgetLog(table, station, id);
+  }
+
+  /// What a host error is, as a note's detail.
+  static detail(e: unknown): string {
+    return e instanceof HostError || e instanceof Error ? e.message : String(e);
   }
 }

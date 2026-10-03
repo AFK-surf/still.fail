@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CoreError } from "../src/error.ts";
-import { Data } from "../src/data.ts";
+import { Effect } from "effect";
+import { Data, holds } from "../src/data.ts";
 import { apply as applyOps, type Op } from "../src/delta.ts";
 import * as format from "../src/format.ts";
 import { holdLanguage } from "../src/i18n.ts";
@@ -13,7 +14,7 @@ import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, down, shownMessage } from "../src/views/views.ts";
+import { Views, betaOffered, chatDerive, down, shownMessage } from "../src/views/views.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -27,6 +28,8 @@ class Router implements Source {
   started: Topic[] = [];
   stopped: Topic[] = [];
   computed = 0;
+  /// What the station topics say of a held topic whose read failed while nothing is held (station/topics.ts).
+  failed = new Map<string, CoreError>();
   start(topic: Topic): void {
     if (VIEWS.has(topic.topic)) this.views.start(topic);
     else this.started.push(topic);
@@ -36,6 +39,9 @@ class Router implements Source {
     else this.stopped.push(topic);
   }
   compute(topic: Topic): Value | undefined {
+    const failed = this.failed.get(topicKey(topic));
+    if (failed) return { err: failed };
+    if (!VIEWS.has(topic.topic)) return undefined;
     this.computed++;
     return this.views.compute(topic);
   }
@@ -49,13 +55,18 @@ function setup() {
   const runner = new Runner(host.time.clock);
   const store = new Store(host, runner);
   store.setShaped();
+  // What the stations hold is in the account's database (data.ts), as in a core: the test writes it there.
+  const data = new Data(host, runner, { owner: () => "s1", derive: chatDerive });
+  Effect.runSync(data.open(["s1"]));
+  store.setHeld((topic) => data.shared(topic), (topic) => data.release(topic));
+  data.onChange((topic) => store.changed(topic));
   const router = new Router();
   const beta = { on: false };
   const views = new Views({
     host,
     runner,
     store,
-    data: new Data(host, runner),
+    data,
     emailOf: (ws) => (ws === "ws" ? "Me@x.com" : null),
     betaOf: (ws) => ws === "ws" && beta.on,
     relayName: () => null,
@@ -64,6 +75,7 @@ function setup() {
   store.setSource(router);
   const t = {
     host,
+    data,
     store,
     router,
     views,
@@ -87,8 +99,22 @@ function setup() {
     async read(u: Ui, id: number) {
       await t.readAll([[u, id]]);
     },
-    set: (topic: Topic, value: unknown) => store.set(topic, { ok: value }),
-    fail: (topic: Topic, error: CoreError) => store.set(topic, { err: error }),
+    set: (topic: Topic, value: unknown) => {
+      router.failed.delete(topicKey(topic));
+      if (holds(topic)) data.set(topic, value);
+      else store.set(topic, { ok: value });
+    },
+    // A held topic's error shows while nothing is held of it (data.ts): what was held goes first, as the core has it
+    // go (a workspace gone, a session removed, a station's rows no longer reached); the station topics say why.
+    fail: (topic: Topic, error: CoreError) => {
+      if (!holds(topic)) return store.set(topic, { err: error });
+      if (topic.topic === "workspace") data.dropWorkspace(topic.workspace as string);
+      else if (topic.topic === "session") {
+        if (data.hasDetail(topic.station as string, topic.key as string)) data.dropSession(topic.station as string, topic.key as string);
+      } else data.retain((s) => s !== topic.station, null);
+      router.failed.set(topicKey(topic), error);
+      store.invalidate(topic);
+    },
     started: () => {
       const s = router.started;
       router.started = [];
@@ -687,10 +713,7 @@ test("a_chats_unread_is_a_mark_and_its_title_comes_from_what_was_said", async ()
   await t.read(u, 1);
   const rowsOf = () => u.value.days[0].items.map((i: J) => [i.id, i.title, i.unread]);
   assert.deepEqual(rowsOf(), [["1", "排查", true], ["2", "看看 这个", false]]);
-  t.store.update(rows("ws/st"), (list) => {
-    (list as J)[0].unread = false;
-    return list;
-  });
+  t.data.putChat("ws/st", { ...named, unread: false });
   await t.read(u, 1);
   assert.equal(rowsOf()[0][2], false);
 });
@@ -706,10 +729,7 @@ test("many_changes_are_one_computation_and_one_emission", async () => {
     t.set(link(st), { state: "online" });
     t.set(rows(st), [row("1", t.host.nowMs())]);
   }
-  t.store.update(rows("ws/a"), (v) => {
-    (v as J)[0].title = "改了";
-    return v;
-  });
+  t.data.putChat("ws/a", { ...row("1", t.host.nowMs()), title: "改了" });
   await t.read(u, 1);
   assert.equal(t.router.computed, computed + 1);
   assert.equal(u.messages, messages + 1);
@@ -904,8 +924,8 @@ test("a_chat_renamed_or_pinned_here_shows_so_at_once_and_as_its_station_has_it_o
   await t.read(list, 1);
   assert.equal(item("7").title, "新名字");
   assert.equal(item("8").pinned, true);
-  local.changed(pinning, false, t.views.ok(rows("ws/st")));
-  local.changed(renaming, true, t.views.ok(rows("ws/st")));
+  local.changed(pinning, false, t.data.rowsRev("ws/st"));
+  local.changed(renaming, true, t.data.rowsRev("ws/st"));
   await t.read(list, 1);
   assert.equal(item("7").title, "新名字");
   assert.notEqual(item("8").pinned, true);
@@ -1029,7 +1049,7 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   let v = u.value;
   assert.deepEqual([v.title, v.messages.length, v.more], ["排查（上次）", 2, true]);
   sameTopics(t.started(), [sessionOf("ws/a", "k"), sessionOf("ws/a", "j")]);
-  t.set(threads("ws/a"), [thread(3, ["k"], now), structuredClone(chat)]);
+  t.set(threads("ws/a"), [thread(3, ["x"], now), structuredClone(chat)]);
   await t.read(u, 1);
   assert.equal(u.value.title, "排查");
   const texts = Array.from({ length: 30 }, (_, i) => `第 ${i + 11} 条`);
@@ -1096,10 +1116,8 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   await t.read(u, 1);
   v = u.value;
   assert.deepEqual([v.messages[0].seq, v.messages.length, v.more], [1, 41, false]);
-  t.store.update(threads("ws/a"), (list) => {
-    (list as J)[1].sessions.push(member(7, "n", "ember"));
-    return list;
-  });
+  const seven = (t.data.thread("ws/a", 7) as J);
+  t.data.putThread("ws/a", { ...seven, sessions: [...seven.sessions, member(7, "n", "ember")] });
   await t.read(u, 1);
   sameTopics(t.started(), [sessionOf("ws/a", "n")]);
   t.set(sessionOf("ws/a", "n"), { session: fullSession("n", { connect: "ember" }), threads: [], turns: [] });

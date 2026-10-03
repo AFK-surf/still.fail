@@ -1,6 +1,6 @@
 // What differs per platform (host.rs), as Effects. The Node host (hosts/node.ts) implements it over fetch, the `ws`
-// package, node:sqlite and files; the web's over fetch, WebSocket and IndexedDB; Android's over OkHttp and SQLite
-// through JSI. Tests use testing.ts. Waiting is not the host's: the core sleeps on Effect's Clock.
+// package, node:sqlite and files; the web's over fetch, WebSocket, IndexedDB and SQLite's WASM build on OPFS;
+// Android's over the native shell (client/shell: reqwest, SQLite) through JSI. Tests use testing.ts. Waiting is not the host's: the core sleeps on Effect's Clock.
 //
 // What streams (a response's body, a WebSocket's frames) is a pull handle: `take` gives the next piece, null once it
 // ended, failing when it broke. It lives in the Scope it was opened in: closing that scope closes it.
@@ -37,11 +37,46 @@ export type StreamResponse = { status: number; headers: [string, string][]; body
 export const SOCKET_PING = "ping";
 export const SOCKET_PING_MS = 25_000;
 
-/// Keys `[from, to)` of one table of the core's database, in key order.
+/// Keys `[from, to)` of one table of the former records store (the KV `records` table, IndexedDB `records`), in key
+/// order: read once, when an account's database is first made (db/import.ts).
 export type DbRange = { table: string; from: string; to: string };
 
-/// One change to the core's database; a batch of them is written at once or not at all.
-export type DbOp = { put: { table: string; key: string; value: Uint8Array } } | { delete: { table: string; key: string } };
+/// A value SQLite takes and gives: no BigInt (integers stay within 2^53), text, bytes, null.
+export type SqlValue = null | number | string | Uint8Array;
+export type SqlRow = SqlValue[];
+
+/// One SQLite database, used synchronously by the core's thread (db/account.ts): the host prepares each statement once and
+/// keeps it. What fails throws a SqlError.
+export interface Sql {
+  /// Statements without parameters, one after another.
+  exec(sql: string): void;
+  /// One statement; how many rows it changed.
+  run(sql: string, params?: readonly SqlValue[]): number;
+  /// One statement's rows, each its columns in order.
+  all(sql: string, params?: readonly SqlValue[]): SqlRow[];
+  close(): void;
+}
+
+/// What SQLite said went wrong: `full` (no room left: the disk or the browser's quota), `busy` (another process holds
+/// the database), or anything else.
+export class SqlError extends Error {
+  readonly kind: "full" | "busy" | "other";
+  constructor(message: string, kind: "full" | "busy" | "other") {
+    super(message);
+    this.kind = kind;
+  }
+}
+
+/// SQLite's error as a SqlError, by its result code or its words.
+export function sqlError(e: unknown): SqlError {
+  if (e instanceof SqlError) return e;
+  const message = e instanceof Error ? e.message : String(e);
+  const code = typeof (e as { errcode?: unknown })?.errcode === "number" ? (e as { errcode: number }).errcode : typeof (e as { resultCode?: unknown })?.resultCode === "number" ? (e as { resultCode: number }).resultCode : null;
+  const primary = code === null ? null : code & 0xff;
+  if (primary === 13 || /SQLITE_FULL|database or disk is full|quota/i.test(message)) return new SqlError(message, "full");
+  if (primary === 5 || primary === 6 || /SQLITE_BUSY|SQLITE_LOCKED|database is locked/i.test(message)) return new SqlError(message, "busy");
+  return new SqlError(message, "other");
+}
 
 export interface Host {
   /// Where still.fail cloud is: the page's origin on the web, https://app.still.fail natively.
@@ -63,9 +98,18 @@ export interface Host {
   storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError>;
   storageDelete(key: string): Effect.Effect<void, HostError>;
 
-  /// The core's database: records by table and key. A host without one keeps nothing.
-  dbRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError>;
-  dbWrite(ops: DbOp[]): Effect.Effect<void, HostError>;
+  /// An account's SQLite database by name (`account-<sub>`), made empty if it is not there: one file per signed-in
+  /// account (docs/core-db.md). Fails when it cannot be opened, or another process holds it (`SqlError` "busy").
+  /// A host without one keeps nothing on the device.
+  openDb?(name: string): Effect.Effect<Sql, HostError | SqlError>;
+  /// A database in memory, for an account whose file cannot be opened (another process holds it): kept this run only
+  /// (undefined while the host cannot make one yet).
+  memoryDb?(): Sql | undefined;
+  /// An account's database gone (it signed out).
+  deleteDb?(name: string): Effect.Effect<void, HostError>;
+  /// The former records store (before the databases per account), read once to bring what it kept over; left as it
+  /// is, so an older core still finds it.
+  legacyRead?(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError>;
 
   /// Milliseconds since the Unix epoch.
   nowMs(): number;

@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect, Queue } from "effect";
+import { dbName } from "../src/data.ts";
 import { CoreError } from "../src/error.ts";
 import { encode, request } from "../src/ops.ts";
 import { StationAddr } from "../src/station/addr.ts";
@@ -784,7 +785,7 @@ test("a_removed_thread_and_a_removed_sessions_transcript_are_forgotten", async (
   push("live", { key: "k1", type: "timeline", start: 0, entries: ["a"], usage: {} });
   await host.settle();
   await run(core.inner.data.written);
-  const keys = (table: string) => host.dbKeys(table).filter((k) => k.includes("ws/st"));
+  const keys = (table: string) => host.rows(dbName("s1"), `SELECT * FROM ${table} WHERE station = 'ws/st'`);
   assert.ok(keys("entry").length > 0 && keys("transcript").length > 0);
   push("thread-removed", { id: 7 });
   push("session-removed", { key: "k1" });

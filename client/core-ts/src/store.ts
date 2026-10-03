@@ -98,6 +98,7 @@ export class Store {
   #windowOpen = false;
   #soon = false;
   #held: ((topic: Topic) => unknown) | null = null;
+  #release_: ((topic: Topic) => void) | null = null;
   #clock = false;
   #clockOn = false;
   #shaped = false;
@@ -111,9 +112,11 @@ export class Store {
     this.#source = source;
   }
 
-  /// Where the values of the data center's topics are read: they have no value of their own here.
-  setHeld(held: (topic: Topic) => unknown): void {
+  /// Where the values of the data's topics are read (data.ts): they have no value of their own here. `release` is told
+  /// when such a topic goes (what was loaded for it can go).
+  setHeld(held: (topic: Topic) => unknown, release?: (topic: Topic) => void): void {
     this.#held = held;
+    this.#release_ = release ?? null;
   }
 
   #heldValue(topic: Topic): unknown {
@@ -125,7 +128,7 @@ export class Store {
     if (this.#heldValue(topic) !== undefined) this.invalidate(topic);
   }
 
-  /// The data center changed a topic's value: it goes out, and whatever watches it hears now.
+  /// The data changed a topic's value: it goes out, and whatever watches it hears now.
   changed(topic: Topic): void {
     this.invalidate(topic);
     const entry = this.#topics.get(topicKey(topic));
@@ -328,8 +331,19 @@ export class Store {
     entry.emitScheduled = false;
     const stale = entry.stale;
     entry.stale = false;
+    const isHeld = this.#held !== null && holds(topic);
     let computed: Value | undefined;
     if (stale) {
+      if (isHeld && entry.subscribers.length === 0) {
+        // Only watched: who watches it reads what is held (and heard of its changes as they were made); what is read
+        // here is only what its source says when nothing is held (an error), so nothing is loaded for it.
+        const said = this.#source?.compute?.(topic);
+        const was = entry.value;
+        if (said === undefined ? was === undefined || !("err" in was) : sameValue(was, said)) return;
+        entry.value = said;
+        for (const [, w] of [...entry.watchers]) w();
+        return;
+      }
       const held = this.#heldValue(topic);
       computed = held !== undefined ? { ok: held } : this.#source?.compute?.(topic);
     }
@@ -337,8 +351,10 @@ export class Store {
     if (!now) return;
     let changed: (() => void)[] = [];
     if (computed !== undefined && !sameValue(now.value, computed)) {
+      // What is held tells its watchers as it changes (changed): only an error is news to them here.
+      const news = !isHeld || "err" in computed || (now.value !== undefined && "err" in now.value);
       now.value = computed;
-      changed = now.watchers.map(([, w]) => w);
+      if (news) changed = now.watchers.map(([, w]) => w);
     }
     if (now.value === undefined) return;
     const c: present.Clock = { now: this.host.nowMs(), offsetMin: this.host.utcOffsetMin(this.host.nowMs()) };
@@ -379,5 +395,6 @@ export class Store {
     // Gone before its source hears: what the source asks of the live topics then no longer has it.
     this.#topics.delete(topicKey(topic));
     this.#source?.stop(topic);
+    if (holds(topic)) this.#release_?.(topic);
   }
 }

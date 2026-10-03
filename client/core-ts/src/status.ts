@@ -63,6 +63,8 @@ export class Status {
   readonly #waits = new Map<number, Wait>();
   #received: [number, number][] = [];
   readonly #sockets = new Map<string, Down>();
+  /// What each account's database says (data.ts): no room, written by a newer core, held by another process.
+  #db = new Map<string, { kind: string; detail: string | null }>();
   #ticking = false;
   #changed: (() => void) | null = null;
   #nameOf: NameOf | null = null;
@@ -134,6 +136,12 @@ export class Status {
     this.#tick();
   }
 
+  /// What the accounts' databases say now (data.ts notes).
+  setDb(notes: Map<string, { kind: string; detail: string | null }>): void {
+    this.#db = new Map(notes);
+    this.changed();
+  }
+
   /// An account's events socket is open, or no longer wanted.
   socketUp(account: string): void {
     if (this.#sockets.delete(account)) this.changed();
@@ -169,6 +177,10 @@ export class Status {
   gather(take: Take, into: Gathered): void {
     const now = this.now();
     const wanted = (sub: string) => take === "all" || take.for.includes(sub);
+    for (const sub of [...this.#db.keys()].sort()) {
+      const note = this.#db.get(sub)!;
+      if (wanted(sub)) into.db.push(note);
+    }
     for (const sub of [...this.#sockets.keys()].sort()) {
       const d = this.#sockets.get(sub)!;
       if (wanted(sub) && now - d.since >= SLOW_MS) into.downs.push({ retryIn: d.retryAt - now, message: d.message, tries: d.tries });
@@ -186,13 +198,21 @@ export class Status {
 
 type Shown = { retryIn: number; message: string; tries: number };
 type Slow = { place: string | null; what: string; connecting: boolean; age: number; bytes: number };
-export type Gathered = { downs: Shown[]; slow: Slow[]; recent: number; window: number };
+export type Gathered = { downs: Shown[]; slow: Slow[]; recent: number; window: number; db: { kind: string; detail: string | null }[] };
 
 /// The `status` topic's value (StatusView) of these sets of waits.
 export function value(parts: [Status, Take][]): Record<string, unknown> {
-  const all: Gathered = { downs: [], slow: [], recent: 0, window: 0 };
+  const all: Gathered = { downs: [], slow: [], recent: 0, window: 0, db: [] };
   for (const [status, take] of parts) status.gather(take, all);
   const items: Record<string, unknown>[] = [];
+  // What is kept on the device first: it lasts until something is done about it.
+  const said = new Set<string>();
+  for (const note of all.db) {
+    if (said.has(note.kind)) continue;
+    said.add(note.kind);
+    const detail = note.kind === "failed" ? t("core-logic.status.db.failed.detail", { why: note.detail ?? "" }) : t(`core-logic.status.db.${note.kind}.detail`);
+    items.push({ state: "trouble", text: t(`core-logic.status.db.${note.kind}`, { brand: brand.name() }), detail });
+  }
   // The first of the smallest (Rust's min_by keeps the first of equals).
   let down: Shown | null = null;
   for (const d of all.downs) if (down === null || d.retryIn < down.retryIn) down = d;
@@ -218,9 +238,9 @@ export function value(parts: [Status, Take][]): Record<string, unknown> {
   if (items.length === 0) return { state: null, text: null, items: [] };
   const window = all.window > 0 ? all.window : RATE_WINDOW_MS;
   const rate = Math.trunc(all.recent / (window / 1000));
-  const state = down ? "trouble" : "slow";
+  const state = down || all.db.length > 0 ? "trouble" : "slow";
   let text = String(items[0].text);
-  if (slow.length > 0 && !down) text += ` · ${t("core-logic.status.seconds", { n: Math.floor(slow[0].age / 1000) })}`;
+  if (slow.length > 0 && !down && all.db.length === 0) text += ` · ${t("core-logic.status.seconds", { n: Math.floor(slow[0].age / 1000) })}`;
   if (items.length > 1) text += ` · ${t("core-logic.status.count", { n: items.length })}`;
   if (slow.length > 0 && rate > 0) text += ` · ${size(rate)}/s`;
   return { state, text, items };

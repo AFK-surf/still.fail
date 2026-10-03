@@ -8,7 +8,7 @@
 // connections suspect, not gone. WakingHost does the first two for everything that goes through the host.
 import { Deferred, Effect, Scope } from "effect";
 import { HostError } from "./error.ts";
-import type { DbOp, DbRange, Host, HttpRequest, HttpResponse, Pull, StreamResponse } from "./host.ts";
+import type { Host, HttpRequest, HttpResponse, Pull, StreamResponse } from "./host.ts";
 import type { ClientId, CoreMessage } from "./protocol.ts";
 import { DROPPED, GONE, NETWORK } from "./wake-words.ts";
 
@@ -149,11 +149,20 @@ export class WakingHost implements Host {
   readonly wakes: Wakes;
 
   readonly tcp?: Host["tcp"];
+  readonly openDb?: Host["openDb"];
+  readonly memoryDb?: Host["memoryDb"];
+  readonly deleteDb?: Host["deleteDb"];
+  readonly legacyRead?: Host["legacyRead"];
 
   constructor(inner: Host, wakes: Wakes) {
     this.inner = inner;
     this.wakes = wakes;
     if (inner.tcp) this.tcp = (port) => inner.tcp!(port);
+    // The databases are the device's: nothing of them waits on a UI coming back.
+    if (inner.openDb) this.openDb = (name) => inner.openDb!(name);
+    if (inner.memoryDb) this.memoryDb = () => inner.memoryDb!();
+    if (inner.deleteDb) this.deleteDb = (name) => inner.deleteDb!(name);
+    if (inner.legacyRead) this.legacyRead = (range) => inner.legacyRead!(range);
   }
 
   cloudOrigin(): string {
@@ -193,12 +202,7 @@ export class WakingHost implements Host {
   storageDelete(key: string) {
     return this.inner.storageDelete(key);
   }
-  dbRead(range: DbRange) {
-    return this.inner.dbRead(range);
-  }
-  dbWrite(ops: DbOp[]) {
-    return this.inner.dbWrite(ops);
-  }
+
   nowMs(): number {
     return this.inner.nowMs();
   }
