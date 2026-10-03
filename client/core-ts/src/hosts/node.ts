@@ -299,16 +299,22 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
   const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener);
   const clients = new Set<number>();
   let dead = false;
+  let running: Core | null = null;
   const fatal = (error: unknown) => {
     if (dead) return;
     dead = true;
     console.error("still.fail core:", error);
+    // Its databases are let go before its clients hear: the core that follows in this process opens them (one
+    // connection at a time: locking_mode EXCLUSIVE).
+    running?.close();
+    host.close();
     const said = JSON.stringify({ fatal: t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }) });
     for (const client of clients) listener(client, said);
     void ready.then((core) => core.close(), () => {});
   };
   // Messages that arrive while the core starts wait, in order (as the Rust core's queue did).
   const ready = Core.create(host, options.hostWire ? { iroh: null, wire: () => new HostWire(host) } : { iroh: nodeIroh() }).then((core) => {
+    running = core;
     core.inner.runner.onDefect = fatal;
     core.keepTime();
     return core;
