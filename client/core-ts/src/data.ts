@@ -45,6 +45,8 @@ const TABLES = [
   "login_sessions",
   "admin",
   "pending",
+  "first",
+  "changing",
 ];
 
 export function join(parts: (string | number)[]): string {
@@ -371,6 +373,9 @@ export class Data {
         case "job":
         case "slack_app":
         case "outbox":
+        case "pending":
+        case "first":
+        case "changing":
         case "entry":
         case "transcript":
           return at >= 0 ? key.slice(0, at) : null;
