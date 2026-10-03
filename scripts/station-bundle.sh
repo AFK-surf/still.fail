@@ -33,8 +33,8 @@ if [ "${STILLFAIL_STATION:-}" = ts ]; then
   cache="${STATION_TS_TARGET_DIR:-$HOME/Library/Caches/stillfail-build/station-ts}/node"
   mkdir -p "$cache"
   if [ ! -x "$cache/$node_dist/bin/node" ]; then
-    curl -fsSL "https://nodejs.org/dist/v$NODE_VERSION/$node_dist.tar.gz" -o "$cache/$node_dist.tar.gz"
-    curl -fsSL "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt" -o "$cache/SHASUMS256-$NODE_VERSION.txt"
+    curl -fsSL --retry 5 --retry-all-errors "https://nodejs.org/dist/v$NODE_VERSION/$node_dist.tar.gz" -o "$cache/$node_dist.tar.gz"
+    curl -fsSL --retry 5 --retry-all-errors "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt" -o "$cache/SHASUMS256-$NODE_VERSION.txt"
     want=$(grep " $node_dist.tar.gz\$" "$cache/SHASUMS256-$NODE_VERSION.txt" | cut -d' ' -f1)
     got=$(shasum -a 256 "$cache/$node_dist.tar.gz" | cut -d' ' -f1)
     [ -n "$want" ] && [ "$want" = "$got" ] || { echo "$node_dist.tar.gz: checksum does not match" >&2; exit 1; }
