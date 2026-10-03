@@ -1,8 +1,9 @@
 //! The native shell of the core in TypeScript on Android (client/core-ts `hosts/bridge.ts`; apps/android/core runs it
 //! in Hermes from C++): everything the core asks of its host that a JS engine has not, done on tokio's threads and on
 //! a thread for the disk, and answered through a C callback. What it does is what the Rust core's native host (client/ffi) did (reqwest,
-//! tokio-tungstenite, a file per storage key and `core.db` in the data directory, TCP to adbd) and what the station's
-//! addon does for Node (iroh), so a phone moving from the Rust core keeps its sign-in and what it had read.
+//! tokio-tungstenite, a file per storage key in the data directory, TCP to adbd) and what the station's addon does for
+//! Node (iroh), so a phone moving from the Rust core keeps its sign-in. Each signed-in account's database is SQLite,
+//! `accounts/<name>.db`, used synchronously by the core's thread (`sql.*`); the former `core.db` is only read, once.
 //!
 //! Operations are named and take JSON and maybe bytes; bridge.ts lists them. `sf_shell_call` answers later through
 //! `complete(ctx, id, json, error, bytes)` from any thread; `sf_shell_call_sync` answers at once.
@@ -88,6 +89,8 @@ struct Inner {
     http: Mutex<reqwest::Client>,
     handles: Mutex<HashMap<u64, Handle>>,
     next: AtomicU64,
+    /// The accounts' databases open, by id, with their files.
+    sqls: Mutex<HashMap<u64, (Option<PathBuf>, rusqlite::Connection)>>,
 }
 
 pub struct Shell {
@@ -113,6 +116,26 @@ fn open_db(handle: &mut DbHandle) -> Result<&mut rusqlite::Connection, String> {
         handle.conn = Some(conn);
     }
     Ok(handle.conn.as_mut().expect("opened above"))
+}
+
+/// A statement's parameters as SQLite takes them: numbers (whole ones as integers), text, null; bytes as an array.
+fn sql_params(a: &Value) -> Vec<rusqlite::types::Value> {
+    use rusqlite::types::Value as V;
+    a.get("params")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .map(|v| match v {
+                    Value::Null => V::Null,
+                    Value::Bool(b) => V::Integer(i64::from(*b)),
+                    Value::Number(n) => n.as_i64().map(V::Integer).unwrap_or_else(|| V::Real(n.as_f64().unwrap_or(0.0))),
+                    Value::String(s) => V::Text(s.clone()),
+                    Value::Array(bytes) => V::Blob(bytes.iter().map(|b| b.as_u64().unwrap_or(0) as u8).collect()),
+                    Value::Object(_) => V::Text(v.to_string()),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn tls_config() -> rustls::ClientConfig {
@@ -345,30 +368,6 @@ impl Inner {
                 })
                 .await
             }
-            "db.write" => {
-                let ops = a.get("ops").and_then(Value::as_array).cloned().unwrap_or_default();
-                let values = bytes.unwrap_or_default();
-                let db = self.db.clone();
-                self.disk(move || {
-                    let mut guard = db.lock().map_err(|_| "the database is gone".to_string())?;
-                    let conn = open_db(&mut guard)?;
-                    let tx = conn.transaction().map_err(err)?;
-                    let mut at = 0usize;
-                    for op in ops {
-                        if let Some(put) = op.get("put") {
-                            let size = put.get("size").and_then(Value::as_u64).unwrap_or(0) as usize;
-                            let value = values.get(at..at + size).ok_or("the values are short")?.to_vec();
-                            at += size;
-                            tx.execute("INSERT OR REPLACE INTO records (tbl, key, value) VALUES (?1, ?2, ?3)", rusqlite::params![str_of(put, "table")?, str_of(put, "key")?, value]).map_err(err)?;
-                        } else if let Some(delete) = op.get("delete") {
-                            tx.execute("DELETE FROM records WHERE tbl = ?1 AND key = ?2", rusqlite::params![str_of(delete, "table")?, str_of(delete, "key")?]).map_err(err)?;
-                        }
-                    }
-                    tx.commit().map_err(err)?;
-                    Ok(Answer::json(json!({})))
-                })
-                .await
-            }
             "tcp.open" => {
                 let port = a.get("port").and_then(Value::as_u64).ok_or("missing port")? as u16;
                 let stream = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.map_err(err)?;
@@ -584,6 +583,88 @@ impl Inner {
         Ok(Answer::json(json!({ "id": self.keep(Handle::Endpoint(endpoint)) })))
     }
 
+    /// An account's database: opened, a statement run, its rows, closed, its file removed.
+    fn sql(&self, op: &str, a: &Value) -> Result<Value, String> {
+        let mut sqls = self.sqls.lock().map_err(|_| "the databases are gone".to_string())?;
+        match op {
+            "sql.open" => {
+                let name = str_of(a, "name")?;
+                let (path, conn) = if name == ":memory:" {
+                    (None, rusqlite::Connection::open_in_memory().map_err(err)?)
+                } else {
+                    if name.contains('/') || name.contains('\\') || name.starts_with('.') {
+                        return Err(format!("not a database name: {name}"));
+                    }
+                    let dir = self.dir.join("accounts");
+                    std::fs::create_dir_all(&dir).map_err(err)?;
+                    let path = dir.join(format!("{name}.db"));
+                    (Some(path.clone()), rusqlite::Connection::open(&path).map_err(err)?)
+                };
+                conn.busy_timeout(std::time::Duration::from_secs(5)).map_err(err)?;
+                conn.set_prepared_statement_cache_capacity(256);
+                // One process at a time: another one finds it busy.
+                conn.execute_batch("PRAGMA locking_mode = EXCLUSIVE; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;").map_err(err)?;
+                let id = self.next.fetch_add(1, Ordering::Relaxed);
+                sqls.insert(id, (path, conn));
+                Ok(json!({ "id": id }))
+            }
+            "sql.delete" => {
+                let name = str_of(a, "name")?;
+                let path = self.dir.join("accounts").join(format!("{name}.db"));
+                sqls.retain(|_, (p, _)| p.as_ref() != Some(&path));
+                for end in ["", "-wal", "-shm", "-journal"] {
+                    let file = PathBuf::from(format!("{}{end}", path.display()));
+                    match std::fs::remove_file(&file) {
+                        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(err(e)),
+                        _ => {}
+                    }
+                }
+                Ok(Value::Null)
+            }
+            _ => {
+                let id = id_of(a)?;
+                if op == "sql.close" {
+                    sqls.remove(&id);
+                    return Ok(Value::Null);
+                }
+                let (_, conn) = sqls.get(&id).ok_or_else(|| format!("no database {id}"))?;
+                let sql = str_of(a, "sql")?;
+                match op {
+                    "sql.exec" => {
+                        conn.execute_batch(sql).map_err(err)?;
+                        Ok(Value::Null)
+                    }
+                    "sql.run" => {
+                        let mut statement = conn.prepare_cached(sql).map_err(err)?;
+                        let n = statement.execute(rusqlite::params_from_iter(sql_params(a))).map_err(err)?;
+                        Ok(json!(n))
+                    }
+                    "sql.all" => {
+                        let mut statement = conn.prepare_cached(sql).map_err(err)?;
+                        let columns = statement.column_count();
+                        let mut rows = statement.query(rusqlite::params_from_iter(sql_params(a))).map_err(err)?;
+                        let mut out = Vec::new();
+                        while let Some(row) = rows.next().map_err(err)? {
+                            let mut values = Vec::with_capacity(columns);
+                            for i in 0..columns {
+                                values.push(match row.get_ref(i).map_err(err)? {
+                                    rusqlite::types::ValueRef::Null => Value::Null,
+                                    rusqlite::types::ValueRef::Integer(v) => json!(v),
+                                    rusqlite::types::ValueRef::Real(v) => json!(v),
+                                    rusqlite::types::ValueRef::Text(v) => Value::String(String::from_utf8_lossy(v).into_owned()),
+                                    rusqlite::types::ValueRef::Blob(v) => Value::Array(v.iter().map(|b| json!(b)).collect()),
+                                });
+                            }
+                            out.push(Value::Array(values));
+                        }
+                        Ok(Value::Array(out))
+                    }
+                    _ => Err(format!("no operation {op}")),
+                }
+            }
+        }
+    }
+
     fn run_sync(&self, op: &str, a: &Value) -> Result<Value, String> {
         let handle = self.handle(id_of(a)?)?;
         match (op, handle) {
@@ -630,7 +711,7 @@ impl Shell {
         let tls = Arc::new(tls_config());
         let http = Mutex::new(http_client(&tls));
         let db = Arc::new(Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
-        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, handles: Mutex::default(), next: AtomicU64::new(1) });
+        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default() });
         Ok(Shell { runtime, inner })
     }
 
@@ -653,7 +734,8 @@ impl Shell {
 
     pub fn call_sync(&self, op: &str, json: &[u8]) -> Vec<u8> {
         let args: Value = serde_json::from_slice(json).unwrap_or(Value::Null);
-        let out = match self.inner.run_sync(op, &args) {
+        let done = if op.starts_with("sql.") { self.inner.sql(op, &args) } else { self.inner.run_sync(op, &args) };
+        let out = match done {
             Ok(value) => json!({ "value": value }),
             Err(error) => json!({ "error": error }),
         };
@@ -776,9 +858,14 @@ mod tests {
         assert_eq!(answer(2).2, Some(vec![1, 2, 3]));
         shell.call(3, "storage.get".into(), br#"{"key":"a/b"}"#, None);
         assert_eq!(answer(3).0, r#"{"none":true}"#);
-        let ops = r#"{"ops":[{"put":{"table":"row","key":"s\u0001a","size":1}},{"put":{"table":"row","key":"s\u0001b","size":2}},{"put":{"table":"row","key":"t\u0001a","size":0}}]}"#;
-        shell.call(4, "db.write".into(), ops.as_bytes(), Some(b"122".to_vec()));
-        assert_eq!(answer(4).1, "");
+        // The former records store, as client/ffi wrote it: read only.
+        {
+            let conn = rusqlite::Connection::open(dir.path().join("core.db")).unwrap();
+            conn.execute_batch("CREATE TABLE records (tbl TEXT NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (tbl, key)) WITHOUT ROWID;").unwrap();
+            for (k, v) in [("s\u{1}a", b"1".to_vec()), ("s\u{1}b", b"22".to_vec()), ("t\u{1}a", Vec::new())] {
+                conn.execute("INSERT INTO records (tbl, key, value) VALUES ('row', ?1, ?2)", rusqlite::params![k, v]).unwrap();
+            }
+        }
         shell.call(5, "db.read".into(), "{\"table\":\"row\",\"from\":\"s\\u0001\",\"to\":\"s\\u0002\"}".as_bytes(), None);
         let (json, _, bytes) = answer(5);
         assert_eq!(json, "{\"keys\":[\"s\\u0001a\",\"s\\u0001b\"],\"sizes\":[1,2]}");
@@ -786,5 +873,28 @@ mod tests {
         assert!(dir.path().join("core.db").exists());
         let out = shell.call_sync("conn.remoteId", br#"{"id":999}"#);
         assert_eq!(String::from_utf8(out).unwrap(), r#"{"error":"no handle 999"}"#);
+    }
+
+    #[test]
+    fn keeps_an_accounts_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
+        let id = sync("sql.open", r#"{"name":"account-a"}"#)["value"]["id"].as_u64().unwrap();
+        assert!(dir.path().join("accounts/account-a.db").exists());
+        assert_eq!(sync("sql.exec", &format!(r#"{{"id":{id},"sql":"CREATE TABLE t (k TEXT PRIMARY KEY, n INTEGER, x REAL, j TEXT)"}}"#))["value"], Value::Null);
+        assert_eq!(sync("sql.run", &format!(r#"{{"id":{id},"sql":"INSERT INTO t VALUES (?, ?, ?, ?)","params":["a",1,1.5,"{{\"x\":\"中\"}}"]}}"#))["value"], json!(1));
+        assert_eq!(sync("sql.run", &format!(r#"{{"id":{id},"sql":"INSERT INTO t VALUES (?, ?, ?, ?)","params":["b",null,null,null]}}"#))["value"], json!(1));
+        let rows = sync("sql.all", &format!(r#"{{"id":{id},"sql":"SELECT k, n, x, j FROM t ORDER BY k","params":[]}}"#));
+        assert_eq!(rows["value"], json!([["a", 1, 1.5, "{\"x\":\"中\"}"], ["b", null, null, null]]));
+        let bad = sync("sql.run", &format!(r#"{{"id":{id},"sql":"INSERT INTO t VALUES (?, 1, 1, 1)","params":["a"]}}"#));
+        assert!(bad["error"].as_str().unwrap().contains("UNIQUE"));
+        assert_eq!(sync("sql.close", &format!(r#"{{"id":{id}}}"#))["value"], Value::Null);
+        assert!(sync("sql.all", &format!(r#"{{"id":{id},"sql":"SELECT 1"}}"#))["error"].is_string());
+        assert_eq!(sync("sql.delete", r#"{"name":"account-a"}"#)["value"], Value::Null);
+        assert!(!dir.path().join("accounts/account-a.db").exists());
+        assert!(sync("sql.open", r#"{"name":"../x"}"#)["error"].is_string());
+        let memory = sync("sql.open", r#"{"name":":memory:"}"#)["value"]["id"].as_u64().unwrap();
+        assert_eq!(sync("sql.all", &format!(r#"{{"id":{memory},"sql":"SELECT 2"}}"#))["value"], json!([[2]]));
     }
 }
