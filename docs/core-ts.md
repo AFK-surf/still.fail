@@ -118,6 +118,14 @@ Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」�
 - 规则 3：消息 entries、transcript、已读位置、outbox 在 TS 里是 `core.db` 的记录（新表），不再用 kept.rs 的 storage 分块；
   第一次启动时把 Rust 留下的 kept 分块导入成记录（老数据不丢），之后不再写 kept 分块（退回 Rust 时它会从 station 重新读）。
 - 规则 3：每条记录带「最后确认时间」（新表 `confirmed`，键 `<表>␁<键>`），Rust 没有。
+- 规则 3、4：发送中的消息（outbox）、在这里建的 chat（pending）、发给还没有 chat 的 agent 的消息（first）、改名/置顶/
+  保留/归档的覆盖层（changing）都是 `core.db` 的记录（表 `outbox`、`pending`、`first`、`changing`），重启后还在；没回答的
+  发送用同一个 idempotency key 重发、没建完的 chat 重新请求（Rust 这些都只在内存里，重启就丢）。没回答的覆盖层在重启时
+  按「被拒」撤掉（它的回答不会再来），station 的行随后会说明到底改没改。
+- 规则 6：一个 profile 自 station 启动后没检查过时，Rust 在算「新 chat」页面时顺手发 `profile.check`；TS 在 overview 记录
+  进来时由同步发（每次运行每个 profile 一次），和页面开没开无关。
+- 规则 6：更新日志（`changelog`）Rust 在页面打开时读（一小时最多一次）；TS 在 core 启动和每次账号的 events socket 打开时
+  由同步读，页面只读记录。
 
 ## 进度与交接（随做随更新）
 
@@ -142,11 +150,35 @@ cloud 的端口、`doing` 的 `since`。
 
 已完成（2026-10-03 按设计规则重写后）：
 - 地基全换成 Effect：Host、Runner（scope + FiberSet）、Store 的发送窗口和回收、Data 的单写 fiber 和新表（`confirmed`、
-  `entry`、`transcript`、`outbox` 等）、Accounts（刷新用 Deferred 单飞）、Cloud、Status、Trace、wake（hedge/drop 用
-  race）、call 的执行（可取消的 call 是可 interrupt 的 fiber）。
+  `entry`、`transcript`、`outbox`、`pending`、`first`、`changing` 等）、Accounts（刷新用 Deferred 单飞）、Cloud、Status、
+  Trace、wake（hedge/drop 用 race）、call 的执行（可取消的 call 是可 interrupt 的 fiber）。
 - 同步调度器 `src/sync/scheduler.ts`（按 lane 限并发、按 key 去重、按优先级取，UI 只能 `prioritize`）和 cloud 同步
   `src/sync/cloud.ts`（socket、/v1/me、workspace、登录设备、运营列表）。订阅只读记录（`core/routing.ts`）。
-- 对照运行：44 步里 42 步一致，2 步是规则 6 带来的刻意不同（见上），最终 UI 状态完全一致。测试 79 个通过。
+- station 同步 `src/station/sync.ts`：workspace 能到就建链路，events 流每次打开都把 station 整个读一遍（交给调度器），
+  事件更新记录；thread 的 entries 和 transcript 是日志记录（按需从库里懒加载），整段从最新页往前补全；写操作用
+  `afterWrite` 只读它影响的记录。station 话题 `src/station/topics.ts` 只读记录（thread 窗口、live、net 采样、place）。
+- 文字和显示：`present.ts`、`decisions.ts`、`jobs.ts`、`footprint.ts`、`looks.ts`、`history.ts`、`refs.ts`、`notices.ts`、
+  `attend.ts`、`pill.ts`、`changelog.ts`、`asks.ts`、`preview-load.ts`、`format.ts`。
+- 视图 `src/views/`：chats/chatSearch/chat/stations/connects/decisions/history/archive/workspaceMarks/chatJobs/longJobs/
+  usage/admin*，覆盖层 `views/local.ts`（outbox、pending、first、changing、archiving 全是记录），改 chat 的 call
+  `views/calls.ts`（发送、建 chat、回答卡片、改名置顶归档，启动时把没做完的接着做）。
+- 选择（newChat/pick，`choose.ts`）、表单（自动决策、Slack token、连接向导、加 profile，`forms.ts`）、注意力和通知
+  （`attention.ts`）、推送注册。
+- mesh（`src/mesh.ts`，对应 mesh.rs + station/wire.rs 的 MeshWire）：凭据握手和续期、共享 opening、UI 回来时 race/hedge、
+  relay 测速和换路、当日流量；iroh 由 host 给（`src/iroh.ts`）。Node 用 station 的 napi 插件（`station/native/mesh`，
+  已为客户端加了：不广播的 lookup、只走 relay 的 endpoint、附加 ALPN、paths/rtt/stats、单向流、关闭原因、网络变化、
+  relay 状态、已知地址）。`test/mesh.test.ts` 在 studio 上起本机 station 端点实测（10 个）。
+- 移植的 Rust 测试：present、decisions、jobs、footprint、looks、refs、history、views（43）、usage、admin、notices、attend、
+  pill、choose、changelog、asks、forms、preview_load、mesh 的大部分；合计 249 个测试通过（`node --test --test-force-exit`）。
+
+还没做（接手从这里开始）：
+- adb 共享（`adb.rs`）：需要 host 给 TCP（Node 有 `net`），link 的 `adb`/`accept` 已经有了。
+- `kept.rs` 的导入：第一次启动把 Rust 的 kept 分块（storage `kept/…`）读出来写成 `entry`/`transcript` 记录。
+- 剩下的 Rust 测试：`core/tests.rs`（56）、`station/tests.rs`（45）、`kept.rs`、`data.rs`、`sync.rs`、`account_state`、
+  mesh 里要 relay 服务器的几个。
+- 规则 7（按 key 的增量）：`src/collections.ts`、Store 支持 `keyed`、web 和安卓的 delta 应用器、2000 行的对比测量。
+- host：桌面 utilityProcess 换成 `src/hosts/node.ts`；web worker host + 只含 iroh 的 wasm；安卓 Hermes + JNI iroh。
+- 对照运行加上 station（假 station 走 HostWire）的步骤，更新刻意不同的清单。
 
 此前（第一版，照 Rust 写的，已被上面取代）：
 1. 第 1 期（2026-10-03）：协议、Host、Store/delta、data center、accounts、cloud、status、workspace、wake、trace、ops、
