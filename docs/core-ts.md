@@ -200,13 +200,19 @@ cloud 的端口、`doing` 的 `since`。
   pill、choose、changelog、asks、forms、preview_load、mesh 的大部分；合计 252 个测试通过（`node --test --test-force-exit`）。
 - adb 共享（`src/adb.ts`，host 给 TCP：Node 用 `net`）；Rust kept 分块的一次性导入（`src/kept.ts`，存储标记 `kept-read`，
   原分块不删，退回 Rust 仍可用）。
+- 桌面：`apps/desktop` 的 utilityProcess 跑 TS core（`build.sh` 把 `src/hosts/node.ts` 打成 `build/app/core-ts.js`，iroh 用
+  `station/native/mesh` 的插件，作 `mesh.node` 放进 Resources；`core.ts` 只换了加载方式，fatal/重启照旧）。Node host 的
+  storage 改成异步、按顺序的文件操作；一个 fiber 出 bug 等同 Rust 的 panic：每个 client 收到 `{"fatal": …}`，桌面起新的。
+  验证（studio）：`DEV=1 SKIP_WEB=1 SKIP_STATION=1 sh apps/desktop/build.sh` 通过；Electron 44.4.5（Node 24.21）里
+  utilityProcess + MessagePort 跑通订阅和调用、`core.db` 写入；`node harness/handover.ts <Rust addon>`：Rust 写的目录 TS
+  打开、TS 写的目录 Rust 打开，账号/workspace/偏好/草稿都一样。
 - 规则 7：按 key 的增量（`src/collections.ts`、`src/output.ts`、Data 冻结记录 + `shared()`、视图按记录复用行）、web 和安卓
   应用器、安卓 `ChatsDecoder`、2000 行测量（见上面「按 key 的增量」）。
 
 还没做（接手从这里开始）：
 - 剩下的 Rust 测试：`core/tests.rs`（56）、`station/tests.rs`（45）、`kept.rs`、`data.rs`、`sync.rs`、`account_state`、
   mesh 里要 relay 服务器的几个。
-- host：桌面 utilityProcess 换成 `src/hosts/node.ts`；web worker host + 只含 iroh 的 wasm；安卓 Hermes + JNI iroh。
+- host：web worker host + 只含 iroh 的 wasm；安卓 Hermes + JNI iroh。
 - 对照运行加上 station（假 station 走 HostWire）的步骤，更新刻意不同的清单。
 
 此前（第一版，照 Rust 写的，已被上面取代）：

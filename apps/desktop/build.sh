@@ -5,11 +5,12 @@
 # .dat, the web app's assets, which the app's own signature seals anyway); signing each, with Apple's timestamp, made a
 # release take some fifty minutes.
 # Into out/mac-arm64/still.fail.app:
-# the core (client/node) as build/stillfail_core.node, the web app (`pnpm run
+# the core (client/core-ts, bundled as build/app/core-ts.js) with its iroh (station/native/mesh's addon) as
+# build/mesh.node, the web app (`pnpm run
 # build:cloud`, dist/cloud-web) as build/web, a
 # station (scripts/station-bundle.sh) as build/station, the app's own code as
 # build/app, then electron-builder puts them together.
-# CARGO_TARGET_DIR is honoured. SKIP_WEB=1 takes dist/cloud-web and dist/admin as they are. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops at build/: no packing, no
+# CARGO_TARGET_DIR is honoured (for the mesh addon). SKIP_WEB=1 takes dist/cloud-web and dist/admin as they are. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops at build/: no packing, no
 # signing, for Electron's own app to run as it is (dev.sh).
 # UNSIGNED=1 makes either channel's package without the maintainer's signing certificate, for local testing.
 # Packed, the app is also zipped (stillfail-<version>-arm64-mac.zip) with stillfail-mac.yml beside it in out/: what
@@ -26,8 +27,9 @@ beta=${BETA:-}
 export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/Library/pnpm:$HOME/.local/node-v24.15.0-darwin-arm64/bin:$PATH"
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
-target=${CARGO_TARGET_DIR:-$root/client/target}
-(cd "$root/client" && cargo build -p stillfail-core-node --release --target aarch64-apple-darwin)
+target=${CARGO_TARGET_DIR:-$root/station/native/mesh/target}
+(cd "$root/station/native/mesh" && CARGO_TARGET_DIR="$target" cargo build --release --target aarch64-apple-darwin)
+(cd "$root/client/core-ts" && pnpm install --frozen-lockfile --silent)
 # The web app carries PostHog when its key is at hand (docs/telemetry.md), as the cloud's does.
 deploy="$HOME/stillfail-deploy"; [ -d "$deploy" ] || deploy="$HOME/ember-deploy"
 posthog="$deploy/posthog.json"
@@ -39,7 +41,7 @@ posthog="$deploy/posthog.json"
 rm -rf "$here/build" "$here/out"
 mkdir -p "$here/build/station"
 [ -n "${SKIP_STATION:-}" ] || sh "$root/scripts/station-bundle.sh" "$here/build/station"
-cp "$target/aarch64-apple-darwin/release/libstillfail_core_node.dylib" "$here/build/stillfail_core.node"
+cp "$target/aarch64-apple-darwin/release/libstillfail_mesh.dylib" "$here/build/mesh.node"
 rsync -a "$root/dist/cloud-web/" "$here/build/web/"
 cd "$here"
 # electron-builder packs the Electron that electron's install script fetches (pnpm may have skipped it).
@@ -47,6 +49,9 @@ cd "$here"
 pnpm exec esbuild src/main.ts src/core.ts src/preload.ts --bundle --platform=node --format=cjs --external:electron --outdir=build/app --log-level=warning \
   ${beta:+--define:process.env.STILLFAIL_CHANNEL='"beta"'}
 # The page marking in a preview's frame (web/src/annotate/frame.ts), which main.ts serves as its /_ember/annotate.js.
+# The core: client/core-ts's Node host, required by core.js (its addon and ws's optional natives are not bundled).
+pnpm exec esbuild "$root/client/core-ts/src/hosts/node.ts" --bundle --platform=node --format=cjs --target=node22 --outfile=build/app/core-ts.js \
+  --external:electron --external:bufferutil --external:utf-8-validate --log-level=error
 pnpm exec esbuild "$root/web/src/annotate/frame.ts" --bundle --format=iife --minify --outfile=build/app/annotate.js --log-level=warning
 [ -z "${DEV:-}" ] || { echo "$here/build"; exit 0; }
 version="0.1.$(git -C "$root" rev-list --count HEAD)"

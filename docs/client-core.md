@@ -7,7 +7,7 @@ one Rust crate, `stillfail-core`, shared by every client:
 | Client | Where the core runs | Binding |
 | --- | --- | --- |
 | Web (app.still.fail) | a SharedWorker (a dedicated Worker where SharedWorker is missing, e.g. Chrome on Android) | `client/wasm` (wasm-bindgen) |
-| Desktop (Electron) | a `utilityProcess` | `client/node` (napi-rs) over `client/ffi` |
+| Desktop (Electron) | a `utilityProcess` | `client/core-ts` on Node (`src/hosts/node.ts`), iroh from the station's `mesh.node` addon (docs/core-ts.md) |
 | Android (iOS later) | a core thread in the app | `client/ffi` (uniffi) |
 
 The UI never talks to still.fail cloud or a station itself. It sends **calls** and
@@ -507,11 +507,13 @@ build (`pnpm run build:cloud`'s `dist/cloud-web`, bundled into the app) from
 `app://ember`, served as still.fail cloud serves it (a file, else `index.html`).
 Nothing in the pages differs but the host underneath:
 
-- The core runs in a `utilityProcess` (`src/core.ts`) through `client/node`,
-  a thin napi-rs layer over `client/ffi` (the same core thread and host; the
-  listener is a JS function on Node's thread), with its data in the app's
-  `userData/core`. Its iroh endpoint is the full native one, so links go
-  direct once the relay has introduced both sides.
+- The core runs in a `utilityProcess` (`src/core.ts`): the TypeScript core
+  (`client/core-ts`, its Node host bundled as `core-ts.js`; docs/core-ts.md),
+  with its data in the app's `userData/core` (the same files and `core.db` the
+  Rust core of `client/node` kept, so an update keeps the sign-in and what was
+  read, and going back to it does too). Its iroh endpoint is the full native one
+  (the station's napi addon, `mesh.node`), so links go direct once the relay has
+  introduced both sides.
 - A page asks the main process for a channel (`emberDesktop.openCore`, from
   the preload): a `MessageChannelMain` whose one end goes to the core and the
   other to the page, as a window message (a port cannot cross the context

@@ -1,7 +1,7 @@
 // still.fail's desktop app: the web app (`pnpm run build:cloud`'s dist/cloud-web)
 // in a window, with its client core in a utility process instead of the
 // browser's SharedWorker (docs/client-core.md). Only the host is different:
-// the page is served from app://ember, the core runs natively (client/node,
+// the page is served from app://ember, the core runs in Node (client/core-ts,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
 import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
@@ -61,7 +61,7 @@ function t(key: string, args?: Record<string, string | number>): string {
   const text = found === undefined ? key : typeof found === "string" ? found : (args && Number(args.n) === 1 ? found.one : undefined) ?? found.other;
   return args ? text.replace(/\{(\w+)\}/g, (all, name: string) => (name in args ? String(args[name]) : all)) : text;
 }
-/** build/ (apps/desktop/build.sh) when run from the source, the app's Resources when packaged: web/, stillfail_core.node and station/. */
+/** build/ (apps/desktop/build.sh) when run from the source, the app's Resources when packaged: web/, mesh.node (the core's iroh) and station/. */
 const resources = app.isPackaged ? process.resourcesPath : join(__dirname, "..");
 const web = join(resources, "web");
 const station = new LocalStation(join(resources, app.isPackaged ? "station" : "station/stillfail"));
@@ -130,7 +130,7 @@ let core: UtilityProcess | null = null;
 /** The core's process, started when a page first asks for it and again after it exited. */
 function coreProcess(): UtilityProcess {
   if (core) return core;
-  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, join(resources, "stillfail_core.node"), BETA ? "beta" : ""], { serviceName: `${NAME} core` });
+  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, join(resources, "mesh.node"), BETA ? "beta" : ""], { serviceName: `${NAME} core` });
   child.on("exit", (code) => {
     if (core === child) core = null;
     dropOwnLink(t("desktop.core.exited"));

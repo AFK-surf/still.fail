@@ -40,11 +40,14 @@ let loaded: Addon | null | undefined;
 /// The addon, if it is there.
 export function loadAddon(): Addon | null {
   if (loaded !== undefined) return loaded;
+  // In a CommonJS bundle (the desktop app's) there is no import.meta: there STILLFAIL_MESH_NATIVE says where it is.
+  const here = typeof import.meta.url === "string" ? import.meta.url : null;
+  const near = (path: string) => (here ? fileURLToPath(new URL(path, here)) : undefined);
   const candidates = [
     process.env.STILLFAIL_MESH_NATIVE,
-    fileURLToPath(new URL("./mesh.node", import.meta.url)),
-    fileURLToPath(new URL("../../../../station/native/mesh/target/release/libstillfail_mesh.dylib", import.meta.url)),
-    fileURLToPath(new URL("../../../../station/native/mesh/target/release/libstillfail_mesh.so", import.meta.url)),
+    near("./mesh.node"),
+    near("../../../../station/native/mesh/target/release/libstillfail_mesh.dylib"),
+    near("../../../../station/native/mesh/target/release/libstillfail_mesh.so"),
   ];
   const path = candidates.find((p) => p !== undefined && existsSync(p));
   if (!path) {
