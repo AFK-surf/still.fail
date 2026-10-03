@@ -220,7 +220,37 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
     return out;
   };
 
+  /// admin/mod.rs Input::text: JavaScript's String(x ?? "").
+  const said = (v: unknown) => (v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v));
+  /// A development station's (STILLFAIL_DEV=1, else EMBER_DEV=1): only there is /dev/inject a route.
+  const dev = (process.env.STILLFAIL_DEV || process.env.EMBER_DEV) === "1";
   return [
+    // Hands the station a chat message as if the connect had received it (development stations, for those who manage
+    // them; anyone else finds no such route).
+    ...(dev
+      ? [
+          {
+            method: "POST",
+            pattern: /^\/dev\/inject$/,
+            handle: (r: Request) =>
+              r.viewer.role !== "owner" && r.viewer.role !== "admin"
+                ? Promise.resolve(error(404, `no route ${r.method} ${r.path}`))
+                : write(async (_s, a) => {
+                    const i = input(r);
+                    const ts = said(i.ts);
+                    await a.hub.accept(said(i.connect), {
+                      channel: said(i.channel),
+                      threadTs: typeof i.threadTs === "string" ? i.threadTs : ts,
+                      ts,
+                      user: said(i.user),
+                      text: said(i.text),
+                      addressed: i.addressed !== false,
+                    });
+                    return ok({ ok: true });
+                  }),
+          },
+        ]
+      : []),
     // A new chat: its session and its thread are made first, so files can be uploaded into it before the first message.
     {
       method: "POST",

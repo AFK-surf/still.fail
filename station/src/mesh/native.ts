@@ -43,6 +43,10 @@ export type Mesh = {
   /// thumbs.rs `keep` for one image: its ThumbHash (base64) and its size as seen; with `dir`, its thumbnail made after
   /// (not waited for) when it is over 24 KiB. Null when it is not readable as an image.
   thumbhash(image: string, dir?: string | null): Promise<{ hash: string; width: number; height: number } | null>;
+  /// archive.rs `file_lock` (native/mesh/src/local.rs): an exclusive flock on the file, across processes.
+  fileLock(path: string): Promise<{ release(): void }>;
+  /// local_links.rs `prepare`: the text with local links made attachments, and the attachments' paths; throws its refusal.
+  prepareLocalLinks(text: string, paths: string[], workspace: string): { text: string; paths: string[] };
 };
 
 /// Loaded once: the mesh (services.ts) and the thumbnails (sessions/thumbs.ts) share it.

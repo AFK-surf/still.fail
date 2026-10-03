@@ -6,6 +6,7 @@
 
 mod keep;
 mod thumbs;
+mod local;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};

@@ -11,8 +11,10 @@
 // Everything streams (the zstd work runs on libuv's pool, the file reads and writes are async): packing a large
 // workspace never holds the main thread for long.
 //
-// The lock: Node has no flock, so the lock files are made where the Rust makes them but the lock itself is held within
+// The lock: Node has no flock; the native addon's (native/mesh/src/local.rs) is taken, as the Rust takes it. Without the
+// addon (tests), the lock files are made where the Rust makes them but the lock itself is held within
 // this process (one station at a time works on a data directory; only an overlap at a handover would see both).
+import { loadMesh } from "../mesh/native.ts";
 import { execFile } from "node:child_process";
 import { type Dirent, existsSync, readdirSync } from "node:fs";
 import {
@@ -68,6 +70,19 @@ export const storage = (path: string) => (existsSync(path) ? path : packed(path)
 
 const held = new Map<string, Promise<void>>();
 
+let addon: ((path: string) => Promise<{ release(): void }>) | null | undefined;
+function nativeLock() {
+  if (addon === undefined) {
+    try {
+      const mesh = loadMesh();
+      addon = (path: string) => mesh.fileLock(path);
+    } catch {
+      addon = null;
+    }
+  }
+  return addon;
+}
+
 /// file_lock: the lock file made (0600, never truncated) and the lock taken, in turn with whoever else in this process
 /// asked for it. The returned function lets it go.
 async function fileLock(path: string): Promise<() => void> {
@@ -82,12 +97,21 @@ async function fileLock(path: string): Promise<() => void> {
   };
   await before;
   try {
-    await (await open(path, "a", 0o600)).close();
+    // Across processes too (a handover's two, a Rust station's), with the native addon's flock, when it is there.
+    const native = nativeLock();
+    if (native === null) {
+      await (await open(path, "a", 0o600)).close();
+      return done;
+    }
+    const held = await native(path);
+    return () => {
+      held.release();
+      done();
+    };
   } catch (error) {
     done();
     throw error;
   }
-  return done;
 }
 
 /// A room's lock (`archive.lock` in it): held while its workspace is packed, restored, read from its archive or deleted.
