@@ -1,6 +1,6 @@
 # TS station 的原生部分：启动器、runner、mesh 插件
 
-方案见 `docs/station-ts.md`。这三件用 Rust 写，各有版本号，预编译发布；TS 那边只按这里的约定用它们。
+方案见 `docs/station-ts.md`。这三件用 Rust 写，各有版本号，预编译发布；TS 那边只按这里的约定用它们。预编译怎么做（按源码算 key、本机共享缓存、GitHub release `native-artifacts`、CI 在 main 上补发）见 `docs/development.md` 的「Native parts」：测试、打包都经 `scripts/native.ts` 拿它们，只有它们自己的源码变了才编。
 
 ## 1. runner（`station/native/runner`，可执行文件 `stillfail-runner`）
 
