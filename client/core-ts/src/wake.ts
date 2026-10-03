@@ -82,7 +82,7 @@ export class Wakes {
 /// What a request says to be one that may be asked twice though it is not a read. Taken off before it goes.
 export const HEDGE = "x-stillfail-hedge";
 
-function hedgeable(request: HttpRequest): boolean {
+export function hedgeable(request: HttpRequest): boolean {
   const m = request.method.toUpperCase();
   return m === "GET" || m === "HEAD" || request.headers.some(([k]) => k.toLowerCase() === HEDGE);
 }
@@ -90,14 +90,14 @@ function hedgeable(request: HttpRequest): boolean {
 const HEDGES = 3;
 
 /// `pending`, unless a wake says it went out before the UI was away: then an error.
-function unlessDropped<A, R>(wakes: Wakes, sent: number, pending: Effect.Effect<A, HostError, R>): Effect.Effect<A, HostError, R> {
+export function unlessDropped<A, R>(wakes: Wakes, sent: number, pending: Effect.Effect<A, HostError, R>): Effect.Effect<A, HostError, R> {
   const dropped = wakes.until((w) => w.dropsRequest(sent)).pipe(Effect.flatMap((w) => Effect.fail(new HostError(w.network ? NETWORK : DROPPED))));
   return Effect.raceFirst(pending, dropped);
 }
 
 /// A request that may be asked twice: asked again at each wake that suspects what it went on (up to HEDGES at once),
 /// the first answer its answer; one that fails leaves it to the others.
-function hedged<A>(wakes: Wakes, host: Host, ask: Effect.Effect<A, HostError>): Effect.Effect<A, HostError> {
+export function hedged<A>(wakes: Wakes, host: Host, ask: Effect.Effect<A, HostError>): Effect.Effect<A, HostError> {
   return Effect.scoped(
     Effect.gen(function* () {
       const done = yield* Deferred.make<A, HostError>();
@@ -126,7 +126,7 @@ function hedged<A>(wakes: Wakes, host: Host, ask: Effect.Effect<A, HostError>): 
 }
 
 /// A pull that ends with an error at a wake when it heard nothing while the UI was away.
-function quietEnds<A>(host: Host, wakes: Wakes, pull: Pull<A>): Pull<A> {
+export function quietEnds<A>(host: Host, wakes: Wakes, pull: Pull<A>): Pull<A> {
   let heard = host.nowMs();
   const gone = Effect.suspend(() => wakes.until((w) => w.dropsStream(heard))).pipe(Effect.flatMap((w) => Effect.fail(new HostError(w.reason()))));
   return {

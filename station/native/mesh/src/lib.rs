@@ -50,6 +50,8 @@ pub struct Options {
 pub struct Endpoint {
     inner: IrohEndpoint,
     keepers: Arc<StdMutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
+    /// Connections coming that are held unanswered, not even their handshake (`hold_incoming`), and those held.
+    held: Arc<StdMutex<(u32, Vec<iroh::endpoint::Incoming>)>>,
 }
 
 #[napi]
@@ -81,7 +83,7 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
             .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE))
             .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key));
     }
-    Ok(Endpoint { inner: builder.bind().await.map_err(failed)?, keepers: Arc::default() })
+    Ok(Endpoint { inner: builder.bind().await.map_err(failed)?, keepers: Arc::default(), held: Arc::default() })
 }
 
 #[napi(object)]
@@ -178,11 +180,26 @@ impl Endpoint {
         Ok(())
     }
 
+    /// The next `n` connections coming are never answered, not even their handshake: a device whose way here is gone,
+    /// dialing (the client core's tests).
+    #[napi]
+    pub fn hold_incoming(&self, n: u32) {
+        self.held.lock().unwrap().0 = n;
+    }
+
     /// The next connection, its handshake done; null once the endpoint is closed. One that fails its handshake is
     /// skipped.
     #[napi]
     pub async fn accept(&self) -> Option<Connection> {
         while let Some(incoming) = self.inner.accept().await {
+            {
+                let mut held = self.held.lock().unwrap();
+                if held.0 > 0 {
+                    held.0 -= 1;
+                    held.1.push(incoming);
+                    continue;
+                }
+            }
             if let Ok(conn) = incoming.await {
                 return Some(Connection { inner: conn });
             }

@@ -908,7 +908,7 @@ function relayStatus(endpoint: IrohEndpoint): string {
 }
 
 /// Sends a byte on a one-way stream and waits for its acknowledgement, then reads QUIC's round trip estimate.
-function sampleRelayRtt(conn: IrohConnection, relay: string): Effect.Effect<number | null> {
+export function sampleRelayRtt(conn: IrohConnection, relay: string): Effect.Effect<number | null> {
   return Effect.gen(function* () {
     const samples: number[] = [];
     for (let i = 0; i < MEASURE_WARMUP + MEASURE_SAMPLES; i++) {

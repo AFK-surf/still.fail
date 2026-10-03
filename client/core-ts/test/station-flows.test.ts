@@ -1260,3 +1260,19 @@ test("an_old_notification_to_a_missing_or_forbidden_thread_reports_the_failure",
     core.close();
   }
 });
+
+// sync.rs
+test("the_core_keeps_its_workspaces_stations_and_agents_at_work_with_nobody_looking", async () => {
+  const { host, core, push, streams } = await started();
+  // Nobody subscribed: the account's workspaces, their stations, and what each station holds are read.
+  for (const path of ["/v1/me", "/v1/workspaces/ws", "/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats"]) {
+    assert.ok(host.requests.some((r) => r.url.endsWith(path)), path);
+  }
+  assert.equal(core.inner.stations.link(ST)?.state.state, "online");
+  // An agent at work: its live state is kept too (its stream follows it); one idle is not.
+  push("chat", { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [{ key: "k", process: "running" }, { key: "idle", process: "warm" }] });
+  await host.settle();
+  await host.settle();
+  assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?live=k&from=0&last=200"]);
+  core.close();
+});
