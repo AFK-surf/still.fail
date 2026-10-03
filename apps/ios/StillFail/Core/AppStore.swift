@@ -8,14 +8,26 @@ final class CoreTopic {
     private(set) var value: JSONValue?
     private(set) var error: CoreFailure?
     private(set) var isLoading = true
+    /// Counts value changes. Views key caches on it instead of comparing whole documents.
+    @ObservationIgnored private(set) var revision = 0
+    /// For a reader outside SwiftUI (the widget feed): told after each value change.
+    @ObservationIgnored var onChange: (() -> Void)?
     @ObservationIgnored private var cancellation: (() -> Void)?
     init(cancel: @escaping () -> Void) { cancellation = cancel }
     func cancel() {
         cancellation?(); cancellation = nil
-        value = nil; error = nil; isLoading = false
+        if value != nil { value = nil; revision += 1 }
+        if error != nil { error = nil }
+        if isLoading { isLoading = false }
     }
-    fileprivate func apply(_ state: CoreTopicState) {
-        value = state.value; error = state.error; isLoading = state.isLoading
+    /// The bridge only delivers changed states, so the value is assigned without
+    /// comparing documents on the main actor; the rest is written only when it differs
+    /// (an observed write notifies every reader even when the value is the same).
+    fileprivate func apply(_ state: CoreTopicState, valueChanged: Bool) {
+        if valueChanged { value = state.value; revision += 1 }
+        if error != state.error { error = state.error }
+        if isLoading != state.isLoading { isLoading = state.isLoading }
+        if valueChanged { onChange?() }
     }
 }
 
@@ -45,6 +57,8 @@ final class AppStore {
     private(set) var isReady = false
     private(set) var authError: String?
     private(set) var isAuthenticating = false
+    /// A chat a widget asked to open; the conversation list opens it and clears it.
+    var requestedRoute: ChatRoute?
 
     @ObservationIgnored private var bridge: CoreBridge!
     @ObservationIgnored private var nextID: UInt64 = 1
@@ -210,6 +224,17 @@ final class AppStore {
         }
     }
     func resume() { sendFocus() }
+    /// stillfail://chat?… from a widget. Another workspace is switched to first, when this account may.
+    func open(_ url: URL) {
+        guard url.scheme == "stillfail", url.host == "chat",
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return }
+        let query = Dictionary(items.compactMap { item in item.value.map { (item.name, $0) } }, uniquingKeysWith: { first, _ in first })
+        guard let station = query["station"], let session = query["session"] else { return }
+        if let workspace = query["workspace"], let account = query["account"], workspace != selectedWorkspaceID || account != selectedAccountID {
+            do { try switchWorkspace(workspace: workspace, account: account) } catch { return }
+        }
+        requestedRoute = ChatRoute(station: station, session: session, thread: query["thread"].flatMap(Int.init))
+    }
     func pause() {
         Task { [weak self] in _ = try? await self?.call("client.focus", params: ["visible": .bool(false), "focused": .bool(false)]) }
     }
@@ -264,16 +289,16 @@ final class AppStore {
             accounts = []; workspaceGroups = []
             for id in Array(pending.keys) { failCall(id, error: CoreFailure(code: "core_restarted")) }
             scopeChanged()
-            for topic in topics.values { topic.apply(CoreTopicState()) }
+            for topic in topics.values { topic.apply(CoreTopicState(), valueChanged: topic.value != nil) }
         case .reply(let id, let result):
             guard let call = pending.removeValue(forKey: id) else { return }
             call.timer.cancel()
             if let epoch = call.epoch, epoch != scopeEpoch {
                 call.continuation.resume(throwing: CoreFailure(code: "scope_changed"))
             } else { call.continuation.resume(with: result.mapError { $0 as any Error }) }
-        case .topic(let id, let state):
+        case .topic(let id, let state, let valueChanged):
             guard let topic = topics[id] else { return }
-            topic.apply(state)
+            topic.apply(state, valueChanged: valueChanged)
             if id == accountsID, let value = state.value, state.error == nil {
                 if accounts != value.arrayValue {
                     accounts = value.arrayValue

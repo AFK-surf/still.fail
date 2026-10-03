@@ -136,7 +136,7 @@ private final class StreamingTextLabel: TextLabelView {
     var animateNext = false
     private var appended = NSRange(location: 0, length: 0)
     private var began: CFTimeInterval = 0
-    private var ticker: Timer?
+    private var ticker: CADisplayLink?
     private weak var drawingLayout: StreamingTextLayout?
     private var dirtyRect: CGRect?
     private var dirtySize: CGSize = .zero
@@ -148,17 +148,19 @@ private final class StreamingTextLabel: TextLabelView {
             let prefix = zip(old, new).prefix(while: { pair in pair.0 == pair.1 }).map { String($0.0) }.joined().utf16.count
             appended = NSRange(location: prefix, length: max(0, attributedText.length - prefix)); began = CACurrentMediaTime()
             guard appended.length > 0 else { return }
-            let timer = Timer(timeInterval: 1 / 60, repeats: true) { [weak self] timer in
-                MainActor.assumeIsolated {
-                    guard let self else { timer.invalidate(); return }
-                    guard self.window != nil, !UIAccessibility.isReduceMotionEnabled, CACurrentMediaTime() - self.began < 0.4 else {
-                        timer.invalidate(); self.ticker = nil; self.appended.length = 0; self.setNeedsDisplay(); return
-                    }
-                    self.redrawAppend()
-                }
-            }
-            ticker = timer; RunLoop.main.add(timer, forMode: .common)
+            // A fade of a fraction of a second reads the same at 30 fps; a 60 Hz timer
+            // per streaming block kept CoreText redrawing for the whole stream.
+            let link = CADisplayLink(target: StreamingTick(self), selector: #selector(StreamingTick.tick))
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
+            link.add(to: .main, forMode: .common)
+            ticker = link
         }
+    }
+    fileprivate func tick() {
+        guard window != nil, !UIAccessibility.isReduceMotionEnabled, CACurrentMediaTime() - began < 0.4 else {
+            ticker?.invalidate(); ticker = nil; appended.length = 0; setNeedsDisplay(); return
+        }
+        redrawAppend()
     }
     override func makeTextLayout(_ attributedText: NSAttributedString) -> TextLabel.Layout {
         let layout = StreamingTextLayout(attributedString: attributedText)
@@ -181,6 +183,16 @@ private final class StreamingTextLabel: TextLabelView {
         if window == nil { ticker?.invalidate(); ticker = nil; appended.length = 0 }
     }
     deinit { ticker?.invalidate() }
+}
+
+/// The display link retains its target; this keeps the label free to deallocate.
+private final class StreamingTick: NSObject {
+    weak var label: StreamingTextLabel?
+    init(_ label: StreamingTextLabel) { self.label = label }
+    @objc func tick(_ link: CADisplayLink) {
+        guard let label else { link.invalidate(); return }
+        MainActor.assumeIsolated { label.tick() }
+    }
 }
 
 /// MarkdownTextView eagerly asks for layout during content replacement. A new

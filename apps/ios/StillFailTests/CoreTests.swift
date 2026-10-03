@@ -102,6 +102,22 @@ final class CoreStoreTests: XCTestCase {
         try await waitUntil { topic.value != nil }
         return topic
     }
+    func testUnchangedTopicStatesAreDroppedAndBurstsCoalesce() async throws {
+        let engine = TestCoreEngine(); let app = store(engine)
+        try await loadScope(app, engine, accounts: ["a"], groups: [group("a", [workspace()])])
+        let topic = try await privateTopic(app, engine)
+        let first = topic.revision
+        let request = id(engine, topic: "workspace")
+        engine.emit(.object(["id": request, "value": .string("private")]))
+        for n in 0..<20 { engine.emit(.object(["id": request, "value": .string("tick \(n)")])) }
+        try await waitUntil { topic.value == .string("tick 19") }
+        // The same value never re-renders; twenty in a burst arrive as a handful of states.
+        XCTAssertLessThan(topic.revision - first, 6)
+        // A reply still comes after the states sent before it.
+        engine.emit(.object(["id": request, "value": .string("before focus")]))
+        _ = try await app.call("client.focus")
+        XCTAssertEqual(topic.value, .string("before focus"))
+    }
     func testLaunchReopensTheLastWorkspaceUntilMembershipDisprovesIt() async throws {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "fail.still.tests.\(UUID().uuidString)"))
         let first = TestCoreEngine()

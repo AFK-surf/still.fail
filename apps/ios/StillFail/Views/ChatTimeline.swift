@@ -50,11 +50,22 @@ enum ChatTimeline {
         if message.flag("mine") { return "mine" }
         return message.text("authorKind") + "|" + message.text("author")
     }
-    static func rows(value: JSONValue, initialOutgoing: ChatDraft?, lives: [String: JSONValue]) -> [ChatTimelineRow] {
+    static func rows(value: JSONValue, initialOutgoing: ChatDraft?, lives: [String: JSONValue], histories: [String: JSONValue] = [:]) -> [ChatTimelineRow] {
         var rows: [ChatTimelineRow] = []
         if value.flag("more") { rows.append(ChatTimelineRow(id: "older", kind: .older)) }
-        for record in ViewRecord.decode(value["messages"].arrayValue, key: "seq") {
-            let message = record.value
+        let messages = value["messages"].arrayValue
+        // A Slack thread's own messages came from (or went to) Slack: each says so, with the thread's link.
+        let slackThread = ChatSlack.isSlack(value["thread"].text("surface"))
+        var pendingSlack = ChatSlack.rows(value: value, histories: histories)[...]
+        for record in ViewRecord.decode(messages, key: "seq") {
+            var message = record.value
+            // Slack words said before this message come first.
+            let at = ChatSlack.time(message)
+            while let next = pendingSlack.first, let at, next.time < at { rows.append(next.row); pendingSlack = pendingSlack.dropFirst() }
+            if slackThread, !message.flag("system") {
+                message = ChatSlack.marked(message, direction: message.text("authorKind") == "person" ? "from" : "to",
+                                          url: value.text("slackUrl"), place: value.text("place"))
+            }
             let outgoing = message.text("outgoing")
             let id = outgoing.isEmpty ? "message:\(record.id)" : "outgoing:\(outgoing)"
             rows.append(ChatTimelineRow(id: id, kind: .message, value: message))
@@ -62,6 +73,8 @@ enum ChatTimeline {
                 rows.append(ChatTimelineRow(id: "decision:\(record.id)", kind: .decision, value: message))
             }
         }
+        // A window short of the chat's end keeps later Slack words for when that end is loaded.
+        if !value.flag("newer") { rows.append(contentsOf: pendingSlack.map(\.row)) }
         for record in ViewRecord.decode(value["outbox"].arrayValue) {
             var outgoing = record.value.objectValue
             outgoing["mine"] = .bool(true); outgoing["authorKind"] = .string("person")
@@ -127,11 +140,13 @@ struct ChatMessageList: UIViewControllerRepresentable {
     var rememberPlace: (Int?, Double?) -> Void = { _, _ in }
     var positionReady: () -> Void = {}
     var footerHeight: CGFloat = 0
+    var visibilityChanged: (Bool) -> Void = { _ in }
     func makeUIViewController(context: Context) -> ChatTimelineController { ChatTimelineController() }
     func updateUIViewController(_ controller: ChatTimelineController, context: Context) {
         controller.store = store; controller.route = route; controller.thread = thread; controller.busy = busy
         controller.quote = quote; controller.download = download; controller.retry = retry; controller.page = page
         controller.newer = newer; controller.rememberPlace = rememberPlace
+        controller.visibilityChanged = { visible in DispatchQueue.main.async { visibilityChanged(visible) } }
         controller.positionReady = { DispatchQueue.main.async { positionReady() } }
         controller.endChanged = { end in DispatchQueue.main.async { if atEnd != end { atEnd = end } } }
         controller.updateFooterHeight(footerHeight)
@@ -152,6 +167,8 @@ final class ChatTimelineController: UIViewController, UICollectionViewDelegate, 
     var endChanged: ((Bool) -> Void)?
     var rememberPlace: ((Int?, Double?) -> Void)?
     var positionReady: (() -> Void)?
+    /// UIKit's appearance order is reliable across interactive pops, unlike SwiftUI's onDisappear.
+    var visibilityChanged: ((Bool) -> Void)?
     var newer = false
     private var positionEstablished = false
     // Estimated collection heights settle as the opening window's native text
@@ -247,6 +264,8 @@ final class ChatTimelineController: UIViewController, UICollectionViewDelegate, 
         }
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); rememberReaderPlace() }
+    override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); visibilityChanged?(true) }
+    override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); visibilityChanged?(false) }
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { openingAnchor = nil }
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) { if !decelerate { rememberReaderPlace() } }
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { rememberReaderPlace() }
@@ -345,7 +364,9 @@ final class ChatTimelineController: UIViewController, UICollectionViewDelegate, 
 
 /// Bubble and chrome colors shared by the timeline and the new-chat handoff.
 enum ChatPalette {
-    static let myBubble = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.17, alpha: 1) : UIColor(red: 0.953, green: 0.949, blue: 0.941, alpha: 1) }
+    /// My words sit on a wash of the accent, so they read as sent at a glance.
+    static let myBubble = UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.965, green: 0.639, blue: 0.514, alpha: 0.16) : UIColor(red: 0.725, green: 0.278, blue: 0.122, alpha: 0.09) }
+    static let myBorder = UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.965, green: 0.639, blue: 0.514, alpha: 0.22) : UIColor(red: 0.725, green: 0.278, blue: 0.122, alpha: 0.16) }
     static let theirBubble = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.12, alpha: 1) : UIColor.white }
     static let theirBorder = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.08) : UIColor(white: 0, alpha: 0.08) }
     static let tile = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.08) : UIColor(white: 0, alpha: 0.045) }
@@ -449,6 +470,7 @@ private final class ChatTimelineCell: UICollectionViewCell {
     private let footer = UILabel()
     private let notice = UILabel()
     private let action = UIButton(type: .system)
+    private let source = SlackSourceButton()
     private var files: [UIButton] = []
     private var primaryAction: (() -> Void)?
     private enum Shape { case mine, theirs, agent }
@@ -459,7 +481,7 @@ private final class ChatTimelineCell: UICollectionViewCell {
     override init(frame: CGRect) {
         super.init(frame: frame)
         contentView.addSubview(bubble)
-        [avatar, author, effort, status, preview, markdown, quoteBar, references, footer, notice, action].forEach { contentView.addSubview($0) }
+        [avatar, author, effort, status, preview, markdown, quoteBar, references, footer, notice, action, source].forEach { contentView.addSubview($0) }
         bubble.layer.cornerRadius = 20; bubble.layer.cornerCurve = .continuous
         author.adjustsFontForContentSizeCategory = true
         effort.font = UIFontMetrics(forTextStyle: .caption2).scaledFont(for: .systemFont(ofSize: 11, weight: .medium))
@@ -480,7 +502,8 @@ private final class ChatTimelineCell: UICollectionViewCell {
         action.addAction(UIAction { [weak self] _ in self?.primaryAction?() }, for: .touchUpInside)
         [status, preview, references, footer, notice].forEach { $0.adjustsFontForContentSizeCategory = true }
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self, UITraitUserInterfaceStyle.self]) { (cell: ChatTimelineCell, _: UITraitCollection) in
-            cell.refreshFonts(); cell.bubble.layer.borderColor = ChatPalette.theirBorder.resolvedColor(with: cell.traitCollection).cgColor
+            cell.refreshFonts(); cell.bubble.layer.borderColor = (cell.shape == .mine ? ChatPalette.myBorder : ChatPalette.theirBorder).resolvedColor(with: cell.traitCollection).cgColor
+            if let slack = cell.row?.value["slack"], !slack.objectValue.isEmpty { cell.source.configure(slack, traits: cell.traitCollection) }
             cell.geometryCache = nil; cell.appliedGeometryWidth = nil; cell.setNeedsLayout(); cell.heightChanged?()
         }
     }
@@ -513,7 +536,7 @@ private final class ChatTimelineCell: UICollectionViewCell {
         geometryCache = nil; appliedGeometryWidth = nil
         row = value
         files.forEach { $0.removeFromSuperview() }; files = []
-        [bubble, avatar, author, effort, status, preview, markdown, quoteBar, references, footer, notice, action].forEach { $0.isHidden = true }
+        [bubble, avatar, author, effort, status, preview, markdown, quoteBar, references, footer, notice, action, source].forEach { $0.isHidden = true }
         primaryAction = nil
         accessibilityIdentifier = value.kind == .message ? "message.\(value.value["seq"].intValue ?? 0)" : "chat.\(value.id)"
         if value.kind != .message {
@@ -553,8 +576,8 @@ private final class ChatTimelineCell: UICollectionViewCell {
         if shape != .agent {
             bubble.isHidden = false
             bubble.backgroundColor = shape == .mine ? ChatPalette.myBubble : ChatPalette.theirBubble
-            bubble.layer.borderWidth = shape == .theirs ? 1 / max(1, traitCollection.displayScale) : 0
-            bubble.layer.borderColor = ChatPalette.theirBorder.resolvedColor(with: traitCollection).cgColor
+            bubble.layer.borderWidth = 1 / max(1, traitCollection.displayScale)
+            bubble.layer.borderColor = (shape == .mine ? ChatPalette.myBorder : ChatPalette.theirBorder).resolvedColor(with: traitCollection).cgColor
         }
         markdown.isHidden = false; markdown.trackedScrollView = scroll; markdown.update(text: message.text("text"), streaming: value.streaming)
         preview.text = String(message.text("text").prefix(1200)); preview.isHidden = markdown.hasRenderedContent || message.text("text").isEmpty
@@ -572,6 +595,8 @@ private final class ChatTimelineCell: UICollectionViewCell {
             button.addAction(UIAction { _ in download?(file) }, for: .touchUpInside)
             contentView.addSubview(button); files.append(button)
         }
+        let slack = message["slack"]
+        if !slack.objectValue.isEmpty { source.isHidden = false; source.configure(slack, traits: traitCollection) }
         status.text = message.text("status"); status.isHidden = status.text?.isEmpty != false || !value.showsAuthor || shape != .agent
         let state = message.text("state")
         footer.text = state.isEmpty ? (value.lastInGroup ? ChatTimeline.timestamp(message) : "") : L10n.text(state == "failed" ? "未发送成功，消息已保留" : "正在发送，消息已保留")
@@ -605,6 +630,7 @@ private final class ChatTimelineCell: UICollectionViewCell {
         var widest = text > 0 ? text : fit(preview, maximum).width
         if !references.isHidden { widest = max(widest, fit(references, maximum - 10).width + 10) }
         if !files.isEmpty { widest = max(widest, min(maximum, 220)) }
+        if !source.isHidden { widest = max(widest, sourceSize(maximum).width) }
         return max(24, min(maximum, ceil(widest)))
     }
     private func geometry(width: CGFloat, apply: Bool) -> CGFloat {
@@ -686,7 +712,18 @@ private final class ChatTimelineCell: UICollectionViewCell {
             if apply { file.frame = CGRect(x: x, y: y, width: width, height: 34) }
             y += 34
         }
+        // Where the words came from or went: at the bubble's foot, or the reply's end.
+        if !source.isHidden {
+            let size = sourceSize(width)
+            y += bodyHeight > 0 || !files.isEmpty ? 8 : 0
+            if apply { source.frame = CGRect(x: shape == .mine ? x + width - size.width : x, y: y, width: size.width, height: size.height) }
+            y += size.height
+        }
         return y
+    }
+    private func sourceSize(_ width: CGFloat) -> CGSize {
+        let size = source.sizeThatFits(CGSize(width: width, height: 40))
+        return CGSize(width: min(width, ceil(size.width)), height: ceil(size.height))
     }
     private func layoutFooter(x: CGFloat, y start: CGFloat, width: CGFloat, alignRight: Bool, apply: Bool) -> CGFloat {
         var y = start

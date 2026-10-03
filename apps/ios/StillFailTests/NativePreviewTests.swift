@@ -42,6 +42,7 @@ private final class PreviewCoreEngine: CoreEngine, @unchecked Sendable {
                 row["pinned"] = .bool(index == 0); row["unread"] = .bool(index == 1)
                 row["agents"] = .array([.object(["key": .string("agent"), "runtime": .string("codex"), "model": .string("gpt-6"), "agentText": .string("GPT-6 · high"), "maker": .object(["id": .string(index % 3 == 1 ? "anthropic" : "openai"), "name": .string(index % 3 == 1 ? "Anthropic" : "OpenAI")])])])
                 row["creator"] = .object(["id": .string("jamie"), "name": .string("Jamie")])
+                if index == 2 { row["connect"] = .string("acme"); row["originText"] = .string("Slack · Acme · #ops") }
                 row["people"] = .array([
                     .object(["id": .string("jamie"), "name": .string("Jamie"), "via": .string("cloud"), "shown": .object(["name": .string("Jamie"), "display": .string("You"), "mine": .bool(true)])]),
                     .object(["id": .string("alex"), "name": .string("Alex"), "via": .string("cloud"), "shown": .object(["name": .string("Alex"), "display": .string("Alex"), "mine": .bool(false)])])
@@ -60,17 +61,30 @@ private final class PreviewCoreEngine: CoreEngine, @unchecked Sendable {
                 return .object(["title": .string("Glass over a long conversation"), "thread": .object(["id": .number(3), "surface": .string("ember")]), "messages": .array(messages), "outbox": .array([]), "agents": .array([])])
             }
             let texts = ["我也看了输入框，长文本应该保持稳定。", "另外需要支持横屏。", "好，那这轮一起处理。", "## Layout review\n\nThe **native timeline** keeps scrolling smooth.\n\n- Reuse message cells\n- Preserve the input cursor\n\n| Device | Layout |\n| --- | --- |\n| iPhone | Stack |\n| iPad | Split |\n\n```swift\nlet layout = UICollectionViewCompositionalLayout()\n```\n\n> Ready for another pass."]
-            let messages: [JSONValue] = texts.enumerated().map { index, text in .object([
+            var messages: [JSONValue] = texts.enumerated().map { index, text in .object([
                 "seq": .number(Double(index + 1)), "authorKind": .string(index == 3 ? "agent" : "person"),
                 "author": .string(index == 2 ? "preview" : index == 3 ? "agent" : "teammate"), "mine": .bool(index == 2),
                 "text": .string(text), "quotes": .array([]), "attachments": .array([]), "createdAt": .number(1_790_000_000_000 + Double(index) * 60_000),
                 "by": .object(["name": .string(index == 3 ? "Claude Opus 5.5 · high" : index == 2 ? "Jamie" : "Alex"), "maker": .object(["id": .string(index == 3 ? "anthropic" : "openai")])])
             ]) }
-            return .object(["title": .string("Review the iPad layout"), "thread": .object(["id": .number(1), "surface": .string("ember")]), "messages": .array(messages), "outbox": .array([]), "agents": .array([])])
+            // The agent's reply asks for a decision with suggested answers.
+            var reply = messages[3].objectValue
+            reply["card"] = .object(["type": .string("options")]); reply["decision"] = .object(["resolved": .bool(false)])
+            reply["options"] = .array(["Ship it today", "Wait for the iPad fix", "Ask Alex first"].map { .object(["label": .string($0)]) })
+            messages[3] = .object(reply)
+            // The agent is also in a Slack thread: its history carries those words in.
+            let agent: JSONValue = .object(["session": .object(["key": .string("agent"), "agentText": .string("Claude Opus 5.5 · high"), "maker": .object(["id": .string("anthropic")]), "runtime": .string("claude")]),
+                                            "threads": .array([.object(["surface": .string("ember")]), .object(["surface": .string("slack:T1")])])])
+            return .object(["title": .string("Review the iPad layout"), "thread": .object(["id": .number(1), "surface": .string("ember")]), "messages": .array(messages), "outbox": .array([]), "agents": .array([agent])])
         case "history":
             let text: JSONValue = .object(["key": .string("reply"), "body": .object(["kind": .string("text"), "content": .object(["text": .string("## Execution review\n\nChecked the **native renderer**, including tables and `inline code`.\n\n| Check | Result |\n| --- | --- |\n| Composer | Aligned |\n| Timeline | Reuses cells |")])])])
             let tools: JSONValue = .object(["key": .string("tools"), "body": .object(["kind": .string("group"), "content": .object(["summary": .string("Read source and run checks"), "title": .string("2 operations completed"), "thinking": .array([]), "steps": .array([.object(["name": .string("exec_command"), "said": .string("Read the chat implementation"), "call": .string("{\"cmd\":[\"bash\",\"-lc\",\"rg ChatTimeline\"],\"timeout_ms\":10000}"), "result": .string("Wall time: 0.4s\nProcess exited with code 0\nOutput:\nChatTimelineController uses reusable native cells."), "failed": .bool(false)]), .object(["name": .string("Edit"), "call": .string("{\"file_path\":\"Chat.swift\",\"old_string\":\"let gap = 4\",\"new_string\":\"let gap = 14\"}"), "result": .string("ok"), "failed": .bool(false)])])])])])
-            return .object(["loaded": .bool(true), "empty": .bool(false), "more": .bool(false), "items": .array([text, tools]), "live": .array([]), "usage": .array([.object(["label": .string("Context"), "value": .string("12,400 tokens")])])])
+            let place: JSONValue = .object(["name": .string("Acme#ops"), "surface": .string("slack"), "url": .string("https://acme.slack.com/archives/C1/p1790000090")])
+            let slackIn: JSONValue = .object(["key": .string("e1"), "at": .number(1_790_000_100_000), "body": .object(["kind": .string("received"), "content": .object(["messages": .array([
+                .object(["key": .string("1790000090.0001"), "from": .object(["name": .string("Robin"), "slackUser": .string("U1"), "bound": .bool(false)]), "text": .string("Can we also check the landscape keyboard?"), "place": place])])])])])
+            let slackOut: JSONValue = .object(["key": .string("e9"), "at": .number(1_790_000_400_000), "body": .object(["kind": .string("post"), "content": .object([
+                "text": .string("Landscape keyboard checked — the composer stays above it."), "place": place, "block": .bool(false), "failed": .bool(false)])])])
+            return .object(["loaded": .bool(true), "empty": .bool(false), "more": .bool(false), "items": .array([slackIn, text, tools, slackOut]), "live": .array([]), "usage": .array([.object(["label": .string("Context"), "value": .string("12,400 tokens")])])])
         default: return .null
         }
     }
@@ -198,6 +212,17 @@ final class NativePreviewTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(900))
                 window.layoutIfNeeded()
                 XCTAssertNil(find("composer.bar", in: host.view), "Releasing past the middle must close the page")
+            }
+            if name == "chat-markdown", let collection: UICollectionView = descendant(in: host.view) {
+                // The top of the chat: people's bubbles, and a Slack message among them.
+                XCTAssertNotNil(find("message.slack.to", in: host.view), "An agent's Slack reply must say where it went")
+                collection.delegate?.scrollViewWillBeginDragging?(collection)
+                collection.setContentOffset(CGPoint(x: 0, y: -collection.adjustedContentInset.top), animated: false)
+                try await Task.sleep(for: .milliseconds(400))
+                window.layoutIfNeeded()
+                XCTAssertNotNil(find("message.slack.from", in: host.view), "A Slack message must say where it came from")
+                let top = XCTAttachment(image: snapshotRenderer(window).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) })
+                top.name = "chat-markdown-top"; top.lifetime = .keepAlways; add(top)
             }
             if name == "conversations", let table: UITableView = descendant(in: host.view), table.numberOfSections > 0, table.numberOfRows(inSection: 0) > 0 {
                 table.delegate?.tableView?(table, didSelectRowAt: IndexPath(row: 0, section: 0))

@@ -1916,10 +1916,15 @@ export type HistoryBody =
 	| { kind: "mark", content: HistoryMark }
 	| { kind: "group", content: HistoryGroup };
 
-/** One item of an execution history, and the transcript entries it draws (`entries`: first, last). */
+/**
+ * One item of an execution history, the transcript entries it draws (`entries`: first, last), and when its first
+ * entry was written (`at`, epoch ms; absent when the transcript does not say): where a client puts it among a chat's
+ * messages.
+ */
 export interface HistoryItem {
 	key: string;
 	entries: number[];
+	at?: number;
 	body: HistoryBody;
 }
 

@@ -40,12 +40,15 @@ final class NavigationBlurAnchor: UIView {
         // Converting the bar's actual position also covers iPad split columns;
         // a status-bar height guess left a white strip above the old material.
         let top = max(0, bar.convert(bar.bounds, to: window).minY)
-        blur.frame = CGRect(x: 0, y: -top, width: bar.bounds.width, height: bar.bounds.height + top + 36)
+        // Called on every SwiftUI update of the page (each streamed token): touch
+        // the bar's hierarchy only when something actually moved.
+        let frame = CGRect(x: 0, y: -top, width: bar.bounds.width, height: bar.bounds.height + top + 36)
+        if blur.frame != frame { blur.frame = frame }
         // UIKit's navigation-item content can live outside the bar's simple
         // subview ordering on iOS 26. Negative layer depth keeps the backdrop
         // below that content as well as below the bar's own subviews.
-        blur.layer.zPosition = -1
-        bar.sendSubviewToBack(blur)
+        if blur.layer.zPosition != -1 { blur.layer.zPosition = -1 }
+        if bar.subviews.first !== blur { bar.sendSubviewToBack(blur) }
         blur.autoresizingMask = [.flexibleWidth, .flexibleHeight]; blur.refresh()
     }
     func detach() {

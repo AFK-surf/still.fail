@@ -21,6 +21,7 @@ settings:
     SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
     ARCHS: arm64
+    DEVELOPMENT_TEAM: D9AAN3VJK8
     CURRENT_PROJECT_VERSION: '1'
     MARKETING_VERSION: '0.1.0'
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -36,6 +37,7 @@ targets:
     platform: iOS
     sources:
       - path: StillFail
+      - path: Shared
       - path: ../../.airbuild/generated/core/StillFailCore.swift
     preBuildScripts:
       - name: Prepare project-local Rust core
@@ -68,6 +70,44 @@ targets:
       - sdk: Security.framework
       - sdk: PhotosUI.framework
       - sdk: UniformTypeIdentifiers.framework
+      - sdk: WidgetKit.framework
+      - target: StillFailWidgets
+        embed: true
+  # Home-screen widgets. They read the snapshot the app writes into the shared App
+  # Group (Shared/WidgetSnapshot.swift); they never start the Rust core.
+  StillFailWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: StillFailWidgets
+      - path: Shared
+      - path: StillFail/Localizable.xcstrings
+    info:
+      path: StillFailWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: still.fail
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations: [en, zh-Hans, zh-Hant, ja, ko, es]
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: StillFailWidgets/StillFailWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.fail.still.iphone]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone.widgets
+        PRODUCT_NAME: StillFailWidgets
+        SKIP_INSTALL: YES
+        SWIFT_EMIT_LOC_STRINGS: NO
+        # The project links the Rust core into every target; the widgets need none of it.
+        OTHER_LDFLAGS: ''
+        LD_RUNPATH_SEARCH_PATHS: '$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks'
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
   StillFailTests:
     type: bundle.unit-test
     platform: iOS
