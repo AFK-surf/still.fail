@@ -40,6 +40,15 @@ function unexpected(v: unknown): string {
   return "map";
 }
 
+/// serde's `OneOf`: what an unknown variant was expected to be.
+function oneOf(names: string[]): string {
+  const q = names.map((x) => `\`${x}\``);
+  if (q.length === 0) return "there are no variants";
+  if (q.length === 1) return `expected ${q[0]}`;
+  if (q.length === 2) return `expected ${q[0]} or ${q[1]}`;
+  return `expected one of ${q.join(", ")}`;
+}
+
 function float(v: number): string {
   return Number.isInteger(v) ? `${v}.0` : String(v);
 }
@@ -131,7 +140,7 @@ function walk(v: unknown, ty: Ty, path: string): unknown {
   if (!shape) throw new Error(`no shape ${ty}`);
   if (shape.kind === "enum") {
     if (typeof v !== "string") throw new Wrong(path, `invalid type: ${unexpected(v)}, expected variant identifier`);
-    if (!shape.values.includes(v)) throw new Wrong(path, `unknown variant \`${v}\`, expected ${shape.values.map((x) => `\`${x}\``).join(", ")}`);
+    if (!shape.values.includes(v)) throw new Wrong(path, `unknown variant \`${v}\`, ${oneOf(shape.values)}`);
     return v;
   }
   if (v === null || typeof v !== "object" || Array.isArray(v)) throw new Wrong(path, `invalid type: ${unexpected(v)}, expected ${expecting(ty)}`);
@@ -139,7 +148,7 @@ function walk(v: unknown, ty: Ty, path: string): unknown {
   if (shape.kind === "tagged") {
     const tag = obj[shape.tag];
     if (tag === undefined) throw new Wrong(path, `missing field \`${shape.tag}\``);
-    if (typeof tag !== "string" || !(tag in shape.variants)) throw new Wrong(path, `unknown variant \`${String(tag)}\`, expected one of ${Object.keys(shape.variants).map((x) => `\`${x}\``).join(", ")}`);
+    if (typeof tag !== "string" || !(tag in shape.variants)) throw new Wrong(path, `unknown variant \`${String(tag)}\`, ${oneOf(Object.keys(shape.variants))}`);
     if (!(shape.content in obj)) throw new Wrong(path, `missing field \`${shape.content}\``);
     return { [shape.tag]: tag, [shape.content]: walk(obj[shape.content], shape.variants[tag], at(path, shape.content)) };
   }
