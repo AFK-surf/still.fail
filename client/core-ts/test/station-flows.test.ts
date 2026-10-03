@@ -10,8 +10,9 @@ import { StationAddr } from "../src/station/addr.ts";
 import { SseParser } from "../src/station/sse.ts";
 import { run } from "./run.ts";
 import { base, overview, session, started, status, stationReplies, threadView } from "./station-fixture.ts";
-import { apply, call, subscribe } from "./helpers.ts";
-import { LINK_KEY, RECONNECT_MS } from "../src/station/sync.ts";
+import { apply, call, subscribe, v } from "./helpers.ts";
+import { EVICT_AFTER_MS } from "../src/store.ts";
+import { EVENTS_COALESCE_MS, LINK_KEY, RECONNECT_MS } from "../src/station/sync.ts";
 import type { FakeHost } from "../src/testing.ts";
 
 const gets = (host: FakeHost, path: string) => host.requests.filter((r) => r.method === "GET" && r.url.endsWith(path)).length;
@@ -247,5 +248,150 @@ test("archive_fallback_updates_the_session_only_after_success", async () => {
   await host.settle();
   assert.equal(gets(host, "/admin/api/sessions/k"), before + 1);
   assert.equal(posts("/admin/api/sessions/k/archive"), 2);
+  core.close();
+});
+
+/// A log as the station said it (the topic goes out with its last line and when, in words, besides).
+const raw = (log: J) => ({ text: log.text, outputAt: log.outputAt });
+const sessionOf = (core: J, key: string) => core.inner.data.get({ topic: "session", station: ST, key }) as J;
+const reqs = (host: FakeHost) => host.requests.filter((r) => r.url.includes("/admin/api/")).length;
+
+test("jobs_are_put_in_place_from_their_events_and_from_stopping_them", async () => {
+  const job = (id: string, state: string) => ({ id, session: "a", name: id, state, port: 4817, startedAt: 1 });
+  const answers: J = {
+    ...base(),
+    "GET /sessions": [summary("a", 0)],
+    "GET /sessions/a": { session: summary("a", 0), threads: [], turns: [], jobs: [job("j1", "running")] },
+    "GET /jobs": [{ ...job("j1", "running"), chat: { id: "7", title: "t", archived: false } }],
+    "POST /jobs/j1/stop": job("j1", "stopped"),
+  };
+  const { host, core, push } = await started(answers);
+  await host.settle();
+  const open = () => core.inner.data.get({ topic: "jobs", station: ST }) as J[];
+  const reads = reqs(host);
+  // Stopped from a page: the answer is the job as it is now, in its chat and gone from the open ones, with nothing
+  // read again.
+  await run(core.inner.stations.perform(op("job.stop", { id: "j1" }), null));
+  await host.settle();
+  assert.equal(sessionOf(core, "a").jobs[0].state, "stopped");
+  assert.deepEqual(open(), []);
+  assert.equal(reqs(host), reads + 1);
+  // Started again elsewhere (an agent, another device): its event puts it back; which chat it is in, the list read
+  // again says.
+  push("job", job("j1", "running"));
+  await host.time.pass(EVENTS_COALESCE_MS + 100);
+  assert.equal(sessionOf(core, "a").jobs[0].state, "running");
+  assert.equal(open()[0].chat.id, "7");
+  assert.equal(gets(host, "/admin/api/jobs"), 2);
+  // A new one goes in front of its session's; one listed keeps its chat as it changes.
+  push("job", job("j2", "failed"));
+  push("job", { ...job("j1", "exited"), restarts: 1 });
+  await host.time.pass(EVENTS_COALESCE_MS + 100);
+  const jobs = sessionOf(core, "a").jobs;
+  assert.deepEqual([jobs[0].id, jobs[1].state], ["j2", "exited"]);
+  assert.equal(open()[0].restarts, 1);
+  assert.equal(open()[0].chat.id, "7");
+  assert.equal(gets(host, "/admin/api/jobs"), 2);
+  // One that was over, cleared (here or on another device): out of its chat's.
+  push("job-removed", { id: "j2", session: "a" });
+  await host.time.pass(EVENTS_COALESCE_MS + 100);
+  assert.deepEqual(sessionOf(core, "a").jobs.map((j: J) => j.id), ["j1"]);
+  core.close();
+});
+
+test("a_jobs_log_is_read_once_and_then_kept_current_by_the_stations_events", async () => {
+  const { host, core, push, streams } = await started({
+    ...base(),
+    "GET /jobs/j1/log?lines=400": { text: "a\nb", outputAt: 5, follows: true },
+    "GET /jobs/j1/log?lines=1": { text: "b", outputAt: 5, follows: true },
+  });
+  const ui = core.connect();
+  const values = new Map();
+  const log = (lines: number) => ({ topic: "jobLog", station: ST, job: "j1", lines });
+  const openStreams = () => streams.filter((s) => !s.closed).map((s) => s.path);
+  subscribe(core, ui, 1, log(400));
+  await host.settle();
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(raw(v(values, 1)), { text: "a\nb", outputAt: 5 });
+  assert.deepEqual(openStreams(), ["/events?job=j1&lines=400"]);
+  // As it grows the station says so, each topic its own lines; nothing is read again, and nothing waits to.
+  subscribe(core, ui, 2, log(1));
+  await host.settle();
+  await host.settle();
+  assert.deepEqual(openStreams(), ["/events?job=j1&lines=1&job=j1&lines=400"]);
+  host.time.sleeps.length = 0;
+  push("job-log", { id: "j1", lines: 400, text: "a\nb\nc", outputAt: 9 });
+  push("job-log", { id: "j1", lines: 1, text: "c", outputAt: 9 });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(raw(v(values, 1)), { text: "a\nb\nc", outputAt: 9 });
+  assert.deepEqual(raw(v(values, 2)), { text: "c", outputAt: 9 });
+  await host.time.pass(5_000, 100);
+  assert.deepEqual([gets(host, "/admin/api/jobs/j1/log?lines=400"), gets(host, "/admin/api/jobs/j1/log?lines=1")], [1, 1]);
+  // Given up: the stream no longer asks for it (once its grace is over).
+  core.receive(ui, { kind: "unsubscribe", id: 1, unsubscribe: true });
+  await host.time.pass(EVICT_AFTER_MS + 500, 500);
+  assert.deepEqual(openStreams(), ["/events?job=j1&lines=1"]);
+  core.close();
+});
+
+test("a_jobs_log_on_a_station_that_does_not_follow_it_is_read_again_less_often_while_it_stays_the_same", async () => {
+  // Deliberately otherwise (docs/core-ts.md, rule 2): the Rust core read an older station's log again and again,
+  // backing off; the TS core reads it once as it opens and never again.
+  const answers: J = { ...base(), "GET /jobs/j1/log?lines=1": { text: "a", outputAt: 5 } };
+  const { host, core } = await started(answers);
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "jobLog", station: ST, job: "j1", lines: 1 });
+  await host.settle();
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(raw(v(values, 1)), { text: "a", outputAt: 5 });
+  answers["GET /jobs/j1/log?lines=1"] = { text: "b", outputAt: 6 };
+  await host.time.pass(60_000, 1_000);
+  assert.equal(gets(host, "/admin/api/jobs/j1/log?lines=1"), 1);
+  core.close();
+});
+
+test("requests_carry_the_trace_they_are_made_in", async () => {
+  // Adapted: a topic asks nothing (rule 6), so what carries a trace is the station's reading (one trace from its
+  // connecting) and a request made inside a call (its call's trace); one outside every trace has its own.
+  const { host, core } = await started(base(), 1);
+  const parents = host.requests.filter((r) => r.url.includes("/admin/api/")).map((r) => [r.url, r.headers.find(([k]) => k === "traceparent")?.[1] ?? ""]);
+  const trace = parents[0][1].slice(3, 35);
+  for (const [url, parent] of parents) {
+    assert.ok(parent.startsWith("00-") && parent.endsWith("-01") && parent.length === 55, `${url}: ${parent}`);
+  }
+  const snapshot = ["/events", "/overview", "/sessions", "/threads", "/chats", "/jobs"].map((p) => parents.find(([u]) => u === `https://stillfail.test/admin/api${p}`)![1]);
+  assert.ok(snapshot.every((p) => p.slice(3, 35) === trace), JSON.stringify(snapshot));
+  // Each request is a span of its own.
+  assert.equal(new Set(snapshot.map((p) => p.slice(36, 52))).size, snapshot.length);
+  // Outside every trace: a trace of its own.
+  await run(core.inner.stations.requests.call(remote(), "GET", "/overview", null));
+  const last = host.requests.at(-1)!.headers.find(([k]) => k === "traceparent")![1];
+  assert.notEqual(last.slice(3, 35), trace);
+  core.close();
+});
+
+test("topics_are_read_once_and_nothing_runs_on_a_timer", async () => {
+  const { host, core, streams } = await started();
+  const ui = core.connect();
+  const topics = [
+    { topic: "session", station: ST, key: "k1" }, { topic: "sessions", station: ST }, { topic: "overview", station: ST }, { topic: "threads", station: ST },
+    { topic: "thread", station: ST, thread: 7 }, { topic: "host", station: ST }, { topic: "link", station: ST }, { topic: "live", station: ST, key: "k1" },
+  ];
+  const reads = () => host.requests.filter((r) => r.url.includes("/admin/api/") && !r.url.includes("/events")).length;
+  const before = reads();
+  topics.forEach((t, i) => subscribe(core, ui, i + 1, t));
+  await host.settle();
+  await host.settle();
+  assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?host=1&live=k1&from=0&last=200"]);
+  // Subscribing reads nothing: what is held shows (the stream opened anew for the host and the live session).
+  assert.equal(reads(), before, JSON.stringify(host.requests.filter((r) => r.url.includes("/admin/api/") && !r.url.includes("/events")).slice(before).map((r) => r.url)));
+  const requests = reqs(host);
+  host.time.sleeps.length = 0;
+  await host.time.pass(RECONNECT_MS * 2, 100);
+  assert.equal(reqs(host), requests, "idle: no request");
   core.close();
 });

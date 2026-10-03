@@ -249,12 +249,15 @@ export class StationsSync {
     if (!link || !this.reachable(address)) return;
     const wants = this.#wants(address);
     if (!anew && link.events && equal(link.events.wants, wants)) return;
+    // Handed over from a stream that is open and heard (wanted for more or less now): it kept the records current
+    // until the new one opens, so the new one reads nothing again.
+    const handover = !anew && link.events !== null && link.heard !== null;
     if (link.events) {
       link.replaced?.pipe((f) => this.#core.runner.interrupt(f as Fiber.Fiber<unknown, unknown>));
       link.replaced = link.events.fiber;
     }
     const generation = ++link.generation;
-    const fiber = this.#core.runner.fork(this.#follow(link, wants, generation), link.scoped);
+    const fiber = this.#core.runner.fork(this.#follow(link, wants, generation, handover), link.scoped);
     link.events = { fiber, wants };
   }
 
@@ -272,12 +275,13 @@ export class StationsSync {
   }
 
   /// Holds the station's stream open; its events keep the records current. Each open reads the station again.
-  #follow(link: Link, wants: EventsFor, generation: number): Effect.Effect<void, never> {
+  #follow(link: Link, wants: EventsFor, generation: number, handover = false): Effect.Effect<void, never> {
     const core = this.#core;
     const self = this;
     const address = link.address;
     return Effect.gen(function* () {
       let first = true;
+      let handing = handover;
       let previous: [string, number] | null = null;
       let misses = 0;
       let reached = false;
@@ -340,8 +344,10 @@ export class StationsSync {
             link.heard = core.host.nowMs();
             self.setLink(address, { state: "online" });
             span.end();
-            // Nothing is replayed: what the station holds is read now, in the trace of its connecting.
-            self.snapshot(address, span.context);
+            // Nothing is replayed: what the station holds is read now, in the trace of its connecting (unless this
+            // stream took over from one still open).
+            if (!handing) self.snapshot(address, span.context);
+            handing = false;
             const parser = new SseParser();
             const openedAt = core.host.nowMs();
             let why = "ended";
@@ -416,6 +422,29 @@ export class StationsSync {
       ...this.#slackConnects(address).map((id) => this.#enqueue(address, `slackApp/${id}`, Priority.background, read({ topic: "slackApp", station: address, connect: id }, `/connects/${encode(id)}/slack-app`))),
     ];
     this.#core.runner.fork(Effect.ensuring(Effect.ignore(Effect.all(done.map((d) => Deferred.await(d)), { mode: "result" })), Effect.sync(() => span.end())));
+  }
+
+  /// A job's log as it is now (its `lines` last lines), once: its topic opened. The station's stream says how it grows
+  /// from then on (an older station's does not: its log is as it was when opened, docs/core-ts.md).
+  readLog(address: string, job: string, lines: number): void {
+    const key = topicKey({ topic: "jobLog", station: address, job, lines });
+    if (this.#links.get(address)?.memory.has(key)) return;
+    this.#enqueue(
+      address,
+      `log/${job}/${lines}`,
+      Priority.shown,
+      Effect.gen({ self: this }, function* () {
+        const link = this.#links.get(address);
+        if (!link || !this.reachable(address)) return;
+        const answer = yield* this.requests.call(link.addr, "GET", `/jobs/${encode(job)}/log?lines=${lines}`, null, { quiet: true });
+        link.followsLogs = get(answer, "follows") === true;
+        // What the stream said meanwhile is newer.
+        if (!link.memory.has(key)) {
+          link.memory.set(key, { text: get(answer, "text") ?? "", outputAt: get(answer, "outputAt") ?? null });
+          this.onChange(address, "log", key);
+        }
+      }),
+    );
   }
 
   /// A task of the station's lane; its key is `<address> <what>` (what `prioritize` matches).

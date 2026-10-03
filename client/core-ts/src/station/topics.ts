@@ -123,6 +123,8 @@ export class StationTopics implements Owner {
     }
     if (topic.topic === "live") this.#core.runner.fork(Effect.andThen(this.#core.data.log("transcript", station, topic.key as string), Effect.sync(() => this.#core.store.invalidate(topic))));
     if (topic.topic === "net") this.#sampleNet(topic);
+    // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
+    if (topic.topic === "jobLog") this.#sync.readLog(station, topic.job as string, topic.lines as number);
     if (["host", "live", "jobLog"].includes(topic.topic)) this.#sync.openEvents(station, false);
   }
 

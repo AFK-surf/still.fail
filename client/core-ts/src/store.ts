@@ -376,8 +376,8 @@ export class Store {
   #evict(topic: Topic, idle: number): void {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry || entry.idle !== idle) return;
+    // Gone before its source hears: what the source asks of the live topics then no longer has it.
+    this.#topics.delete(topicKey(topic));
     this.#source?.stop(topic);
-    const again = this.#topics.get(topicKey(topic));
-    if (again && again.idle === idle) this.#topics.delete(topicKey(topic));
   }
 }

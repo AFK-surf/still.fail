@@ -837,11 +837,8 @@ test("a_chats_jobs_are_shown_as_the_core_puts_them_and_a_jobs_output_says_when_i
   subscribe(core, ui, 2, { topic: "jobLog", station: "ws/st", job: "w", lines: 1 });
   await host.settle();
   await host.settle();
-  // The station follows the log on its stream, opened again for it: what it says comes as an event (the Rust core
-  // read /jobs/w/log first; here nothing is read, docs/core-ts.md rule 2).
+  // The station follows the log on its stream, opened again for it.
   assert.ok(s.streams.at(-1)!.path.includes("job=w&lines=1"), s.streams.at(-1)!.path);
-  s.push("job-log", { id: "w", lines: 1, text: "step 3\n", outputAt: now - 180_000 });
-  await host.settle();
   const values = new Map();
   apply(host, values);
   // Restarting first, then alive, then what is over; each with its dot and its line; the heads' notes.
@@ -854,8 +851,9 @@ test("a_chats_jobs_are_shown_as_the_core_puts_them_and_a_jobs_output_says_when_i
   assert.deepEqual([jobs.jobs[0].meta[0].text, jobs.jobs[2].tone], ["正在重启", "off"]);
   // Its output: the last line and when, in words; the station follows it, so it is not read again.
   assert.deepEqual([v(values, 2).last, v(values, 2).said], ["step 3", "最后输出 · 3 分钟前"]);
+  const before = logReads;
   await host.time.pass(5_000, 100);
-  assert.equal(logReads, 0);
+  assert.equal(logReads, before);
   core.close();
 });
 
