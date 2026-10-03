@@ -41,7 +41,7 @@ export class Station {
         s.conns.push(conn);
         void s.#serve(conn, () => index < s.deadBelow).catch(() => {});
       }
-    })();
+    })().catch(() => {});
     return s;
   }
 
@@ -100,7 +100,7 @@ export class Station {
         if (dead()) continue;
         await control.write(Buffer.from(`${JSON.stringify(this.#answer(line))}\n`)).catch(() => {});
       }
-    })();
+    })().catch(() => {});
     for (;;) {
       const stream = await conn.acceptBi();
       if (stream === null) return;
@@ -129,7 +129,7 @@ export class Station {
           }
         }
         await stream.finish().catch(() => {});
-      })();
+      })().catch(() => {});
     }
   }
 
