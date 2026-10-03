@@ -125,7 +125,8 @@ export async function serve(m: Members, conn: Connection) {
   let expiry: ReturnType<typeof setTimeout> | undefined;
   const watchExpiry = () => {
     clearTimeout(expiry);
-    expiry = setTimeout(gone, Math.max(0, current.exp * 1000 - Date.now()) + 50);
+    // A timer holds at most ~24.8 days (2^31-1 ms): a credential good for longer is looked at again then.
+    expiry = setTimeout(() => gone() || watchExpiry(), Math.min(2 ** 31 - 1, Math.max(0, current.exp * 1000 - Date.now()) + 50));
   };
   watchExpiry();
   const unlisten = m.cloud.listen(gone);
