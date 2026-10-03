@@ -20,7 +20,7 @@ const arr = (v: unknown): J[] => arrU(v) ?? [];
 const get = (v: unknown, k: string): J => getU(v, k);
 
 /// Where this device's push registration is kept.
-const PUSH_KEY = "push";
+export const PUSH_KEY = "push";
 
 export class Attention implements Owner {
   readonly #core: Inner;
