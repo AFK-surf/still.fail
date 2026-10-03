@@ -97,9 +97,10 @@ export class Requests {
   }
 
   /// A JSON request; a non-2xx answer is an error.
-  call(station: StationAddr, method: string, path: string, body: unknown, options: { quiet?: boolean; ctx?: SpanContext | null } = {}): Effect.Effect<unknown, CoreError> {
+  call(station: StationAddr, method: string, path: string, body: unknown, options: { quiet?: boolean; ctx?: SpanContext | null; headers?: [string, string][] } = {}): Effect.Effect<unknown, CoreError> {
     const bytes = body === undefined || body === null ? empty : toJsonBytes(body);
     const headers: [string, string][] = body === undefined || body === null ? [] : [["content-type", "application/json"]];
+    if (options.headers) headers.push(...options.headers);
     return Effect.flatMap(this.exchange(station, method, path, headers, bytes, options.quiet ?? false, options.ctx ?? null), (r) => {
       // Like the web's `response.json().catch(() => ({}))`.
       const parsed = parseJson(r.body);
