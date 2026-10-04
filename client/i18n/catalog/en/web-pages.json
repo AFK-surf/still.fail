@@ -896,6 +896,5 @@
   "web-pages.profiles.share.hostAway": "{station} is not answering; it can't be used now",
   "web-pages.profiles.share.changeThere": "Change it there",
   "web-pages.profiles.share.users": "In use on {stations}",
-  "web-pages.profiles.account.common": "In common",
-  "web-pages.profiles.account.each": "On each station"
+  "web-pages.profiles.account.each": "Hosts"
 }

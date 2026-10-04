@@ -827,6 +827,5 @@
   "web-pages.profiles.share.hostAway": "{station} 没有响应，现在用不了",
   "web-pages.profiles.share.changeThere": "在那台上改",
   "web-pages.profiles.share.users": "在用：{stations}",
-  "web-pages.profiles.account.common": "共同的",
-  "web-pages.profiles.account.each": "各台 station"
+  "web-pages.profiles.account.each": "Hosts"
 }
