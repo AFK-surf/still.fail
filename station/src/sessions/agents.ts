@@ -241,7 +241,7 @@ export const AgentsLive = (control: Control) =>
 
       // Profiles, sign-ins, allowances and the machine's own logins; the Claude driver's machine token renewed by it.
       const hostName = (p: any) => {
-        const host = sharing?.shares().find((s) => s.id === p?.share?.id)?.host;
+        const host = p?.share?.host;
         return cloud.state?.peers.find((x) => x?.id === host)?.name ?? host ?? null;
       };
       const accounts: Accounts = makeAccounts({
@@ -250,7 +250,7 @@ export const AgentsLive = (control: Control) =>
       });
       accounts.start();
       sharing = new Sharing({
-        data, config, cloud, key,
+        data, config, cloud,
         ask: (station, request) => remote.ask(station, request),
         agentHome: () => settings().agentHome,
         env: process.env as Record<string, string | undefined>,

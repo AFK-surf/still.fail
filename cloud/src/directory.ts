@@ -18,11 +18,10 @@ import { header } from "./compat";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
 import { langOf, type Lang } from "./i18n.ts";
-import { validKeyHex } from "./grants";
 import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
-import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, ShareView, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -31,9 +30,6 @@ const MANAGERS: readonly Role[] = ["owner", "admin"];
 export const INVITATION_TTL_SEC = 7 * 24 * 60 * 60;
 export const ENROLLMENT_TTL_SEC = 60 * 60;
 const LIMITS = { openInvitations: 50, pushPerUser: 32 };
-/** Things one workspace's stations may share, and stations one share may name. */
-const MAX_SHARES = 500;
-const MAX_ALLOW = 64;
 /**
  * What an account may create, and what each workspace it created may hold (its creator counted among the people). Every
  * account is on the free plan: one workspace, just its creator, two stations. A code or the admin's say makes it
@@ -109,7 +105,6 @@ export class Directory extends DurableObject<Env> {
       CREATE UNIQUE INDEX IF NOT EXISTS feedback_by_key ON feedback (sender, key);
       CREATE INDEX IF NOT EXISTS feedback_by_sender ON feedback (sender, created_at);
       CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, at INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS shares (workspace TEXT NOT NULL, id TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL, host TEXT NOT NULL, allow TEXT, updated_at INTEGER NOT NULL, PRIMARY KEY (workspace, id));
     `);
     // users had neither column before invite codes, nor beta (1: let into the test channel) before it, nor blocked (1:
     // the admin blocked the account; the account's own object is what keeps it out) before the console could block;
@@ -381,7 +376,7 @@ export class Directory extends DurableObject<Env> {
     const added = MANAGERS.includes(role)
       ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
       : [];
-    return { id, name: w.name as string, role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), shares: this.#shares(id) };
+    return { id, name: w.name as string, role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays) };
   }
 
   /**
@@ -420,7 +415,7 @@ export class Directory extends DurableObject<Env> {
     const told = [...this.#members(id), ...this.#invitees(id)];
     const stations = this.#rows("SELECT id FROM stations WHERE workspace = ?", id).map((r) => r.id as string);
     this.ctx.storage.transactionSync(() => {
-      for (const table of ["members", "invitations", "added", "stations", "enrollments", "shares"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
+      for (const table of ["members", "invitations", "added", "stations", "enrollments"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
       this.#run("DELETE FROM workspaces WHERE id = ?", id);
     });
     this.#tell(told, LIST, { type: "workspace", id });
@@ -609,62 +604,9 @@ export class Directory extends DurableObject<Env> {
     this.#role(sub, workspace, MANAGERS);
     if (!this.#one("SELECT 1 AS x FROM stations WHERE id = ? AND workspace = ?", station, workspace)) return;
     this.#run("DELETE FROM stations WHERE id = ?", station);
-    // What it shared goes with it: nothing else could hand its logins over.
-    this.#run("DELETE FROM shares WHERE workspace = ? AND host = ?", workspace, station);
     this.#changed(workspace, true);
     this.#disconnect(station, CLOSE.removed, "station_removed");
   }
-
-  // ── shares ──────────────────────────────────────────────────────────────
-  // What stations share with each other (docs/station-share.md). The cloud only says which station has each thing and
-  // which may use it; what it is goes between the stations. Only the host changes its row: a station signs its own
-  // requests (api.ts `/v1/stations/shares`); a station removed from the workspace takes what it shared with it.
-
-  #shares(workspace: string): ShareView[] {
-    return this.#rows("SELECT id, kind, name, host, allow, updated_at FROM shares WHERE workspace = ? ORDER BY updated_at", workspace).map((r) => ({
-      id: r.id as string, kind: r.kind as ShareView["kind"], name: r.name as string, host: r.host as string,
-      allow: r.allow === null ? null : (JSON.parse(r.allow as string) as string[]), updated_at: r.updated_at as number,
-    }));
-  }
-
-  /**
-   * A station's request about what it shares: `put` (made, or its name and who may use it), `move` (to
-   * another station of the workspace, which has taken it already), `delete`. Answers the workspace's shares.
-   */
-  stationShare(station: string, input: Record<string, unknown>): { shares: ShareView[] } {
-    const at = this.#one("SELECT workspace FROM stations WHERE id = ?", station) ?? fail(403, "not_enrolled");
-    const workspace = at!.workspace as string;
-    const id = typeof input.id === "string" && /^sh-[0-9a-z]{10,40}$/.test(input.id) ? input.id : fail(400, "invalid_id");
-    const row = this.#one("SELECT host FROM shares WHERE workspace = ? AND id = ?", workspace, id);
-    if (row && row.host !== station) fail(403, "not_host");
-    const op = input.op;
-    if (op === "delete") {
-      this.#run("DELETE FROM shares WHERE workspace = ? AND id = ?", workspace, id);
-    } else if (op === "move") {
-      if (!row) fail(404, "share_not_found");
-      const to = typeof input.host === "string" ? input.host : "";
-      if (!this.#one("SELECT 1 AS x FROM stations WHERE id = ? AND workspace = ?", to, workspace)) fail(400, "invalid_host");
-      this.#run("UPDATE shares SET host = ?, updated_at = ? WHERE workspace = ? AND id = ?", to, nowSeconds(), workspace, id);
-    } else if (op === "put") {
-      const kind = input.kind === "profile" || input.kind === "skill" ? input.kind : fail(400, "invalid_kind");
-      const name = typeof input.name === "string" && input.name.trim() && input.name.length <= 200 ? input.name.trim() : fail(400, "invalid_name");
-      const allow = input.allow === null || input.allow === undefined ? null
-        : Array.isArray(input.allow) && input.allow.length <= MAX_ALLOW && input.allow.every(validKeyHex) ? JSON.stringify([...new Set(input.allow as string[])])
-        : fail(400, "invalid_allow");
-      if (row) {
-        this.#run("UPDATE shares SET name = ?, allow = ?, updated_at = ? WHERE workspace = ? AND id = ?", name, allow, nowSeconds(), workspace, id);
-      } else {
-        if ((this.#one("SELECT count(*) AS n FROM shares WHERE workspace = ?", workspace)!.n as number) >= MAX_SHARES) fail(400, "too_many_shares");
-        this.#run("INSERT INTO shares (workspace, id, kind, name, host, allow, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", workspace, id, kind, name, station, allow, nowSeconds());
-      }
-    } else {
-      fail(400, "invalid_op");
-    }
-    this.#changed(workspace, false);
-    return { shares: this.#shares(workspace) };
-  }
-
-
 
   /** What a grant to reach `station` should say about the caller, if it may. */
   /** Whether a station is enrolled (in some workspace). */
@@ -1066,8 +1008,7 @@ export class Directory extends DurableObject<Env> {
     // The workspace's own relays after still.fail's: a station from before them keeps one more relay as it keeps the rest.
     const told = relays(this.env);
     const relay_urls = [...told.relay_urls, ...parseRelays(own).filter((u) => !told.relay_urls.map(sameUrl).includes(sameUrl(u)))];
-    const shares = this.#shares(row.workspace as string);
-    const frame = JSON.stringify({ type: "state", peers, shares, ...row, origin: this.env.PUBLIC_ORIGIN, ...told, relay_urls, grant_keys: grantKeys(this.env), revocations });
+    const frame = JSON.stringify({ type: "state", peers, ...row, origin: this.env.PUBLIC_ORIGIN, ...told, relay_urls, grant_keys: grantKeys(this.env), revocations });
     for (const ws of sockets) ws.send(frame);
   }
 

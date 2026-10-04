@@ -10,7 +10,7 @@ import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { version } from "../ops/version.ts";
 import { Cloud, Key, Up } from "../services.ts";
-import type { Cloud as CloudState, Revocation, Share } from "./state.ts";
+import type { Cloud as CloudState, Revocation } from "./state.ts";
 import type { StationKey } from "./key.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -57,7 +57,6 @@ export const presence = Effect.gen(function* () {
     }
     const started = yield* Clock.currentTimeMillis;
     s.peersCurrent = false;
-    s.sharesCurrent = false;
     // The socket, until it ends or the station stops answering (then it is closed: offline at the cloud).
     const ended = yield* Effect.result(Effect.raceFirst(connect(s, key), Effect.as(until(false), "station not answering; went offline at still.fail cloud")));
     s.peersCurrent = false;
@@ -165,15 +164,12 @@ function applyState(s: CloudState, text: string) {
   if (body?.type === "state") {
     // Current before it is told, so whoever hears of the new roster reads it as current.
     s.peersCurrent = Array.isArray(body.peers);
-    s.sharesCurrent = Array.isArray(body.shares);
     s.update((st) => {
       for (const k of ["workspace", "workspace_name", "name", "origin", "relay_url"] as const) {
         if (typeof body[k] === "string") st[k] = body[k];
       }
       // Missing roster means an old cloud: never keep peers from another binding.
       st.peers = Array.isArray(body.peers) ? body.peers : [];
-      // Kept from the last socket while an old cloud says nothing (it never had them).
-      if (Array.isArray(body.shares)) st.shares = body.shares.filter(isShare);
       if (Array.isArray(body.relay_urls)) st.relay_urls = body.relay_urls.filter((u: unknown) => typeof u === "string");
       if (body.grant_keys && typeof body.grant_keys === "object" && !Array.isArray(body.grant_keys)) st.grant_keys = body.grant_keys;
       if (Array.isArray(body.revocations) && body.revocations.every(isRevocation)) st.revocations = body.revocations;
@@ -187,7 +183,3 @@ function applyState(s: CloudState, text: string) {
 }
 
 const isRevocation = (r: any): r is Revocation => typeof r?.kind === "string" && typeof r?.id === "string" && Number.isInteger(r?.at) && r.at >= 0;
-
-const isShare = (x: any): x is Share =>
-  typeof x?.id === "string" && (x.kind === "profile" || x.kind === "skill") && typeof x.name === "string" && typeof x.host === "string" &&
-  (x.allow === null || (Array.isArray(x.allow) && x.allow.every((a: unknown) => typeof a === "string")));

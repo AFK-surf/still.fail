@@ -36,48 +36,28 @@ function agentHome(raw: Json, dataDir: string): string {
 }
 
 /// What a skill's sharing is (share/index.ts): shared from here (config.json `sharedSkills`), a copy of another
-/// station's (its link into <data>/share/<id>/skill), or neither (null).
+/// station's (its link into <data>/share/<id>/skill, from the station state.json says), or neither (null).
 function sharing(dataDir: string, raw: Json, dir: string, name: string): Json {
-  const cloud = readJson(joined(dataDir, "mesh/cloud.json"));
-  const shares: Json[] = Array.isArray(cloud?.shares) ? cloud.shares : [];
   const hosted = raw?.sharedSkills?.[name];
-  if (typeof hosted === "string") {
-    const share = shares.find((s) => s?.id === hosted);
+  if (typeof hosted === "string" || typeof hosted?.id === "string") {
+    const station = readJson(joined(dataDir, "mesh/cloud.json"))?.station ?? "";
     let conflicts: string[] = [];
     try {
       conflicts = readdirSync(joined(dir, name)).filter((n) => /^SKILL\.conflict-.*\.md$/.test(n));
     } catch {}
-    return { id: hosted, role: "host", host: cloud?.station ?? "", allow: share?.allow ?? null, conflicts };
+    return { id: typeof hosted === "string" ? hosted : hosted.id, role: "host", host: station, allow: Array.isArray(hosted?.allow) ? hosted.allow : null, conflicts };
   }
   try {
     const path = joined(dir, name);
     if (!lstatSync(path).isSymbolicLink()) return null;
-    const target = readlinkSync(path);
-    const m = /\/share\/(sh-[0-9a-z]+)\/skill$/.exec(target);
-    const share = m ? shares.find((s) => s?.id === m[1]) : undefined;
-    return share ? { id: share.id, role: "user", host: share.host, allow: share.allow ?? null, conflicts: [] } : null;
+    const m = /\/share\/(sh-[0-9a-z]+)\/skill$/.exec(readlinkSync(path));
+    const had = m ? readJson(joined(dataDir, "share/state.json"))?.borrowed?.[m[1]!] : undefined;
+    return had ? { id: m![1], role: "user", host: had.host ?? "", allow: Array.isArray(had.allow) ? had.allow : null, conflicts: [] } : null;
   } catch {
     return null;
   }
 }
 
-/// front: a SKILL.md's frontmatter field (`key: value`), if it has one.
-function front(text: string, key: string): string | null {
-  if (!text.startsWith("---\n")) return null;
-  const body = text.slice(4);
-  const end = body.indexOf("\n---");
-  if (end < 0) return null;
-  for (const raw of body.slice(0, end).split("\n")) {
-    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-    if (line.startsWith(`${key}:`)) return line.slice(key.length + 1).trim().replace(/^"+|"+$/g, "");
-  }
-  return null;
-}
-
-/// Rust's String order (bytes of UTF-8).
-const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.from(b));
-
-/// list_skills: the shared skills, the team's first (projects' memories before the rest), then the station's own; by name.
 function listSkills(home: string, dataDir: string, raw: Json): Json[] {
   const dir = joined(home, "skills");
   let names: string[];

@@ -5,7 +5,6 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import type { Share } from "../src/cloud/state.ts";
 import { checkConfig } from "../src/accounts/check.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { Sharing } from "../src/share/index.ts";
@@ -13,40 +12,26 @@ import { Sharing } from "../src/share/index.ts";
 const A = "a".repeat(64);
 const B = "b".repeat(64);
 
-/// What still.fail cloud keeps of shares, and the stations' cloud.json as its frames leave them.
+/// The workspace's roster as still.fail cloud gives it (the only thing it says here), and each station's view of it.
 class FakeCloud {
-  shares: Share[] = [];
-  listeners = new Map<string, Set<() => void>>();
+  peers = [{ id: A, name: "studio" }, { id: B, name: "mini" }];
+  listeners = new Set<() => void>();
   cloudFor(station: string) {
     const cloud = this;
-    const mine = new Set<() => void>();
-    this.listeners.set(station, mine);
     return {
-      sharesCurrent: true,
+      peersCurrent: true,
       get state() {
-        return { station, workspace: "w", peers: [{ id: A, name: "studio" }, { id: B, name: "mini" }], shares: cloud.shares } as any;
+        return { station, workspace: "w", peers: cloud.peers } as any;
       },
       removed: () => false,
       listen(f: () => void) {
-        mine.add(f);
-        return () => mine.delete(f);
+        cloud.listeners.add(f);
+        return () => cloud.listeners.delete(f);
       },
     } as any;
   }
   tell() {
-    for (const set of this.listeners.values()) for (const f of set) f();
-  }
-  /// directory.ts stationShare, as far as these tests go.
-  post(station: string, body: any) {
-    const at = this.shares.findIndex((s) => s.id === body.id);
-    if (at >= 0 && this.shares[at]!.host !== station) throw new Error("not_host");
-    if (body.op === "delete") this.shares = this.shares.filter((s) => s.id !== body.id);
-    else if (body.op === "move") this.shares[at] = { ...this.shares[at]!, host: body.host };
-    else if (at >= 0) this.shares[at] = { ...this.shares[at]!, name: body.name, allow: body.allow ?? null };
-    else this.shares.push({ id: body.id, kind: body.kind, name: body.name, host: station, allow: body.allow ?? null, updated_at: 0 });
-    this.shares = [...this.shares];
-    setImmediate(() => this.tell());
-    return { shares: this.shares };
+    for (const f of this.listeners) f();
   }
 }
 
@@ -60,7 +45,7 @@ function station(cloud: FakeCloud, id: string, others: () => Map<string, Station
   mkdirSync(join(data, "agent", "skills"), { recursive: true });
   const lent: string[] = [];
   const sharing = new Sharing({
-    data, config, key: null as any, cloud: cloud.cloudFor(id),
+    data, config, cloud: cloud.cloudFor(id),
     ask: async (to, request) => {
       const other = others().get(to);
       if (!other) throw new Error("peer unavailable");
@@ -72,7 +57,6 @@ function station(cloud: FakeCloud, id: string, others: () => Map<string, Station
     codexRunning: () => false,
     status: (pid) => ({ check: { state: "ok", detail: `checked ${pid}`, models: null, checkedAt: 1 }, quota: null }),
     changed: () => {},
-    post: async (_path, _tag, body) => cloud.post(id, body),
   });
   return { data, config, sharing, lent };
 }
@@ -174,13 +158,15 @@ test("a shared subscription moves to another station: login handed over, the old
   const id = a.config.raw().profiles[0].share.id;
   await a.sharing.moveProfile("max", B);
   await settle(a, b);
-  assert.equal(cloud.shares.find((s) => s.id === id)!.host, B);
   const taken = b.config.raw().profiles.find((p: any) => p.share?.id === id);
   assert.equal(taken.share.borrowed, undefined);
+  assert.equal(b.sharing.profileView(taken)!.role, "host");
+  assert.deepEqual(b.sharing.profileView(taken)!.users, [A], "it knows who borrows it");
   assert.equal(JSON.parse(readFileSync(join(b.data, "homes", taken.id, ".credentials.json"), "utf8")).claudeAiOauth.refreshToken, "r");
   // The old host forgot the login and borrows now (under the same profile id: its chats go on).
   const left = a.config.raw().profiles.find((p: any) => p.id === "max");
   assert.equal(left.share.borrowed, true);
+  assert.equal(left.share.host, B, "it knows whom it borrows from");
   assert.equal(existsSync(join(a.data, "homes", "max", ".credentials.json")), false);
   assert.equal((await a.sharing.lendClaude(left)).token, `token-of-${taken.id}`);
   // Only the station that has it can hand it over.
@@ -201,7 +187,7 @@ test("a shared skill: copied and linked under its name, edits go back to the hos
   const link = join(b.data, "agent", "skills", "ember");
   assert.ok(lstatSync(link).isSymbolicLink());
   assert.match(readFileSync(join(link, "SKILL.md"), "utf8"), /first/);
-  const id = a.config.raw().sharedSkills.ember;
+  const id = a.config.raw().sharedSkills.ember.id;
   assert.equal(b.sharing.skillView("ember")!.role, "user");
   // An edit on the copy, sent to the host on the version it was made on.
   writeFileSync(join(readlinkSync(link), "SKILL.md"), "---\nname: ember\ndescription: 项目记忆：ember\n---\nfrom mini\n");
@@ -219,4 +205,25 @@ test("a shared skill: copied and linked under its name, edits go back to the hos
   await a.sharing.shareSkill("ember", false, null);
   await settle(a, b);
   assert.equal(existsSync(link), false);
+});
+
+test("a station gone from the workspace: what it shared is taken away, what it used forgotten", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const a = station(cloud, A, () => all, [KEY]);
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  await a.sharing.shareProfile("deepseek", true, null);
+  await settle(a, b);
+  const id = a.config.raw().profiles[0].share.id;
+  assert.deepEqual(a.sharing.profileView(a.config.raw().profiles[0])!.users, [B]);
+  cloud.peers = cloud.peers.filter((p) => p.id !== A);
+  cloud.tell();
+  await settle(b);
+  assert.equal(b.config.raw().profiles.length, 0, "its copy taken away");
+  cloud.peers = [{ id: A, name: "studio" }];
+  cloud.tell();
+  await settle(a);
+  assert.deepEqual(a.sharing.profileView(a.config.raw().profiles[0])!.users, [], "no one borrows it now");
+  assert.equal(a.config.raw().profiles[0].share.id, id);
 });

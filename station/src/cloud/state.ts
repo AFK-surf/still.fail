@@ -8,10 +8,6 @@ import { wall } from "../ops/fibers.ts";
 
 export type Revocation = { kind: string; id: string; at: number };
 
-/// Something a station of the workspace shares (docs/station-share.md), as still.fail cloud lists it: which station has
-/// it and which may use it (null: every one). What it is goes between the stations.
-export type Share = { id: string; kind: "profile" | "skill"; name: string; host: string; allow: string[] | null; updated_at: number };
-
 export type CloudState = {
   origin: string;
   station: string;
@@ -24,8 +20,6 @@ export type CloudState = {
   grant_keys: any;
   /// The workspace's stations this one may call (peer RPC); none from old clouds.
   peers: any[];
-  /// What the workspace's stations share; none from old clouds.
-  shares?: Share[];
   revocations: Revocation[];
   /// When the cloud said the station was removed from its workspace (unix seconds), and how (4004 / 404).
   removed_at?: number;
@@ -39,7 +33,7 @@ const statePath = (data: string) => join(meshDir(data), "cloud.json");
 export function readState(data: string): CloudState | null {
   if (!existsSync(statePath(data))) return null;
   const raw = JSON.parse(readFileSync(statePath(data), "utf8"));
-  return { ...raw, relay_urls: raw.relay_urls ?? [], peers: raw.peers ?? [], shares: raw.shares ?? [], revocations: raw.revocations ?? [] };
+  return { ...raw, relay_urls: raw.relay_urls ?? [], peers: raw.peers ?? [], revocations: raw.revocations ?? [] };
 }
 
 /// Pretty JSON, field order as the Rust struct's, the removal only while there is one.
@@ -48,7 +42,6 @@ export function writeState(data: string, s: CloudState) {
     origin: s.origin, station: s.station, workspace: s.workspace, workspace_name: s.workspace_name, name: s.name,
     relay_url: s.relay_url, relay_urls: s.relay_urls, grant_keys: s.grant_keys, peers: s.peers, revocations: s.revocations,
   };
-  if (s.shares !== undefined && s.shares.length > 0) out.shares = s.shares;
   if (s.removed_at !== undefined) out.removed_at = s.removed_at;
   if (s.removed_code !== undefined) out.removed_code = s.removed_code;
   writePrivate(statePath(data), JSON.stringify(out, null, 2));
@@ -59,8 +52,6 @@ export class Cloud {
   state: CloudState | null;
   /// Whether `peers` is the cloud's roster as of the current presence socket (fail closed until a `state` frame says so).
   peersCurrent = false;
-  /// Whether `shares` is the cloud's list as of the current presence socket (an old cloud never says).
-  sharesCurrent = false;
   private listeners = new Set<(s: CloudState | null) => void>();
   private writing = false;
   private watcher: { close(): void } | undefined;

@@ -14,12 +14,7 @@ export interface InvitationView { id: string; role: Role; email: string | null; 
 export interface PendingInvitation { id: string; workspace: string; name: string; role: Role; inviter: string; expires_at: number }
 /** An email added to a workspace whose account has not signed in yet: a member from its first sign-in on. */
 export interface AddedView { email: string; role: Role; added_by: string; added_at: number }
-/**
- * Something a station shares with the workspace's other stations (docs/station-share.md): which station has it
- * (`host`) and which may use it (`allow`, null: every one). Nothing of what it is: that goes between the stations.
- */
-export interface ShareView { id: string; kind: "profile" | "skill"; name: string; host: string; allow: string[] | null; updated_at: number }
-export interface WorkspaceView { id: string; name: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; shares?: ShareView[] }
+export interface WorkspaceView { id: string; name: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[] }
 
 /** What `/v1/events` pushes: what changed, for the device to refetch. */
 export type AccountEvent =
