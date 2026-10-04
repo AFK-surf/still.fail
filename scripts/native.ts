@@ -1,6 +1,6 @@
 // The native parts the TypeScript station and clients use, prebuilt (docs/development.md, "Native parts"): each one
-// is named by a key, the hash of all that goes into it (its sources, as git has them, and every vendored crate it
-// uses; its Cargo.lock; the Rust toolchain; the target; how it is built), and found, in this order, in
+// is named by a key, the hash of all that goes into it (its sources, as git has them, not its tests, and every vendored
+// crate it uses; its Cargo.lock; the Rust toolchain; the target; how it is built), and found, in this order, in
 //   1. the cache on this machine, which every worktree shares: ~/Library/Caches/stillfail-native (macOS),
 //      $XDG_CACHE_HOME/stillfail-native or ~/.cache/stillfail-native (Linux), or $STILLFAIL_NATIVE_CACHE;
 //   2. $STILLFAIL_NATIVE_INBOX, a directory of artifacts (CI: those a branch's natives job built, as a run artifact);
@@ -224,6 +224,9 @@ function inputs(paths: string[]): [string, string][] {
     const hashes = git(["hash-object", "--stdin-paths"], present.join("\n") + "\n").trim().split("\n");
     present.forEach((p, i) => files.set(p, hashes[i]!));
   }
+  // A crate's tests, benches and examples are not in what it builds: changed, it is the same part (a test-only change
+  // built the launcher and runner again for three platforms on 2026-10-04).
+  for (const p of [...files.keys()]) if (/(^|\/)(tests|benches|examples)\//.test(p)) files.delete(p);
   return [...files].sort(([a], [b]) => (a < b ? -1 : 1));
 }
 function key(part: string, target: Target): string {
