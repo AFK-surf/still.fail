@@ -109,6 +109,34 @@ deps() { (cd "$1" && pnpm install --frozen-lockfile --prefer-offline); }
 # side would otherwise wait on its lock, and two workspaces' builds of the vendored crates in one target can mix.
 cargo_test() { (cd "$1" && shift && if [ -n "${CARGO_TARGET_DIR:-}" ]; then CARGO_TARGET_DIR="$CARGO_TARGET_DIR/$(printf '%s' "$PWD" | cksum | cut -d' ' -f1)"; fi && cargo test "$@"); }
 
+# Rust's tests remembered by what goes into them: where every input is committed (none changed in the worktree), the
+# key is their git trees, the toolchains and the machine's kind, and a step that passed at a key on this machine passes
+# there again without building (a run of every part, CI's when .github/ changed, built each crate's tests for a minute
+# to run them for a second). Nothing changed in Rust is the usual case; its tests run once per change.
+passed_dir=${XDG_CACHE_HOME:-$HOME/.cache}/stillfail-check/passed
+inputs_key() {
+  [ -z "$(git status --porcelain -- "$@")" ] || return 1
+  { git ls-tree HEAD -- "$@"; rustc -V; node -v; uname -sm; } 2>/dev/null | cksum | tr ' ' -
+}
+# remember <key> <command…>: runs it, and marks the key passed when it does.
+remember() {
+  key=$1; shift
+  "$@" || return 1
+  [ -n "$key" ] && mkdir -p "$passed_dir" && : > "$passed_dir/$key"
+  return 0
+}
+# rust_step <name> <inputs> <cargo_test args…>: the step, or that it passed before at these inputs.
+rust_step() {
+  name=$1; inputs=$2; shift 2
+  # shellcheck disable=SC2086 # the inputs are paths, split on purpose
+  key=$(inputs_key $inputs) && key="$(printf '%s' "$name" | cksum | cut -d' ' -f1)-$key" || key=""
+  if [ -n "$key" ] && [ -e "$passed_dir/$key" ]; then
+    step "$name (passed before, same inputs)" true
+  else
+    step "$name" heavy remember "$key" cargo_test "$@"
+  fi
+}
+
 # Cloudflare's types for the worker (cloud/worker-configuration.d.ts, not committed), once its dependencies are there:
 # `wrangler types` takes seconds, so what it made is kept, by what it is made from, for every worktree on this machine.
 after_cloud_types() {
@@ -206,12 +234,13 @@ if [ $full = 1 ]; then
   for crate in launcher runner mesh; do
     also='^$'; [ $crate = mesh ] && also='^vendor/'
     if part station && { touches "^station/native/$crate/" || touches "$also"; }; then
-      if has cargo; then step "Rust: station/native/$crate" heavy cargo_test "station/native/$crate" --locked -q; else later "Rust: station/native/$crate"; fi
+      inputs="station/native/$crate"; [ $crate = mesh ] && inputs="$inputs vendor"
+      if has cargo; then rust_step "Rust: station/native/$crate" "$inputs" "station/native/$crate" --locked -q; else later "Rust: station/native/$crate"; fi
     fi
   done
   # The core's native shells (client/shell for Android, client/iroh-wasm for the web).
   if part core && touches '^client/(shell|iroh-wasm)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
-    if has cargo; then step "Rust: client" heavy cargo_test client --workspace -q; else later "Rust: client"; fi
+    if has cargo; then rust_step "Rust: client" "client vendor" client --workspace -q; else later "Rust: client"; fi
   fi
   # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed.
   if part android && touches '^(apps/android|client)/'; then
