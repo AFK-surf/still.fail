@@ -284,6 +284,15 @@ internal class ChatMotion(private val reduced: Boolean) {
         found = fail.still.android.ui.TextMark("", accent, words).also { it.level = 0.28f }
     }
 
+    /** Draws in the strokes under a search's words (TextMark.drawn), once the message is in view. */
+    suspend fun drawFound() {
+        val m = found ?: return
+        if (reduced) { m.drawn = Float.MAX_VALUE; return }
+        val until = fail.still.android.ui.STROKE_MS + fail.still.android.ui.STROKE_GAP_MS * 12
+        androidx.compose.animation.core.animate(0f, until, animationSpec = androidx.compose.animation.core.tween(until.toInt(), easing = androidx.compose.animation.core.LinearEasing)) { v, _ -> m.drawn = v }
+        m.drawn = Float.MAX_VALUE
+    }
+
     /** Starts marking `passage` in the message `ts` (drawn once its row composes); `flash` then plays it out. */
     fun lead(ts: String, passage: String, accent: Color) {
         flashes++

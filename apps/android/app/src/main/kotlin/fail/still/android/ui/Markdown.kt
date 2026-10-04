@@ -668,7 +668,9 @@ private fun inlineText(n: Node): String = when (n) {
 }
 
 @Composable
-private fun MdText(text: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, inline: Map<String, InlineTextContent> = emptyMap()) {
+private fun MdText(raw: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, inline: Map<String, InlineTextContent> = emptyMap()) {
+    // A search's words in bold where it led (TextMark.kt).
+    val text = markWeight(raw)
     // A passage a quote led to, marked in these words (TextMark.kt).
     val (mark, laid) = passageMark(text.text)
     // On the annotate page, a passage picked from them or noted (Pick.kt).

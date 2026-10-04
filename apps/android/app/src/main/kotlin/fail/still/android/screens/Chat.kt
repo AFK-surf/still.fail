@@ -1134,7 +1134,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             QuoteCards(m.quotes, jump, Alignment.Start)
             Box(hold.drawBehind { drawRoundRect(press, cornerRadius = CornerRadius(12.dp.toPx())) }) {
                 // A person's words as yours are drawn: a reference to another chat as its chip (web Chat.tsx → PersonWords).
-                if (m.authorKind == "person") { if (m.text.isNotEmpty()) { val words = fail.still.android.ui.withRefs(m.text); val (mark, laid) = passageMark(words.text); Text(words, mark, fontSize = 15.sp, lineHeight = 23.sp, color = ink.text, onTextLayout = laid) } }
+                if (m.authorKind == "person") { if (m.text.isNotEmpty()) { val words = fail.still.android.ui.markWeight(fail.still.android.ui.withRefs(m.text)); val (mark, laid) = passageMark(words.text); Text(words, mark, fontSize = 15.sp, lineHeight = 23.sp, color = ink.text, onTextLayout = laid) } }
                 else AgentWords(ctx, m.text, m.attachments, draft)
             }
             // An agent's files are placed in its words (Prose.kt), the rest below them there.
@@ -1260,7 +1260,7 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
     val fieldWidth = LocalSendTextWidth.current
     if (flight != null) flight.groundColor = ink.neutral
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        val words = fail.still.android.ui.withRefs(text)
+        val words = fail.still.android.ui.markWeight(fail.still.android.ui.withRefs(text))
         val (mark, laid) = passageMark(words.text)
         Text(
             // A lone full-width mark (？ ！ 。) sits at the left of its wide cell: proportional alternates ("palt") cut that cell to the glyph, so the bubble's padding centres it.
@@ -1382,7 +1382,7 @@ private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, r
             } finally { follow?.let { it.own-- } }
             follow?.topHeld = true
             follow?.on = follow?.atEnd() == true
-            if (!found) motion.flash()
+            if (found) motion.drawFound() else motion.flash()
         }
     }
 }
