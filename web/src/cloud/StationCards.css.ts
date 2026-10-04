@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { btn } from "../styles/controls.css.ts";
+import { cardLook } from "../styles/pages.css.ts";
 
 export const name = style({
   padding: "0", border: "0", background: "none", font: "inherit", cursor: "pointer",
@@ -18,8 +19,7 @@ globalStyle(`${menu} ${btn}`, { flex: "none" });
 
 export const cards = style({ display: "grid", gap: "10px" });
 export const card = style({
-  display: "grid", gap: "10px", padding: "14px 16px", borderRadius: vars.rCard, cornerShape: vars.cornerShape,
-  background: vars.list,
+  display: "grid", gap: "10px", padding: "20px 25px", ...cardLook,
 });
 export const cardHead = style({ display: "flex", alignItems: "center", gap: "10px", minWidth: "0" });
 export const cardTitle = style({ flex: "1", display: "flex", alignItems: "baseline", gap: "10px", minWidth: "0" });

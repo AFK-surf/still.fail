@@ -4,15 +4,13 @@ import { muted } from "../styles/shell.css.ts";
 import { command, runtimeLogo } from "../ui.css.ts";
 import { machineLogins } from "../pages/Accounts.css.ts";
 import { btn } from "../styles/controls.css.ts";
+import { cardLook } from "../styles/pages.css.ts";
 
 export const groupHead = style({});
 export const roleSelect = style({ width: "120px", flex: "none" });
 export const stationHeading = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
-/** Concentric with what is inside: its fields' and commands' corner (--r-field) plus its padding. */
-export const onboardingCard = style({
-  width: "100%", textAlign: "left", padding: "20px", border: `1px solid ${vars.line}`,
-  borderRadius: `calc(${vars.rField} + 20px)`, cornerShape: vars.cornerShape, background: vars.canvas,
-});
+/** As the settings pages' cards (pages.css.ts card). */
+export const onboardingCard = style({ width: "100%", textAlign: "left", padding: "20px 25px", border: "0", ...cardLook });
 export const onboardingRow = style({ display: "flex", alignItems: "stretch", gap: "8px" });
 /** 「添加这台 Mac」 under the first station's form (the desktop app's). */
 export const firstThisMac = style({ marginTop: "12px" });

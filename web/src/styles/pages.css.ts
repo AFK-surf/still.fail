@@ -39,8 +39,11 @@ export const section = style({ marginBottom: "28px" });
  * A grey ground, no line round it, and the app's kind of corner (a little over --r-card: it is large): nothing in it draws a curve near one (its buttons are words:
  * controls.css.ts), so nothing has to follow it.
  */
+/** A settings card's ground and corner, for the other cards of the settings pages (a station's, the first station's) too. */
+export const cardGround = `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`;
+export const cardLook = { borderRadius: `calc(22px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: cardGround } as const;
 export const card = style({
-  borderRadius: `calc(22px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, padding: "20px 25px", background: `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`,
+  ...cardLook, padding: "20px 25px",
   display: "grid", gap: "14px",
   selectors: {
     "& + &": { marginTop: "10px" },

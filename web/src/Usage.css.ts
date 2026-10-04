@@ -1,5 +1,6 @@
 import { globalStyle, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
+import { cardGround } from "./styles/pages.css.ts";
 
 // The people a day's bar is split by, in the order the usage view ranks them (client/core-ts/src/views/usage.ts SERIES),
 // the rest grey. Checked with the dataviz validator (four slots, adjacent pairs) on the light and dark grounds; the
@@ -19,7 +20,7 @@ globalStyle(":root:not([data-theme=\"light\"])", { "@media": { "(prefers-color-s
 export const usage = style({
   vars: {
     "--u-text": vars.text, "--u-muted": vars.muted, "--u-subtle": vars.subtle, "--u-line": vars.line, "--u-strong": vars.lineStrong,
-    "--u-hover": vars.hover, "--u-tile": vars.list,
+    "--u-hover": vars.hover, "--u-tile": cardGround,
   },
   display: "grid", gap: "28px",
 });

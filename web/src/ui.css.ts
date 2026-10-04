@@ -59,10 +59,11 @@ export const fieldTop = style({ display: "flex", alignItems: "baseline", justify
 export const fieldLabel = style({ fontSize: vars.textSm, fontWeight: "500" });
 export const fieldHint = style({ fontSize: vars.textXs, color: vars.muted });
 export const dialogError = style({});
+/** A pill, as a one-line field is (controls.css.ts input). */
 export const select = style({
-  width: "100%", minHeight: "36px", padding: "7px 12px", border: `1px solid ${vars.lineStrong}`,
-  borderRadius: vars.rField, background: vars.canvas, fontSize: vars.textSm,
-  transition: `border-color ${vars.dur} ${vars.easeOut}`, cornerShape: vars.cornerShape, display: "flex",
+  width: "100%", minHeight: "36px", padding: "7px 16px", border: `1px solid ${vars.lineStrong}`,
+  borderRadius: "999px", background: vars.canvas, fontSize: vars.textSm,
+  transition: `border-color ${vars.dur} ${vars.easeOut}`, cornerShape: "round", display: "flex",
   alignItems: "center", justifyContent: "space-between", gap: "8px", textAlign: "left", cursor: "pointer",
   selectors: {
     "&:hover": { borderColor: vars.fieldHover },
