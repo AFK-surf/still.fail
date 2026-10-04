@@ -112,7 +112,20 @@
   "android-settings.files.clear.action": "Delete all",
   "android-settings.files.clear.text": "Deletes the {size} of files kept on this phone; they download again when opened.",
   "android-settings.files.clear.title": "Delete all?",
+  "android-settings.files.days": {
+    "one": "1 day ago",
+    "other": "{n} days ago"
+  },
+  "android-settings.files.hours": {
+    "one": "1 hour ago",
+    "other": "{n} hours ago"
+  },
+  "android-settings.files.justNow": "just now",
   "android-settings.files.meta": "{size} · opened {opened}",
+  "android-settings.files.minutes": {
+    "one": "1 minute ago",
+    "other": "{n} minutes ago"
+  },
   "android-settings.files.none": "No files kept yet",
   "android-settings.files.note": "Files opened in the app are kept on this phone, so they open again without downloading. Deleting them leaves the station's files as they are.",
   "android-settings.files.partial": "{size} · not finished",

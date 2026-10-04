@@ -4,7 +4,6 @@
 package fail.still.android.screens
 
 import android.content.Context
-import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -102,7 +101,7 @@ fun KeptFilesScreen() {
                     ListRow {
                         Column(Modifier.weight(1f)) {
                             Text(f.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            val opened = DateUtils.getRelativeTimeSpanString(f.opened, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString()
+                            val opened = since(f.opened)
                             Text(if (f.partial) t("android-settings.files.partial", "size" to fileSize(f.size)) else t("android-settings.files.meta", "size" to fileSize(f.size), "opened" to opened),
                                 fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -122,5 +121,16 @@ fun KeptFilesScreen() {
             }
         }
         Spacer(Modifier.height(30.dp))
+    }
+}
+
+/** How long ago, in the app's words: just now, minutes, hours, days. */
+private fun since(at: Long): String {
+    val minutes = (System.currentTimeMillis() - at) / 60_000
+    return when {
+        minutes < 1 -> t("android-settings.files.justNow")
+        minutes < 60 -> t("android-settings.files.minutes", "n" to minutes)
+        minutes < 24 * 60 -> t("android-settings.files.hours", "n" to minutes / 60)
+        else -> t("android-settings.files.days", "n" to minutes / (24 * 60))
     }
 }
