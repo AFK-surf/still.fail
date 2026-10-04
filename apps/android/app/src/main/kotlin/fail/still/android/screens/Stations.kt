@@ -133,8 +133,8 @@ fun StationsScreen(current: WorkspaceEntry) {
     }
 }
 
-/** Laid out while a station has no load or network to show, so that its card keeps their room. */
-private val noNet = StationNet(path = " ", rtt = NetFigure(" ", "ok"), rttHistory = emptyList(), down = " ", up = " ", total = "")
+/** Laid out unseen while a station has no network to show, so that its card keeps the room (its path in Chinese, as tall as a real one). */
+private val noNet = StationNet(path = "直连", rtt = NetFigure("0 ms", "ok"), rttHistory = emptyList(), down = " ", up = " ", total = "")
 
 /**
  * Under a station's name in the list: its load as rings and its network, in the same room whatever state it is in —

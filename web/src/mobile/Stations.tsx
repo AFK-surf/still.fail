@@ -73,7 +73,7 @@ export function StationsScreen() {
 }
 
 /** Laid out while a station has no network to show, so that its card keeps the room. */
-const noNet: StationNet = { path: " ", rtt: { text: " ", level: "ok" }, rttHistory: [], down: " ", up: " ", total: "" };
+const noNet: StationNet = { path: "直连", rtt: { text: "0 ms", level: "ok" }, rttHistory: [], down: " ", up: " ", total: "" };
 
 /**
  * Under a station's name in the list: its load as rings and its network, in the same room whatever state it is in —
