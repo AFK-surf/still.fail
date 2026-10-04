@@ -783,6 +783,8 @@ test("stations_shows_each_station_with_its_models", async () => {
   assert.equal(v[0].version, "0.4.0");
   assert.equal(v[0].online, true);
   assert.deepEqual(v[0].link, { state: "error", message: "没有权限" });
+  // Reached, if refused: not coming back.
+  assert.equal(v[0].reconnecting, false);
   assert.deepEqual(v[0].overview.profiles.map((p: J) => p.id), ["p1", "p2", "p3", "p4", "p5", "p6"]);
   assert.equal(v[0].host.hostname, "studio");
   assert.deepEqual(v[0].runtimes, [{ runtime: "claude", models: ["deepseek-flash", "opus", "sonnet"] }, { runtime: "codex", models: ["deepseek-flash", "gpt-5", "o3", "openai/gpt-5"] }]);
@@ -800,7 +802,7 @@ test("stations_shows_each_station_with_its_models", async () => {
   assert.ok(gpt.spent.text.startsWith("额度用完 · "));
   assert.deepEqual([gpt.name, gpt.ids], ["GPT-5", ["gpt-5", "openai/gpt-5"]]);
   assert.deepEqual(gpt.accounts.codex.map((a: J) => a.id), ["p1", "p6"]);
-  assert.deepEqual(plain(v[1]), { station: "ws/b", id: "b", name: "beta", online: false, lastSeen: v[1].lastSeen, link: { state: "offline" }, runtimes: [], models: [], betaOffered: false });
+  assert.deepEqual(plain(v[1]), { station: "ws/b", id: "b", name: "beta", online: false, reconnecting: false, lastSeen: v[1].lastSeen, link: { state: "offline" }, runtimes: [], models: [], betaOffered: false });
   assert.ok(v[1].summary.startsWith("离线 · "));
   assert.equal(v[2].lastSeen, undefined);
 });
