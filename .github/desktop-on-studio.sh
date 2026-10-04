@@ -6,7 +6,7 @@
 # The commit is built in a worktree of its own (~/ember-wt/ci-desktop), never studio's checkout.
 set -eu
 sha=${1:?usage: desktop-on-studio.sh <commit>}
-export PATH="$HOME/.local/bin:$HOME/Library/pnpm:$HOME/.local/node-v24.15.0-darwin-arm64/bin:$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/Library/pnpm:$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
 repo="$HOME/WebstormProjects/still.fail"
 wt=~/ember-wt/ci-desktop
 # A deploy fetching at the same moment holds the ref's lock: tried again.

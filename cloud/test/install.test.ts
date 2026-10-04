@@ -44,6 +44,11 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   // The last release from before the rename, for installers from before it.
   assert.equal(releaseType("ember-station-linux-x64.tar.gz"), "application/gzip");
   assert.equal(releaseType("other-station-linux-x64.tar.gz"), null);
+  // The Node a release runs on, kept apart from it once per version, with its checksum.
+  assert.equal(releaseType("node/node-v24.21.0-linux-x64.tar.gz"), "application/gzip");
+  assert.equal(releaseType("node/node-v24.21.0-darwin-arm64.tar.gz.sha256"), "text/plain; charset=utf-8");
+  assert.equal(releaseType("node/node-latest-linux-x64.tar.gz"), null);
+  assert.equal(releaseType("node/other.tar.gz"), null);
   assert.equal(releaseType("desktop/stillfail-mac.yml"), "text/yaml; charset=utf-8");
   assert.equal(releaseType("desktop/stillfail-0.1.1092-arm64-mac.zip"), "application/zip");
   assert.equal(releaseType("desktop/stillfail-0.1.1092-arm64-mac.zip.blockmap"), "application/octet-stream");

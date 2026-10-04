@@ -246,7 +246,7 @@ if [ $full = 1 ]; then
   for crate in launcher runner mesh; do
     also='^$'; [ $crate = mesh ] && also='^vendor/'
     if part station && { touches "^station/native/$crate/" || touches "$also"; }; then
-      inputs="station/native/$crate"; [ $crate = mesh ] && inputs="$inputs vendor"
+      inputs="station/native/$crate"; [ $crate = mesh ] && inputs="$inputs vendor"; [ $crate = launcher ] && inputs="$inputs .node-version"
       if has cargo; then remembered "Rust: station/native/$crate" "$inputs" heavy cargo_test "station/native/$crate" --locked -q; else later "Rust: station/native/$crate"; fi
     fi
   done

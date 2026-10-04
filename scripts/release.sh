@@ -15,7 +15,11 @@
 # promote: the test channel's station release becomes the stable one: its tarballs and station.json copied to the
 # stable names, nothing built. (The beta apps are other apps: a released app is released by release.sh desktop/android.
 # The web app is promoted by cloud/deploy.py promote-web.)
+# A station's release names the Node it runs on (its NODE_VERSION), which is not in it: that Node goes beside the releases, once
+# per version (node/node-v<version>-<platform>.tar.gz and its .sha256: scripts/node-dist.sh), when they lack it.
 # RELEASE_DIR=dir: into that directory instead of the bucket (the dev cloud serves them from dist/releases: cloud/test/dev.ts).
+# RELEASES=<url>: where the releases are read from, to see whether a Node is there already (still.fail cloud's; "" with
+# RELEASE_DIR: only that directory is looked in).
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 out=$(mktemp -d)
@@ -79,6 +83,11 @@ put() {
 }
 
 build=$(git -C "$root" rev-list --count HEAD)
+releases=${RELEASES-https://app.still.fail/releases}
+# Whether the releases have <name> already: in RELEASE_DIR, or where they are read from.
+released() {
+  { [ -n "${RELEASE_DIR:-}" ] && [ -f "$RELEASE_DIR/$1" ]; } || { [ -n "$releases" ] && curl -fsI "$releases/$1" > /dev/null 2>&1; }
+}
 [ -z "$(git -C "$root" status --porcelain)" ] || echo "note: the working tree has changes; the apps are numbered by the commit ($build) all the same" >&2
 
 for platform in $platforms; do
@@ -111,6 +120,13 @@ for platform in $platforms; do
       file="stillfail-station-$platform.tar.gz"
       (tar -czf "$out/$file" -C "$out/$platform" stillfail && put "$out/$file" "${beta:+beta/}$file" application/gzip) &
       putting="${putting:-} $!"
+      # Its Node, unless the releases have that version already.
+      node_file="node/node-v$(cat "$root/.node-version")-$platform.tar.gz"
+      if ! released "$node_file"; then
+        dist=$(sh "$root/scripts/node-dist.sh" "$out/node-$platform" "$platform")
+        put "$dist" "$node_file" application/gzip
+        put "$dist.sha256" "$node_file.sha256" "text/plain; charset=utf-8"
+      fi
       station=yes
       ;;
   esac

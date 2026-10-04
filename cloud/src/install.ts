@@ -40,6 +40,12 @@ export const RELEASE_FILE = /^(stillfail|ember)-station-(darwin-arm64|linux-x64|
 export const BETA_RELEASE_FILE = /^beta\/stillfail-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
 
 /**
+ * The Node a release runs on (its NODE_VERSION file says the version), kept apart from it, once per version (scripts/node-dist.sh):
+ * the installer gets it when the machine has none of that version yet, with its sha256 to check it by.
+ */
+export const NODE_FILE = /^node\/node-v[0-9]+\.[0-9]+\.[0-9]+-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz(\.sha256)?$/;
+
+/**
  * The apps' builds, as scripts/release.sh puts them beside the station's: what each app's updater reads for the
  * latest (the desktop app's electron-updater, the Android app's Updates.kt), and the files it names.
  */
@@ -64,6 +70,7 @@ const APP_FILES: [RegExp, string][] = [
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
 export function releaseType(file: string): string | null {
   if (RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file)) return "application/gzip";
+  if (NODE_FILE.test(file)) return file.endsWith(".sha256") ? "text/plain; charset=utf-8" : "application/gzip";
   return APP_FILES.find(([name]) => name.test(file))?.[1] ?? null;
 }
 
@@ -135,6 +142,48 @@ curl -fL --progress-bar "$origin/releases/$release" -o "$tmp/stillfail.tar.gz"
 tar -xzf "$tmp/stillfail.tar.gz" -C "$tmp"
 # Which channel the release came from, for the station (the Rust station's updates.rs: where it goes back from the beta).
 printf '%s\n' "$channel" > "$tmp/stillfail/CHANNEL"
+
+# The Node it runs on (NODE_VERSION: its version) is not in the release: kept apart in node/v<version> beside the data, once per
+# version, and linked at <app>/node, where the launcher finds it (and a launcher of an older release handing over to
+# this one: it looks there too). The machine's own Node does when it is that very version (another one is not what the
+# station was tested on); else it is downloaded and checked. A release from before (Node in it, no NODE_VERSION) needs none.
+node_dir=""
+if [ -f "$tmp/stillfail/NODE_VERSION" ]; then
+  node_version=$(cat "$tmp/stillfail/NODE_VERSION")
+  node_dir="$cur/node/v$node_version"
+  if [ ! -x "$node_dir/bin/node" ]; then
+    rm -rf "$node_dir.part"
+    mkdir -p "$node_dir.part/bin"
+    own=$(command -v node 2>/dev/null || true)
+    if [ -n "$own" ] && [ "$("$own" -v 2>/dev/null)" = "v$node_version" ]; then
+      cp "$own" "$node_dir.part/bin/node"
+    else
+      node_file="node-v$node_version-$platform.tar.gz"
+      echo "${say("cloud.install.node.download", { version: "${node_version}" })}"
+      if ! curl -fL --progress-bar "$origin/releases/node/$node_file" -o "$tmp/$node_file" || ! curl -fsSL "$origin/releases/node/$node_file.sha256" -o "$tmp/$node_file.sha256"; then
+        echo "${say("cloud.install.node.failed", { version: "${node_version}", origin: "${origin}" })}" >&2
+        exit 1
+      fi
+      want=$(cut -d' ' -f1 < "$tmp/$node_file.sha256")
+      got=$({ shasum -a 256 "$tmp/$node_file" 2>/dev/null || sha256sum "$tmp/$node_file"; } | cut -d' ' -f1)
+      if [ -z "$want" ] || [ "$want" != "$got" ]; then
+        echo "${say("cloud.install.node.mismatch", { version: "${node_version}" })}" >&2
+        exit 1
+      fi
+      tar -xzf "$tmp/$node_file" -C "$node_dir.part"
+    fi
+    "$node_dir.part/bin/node" -v >/dev/null 2>&1 || { echo "${say("cloud.install.node.broken", { version: "${node_version}" })}" >&2; exit 1; }
+    mv "$node_dir.part" "$node_dir"
+  fi
+  ln -s "$node_dir" "$tmp/stillfail/node"
+fi
+# The Nodes no release here runs on any more, once it runs on this one (a running old one keeps its binary open).
+prune_node() {
+  [ -n "$node_dir" ] || return 0
+  for d in "$(dirname "$node_dir")"/v*; do
+    [ "$d" = "$node_dir" ] || rm -rf "$d"
+  done
+}
 
 # The agents it starts are found on this PATH (Claude Code, Codex, and what they run). Each directory once: run from
 # the station (whose PATH is this), it would otherwise grow with every update.
@@ -257,6 +306,7 @@ if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_servic
   done
   if [ -n "$handed" ]; then
     rm -rf "$app.old"
+    prune_node
   elif [ -f "$data/run/handoff-failed" ]; then
     echo "${say("cloud.install.handoff.failed", { why: '$(cat "$data/run/handoff-failed")' })}" >&2
   elif [ "$(said startedAt)" != "$started" ]; then
@@ -310,6 +360,7 @@ fi
 move_data
 [ -n "$swapped" ] || swap_app
 rm -rf "$app.old"
+prune_node
 fi
 mkdir -p "$HOME/.local/bin"
 ln -sf "$app/bin/stillfail" "$HOME/.local/bin/stillfail"

@@ -82,6 +82,13 @@ Measured on studio, a fresh worktree each, step by step (seconds; rustc calls in
 
 With the parts published and an empty cache, the first column plus their download (33 MB, about 12 s; measured at f5b84fbf, when the core tests still took 58 s: 144 s on studio, 150 s on mini1). A worktree takes 2.1 GB (no Cargo target) against 4.8 GB building the parts and 11.1 GB in the Rust era; the shared cache 0.09 GB. A TypeScript-only commit's full check, part by part as CI runs it, made no rustc call and ran no cargo.
 
+## Node
+
+One Node version everywhere, `.node-version`'s: CI (`.github/actions/setup`, and on the Macs `scripts/node-here.sh`),
+the station's releases (which name it in `NODE_VERSION` rather than carry it: the installer gets it once per version,
+`scripts/node-dist.sh` puts it beside the releases) and the desktop app, which runs its station on its own Electron as
+Node. It is Electron's Node: upgrading Electron, `.node-version` goes with it (`apps/desktop/build.sh` stops otherwise).
+
 ## CI time
 
 Every run of the pipeline ends with `timing` (`scripts/ci-time.ts`): the time from its first job starting to its last

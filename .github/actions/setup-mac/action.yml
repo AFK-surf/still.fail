@@ -27,3 +27,5 @@ runs:
         find "$HOME/stillfail-ci" -mindepth 1 -maxdepth 1 -type d \( -name 'target*' -o -name 'check-*' -o -name 'linux*' \) -mmin +240 -exec rm -rf {} + 2>/dev/null || true
         # Rust's tests a few at a time: three runners share the machine, and the core's timing tests fail under load.
         echo "RUST_TEST_THREADS=4" >> "$GITHUB_ENV"
+        # The Node the station runs on (.node-version), ahead of ~/.local/bin's: what it is checked and built with.
+        echo "$(sh scripts/node-here.sh)" >> "$GITHUB_PATH"

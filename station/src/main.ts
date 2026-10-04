@@ -23,6 +23,10 @@ import { version } from "./ops/version.ts";
 import { AdbShares, AdminApi, AdminHost, Cloud, Events, Key, MeshNative, Paths, Readers, Store, Up } from "./services.ts";
 import { wall } from "./ops/fibers.ts";
 
+// Run by the desktop app on its own Electron as Node (apps/desktop/src/station.ts): what this starts (agents, jobs,
+// their tools, the next station at a handover through the launcher, which keeps its own) is not told to be Node too.
+delete process.env.ELECTRON_RUN_AS_NODE;
+
 const args = process.argv.slice(2);
 const data = dataDir(args);
 const command = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && args[i - 1] !== "--with-parent"));

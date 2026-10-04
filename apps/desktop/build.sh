@@ -24,9 +24,11 @@ set -eu
 [ "${1:-}" = "--beta" ] && BETA=1
 beta=${BETA:-}
 # A non-login shell (ssh studio …) has none of these on its PATH.
-export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/Library/pnpm:$HOME/.local/node-v24.15.0-darwin-arm64/bin:$PATH"
+export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/Library/pnpm:$PATH"
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
+# The Node the station runs on (.node-version: Electron's), first.
+PATH="$(sh "$root/scripts/node-here.sh"):$PATH"
 mesh=$(node "$root/scripts/native.ts" file mesh darwin-arm64)
 (cd "$root/client/core-ts" && pnpm install --frozen-lockfile --silent)
 # The web app carries PostHog when its key is at hand (docs/telemetry.md), as the cloud's does.
@@ -47,6 +49,10 @@ rsync -a "$root/dist/cloud-web/" "$here/build/web/"
 cd "$here"
 # electron-builder packs the Electron that electron's install script fetches (pnpm may have skipped it).
 [ -d node_modules/electron/dist ] || node node_modules/electron/install.js
+# The app runs its station on its own Electron as Node (src/station.ts), and the station is built and checked on
+# .node-version's: the two the same, or the build stops (upgrading Electron, .node-version goes with it).
+electron_node=$(ELECTRON_RUN_AS_NODE=1 node_modules/electron/dist/Electron.app/Contents/MacOS/Electron -p process.versions.node)
+[ "$electron_node" = "$(cat "$root/.node-version")" ] || { echo "Electron runs Node $electron_node, .node-version says $(cat "$root/.node-version"): make them the same" >&2; exit 1; }
 pnpm exec esbuild src/main.ts src/core.ts src/preload.ts --bundle --platform=node --format=cjs --external:electron --outdir=build/app --log-level=warning \
   ${beta:+--define:process.env.STILLFAIL_CHANNEL='"beta"'}
 # The page marking in a preview's frame (web/src/annotate/frame.ts), which main.ts serves as its /_ember/annotate.js.

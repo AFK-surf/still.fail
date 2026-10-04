@@ -15,8 +15,8 @@ type Range = { start: number; end: number };
 /** Reads that would be more than this many are made from ranges further apart, reading the bytes between. */
 const MAX_READS = 40;
 
-/** A file named by its version (a build's zip and its blockmap, an apk) never changes; the rest do (the feeds, the station's). */
-const VERSIONED = /-[0-9.]+-arm64-mac\.zip(\.blockmap)?$|-[0-9]+\.apk$/;
+/** A file named by its version (a build's zip and its blockmap, an apk, a Node) never changes; the rest do (the feeds, the station's). */
+const VERSIONED = /-[0-9.]+-arm64-mac\.zip(\.blockmap)?$|-[0-9]+\.apk$|^node\/node-v[0-9.]+-[a-z0-9-]+\.tar\.gz(\.sha256)?$/;
 
 export async function serveRelease(request: Request, bucket: ReleaseBucket | undefined, file: string, type: string): Promise<Response> {
   const headers = {

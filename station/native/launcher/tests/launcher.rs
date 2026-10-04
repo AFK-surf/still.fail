@@ -24,8 +24,10 @@ fn launcher() -> &'static str {
     BUILT
 }
 
+/// The Node the station runs on (.node-version), where scripts/node-here.sh puts it, unless STILLFAIL_NODE says another.
 fn node() -> String {
-    std::env::var("STILLFAIL_NODE").unwrap_or_else(|_| format!("{}/.local/node-v24.15.0-darwin-arm64/bin/node", std::env::var("HOME").unwrap()))
+    let version = include_str!("../../../../.node-version").trim();
+    std::env::var("STILLFAIL_NODE").unwrap_or_else(|_| format!("{}/.local/node-v{version}-darwin-arm64/bin/node", std::env::var("HOME").unwrap()))
 }
 
 /// Held while a socket is made or a process started. On macOS a socket is made close-on-exec only after it is made: a

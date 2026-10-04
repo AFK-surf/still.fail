@@ -24,23 +24,28 @@ type_of() {
     *.json) echo application/json ;;
     *.yml) echo "text/yaml; charset=utf-8" ;;
     *.tar.gz) echo application/gzip ;;
+    *.sha256) echo "text/plain; charset=utf-8" ;;
     *.zip) echo application/zip ;;
     *.apk) echo application/vnd.android.package-archive ;;
     *) echo application/octet-stream ;;
   esac
 }
 feed() { case $1 in station*.json | */latest.json | desktop/*-mac.yml) return 0 ;; *) return 1 ;; esac; }
+# What a pass puts: a Node first (a station's release that names it is fetched by its fixed name, not through a feed),
+# then the other files, then the feeds.
+pass_of() { case $1 in node/*) echo node ;; *) if feed "$1"; then echo feeds; else echo files; fi ;; esac; }
 
-passes="files feeds"
-case "${1:-}" in --files) passes=files; shift ;; --feeds) passes=feeds; shift ;; esac
+passes="node files feeds"
+taken=""
+case "${1:-}" in --files) passes="node files"; taken=yes; shift ;; --feeds) passes=feeds; shift ;; esac
 for dir in "$@"; do
   [ -d "$dir" ] || { echo "no releases in $dir" >&2; exit 1; }
   names=$(cd "$dir" && find . -type f | sed 's|^\./||' | sort)
   for pass in $passes; do
     pids=""
     for name in $names; do
-      if feed "$name"; then [ $pass = feeds ] || continue; else [ $pass = files ] || continue; fi
-      { put "$name" "$dir/$name" "$(type_of "$name")" && if [ "$passes" = files ]; then rm "$dir/$name"; fi; } &
+      [ "$(pass_of "$name")" = "$pass" ] || continue
+      { put "$name" "$dir/$name" "$(type_of "$name")" && if [ -n "$taken" ]; then rm "$dir/$name"; fi; } &
       pids="$pids $!"
     done
     for pid in $pids; do wait "$pid" || { echo "not all of $dir was put" >&2; exit 1; }; done

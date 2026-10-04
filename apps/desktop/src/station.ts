@@ -52,6 +52,14 @@ export class LocalStation {
     this.#bin = join(dir, "mesh", "target", "release", "stillfail-station");
   }
 
+  /**
+   * What the station's launcher runs it with: this app's own Electron as Node (ELECTRON_RUN_AS_NODE), which the release
+   * names as its Node (.node-version, Electron's): the station carries none.
+   */
+  get #node(): Record<string, string> {
+    return { STILLFAIL_NODE: process.execPath, ELECTRON_RUN_AS_NODE: "1" };
+  }
+
   /** Whether the app carries a station (a build with SKIP_STATION=1 does not). */
   get carried(): boolean {
     return existsSync(this.#bin);
@@ -93,7 +101,7 @@ export class LocalStation {
     const child = spawn(this.#bin, ["run", "--app", this.dir, "--data", data, "--with-parent"], {
       // Opened from Finder the app has launchd's short PATH; the agents it starts (Claude Code, Codex) are found on this
       // one, as an installed station's (cloud/src/install.ts).
-      env: { ...process.env, STILLFAIL_DATA: data, EMBER_DATA: data, PATH: `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin` },
+      env: { ...process.env, ...this.#node, STILLFAIL_DATA: data, EMBER_DATA: data, PATH: `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin` },
       stdio: ["ignore", log, log],
     });
     this.#child = child;
@@ -126,7 +134,7 @@ export class LocalStation {
   /** Joins the workspace a one-time token from 「添加 station」 is for. */
   enroll(origin: string, token: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      execFile(this.#bin, ["enroll", origin, token, "--data", this.data], (error, _stdout, stderr) => {
+      execFile(this.#bin, ["enroll", origin, token, "--data", this.data], { env: { ...process.env, ...this.#node } }, (error, _stdout, stderr) => {
         if (error) reject(new Error(stderr.trim() || error.message));
         else resolve();
       });

@@ -14,7 +14,8 @@ load=${E2E_LOAD:-$(native station-load)}
 rm -rf "$work" && mkdir -p "$work/data/homes/cc"
 if [ -n "${E2E_APP:-}" ]; then
   app=$E2E_APP
-  export PATH="$here/test/fake:$app/node/bin:$PATH" STILLFAIL_NO_DISCOVERY=1
+  # A release names its Node (NODE_VERSION) rather than carrying it (cloud/src/install.ts links it at node/): this one's.
+  export PATH="$here/test/fake:$PATH" STILLFAIL_NO_DISCOVERY=1 STILLFAIL_NODE=${STILLFAIL_NODE:-$(command -v node)}
 else
   app=$work/app
   mkdir -p "$app/node/bin"
