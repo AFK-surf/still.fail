@@ -93,7 +93,9 @@ export const menuItem = style({
     "&[data-danger]": { color: vars.red },
   },
 });
-export const menuSep = style({ height: "1px", margin: "6px 4px", background: vars.line });
+// Menus float on glass lighter than the page, so the page's line would read as a dark groove there; a tint of the
+// text instead is lighter than the glass in dark and darker in light.
+export const menuSep = style({ height: "1px", margin: "6px 4px", background: `color-mix(in srgb, ${vars.text} 12%, transparent)` });
 export const menuLabel = style({ padding: "6px 10px 4px", fontSize: vars.textXs, color: vars.muted });
 export const steps = style({
   margin: "0", paddingLeft: "20px", display: "grid", gap: "8px", fontSize: vars.textSm,
