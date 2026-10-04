@@ -170,17 +170,14 @@ globalStyle(`${sidePanel} ${resizeHandle}`, {
   },
 });
 globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "auto", padding: "0", borderBottom: "0" });
-/** The chat's title with its rename pen laid over its end, so the pen takes no room while it is not shown. */
-export const titleBox = style({ position: "relative", display: "flex", alignItems: "center", minWidth: "0", marginRight: "4px" });
-/** Over the end of the chat's title, shown while the title is pointed at: renames it (as double-clicking the title does). */
-export const renameBtn = style({
-  position: "absolute", right: "-4px", top: "50%", transform: "translateY(-50%)",
-  width: "24px", height: "24px", opacity: 0, color: vars.muted,
-  selectors: {
-    [`${pageBarTitle}:hover &, &:focus-visible`]: { opacity: 1 },
-  },
+/** The chat's title when it can be renamed: pressed, it turns into the field (Rename.css.ts titleInputBar) in the same box. */
+export const titleBtn = style({
+  display: "block", width: "calc(100% + 16px)", height: "28px", margin: "0 -8px", padding: "0 8px", border: "0",
+  borderRadius: `calc(6px * ${vars.cornerScale})`, background: "transparent", color: "inherit", font: "inherit", lineHeight: "28px",
+  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer", cornerShape: vars.cornerShape,
+  transition: `background ${vars.dur} ${vars.easeOut}`,
+  selectors: { "&:hover, &:focus-visible": { background: vars.hover } },
 });
-// The title's end fades out under the pen while it shows.
-globalStyle(`${pageBarTitle}:hover ${titleBox} h1, ${titleBox}:has(${renameBtn}:focus-visible) h1`, {
-  maskImage: "linear-gradient(to right, #000 calc(100% - 30px), transparent calc(100% - 10px))",
-});
+// The title keeps its width; its button's box reaches 8px past it each side (cut short with it), and a little more room
+// before what follows.
+globalStyle(`${pageBarTitle} h1:has(> ${titleBtn})`, { overflow: "visible", marginRight: "4px" });

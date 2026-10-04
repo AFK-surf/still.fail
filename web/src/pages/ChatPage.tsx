@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
-import { Archive, Boxes, Close, Edit, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
+import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -614,10 +614,9 @@ function ChatTitle({ station, session, title, onRename }: { station: string; ses
   const renameFailed = useDoingFailed("chat.rename", { station, session: session ?? "" });
   return (
     <>
-      <span className={css.titleBox}>
-        <h1 onDoubleClick={onRename}>{renamingTo ?? title}</h1>
-        {onRename && <IconButton label={t("web-pages.chat.rename")} icon={Edit} shortcut="chat.rename" className={css.renameBtn} onClick={onRename} />}
-      </span>
+      {onRename
+        ? <h1><Tip label={t("web-pages.chat.rename")} shortcut="chat.rename"><button type="button" className={css.titleBtn} onClick={onRename}>{renamingTo ?? title}</button></Tip></h1>
+        : <h1>{renamingTo ?? title}</h1>}
       <DoingShown state={{ running: renamingTo !== undefined, error: session === null ? undefined : renameFailed }} className={controlsCss.iconSpinner} size={14} label={t("web-pages.settings.stations.renaming")} />
     </>
   );
