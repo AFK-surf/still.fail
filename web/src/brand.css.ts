@@ -74,6 +74,9 @@ globalStyle(`${pageNarrow} > *`, { maxWidth: "760px", marginLeft: "auto", margin
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
 // One column no wider than the page, so a long title is cut short rather than widening its row past it.
 globalStyle(list, { listStyle: "none", margin: "0 -12px", padding: "0", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px" });
+/** A list right in a narrow page (not in a section): in the page's column like everything else there, its rows' grounds
+ * out past it by their padding. Its own margin above would take the column's centring away (it comes later). */
+globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: "max(-12px, calc(50% - 392px))", marginRight: "max(-12px, calc(50% - 392px))" });
 /** Why a dialog's action did not work, just above its buttons. */
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
 globalStyle(dialogError, { margin: "12px 0 0", fontSize: vars.textSm, color: vars.red, textWrap: "pretty" });
