@@ -132,7 +132,8 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
                         modifier = Modifier.clip(RoundedCornerShape(50)).background(C.accentBg).padding(horizontal = 6.dp, vertical = 1.dp))
                 }
             }
-            if (note.isNotEmpty()) Text(note, fontSize = 13.sp, color = if (v.state == "failed") C.red else C.muted)
+            // Its line kept while there is nothing to say: the rows stay put as checks and updates come and go.
+            Text(note.ifEmpty { " " }, fontSize = 13.sp, color = if (v.state == "failed") C.red else C.muted)
         }
         when {
             v.state == "updating" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

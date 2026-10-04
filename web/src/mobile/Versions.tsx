@@ -64,7 +64,8 @@ function Row({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: bool
     <ListRow>
       <span className={css.mVersionText}>
         <span className={css.mVersionHead}><span className={css.mVersionName}>{v.name}</span><span className={css.mVersionShown}>{shown}</span>{beta && <span className={css.mVersionBeta}>{t("web-mobile.versions.beta")}</span>}</span>
-        {note && <span className={css.mVersionNote} data-failed={v.state === "failed" || undefined}>{note}</span>}
+        {/* Its line kept while there is nothing to say: the rows stay put as checks and updates come and go. */}
+        <span className={css.mVersionNote} data-failed={v.state === "failed" || undefined}>{note || "\u00a0"}</span>
       </span>
       {v.state === "updating" ? <span className={css.mVersionState}>{v.percent != null ? <DownloadChip percent={v.percent} /> : <Spinner size={12} />}{updating}</span>
         : v.state === "failed" ? <span className={css.mVersionState}><span className={css.mVersionNote} data-failed style={{ fontWeight: 500 }}>{failed}</span>{action(t("common.retry"))}</span>

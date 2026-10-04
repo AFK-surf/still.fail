@@ -30,11 +30,12 @@ export const mBarChips = style({ display: "flex", gap: "4px", height: "20px", ma
 export const mBarNet = style({ flex: "1", display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px" });
 globalStyle(`${mBarNet} > span`, { display: "flex", flexDirection: "column", gap: "9px" });
 globalStyle(`${mStationBars} i`, { display: "block", height: "10px", borderRadius: "5px", background: "color-mix(in srgb, var(--m-line) 70%, transparent)" });
-globalStyle(`${mBarChips} i`, { height: "20px", borderRadius: "6px" });
+globalStyle(`${mBarChips} i`, { display: "block", height: "20px", borderRadius: "6px", background: "color-mix(in srgb, var(--m-line) 70%, transparent)" });
 export const mStationOffline = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", paddingTop: "6px", textAlign: "center",
 });
 /** 重试 under it: as weighty as root.css.ts's `button { font: inherit }`, and after it. */
 globalStyle(`${mStationOffline} button${connectionRetry}`, { marginTop: "6px", fontSize: "13px" });
-export const mStationLine = style({ display: "block", paddingTop: "8px", fontSize: "13px", color: "var(--m-muted)" });
+export const mStationLine = style({ display: "block", paddingTop: "8px", fontSize: "13px", lineHeight: "18px", color: "var(--m-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
+globalStyle(`${mStationLine}[data-unknown] i`, { display: "inline-block", verticalAlign: "middle", height: "10px", borderRadius: "5px", background: "color-mix(in srgb, var(--m-line) 70%, transparent)" });
 globalStyle(`${mStationHead} ${mGrow}`, { display: "flex", flexDirection: "column" });

@@ -168,6 +168,39 @@ private fun StationBody(s: StationView) {
     }
 }
 
+/**
+ * An online station's machine on its page: its load, what it is, its network, its agents' processes, each in its room
+ * whether known yet or not (grey bars until it is); reconnecting, as last heard, faded.
+ */
+@Composable
+private fun StationFigures(s: StationView) {
+    val host = s.host
+    val net = s.net
+    val processes = s.overview?.processesText?.takeIf { it.isNotEmpty() }
+    Column(Modifier.alpha(if (s.reconnecting == true) 0.45f else 1f)) {
+        Box(Modifier.padding(vertical = 4.dp).height(20.dp)) {
+            if (host != null) MeterChips(host.meters)
+            else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, 6.dp) } }
+        }
+        Line(host?.line, 180.dp, Modifier.padding(top = 8.dp))
+        Box(Modifier.padding(top = 6.dp)) {
+            NetLine(net ?: noNet, Modifier.alpha(if (net != null) 1f else 0f))
+            if (net == null) Row(Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(34.dp); Bar(96.dp) }
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(132.dp); Bar(132.dp) }
+            }
+        }
+        Line(processes, 120.dp, Modifier.padding(top = 4.dp))
+    }
+}
+
+/** A grey line of text, one line however long; a grey bar `bar` wide in its room while it is not known. */
+@Composable
+private fun Line(text: String?, bar: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) = Box(modifier, contentAlignment = Alignment.CenterStart) {
+    Text(text ?: "直连", fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(if (text != null) 1f else 0f))
+    if (text == null) Bar(bar)
+}
+
 /** The station is up but not reached just now: what shows of it is from before. */
 @Composable
 private fun Reconnecting() = Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -189,43 +222,32 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
     Column(Modifier.fillMaxSize()) {
         val manager = isManager(current)
         NavBar("Station", app::pop, s?.name ?: stationName(address), sub = s?.let { st ->
-            { if (st.reconnecting == true) Reconnecting() else Text(st.line.orEmpty(), fontSize = 11.sp, color = C.muted, maxLines = 1) }
+            // As tall either way: the title does not move as the station comes and goes.
+            { Box(Modifier.height(16.dp), contentAlignment = Alignment.CenterStart) { if (st.reconnecting == true) Reconnecting() else Text(st.line.orEmpty(), fontSize = 11.sp, color = C.muted, maxLines = 1) } }
         }, trailing = if (s != null && manager) ({ NavButton(Icons.More, { openStationMenu(app, current, s) }) }) else null)
         if (s == null) return Loading(stations.error?.message ?: t("android-settings.reading"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
-            val host = s.host
-            if (s.online && host != null) {
-                Card {
-                    // Reconnecting: as last heard, faded.
-                    Column(Modifier.alpha(if (s.reconnecting == true) 0.45f else 1f)) {
-                        MeterChips(host.meters, Modifier.padding(vertical = 4.dp))
-                        Text(host.line, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp))
-                        s.net?.let { NetLine(it, Modifier.padding(top = 6.dp)) }
-                        s.overview?.processesText?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp)) }
-                    }
-                }
-            } else if (!s.online) {
-                Card {
-                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
-                        Text(t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
-                        RetryPill(Modifier.padding(top = 6.dp))
-                    }
+            // Every part keeps its room as what it shows comes and goes (not read yet: grey bars); only being online or
+            // offline changes what the page is.
+            if (s.online) Card { StationFigures(s) }
+            else Card {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
+                    Text(t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
+                    RetryPill(Modifier.padding(top = 6.dp))
                 }
             }
             val overview = s.overview
-            if (overview != null) {
-                // What runs on it is in settings' lists, every station's together; here, how much of it there is.
-                SectionHeader(t("android-settings.stations.onIt"), start = 24.dp)
-                ListCard {
-                    GoRow(t("android-settings.connects.title"), t("android-settings.count", "n" to overview.connects.size)) { app.push(Screen.Connects(address)) }
-                    GoRow("Profile", t("android-settings.count", "n" to overview.profiles.size)) { app.push(Screen.Profiles(address)) }
-                    GoRow(t("android-settings.memory")) { app.push(Screen.Memory(address)) }
-                    // This phone's adb, lent to its agents (AdbShare.kt).
-                    GoRow(t("android-misc.adb.title"), if (shared.value?.let { it.sharing && it.station == address } == true) t("android-misc.adb.sharing") else null) { app.push(Screen.AdbShare(address)) }
-                }
-                if (s.online) Versions(address, overview.updates, manager, beta = s.betaOffered == true)
+            // What runs on it is in settings' lists, every station's together; here, how much of it there is (once read).
+            SectionHeader(t("android-settings.stations.onIt"), start = 24.dp)
+            ListCard {
+                GoRow(t("android-settings.connects.title"), overview?.let { t("android-settings.count", "n" to it.connects.size) }) { app.push(Screen.Connects(address)) }
+                GoRow("Profile", overview?.let { t("android-settings.count", "n" to it.profiles.size) }) { app.push(Screen.Profiles(address)) }
+                GoRow(t("android-settings.memory")) { app.push(Screen.Memory(address)) }
+                // This phone's adb, lent to its agents (AdbShare.kt).
+                GoRow(t("android-misc.adb.title"), if (shared.value?.let { it.sharing && it.station == address } == true) t("android-misc.adb.sharing") else null) { app.push(Screen.AdbShare(address)) }
             }
+            if (s.online && overview != null) Versions(address, overview.updates, manager, beta = s.betaOffered == true)
             Spacer(Modifier.height(30.dp))
         }
     }

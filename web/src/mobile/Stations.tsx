@@ -76,6 +76,30 @@ export function StationsScreen() {
 /** Laid out while a station has no network to show, so that its card keeps the room. */
 const noNet: StationNet = { path: "直连", rtt: { text: "0 ms", level: "ok" }, rttHistory: [], down: " ", up: " ", total: "" };
 
+/**
+ * An online station's machine on its page: its load, what it is, its network, its agents' processes, each in its room
+ * whether known yet or not (grey bars until it is); reconnecting, as last heard, faded.
+ */
+function StationFigures({ s }: { s: StationView }) {
+  const processes = s.overview?.processesText || null;
+  return (
+    <span className={css.mStationFaded} data-stale={s.reconnecting || undefined}>
+      <span className={css.mStationRings}>{s.host ? <MeterChips meters={s.host.meters} /> : <span className={css.mBarChips} style={{ marginTop: 0 }}>{[46, 52, 50].map((w) => <i key={w} style={{ width: w }} />)}</span>}</span>
+      <Known text={s.host?.line ?? null} bar={180} />
+      <span className={css.mStationBody}>
+        <span className={css.mStationLoad}><span className={css.mStationNet} data-hidden={!s.net || undefined}><Net net={s.net ?? noNet} stacked /></span></span>
+        {!s.net && <span className={css.mStationBars} aria-hidden><span className={css.mBarNet}><span><i style={{ width: 34 }} /><i style={{ width: 96 }} /></span><span><i style={{ width: 132 }} /><i style={{ width: 132 }} /></span></span></span>}
+      </span>
+      <Known text={processes} bar={120} />
+    </span>
+  );
+}
+
+/** A grey line of text, one line however long; a grey bar `bar` wide in its room while it is not known. */
+function Known({ text, bar }: { text: string | null; bar: number }) {
+  return <span className={css.mStationLine} data-unknown={text === null || undefined}>{text ?? <i style={{ width: bar }} />}</span>;
+}
+
 /** The station is up but not reached just now: what shows of it is from before. */
 function Reconnecting() {
   return <span className={css.mReconnecting}><Spinner size={11} />{t("web-mobile.stations.reconnecting")}</span>;
@@ -162,30 +186,19 @@ export function StationScreen() {
         trailing={s && manager ? <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
       {!s ? <Loading text={stations.error?.message ?? t("web-mobile.reading")} /> : (
         <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
-          {s.online && s.host ? (
-            <Card>
-              <span className={css.mStationFaded} data-stale={s.reconnecting || undefined}>
-              <span className={css.mStationRings}><MeterChips meters={s.host.meters} /></span>
-              <span className={css.mStationLine}>{s.host.line}</span>
-              {s.net && <Net net={s.net} stacked />}
-              {s.overview?.processesText && <span className={css.mStationLine}>{s.overview.processesText}</span>}
-              </span>
-            </Card>
-          ) : !s.online ? (
+          {/* Every part keeps its room as what it shows comes and goes (not read yet: grey bars); only being online or
+              offline changes what the page is. */}
+          {s.online ? <Card><StationFigures s={s} /></Card> : (
             <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>{t("web-mobile.stations.offlineNote", { name: NAME })}</span><RetryPill /></span></Card>
-          ) : null}
-          {/* What runs on it is in settings' lists, every station's together; here, how much of it there is, and its versions. */}
-          {s.overview && (
-            <>
-              <SectionHeader title={t("web-mobile.stations.onThis")} start={24} />
-              <ListCard>
-                <GoRow title={t("web-mobile.settings.connects")} value={t("web-mobile.settings.connectsCount", { n: s.overview.connects.length })} onClick={() => app.push(app.at(`/settings/connects?station=${s.id}`))} />
-                <GoRow title="Profile" value={t("web-mobile.settings.profilesCount", { n: s.overview.profiles.length })} onClick={() => app.push(app.at(`/settings/profiles?station=${s.id}`))} />
-                <GoRow title={t("web-mobile.settings.memory")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
-              </ListCard>
-              {s.online && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
-            </>
           )}
+          {/* What runs on it is in settings' lists, every station's together; here, how much of it there is (once read), and its versions. */}
+          <SectionHeader title={t("web-mobile.stations.onThis")} start={24} />
+          <ListCard>
+            <GoRow title={t("web-mobile.settings.connects")} value={s.overview ? t("web-mobile.settings.connectsCount", { n: s.overview.connects.length }) : undefined} onClick={() => app.push(app.at(`/settings/connects?station=${s.id}`))} />
+            <GoRow title="Profile" value={s.overview ? t("web-mobile.settings.profilesCount", { n: s.overview.profiles.length }) : undefined} onClick={() => app.push(app.at(`/settings/profiles?station=${s.id}`))} />
+            <GoRow title={t("web-mobile.settings.memory")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
+          </ListCard>
+          {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
           <div style={{ height: 30 }} />
         </div>
       )}
