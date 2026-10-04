@@ -219,6 +219,10 @@ globalStyle("::view-transition-group(*), ::view-transition-old(*), ::view-transi
     },
   },
 });
+/** The words a search found, marked in the message it opened, until the chat is left. */
+globalStyle("::highlight(search-hit)", {
+  backgroundColor: `color-mix(in srgb, ${vars.accent} 28%, transparent)`, color: "inherit",
+});
 /** The quoted passage, highlighted where it was said after following a quote. */
 globalStyle("::highlight(quote-flash)", {
   backgroundColor: `color-mix(in srgb, ${vars.accent} 28%, transparent)`, color: "inherit",

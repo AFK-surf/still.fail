@@ -760,6 +760,8 @@ test("the_messages_a_few_words_find_are_those_of_the_chats_listed_newest_first_a
   assert.equal(typeof first.time.createdAt, "object");
   // Not asked for: none looked for.
   assert.deepEqual(v(values, 2).messages ?? [], []);
+  // The words looked for, as a message opened from the search marks them.
+  assert.deepEqual(v(values, 3).words, ["login", "页面"]);
   // Every word, case aside, on the line that has them; a line's start cut to the words.
   const cut = v(values, 3).messages;
   assert.deepEqual(cut.map((m: J) => m.seq), [3]);

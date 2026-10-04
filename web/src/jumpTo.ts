@@ -1,9 +1,10 @@
 // A message a chat is to show when it opens: a row's second line pressed, where the core says what its state is about
 // (`stateAbout`). The row asks for it here and opens the chat as it always does; the chat's list (Chat.tsx
-// useMessageList, both screens) takes it once the message is in, scrolls it to its top and flashes it.
+// useMessageList, both screens) takes it once the message is in, scrolls it to its top and flashes it; or, opened from
+// a search (`words`), marks the words in it instead, until the chat is left.
 import { useSyncExternalStore } from "react";
 
-interface Wanted { station: string; thread: number; seq: number }
+interface Wanted { station: string; thread: number; seq: number; words?: string[] | undefined }
 
 let wanted: Wanted | null = null;
 const heard = new Set<() => void>();
@@ -29,4 +30,9 @@ export function useJump(station: string, thread: number | null): number | null {
     () => (wanted && thread !== null && wanted.station === station && wanted.thread === thread ? wanted.seq : null),
     () => null,
   );
+}
+
+/** The words the message asked for is to have marked (opened from a search), if any: read as it is shown. */
+export function jumpWords(): string[] | undefined {
+  return wanted?.words;
 }

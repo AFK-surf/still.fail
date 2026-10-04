@@ -689,7 +689,10 @@ export class Views implements Owner {
         const chats = this.#chats(view.scope as string, false, false);
         if (chats === undefined || !("ok" in chats)) return chats;
         const found = refs.search(chats.ok, view.query as string, view.station as string | undefined, view.exclude as string | undefined, view.limit as number | undefined);
-        if (typeof view.messages === "number" && view.messages > 0) found.messages = this.#foundMessages(chats.ok, view);
+        if (typeof view.messages === "number" && view.messages > 0) {
+          found.messages = this.#foundMessages(chats.ok, view);
+          found.words = refs.terms(view.query as string);
+        }
         return { ok: found };
       }
       case "stations":

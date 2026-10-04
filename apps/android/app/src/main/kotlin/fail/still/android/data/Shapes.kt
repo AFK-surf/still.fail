@@ -1400,6 +1400,8 @@ data class FoundMessage (
 @Serializable
 data class ChatSearchView (
 	val items: List<ChatItem>,
+	/// The words looked for, as a found message marks them in its chat when opened (with `messages`).
+	val words: List<String>? = null,
 	/// The messages that have the words (asked for by `messages`, at most that many), newest first: only in the chats
 	/// listed. Empty when not asked for.
 	val messages: List<FoundMessage>? = null

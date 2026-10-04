@@ -157,7 +157,7 @@ function SearchPage({ from, onClose }: { from: DOMRect; onClose: () => void }) {
         {messages.length > 0 && (
           <section>
             <SectionHeader title={t("web-mobile.home.searchMessages")} />
-            {messages.map((m) => <FoundRow key={`${m.station}/${m.thread}/${m.seq}`} found={m} />)}
+            {messages.map((m) => <FoundRow key={`${m.station}/${m.thread}/${m.seq}`} found={m} words={view?.words} />)}
           </section>
         )}
       </div>
@@ -166,13 +166,13 @@ function SearchPage({ from, onClose }: { from: DOMRect; onClose: () => void }) {
 }
 
 /** A message the words found: its chat, who said it and when, over the line that has them (those drawn out); tapped,
- *  its chat opens at it (../jumpTo.ts). */
-function FoundRow({ found }: { found: FoundMessage }) {
+ *  its chat opens at it, the words marked there (../jumpTo.ts). */
+function FoundRow({ found, words }: { found: FoundMessage; words: string[] | undefined }) {
   const app = useApp();
   const item = found.chat;
   return (
     <button type="button" className={css.mChatRow}
-      onClick={() => { jumpTo({ station: found.station, thread: found.thread, seq: found.seq }); app.open(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`); }}>
+      onClick={() => { jumpTo({ station: found.station, thread: found.thread, seq: found.seq, words }); app.open(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`); }}>
       <span className={css.mChatText}>
         <span className={css.mChatLine1}>
           <span className={css.mFoundChat}>{item.title}</span>

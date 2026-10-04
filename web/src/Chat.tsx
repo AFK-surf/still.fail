@@ -45,7 +45,7 @@ import { failure, useToast, useAct } from "./toast.tsx";
 import { MessageDecision } from "./Decisions.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
-import { jumped, useJump } from "./jumpTo.ts";
+import { jumped, jumpWords, useJump } from "./jumpTo.ts";
 import { t } from "./i18n.ts";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
@@ -488,6 +488,7 @@ function useJumpTo(list: RefObject<HTMLDivElement | null>, station: string, thre
     }
     // A frame later: after the list has been put where it opens.
     const frame = requestAnimationFrame(() => {
+      const words = jumpWords();
       jumped();
       const pane = list.current;
       const target = pane?.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${CSS.escape(message.ts)}"]`);
@@ -500,12 +501,61 @@ function useJumpTo(list: RefObject<HTMLDivElement | null>, station: string, thre
       // Said at once (the browser says it a frame later): the pane keeps this place, not the one it held as the list
       // re-renders for the jump being taken (scroll.ts).
       pane.dispatchEvent(new Event("scroll"));
+      // Opened from a search: the words found marked in it (kept until the chat is left), the first in view.
+      if (words?.length && markWords(target, words)) {
+        const first = searchHits[0]!.getBoundingClientRect();
+        const bottom = pane.getBoundingClientRect().bottom;
+        if (first.bottom > bottom) {
+          pane.scrollTop += first.top + first.height / 2 - (pane.getBoundingClientRect().top + pane.clientHeight / 2);
+          pane.dispatchEvent(new Event("scroll"));
+        }
+        return;
+      }
       target.classList.remove(css.msgFlash);
       void target.offsetWidth;
       target.classList.add(css.msgFlash);
     });
     return () => cancelAnimationFrame(frame);
   }, [seq, messages, more]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The words a search marked go when the chat does.
+  useEffect(() => () => unmarkWords(), [station, thread]);
+}
+
+/** Where the words a search found are marked in the message it opened (CSS custom highlights: `search-hit`). */
+let searchHits: Range[] = [];
+
+/** Marks each of `words` (case aside) in the text of `root`; false when none is in it (or the browser cannot). */
+function markWords(root: Element, words: string[]): boolean {
+  unmarkWords();
+  if (!("highlights" in CSS)) return false;
+  const wanted = words.map((w) => w.toLowerCase()).filter((w) => w !== "");
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const ranges: Range[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const node = n as Text;
+    const lower = node.data.toLowerCase();
+    if (lower.length !== node.data.length) continue;
+    for (const w of wanted) {
+      for (let at = lower.indexOf(w); at >= 0; at = lower.indexOf(w, at + w.length)) {
+        const range = document.createRange();
+        range.setStart(node, at);
+        range.setEnd(node, at + w.length);
+        ranges.push(range);
+      }
+    }
+  }
+  if (!ranges.length) return false;
+  ranges.sort((a, b) => a.compareBoundaryPoints(Range.START_TO_START, b));
+  searchHits = ranges;
+  const highlights = (CSS as unknown as { highlights: Map<string, unknown> }).highlights;
+  const Highlight = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
+  highlights.set("search-hit", new Highlight(...ranges));
+  return true;
+}
+
+function unmarkWords(): void {
+  searchHits = [];
+  if ("highlights" in CSS) (CSS as unknown as { highlights: Map<string, unknown> }).highlights.delete("search-hit");
 }
 
 /** The core hands the chat over anew as it changes: a message is the same one if all it holds is (its times in words too). */

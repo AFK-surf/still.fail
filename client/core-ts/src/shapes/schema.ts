@@ -1031,6 +1031,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the\nsystem was asked to allow them, whether the device should hold a push registration, and the notices a page is to\nshow now, each taken by one page (`notice.claim`).", keepNone: true }),
   ChatSearchView: struct([
     ["items", vec("ChatItem")],
+    ["words", vec("String"), { default: true, doc: "The words looked for, as a found message marks them in its chat when opened (with `messages`)." }],
     ["messages", vec("FoundMessage"), { default: true, doc: "The messages that have the words (asked for by `messages`, at most that many), newest first: only in the chats\nlisted. Empty when not asked for." }],
   ], { doc: "The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words\nfirst. What the composer's `@` menu and the switcher list.", keepNone: true }),
   FoundMessage: struct([

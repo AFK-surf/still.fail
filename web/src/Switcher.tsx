@@ -76,7 +76,7 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
   const go = (pick: Found | undefined) => {
     if (!pick) return;
     onClose();
-    if (pick.message) jumpTo({ station: pick.message.station, thread: pick.message.thread, seq: pick.message.seq });
+    if (pick.message) jumpTo({ station: pick.message.station, thread: pick.message.thread, seq: pick.message.seq, words: view?.words });
     navigate(`${stationBase(pick.chat.station)}/chats/${encodeURIComponent(pick.chat.id)}`);
   };
   const option = (i: number) => ({

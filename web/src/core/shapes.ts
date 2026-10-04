@@ -1395,6 +1395,8 @@ export interface FoundMessage {
  */
 export interface ChatSearchView {
 	items: ChatItem[];
+	/** The words looked for, as a found message marks them in its chat when opened (with `messages`). */
+	words?: string[];
 	/**
 	 * The messages that have the words (asked for by `messages`, at most that many), newest first: only in the chats
 	 * listed. Empty when not asked for.
