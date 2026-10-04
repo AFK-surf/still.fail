@@ -6,7 +6,7 @@
   "engines": {
     "node": ">=24"
   },
-  "packageManager": "pnpm@10.11.1",
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "node scripts/native.ts iroh-pkg && node scripts/posthog-key.ts",
     "build:cloud": "node scripts/native.ts iroh-pkg && (cd client/core-ts && pnpm install --frozen-lockfile) && vite build --config web/vite.config.ts --mode cloud && vite build --config web/vite.config.ts --mode cloud-admin && node cloud/build-static.ts",

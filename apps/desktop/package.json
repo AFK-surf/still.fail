@@ -73,5 +73,5 @@
     },
     "electronDist": "node_modules/electron/dist"
   },
-  "packageManager": "pnpm@10.11.1"
+  "packageManager": "pnpm@10.33.0"
 }

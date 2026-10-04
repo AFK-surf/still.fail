@@ -21,7 +21,9 @@ runs:
         package-manager-cache: false
     - shell: bash
       run: |
-        npm install --global pnpm@10.11.1
+        # The pnpm every package.json names (packageManager, one version for all: a mix had each install switch
+        # versions, and installs side by side raced to fetch the other one, 2026-10-04).
+        npm install --global "pnpm@$(node -p 'require("./package.json").packageManager.split("@")[1]')"
         echo "PNPM_STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
     # pnpm's store, which every install here links from: kept between runs by the lockfiles.
     - uses: actions/cache@v4
