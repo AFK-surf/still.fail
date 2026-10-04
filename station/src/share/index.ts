@@ -205,18 +205,24 @@ export class Sharing {
 
   // ── state ──
 
+  /// The one copy of state.json in memory (read at the first use): every change is made to it and written through, so
+  /// a request answered while the shares are brought in line changes the same one.
+  private state: State | null = null;
+
   private readState(): State {
+    if (this.state) return this.state;
     try {
       const s = JSON.parse(readFileSync(join(this.root, "state.json"), "utf8"));
-      return { hosted: isObject(s.hosted) ? s.hosted : {}, borrowed: isObject(s.borrowed) ? s.borrowed : {}, moved: isObject(s.moved) ? s.moved : {} };
+      this.state = { hosted: isObject(s.hosted) ? s.hosted : {}, borrowed: isObject(s.borrowed) ? s.borrowed : {}, moved: isObject(s.moved) ? s.moved : {} };
     } catch {
-      return { hosted: {}, borrowed: {}, moved: {} };
+      this.state = { hosted: {}, borrowed: {}, moved: {} };
     }
+    return this.state;
   }
 
-  private writeState(s: State) {
+  private writeState(_s: State = this.readState()) {
     mkdirSync(this.root, { recursive: true });
-    writePrivate(join(this.root, "state.json"), JSON.stringify(s, null, 2));
+    writePrivate(join(this.root, "state.json"), JSON.stringify(this.readState(), null, 2));
   }
 
   private profiles(): Json[] {
@@ -331,6 +337,8 @@ export class Sharing {
       hosted.allow = now.allow;
       hosted.name = now.name;
       state.hosted[id] = hosted;
+      // Written before anyone is told, so what they ask for is that version.
+      this.writeState();
       if (peers === null) continue;
       for (const peer of peers) {
         if (this.mayUse(now.allow, peer)) {

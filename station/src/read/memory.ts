@@ -36,6 +36,22 @@ function agentHome(raw: Json, dataDir: string): string {
 }
 
 /// What a skill's sharing is (share/index.ts): shared from here (config.json `sharedSkills`), a copy of another
+/// front: a SKILL.md's frontmatter field (`key: value`), if it has one.
+function front(text: string, key: string): string | null {
+  if (!text.startsWith("---\n")) return null;
+  const body = text.slice(4);
+  const end = body.indexOf("\n---");
+  if (end < 0) return null;
+  for (const raw of body.slice(0, end).split("\n")) {
+    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    if (line.startsWith(`${key}:`)) return line.slice(key.length + 1).trim().replace(/^"+|"+$/g, "");
+  }
+  return null;
+}
+
+/// Rust's String order (bytes of UTF-8).
+const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.from(b));
+
 /// station's (its link into <data>/share/<id>/skill, from the station state.json says), or neither (null).
 function sharing(dataDir: string, raw: Json, dir: string, name: string): Json {
   const hosted = raw?.sharedSkills?.[name];
