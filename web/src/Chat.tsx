@@ -1030,7 +1030,7 @@ export function AgentAvatar({ maker, runtime, slack }: { maker: Maker | null | u
     <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}>
       {runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
       {/* What it said went to Slack, not here: Slack's mark on its corner. */}
-      {slack && <span className={css.msgAvatarSlack}><SlackLogo size={8} /></span>}
+      {slack && <span className={css.msgAvatarSlack}><SlackLogo size={9} /></span>}
     </span>
   );
 }
