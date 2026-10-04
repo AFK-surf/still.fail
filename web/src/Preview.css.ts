@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
+import { glass } from "./styles/glass.ts";
 import { enterUpKeyframes, jobBreatheKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
 import { iconBtn } from "./styles/pages.css.ts";
 import { msg } from "./styles/conversation.css.ts";
@@ -28,7 +29,7 @@ export const previewMissing = style({ alignItems: "center", justifyContent: "cen
 /** A service starting again: said over its page, which loads anew once it is up. */
 export const previewRestart = style({
   position: "absolute", left: "50%", bottom: "18px", transform: "translateX(-50%)", display: "flex",
-  alignItems: "center", gap: "12px", padding: "10px 18px 10px 16px", borderRadius: "999px", background: vars.canvas,
+  alignItems: "center", gap: "12px", padding: "10px 18px 10px 16px", borderRadius: "999px", ...glass,
   boxShadow: `0 8px 24px ${vars.shadow}`, fontSize: vars.textSm, lineHeight: "1.35", whiteSpace: "nowrap",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`,
 });
@@ -73,7 +74,7 @@ globalStyle(`${enrollWait} > span:last-child`, { display: "grid", gap: "2px", fo
 export const loadRing = style({ color: vars.muted, flex: "none", selectors: { '&[data-failed]': { color: vars.red } } });
 export const loadDetails = style({
   zIndex: 1000, width: "min(420px, calc(100vw - 24px))", padding: "14px", borderRadius: vars.rCard,
-  background: `color-mix(in srgb, ${vars.raised} 84%, transparent)`, backdropFilter: "blur(20px)", color: vars.text,
+  ...glass, color: vars.text,
   boxShadow: `0 2px 8px ${vars.shadow}`, fontSize: vars.textSm,
 });
 export const loadHeading = style({ fontWeight: "500", marginBottom: "4px" });

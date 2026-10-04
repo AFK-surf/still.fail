@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
+import { glass } from "./glass.ts";
 import { popKeyframes } from "./keyframes.css.ts";
 import { inputRow } from "./additions.css.ts";
 import { command, field, skeletonRow } from "../ui.css.ts";
@@ -72,7 +73,7 @@ export const input = style({
 /** A one-line field is a pill, as the buttons beside it are; a textarea keeps --r-field (its lines in a pill would not sit right). */
 globalStyle(`input${input}`, { borderRadius: "999px", paddingLeft: "16px", paddingRight: "16px", cornerShape: "round" });
 export const popover = style({
-  zIndex: "60", padding: "6px", border: `1px solid ${vars.line}`, borderRadius: vars.rMenu, background: vars.canvas,
+  zIndex: "60", padding: "6px", borderRadius: vars.rMenu, ...glass,
   boxShadow: `0 12px 32px ${vars.shadow}`, transformOrigin: "var(--radix-popper-transform-origin, top)",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`, cornerShape: vars.cornerShape,
 });

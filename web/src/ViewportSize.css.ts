@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
+import { glass } from "./styles/glass.ts";
 import { fadeInKeyframes, mRiseInKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
 
 /** The bar's button: its icon alone, or with the size the page is laid out at (and how much it is drawn at). */
@@ -23,7 +24,7 @@ export const buttonScale = style({ color: vars.muted, fontWeight: "400" });
 
 export const popover = style({
   zIndex: "60", width: "256px", padding: "6px", borderRadius: vars.rMenu, cornerShape: vars.cornerShape,
-  background: vars.canvas, border: `1px solid ${vars.line}`, boxShadow: `0 12px 32px ${vars.shadow}`,
+  ...glass, boxShadow: `0 12px 32px ${vars.shadow}`,
   transformOrigin: "var(--radix-popper-transform-origin, top right)", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
   outline: "none",
 });
@@ -34,7 +35,7 @@ export const sheetShade = style({
 });
 export const sheet = style({
   position: "fixed", left: "0", right: "0", bottom: "0", zIndex: "81", padding: "8px 12px calc(12px + env(safe-area-inset-bottom))",
-  borderRadius: `${vars.rDialog} ${vars.rDialog} 0 0`, cornerShape: vars.cornerShape, background: vars.canvas,
+  borderRadius: `${vars.rDialog} ${vars.rDialog} 0 0`, cornerShape: vars.cornerShape, ...glass,
   boxShadow: `0 -8px 32px ${vars.shadow}`, outline: "none",
   animation: `${mRiseInKeyframes} 260ms ${vars.easeOut}`,
 });
