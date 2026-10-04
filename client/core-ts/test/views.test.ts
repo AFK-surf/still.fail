@@ -1397,24 +1397,28 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
     // Its own chat's words are its messages already; what goes to a still.fail chat is not Slack's.
     [2, call("mcp__stillfail__chat_post", { to: "EMBER/1.0", text: "这里" }, "1970-01-01T00:00:02.5Z", "c2")],
     [3, call("mcp__stillfail__slack_api", { method: "chat.postMessage", params: { channel: "C0DEV", text: "新话题" } }, "1970-01-01T00:00:04Z", "c3")],
+    // What someone said in Slack, given to it.
+    [4, { at: "1970-01-01T00:00:05Z", kind: "user", text: '<message via="slack" thread="C0OPS/1727.0001" from="Mia (U9)" ts="2.5">*收到*，<@U9> 看一下</message>' }],
   ]);
   await t.read(u, 1);
   let v = u.value;
-  assert.deepEqual(v.elsewhere.map((s: J) => [s.after, s.text, s.place.name, s.failed]), [
-    [1, "**部署** 好了 [看这里](https://x.y)", "#C0OPS", false],
-    [2, "新话题", "#C0DEV", false],
+  assert.deepEqual(v.elsewhere.map((s: J) => [s.after, s.text, s.place.name, s.failed, s.received ?? false, s.by.name]), [
+    [1, "**部署** 好了 [看这里](https://x.y)", "#C0OPS", false, false, v.elsewhere[0].by.name],
+    [1, "**收到**，<@U9> 看一下", "#C0OPS", false, true, "Mia"],
+    [2, "新话题", "#C0DEV", false, false, v.elsewhere[0].by.name],
   ]);
   assert.equal(v.messages.length, 2);
   // Slack's answer gives the new message its thread; one Slack refused failed.
   t.data.putItems("transcript", "ws/a", "k", [
-    [4, { at: "1970-01-01T00:00:04Z", kind: "tool_result", text: JSON.stringify({ ok: true, ts: "1727.0002" }), callId: "c3" }],
-    [5, call("mcp__stillfail__slack_api", { method: "chat.postMessage", params: { channel: "C0DEV", thread_ts: "1727.0002", text: "补一句" } }, "1970-01-01T00:00:05Z", "c4")],
-    [6, { at: "1970-01-01T00:00:05Z", kind: "tool_result", text: JSON.stringify({ ok: false, error: "not_in_channel" }), callId: "c4" }],
+    [5, { at: "1970-01-01T00:00:04Z", kind: "tool_result", text: JSON.stringify({ ok: true, ts: "1727.0002" }), callId: "c3" }],
+    [6, call("mcp__stillfail__slack_api", { method: "chat.postMessage", params: { channel: "C0DEV", thread_ts: "1727.0002", text: "补一句" } }, "1970-01-01T00:00:05Z", "c4")],
+    [7, { at: "1970-01-01T00:00:05Z", kind: "tool_result", text: JSON.stringify({ ok: false, error: "not_in_channel" }), callId: "c4" }],
   ]);
   await t.read(u, 1);
   v = u.value;
   assert.deepEqual(v.elsewhere.map((s: J) => [s.after, s.text, s.failed]), [
     [1, "**部署** 好了 [看这里](https://x.y)", false],
+    [1, "**收到**，<@U9> 看一下", false],
     [2, "新话题", false],
     [2, "补一句", true],
   ]);

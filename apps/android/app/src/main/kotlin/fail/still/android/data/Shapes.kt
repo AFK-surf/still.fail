@@ -1417,8 +1417,8 @@ data class Place (
 	val url: String? = null
 )
 
-/// A message an agent of a chat sent to Slack (chat_post to a Slack thread, slack_api chat.postMessage), read from
-/// its transcript: the chat shows it after the message it followed, without it being one of the chat's.
+/// A message in Slack an agent of a chat sent (chat_post to a Slack thread, slack_api chat.postMessage) or was given,
+/// read from its transcript: the chat shows it after the message it followed, without it being one of the chat's.
 @Serializable
 data class ChatSentElsewhere (
 	val key: String,
@@ -1430,6 +1430,8 @@ data class ChatSentElsewhere (
 	/// Where it went; none when the core cannot name it.
 	val place: Place? = null,
 	val failed: Boolean? = null,
+	/// A person's message in Slack its agent was given (`by`: who said it); absent for what the agent sent there.
+	val received: Boolean? = null,
 	val by: MessageBy,
 	/// Its times in words, by field (`createdAt`).
 	val time: Map<String, Stamp>? = null
@@ -1512,8 +1514,8 @@ data class ChatView (
 	val people: List<Person>,
 	val agents: List<ChatAgent>,
 	val messages: List<ChatMessage>,
-	/// What its agents sent to Slack meanwhile (not to this chat), shown among its messages; not kept in it. Empty
-	/// from a core before it.
+	/// What its agents said in Slack and were given from it meanwhile (not in this chat), shown among its messages;
+	/// not kept in it. Empty from a core before it.
 	val elsewhere: List<ChatSentElsewhere>? = null,
 	val more: Boolean,
 	/// Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,

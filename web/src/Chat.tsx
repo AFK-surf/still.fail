@@ -174,7 +174,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
   // What its agents sent to Slack meanwhile, each after the message it followed (0: before the first).
   const sentAfter = new Map<number, ChatSentElsewhere[]>();
   for (const s of chat.elsewhere ?? []) sentAfter.set(s.after, [...(sentAfter.get(s.after) ?? []), s]);
-  const sent = (after: number) => sentAfter.get(after)?.map((s) => <SentElsewhere key={s.key} sent={s} agentHere={here(s.by.agent)} onOpenHistory={onOpenHistory} />);
+  const sent = (after: number) => sentAfter.get(after)?.map((s) => <SentElsewhere key={s.key} sent={s} agentHere={here(s.by.agent ?? undefined)} onOpenHistory={onOpenHistory} />);
   return (
     <>
       {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
@@ -885,23 +885,28 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   && a.options === b.options && a.archive === b.archive && a.check?.text === b.check?.text && a.check?.failed === b.check?.failed && a.focus === b.focus && sameMessage(a.message, b.message));
 
 /**
- * What an agent of the chat sent to Slack rather than here (the core reads it from its transcript; the chat does not
- * keep it): drawn as its message, with where it went over its words beside a bar, as the execution history has it.
+ * What an agent of the chat said in Slack rather than here, or a person's Slack message it was given (the core reads
+ * them from its transcript; the chat does not keep them): drawn as a message of theirs, Slack's mark on the avatar, with
+ * where it went or came from over its words beside a bar, as the execution history has it.
  */
 const SentElsewhere = memo(function SentElsewhere({ sent: s, agentHere, onOpenHistory }: { sent: ChatSentElsewhere; agentHere: boolean; onOpenHistory: (key: string) => void }) {
   const agent = agentHere ? s.by.agent : undefined;
+  const received = s.received === true;
   const place = s.place
     ? <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
     : <><SlackLogo size={12} />Slack</>;
   return (
-    <OthersMessage data-role="agent" data-author={s.by.name} data-elsewhere="" avatar={<AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack />} time={s.time?.createdAt}
+    <OthersMessage data-role={received ? "person" : "agent"} data-author={s.by.name} data-elsewhere="" time={s.time?.createdAt}
+      avatar={received
+        ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><SlackLogo size={9} /></span></span>
+        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack />}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{s.by.name}</button>
         : <span className={css.msgName}>{s.by.name}</span>}>
       <div className={`${historyCss.hReceived} ${historyCss.hPost}`} data-failed={s.failed ?? false}>
         <div className={historyCss.hLabel}>
-          <Send {...ICON} size={14} />
-          {t("web-main.history.sentTo")}
+          {received ? <Received {...ICON} size={14} /> : <Send {...ICON} size={14} />}
+          {t(received ? "web-main.chat.fromSlack" : "web-main.history.sentTo")}
           {s.place?.url
             ? <a className={historyCss.hPlace} href={s.place.url} target="_blank" rel="noopener">{place}</a>
             : <span className={historyCss.hPlace}>{place}</span>}

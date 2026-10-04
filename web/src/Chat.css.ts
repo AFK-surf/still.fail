@@ -216,7 +216,9 @@ export const msgAvatarAgent = style({
   // Slack's mark on its corner (msgAvatarSlack) is out past its round.
   selectors: { "&[data-slack]": { overflow: "visible" } },
 });
-/** Slack's mark on the corner of an agent's avatar, over what it sent to Slack (Chat.tsx SentElsewhere). */
+/** A Slack person's avatar with Slack's mark on its corner (msgAvatarSlack), out past its round. */
+export const msgAvatarSlackHolder = style({ selectors: { "&[data-slack]": { overflow: "visible" } } });
+/** Slack's mark on the corner of an avatar, over what was said in Slack (Chat.tsx SentElsewhere). */
 export const msgAvatarSlack = style({
   position: "absolute", right: "-6px", bottom: "-6px", width: "14px", height: "14px", display: "grid", placeItems: "center",
   borderRadius: "50%", background: vars.list, boxShadow: `0 0 0 1px ${vars.line}`,

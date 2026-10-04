@@ -1,9 +1,10 @@
-// What a chat's agents sent to Slack (chat_post to a Slack thread, slack_api chat.postMessage), read from their
-// transcripts as the sync brings them and kept, as Markdown, in the account's database (`sent`, db/account.ts): a chat
-// shows these among its messages, at the time they were sent, without them being entries of the chat (shapes:
-// ChatSentElsewhere), and without its transcripts being read again to find them.
+// What a chat's agents said in Slack and heard from it: what they sent there (chat_post to a Slack thread, slack_api
+// chat.postMessage) and the Slack messages they were given. Read from their transcripts as the sync brings them and
+// kept, as Markdown, in the account's database (`slack_said`, db/account.ts): a chat shows these among its messages, at
+// the time they were said, without them being entries of the chat (shapes: ChatSentElsewhere), and without its
+// transcripts being read again to find them.
 import { epochMs, toolName } from "./activity.ts";
-import { args } from "./history.ts";
+import { args, parsePrompt } from "./history.ts";
 import * as format from "./format.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -67,20 +68,34 @@ export function outcome(entry: J): { failed: boolean; ts: string | null } {
   return { failed: v.ok === false, ts: typeof v.ts === "string" ? v.ts : null };
 }
 
-/// One thing sent, as kept: its transcript item, its call's id, when, where to (a Slack thread's address, or a channel
-/// before its message's ts is known), its words as Markdown, and whether it failed.
-export type Sent = { i: number; call: string | null; at: number; to: string; text: string; failed: boolean };
+/// One thing said in Slack, as kept: its transcript item (`k`: which of the item's messages), `out` when the agent sent
+/// it (its call's id) or else a person's it was given (`user`, `who`: their Slack id and name), when, where (a Slack
+/// thread's address, or a channel before a message's ts is known), its words as Markdown, and whether it failed.
+export type Said = {
+  i: number; k: number; out: boolean; call: string | null; user: string | null; who: string | null; at: number; to: string;
+  text: string; failed: boolean;
+};
 
-/// What a transcript item does to what was sent: a call that sends something (`sent`), or the result of a call (`result`:
-/// its call's id, else none, then it is the item just before's).
-export function readItem(i: number, e: J): { sent: Sent } | { result: { call: string | null; failed: boolean; ts: string | null } } | null {
+/// What a transcript item says of Slack: what the agent sends there or was given from there (`said`), or the result of
+/// a call (`result`: its call's id, else none, then it is the item just before's).
+export function readItem(i: number, e: J): { said: Said[] } | { result: { call: string | null; failed: boolean; ts: string | null } } | null {
   if (e?.subagent === true) return null;
+  const at = typeof e?.at === "string" ? (epochMs(e.at) ?? 0) : 0;
   if (e?.kind === "tool_call") {
     const s = sending(typeof e.tool === "string" ? e.tool : "", typeof e.text === "string" ? e.text : "");
     if (s === null) return null;
-    const at = typeof e.at === "string" ? epochMs(e.at) : null;
-    return { sent: { i, call: typeof e.callId === "string" ? e.callId : null, at: at ?? 0, to: s.to, text: markdownOf(s.text), failed: false } };
+    return { said: [{ i, k: 0, out: true, call: typeof e.callId === "string" ? e.callId : null, user: null, who: null, at, to: s.to, text: markdownOf(s.text), failed: false }] };
   }
   if (e?.kind === "tool_result") return { result: { call: typeof e.callId === "string" ? e.callId : null, ...outcome(e) } };
+  if (e?.kind === "user" && typeof e.text === "string") {
+    const said = parsePrompt(e.text)[0].flatMap((m, k): Said[] => {
+      if (!m.slack || m.text.trim() === "") return [];
+      // When it was said in Slack (its ts), else when the agent was given it.
+      const ts = Number(m.ts);
+      const to = m.thread ?? "";
+      return [{ i, k, out: false, call: null, user: m.user || null, who: m.name, at: Number.isFinite(ts) && ts > 0 ? Math.trunc(ts * 1000) : at, to, text: markdownOf(m.text), failed: false }];
+    });
+    return said.length > 0 ? { said } : null;
+  }
   return null;
 }

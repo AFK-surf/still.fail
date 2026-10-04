@@ -724,7 +724,7 @@ test("a_core_answers_its_first_view_from_the_database_before_any_network", async
   core.close();
 });
 
-test("what_agents_sent_to_slack_is_read_as_their_transcripts_are_written_kept_past_them_and_filled_once_where_missing", async () => {
+test("what_agents_said_in_slack_is_read_as_their_transcripts_are_written_kept_past_them_and_filled_once_where_missing", async () => {
   const { data, open, db, again, runner } = fresh();
   await open();
   const call = (to: string, text: string, callId: string) => ({ at: "1970-01-01T00:00:02Z", kind: "tool_call", tool: "mcp__stillfail__chat_post", text: JSON.stringify({ to, text }), callId });
@@ -732,23 +732,23 @@ test("what_agents_sent_to_slack_is_read_as_their_transcripts_are_written_kept_pa
   data.onLogChange((table, station, id) => told.push(`${table} ${station} ${id}`));
   data.putItems("transcript", "w/a", "k1", [[0, { kind: "user", text: "hi" }], [1, call("C0OPS/1.2", "*好了*", "c1")]]);
   await flush();
-  assert.deepEqual(data.sentBy("w/a", "k1").map((s) => [s.i, s.to, s.text, s.failed]), [[1, "C0OPS/1.2", "**好了**", false]]);
-  assert.ok(told.includes("sent w/a k1"));
+  assert.deepEqual(data.slackSaid("w/a", "k1").map((s) => [s.i, s.to, s.text, s.failed]), [[1, "C0OPS/1.2", "**好了**", false]]);
+  assert.ok(told.includes("slack w/a k1"));
   data.putItems("transcript", "w/a", "k1", [[2, { kind: "tool_result", text: "failed", ok: false, callId: "c1" }]]);
   await flush();
-  assert.deepEqual(data.sentBy("w/a", "k1").map((s) => s.failed), [true]);
+  assert.deepEqual(data.slackSaid("w/a", "k1").map((s) => s.failed), [true]);
   // Written again as it was: nothing read again (it stays failed).
   told.length = 0;
   data.putItems("transcript", "w/a", "k1", [[1, call("C0OPS/1.2", "*好了*", "c1")]]);
   await flush();
-  assert.deepEqual([data.sentBy("w/a", "k1").map((s) => s.failed), told], [[true], []]);
+  assert.deepEqual([data.slackSaid("w/a", "k1").map((s) => s.failed), told], [[true], []]);
   // A core before it held the transcript only: the table is made and filled as the database opens.
-  db().run("DROP TABLE sent", []);
+  db().run("DROP TABLE slack_said", []);
   const d = await again();
-  assert.deepEqual(d.sentBy("w/a", "k1").map((s) => [s.i, s.failed]), [[1, true]]);
+  assert.deepEqual(d.slackSaid("w/a", "k1").map((s) => [s.i, s.failed]), [[1, true]]);
   // Its transcript cut before it: it goes.
   d.putItems("transcript", "w/a", "k1", [], 0);
   await flush();
-  assert.deepEqual(d.sentBy("w/a", "k1"), []);
+  assert.deepEqual(d.slackSaid("w/a", "k1"), []);
   runner.shutdown();
 });

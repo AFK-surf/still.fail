@@ -121,6 +121,7 @@
   "web-main.chat.archivedPlaceholder": "还原对话后才能发送",
   "web-main.chat.deleteFailed": "没能删除：{error}",
   "web-main.chat.empty": "在这里发消息，这个对话里的 agent 会在这里回复。",
+  "web-main.chat.fromSlack": "来自 ",
   "web-main.chat.keep": "不再提醒归档",
   "web-main.chat.keep.done": "已保留，不再提醒归档",
   "web-main.chat.keep.what": "停止归档提醒",

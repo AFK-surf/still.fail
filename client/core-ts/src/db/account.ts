@@ -17,8 +17,8 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureKept, ensureSaid, ensureSent, migrate, versionOf } from "./schema.ts";
-import { readItem, type Sent } from "../elsewhere.ts";
+import { ensureKept, ensureSaid, ensureSlackSaid, migrate, versionOf } from "./schema.ts";
+import { readItem, type Said } from "../elsewhere.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -261,9 +261,9 @@ export class AccountDb {
         // No room to make it: messages are not found by their words this time.
       }
       try {
-        if (ensureSent(sql)) this.#fillSent();
+        if (ensureSlackSaid(sql)) this.#fillSlackSaid();
       } catch {
-        // No room to make it: what agents sent to Slack is not shown in their chats this time.
+        // No room to make it: what agents said in Slack is not shown in their chats this time.
       }
       try {
         ensureKept(sql);
@@ -1425,59 +1425,63 @@ export class AccountDb {
         for (const r of this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} > ?`, [station, k, cutAfter])) this.#logCache.delete(K(table, station, id, r[0] as number));
         if (this.sql.run(`DELETE FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} > ?`, [station, k, cutAfter]) > 0) changed = true;
       }
-      if (table === "transcript" && this.#hasSent()) {
-        let sent = false;
-        if (cutAfter !== null && this.sql.run("DELETE FROM sent WHERE station = ? AND session = ? AND i > ?", [station, id, cutAfter]) > 0) sent = true;
-        if (written.length > 0 && this.#readSent(station, id, written)) sent = true;
-        if (sent) this.#tellLog("sent", station, id);
+      if (table === "transcript" && this.#hasSlackSaid()) {
+        let said = false;
+        if (cutAfter !== null && this.sql.run("DELETE FROM slack_said WHERE station = ? AND session = ? AND i > ?", [station, id, cutAfter]) > 0) said = true;
+        if (written.length > 0 && this.#readSlackSaid(station, id, written)) said = true;
+        if (said) this.#tellLog("slack", station, id);
       }
       if (changed) this.#tellLog(table, station, id);
     });
   }
 
-  #sentMade: boolean | undefined;
-  #hasSent(): boolean {
-    this.#sentMade ??= this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sent'").length > 0;
-    return this.#sentMade;
+  #slackSaidMade: boolean | undefined;
+  #hasSlackSaid(): boolean {
+    this.#slackSaidMade ??= this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'slack_said'").length > 0;
+    return this.#slackSaidMade;
   }
 
-  /// What transcript items of a session send to Slack, into `sent`; their results, onto what they sent. Answers whether
-  /// anything changed.
-  #readSent(station: string, session: string, items: [number, J][]): boolean {
+  /// What transcript items of a session say of Slack, into `slack_said`; calls' results, onto what they sent. Answers
+  /// whether anything changed.
+  #readSlackSaid(station: string, session: string, items: [number, J][]): boolean {
     let changed = false;
     for (const [n, e] of [...items].sort((a, b) => a[0] - b[0])) {
       const read = readItem(n, e);
       if (read === null) continue;
-      if ("sent" in read) {
-        const s = read.sent;
-        this.sql.run("INSERT OR REPLACE INTO sent (station, session, i, call, at, dest, text, failed) VALUES (?, ?, ?, ?, ?, ?, ?, 0)", [station, session, n, s.call, s.at, s.to, s.text]);
-        changed = true;
+      if ("said" in read) {
+        for (const s of read.said) {
+          this.sql.run(
+            "INSERT OR REPLACE INTO slack_said (station, session, i, k, out, call, user, who, at, dest, text, failed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+            [station, session, n, s.k, s.out ? 1 : 0, s.call, s.user, s.who, s.at, s.to, s.text],
+          );
+          changed = true;
+        }
         continue;
       }
       const r = read.result;
       // Its call by its id, else the item just before it.
       const where = r.call !== null ? "call = ?" : "i = ?";
-      const row = this.sql.all(`SELECT i, dest, failed FROM sent WHERE station = ? AND session = ? AND ${where}`, [station, session, r.call ?? n - 1])[0];
+      const row = this.sql.all(`SELECT i, dest, failed FROM slack_said WHERE station = ? AND session = ? AND out = 1 AND ${where}`, [station, session, r.call ?? n - 1])[0];
       if (row === undefined) continue;
       const dest = String(row[1]);
       // A message of its own in a channel: Slack's answer says its thread.
       const to = r.ts !== null && !dest.includes("/") ? `${dest}/${r.ts}` : dest;
       if (to === dest && (row[2] === 1) === r.failed) continue;
-      this.sql.run("UPDATE sent SET dest = ?, failed = ? WHERE station = ? AND session = ? AND i = ?", [to, r.failed ? 1 : 0, station, session, row[0] as number]);
+      this.sql.run("UPDATE slack_said SET dest = ?, failed = ? WHERE station = ? AND session = ? AND i = ? AND out = 1", [to, r.failed ? 1 : 0, station, session, row[0] as number]);
       changed = true;
     }
     return changed;
   }
 
-  /// `sent` made now: filled from the transcripts held, a session at a time.
-  #fillSent(): void {
+  /// `slack_said` made now: filled from the transcripts held.
+  #fillSlackSaid(): void {
     const sessions = this.sql.all("SELECT DISTINCT station, session FROM transcript");
     if (sessions.length === 0) return;
     this.sql.exec("BEGIN IMMEDIATE");
     try {
       for (const [station, session] of sessions) {
         const items = this.sql.all("SELECT i, json FROM transcript WHERE station = ? AND session = ? ORDER BY i", [station as string, session as string]).map((r) => [r[0] as number, parse(r[1])] as [number, J]);
-        this.#readSent(station as string, session as string, items);
+        this.#readSlackSaid(station as string, session as string, items);
       }
       this.sql.exec("COMMIT");
     } catch (e) {
@@ -1490,11 +1494,14 @@ export class AccountDb {
     }
   }
 
-  /// What a session sent to Slack, in the order it did.
-  sentBy(station: string, session: string): Sent[] {
-    if (!this.#hasSent()) return [];
-    return this.sql.all("SELECT i, call, at, dest, text, failed FROM sent WHERE station = ? AND session = ? ORDER BY i", [station, session])
-      .map((r) => ({ i: r[0] as number, call: (r[1] as string | null) ?? null, at: r[2] as number, to: r[3] as string, text: r[4] as string, failed: r[5] === 1 }));
+  /// What a session said in Slack and heard from it, in the order of its transcript.
+  slackSaid(station: string, session: string): Said[] {
+    if (!this.#hasSlackSaid()) return [];
+    return this.sql.all("SELECT i, k, out, call, user, who, at, dest, text, failed FROM slack_said WHERE station = ? AND session = ? ORDER BY i, k", [station, session])
+      .map((r) => ({
+        i: r[0] as number, k: r[1] as number, out: r[2] === 1, call: (r[3] as string | null) ?? null, user: (r[4] as string | null) ?? null,
+        who: (r[5] as string | null) ?? null, at: r[6] as number, to: r[7] as string, text: r[8] as string, failed: r[9] === 1,
+      }));
   }
 
   #forgetEntries(station: string, thread: number): void {
@@ -1507,7 +1514,7 @@ export class AccountDb {
       if (table === "entry") this.#forgetEntries(station, Number(id));
       else {
         if (this.sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", [station, id]) > 0) this.#tellLog("transcript", station, id);
-        if (this.#hasSent() && this.sql.run("DELETE FROM sent WHERE station = ? AND session = ?", [station, id]) > 0) this.#tellLog("sent", station, id);
+        if (this.#hasSlackSaid() && this.sql.run("DELETE FROM slack_said WHERE station = ? AND session = ?", [station, id]) > 0) this.#tellLog("slack", station, id);
       }
     });
   }
@@ -1571,7 +1578,7 @@ export class AccountDb {
         this.sql.run(`DELETE FROM ${table} WHERE ${column} = ?`, [station]);
       }
       if (this.sql.all("SELECT 1 FROM sqlite_master WHERE name = 'log_use'").length > 0) this.sql.run("DELETE FROM log_use WHERE station = ?", [station]);
-      if (this.#hasSent()) this.sql.run("DELETE FROM sent WHERE station = ?", [station]);
+      if (this.#hasSlackSaid()) this.sql.run("DELETE FROM slack_said WHERE station = ?", [station]);
       for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
       this.#cache.clear();
       this.#logCache.clear();

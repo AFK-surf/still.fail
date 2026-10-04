@@ -93,6 +93,7 @@
   "android-chat.history.run.auto": "自动 · {name}",
   "android-chat.history.send.failed": "发送失败",
   "android-chat.history.sent.to": "发送到 {name}",
+  "android-chat.chat.slack.from": "来自 {name}",
   "android-chat.history.stopped": "已请求停止",
   "android-chat.history.tab.details": "详情",
   "android-chat.history.tab.steps": "步骤",

@@ -136,6 +136,7 @@
   "web-main.chat.archivedPlaceholder": "Restore to send",
   "web-main.chat.deleteFailed": "Couldn't delete: {error}",
   "web-main.chat.empty": "Send a message; agents in this chat reply here.",
+  "web-main.chat.fromSlack": "From ",
   "web-main.chat.keep": "Stop reminders",
   "web-main.chat.keep.done": "Kept. No more archive reminders.",
   "web-main.chat.keep.what": "stop archive reminders",

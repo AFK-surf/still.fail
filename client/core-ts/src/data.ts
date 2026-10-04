@@ -822,9 +822,9 @@ export class Data {
     return this.of(station)?.logRange(table, station, id, from, to) ?? new Map();
   }
 
-  /// What a session sent to Slack, as read from its transcript when it was written (elsewhere.ts).
-  sentBy(station: string, session: string): ReturnType<AccountDb["sentBy"]> {
-    return this.of(station)?.sentBy(station, session) ?? [];
+  /// What a session said in Slack and heard from it, as read from its transcript when it was written (elsewhere.ts).
+  slackSaid(station: string, session: string): ReturnType<AccountDb["slackSaid"]> {
+    return this.of(station)?.slackSaid(station, session) ?? [];
   }
 
   logSpan(table: "entry" | "transcript", station: string, id: string): { min: number; max: number; count: number } | null {

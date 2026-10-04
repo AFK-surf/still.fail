@@ -99,6 +99,7 @@
   "android-chat.history.run.auto": "Auto · {name}",
   "android-chat.history.send.failed": "Send failed",
   "android-chat.history.sent.to": "Sent to {name}",
+  "android-chat.chat.slack.from": "From {name}",
   "android-chat.history.stopped": "Stop requested",
   "android-chat.history.tab.details": "Details",
   "android-chat.history.tab.steps": "Steps",

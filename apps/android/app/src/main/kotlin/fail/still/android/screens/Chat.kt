@@ -384,7 +384,7 @@ private sealed interface Entry {
         override val id get() = sent?.let { "o:$it" } ?: "m:${m.ts}"
     }
     data class Out(val o: Outgoing) : Entry { override val id get() = "o:${o.id}" }
-    /** What an agent of the chat sent to Slack rather than here (the core's `elsewhere`): shown, not one of the chat's. */
+    /** What was said in Slack by or to an agent of the chat (the core's `elsewhere`): shown, not one of the chat's. */
     data class Sent(val s: ChatSentElsewhere) : Entry { override val id get() = "s:${s.key}" }
     data class Working(val agent: AgentAtWork) : Entry { override val id get() = "act:${agent.key}" }
     /** The room an activity that folded away leaves behind (as the web's floor): what is above it does not drop. */
@@ -1019,18 +1019,20 @@ private fun Said(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.compose
 }
 
 /**
- * What an agent of the chat sent to Slack rather than here (web Chat.tsx → SentElsewhere): its avatar and name as its
- * messages have them, then where it went over its words beside a bar, as the execution history draws a post.
+ * What an agent of the chat said in Slack rather than here, or a person's Slack message it was given (web Chat.tsx →
+ * SentElsewhere): an avatar and name as messages have them, Slack's mark on the avatar, then where it went or came from
+ * over its words beside a bar, as the execution history draws them.
  */
 @Composable
 private fun SentElsewhere(ctx: Here, s: ChatSentElsewhere) {
     val app = LocalApp.current
     val ink = chatInk()
     val agent = s.by.agent?.let { ctx.agent(it) }
+    val received = s.received == true
     Box(Modifier.fillMaxWidth()) {
         Box(Modifier.padding(top = 3.dp)) {
-            AgentAvatar(s.by.maker, s.by.runtime)
-            // What it said went to Slack, not here: Slack's mark on its corner (web: msgAvatarSlack).
+            if (received) Avatar(s.by.name, s.by.name, 18.dp) else AgentAvatar(s.by.maker, s.by.runtime)
+            // Said in Slack, not here: Slack's mark on its corner (web: msgAvatarSlack).
             Box(
                 Modifier.align(Alignment.BottomEnd).offset(6.dp, 6.dp).size(14.dp).clip(CircleShape).background(chatInk().canvas)
                     .border(1.dp, C.line, CircleShape),
@@ -1047,8 +1049,8 @@ private fun SentElsewhere(ctx: Here, s: ChatSentElsewhere) {
                 )
                 MessageTime(s.time?.get("createdAt"))
             }
-            Message(Icons.Send, {
-                val (before, after) = around("android-chat.history.sent.to")
+            Message(if (received) Icons.Received else Icons.Send, {
+                val (before, after) = around(if (received) "android-chat.chat.slack.from" else "android-chat.history.sent.to")
                 Text(before, fontSize = 13.sp, color = C.muted)
                 Box(Modifier.weight(1f, fill = false)) {
                     val place = s.place

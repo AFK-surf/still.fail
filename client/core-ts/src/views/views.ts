@@ -345,9 +345,9 @@ export class Views implements Owner {
     core.data.onLogChange((table) => {
       if (table === "entry") this.#invalidate((v) => v.topic === "chatSearch" && typeof v.messages === "number" && v.messages > 0 && refs.terms(String(v.query ?? "")).length > 0);
     });
-    // What an agent sent to Slack changed: the chats it is in show it.
+    // What an agent said in Slack or heard from it changed: the chats it is in show it.
     core.data.onLogChange((table, station, key) => {
-      if (table !== "sent") return;
+      if (table !== "slack") return;
       const session = topicKey({ topic: "session", station, key });
       for (const v of [...this.#views.values()]) if (v.topic.topic === "chat" && v.topic.station === station && v.watches.has(session)) this.#core.store.invalidate(v.topic);
     });
@@ -1179,7 +1179,7 @@ export class Views implements Owner {
       pendingCard = d !== null && open(d) ? [u64(d.seq) ?? 0, decisions.dismissed(d)] : null;
     }
     decisions.inMessages(messages, pendingCard);
-    const elsewhere = this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false);
+    const elsewhere = this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots });
     const focusLast = page.end !== false && outbox.length === 0 && messages.length > 0 && present.focusMessage(messages[messages.length - 1]);
     const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : chatTitle(thread);
     const view: J = {
@@ -1217,9 +1217,10 @@ export class Views implements Owner {
     return { ok: view };
   }
 
-  /// What a chat's agents sent to Slack (not to the chat itself), each after the message it followed. Only what falls in
-  /// the window of messages shown (`more`/`newer`: the chat goes on before/after it): the rest comes with its page.
-  #sentElsewhere(station: string, thread: J, agents: J[], messages: J[], more: boolean, newer: boolean): J[] {
+  /// What a chat's agents said in Slack and were given from it (not this chat's own thread), each after the message it
+  /// followed. Only what falls in the window of messages shown (`more`/`newer`: the chat goes on before/after it): the
+  /// rest comes with its page. A Slack message given to several of its agents shows once.
+  #sentElsewhere(station: string, thread: J, agents: J[], messages: J[], more: boolean, newer: boolean, people: { members: J[]; bots: [string, string][] }): J[] {
     const own = `${str(get(thread, "channel")) ?? ""}/${str(get(thread, "threadTs")) ?? ""}`;
     const first = u64(messages[0]?.createdAt);
     const last = u64(messages.at(-1)?.createdAt);
@@ -1227,26 +1228,36 @@ export class Views implements Owner {
     const workspaces = slackWorkspaces(this.ok({ topic: "overview", station }));
     const offsetMin = this.#core.host.utcOffsetMin(this.#core.host.nowMs());
     const out: J[] = [];
+    const heard = new Set<string>();
     for (const a of agents) {
       const key = str(get(a.session, "key"));
       if (key === null) continue;
-      const sent = this.#core.data.sentBy(station, key).filter((s) => s.to !== own && !(more && s.at < first!) && !(newer && s.at >= last!));
-      if (sent.length === 0) continue;
+      const said = this.#core.data.slackSaid(station, key).filter((s) => s.to !== own && !(more && s.at < first!) && !(newer && s.at >= last!));
+      if (said.length === 0) continue;
       const threads = arr(get(this.ok({ topic: "session", station, key }), "threads"));
-      const by = { name: str(get(a.session, "agentText")) ?? "agent", agent: key, maker: get(a.session, "maker") ?? null, runtime: get(a.session, "runtime") ?? null };
-      for (const s of sent) {
+      const agent = { name: str(get(a.session, "agentText")) ?? "agent", agent: key, maker: get(a.session, "maker") ?? null, runtime: get(a.session, "runtime") ?? null };
+      for (const s of said) {
+        if (!s.out) {
+          const id = `${s.user ?? ""} ${s.to} ${s.at}`;
+          if (heard.has(id)) continue;
+          heard.add(id);
+        }
         let after = 0;
         for (const m of messages) {
           if (typeof m.createdAt !== "number" || m.createdAt > s.at) break;
           after = m.seq;
         }
-        let place: J = format.place(threads, s.to, offsetMin, workspaces);
-        if (place === null) {
+        let place: J = s.to === "" ? null : format.place(threads, s.to, offsetMin, workspaces);
+        if (place === null && s.to !== "") {
           // A message of its own in a channel, before its ts is known.
           const named = threads.find((th) => get(th, "channel") === s.to && typeof get(th, "channelName") === "string");
           place = { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
         }
-        out.push({ key: `${key}/${s.i}`, after, createdAt: s.at, text: s.text, place, failed: s.failed, by: structuredClone(by) });
+        const by = s.out ? structuredClone(agent) : { name: s.who || s.user || "Slack" };
+        const text = s.out ? s.text : present.mentions(s.text, people.bots, people.members);
+        const item: J = { key: `${key}/${s.i}/${s.k}`, after, createdAt: s.at, text, place, failed: s.failed, by };
+        if (!s.out) item.received = true;
+        out.push(item);
       }
     }
     return out.sort((a, b) => a.createdAt - b.createdAt);
