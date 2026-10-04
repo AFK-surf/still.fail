@@ -2,6 +2,7 @@
 // pool's choice among the station's profiles, kept while usable, moved off one whose allowance ran out, and changed by
 // hand (profile, model, effort, fast). How profiles are doing comes from outside (the accounts module's checks and
 // allowances: `setHealth`); which ran into their allowance lately is kept here.
+import type { Clock } from "effect";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import type { Store } from "../store/store.ts";
@@ -22,6 +23,8 @@ export type AccountsDeps = {
   store: Store;
   /// The profiles of sessions with a process now (their load).
   running(): string[];
+  /// Its time.
+  clock: Clock.Clock;
 };
 
 export class Accounts {
@@ -47,7 +50,7 @@ export class Accounts {
     if (at !== undefined) {
       // Read again since: what it says now counts.
       const checked = health.quota?.checkedAt;
-      if ((typeof checked === "number" && checked > at) || Date.now() - at > SPENT_FOR_MS) this.spent.delete(id);
+      if ((typeof checked === "number" && checked > at) || this.deps.clock.currentTimeMillisUnsafe() - at > SPENT_FOR_MS) this.spent.delete(id);
       else health.spent = true;
     }
     return health;
@@ -57,7 +60,7 @@ export class Accounts {
   pick(candidates: Profile[], model: string | null | undefined, strict: boolean): Profile {
     const running = this.deps.running();
     const profile = pickProfile(candidates, model, { health: (id) => this.healthOf(id), load: (id) => running.filter((p) => p === id).length, lastPicked: (id) => this.picked.get(id) ?? 0 }, strict);
-    this.picked.set(profile.id, Date.now());
+    this.picked.set(profile.id, this.deps.clock.currentTimeMillisUnsafe());
     return profile;
   }
 
@@ -91,7 +94,7 @@ export class Accounts {
     const { store } = this.deps;
     const row = store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
-    this.spent.set(row.profile, Date.now());
+    this.spent.set(row.profile, this.deps.clock.currentTimeMillisUnsafe());
     if (row.profilePinned) return null;
     const runtime = runtimeNamed(row.runtime);
     if (!runtime) return null;

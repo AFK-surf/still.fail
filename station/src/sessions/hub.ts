@@ -22,7 +22,8 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Effect, Fiber } from "effect";
+import { Clock, Effect, Fiber } from "effect";
+import { liveClock } from "../ops/fibers.ts";
 import type { AgentDriver, AgentSession } from "../agents/runtime.ts";
 import { runnerId } from "../agents/process.ts";
 import { allLeft, existingRunners } from "../agents/runner.ts";
@@ -36,7 +37,7 @@ import { isStopCommand } from "./args.ts";
 import type { ChatEvent, ChatSurface, InboundMessage, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
 import { type Connect, type HubConfig, profilesFor, runtimeNamed } from "./config.ts";
-import { INTERNAL_CONNECT, type InternalChat, nextTs } from "./internal.ts";
+import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths } from "./agent-home.ts";
@@ -93,6 +94,8 @@ export type HubOptions = {
   /// The runners alive on this machine now, by id (default: <data>/run/runners).
   runners?: () => string[];
   cold?: ColdStorage;
+  /// Its time, and its sessions' (a TestClock in tests).
+  clock?: Clock.Clock;
 };
 
 /// The handover file, in the data directory.
@@ -106,6 +109,7 @@ export class Hub {
   readonly link: (key: string) => string | undefined;
   readonly cold: ColdStorage;
   readonly accounts: Accounts;
+  readonly clock: Clock.Clock;
   /// What running turns are doing, for the pages' live view.
   readonly live: LiveHub;
   readonly actors = new Map<string, SessionActor>();
@@ -132,6 +136,7 @@ export class Hub {
 
   constructor(options: HubOptions) {
     this.options = options;
+    this.clock = options.clock ?? liveClock;
     this.store = options.store;
     this.internal = options.internal ?? null;
     this.drivers = new Map(options.drivers.map((d) => [d.runtime(), d]));
@@ -141,6 +146,7 @@ export class Hub {
       config: () => this.config(),
       store: this.store,
       running: () => [...this.actors.values()].filter((a) => a.processState() !== "cold").flatMap((a) => this.store.getSession(a.key)?.profile ?? []),
+      clock: this.clock,
     });
     this.live = new LiveHub(
       (key) => {
@@ -152,12 +158,23 @@ export class Hub {
         return path === null ? null : { runtime, path };
       },
       (key) => postEntries(this.store.postsBy(key)),
+      this.clock,
     );
     this.deps = this.sessionDeps();
   }
 
   config(): HubConfig {
     return this.options.config();
+  }
+
+  /// Now, by its clock.
+  now(): number {
+    return this.clock.currentTimeMillisUnsafe();
+  }
+
+  /// A Slack-style ts for something said now.
+  nextTs(): string {
+    return nextTsAt(this.now());
   }
 
   reposDir(): string {
@@ -468,7 +485,7 @@ export class Hub {
   /// share a process and stay. Runs when a process goes idle (the count grew) and at each idle process's deadline.
   private evictIdle() {
     const config = this.config();
-    const now = Date.now();
+    const now = this.now();
     const idle = [...this.actors.values()]
       .filter((a) => a.runtime === "claude")
       .flatMap((a) => {
@@ -495,7 +512,7 @@ export class Hub {
     }
     const old = this.deadlines.get(key);
     if (old) this.interrupt(old);
-    const fiber = Effect.runFork(
+    const fiber = this.runFork(
       Effect.sleep(this.config().warmMs).pipe(
         Effect.andThen(
           Effect.sync(() => {
@@ -547,11 +564,11 @@ export class Hub {
   /// The key the client that asked for a session gave it (NewChat.clientKey), while it is kept.
   clientKey(key: string): string | undefined {
     const kept = this.clientKeysMade.get(key);
-    return kept && Date.now() - kept[1] < CLIENT_KEY_KEPT_MS ? kept[0] : undefined;
+    return kept && this.now() - kept[1] < CLIENT_KEY_KEPT_MS ? kept[0] : undefined;
   }
 
   clientKeys(): Map<string, string> {
-    return new Map([...this.clientKeysMade].filter(([, [, at]]) => Date.now() - at < CLIENT_KEY_KEPT_MS).map(([key, [client]]) => [key, client]));
+    return new Map([...this.clientKeysMade].filter(([, [, at]]) => this.now() - at < CLIENT_KEY_KEPT_MS).map(([key, [client]]) => [key, client]));
   }
 
   // ── what goes beside it ────────────────────────────────────────────────────────────────────────────────────────
@@ -596,7 +613,7 @@ export class Hub {
   fork(effect: Effect.Effect<void>) {
     // It may end before runFork returns.
     const held: { fiber?: Fiber.Fiber<void>; done?: boolean } = {};
-    held.fiber = Effect.runFork(
+    held.fiber = this.runFork(
       effect.pipe(
         Effect.ensuring(
           Effect.sync(() => {
@@ -607,6 +624,11 @@ export class Hub {
       ),
     );
     if (!held.done) this.fibers.add(held.fiber);
+  }
+
+  /// Runs `effect` on the hub's clock.
+  private runFork<A>(effect: Effect.Effect<A>): Fiber.Fiber<A> {
+    return Effect.runFork(effect.pipe(Effect.provideService(Clock.Clock, this.clock)));
   }
 
   private interrupt(fiber: Fiber.Fiber<void>) {
@@ -658,7 +680,7 @@ export class Hub {
     const workspace = join(config.dataDir, "sessions", connect.id, dir, "workspace");
     mkdirSync(workspace, { recursive: true });
     mkdirSync(join(config.dataDir, "repos"), { recursive: true });
-    const now = Date.now();
+    const now = this.now();
     this.store.insertSession({
       key,
       connect: connect.id,
@@ -745,7 +767,8 @@ export class Hub {
         }
       },
       toolStatus,
-      nextTs,
+      nextTs: () => this.nextTs(),
+      clock: this.clock,
     };
   }
 }

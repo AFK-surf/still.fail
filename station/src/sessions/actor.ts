@@ -5,7 +5,7 @@
 //   tool answers once it is recorded: a turn's end comes after the tool's answer, so nothing a tool said is lost.
 // Its process is a runner's (src/agents/runner.ts): this actor can go (a station stopping or handing over) and the
 // next take it up (`snapshot` / `adopt`), its turn going on all along.
-import { Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
+import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
 import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { latest as latestNote, untold } from "../agents/migrations.ts";
@@ -96,6 +96,8 @@ export type SessionDeps = {
   stopJobs(key: string): Promise<void>;
   toolStatus(tool: string): string;
   nextTs(): string;
+  /// Its time (the hub's).
+  clock: Clock.Clock;
 };
 
 type Turn = { id: string; declared: DeclaredState | null; authRetried: boolean; by: TurnFor };
@@ -137,7 +139,7 @@ export class SessionActor {
   private nudges = 0;
   private stopRequested = false;
   private resumeLost = false;
-  private idleSince = Date.now();
+  private idleSince: number;
   private workingFor: Working[] = [];
   private tools: [string, string][] = [];
   private notices: string[] = [];
@@ -154,8 +156,14 @@ export class SessionActor {
     this.key = key;
     this.runtime = runtime;
     this.deps = deps;
+    this.idleSince = deps.clock.currentTimeMillisUnsafe();
     this.scope = Effect.runSync(Scope.make());
-    this.run = Effect.runSync(Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope));
+    const run = Effect.runSync(Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope));
+    this.run = (effect) => run(effect.pipe(Effect.provideService(Clock.Clock, deps.clock)));
+  }
+
+  private now(): number {
+    return this.deps.clock.currentTimeMillisUnsafe();
   }
 
   // ── the queue ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -286,7 +294,7 @@ export class SessionActor {
   /// Turns were held and are no longer: what waited meanwhile goes on.
   release(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.waiting !== null && this.waitingUntil <= Date.now()) this.waitMs(this.waitingSeconds, 0);
+      if (this.waiting !== null && this.waitingUntil <= this.now()) this.waitMs(this.waitingSeconds, 0);
       await this.pump();
       if (this.notices.length > 0) await this.giveNotices();
     });
@@ -298,7 +306,7 @@ export class SessionActor {
       if (this.agent || this.deps.held()) return;
       log.info("session", "warming session process", { session: this.key });
       await this.ensureAgent();
-      this.idleSince = Date.now();
+      this.idleSince = this.now();
       this.deps.store.notify(this.key);
       this.deps.idle(this.key);
     });
@@ -362,7 +370,7 @@ export class SessionActor {
       },
       workingFor: this.workingFor,
       notices: this.notices,
-      waitingMs: this.waiting !== null ? Math.max(0, this.waitingUntil - Date.now()) : null,
+      waitingMs: this.waiting !== null ? Math.max(0, this.waitingUntil - this.now()) : null,
       waitingSeconds: this.waitingSeconds,
       nudges: this.nudges,
       stopRequested: this.stopRequested,
@@ -387,7 +395,7 @@ export class SessionActor {
     this.notices = snap.notices;
     this.nudges = snap.nudges;
     this.stopRequested = snap.stopRequested;
-    this.idleSince = Date.now();
+    this.idleSince = this.now();
     if (snap.waitingMs !== null) this.waitMs(snap.waitingSeconds, snap.waitingMs);
   }
 
@@ -673,7 +681,7 @@ export class SessionActor {
   private async onTurnEnded(generation: number, outcome: TurnOutcome) {
     if (!this.isCurrent(generation)) return;
     const store = this.deps.store;
-    this.idleSince = Date.now();
+    this.idleSince = this.now();
     const turn = this.turn;
     this.turn = null;
     this.phase = "idle";
@@ -777,7 +785,7 @@ export class SessionActor {
     const wait = ++this.waits;
     this.waiting = wait;
     this.phase = "waiting";
-    this.waitingUntil = Date.now() + ms;
+    this.waitingUntil = this.now() + ms;
     this.waitingSeconds = seconds;
     void this.run(
       Effect.sleep(Math.max(0, ms)).pipe(

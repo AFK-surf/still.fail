@@ -5,9 +5,11 @@
 // live in memory until they end, and the transcript stays the record, read as it grows and kept in memory while someone
 // watches. Redesigned on one point (docs/station-ts.md, push not poll): a watched transcript is followed by the file
 // system's change events (fs.watch), not looked at every 250 ms.
+import type { Clock } from "effect";
 import { closeSync, existsSync, type FSWatcher, openSync, readFileSync, readSync, statSync, watch } from "node:fs";
 import { zstdDecompressSync } from "node:zlib";
 import type { LiveEvent } from "../agents/runtime.ts";
+import { Fibers } from "../ops/fibers.ts";
 import { parseIso, type ReadState, type TimelineEntry, timelineOf } from "../read/transcript.ts";
 
 type Json = any;
@@ -197,16 +199,18 @@ export class LiveHub {
   private rates = new Map<string, Rate>();
   private listeners = new Map<string, [number, Listener][]>();
   private watched = new Map<string, Watched>();
-  private timers = new Set<ReturnType<typeof setTimeout>>();
+  /// Its time and its waits (a read put off to gather a burst of writes).
+  private time: Fibers;
   private nextId = 0;
   /// Where a session's transcript is, once its runtime has started one.
   private locate: Locate;
   /// What a session's agent posted, as timeline entries: woven into its transcript's (which leaves its posts out).
   private posts: Posts;
 
-  constructor(locate: Locate, posts: Posts) {
+  constructor(locate: Locate, posts: Posts, clock?: Clock.Clock) {
     this.locate = locate;
     this.posts = posts;
+    this.time = new Fibers("live", clock);
   }
 
   private emit(key: string, message: LiveMessage) {
@@ -221,7 +225,7 @@ export class LiveHub {
   event(key: string, event: LiveEvent) {
     switch (event.kind) {
       case "phase":
-        this.phase.set(key, [event.phase, Date.now()]);
+        this.phase.set(key, [event.phase, this.time.now()]);
         this.emit(key, { type: "step", event });
         break;
       // What a step writes as it goes is not told: its words come with its transcript entry. How fast it writes is.
@@ -232,7 +236,7 @@ export class LiveHub {
         const input = takeChars(event.input ?? "", INPUT_CHARS);
         const steps = this.steps.get(key) ?? [];
         // Started again with its input (Claude Code streams it after the start): it keeps when it started.
-        const startedAt = steps.find((s) => s.id === event.id)?.startedAt ?? Date.now();
+        const startedAt = steps.find((s) => s.id === event.id)?.startedAt ?? this.time.now();
         const kept = steps.filter((s) => s.id !== event.id);
         const step = { id: event.id, step: event.step } as LiveStep;
         if (event.tool !== undefined) step.tool = event.tool;
@@ -298,7 +302,7 @@ export class LiveHub {
       listener({ type: "timeline", start, entries: tail.entries.slice(start), usage: { ...tail.usage } });
     }
     const phase = this.phase.get(key);
-    listener({ type: "steps", steps: [...(this.steps.get(key) ?? [])], phase: phase ? { phase: phase[0], elapsedMs: Date.now() - phase[1] } : null });
+    listener({ type: "steps", steps: [...(this.steps.get(key) ?? [])], phase: phase ? { phase: phase[0], elapsedMs: this.time.now() - phase[1] } : null });
     return id;
   }
 
@@ -344,14 +348,13 @@ export class LiveHub {
 
   close() {
     for (const key of [...this.watched.keys()]) this.unwatch(key);
-    for (const timer of this.timers) clearTimeout(timer);
-    this.timers.clear();
+    void this.time.close();
   }
 
   /// Output written: its rate is told once half a second of it has come (a first few bytes say nothing of the pace),
   /// then when a second has passed since it last was.
   private counted(key: string, bytes: number) {
-    const now = Date.now();
+    const now = this.time.now();
     let rate = this.rates.get(key);
     if (!rate) this.rates.set(key, (rate = { buckets: [], toldAt: 0, told: 0 }));
     const bucket = Math.floor(now / 250) * 250;
@@ -414,14 +417,12 @@ export class LiveHub {
     const watched = this.watched.get(key)!;
     if (watched.reading) return;
     watched.reading = true;
-    const timer = setTimeout(() => {
-      this.timers.delete(timer);
+    this.time.after(40, () => {
       const now = this.watched.get(key);
       if (!now) return;
       now.reading = false;
       const [start, entries] = now.tail.read();
       if (entries.length > 0 || fresh) this.emit(key, { type: "timeline", start, entries, usage: { ...now.tail.usage } });
-    }, 40);
-    this.timers.add(timer);
+    });
   }
 }

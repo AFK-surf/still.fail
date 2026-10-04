@@ -2,6 +2,8 @@
 // platform, like Slack: people's messages arrive with their source, and the agent answers with chat_post to their
 // thread. Every chat lives in one channel, INTERNAL_CHANNEL; its thread_ts is its address. The messages themselves are
 // the store's, like every thread's.
+import type { Clock } from "effect";
+import { liveClock } from "../ops/fibers.ts";
 import type { Attachment } from "../store/store.ts";
 import type { ChatSurface, ThreadRef } from "./chat.ts";
 
@@ -14,9 +16,7 @@ export const INTERNAL_BOT_USER = "UEMBER";
 /// The last ts given, in microseconds: they only go up within this process (a clock, not a registry).
 let lastMicros = 0;
 
-/// Slack-style timestamps ("seconds.micros"), strictly increasing within this process.
-export const nextTs = (): string => nextTsAt(Date.now());
-
+/// Slack-style timestamps ("seconds.micros") at `nowMs` (its clock's now), strictly increasing within this process.
 export function nextTsAt(nowMs: number): string {
   const next = Math.max(lastMicros + 1, nowMs * 1000);
   lastMicros = next;
@@ -26,9 +26,11 @@ export function nextTsAt(nowMs: number): string {
 export class InternalChat implements ChatSurface {
   /// Display names of page users (an email; "local" in chats written on the page this machine had, before it went).
   private names: (user: string) => string;
+  private clock: Clock.Clock;
 
-  constructor(names: (user: string) => string = (user) => (user === "local" ? "管理员" : user)) {
+  constructor(names: (user: string) => string = (user) => (user === "local" ? "管理员" : user), clock: Clock.Clock = liveClock) {
     this.names = names;
+    this.clock = clock;
   }
 
   botUserId(): string {
@@ -42,7 +44,7 @@ export class InternalChat implements ChatSurface {
   /// Nothing to send anywhere: the message is recorded under the ts this gives, and the page reads it from there.
   async post(thread: ThreadRef, _message: string, _files: Attachment[]): Promise<string> {
     if (thread.channel !== INTERNAL_CHANNEL) throw new Error(`no still.fail chat ${thread.channel}/${thread.threadTs}`);
-    return nextTs();
+    return nextTsAt(this.clock.currentTimeMillisUnsafe());
   }
 
   async userName(user: string): Promise<string | null> {

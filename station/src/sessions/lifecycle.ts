@@ -15,7 +15,7 @@ import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
 import { type Runtime, runs, runtimeTitle } from "./config.ts";
 import { CLIENT_KEY_KEPT_MS, type Hub, connectOf, newChatKey, newSingleSessionKey, newToken } from "./hub.ts";
-import { INTERNAL_CHANNEL, INTERNAL_CONNECT, nextTs } from "./internal.ts";
+import { INTERNAL_CHANNEL, INTERNAL_CONNECT } from "./internal.ts";
 
 /// A session of its own, talked to in the station's chat.
 export type NewChat = {
@@ -64,7 +64,7 @@ export function openChat(hub: Hub, session: string, createdBy: string, title: st
   const home = hub.store.homeChat(session) !== null ? null : session;
   // Its own chat keeps the name the session was given before it had one.
   const name = title ?? (home !== null ? row.title : null);
-  const thread = hub.store.openThreadOf(STILLFAIL_SURFACE, INTERNAL_CHANNEL, nextTs(), name, createdBy, home);
+  const thread = hub.store.openThreadOf(STILLFAIL_SURFACE, INTERNAL_CHANNEL, hub.nextTs(), name, createdBy, home);
   hub.store.joinThread(thread.id, session, INTERNAL_CONNECT);
   return thread;
 }
@@ -86,7 +86,7 @@ export function addToThread(hub: Hub, thread: number, session: string) {
 /// session in the chat, like a Slack message. `client`: the app it was sent from, as it said. Its entry number.
 export function say(hub: Hub, thread: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = [], client: string | null = null): number {
   stillfailChat(hub, thread);
-  const [n] = hub.store.insertMessage({ thread, ts: nextTs(), authorKind: "person", author: user, text, attachments, quotes, client });
+  const [n] = hub.store.insertMessage({ thread, ts: hub.nextTs(), authorKind: "person", author: user, text, attachments, quotes, client });
   const sessions = hub.store.threadSessions(thread).map((m) => m.session);
   hub.deliver(thread, n, sessions, text);
   return n;
@@ -116,7 +116,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
   const workspace = join(config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");
   mkdirSync(workspace, { recursive: true });
   mkdirSync(join(config.dataDir, "repos"), { recursive: true });
-  const now = Date.now();
+  const now = hub.now();
   // Known before its rows are (their events can reach the client before this answers), and for a while after.
   const client = trimmed(options.clientKey);
   if (client !== null) {
@@ -329,7 +329,7 @@ export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSes
   const workspace = join(config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");
   mkdirSync(workspace, { recursive: true });
   mkdirSync(join(config.dataDir, "repos"), { recursive: true });
-  const now = Date.now();
+  const now = hub.now();
   const titleOf = found.title ?? found.first;
   const title = titleOf !== null ? Array.from(titleOf).slice(0, 80).join("") : null;
   store.insertSession({
@@ -357,7 +357,7 @@ export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSes
   // where it was when it came here (the pages open `?history=<session>&entry=<n>` links there).
   const at = last !== null ? `&entry=${last}` : "";
   const note = tr(lang, "station.session.continued", { runtime: runtimeTitle(runtime), cwd: found.cwd, link: `?history=${key}${at}` });
-  store.insertMessage({ thread: thread.id, ts: nextTs(), authorKind: "ember", author: "ember", text: note });
+  store.insertMessage({ thread: thread.id, ts: hub.nextTs(), authorKind: "ember", author: "ember", text: note });
   store.setRead(createdBy, thread.id, store.lastEntry(thread.id));
   return [key, thread];
 }
