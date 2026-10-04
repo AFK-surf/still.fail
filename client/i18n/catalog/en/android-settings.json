@@ -113,8 +113,6 @@
   "android-settings.files.chat.both": "Messages {size} · {n} files {files}",
   "android-settings.files.chat.messages": "Messages {size}",
   "android-settings.files.clear.action": "Delete",
-  "android-settings.files.clear.text": "Deletes the {size} of files kept on this phone; they download again when opened.",
-  "android-settings.files.clear.title": "Delete all?",
   "android-settings.files.clearAll": "Clear all",
   "android-settings.files.clearAll.text": "Deletes the {size} of chat history and files kept on this phone; they download again when opened.",
   "android-settings.files.clearAll.title": "Clear all?",

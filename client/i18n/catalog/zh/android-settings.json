@@ -95,8 +95,6 @@
   "android-settings.files.chat.both": "消息 {size} · {n} 个文件 {files}",
   "android-settings.files.chat.messages": "消息 {size}",
   "android-settings.files.clear.action": "删除",
-  "android-settings.files.clear.text": "删掉这台手机上存的 {size} 文件，再打开时会重新下载。",
-  "android-settings.files.clear.title": "全部删除？",
   "android-settings.files.clearAll": "全部清除",
   "android-settings.files.clearAll.text": "删掉这台手机上存的 {size} 聊天记录和文件，再打开时会重新下载。",
   "android-settings.files.clearAll.title": "全部清除？",
