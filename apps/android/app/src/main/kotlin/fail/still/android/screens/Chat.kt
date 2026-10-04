@@ -170,6 +170,7 @@ import fail.still.core.CoreException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -420,6 +421,8 @@ private val ACTIVITY_GLIDE = androidx.compose.animation.core.spring(dampingRatio
 /** How long an activity stays once its agent stops, then how long it takes to fade (web Chat.tsx HOLD_MS, FADE_MS). */
 private const val HOLD_MS = 600L
 private const val FADE_MS = 220L
+/** How long words sent wait for the list to be laid out with the composer's room before they fly all the same. */
+private const val LAYOUT_MS = 100L
 
 /** The list's gap between messages (web mobile: --list-gap 20px). */
 private val GAP = 20.dp
@@ -701,11 +704,14 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // the list's own scroll clamping in a short chat; scrolling is never an animation clock.
     var box by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     val flying = host.flight
-    val bottomExtra = with(density) { 10.dp.roundToPx() }
     val followMargin = with(density) { 12.dp.roundToPx() }
     SideEffect {
         host.prepareFlight = { f ->
-            snapshotFlow { list.layoutInfo.afterContentPadding == host.roomForList() + bottomExtra }.first { it }
+            // Laid out with the room the flight keeps for the composer: the padding as the list rounds it (px → dp → px is
+            // not px again at every density, e.g. 2.75), and a few frames at most, never a wait for something to happen.
+            withTimeoutOrNull(LAYOUT_MS) {
+                snapshotFlow { list.layoutInfo.afterContentPadding == with(density) { (host.roomForList().toDp() + 10.dp).roundToPx() } }.first { it }
+            }
             if (!short && host.flight === f) {
                 follow.paused = true
                 val index = f.key?.let(follow.indexOf)?.takeIf { it >= 0 }
@@ -733,7 +739,9 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         // Words sent flying in, while it follows: it is put in place by them (below), not glided after their row.
         if (sent && host.flight?.carried == false && !short) follow.paused = true
         if (toLatest[0] && !short) { toLatest[0] = false; atLatest(); return@SideEffect }
-        if (sent && !short && follow.placed && !follow.on) { atLatest(); return@SideEffect }
+        // Not only from up the list: while it follows a long message from its top (its anchor), the end is below what
+        // shows too, and a row put there would never come into sight (the words stayed in the composer, then went).
+        if (sent && !short && follow.placed && (!follow.on || follow.anchor != null || list.canScrollForward)) { atLatest(); return@SideEffect }
         if (was == null || was == headKey || !follow.placed || reveal.revealing) return@SideEffect
         // Not laid out anew yet: what is in view is what was.
         val shown = list.layoutInfo.visibleItemsInfo

@@ -152,6 +152,46 @@ class ChatMotionTest {
         r.end()
     }
 
+    /**
+     * Sent while the list follows a long reply from its top (its end out of sight below): the reader is taken to the end
+     * and the words go to their row there, rather than staying in the composer until they give up.
+     */
+    @Test
+    fun sentUnderALongReply() {
+        val h = Harness(rule)
+        h.fake.put(topic, Fixtures.chat(talk))
+        val long = (1..40).joinToString("\n") { "第 $it 行：把登录、注册和找回密码三个页面的错误提示都检查了一遍" }
+        val text = "好的，那再把单元测试补上"
+        val replied = talk + Fixtures.agent(5, long, said = true)
+        h.fake.answer = { name, _ ->
+            if (name == "chat.send") h.fake.put(topic, Fixtures.chat(replied, listOf(Fixtures.outgoing("out-1", text))))
+            JsonNull
+        }
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        h.settle()
+        // The reply comes in while the reader is at the end: followed until its top is at the top.
+        h.fake.put(topic, Fixtures.chat(replied))
+        h.settle(3000)
+        h.type(text)
+        h.keyboard()
+        val r = h.record("sent-under-long-reply")
+        r.frame { h.send() }
+        r.frames(60)
+        // A second on (the clock stopped there): its row in sight above the composer, not laid out somewhere below what shows.
+        val row = rule.onNode(hasText(text)).fetchSemanticsNode().boundsInRoot
+        val field = rule.onAllNodes(hasSetTextAction())[0].fetchSemanticsNode().boundsInRoot
+        assertTrue("sent row at ${row.top}..${row.bottom}, composer from ${field.top}", row.top > 0f && row.bottom <= field.top)
+        // And the words gone from the field (only its faint placeholder there): no ink left where they were typed.
+        val shot = rule.onRoot().captureToImage().toPixelMap()
+        var ink = 0
+        for (y in field.top.toInt() until field.bottom.toInt().coerceAtMost(shot.height)) for (x in field.left.toInt() until field.right.toInt().coerceAtMost(shot.width)) {
+            val c = shot[x, y]
+            if (c.red + c.green + c.blue < 1.2f) ink++
+        }
+        assertTrue("$ink dark pixels still in the composer", ink < 50)
+        r.end()
+    }
+
     /** The stream can replace the outbox before the post response supplies its seq. */
     @Test
     fun sentMessageBeforeAck() = sentMessageBeforeAck(dark = false)
