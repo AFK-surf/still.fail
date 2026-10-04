@@ -256,7 +256,7 @@ export const AgentsLive = (control: Control) =>
         env: process.env as Record<string, string | undefined>,
         claudeToken: (p) => accounts.claudeToken(p),
         codexRunning: (id) => codex.running(id),
-        status: (id) => accounts.health(id),
+        status: (id) => { const h = accounts.health(id); return { check: h.check ?? null, quota: h.quota ?? null }; },
         changed: () => events.overviewChanged(),
         recheck: () => accounts.recheckBorrowed(),
       });
