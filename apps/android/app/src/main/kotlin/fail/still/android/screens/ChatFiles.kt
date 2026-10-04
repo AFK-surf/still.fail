@@ -146,6 +146,8 @@ fun isImage(name: String) = kindOf(name).kind == PreviewKind.Image
 const val BIG_FILE = 16L * 1024 * 1024
 /** The most a station from before parts sends (whole). */
 private const val WHOLE_FILE_MAX = 50L * 1024 * 1024
+/** The most the files fetched onto the disk to be viewed take together. */
+private const val DISK_KEPT = 2L * 1024 * 1024 * 1024
 
 internal object FileData {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -205,7 +207,7 @@ internal object FileData {
                 val dir = File(context.cacheDir, "files").apply { mkdirs() }
                 val ext = file.name.substringAfterLast('.', "").take(8)
                 val done = File(dir, "${Integer.toHexString(id.hashCode())}-${file.size}${if (ext.isEmpty()) "" else ".$ext"}")
-                if (done.exists() && done.length() == file.size) return@async done
+                if (done.exists() && done.length() == file.size) return@async done.also { it.setLastModified(System.currentTimeMillis()) }
                 val part = File(dir, done.name + ".part")
                 val name = file.path.substringAfterLast('/')
                 try {
@@ -214,7 +216,7 @@ internal object FileData {
                     if (e.code != "unsupported" || file.size > WHOLE_FILE_MAX) throw e
                     return@async onDisk(context, id, file.name, app.api(station).file(key, name, false, null).second)
                 }
-                withContext(Dispatchers.IO) { part.renameTo(done) }
+                withContext(Dispatchers.IO) { part.renameTo(done); prune(dir, done) }
                 done
             } finally {
                 comingToDisk.remove(id)
@@ -234,8 +236,27 @@ internal object FileData {
             val part = File(dir, file.name + ".part")
             part.writeBytes(bytes)
             part.renameTo(file)
-        }
+            prune(dir, file)
+        } else file.setLastModified(System.currentTimeMillis())
         file
+    }
+
+    /**
+     * Keeps the files fetched onto the disk (the app's cache, never Downloads: the system may clear it too) within
+     * [DISK_KEPT] together: the least lately used go first, never `keep` (the one just opened); a part left a day
+     * (a fetch that stopped) goes too.
+     */
+    private fun prune(dir: File, keep: File) {
+        val now = System.currentTimeMillis()
+        val all = dir.listFiles()?.toMutableList() ?: return
+        all.removeAll { f -> (f.name.endsWith(".part") && now - f.lastModified() > 24 * 3600_000L && f.delete()) || f.name.endsWith(".part") }
+        var total = all.sumOf { it.length() }
+        for (f in all.sortedBy { it.lastModified() }) {
+            if (total <= DISK_KEPT) break
+            if (f == keep) continue
+            val len = f.length()
+            if (f.delete()) total -= len
+        }
     }
 }
 
