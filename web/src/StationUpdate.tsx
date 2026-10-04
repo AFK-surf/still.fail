@@ -19,7 +19,7 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
       <Popover.Anchor asChild><span className={css.dot} /></Popover.Anchor>{notice.label ?? notice.text}
     </Popover.Trigger>
     <Popover.Portal>
-      <Popover.Content className={css.popover} data-tone={notice.tone} side="bottom" align="end" sideOffset={6} collisionPadding={12} onOpenAutoFocus={(e) => e.preventDefault()}>
+      <Popover.Content className={css.popover} data-tone={notice.tone} side="bottom" align="center" sideOffset={6} collisionPadding={12} onOpenAutoFocus={(e) => e.preventDefault()}>
         <div className={css.head}>
           <div className={css.words}>
             {notice.station
