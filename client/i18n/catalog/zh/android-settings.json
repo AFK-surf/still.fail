@@ -294,7 +294,7 @@
   "android-settings.profile.verifiedAdded": "已验证并添加 Profile",
   "android-settings.profile.verifyAdd": "验证并添加",
   "android-settings.profiles.empty": "这台机器还没有 Profile",
-  "android-settings.profiles.note": "agent 跑模型用的账号。需查看的账号排在各 station 前面，点进去查看原因和处理办法。",
+  "android-settings.profiles.note": "agent 跑模型用的账号。需查看的排在前面，点进去查看原因和处理办法。",
   "android-settings.profiles.stationOffline": "station 离线，读不到它的 Profile",
   "android-settings.quota.blocked": "被停用",
   "android-settings.quota.check": "查询额度",

@@ -127,7 +127,8 @@ function ShareRows({ p }: { p: Profile }) {
         <ListCard>
           <ListRow onClick={entry?.editable ? () => app.push(app.at(`/s/${entry.stationId}/settings/accounts/${encodeURIComponent(entry.profile.id)}`)) : undefined}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-              <span className={listsCss.mRowTitle}>{t("web-pages.profiles.share.copy", { station: host })}</span>
+              <span className={listsCss.mRowTitle}>{t("web-main.memory.share.from", { station: host })}</span>
+              <span className={listsCss.mRowNote}>{t("web-pages.profiles.share.changeThere")}</span>
               {subscription && p.share.reachable === false && <span className={`${listsCss.mRowNote} ${partsCss.mRed}`}>{t("web-pages.profiles.share.hostAway", { station: host })}</span>}
             </span>
             {entry?.editable && <ChevronRight size={14} className={partsCss.mSubtle} />}

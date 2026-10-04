@@ -206,7 +206,8 @@ private fun ShareSection(current: WorkspaceEntry, s: StationView, p: Profile) {
         ListCard {
             ListRow(onClick = if (entry?.editable == true) ({ app.push(Screen.Profile(entry.station, entry.profile.id)) }) else null) {
                 Column(Modifier.weight(1f)) {
-                    Text(t("web-pages.profiles.share.copy", "station" to host), fontSize = 15.sp, color = C.ink)
+                    Text(t("web-main.memory.share.from", "station" to host), fontSize = 15.sp, color = C.ink)
+                    Text(t("web-pages.profiles.share.changeThere"), fontSize = 13.sp, color = C.muted)
                     if (subscription && share.reachable == false) Text(t("web-pages.profiles.share.hostAway", "station" to host), fontSize = 13.sp, color = C.red)
                 }
                 if (entry?.editable == true) IconIn(Icons.ChevronRight, 14.dp, C.subtle)

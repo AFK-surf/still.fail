@@ -62,8 +62,9 @@ export function workspaceProfiles(stations: J[]): J {
     e.editable = at.host !== undefined;
     items.push(e);
   }
-  // Unusable last, then by name.
-  items.sort((a, b) => Number(!a.usable) - Number(!b.usable) || String(a.profile.name).localeCompare(String(b.profile.name)));
+  // What needs a look first (one nobody can use now, one whose check failed), then by name.
+  const look = (e: J) => !e.usable || e.profile.checkTone === "red";
+  items.sort((a, b) => Number(look(b)) - Number(look(a)) || String(a.profile.name).localeCompare(String(b.profile.name)));
   return { items, loading };
 }
 

@@ -824,5 +824,6 @@
   "web-pages.profiles.share.here": "在这台",
   "web-pages.profiles.share.copy": "这个 Profile 是 {station} 分享来的，在那台上改。",
   "web-pages.profiles.share.goHost": "去 {station}",
-  "web-pages.profiles.share.hostAway": "{station} 没有响应，现在用不了"
+  "web-pages.profiles.share.hostAway": "{station} 没有响应，现在用不了",
+  "web-pages.profiles.share.changeThere": "在那台上改"
 }

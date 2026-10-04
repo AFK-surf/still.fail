@@ -389,7 +389,7 @@
   "web-mobile.profiles.notChecked": "还没检查过",
   "web-mobile.profiles.notFound": "没有这个 Profile。",
   "web-mobile.profiles.notSaved": "没有保存",
-  "web-mobile.profiles.note": "agent 跑模型用的账号。需查看的账号排在各 station 前面，点进去查看原因和处理办法。",
+  "web-mobile.profiles.note": "agent 跑模型用的账号。需查看的排在前面，点进去查看原因和处理办法。",
   "web-mobile.profiles.offline": "station 离线，读不到它的 Profile",
   "web-mobile.profiles.openAuth": "打开授权页面",
   "web-mobile.profiles.orNew": "或者添加一个新的",
