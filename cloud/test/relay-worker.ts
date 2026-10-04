@@ -29,7 +29,10 @@ export class RelayBudget extends ProductionRelayBudget {
 }
 
 export class Relay extends DurableObject<{ TEST_RELAY?: Fetcher }> {
-  private delayMs = 0;
+  /** Upgrades held until release(), while a test holds them (hold()); null: none held. */
+  private held: (() => void)[] | null = null;
+  private arrivals: { n: number; resolve: () => void }[] = [];
+  private closings: { n: number; resolve: () => void }[] = [];
   private destroyed = 0;
   private accepts = 0;
   private disconnects = 0;
@@ -47,11 +50,43 @@ export class Relay extends DurableObject<{ TEST_RELAY?: Fetcher }> {
   destroyCount() {
     return this.destroyed;
   }
-  delay(milliseconds: number) {
-    this.delayMs = milliseconds;
+  /** From now on each upgrade waits here until release(): a test keeps some pending while it does something else. */
+  hold() {
+    this.held = [];
+  }
+  /** Resolves once `n` upgrades are waiting here (not on a guess of how long they take to arrive). */
+  arrived(n: number) {
+    return new Promise<void>((resolve) => {
+      this.arrivals.push({ n, resolve });
+      this.wake();
+    });
+  }
+  /** Lets every held upgrade go on, and holds no more. */
+  release() {
+    const held = this.held ?? [];
+    this.held = null;
+    for (const go of held) go();
+  }
+  /** Resolves once `n` connections in all have closed here. */
+  disconnected(n: number) {
+    return new Promise<void>((resolve) => {
+      this.closings.push({ n, resolve });
+      this.wake();
+    });
+  }
+  private wake() {
+    this.closings = this.closings.filter((c) => (c.n <= this.disconnects ? (c.resolve(), false) : true));
+    const waiting = this.held?.length ?? 0;
+    this.arrivals = this.arrivals.filter((a) => (a.n <= waiting ? (a.resolve(), false) : true));
   }
   async fetch(request: Request): Promise<Response> {
-    if (this.delayMs) await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+    if (this.held) {
+      const held = this.held;
+      await new Promise<void>((go) => {
+        held.push(go);
+        this.wake();
+      });
+    }
     if (request.headers.has("authorization") || request.headers.has("cookie") || new URL(request.url).search) {
       return new Response("credential leak", { status: 500 });
     }
@@ -67,6 +102,7 @@ export class Relay extends DurableObject<{ TEST_RELAY?: Fetcher }> {
     server.addEventListener("message", (event) => server.send(event.data));
     server.addEventListener("close", () => {
       if (this.sockets.delete(server)) this.disconnects++;
+      this.wake();
       server.close(1000, "closed");
     });
     return new Response(null, {

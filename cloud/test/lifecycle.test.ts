@@ -34,7 +34,9 @@ test("logout does not cancel a pending native relay upgrade", { timeout: 10000 }
   try {
     const session = await h.login();
     const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
-    await relays.get(relays.idFromName("primary")).delay(2000);
+    const relay = relays.get(relays.idFromName("primary"));
+    // The upgrade held at the relay, signed out meanwhile, then let go.
+    await relay.hold();
     const pending = h.fetch("/relay", {
       headers: {
         ...auth(session.access_token),
@@ -42,7 +44,7 @@ test("logout does not cancel a pending native relay upgrade", { timeout: 10000 }
         "sec-websocket-protocol": "iroh-relay",
       },
     });
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await relay.arrived(1);
     assert.equal(
       (
         await h.fetch("/v1/auth/logout", {
@@ -53,6 +55,7 @@ test("logout does not cancel a pending native relay upgrade", { timeout: 10000 }
       ).status,
       200,
     );
+    await relay.release();
     const response = await pending;
     assert.equal(response.status, 101);
     response.webSocket!.accept();

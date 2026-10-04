@@ -35,8 +35,13 @@ test("pending upgrades consume capacity before the backend replies", { timeout: 
   const h = await harness({ noGoogle: true });
   try {
     const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
-    await relays.get(relays.idFromName("primary")).delay(500);
-    const responses = await Promise.all(Array.from({ length: LIMITS.connections + 1 }, () => h.fetch("/relay", { headers: upgrade })));
+    const relay = relays.get(relays.idFromName("primary"));
+    // Every upgrade the limit lets through held at the relay, so none has its answer when the last one asks.
+    await relay.hold();
+    const asked = Array.from({ length: LIMITS.connections + 1 }, () => h.fetch("/relay", { headers: upgrade }));
+    await relay.arrived(LIMITS.connections);
+    await relay.release();
+    const responses = await Promise.all(asked);
     assert.equal(responses.filter((r) => r.status === 101).length, LIMITS.connections);
     assert.equal(responses.filter((r) => r.status === 429).length, 1);
     for (const response of responses) {
@@ -59,10 +64,10 @@ test("closed connections free capacity, counted by the relay process", { timeout
       sockets.push(response.webSocket!);
     }
     assert.equal((await h.fetch("/relay", { headers: upgrade })).status, 429);
-    const closed = new Promise((resolve) => sockets[0].addEventListener("close", resolve, { once: true }));
+    const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
     sockets[0].close();
-    await closed;
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Counted by the relay process once its side has closed too (not 100 ms later, on a guess).
+    await relays.get(relays.idFromName("primary")).disconnected(1);
     const response = await h.fetch("/relay", { headers: upgrade });
     assert.equal(response.status, 101);
     response.webSocket!.accept();
