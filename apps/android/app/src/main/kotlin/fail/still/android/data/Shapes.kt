@@ -411,6 +411,8 @@ data class AutomaticDecisionSettings (
 @Serializable
 data class AutomaticDecisionView (
 	val canEdit: Boolean,
+	/// The station reviews the done chats no decision has answered when asked (automaticDecisions.review).
+	val canReview: Boolean? = null,
 	val settings: AutomaticDecisionSettings,
 	val models: List<AutomaticDecisionModel>,
 	val recent: List<AutomaticDecisionCheck>

@@ -71,6 +71,12 @@ export const routes = ({ accounts, overview }: AccountsRouteDeps): Route[] => {
         return ok(await view(r));
       }),
     ),
+    route("POST", /^\/*automatic-decisions\/+review\/*$/, (r) =>
+      answer(async (a) => {
+        const queued = a.reviewUndecided(r.viewer);
+        return ok({ queued, overview: await view(r) });
+      }),
+    ),
     route("POST", /^\/*automatic-decisions\/+refresh\/*$/, (r) =>
       answer(async (a) => {
         await a.refreshDecisionModels(r.viewer, r.lang);

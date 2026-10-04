@@ -125,6 +125,16 @@ private fun AutomaticDecisionPanel(station: String, name: String, view: Automati
                 d.pick?.let { pick -> ModelList(pick.options, "codex", d.model) { model -> app.sheet = null; edit("model", JsonPrimitive(model)) } }
             }
         }
+        // Asked of the station as saved: only once the rule is on there, and nothing unsaved.
+        if (view.canReview == true && view.settings.completion?.enabled == true && !d.dirty) {
+            val reviewing = app.isDoing("automaticDecisions.review", "station" to station)
+            ListRow(onClick = if (busy || reviewing) null else ({
+                app.act(t("web-pages.automaticDecisions.reviewAction"), t("web-pages.automaticDecisions.reviewStarted")) { app.core.call("automaticDecisions.review", buildJsonObject { put("station", station) }) }
+            })) {
+                Text(t("web-pages.automaticDecisions.review"), color = C.ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                DoingMark(reviewing, app.failedOf("automaticDecisions.review", "station" to station))
+            }
+        }
     }
 
     if (d.dirty) Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {

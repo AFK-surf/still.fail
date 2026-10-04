@@ -397,6 +397,8 @@ export interface AutomaticDecisionSettings {
 
 export interface AutomaticDecisionView {
 	canEdit: boolean;
+	/** The station reviews the done chats no decision has answered when asked (automaticDecisions.review). */
+	canReview?: boolean;
 	settings: AutomaticDecisionSettings;
 	models: AutomaticDecisionModel[];
 	recent: AutomaticDecisionCheck[];

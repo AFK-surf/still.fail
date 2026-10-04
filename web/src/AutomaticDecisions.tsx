@@ -66,7 +66,7 @@ function DecisionRecords({station,view}:{station:string;view:AutomaticDecisionVi
   </ul>;
 }
 function AutomaticDecisionPanel({ station, name, view }: { station: string; name: string; view: AutomaticDecisionView }) {
-  const {d, state, saving, saveFailed, edit, save} = useAutomaticDecisionForm(station, view);
+  const {d, state, saving, saveFailed, reviewing, reviewFailed, canReview, edit, save, review} = useAutomaticDecisionForm(station, view);
   const status = (text: string) => <li className={pages.listRow}><StatusDot state="online" /><span className={pages.listRowText}><span className={pages.listRowTitle}>{name}</span><span className={css.note}>{text}</span></span></li>;
   if (!view.canEdit) return status(t("web-pages.automaticDecisions.adminOnly"));
   if (!d) return status(state.error?.message ?? t("web-pages.automaticDecisions.readingConfig"));
@@ -87,9 +87,11 @@ function AutomaticDecisionPanel({ station, name, view }: { station: string; name
         : <span className={css.note}>{chosen?.name ?? t("web-pages.automaticDecisions.noModels")}</span>}
       <Switch id={`decision-${station}`} label={t("web-pages.automaticDecisions.enableOn",{station:name})} checked={d.enabled} disabled={busy} onChange={enabled => edit({enabled})} />
       {d.dirty && <Button variant="primary" busy={saving} disabled={busy} onClick={save}>{t("web-pages.automaticDecisions.save")}</Button>}
+      {canReview && <Button variant="ghost" busy={reviewing} disabled={busy || reviewing} onClick={review}>{t("web-pages.automaticDecisions.review")}</Button>}
       </span>
     </div>
     {saveFailed && <p className={css.error} role="alert">{saveFailed}</p>}
+    {reviewFailed && <p className={css.error} role="alert">{reviewFailed}</p>}
   </li>;
 }
 
@@ -102,13 +104,18 @@ export function useAutomaticDecisionForm(station: string, view: AutomaticDecisio
   const refreshing = useDoing("automaticDecisions.refresh", { station });
   const saveFailed = useDoingFailed("automaticDecisions.form.save", {station,form});
   const refreshFailed = useDoingFailed("automaticDecisions.refresh", {station});
+  const reviewing = useDoing("automaticDecisions.review", { station });
+  const reviewFailed = useDoingFailed("automaticDecisions.review", {station});
+  // Asked of the station as saved: only once the rule is on there, and nothing unsaved.
+  const canReview = !!view.canReview && !!view.settings.completion?.enabled && !!d && !d.dirty;
   useEffect(() => {
     if (!view.canEdit) return;
     act(call("automaticDecisions.form.open", { station, form }), t("web-pages.automaticDecisions.readAction"));
     return () => { act(call("automaticDecisions.form.drop", { station, form }), t("web-pages.automaticDecisions.closeAction")); };
   }, [call, station, form, view.canEdit, act]);
   const edit = (input: Record<string, unknown>) => act(call("automaticDecisions.form.edit", { station, form, input }), t("web-pages.automaticDecisions.editAction"));
-  return {d, state, saving, refreshing, saveFailed, refreshFailed, edit,
+  return {d, state, saving, refreshing, saveFailed, refreshFailed, reviewing, reviewFailed, canReview, edit,
+    review: () => act(call("automaticDecisions.review", {station}), t("web-pages.automaticDecisions.reviewAction"), t("web-pages.automaticDecisions.reviewStarted")),
     save: () => act(call("automaticDecisions.form.save", {station,form}), t("web-pages.automaticDecisions.saveAction"), t("web-pages.automaticDecisions.saved")),
     refresh: () => act(call("automaticDecisions.refresh", {station}), t("web-pages.automaticDecisions.refreshAction"), t("web-pages.automaticDecisions.refreshed"))};
 }

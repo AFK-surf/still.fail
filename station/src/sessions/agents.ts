@@ -40,7 +40,7 @@ import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
 import { autoArchive } from "./lifecycle.ts";
 import { fromPeer } from "./messages.ts";
-import { reviewUndecided } from "./review.ts";
+import { reviewUndecided, startReview } from "./review.ts";
 
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
@@ -230,7 +230,7 @@ export const AgentsLive = (control: Control) =>
       });
 
       // Profiles, sign-ins, allowances and the machine's own logins; the Claude driver's machine token renewed by it.
-      const accounts: Accounts = makeAccounts({ data, store, config, hub, codex: () => codex as any, following: () => events.inUse(), checkOnStart: true });
+      const accounts: Accounts = makeAccounts({ data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, following: () => events.inUse(), checkOnStart: true });
       accounts.start();
       const slackView = {
         connection: (c: any) => slack.state(c.id),

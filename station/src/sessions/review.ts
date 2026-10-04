@@ -141,6 +141,14 @@ export function undecided(hub: Hub): string[] {
   return keys;
 }
 
+/// Asked from the pages: the sweep started, and how many chats it has to look at (null when no model can be asked).
+export function startReview(hub: Hub): number | null {
+  if (candidatesOf(hub).length === 0) return null;
+  const queued = undecided(hub).length;
+  void reviewUndecided(hub).catch(() => {});
+  return queued;
+}
+
 /// Per hub: the sweep going on, and whether it was asked for again meanwhile.
 const sweeps = new WeakMap<Hub, { done: Promise<void>; again: boolean }>();
 

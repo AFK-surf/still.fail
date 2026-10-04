@@ -70,6 +70,7 @@ export const PARAMS: Record<string, string> = {
   "machineSessions.continue": "runtime?:string id?:string",
   "automaticDecisions.save": "input:json",
   "automaticDecisions.refresh": "",
+  "automaticDecisions.review": "",
   "connect.create": "input?:json id?:string",
   "connect.put": "id:string input?:json",
   "connect.delete": "id:string",
@@ -274,6 +275,8 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => "/machine-sessions", p.pick(["runtime", "id"]), NONE);
     case "automaticDecisions.save":
       return op("PUT", () => "/automatic-decisions", p.has("input") ? p.v.input : {}, OVERVIEW);
+    case "automaticDecisions.review":
+      return op("POST", () => "/automatic-decisions/review", {}, OVERVIEW);
     case "automaticDecisions.refresh":
       return op("POST", () => "/automatic-decisions/refresh", {}, OVERVIEW);
     case "connect.create":

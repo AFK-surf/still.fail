@@ -62,7 +62,7 @@ function DecisionRecords({station,name,view}:{station:string;name:string;view:Au
 }
 function DecisionPanel({station,name,view}:{station:string;name:string;view:AutomaticDecisionView}) {
   const app=useApp();
-  const {d,state,saving,refreshing,saveFailed,refreshFailed,edit,save,refresh}=useAutomaticDecisionForm(station,view);
+  const {d,state,saving,refreshing,saveFailed,refreshFailed,reviewing,reviewFailed,canReview,edit,save,refresh,review}=useAutomaticDecisionForm(station,view);
   if (!view.canEdit) return <p className={settings.mPageNote}>{t("web-pages.automaticDecisions.adminOnly")}</p>;
   if (!d) return <p className={settings.mPageNote}>{state.error?.message ?? t("web-pages.automaticDecisions.readingConfig")}</p>;
   const busy=d.pending || saving;
@@ -80,6 +80,10 @@ function DecisionPanel({station,name,view}:{station:string;name:string;view:Auto
         <span className={connects.mSwitch} data-on={d.enabled || undefined} />
       </ListRow>
       <GoRow title={t("web-pages.automaticDecisions.model")} value={chosen?.name ?? (d.model ? t("web-pages.automaticDecisions.unavailable", {model:d.model}) : t("web-pages.automaticDecisions.pickModel"))} onClick={()=>{if(!busy)pick();}} />
+      {canReview && <ListRow onClick={busy || reviewing ? undefined : review}>
+        <span className={`${parts.mGrow} ${lists.mRowText}`}><span className={lists.mRowTitle}>{t("web-pages.automaticDecisions.review")}</span></span>
+        {reviewing ? <Spinner size={16} /> : reviewFailed && <FailedMark error={reviewFailed} size={14} />}
+      </ListRow>}
     </ListCard>
     {d.dirty && <div className={settings.mProfileTools}><Button label={t("web-pages.automaticDecisions.save")} primary busy={saving} enabled={!busy} onClick={save} />{saveFailed && <FailedMark error={saveFailed} size={14} />}</div>}
 

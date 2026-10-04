@@ -1689,6 +1689,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "One transient connect wizard. Decisions and navigation come from the core on every client." }),
   AutomaticDecisionView: struct([
     ["canEdit", "bool"],
+    ["canReview", "bool", { default: true, doc: "The station reviews the done chats no decision has answered when asked (automaticDecisions.review)." }],
     ["settings", "AutomaticDecisionSettings"],
     ["models", vec("AutomaticDecisionModel")],
     ["recent", vec("AutomaticDecisionCheck")],

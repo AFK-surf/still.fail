@@ -765,7 +765,7 @@ test("nothing is recommended while the rule is off or its model is not verified"
   await r.close();
 });
 
-test("turning the rule on reviews the done chats no decision has answered, once each", async () => {
+test("turning the rule on reviews the done chats no decision has answered, once each", async (t) => {
   const r = new Rig();
   const m = say("<@UBOT> explain retention");
   await r.accept(m);
@@ -773,6 +773,7 @@ test("turning the rule on reviews the done chats no decision has answered, once 
   const key = `cl:C1:${m.threadTs}`;
   const thread = () => r.thread("C1", m.threadTs).id;
   const { url, server } = await provider(true);
+  t.after(() => server.close());
   installDecisionProfile(r, url);
   // Done while the rule was off: nothing looked at it.
   r.edit((raw) => (raw.automaticDecisions.completion.enabled = false));
@@ -788,7 +789,6 @@ test("turning the rule on reviews the done chats no decision has answered, once 
   // A chat already answered as it stands is not asked about again.
   await reviewUndecided(r.hub);
   assert.equal(r.store.recentDecisions().length, 1);
-  server.close();
   await r.close();
 });
 

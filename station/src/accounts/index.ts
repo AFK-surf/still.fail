@@ -70,6 +70,8 @@ export type AccountsDeps = {
   store: Store;
   config: ConfigFile;
   /// The hub, whose account pool picks profiles by their checks and allowances (and knows which ran out lately).
+  /// Starts reviewing the done chats no decision has answered (review.ts): how many, or null without a usable model.
+  reviewUndecided?: () => number | null;
   hub?: { accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth } };
   /// The codex driver, once there.
   codex?: () => CodexAccess | undefined;
@@ -696,6 +698,17 @@ export class Accounts {
     });
   }
 
+  /// POST /automatic-decisions/review: the done chats no decision has answered, reviewed now in the background; how many.
+  reviewUndecided(viewer: Viewer): number {
+    if (!manages(viewer)) throw new Refusal(403, "只有 workspace 管理员能触发自动决策");
+    const review = this.deps.reviewUndecided;
+    if (!review) throw new Refusal(503, "这台 station 暂不支持手动检查");
+    if (!hubConfig(this.deps.config.raw(), this.deps.data).automaticDecisions.completion.enabled) throw new Refusal(409, "先启用并保存这条规则");
+    const queued = review();
+    if (queued === null) throw new Refusal(409, "配置的模型在现有 Profile 中暂不可用");
+    return queued;
+  }
+
   /// POST /automatic-decisions/refresh: every profile checked again (four at a time).
   async refreshDecisionModels(viewer: Viewer, lang: Lang = stationLang()) {
     if (!manages(viewer)) throw new Refusal(403, "只有 workspace 管理员能刷新决策模型");
@@ -736,6 +749,7 @@ export class Accounts {
     const completion = isObject(settings?.completion) ? settings.completion : {};
     return {
       canEdit: true,
+      canReview: this.deps.reviewUndecided !== undefined,
       settings: { completion: { enabled: completion.enabled === true, model: typeof completion.model === "string" ? completion.model : null } },
       models: this.decisionModels(),
       recent,
