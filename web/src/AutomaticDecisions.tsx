@@ -94,7 +94,7 @@ function ArchivePolicy({ station, policy }: { station: string; policy: ArchivePo
           <span className={css.optionRubric}>{o.rubric}</span>
           <span className={css.optionCount}>{o.count}</span>
         </button>)}
-      <Button variant="ghost" icon={Plus} disabled={busy} onClick={() => add(archive)}>{t("web-pages.archivePolicy.add")}</Button>
+      <button type="button" className={`${css.option} ${css.addOption}`} disabled={busy} onClick={() => add(archive)}><Plus size={14} />{t("web-pages.archivePolicy.add")}</button>
     </div>)}
     <p className={css.note}>{policy.changeText ? `${policy.changeText} · ` : ""}<span className={policy.failed ? css.bad : undefined}>{policy.summaryText}</span></p>
     {editing && form.d && <PolicyDialog station={station} edit={editing} d={form.d} form={form} days={policy.days} onClose={() => setEditing(null)} />}

@@ -34,3 +34,4 @@ export const optionCount = style({ flex: "none", minWidth: "2em", textAlign: "ri
 export const optionChats = style({ display: "grid", gap: 6, paddingTop: 8, minWidth: 0 });
 export const optionChat = style({ fontSize: vars.textSm, color: vars.text, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", selectors: { "&:hover": { textDecoration: "underline" } } });
 export const grow = style({ flex: "1" });
+export const addOption = style({ alignItems: "center", gap: 6, color: vars.muted, fontSize: vars.textSm });
