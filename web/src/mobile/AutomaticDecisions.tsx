@@ -1,12 +1,12 @@
 import { t } from "../i18n.ts";
-import { Fragment, useState } from "react";
-import { useAutomaticDecisionForm, usePolicyForm } from "../AutomaticDecisions.tsx";
+import { Fragment, type ReactNode } from "react";
+import { useAutomaticDecisionForm, usePolicyDraft, usePolicyForm } from "../AutomaticDecisions.tsx";
 import { useStations } from "../api.ts";
-import type { ArchivePolicyView, AutomaticDecisionView } from "../core/shapes.ts";
-import { ChevronRight, Edit, Refresh } from "../icons.tsx";
+import type { ArchiveOptionView, ArchivePolicyView, AutomaticDecisionView } from "../core/shapes.ts";
+import { ChevronRight, Refresh } from "../icons.tsx";
 import { stationBase } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
-import { Button, FailedMark, Field, LargeTitle, LinkButton, ListCard, ListRow, NavButton, SectionHeader, Spinner, TopBack } from "./parts.tsx";
+import { Button, FailedMark, Field, LargeTitle, LinkButton, ListCard, ListRow, NavButton, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
 import { ModelList } from "./History.tsx";
 import { GoRow } from "./Settings.tsx";
 import * as css from "./AutomaticDecisions.css.ts";
@@ -75,52 +75,77 @@ function DecisionPanel({station,name,view}:{station:string;name:string;view:Auto
 }
 
 
-/** The station's archive policy: its words and its options in their two groups, each with the chats the checks put there. */
+/** The station's archive policy: its words and its options in their two groups, each with how many chats the checks
+ *  put there. A tap edits what it is on, in a sheet: the words, an option (with the chats it got), a new option. */
 function PolicySection({station,policy}:{station:string;policy:ArchivePolicyView}) {
   const app=useApp();
   const form=usePolicyForm(station);
-  const [editing,setEditing]=useState(false);
-  const [open,setOpen]=useState<string|null>(null);
-  const d=form.d;
+  const busy=!form.d || form.d.pending;
   const group=(archive:boolean)=>t(archive ? "web-pages.archivePolicy.archive" : "web-pages.archivePolicy.keep");
-  if (editing && d) return <>
-    <SectionHeader title={t("web-pages.archivePolicy.title")} start={24} />
-    <div className={css.policyPad}><textarea className={`${lists.mField} ${css.policyText}`} rows={5} value={d.policy} disabled={d.pending} aria-label={t("web-pages.archivePolicy.title")} onChange={e=>form.edit({policy:e.target.value})} /></div>
-    {[true,false].map(archive=><Fragment key={String(archive)}>
-      <SectionHeader title={group(archive)} start={24} />
-      <div className={css.policyPad}>
-        {d.options.filter(o=>o.archive===archive).map(o=><div key={o.key} className={css.optionEdit}>
-          <Field value={o.name} placeholder={t("web-pages.archivePolicy.name")} onChange={name=>form.edit({option:o.key,name})} />
-          <textarea className={lists.mField} rows={2} value={o.rubric} placeholder={t("web-pages.archivePolicy.rubric")} aria-label={t("web-pages.archivePolicy.rubric")} onChange={e=>form.edit({option:o.key,rubric:e.target.value})} />
-          <div className={css.optionTools}>
-            <LinkButton label={t(o.archive ? "web-pages.archivePolicy.toKeep" : "web-pages.archivePolicy.toArchive")} enabled={!d.pending} onClick={()=>form.edit({option:o.key,archive:!o.archive})} />
-            <LinkButton label={t("web-pages.archivePolicy.remove")} className={parts.mRed} enabled={!d.pending} onClick={()=>form.edit({remove:o.key})} />
-          </div>
-        </div>)}
-        <LinkButton label={t("web-pages.archivePolicy.add")} enabled={!d.pending} onClick={()=>form.edit({add:archive})} />
-      </div>
-    </Fragment>)}
-    {form.saveFailed && <p className={`${settings.mPageNote} ${parts.mRed}`}>{form.saveFailed}</p>}
-    <div className={settings.mProfileTools}>
-      <Button label={t("web-pages.archivePolicy.cancel")} primary={false} enabled={!d.pending} onClick={()=>{form.edit({reset:true});setEditing(false);}} />
-      <Button label={t("web-pages.archivePolicy.save")} primary busy={form.saving} enabled={d.dirty && !d.pending} onClick={()=>{form.save().then(()=>setEditing(false),()=>{});}} />
-    </div>
-  </>;
+  const sheet=(edit:PolicyEdit)=>app.sheet({height:0.85,content:()=><PolicySheet station={station} form={form.form} edit={edit} days={policy.days} close={()=>app.sheet(null)} />});
+  const open=(edit:PolicyEdit)=>{void form.reset().then(()=>sheet(edit));};
+  const add=(archive:boolean)=>{void form.add(archive).then(key=>{if(key)sheet({kind:"option",key});});};
   return <>
-    <div className={css.stationHead}><div className={css.stationName}><SectionHeader title={t("web-pages.archivePolicy.title")} start={24} /></div>{d && <NavButton icon={Edit} label={t("web-pages.archivePolicy.edit")} onClick={()=>setEditing(true)} />}</div>
-    <p className={`${settings.mPageNote} ${css.policyWords}`}>{policy.text}</p>
+    <div className={css.stationHead}><div className={css.stationName}><SectionHeader title={t("web-pages.archivePolicy.title")} start={24} /></div>{form.saving ? <Spinner size={16} /> : form.saveFailed && <FailedMark error={form.saveFailed} size={14} />}</div>
+    <ListCard><ListRow onClick={busy ? undefined : ()=>open({kind:"text"})}>
+      <span className={`${parts.mGrow} ${css.policyWords}`}>{policy.text}</span>
+    </ListRow></ListCard>
     {[true,false].map(archive=><Fragment key={String(archive)}>
       <SectionHeader title={group(archive)} start={24} />
-      <ListCard>{policy.options.filter(o=>o.archive===archive).map(o=><Fragment key={o.id}>
-        <ListRow onClick={o.count ? ()=>setOpen(open===o.id ? null : o.id) : undefined}>
+      <ListCard>
+        {policy.options.filter(o=>o.archive===archive).map(o=><ListRow key={o.id} onClick={busy ? undefined : ()=>open({kind:"option",id:o.id,view:o})}>
           <span className={`${parts.mGrow} ${lists.mRowText}`}><span className={lists.mRowTitle}>{o.name}</span><span className={`${lists.mRowNote} ${settings.mWrap}`}>{o.rubric}</span></span>
           <span className={css.count}>{o.count}</span>
-        </ListRow>
-        {open===o.id && o.chats.map(c=><ListRow key={c.session} onClick={()=>app.push(`${stationBase(station)}/chats/${encodeURIComponent(c.session)}`)}>
-          <span className={`${parts.mGrow} ${css.chat}`}>{c.title}</span><ChevronRight size={14} className={parts.mSubtle} />
         </ListRow>)}
-      </Fragment>)}</ListCard>
+        <ListRow onClick={busy ? undefined : ()=>add(archive)}><span className={parts.mLink}>{t("web-pages.archivePolicy.add")}</span></ListRow>
+      </ListCard>
     </Fragment>)}
     <p className={settings.mPageNote}>{policy.changeText ? `${policy.changeText} · ` : ""}<span className={policy.failed ? parts.mRed : undefined}>{policy.summaryText}</span></p>
+  </>;
+}
+
+/** What a sheet edits: the words; an option of the station's (by its id, with what the checks put there); a new one (its draft key). */
+type PolicyEdit = { kind: "text" } | { kind: "option"; id: string; view: ArchiveOptionView } | { kind: "option"; key: string };
+
+function PolicySheet({station,form,edit,days,close}:{station:string;form:string;edit:PolicyEdit;days:number;close:()=>void}) {
+  const app=useApp();
+  const draft=usePolicyDraft(station,form);
+  const d=draft.d;
+  if (!d) return null;
+  // Closed at once; the save goes on beside the policy's title (a spinner, or what went wrong).
+  const save=()=>{close();void draft.save().catch(()=>{});};
+  const cancel=()=>{close();void draft.reset();};
+  const tools=(extra?:ReactNode)=><div className={css.sheetTools}>
+    {extra}<span className={parts.mGrow} />
+    <Button label={t("web-pages.archivePolicy.cancel")} primary={false} onClick={cancel} />
+    <Button label={t("web-pages.archivePolicy.save")} primary enabled={d.dirty} onClick={save} />
+  </div>;
+  if (edit.kind==="text") return <>
+    <SheetGrab /><SheetHead title={t("web-pages.archivePolicy.title")} />
+    <div className={css.sheetBody}>
+      <p className={lists.mRowNote}>{t("web-pages.archivePolicy.textLead")}</p>
+      <textarea className={`${lists.mField} ${css.policyText}`} rows={9} value={d.policy} aria-label={t("web-pages.archivePolicy.title")} onChange={e=>draft.edit({policy:e.target.value})} />
+      {tools()}
+    </div>
+  </>;
+  const isNew="key" in edit;
+  const o=d.options.find(x=>isNew ? x.key===edit.key : x.id===edit.id);
+  if (!o) return null;
+  const view=isNew ? null : edit.view;
+  const remove=()=>{close();void draft.change({remove:o.key}).then(()=>draft.save()).catch(()=>{});};
+  return <>
+    <SheetGrab /><SheetHead title={isNew ? t("web-pages.archivePolicy.newOption") : view!.name} />
+    <div className={css.sheetBody}>
+      <Field value={o.name} placeholder={t("web-pages.archivePolicy.name")} onChange={name=>draft.edit({option:o.key,name})} />
+      <textarea className={lists.mField} rows={3} value={o.rubric} placeholder={t("web-pages.archivePolicy.rubric")} aria-label={t("web-pages.archivePolicy.rubric")} onChange={e=>draft.edit({option:o.key,rubric:e.target.value})} />
+      <Seg fill options={[t("web-pages.archivePolicy.archive"),t("web-pages.archivePolicy.keep")]} selected={o.archive ? 0 : 1} onSelect={i=>draft.edit({option:o.key,archive:i===0})} />
+      {view && view.count>0 && <>
+        <p className={lists.mRowNote}>{t("web-pages.archivePolicy.chats",{days})}</p>
+        <ListCard>{view.chats.map(c=><ListRow key={c.session} onClick={()=>{cancel();app.push(`${stationBase(station)}/chats/${encodeURIComponent(c.session)}`);}}>
+          <span className={`${parts.mGrow} ${css.chat}`}>{c.title}</span><ChevronRight size={14} className={parts.mSubtle} />
+        </ListRow>)}</ListCard>
+      </>}
+      {tools(!isNew && <LinkButton label={t("web-pages.archivePolicy.remove")} className={parts.mRed} onClick={remove} />)}
+    </div>
   </>;
 }

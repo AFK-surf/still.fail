@@ -1,15 +1,16 @@
 import { t } from "./i18n.ts";
-import { useEffect, useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import { Link } from "react-router";
 import { useStations } from "./api.ts";
 import { useCall, useTopic } from "./core/react.ts";
-import type { ArchiveOptionDraft, ArchiveOptionView, ArchivePolicyDraft, ArchivePolicyView, AutomaticDecisionDraft, AutomaticDecisionView } from "./core/shapes.ts";
+import type { ArchiveOptionView, ArchivePolicyDraft, ArchivePolicyView, AutomaticDecisionDraft, AutomaticDecisionView } from "./core/shapes.ts";
 import { useAct, useToast } from "./toast.tsx";
 import { useDoing, useDoingFailed } from "./doing.ts";
-import { Button, IconButton, StatusDot, Switch } from "./ui.tsx";
+import { Button, Dialog, Field, Segmented, StatusDot, Switch } from "./ui.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import type { Picking } from "./pick.ts";
-import { ArrowDown, ArrowUp, ChevronRight, Edit, Plus, Trash } from "./icons.tsx";
+import { ChevronRight, Plus, Trash } from "./icons.tsx";
+import * as waitingCss from "./styles/waiting.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import { stationBase } from "./station.tsx";
 import * as pages from "./styles/pages.css.ts";
@@ -70,80 +71,101 @@ function AutomaticDecisionPanel({ station, name, view }: { station: string; name
   </li>;
 }
 
-/** The archive policy: its words, then its options in their two groups, each with the chats the checks put there. */
+/** The archive policy: its words, then its options in their two groups, each with how many chats the checks put
+ *  there. Each part is edited on its own, in a dialog: the words, an option (with the chats it got), a new option. */
 function ArchivePolicy({ station, policy }: { station: string; policy: ArchivePolicyView }) {
   const form = usePolicyForm(station);
-  const [editing, setEditing] = useState(false);
-  const [open, setOpen] = useState<string | null>(null);
-  const d = form.d;
-  if (editing && d) return <div className={css.policy}>
-    <div className={css.policyHead}><span className={css.policyTitle}>{t("web-pages.archivePolicy.title")}</span></div>
-    <textarea className={`${controlsCss.input} ${css.policyText}`} rows={4} value={d.policy} disabled={d.pending} aria-label={t("web-pages.archivePolicy.title")}
-      onChange={(e) => form.edit({ policy: e.target.value })} />
-    {[true, false].map((archive) => <div key={String(archive)} className={css.policyGroup}>
-      <span className={css.policyGroupName}>{t(archive ? "web-pages.archivePolicy.archive" : "web-pages.archivePolicy.keep")}</span>
-      {d.options.filter((o) => o.archive === archive).map((o) => <OptionEditor key={o.key} option={o} pending={d.pending} edit={form.edit} />)}
-      <Button variant="ghost" icon={Plus} disabled={d.pending} onClick={() => form.edit({ add: archive })}>{t("web-pages.archivePolicy.add")}</Button>
-    </div>)}
-    {form.saveFailed && <p className={css.error} role="alert">{form.saveFailed}</p>}
-    <div className={css.policyFoot}>
-      <Button variant="ghost" disabled={d.pending} onClick={() => { form.edit({ reset: true }); setEditing(false); }}>{t("web-pages.archivePolicy.cancel")}</Button>
-      <Button variant="primary" busy={form.saving} disabled={!d.dirty || d.pending} onClick={() => form.save().then(() => setEditing(false), () => {})}>{t("web-pages.archivePolicy.save")}</Button>
-    </div>
-  </div>;
+  const [editing, setEditing] = useState<PolicyEdit | null>(null);
+  const busy = !form.d || form.d.pending;
+  const open = (what: PolicyEdit) => { void form.reset().then(() => setEditing(what)); };
+  const add = (archive: boolean) => { void form.add(archive).then((key) => { if (key) setEditing({ kind: "option", key }); }); };
   return <div className={css.policy}>
     <div className={css.policyHead}>
       <span className={css.policyTitle}>{t("web-pages.archivePolicy.title")}</span>
-      <Button variant="ghost" icon={Edit} disabled={!d} onClick={() => setEditing(true)}>{t("web-pages.archivePolicy.edit")}</Button>
+      {form.saving && <span className={`${waitingCss.spinner}`} aria-hidden="true" />}
+      {form.saveFailed && <span className={css.error} role="alert">{form.saveFailed}</span>}
     </div>
-    <p className={css.policyWords}>{policy.text}</p>
+    <button type="button" className={css.policyWords} disabled={busy} onClick={() => open({ kind: "text" })}>{policy.text}</button>
     {[true, false].map((archive) => <div key={String(archive)} className={css.policyGroup}>
       <span className={css.policyGroupName}>{t(archive ? "web-pages.archivePolicy.archive" : "web-pages.archivePolicy.keep")}</span>
-      {policy.options.filter((o) => o.archive === archive).map((o) => <OptionRow key={o.id} station={station} option={o} open={open === o.id} toggle={() => setOpen(open === o.id ? null : o.id)} />)}
+      {policy.options.filter((o) => o.archive === archive).map((o) =>
+        <button key={o.id} type="button" className={css.option} disabled={busy} onClick={() => open({ kind: "option", id: o.id, view: o })}>
+          <span className={css.optionName}>{o.name}</span>
+          <span className={css.optionRubric}>{o.rubric}</span>
+          <span className={css.optionCount}>{o.count}</span>
+        </button>)}
+      <Button variant="ghost" icon={Plus} disabled={busy} onClick={() => add(archive)}>{t("web-pages.archivePolicy.add")}</Button>
     </div>)}
     <p className={css.note}>{policy.changeText ? `${policy.changeText} · ` : ""}<span className={policy.failed ? css.bad : undefined}>{policy.summaryText}</span></p>
+    {editing && form.d && <PolicyDialog station={station} edit={editing} d={form.d} form={form} days={policy.days} onClose={() => setEditing(null)} />}
   </div>;
 }
 
-function OptionRow({ station, option, open, toggle }: { station: string; option: ArchiveOptionView; open: boolean; toggle: () => void }) {
-  return <>
-    <button type="button" className={css.option} aria-expanded={option.count ? open : undefined} disabled={!option.count} onClick={toggle}>
-      <span className={css.optionName}>{option.name}</span>
-      <span className={css.optionRubric}>{option.rubric}</span>
-      <span className={css.optionCount}>{option.count}</span>
-    </button>
-    {open && <div className={css.optionChats}>{option.chats.map((c) =>
-      <Link key={c.session} to={`${stationBase(station)}/chats/${encodeURIComponent(c.session)}`} className={css.optionChat}>{c.title}</Link>)}
-      {option.count > option.chats.length && <span className={css.note}>{t("web-pages.archivePolicy.more", { n: option.count - option.chats.length })}</span>}
-    </div>}
+/** What a dialog edits: the words; an option of the station's (by its id, with what the checks put there); a new one (its draft key). */
+type PolicyEdit = { kind: "text" } | { kind: "option"; id: string; view: ArchiveOptionView } | { kind: "option"; key: string };
+
+function PolicyDialog({ station, edit, d, form, days, onClose }: { station: string; edit: PolicyEdit; d: ArchivePolicyDraft; form: ReturnType<typeof usePolicyDraft>; days: number; onClose: () => void }) {
+  // Closed at once; the save goes on under the policy's title (a spinner, or what went wrong).
+  const save = () => { onClose(); void form.save().catch(() => {}); };
+  const cancel = () => { onClose(); void form.reset(); };
+  const foot = (extra?: ReactNode) => <>
+    {extra}
+    <span className={css.grow} />
+    <Button variant="ghost" onClick={cancel}>{t("web-pages.archivePolicy.cancel")}</Button>
+    <Button variant="primary" disabled={!d.dirty} onClick={save}>{t("web-pages.archivePolicy.save")}</Button>
   </>;
+  if (edit.kind === "text") return <Dialog open title={t("web-pages.archivePolicy.title")} description={t("web-pages.archivePolicy.textLead")} onClose={cancel} footer={foot()} wide>
+    <textarea className={`${controlsCss.input} ${css.policyText}`} rows={8} autoFocus value={d.policy} aria-label={t("web-pages.archivePolicy.title")}
+      onChange={(e) => form.edit({ policy: e.target.value })} />
+  </Dialog>;
+  const isNew = "key" in edit;
+  const o = d.options.find((x) => (isNew ? x.key === edit.key : x.id === edit.id));
+  if (!o) return null;
+  const view = isNew ? null : edit.view;
+  const nameId = `${o.key}-name`; const rubricId = `${o.key}-rubric`;
+  const remove = () => { onClose(); void form.change({ remove: o.key }).then(() => form.save()).catch(() => {}); };
+  return <Dialog open title={isNew ? t("web-pages.archivePolicy.newOption") : view!.name} onClose={cancel}
+    footer={foot(!isNew && <Button variant="danger" icon={Trash} onClick={remove}>{t("web-pages.archivePolicy.remove")}</Button>)}>
+    <Field label={t("web-pages.archivePolicy.name")} htmlFor={nameId}>
+      <input id={nameId} className={controlsCss.input} autoFocus={isNew} value={o.name} onChange={(e) => form.edit({ option: o.key, name: e.target.value })} />
+    </Field>
+    <Field label={t("web-pages.archivePolicy.rubric")} htmlFor={rubricId}>
+      <textarea id={rubricId} className={`${controlsCss.input} ${css.policyText}`} rows={3} value={o.rubric} onChange={(e) => form.edit({ option: o.key, rubric: e.target.value })} />
+    </Field>
+    <Segmented label={t("web-pages.archivePolicy.counts")} value={o.archive ? "archive" : "keep"} onChange={(v) => form.edit({ option: o.key, archive: v === "archive" })}
+      options={[{ value: "archive", label: t("web-pages.archivePolicy.archive") }, { value: "keep", label: t("web-pages.archivePolicy.keep") }]} />
+    {view && view.count > 0 && <div className={css.optionChats}>
+      <span className={css.policyGroupName}>{t("web-pages.archivePolicy.chats", { days })}</span>
+      {view.chats.map((c) => <Link key={c.session} to={`${stationBase(station)}/chats/${encodeURIComponent(c.session)}`} className={css.optionChat} onClick={cancel}>{c.title}</Link>)}
+      {view.count > view.chats.length && <span className={css.note}>{t("web-pages.archivePolicy.more", { n: view.count - view.chats.length })}</span>}
+    </div>}
+  </Dialog>;
 }
 
-function OptionEditor({ option, pending, edit }: { option: ArchiveOptionDraft; pending: boolean; edit: (patch: Record<string, unknown>) => void }) {
-  return <div className={css.optionEdit}>
-    <input className={`${controlsCss.input} ${css.optionNameInput}`} value={option.name} disabled={pending} placeholder={t("web-pages.archivePolicy.name")} aria-label={t("web-pages.archivePolicy.name")}
-      onChange={(e) => edit({ option: option.key, name: e.target.value })} />
-    <input className={controlsCss.input} value={option.rubric} disabled={pending} placeholder={t("web-pages.archivePolicy.rubric")} aria-label={t("web-pages.archivePolicy.rubric")}
-      onChange={(e) => edit({ option: option.key, rubric: e.target.value })} />
-    <IconButton icon={option.archive ? ArrowDown : ArrowUp} disabled={pending} label={t(option.archive ? "web-pages.archivePolicy.toKeep" : "web-pages.archivePolicy.toArchive")}
-      onClick={() => edit({ option: option.key, archive: !option.archive })} />
-    <IconButton icon={Trash} disabled={pending} label={t("web-pages.archivePolicy.remove")} onClick={() => edit({ remove: option.key })} />
-  </div>;
-}
-
-/** The core's draft of a station's archive policy, for both layouts. */
+/** The core's draft of a station's archive policy, for both layouts: opened while the page shows it. */
 export function usePolicyForm(station: string) {
-  const form = useId(); const call = useCall(); const act = useAct(); const toast = useToast();
-  const state = useTopic<ArchivePolicyDraft | null>({ topic: "policyForm", station, form });
-  const saving = useDoing("automaticDecisions.policy.save", { station, form });
-  const saveFailed = useDoingFailed("automaticDecisions.policy.save", { station, form });
+  const form = useId(); const call = useCall(); const act = useAct();
   useEffect(() => {
     act(call("automaticDecisions.policy.open", { station, form }), t("web-pages.archivePolicy.readAction"));
     return () => { act(call("automaticDecisions.policy.drop", { station, form }), t("web-pages.archivePolicy.closeAction")); };
   }, [call, station, form, act]);
-  const edit = (input: Record<string, unknown>) => act(call("automaticDecisions.policy.edit", { station, form, input }), t("web-pages.archivePolicy.editAction"));
+  return usePolicyDraft(station, form);
+}
+
+/** A draft opened elsewhere (by usePolicyForm), read and changed here: a sheet over the page shows the same one. */
+export function usePolicyDraft(station: string, form: string) {
+  const call = useCall(); const act = useAct(); const toast = useToast();
+  const state = useTopic<ArchivePolicyDraft | null>({ topic: "policyForm", station, form });
+  const saving = useDoing("automaticDecisions.policy.save", { station, form });
+  const saveFailed = useDoingFailed("automaticDecisions.policy.save", { station, form });
+  const change = (input: Record<string, unknown>) => call("automaticDecisions.policy.edit", { station, form, input }) as Promise<ArchivePolicyDraft | null>;
+  const edit = (input: Record<string, unknown>) => act(change(input), t("web-pages.archivePolicy.editAction"));
+  // Back to the station's, before a part is edited: what an earlier dialog left unsaved is gone.
+  const reset = () => change({ reset: true }).catch(() => null);
+  // A new option at the end of its group, edited next: its key.
+  const add = (archive: boolean) => reset().then(() => change({ add: archive })).then((v) => v?.options.at(-1)?.key ?? null, () => null);
   const save = () => call("automaticDecisions.policy.save", { station, form }).then(() => toast(t("web-pages.archivePolicy.saved")));
-  return { d: state.value, saving, saveFailed, edit, save };
+  return { form, d: state.value, saving, saveFailed, change, edit, reset, add, save };
 }
 
 /** Both layouts render the same core-owned draft and named actions. */
