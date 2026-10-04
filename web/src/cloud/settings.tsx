@@ -1,4 +1,4 @@
-import { AutomaticDecisions, AutomaticDecisionCompletion } from "../AutomaticDecisions.tsx";
+import { AutomaticDecisions, AutomaticDecisionCompletion, AutomaticDecisionPolicy } from "../AutomaticDecisions.tsx";
 // Settings in still.fail cloud, in two parts: the account the current workspace
 // is reached through (who you are, where you are signed in), and the
 // workspace itself (its name, members, stations, connects and the stations'
@@ -749,6 +749,14 @@ export function AutomaticDecisionCompletionSettings({entry}:{entry:WorkspaceEntr
   return <Page title={t("web-pages.automaticDecisions.completion")} lead={t("web-pages.automaticDecisions.completionNote")} back={base} backLabel={t("web-pages.automaticDecisions.title")}
     actions={<Button variant="ghost" icon={Refresh} onClick={refresh}>{t("web-pages.automaticDecisions.refresh")}</Button>}>
     <AutomaticDecisionCompletion workspace={entry.id} />
+  </Page>;
+}
+
+export function AutomaticDecisionPolicySettings({entry}:{entry:WorkspaceEntry}) {
+  const {station=""}=useParams();
+  const name=useStations(entry.id).value?.find(s=>s.station===station)?.name;
+  return <Page title={name ? `${t("web-pages.archivePolicy.title")} · ${name}` : t("web-pages.archivePolicy.title")} lead={t("web-pages.archivePolicy.textLead")} back={`/w/${entry.id}/settings/automatic-decisions/completion`} backLabel={t("web-pages.automaticDecisions.completion")}>
+    <AutomaticDecisionPolicy workspace={entry.id} station={station} />
   </Page>;
 }
 

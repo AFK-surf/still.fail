@@ -122,6 +122,7 @@
   "web-pages.archivePolicy.more": "还有 {n} 个",
   "web-pages.archivePolicy.name": "名字",
   "web-pages.archivePolicy.newOption": "新选项",
+  "web-pages.archivePolicy.optionCount": "{n} 个选项",
   "web-pages.archivePolicy.readAction": "读取归档策略",
   "web-pages.archivePolicy.remove": "删掉",
   "web-pages.archivePolicy.rubric": "什么情况算这一种",

@@ -35,12 +35,12 @@ export function AutomaticDecisionCompletion({ workspace }: { workspace: string }
     {!stations.value && <p className={css.note}>{stations.error?.message ?? t("web-pages.automaticDecisions.reading")}</p>}
     {stations.value?.length === 0 && <p className={css.note}>{t("web-pages.automaticDecisions.addStation")}</p>}
     <ul className={pages.list}>{stations.value?.map(s => s.online && s.overview?.automaticDecisions
-      ? <AutomaticDecisionPanel key={s.station} station={s.station} name={s.name} view={s.overview.automaticDecisions} />
+      ? <AutomaticDecisionPanel key={s.station} workspace={workspace} station={s.station} name={s.name} view={s.overview.automaticDecisions} />
       : <li key={s.station} className={pages.listRow}><StatusDot state={s.online ? "online" : "offline"} /><span className={pages.listRowText}><span className={pages.listRowTitle}>{s.name}</span><span className={css.note}>{!s.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("web-pages.automaticDecisions.connecting") : t("web-pages.automaticDecisions.upgrade")}</span></span></li>)}</ul>
   </div>;
 }
 
-function AutomaticDecisionPanel({ station, name, view }: { station: string; name: string; view: AutomaticDecisionView }) {
+function AutomaticDecisionPanel({ workspace, station, name, view }: { workspace: string; station: string; name: string; view: AutomaticDecisionView }) {
   const {d, state, saving, saveFailed, reviewing, reviewFailed, canReview, edit, save, review} = useAutomaticDecisionForm(station, view);
   const status = (text: string) => <li className={pages.listRow}><StatusDot state="online" /><span className={pages.listRowText}><span className={pages.listRowTitle}>{name}</span><span className={css.note}>{text}</span></span></li>;
   if (!view.canEdit) return status(t("web-pages.automaticDecisions.adminOnly"));
@@ -67,8 +67,23 @@ function AutomaticDecisionPanel({ station, name, view }: { station: string; name
     </div>
     {saveFailed && <p className={css.error} role="alert">{saveFailed}</p>}
     {reviewFailed && <p className={css.error} role="alert">{reviewFailed}</p>}
-    {view.policy && <ArchivePolicy station={station} policy={view.policy} />}
+    {view.policy && <Link className={`${pages.listRow} ${css.policyRow}`} to={`/w/${workspace}/settings/automatic-decisions/completion/${encodeURIComponent(station)}`}>
+      <span className={pages.listRowTitle}>{t("web-pages.archivePolicy.title")}</span>
+      <span className={view.policy.failed ? css.error : css.note}>{t("web-pages.archivePolicy.optionCount", { n: view.policy.options.length })}{view.policy.summaryText ? ` · ${view.policy.summaryText}` : ""}</span>
+      <ChevronRight size={16} className={css.note} />
+    </Link>}
   </li>;
+}
+
+/** A station's archive policy, on a page of its own (opened from its row under the station's rule). */
+export function AutomaticDecisionPolicy({ workspace, station }: { workspace: string; station: string }) {
+  const stations = useStations(workspace);
+  const s = stations.value?.find((x) => x.station === station);
+  const policy = s?.online ? s.overview?.automaticDecisions?.policy : undefined;
+  if (policy && s?.overview?.automaticDecisions?.canEdit) return <ArchivePolicy station={station} policy={policy} />;
+  return <p className={css.note}>{stations.error?.message ?? (!stations.value ? t("web-pages.automaticDecisions.reading")
+    : !s?.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("web-pages.automaticDecisions.connecting")
+    : s.overview.automaticDecisions && !s.overview.automaticDecisions.canEdit ? t("web-pages.automaticDecisions.adminOnly") : t("web-pages.automaticDecisions.upgrade"))}</p>;
 }
 
 /** The archive policy: its words, then its options in their two groups, each with how many chats the checks put
@@ -80,11 +95,10 @@ function ArchivePolicy({ station, policy }: { station: string; policy: ArchivePo
   const open = (what: PolicyEdit) => { void form.reset().then(() => setEditing(what)); };
   const add = (archive: boolean) => { void form.add(archive).then((key) => { if (key) setEditing({ kind: "option", key }); }); };
   return <div className={css.policy}>
-    <div className={css.policyHead}>
-      <span className={css.policyTitle}>{t("web-pages.archivePolicy.title")}</span>
+    {(form.saving || form.saveFailed) && <div className={css.policyHead}>
       {form.saving && <span className={`${waitingCss.spinner}`} aria-hidden="true" />}
       {form.saveFailed && <span className={css.error} role="alert">{form.saveFailed}</span>}
-    </div>
+    </div>}
     <button type="button" className={css.policyWords} disabled={busy} onClick={() => open({ kind: "text" })}>{policy.text}</button>
     {[true, false].map((archive) => <div key={String(archive)} className={css.policyGroup}>
       <span className={css.policyGroupName}>{t(archive ? "web-pages.archivePolicy.archive" : "web-pages.archivePolicy.keep")}</span>

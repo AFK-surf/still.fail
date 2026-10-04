@@ -1,5 +1,6 @@
 import { t } from "../i18n.ts";
 import { Fragment, type ReactNode } from "react";
+import { useParams } from "react-router";
 import { useAutomaticDecisionForm, usePolicyDraft, usePolicyForm } from "../AutomaticDecisions.tsx";
 import { useStations } from "../api.ts";
 import type { ArchiveOptionView, ArchivePolicyView, AutomaticDecisionView } from "../core/shapes.ts";
@@ -67,11 +68,31 @@ function DecisionPanel({station,name,view}:{station:string;name:string;view:Auto
         <span className={`${parts.mGrow} ${lists.mRowText}`}><span className={lists.mRowTitle}>{t("web-pages.automaticDecisions.review")}</span></span>
         {reviewing ? <Spinner size={16} /> : reviewFailed && <FailedMark error={reviewFailed} size={14} />}
       </ListRow>}
+      {view.policy && <ListRow onClick={()=>app.push(app.at(`/settings/automatic-decisions/completion/${encodeURIComponent(station)}`))}>
+        <span className={`${parts.mGrow} ${lists.mRowText}`}><span className={lists.mRowTitle}>{t("web-pages.archivePolicy.title")}</span><span className={`${lists.mRowNote} ${view.policy.failed ? parts.mRed : ""}`}>{t("web-pages.archivePolicy.optionCount",{n:view.policy.options.length})}{view.policy.summaryText ? ` · ${view.policy.summaryText}` : ""}</span></span>
+        <ChevronRight size={14} className={parts.mSubtle} />
+      </ListRow>}
     </ListCard>
     {d.dirty && <div className={settings.mProfileTools}><Button label={t("web-pages.automaticDecisions.save")} primary busy={saving} enabled={!busy} onClick={save} />{saveFailed && <FailedMark error={saveFailed} size={14} />}</div>}
-    {view.policy && <PolicySection station={station} policy={view.policy} />}
-
   </>;
+}
+
+/** A station's archive policy, on a screen of its own (from its row under the station's rule). */
+export function AutomaticDecisionPolicyScreen() {
+  const app=useApp();
+  const {station=""}=useParams();
+  const stations=useStations(app.entry.id);
+  const s=stations.value?.find(x=>x.station===station);
+  const view=s?.online ? s.overview?.automaticDecisions : undefined;
+  return <div className={`${pages.mScreen} ${pages.mScroll}`}>
+    <TopBack label={t("web-pages.automaticDecisions.completion")} onBack={app.pop} />
+    <LargeTitle small={s?.name ?? ""} big={t("web-pages.archivePolicy.title")} />
+    {view?.policy && view.canEdit ? <PolicySection station={station} policy={view.policy} />
+      : <p className={settings.mPageNote}>{stations.error?.message ?? (!stations.value ? t("web-pages.automaticDecisions.reading")
+        : !s?.online ? t("web-pages.automaticDecisions.offlineNote") : !s.overview ? t("web-pages.automaticDecisions.connecting")
+        : view && !view.canEdit ? t("web-pages.automaticDecisions.adminOnly") : t("web-pages.automaticDecisions.upgrade"))}</p>}
+    <div style={{height:30}} />
+  </div>;
 }
 
 
@@ -86,7 +107,7 @@ function PolicySection({station,policy}:{station:string;policy:ArchivePolicyView
   const open=(edit:PolicyEdit)=>{void form.reset().then(()=>sheet(edit));};
   const add=(archive:boolean)=>{void form.add(archive).then(key=>{if(key)sheet({kind:"option",key});});};
   return <>
-    <div className={css.stationHead}><div className={css.stationName}><SectionHeader title={t("web-pages.archivePolicy.title")} start={24} /></div>{form.saving ? <Spinner size={16} /> : form.saveFailed && <FailedMark error={form.saveFailed} size={14} />}</div>
+    <div className={css.stationHead}><div className={css.stationName}><p className={settings.mPageNote}>{t("web-pages.archivePolicy.textLead")}</p></div>{form.saving ? <Spinner size={16} /> : form.saveFailed && <FailedMark error={form.saveFailed} size={14} />}</div>
     <ListCard><ListRow onClick={busy ? undefined : ()=>open({kind:"text"})}>
       <span className={`${parts.mGrow} ${css.policyWords}`}>{policy.text}</span>
     </ListRow></ListCard>

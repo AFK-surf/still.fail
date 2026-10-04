@@ -1,4 +1,4 @@
-import { AutomaticDecisionCompletionScreen, AutomaticDecisionsScreen } from "./AutomaticDecisions.tsx";
+import { AutomaticDecisionCompletionScreen, AutomaticDecisionPolicyScreen, AutomaticDecisionsScreen } from "./AutomaticDecisions.tsx";
 // A workspace on a narrow screen: the Android app's pages (./app.tsx), at the desktop's addresses where it has them, so
 // a link opens the same thing on either.
 import { useMemo } from "react";
@@ -48,6 +48,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/connects" element={<ConnectsScreen />} />
       <Route path="settings/automatic-decisions" element={<AutomaticDecisionsScreen />} />
       <Route path="settings/automatic-decisions/completion" element={<AutomaticDecisionCompletionScreen />} />
+      <Route path="settings/automatic-decisions/completion/:station" element={<AutomaticDecisionPolicyScreen />} />
       <Route path="settings/profiles" element={<ProfilesScreen />} />
       <Route path="settings/profiles/account/:key" element={<ProfileAccountScreen />} />
       <Route path="settings/memory" element={<MemoriesScreen />} />

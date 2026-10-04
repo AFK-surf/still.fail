@@ -27,7 +27,7 @@ import { NotificationsPage } from "../pages/Notifications.tsx";
 import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
-import { AutomaticDecisionCompletionSettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
+import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
@@ -121,6 +121,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
             <Route path="settings/automatic-decisions" element={<AutomaticDecisionsSettings entry={entry} />} />
             <Route path="settings/automatic-decisions/completion" element={<AutomaticDecisionCompletionSettings entry={entry} />} />
+            <Route path="settings/automatic-decisions/completion/:station" element={<AutomaticDecisionPolicySettings entry={entry} />} />
             <Route path="settings/profiles/add/:provider?" element={<AddProfile workspace={entry.id} />} />
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
             <Route path="settings/profiles/account/:key" element={<ProfileAccountSettings entry={entry} />} />

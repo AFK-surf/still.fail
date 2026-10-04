@@ -131,6 +131,10 @@
   "web-pages.archivePolicy.more": "{n} more",
   "web-pages.archivePolicy.name": "Name",
   "web-pages.archivePolicy.newOption": "New option",
+  "web-pages.archivePolicy.optionCount": {
+    "one": "{n} option",
+    "other": "{n} options"
+  },
   "web-pages.archivePolicy.readAction": "Read the archive policy",
   "web-pages.archivePolicy.remove": "Remove",
   "web-pages.archivePolicy.rubric": "When a chat is in this situation",

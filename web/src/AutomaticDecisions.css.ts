@@ -9,10 +9,11 @@ export const bad = style({ color: vars.red });
 export const tools = style({ display: "flex", alignItems: "center", gap: 8 });
 export const controls = style({ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, flex: "none" });
 
-// The archive policy under a station's rule: its words, then its options in two groups.
-export const policy = style({ display: "grid", gap: 12, padding: "4px 12px 16px" });
+// The archive policy's row under a station's rule, lined up with the station's name (past its dot).
+export const policyRow = style({ minHeight: 40, paddingLeft: 31, color: "inherit", textDecoration: "none" });
+// The archive policy, on its own page: its words, then its options in two groups.
+export const policy = style({ display: "grid", gap: 12 });
 export const policyHead = style({ display: "flex", alignItems: "center", gap: 8, minHeight: 28 });
-export const policyTitle = style({ fontSize: vars.textSm, fontWeight: 600 });
 export const policyWords = style({
   margin: 0, padding: "8px 10px", marginInline: -10, fontSize: vars.textSm, lineHeight: "1.6", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
   textAlign: "left", background: "none", border: "none", color: "inherit", font: "inherit", cursor: "pointer",

@@ -111,13 +111,45 @@ private fun AutomaticDecisionPanel(station: String, name: String, view: Automati
                 DoingMark(reviewing, app.failedOf("automaticDecisions.review", "station" to station))
             }
         }
+        view.policy?.let { policy ->
+            ListRow(onClick = { app.push(Screen.AutomaticDecisionPolicy(station)) }) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(t("web-pages.archivePolicy.title"), color = C.ink, fontSize = 15.sp)
+                    val line = listOfNotNull(t("web-pages.archivePolicy.optionCount", "n" to policy.options.size), policy.summaryText?.ifEmpty { null }).joinToString(" · ")
+                    Text(line, fontSize = 13.sp, color = if (policy.failed > 0u) C.red else C.muted)
+                }
+                IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+            }
+        }
     }
 
     if (d.dirty) Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Button(t("web-pages.automaticDecisions.save"), primary = true, busy = saving, enabled = !busy) { act("save") }
         DoingMark(false, app.failedOf("automaticDecisions.form.save", "station" to station, "form" to form))
     }
-    view.policy?.let { ArchivePolicySection(station, it) }
+}
+
+/** A station's archive policy, on a screen of its own (from its row under the station's rule). */
+@Composable
+fun AutomaticDecisionPolicyScreen(current: WorkspaceEntry, station: String) {
+    val app = LocalApp.current
+    val topic by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
+    val s = topic.value?.find { it.station == station }
+    val view = if (s?.online == true) s.overview?.automaticDecisions else null
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
+        TopBack(t("web-pages.automaticDecisions.completion"), app::pop)
+        LargeTitle(s?.name ?: "", t("web-pages.archivePolicy.title"))
+        val policy = view?.policy
+        if (policy != null && view.canEdit) ArchivePolicySection(station, policy)
+        else PageNote(topic.error?.message ?: t(when {
+            topic.value == null -> "web-pages.automaticDecisions.reading"
+            s?.online != true -> "web-pages.automaticDecisions.offlineNote"
+            s.overview == null -> "web-pages.automaticDecisions.connecting"
+            view != null && !view.canEdit -> "web-pages.automaticDecisions.adminOnly"
+            else -> "web-pages.automaticDecisions.upgrade"
+        }))
+        Spacer(Modifier.height(30.dp))
+    }
 }
 
 /** The station's archive policy (web mobile/AutomaticDecisions.tsx PolicySection): its words and its options in two groups,
@@ -185,7 +217,7 @@ private fun ArchivePolicySection(station: String, policy: ArchivePolicyView) {
     }
     fun group(archive: Boolean) = t(if (archive) "web-pages.archivePolicy.archive" else "web-pages.archivePolicy.keep")
     Row(Modifier.fillMaxWidth().padding(end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f)) { SectionHeader(t("web-pages.archivePolicy.title"), start = 24.dp) }
+        Box(Modifier.weight(1f)) { PageNote(t("web-pages.archivePolicy.textLead")) }
         DoingMark(saving, app.failedOf("automaticDecisions.policy.save", "station" to station, "form" to form))
     }
     ListCard {
