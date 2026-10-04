@@ -10,11 +10,25 @@
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 
+# The account the bucket is in, for Cloudflare's API: asked once (empty when the token cannot say).
+account_id=${CLOUDFLARE_ACCOUNT_ID:-}
+if [ -z "$account_id" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
+  account_id=$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts" 2>/dev/null \
+    | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4) || account_id=""
+fi
+# The object put straight through Cloudflare's API, as wrangler does it, without its start-up and at the speed the line
+# has (a 148 MB zip took wrangler ~45 s from mini1, whose upload is ~5.5 MB/s): wrangler when that cannot be done.
+api_put() {
+  [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "$account_id" ] || return 1
+  curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: $3" -T "$2" \
+    "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets/stillfail-releases/objects/$1" > /dev/null
+}
 # put <name in the bucket> <file> <content type>, tried again twice when Cloudflare's API fails on the way.
 put() {
   for try in 1 2 3; do
-    (cd "$root/cloud" && pnpm exec wrangler r2 object put "stillfail-releases/$1" --file "$2" --content-type "$3" --remote >/dev/null) && {
-      echo "uploaded $1 ($(du -h "$2" | cut -f1))"; return 0; }
+    how=api
+    { api_put "$@" || { how=wrangler; (cd "$root/cloud" && pnpm exec wrangler r2 object put "stillfail-releases/$1" --file "$2" --content-type "$3" --remote >/dev/null); }; } && {
+      echo "uploaded $1 ($(du -h "$2" | cut -f1), $how)"; return 0; }
     [ $try = 3 ] || { echo "putting $1 failed (try $try), trying again" >&2; sleep 15; }
   done
   return 1
