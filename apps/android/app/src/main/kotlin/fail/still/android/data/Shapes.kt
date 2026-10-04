@@ -1405,6 +1405,36 @@ data class ChatSearchView (
 	val messages: List<FoundMessage>? = null
 )
 
+/// A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread.
+@Serializable
+data class Place (
+	/// A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
+	val name: String,
+	/// ember | slack
+	val surface: String,
+	val session: String? = null,
+	/// A Slack thread's link in Slack, while a connect is signed in to its workspace.
+	val url: String? = null
+)
+
+/// A message an agent of a chat sent to Slack (chat_post to a Slack thread, slack_api chat.postMessage), read from
+/// its transcript: the chat shows it after the message it followed, without it being one of the chat's.
+@Serializable
+data class ChatSentElsewhere (
+	val key: String,
+	/// The message it comes after (its seq); 0 before the first of the chat.
+	val after: Long,
+	val createdAt: Long,
+	/// As sent (Slack's mrkdwn).
+	val text: String,
+	/// Where it went; none when the core cannot name it.
+	val place: Place? = null,
+	val failed: Boolean? = null,
+	val by: MessageBy,
+	/// Its times in words, by field (`createdAt`).
+	val time: Map<String, Stamp>? = null
+)
+
 /// Who is looking: the account that reaches the workspace, by its email.
 @Serializable
 data class Me (
@@ -1482,6 +1512,9 @@ data class ChatView (
 	val people: List<Person>,
 	val agents: List<ChatAgent>,
 	val messages: List<ChatMessage>,
+	/// What its agents sent to Slack meanwhile (not to this chat), shown among its messages; not kept in it. Empty
+	/// from a core before it.
+	val elsewhere: List<ChatSentElsewhere>? = null,
 	val more: Boolean,
 	/// Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,
 	/// `chat.latest` goes to the end). What is said meanwhile waits there, counted in its thread's `unread`.
@@ -2103,18 +2136,6 @@ data class HistoryWait (
 data class HistoryMark (
 	val text: String,
 	val wait: HistoryWait? = null
-)
-
-/// A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread.
-@Serializable
-data class Place (
-	/// A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
-	val name: String,
-	/// ember | slack
-	val surface: String,
-	val session: String? = null,
-	/// A Slack thread's link in Slack, while a connect is signed in to its workspace.
-	val url: String? = null
 )
 
 @Serializable

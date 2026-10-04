@@ -10,7 +10,7 @@ import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { stationBase, usePerson, useStation } from "./station.tsx";
-import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, ICON, ModelLogo, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
 import { shortcutOf, takesKeys, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
@@ -26,7 +26,8 @@ import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import type { ArchiveCheck } from "./core/shapes.ts";
+import type { ArchiveCheck, ChatSentElsewhere } from "./core/shapes.ts";
+import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
 import { core } from "./core/react.ts";
@@ -170,6 +171,10 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
   const archiveAt = onArchive && chat.archivable && !chat.offline && last?.ending === "all_done" ? last.seq : null;
   // What the archive check made of it, under the same post (in words: the option it picked and what came of it).
   const checkAt = chat.archiveCheck && last?.ending === "all_done" ? last.seq : null;
+  // What its agents sent to Slack meanwhile, each after the message it followed (0: before the first).
+  const sentAfter = new Map<number, ChatSentElsewhere[]>();
+  for (const s of chat.elsewhere ?? []) sentAfter.set(s.after, [...(sentAfter.get(s.after) ?? []), s]);
+  const sent = (after: number) => sentAfter.get(after)?.map((s) => <SentElsewhere key={s.key} sent={s} agentHere={here(s.by.agent)} onOpenHistory={onOpenHistory} />);
   return (
     <>
       {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
@@ -178,6 +183,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
           <p>{t("web-main.chat.empty")}</p>
         </div>
       )}
+      {sent(0)}
       {messages.map((m) => {
         const line = m.seq === divider ? <div className={css.chatUnreadLine} data-unread-line role="separator"><span>{t("web-main.chat.unreadLine")}</span></div> : null;
         const { enter, emitted, caught } = rowOf(m);
@@ -189,6 +195,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
             <MessageRow message={m} focus={chat.focusLast === true && m.seq === messages.at(-1)?.seq} enter={enter} emitted={emitted} caught={caught} thread={thread}
               agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory}
               {...(archiveAt === m.seq ? { archive: onArchive } : {})} {...(checkAt === m.seq ? { check: chat.archiveCheck } : {})} />
+            {sent(m.seq)}
           </Fragment>
         );
       })}
@@ -876,6 +883,35 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   );
 }, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && a.thread === b.thread
   && a.options === b.options && a.archive === b.archive && a.check?.text === b.check?.text && a.check?.failed === b.check?.failed && a.focus === b.focus && sameMessage(a.message, b.message));
+
+/**
+ * What an agent of the chat sent to Slack rather than here (the core reads it from its transcript; the chat does not
+ * keep it): drawn as its message, with where it went over its words beside a bar, as the execution history has it.
+ */
+const SentElsewhere = memo(function SentElsewhere({ sent: s, agentHere, onOpenHistory }: { sent: ChatSentElsewhere; agentHere: boolean; onOpenHistory: (key: string) => void }) {
+  const agent = agentHere ? s.by.agent : undefined;
+  const place = s.place
+    ? <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
+    : <><SlackLogo size={12} />Slack</>;
+  return (
+    <OthersMessage data-role="agent" data-author={s.by.name} data-elsewhere="" avatar={<AgentAvatar maker={s.by.maker} runtime={s.by.runtime} />} time={s.time?.createdAt}
+      name={agent
+        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{s.by.name}</button>
+        : <span className={css.msgName}>{s.by.name}</span>}>
+      <div className={`${historyCss.hReceived} ${historyCss.hPost}`} data-failed={s.failed ?? false}>
+        <div className={historyCss.hLabel}>
+          <Send {...ICON} size={14} />
+          {t("web-main.history.sentTo")}
+          {s.place?.url
+            ? <a className={historyCss.hPlace} href={s.place.url} target="_blank" rel="noopener">{place}</a>
+            : <span className={historyCss.hPlace}>{place}</span>}
+          {s.failed && <Pill tone="red">{t("web-main.history.sendFailed")}</Pill>}
+        </div>
+        <div className={`${historyCss.hQuote} ${historyCss.hQuoteMd} ${conversationCss.markdown}`}><Prose>{s.text}</Prose></div>
+      </div>
+    </OthersMessage>
+  );
+}, (a, b) => a.agentHere === b.agentHere && a.onOpenHistory === b.onOpenHistory && JSON.stringify(a.sent) === JSON.stringify(b.sent));
 
 /**
  * 归档这个 chat, under the agent's post that said it is all done, while nothing is left in the chat: as wide as the

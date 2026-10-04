@@ -24,6 +24,7 @@ import type { Value, Watch } from "../store.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
+import { Elsewhere, markdownOf } from "../elsewhere.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import * as marks from "./marks.ts";
@@ -200,6 +201,22 @@ export function shownMessage(m: J, agents: J[], viewer: J, slackUsers: string[],
 import * as brand from "../brand.ts";
 const brandName = () => brand.name();
 
+/// The Slack workspaces a station's connects are signed in to, by team: their names and links.
+function slackWorkspaces(overview: J): Map<string, format.SlackWorkspace> {
+  const workspaces = new Map<string, format.SlackWorkspace>();
+  for (const c of arr(get(overview, "connects"))) {
+    const conn = get(c, "connection");
+    const s = get(conn, "state");
+    const seen = s === "connected" || s === "reconnecting" ? get(conn, "workspace") : undefined;
+    const team = str(get(seen, "teamId"));
+    if (team === null) continue;
+    const name = str(get(seen, "team")) ?? str(get(c, "team")) ?? "";
+    const url = str(get(seen, "url")) || null;
+    if (!workspaces.has(team)) workspaces.set(team, { name, url });
+  }
+  return workspaces;
+}
+
 /// Whether the viewer added something: its creator's id, or email in any case, is theirs.
 function isMine(me: J, creator: J): boolean {
   if (!isObject(creator)) return false;
@@ -315,6 +332,8 @@ export class Views implements Owner {
   /// Per live view, the topics it watches.
   readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch> }>();
   readonly #updateNoticesOpen = new Set<string>();
+  /// What chats' agents sent to Slack, read from their transcripts.
+  readonly #elsewhere = new Elsewhere();
   /// Views whose words count seconds (a chat's jobs): each computed again when they next change.
   readonly #again = new Map<string, Fiber.Fiber<unknown, unknown>>();
   /// The scopes whose stations' rows are being loaded (the list showed its first screen meanwhile).
@@ -328,6 +347,13 @@ export class Views implements Owner {
     // What was said changed: the searches that find messages look again.
     core.data.onLogChange((table) => {
       if (table === "entry") this.#invalidate((v) => v.topic === "chatSearch" && typeof v.messages === "number" && v.messages > 0 && refs.terms(String(v.query ?? "")).length > 0);
+    });
+    // An agent's transcript grew: the chats it is in show what it sent to Slack, when that changed.
+    core.data.onLogChange((table, station, key) => {
+      if (table !== "transcript") return;
+      const session = topicKey({ topic: "session", station, key });
+      const chats = [...this.#views.values()].filter((v) => v.topic.topic === "chat" && v.topic.station === station && v.watches.has(session));
+      if (chats.length > 0 && this.#sentBy(station, key).changed) for (const v of chats) this.#core.store.invalidate(v.topic);
     });
   }
 
@@ -1157,6 +1183,7 @@ export class Views implements Owner {
       pendingCard = d !== null && open(d) ? [u64(d.seq) ?? 0, decisions.dismissed(d)] : null;
     }
     decisions.inMessages(messages, pendingCard);
+    const elsewhere = this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false);
     const focusLast = page.end !== false && outbox.length === 0 && messages.length > 0 && present.focusMessage(messages[messages.length - 1]);
     const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : chatTitle(thread);
     const view: J = {
@@ -1168,6 +1195,7 @@ export class Views implements Owner {
       people,
       agents,
       messages,
+      elsewhere,
       more: u64(page.first) !== null && page.first > 1,
       newer: page.end === false,
       at: page.at ?? null,
@@ -1191,6 +1219,47 @@ export class Views implements Owner {
     const check = row !== undefined && view.archived !== true ? present.archiveCheck(row.archiveCheck) : null;
     if (check !== null) view.archiveCheck = check;
     return { ok: view };
+  }
+
+  /// What session `key` sent to Slack, as its transcript held here says.
+  #sentBy(station: string, key: string): ReturnType<Elsewhere["of"]> {
+    const data = this.#core.data;
+    return this.#elsewhere.of(station, key, data.logSpan("transcript", station, key), (from, to) => data.logRange("transcript", station, key, from, to));
+  }
+
+  /// What a chat's agents sent to Slack (not to the chat itself), each after the message it followed. Only what falls in
+  /// the window of messages shown (`more`/`newer`: the chat goes on before/after it): the rest comes with its page.
+  #sentElsewhere(station: string, thread: J, agents: J[], messages: J[], more: boolean, newer: boolean): J[] {
+    const own = `${str(get(thread, "channel")) ?? ""}/${str(get(thread, "threadTs")) ?? ""}`;
+    const first = u64(messages[0]?.createdAt);
+    const last = u64(messages.at(-1)?.createdAt);
+    if ((more || newer) && (first === null || last === null)) return [];
+    const workspaces = slackWorkspaces(this.ok({ topic: "overview", station }));
+    const offsetMin = this.#core.host.utcOffsetMin(this.#core.host.nowMs());
+    const out: J[] = [];
+    for (const a of agents) {
+      const key = str(get(a.session, "key"));
+      if (key === null) continue;
+      const sent = this.#sentBy(station, key).sent.filter((s) => s.to !== own && !(more && s.at < first!) && !(newer && s.at >= last!));
+      if (sent.length === 0) continue;
+      const threads = arr(get(this.ok({ topic: "session", station, key }), "threads"));
+      const by = { name: str(get(a.session, "agentText")) ?? "agent", agent: key, maker: get(a.session, "maker") ?? null, runtime: get(a.session, "runtime") ?? null };
+      for (const s of sent) {
+        let after = 0;
+        for (const m of messages) {
+          if (typeof m.createdAt !== "number" || m.createdAt > s.at) break;
+          after = m.seq;
+        }
+        let place: J = format.place(threads, s.to, offsetMin, workspaces);
+        if (place === null) {
+          // A message of its own in a channel, before its ts is known.
+          const named = threads.find((th) => get(th, "channel") === s.to && typeof get(th, "channelName") === "string");
+          place = { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
+        }
+        out.push({ key: `${key}/${s.i}`, after, createdAt: s.at, text: markdownOf(s.text), place, failed: s.failed, by: structuredClone(by) });
+      }
+    }
+    return out.sort((a, b) => a.createdAt - b.createdAt);
   }
 
   /// A pending chat's page: its station's chat once made and read, else what is known here.
@@ -1340,17 +1409,7 @@ export class Views implements Owner {
     const botName = str(get(connect, "name")) ?? str(get(session, "connect")) ?? "";
     const slackUsers = arr(get(overview, "slackUsers")).filter((u): u is string => typeof u === "string");
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: ofAddress(station) }), "members"));
-    const workspaces = new Map<string, format.SlackWorkspace>();
-    for (const c of arr(get(overview, "connects"))) {
-      const conn = get(c, "connection");
-      const s = get(conn, "state");
-      const seen = s === "connected" || s === "reconnecting" ? get(conn, "workspace") : undefined;
-      const team = str(get(seen, "teamId"));
-      if (team === null) continue;
-      const name = str(get(seen, "team")) ?? str(get(c, "team")) ?? "";
-      const url = str(get(seen, "url")) || null;
-      if (!workspaces.has(team)) workspaces.set(team, { name, url });
-    }
+    const workspaces = slackWorkspaces(overview);
     const now = this.#core.host.nowMs();
     return {
       ok: presentHistory(live.ok, {

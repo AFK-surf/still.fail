@@ -135,6 +135,7 @@ import fail.still.android.data.Attachment
 import fail.still.android.data.ChatAgent
 import fail.still.android.data.ChatJobsView
 import fail.still.android.data.ChatOf
+import fail.still.android.data.ChatSentElsewhere
 import fail.still.android.data.ChatView
 import fail.still.android.data.Maker
 import fail.still.android.data.Live
@@ -156,6 +157,7 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Mark
 import fail.still.android.ui.Markdown
+import fail.still.android.ui.SlackMark
 import fail.still.android.ui.MenuItem
 import fail.still.android.ui.MenuSpec
 import fail.still.android.ui.ModelMark
@@ -382,6 +384,8 @@ private sealed interface Entry {
         override val id get() = sent?.let { "o:$it" } ?: "m:${m.ts}"
     }
     data class Out(val o: Outgoing) : Entry { override val id get() = "o:${o.id}" }
+    /** What an agent of the chat sent to Slack rather than here (the core's `elsewhere`): shown, not one of the chat's. */
+    data class Sent(val s: ChatSentElsewhere) : Entry { override val id get() = "s:${s.key}" }
     data class Working(val agent: AgentAtWork) : Entry { override val id get() = "act:${agent.key}" }
     /** The room an activity that folded away leaves behind (as the web's floor): what is above it does not drop. */
     data class Floor(val px: Int) : Entry { override val id get() = "floor" }
@@ -511,10 +515,14 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val all = buildList {
         if (view.more) add(Entry.Older)
         if (messages.isEmpty() && view.outbox.isEmpty()) add(Entry.Empty)
+        // What its agents sent to Slack meanwhile, each after the message it followed (0: before the first).
+        val elsewhere = view.elsewhere.orEmpty().groupBy { it.after }
+        elsewhere[0L]?.forEach { add(Entry.Sent(it)) }
         messages.forEach { m ->
             if (motion.held(m.seq)) return@forEach
             if (m.seq == lineAt) add(Entry.Line)
             add(Entry.Said(m, sentAs[m.seq]))
+            elsewhere[m.seq]?.forEach { add(Entry.Sent(it)) }
         }
         if (short) add(Entry.Newer)
         view.outbox.forEach { add(Entry.Out(it)) }
@@ -849,6 +857,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                         Entry.Line -> UnreadLine()
                         is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.waiting && now - row.m.createdAt > 1000)
                         is Entry.Out -> Out(ctx, row.o)
+                        is Entry.Sent -> SentElsewhere(ctx, row.s)
                         is Entry.Working -> Activity(ctx, row.agent, leaving(row.agent.key), opening = fresh)
                         is Entry.Floor -> Spacer(Modifier.fillMaxWidth().height(with(LocalDensity.current) { row.px.toDp() }))
                     } }
@@ -1007,6 +1016,41 @@ private fun Said(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.compose
     val motion = LocalChatMotion.current
     val mark = motion?.mark?.takeIf { motion.flashed == m.ts }
     CompositionLocalProvider(LocalTextMark provides mark) { SaidRow(ctx, m, draft, list, rows, waitingNow) }
+}
+
+/**
+ * What an agent of the chat sent to Slack rather than here (web Chat.tsx → SentElsewhere): its avatar and name as its
+ * messages have them, then where it went over its words beside a bar, as the execution history draws a post.
+ */
+@Composable
+private fun SentElsewhere(ctx: Here, s: ChatSentElsewhere) {
+    val app = LocalApp.current
+    val ink = chatInk()
+    val agent = s.by.agent?.let { ctx.agent(it) }
+    Box(Modifier.fillMaxWidth()) {
+        Box(Modifier.padding(top = 3.dp)) { AgentAvatar(s.by.maker, s.by.runtime) }
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.padding(start = 25.dp).heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    s.by.name, fontSize = 15.sp, fontWeight = FontWeight(650), color = ink.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 240.dp).let { mod ->
+                        if (agent != null) mod.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { openHistory(app, ctx.station, ctx.of, agent.key) } else mod
+                    },
+                )
+                MessageTime(s.time?.get("createdAt"))
+            }
+            Message(Icons.Send, {
+                val (before, after) = around("android-chat.history.sent.to")
+                Text(before, fontSize = 13.sp, color = C.muted)
+                Box(Modifier.weight(1f, fill = false)) {
+                    val place = s.place
+                    if (place != null) Place(ctx.station, ctx.of, place) else Row(verticalAlignment = Alignment.CenterVertically) { SlackMark(12.dp); Strong(" Slack") }
+                }
+                Text(after, fontSize = 13.sp, color = C.muted)
+                if (s.failed == true) Pill(t("android-chat.history.send.failed"), C.red)
+            }, s.text) { Markdown(s.text, size = 15) }
+        }
+    }
 }
 
 /**

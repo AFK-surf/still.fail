@@ -341,14 +341,14 @@ private fun plain(text: String): String = text
     .trim()
 
 @Composable
-private fun Strong(text: String) = Text(text, fontSize = 13.sp, color = C.ink, fontWeight = FontWeight.SemiBold)
+internal fun Strong(text: String) = Text(text, fontSize = 13.sp, color = C.ink, fontWeight = FontWeight.SemiBold)
 
 /**
  * A message in or out, drawn alike: a line saying what and where, then its words in brief beside a bar (they answer
  * each other). A tap on the words opens the whole of it on its own page, under the same line.
  */
 @Composable
-private fun Message(icon: androidx.compose.ui.graphics.vector.ImageVector, label: @Composable RowScope.() -> Unit, text: String, full: @Composable () -> Unit) {
+internal fun Message(icon: androidx.compose.ui.graphics.vector.ImageVector, label: @Composable RowScope.() -> Unit, text: String, full: @Composable () -> Unit) {
     val app = LocalApp.current
     val line: @Composable RowScope.() -> Unit = {
         IconIn(icon, 14.dp, C.muted, Modifier.padding(end = 5.dp))
@@ -364,10 +364,10 @@ private fun Message(icon: androidx.compose.ui.graphics.vector.ImageVector, label
 }
 
 /** A sentence of the catalog's around a part drawn on its own (`{name}`): its words before it and after it. */
-private fun around(key: String): Pair<String, String> = t(key).split("{name}", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+internal fun around(key: String): Pair<String, String> = t(key).split("{name}", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
 
 @Composable
-private fun Pill(text: String, color: androidx.compose.ui.graphics.Color) =
+internal fun Pill(text: String, color: androidx.compose.ui.graphics.Color) =
     Text(text, fontSize = 11.sp, color = color, modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp))
 
 /**
@@ -375,7 +375,7 @@ private fun Pill(text: String, color: androidx.compose.ui.graphics.Color) =
  * opens in Slack (its link, while a connect is signed in to its workspace).
  */
 @Composable
-private fun Place(station: String, of: ChatOf, place: fail.still.android.data.Place) {
+internal fun Place(station: String, of: ChatOf, place: fail.still.android.data.Place) {
     val app = LocalApp.current
     val context = androidx.compose.ui.platform.LocalContext.current
     // A still.fail chat (surface "ember") is its agent's item: opened by the session it is bound to.

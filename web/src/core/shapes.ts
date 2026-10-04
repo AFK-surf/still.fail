@@ -1402,6 +1402,36 @@ export interface ChatSearchView {
 	messages?: FoundMessage[];
 }
 
+/** A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread. */
+export interface Place {
+	/** A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
+	name: string;
+	/** ember | slack */
+	surface: string;
+	session?: string;
+	/** A Slack thread's link in Slack, while a connect is signed in to its workspace. */
+	url?: string;
+}
+
+/**
+ * A message an agent of a chat sent to Slack (chat_post to a Slack thread, slack_api chat.postMessage), read from
+ * its transcript: the chat shows it after the message it followed, without it being one of the chat's.
+ */
+export interface ChatSentElsewhere {
+	key: string;
+	/** The message it comes after (its seq); 0 before the first of the chat. */
+	after: number;
+	createdAt: number;
+	/** As sent (Slack's mrkdwn). */
+	text: string;
+	/** Where it went; none when the core cannot name it. */
+	place?: Place;
+	failed?: boolean;
+	by: MessageBy;
+	/** Its times in words, by field (`createdAt`). */
+	time?: Record<string, Stamp>;
+}
+
 /** Who is looking: the account that reaches the workspace, by its email. */
 export interface Me {
 	id?: string;
@@ -1475,6 +1505,11 @@ export interface ChatView {
 	people: Person[];
 	agents: ChatAgent[];
 	messages: ChatMessage[];
+	/**
+	 * What its agents sent to Slack meanwhile (not to this chat), shown among its messages; not kept in it. Empty
+	 * from a core before it.
+	 */
+	elsewhere?: ChatSentElsewhere[];
 	more: boolean;
 	/**
 	 * Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,
@@ -2081,17 +2116,6 @@ export interface HistoryWait {
 export interface HistoryMark {
 	text: string;
 	wait?: HistoryWait;
-}
-
-/** A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread. */
-export interface Place {
-	/** A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
-	name: string;
-	/** ember | slack */
-	surface: string;
-	session?: string;
-	/** A Slack thread's link in Slack, while a connect is signed in to its workspace. */
-	url?: string;
 }
 
 export interface HistoryMessage {
