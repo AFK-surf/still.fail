@@ -27,6 +27,8 @@ export function WorkspaceScreen() {
   const app = useApp();
   const view = useWorkspace(app.entry.id).value;
   const me = app.entry.account;
+  // Before the early return below: the same hooks on every render, read or not yet.
+  const doing = useDoingList();
   if (!view) return <div className={pagesCss.mScreen}><TopBack label={t("web-mobile.settings.title")} onBack={app.pop} /><Loading text={t("web-mobile.workspace.reading")} /></div>;
   const manager = view.role === "owner" || view.role === "admin";
   const leave = () => confirm(app, {
@@ -44,7 +46,6 @@ export function WorkspaceScreen() {
   const waiting = manager ? view.added.length + view.invitations.length : 0;
   // A row's link waits, spinning, until still.fail cloud answers; the toast says how it ended (one that failed keeps the
   // failure mark a few seconds).
-  const doing = useDoingList();
   const removing = (email: string) => doing.some((d) => !failed(d) && doingMatches(d, "workspace.removeAdded", { account: me.sub, workspace: view.id, email }));
   const revoking = (id: string) => doing.some((d) => !failed(d) && doingMatches(d, "workspace.revokeInvitation", { account: me.sub, workspace: view.id, invitation: id }));
   return (
