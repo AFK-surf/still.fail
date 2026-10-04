@@ -86,10 +86,11 @@ export function WaitingText({ text, className, compactNeed = false }: { text: st
 
 /**
  * A row pressed on its state line (WaitingText) when the core says which message the state is about (`stateAbout`):
- * its chat, as it opens, goes to that message (jumpTo.ts). Pressed elsewhere, or about none: nothing here.
+ * its chat, as it opens, goes to that message (jumpTo.ts). Pressed elsewhere, about none, or with something unread (the
+ * chat opens at the unread line, the message read on from there): nothing here.
  */
 export function jumpFromLine(item: ChatItem, target: EventTarget): void {
-  if (item.stateAbout == null || item.thread == null || !(target instanceof Element) || !target.closest("[data-state-line]")) return;
+  if (item.stateAbout == null || item.unread || item.thread == null || !(target instanceof Element) || !target.closest("[data-state-line]")) return;
   jumpTo({ station: item.station, thread: item.thread, seq: item.stateAbout });
 }
 

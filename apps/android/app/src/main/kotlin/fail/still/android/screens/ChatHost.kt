@@ -223,7 +223,7 @@ class Host {
     internal var capsule: LayoutCoordinates? = null
     internal var overlay: LayoutCoordinates? = null
     internal var layer: GraphicsLayer? = null
-    /** Shows the chat's message `seq` (in the list, in its middle, flashing), if it is loaded: set by the list. */
+    /** Shows the chat's message `seq` (in the list, at its top, flashing), if it is loaded: set by the list. */
     internal var showSaid: ((Long) -> Unit)? = null
     /** A message (seq) to show once the chat's list is in place (Screen.Chat.at), the pages before it brought in. */
     internal var goTo: Long? = null

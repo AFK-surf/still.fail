@@ -1269,8 +1269,9 @@ private fun UnsentButton(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 }
 
 /**
- * Goes to a quoted message by its ts, as the web does (Chat.tsx → Quotes → jump): at once, its middle in the middle of
- * the list, then it flashes (a reader's move: the list follows the newest again only if that leaves it at the end).
+ * Goes to a quoted message by its ts, as the web does (Chat.tsx → Quotes → jump): at once, its passage in the middle of
+ * the list, or a whole message (no passage) at the top as the unread line puts one; then it flashes (a reader's move:
+ * the list follows the newest again only if that leaves it at the end).
  */
 @Composable
 private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, rows: List<Entry>, motion: ChatMotion? = LocalChatMotion.current): (String, String) -> Unit {
@@ -1281,15 +1282,18 @@ private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, r
             val follow = motion.follow
             follow?.anchor = null
             motion.lead(ts, passage, accent)
+            // Its top just below the bar (the list's top padding).
             list.scrollToItem(index)
-            val info = list.layoutInfo
-            info.visibleItemsInfo.firstOrNull { it.index == index }?.let { item ->
-                list.scrollBy((item.offset + item.size / 2 - (info.viewportStartOffset + info.viewportEndOffset) / 2).toFloat())
+            if (passage.isNotEmpty()) {
+                val info = list.layoutInfo
+                info.visibleItemsInfo.firstOrNull { it.index == index }?.let { item ->
+                    list.scrollBy((item.offset + item.size / 2 - (info.viewportStartOffset + info.viewportEndOffset) / 2).toFloat())
+                }
+                // The passage, found in its words, is what goes in the middle (web: the range's middle at the pane's).
+                val pane = motion.pane
+                val mid = pane?.let { p -> motion.mark?.middleIn(p) }
+                if (pane != null && mid != null) list.scrollBy(mid.y - pane.size.height / 2f)
             }
-            // The passage, found in its words, is what goes in the middle (web: the range's middle at the pane's).
-            val pane = motion.pane
-            val mid = pane?.let { p -> motion.mark?.middleIn(p) }
-            if (pane != null && mid != null) list.scrollBy(mid.y - pane.size.height / 2f)
             follow?.on = follow?.atEnd() == true
             motion.flash()
         }

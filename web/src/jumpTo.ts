@@ -1,6 +1,6 @@
 // A message a chat is to show when it opens: a row's second line pressed, where the core says what its state is about
 // (`stateAbout`). The row asks for it here and opens the chat as it always does; the chat's list (Chat.tsx
-// useMessageList, both screens) takes it once the message is in, scrolls it to the middle and flashes it.
+// useMessageList, both screens) takes it once the message is in, scrolls it to its top and flashes it.
 import { useSyncExternalStore } from "react";
 
 interface Wanted { station: string; thread: number; seq: number }

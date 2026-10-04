@@ -459,9 +459,9 @@ function useWindowMoves(list: RefObject<HTMLElement | null>, messages: ChatMessa
 }
 
 /**
- * A message asked to be shown (jumpTo.ts: a row's state line pressed): once it is in the list, scrolled to the middle
- * and flashed, after the list has been put where it opens (the unread line, where it was left). Older than the window:
- * older pages load until it is in; not there at all, nothing.
+ * A message asked to be shown (jumpTo.ts: a row's state line pressed): once it is in the list, scrolled to the top
+ * (below what floats there, as the unread line) and flashed, after the list has been put where it opens (the unread
+ * line, where it was left). Older than the window: older pages load until it is in; not there at all, nothing.
  */
 function useJumpTo(list: RefObject<HTMLDivElement | null>, station: string, thread: number | null, messages: ChatMessage[], more: boolean | undefined, older: () => Promise<unknown>) {
   const seq = useJump(station, thread);
@@ -484,7 +484,9 @@ function useJumpTo(list: RefObject<HTMLDivElement | null>, station: string, thre
       if (!pane || !target) return;
       // A reader's move: the pane keeps it rather than holding its bottom.
       pane.dispatchEvent(new WheelEvent("wheel"));
-      target.scrollIntoView({ block: "center" });
+      // Its top near the pane's, below what floats over it there (the phone's bar: its scroll padding), as the unread line.
+      const covered = parseFloat(getComputedStyle(pane).scrollPaddingTop) || 0;
+      pane.scrollTop += target.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered - 12;
       target.classList.remove(css.msgFlash);
       void target.offsetWidth;
       target.classList.add(css.msgFlash);
