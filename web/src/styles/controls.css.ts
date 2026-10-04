@@ -10,7 +10,7 @@ import { spinner } from "./waiting.css.ts";
 import { card } from "./pages.css.ts";
 
 export const btn = style({
-  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "32px",
+  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "36px",
   padding: "0 16px", borderRadius: "999px", border: `1px solid ${vars.lineStrong}`, background: vars.canvas,
   color: vars.text, fontSize: vars.textSm, fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer",
   transition: `background ${vars.dur} ${vars.easeOut}, border-color ${vars.dur} ${vars.easeOut}`,
@@ -43,13 +43,11 @@ export const btnDangerSolid = style({
     "&:hover:not(:disabled)": { background: `color-mix(in oklch, ${vars.red} 85%, black)` },
   },
 });
-/** In a settings card (its grey ground and no line round it), a button that is not solid has no line either: a tint of its text's colour. */
-globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnGhost}, ${btnDangerSolid})`, {
-  borderColor: "transparent", background: "color-mix(in oklab, currentColor 8%, transparent)",
+/** In a settings card (its grey ground and no line round it), a button that is not solid is its words and icon alone, to its edge. */
+globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid})`, {
+  borderColor: "transparent", background: "transparent", padding: "0", height: "auto", minHeight: "36px",
 });
-globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnGhost}, ${btnDangerSolid}):hover:not(:disabled)`, {
-  background: "color-mix(in oklab, currentColor 14%, transparent)",
-});
+globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid}):hover:not(:disabled)`, { background: "transparent", opacity: ".7" });
 export const textToggle = style({
   display: "inline-flex", alignItems: "center", gap: "2px", border: "0", background: "none", padding: "2px 4px",
   color: vars.muted, fontSize: vars.textXs, lineHeight: "18px", cursor: "pointer",
