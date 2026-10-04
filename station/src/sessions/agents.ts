@@ -19,6 +19,7 @@ import { log } from "../ops/log.ts";
 import { AdbShares, Cloud, Events, Key, Paths, Readers, Store } from "../services.ts";
 import { Notifier } from "../cloud/notify.ts";
 import { adbTools } from "../tools/adb.ts";
+import { archiveTools } from "../tools/archive.ts";
 import { feedbackTools, tellFixed } from "../tools/feedback.ts";
 import { signedPost } from "../cloud/signed.ts";
 import { version } from "../ops/version.ts";
@@ -173,6 +174,7 @@ export const AgentsLive = (control: Control) =>
 
       const tools = [
         ...chatTools(hub),
+        ...archiveTools(hub),
         ...remoteTools(remote),
         ...adbTools(() => shares.list(), () => {
           const s = place();

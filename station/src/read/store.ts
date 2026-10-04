@@ -459,6 +459,15 @@ export function archiveSuggested(s: Store, thread: number): boolean {
   return version !== null && version === lastEntry(s, thread);
 }
 
+/// What the latest review found for the thread, while it stands as it was then: the option picked (`option`, `name`,
+/// `archive`) or the failure (`error`), and when.
+export function archiveVerdict(s: Store, thread: number): Json | null {
+  const r = one(s, "SELECT version, at, verdict FROM archive_verdicts WHERE thread = ?", thread);
+  if (!r || r.version !== lastEntry(s, thread)) return null;
+  const v = parsed(r.verdict);
+  return v && typeof v === "object" ? { ...v, at: r.at } : null;
+}
+
 // ── pins, kept chats ──
 
 /// The chats a viewer pinned (by their session's key), with when.

@@ -13,6 +13,7 @@ import type { Request } from "../src/api/request.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { profileEnv } from "../src/agents/profiles.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
+import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
 import { Store } from "../src/store/store.ts";
 import { approval, fakeLogin, machine as fakeMachine, script, temp, until, upon } from "./accounts-fakes.ts";
 
@@ -378,29 +379,45 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
-  test("the review log names each chat as its list does and says what came of the review", async () => {
+  test("the archive policy page: its options with the chats last put there, who changed it, and edits by managers", async () => {
     const store = Store.open(":memory:", null);
     store.insertSession({ key: "titled", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/a", token: "t", createdAt: 1, lastActiveAt: 1 });
     store.insertSession({ key: "loose", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/b", token: "t2", createdAt: 1, lastActiveAt: 1 });
+    store.insertSession({ key: "old", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/c", token: "t3", createdAt: 1, lastActiveAt: 1 });
     const thread = store.openThread("slack:T1", "C1", "1.1", null, null);
     store.joinThread(thread.id, "titled", "ds");
     store.setThreadTitle(thread.id, "修登录页");
-    const result = (selected: string, complete: number) => ({ selected, probabilities: { complete }, model: "m", source: "native", retainedMass: 1 });
-    const base = { purpose: "archive", version: 2, model: "m", threshold: 0.9, elapsedMs: 1 };
-    store.recordDecision("titled", { ...base, accepted: true, result: result("complete", 0.97) });
-    store.recordDecision("titled", { ...base, accepted: false, result: result("complete", 0.8) });
-    store.recordDecision("titled", { ...base, accepted: false, result: result("complete", 0.95) });
-    store.recordDecision("titled", { ...base, accepted: false, result: result("human_needed", 0.1) });
+    const result = (selected: string) => ({ selected, probabilities: { [selected]: 1 }, model: "m", source: "native", retainedMass: 1 });
+    const base = { purpose: "archive", version: 3, model: "m", threshold: 0.9, elapsedMs: 1 };
+    store.recordDecision("titled", { ...base, accepted: false, option: { id: "awaiting_review", name: "等人看结果", archive: false }, result: result("awaiting_review") });
+    store.recordDecision("titled", { ...base, accepted: true, option: { id: "landed", name: "已落地", archive: true }, result: result("landed") });
     store.recordDecision("loose", { ...base, accepted: false, result: null, error: "timeout" });
+    store.recordDecision("old", { ...base, version: 2, accepted: true, result: result("complete") });
     const t = await rig({ store });
-    const recent = t.accounts.automaticDecisionsView(owner).recent.map((r: any) => [r.title, r.outcome, r.label]);
-    assert.deepEqual(recent, [
-      ["loose", "failed", "没检查成"],
-      ["修登录页", "kept", "不推荐：还在等人回答或处理"],
-      ["修登录页", "kept", "不推荐：检查时 chat 又有了新消息，等下次检查"],
-      ["修登录页", "kept", "不推荐：像是做完了，但把握不够（80%，要 90%）"],
-      ["修登录页", "suggested", "推荐归档：没有后续事项"],
-    ]);
+    const view = t.accounts.automaticDecisionsView(owner);
+    // Pages from before the policy list the checks one by one.
+    assert.deepEqual(view.recent.map((r: any) => [r.title, r.label]), [["old", "已做完 · 推荐归档"], ["loose", "没检查成"], ["修登录页", "已落地 · 推荐归档"], ["修登录页", "等人看结果 · 不推荐"]]);
+    const policy = view.policy;
+    assert.equal(policy.text, DEFAULT_POLICY.policy);
+    assert.equal(policy.edited, false);
+    assert.equal(policy.change, null);
+    assert.deepEqual([policy.checked, policy.failed], [3, 1]);
+    // Each chat counted once, by its latest check.
+    const landed = policy.options.find((o: any) => o.id === "landed");
+    assert.equal(landed.count, 1);
+    assert.deepEqual(landed.chats.map((c: any) => [c.title, c.recommended]), [["修登录页", true]]);
+    assert.equal(policy.options.find((o: any) => o.id === "awaiting_review").count, 0);
+    // Changed by a manager: kept by who, with what changed; a member is refused, and so is a policy that cannot be.
+    const options = DEFAULT_POLICY.options.filter((o) => o.id !== "uncertain");
+    assert.deepEqual(await t.call("PUT", "/automatic-decisions/policy", { policy: "x", options }, member), [403, { error: "只有 workspace 管理员能改归档策略" }]);
+    assert.deepEqual(await t.call("PUT", "/automatic-decisions/policy", { policy: "x", options: options.map((o) => ({ ...o, archive: true })) }), [400, { error: "至少要有一个不推荐的选项" }]);
+    const [status, overview] = await t.call("PUT", "/automatic-decisions/policy", { policy: "只看用户最初要的东西", options });
+    assert.equal(status, 200);
+    const after = overview.automaticDecisions.policy;
+    assert.equal(after.text, "只看用户最初要的东西");
+    assert.equal(after.options.length, DEFAULT_POLICY.options.length - 1);
+    assert.deepEqual(after.change.by, { kind: "person", email: "owner@example.com", name: null });
+    assert.equal(after.change.summary, "改了策略，删了「看不出来」");
     await t.close();
   });
 });

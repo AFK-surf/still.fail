@@ -15,9 +15,11 @@ import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { review, reviewUndecided } from "../src/sessions/review.ts";
 import { cleanTitle } from "../src/sessions/titles.ts";
 import { adbTools } from "../src/tools/adb.ts";
+import { archiveTools } from "../src/tools/archive.ts";
 import { chatTools } from "../src/tools/chat.ts";
 import { feedbackTools } from "../src/tools/feedback.ts";
 import { stationTools } from "../src/tools/stations.ts";
+import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
 import { Rig, matches, message, reply, say, settle } from "./hub-fakes.ts";
 
 type Json = any;
@@ -26,7 +28,7 @@ type Json = any;
 
 test("every tool has a name, a description and an object's input schema; the chat tools in their order", () => {
   const r = new Rig();
-  const ours = [...chatTools(r.hub), ...stationTools(() => null), ...adbTools(() => [], () => null), ...feedbackTools(r.store, () => null, () => null)];
+  const ours = [...chatTools(r.hub), ...archiveTools(r.hub), ...stationTools(() => null), ...adbTools(() => [], () => null), ...feedbackTools(r.store, () => null, () => null)];
   assert.deepEqual(
     chatTools(r.hub).map((t) => t.name),
     ["chat_post", "slack_api", "chat_state", "chat_history", "chat_list", "chat_read", "session_send", "session_history"],
@@ -677,8 +679,10 @@ async function provider(complete: boolean) {
   const server = createServer((req, res) => {
     req.resume();
     req.on("end", () => {
+      // The default policy's options: answered (archive) or awaiting_review (not), the rest hardly.
       const [done, human] = complete ? [0.96, 0.01] : [0.01, 0.96];
-      const body = JSON.stringify({ model: "test-jev", answers: { decision: { type: "choice", probabilities: { complete: done, human_needed: human, agent_work: 0.02, uncertain: 0.01 } } } });
+      const probabilities = { ...Object.fromEntries(DEFAULT_POLICY.options.map((o) => [o.id, 0.005])), answered: done, awaiting_review: human };
+      const body = JSON.stringify({ model: "test-jev", answers: { decision: { type: "choice", probabilities } } });
       res.writeHead(200, { "content-type": "application/json" }).end(body);
     });
   });
@@ -791,6 +795,42 @@ test("turning the rule on reviews the done chats no decision has answered, once 
   // A chat already answered as it stands is not asked about again.
   await reviewUndecided(r.hub);
   assert.equal(r.store.recentDecisions().length, 1);
+  await r.close();
+});
+
+test("the archive policy decides by the option picked; an agent changing it is kept by its session and asks again", async (t) => {
+  const r = new Rig();
+  const m = say("<@UBOT> make the button blue, show me first");
+  await r.accept(m);
+  await settle();
+  const key = `cl:C1:${m.threadTs}`;
+  const thread = () => r.thread("C1", m.threadTs).id;
+  const { url, server } = await provider(false);
+  t.after(() => server.close());
+  installDecisionProfile(r, url);
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Branch blue-button is up for you to look at.", kind: "all_done", done: "The branch is pushed" });
+  r.claude.last().complete();
+  await settle();
+  await review(r.hub, key);
+  // Picked: awaiting review, which the default policy does not count as archive.
+  assert.ok(!r.store.archiveSuggested(thread()));
+  const decided = r.store.lastDecision(key);
+  assert.deepEqual(decided.option, { id: "awaiting_review", name: "等人看结果", archive: false });
+  assert.equal(decided.policyAt, 0);
+  const [tool] = archiveTools(r.hub);
+  const read = JSON.parse(await tool!.run(key, {}));
+  assert.deepEqual(read, DEFAULT_POLICY);
+  await assert.rejects(tool!.run(key, { options: [{ name: "只有一个", rubric: "", archive: true }] }), /2 到 20/);
+  const options = read.options.map((o: Json) => (o.id === "awaiting_review" ? { ...o, archive: true } : o));
+  const said = await tool!.run(key, { options });
+  assert.match(said, /「等人看结果」改成推荐归档/);
+  assert.equal(await tool!.run(key, { options }), "Nothing changed: the policy is already so.");
+  const saved = r.store.archivePolicy()!;
+  assert.deepEqual(saved.change.by, { kind: "agent", session: key });
+  // Under the new policy the chat is asked about again, and now recommended.
+  await reviewUndecided(r.hub);
+  assert.ok(r.store.archiveSuggested(thread()));
+  assert.equal(r.store.lastDecision(key).policyAt, saved.change.id);
   await r.close();
 });
 

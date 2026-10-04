@@ -327,8 +327,13 @@ test("incomplete top logprobs never become a confident answer", () => {
   // Criteria in their names' order (a BTreeMap's): agent_work A, complete B, human_needed C, uncertain D.
   const r = parse(c, q, raw(tokens));
   assert.equal(r.selected, "complete");
+  // A choice too unlikely to be among the top tokens counts as none, while the rest hold nearly all of it.
   tokens.pop();
-  assert.throws(() => parse(c, q, raw(tokens)));
+  assert.equal(parse(c, q, raw(tokens)).probabilities.uncertain, 0);
+  tokens.shift();
+  tokens.shift();
+  assert.throws(() => parse(c, q, raw(tokens)), /mass/);
+  tokens.unshift({ token: "A", logprob: Math.log(0.02) });
   tokens.push({ token: "D", logprob: -2.0 });
   assert.throws(() => parse(c, q, raw(tokens)));
 });

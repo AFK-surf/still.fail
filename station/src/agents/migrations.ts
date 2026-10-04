@@ -27,6 +27,7 @@ export const NOTES: [number, string][] = [
   [20, "In still.fail chats, write lists in Markdown (- or 1., an item per line): • is Slack's, and there it runs into one paragraph."],
   [21, "all_done is no longer reviewed before it is posted or recorded (the earlier notes about a review that could reject it are void): a chat marked all done may be assessed afterwards, in the background, and recommended for the archive when nothing is left in it. It never holds an agent back."],
   [22, "A skill may now be shared between the workspace's stations: one from another station shows in skills/ like the others, and what you write to it reaches that station (an edit made on an older copy is kept beside it as SKILL.conflict-<station>.md: merge it into SKILL.md when you see one)."],
+  [23, "Archive recommendations now follow an editable archive policy (words plus options, each counted as archive or not); new tool archive_policy reads and changes it. When someone says a recommendation is wrong, fix the policy if it causes it."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

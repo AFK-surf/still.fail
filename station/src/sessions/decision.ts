@@ -127,10 +127,16 @@ export function parse(config: DecisionConfig, question: ChoiceQuestion, raw: Jso
     if (content.length !== 1) throw new Error("decision must return one token");
     const tokens = content[0]?.top_logprobs;
     if (!Array.isArray(tokens)) throw new Error("decision top_logprobs missing");
+    // With many choices the unlikely ones may fall out of the top tokens: absent, they count as none, and what the
+    // present ones hold together must still be nearly all of it (below).
     question.criteria.forEach(([name], i) => {
       const matches = tokens.filter((t: Json) => t?.token === letter(i));
+      if (matches.length === 0) {
+        probabilities[name] = 0;
+        return;
+      }
       const lp = matches[0]?.logprob;
-      if (typeof lp !== "number") throw new Error("decision choice absent from top_logprobs");
+      if (typeof lp !== "number") throw new Error("decision choice without a logprob");
       if (matches.length > 1 || !Number.isFinite(lp) || lp > 0) throw new Error("invalid decision logprob");
       probabilities[name] = Math.exp(lp);
     });

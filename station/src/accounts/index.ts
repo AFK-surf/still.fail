@@ -29,6 +29,7 @@ import { type ProfileHealth, serves, usable } from "../sessions/pool.ts";
 import type { Store } from "../store/store.ts";
 import { modelKey } from "../read/usage.ts";
 import { titleOf } from "../read/views.ts";
+import { currentPolicy, LEGACY_OPTIONS, savePolicy } from "../sessions/archive-policy.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { checkAutomaticDecisions } from "./check.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
@@ -46,6 +47,9 @@ type Json = any;
 const QUOTA_EVERY_MS = 5 * 60_000;
 const CHECK_ON_START_MS = 3_000;
 const PENDING_KEPT_MS = 15 * 60_000;
+/// The checks the policy page counts: of the last days, and the chats it names for each option at most.
+const POLICY_DAYS = 7;
+const POLICY_CHATS = 20;
 
 /// What the pages are refused, and with which status (admin/mod.rs `http_error`).
 export class Refusal extends Error {
@@ -803,12 +807,18 @@ export class Accounts {
   automaticDecisionsView(viewer: Viewer): Json {
     if (!manages(viewer)) return { canEdit: false, settings: {}, models: [], recent: [] };
     const lang = stationLang();
+    const titles = new Map<string, string>();
+    const title = (session: string) => {
+      let t = titles.get(session);
+      if (t === undefined) titles.set(session, (t = this.chatTitleOf(session)));
+      return t;
+    };
+    // For pages from before the policy: the checks one by one.
     const recent = this.deps.store.recentDecisions().map((row: Json) => {
       const d = row.detail ?? {};
       const session = typeof row.session === "string" ? row.session : "";
-      const [label, outcome] = decisionOutcome(d, lang);
       return {
-        id: row.id, session, title: this.chatTitleOf(session), at: row.at, label, outcome,
+        id: row.id, session, title: title(session), at: row.at, label: checkLabel(d, lang),
         accepted: d.accepted ?? null, model: d.model ?? null, profile: d.profile ?? null, elapsedMs: d.elapsedMs ?? null, error: d.error ?? null,
       };
     });
@@ -820,7 +830,58 @@ export class Accounts {
       settings: { completion: { enabled: completion.enabled === true, model: typeof completion.model === "string" ? completion.model : null } },
       models: this.decisionModels(),
       recent,
+      policy: this.policyView(title),
     };
+  }
+
+  /// The archive policy as the pages show it: its words, its options each with the chats the checks of the last days
+  /// put there (by their latest check), who changed it last, and how many checks failed.
+  private policyView(title: (session: string) => string): Json {
+    const store = this.deps.store;
+    const policy = currentPolicy(store);
+    const saved = store.archivePolicy();
+    const latest = new Map<string, Json>();
+    for (const row of store.decisionsSince(store.now() - POLICY_DAYS * 86_400_000)) if (typeof row.session === "string") latest.set(row.session, row);
+    const byOption = new Map<string, Json[]>();
+    let failed = 0;
+    for (const [session, row] of [...latest.entries()].reverse()) {
+      const picked = pickedOf(row.detail);
+      if (picked === null) {
+        failed++;
+        continue;
+      }
+      const list = byOption.get(picked) ?? [];
+      list.push({ session, title: title(session), at: row.at, recommended: row.detail?.accepted === true });
+      byOption.set(picked, list);
+    }
+    const by = saved?.change.by;
+    return {
+      text: policy.policy,
+      options: policy.options.map((o) => {
+        const chats = byOption.get(o.id) ?? [];
+        return { ...o, count: chats.length, chats: chats.slice(0, POLICY_CHATS) };
+      }),
+      days: POLICY_DAYS,
+      checked: latest.size,
+      failed,
+      edited: saved !== null,
+      change: saved
+        ? { at: saved.change.at, summary: saved.change.summary, by: by?.kind === "agent" ? { kind: "agent", session: by.session, title: title(by.session), runtime: store.getSession(by.session)?.runtime ?? null } : { kind: "person", email: by?.email ?? null, name: by?.name ?? null } }
+        : null,
+    };
+  }
+
+  /// PUT /automatic-decisions/policy (a workspace manager's): the policy in words and its options; the done chats are
+  /// checked again under it.
+  putArchivePolicy(input: Record<string, unknown>, viewer: Viewer) {
+    if (!manages(viewer)) throw new Refusal(403, "只有 workspace 管理员能改归档策略");
+    let changed: string | null;
+    try {
+      changed = savePolicy(this.deps.store, input, { kind: "person", email: viewer.email, name: viewer.name || null });
+    } catch (e) {
+      throw new Refusal(400, (e as Error).message);
+    }
+    if (changed !== null) this.deps.reviewUndecided?.();
   }
 
   /// The overview's `profiles`.
@@ -992,20 +1053,14 @@ export function modelName(id: string): string {
   return context === "" ? named : `${named} ${context}`;
 }
 
-/// A review's outcome in words, and whether it suggested archiving (`suggested`), did not (`kept`) or could not tell (`failed`).
-export function decisionOutcome(d: Json, lang: Lang): [string, "suggested" | "kept" | "failed"] {
+/// A check in a line, for the pages that list them one by one: the option the model picked and what came of it, or
+/// that it failed. Checks from before the policy had options name the fixed four's.
+export function checkLabel(d: Json, lang: Lang): string {
   const selected = typeof d?.result?.selected === "string" ? d.result.selected : null;
-  if (selected === null) return [tr(lang, "station.decisions.failed"), "failed"];
-  if (d.accepted === true) return [tr(lang, "station.decisions.suggested"), "suggested"];
-  if (selected !== "complete") {
-    const known = ["agent_work", "human_needed", "uncertain"].includes(selected);
-    return [tr(lang, known ? `station.decisions.${selected}` : "station.decisions.uncertain"), "kept"];
-  }
-  // Leaning to done, yet not suggested: not sure enough, else the chat (or the rule) changed while it was asked.
-  const p = d.result.probabilities?.complete;
-  const threshold = d.threshold;
-  if (typeof p === "number" && typeof threshold === "number" && p < threshold) {
-    return [tr(lang, "station.decisions.unsure", { p: Math.floor(p * 100), threshold: Math.round(threshold * 100) }), "kept"];
-  }
-  return [tr(lang, "station.decisions.changed"), "kept"];
+  if (selected === null) return tr(lang, "station.decisions.failed");
+  const name = typeof d.option?.name === "string" ? d.option.name : (LEGACY_OPTIONS[selected]?.name ?? selected);
+  return `${name} · ${tr(lang, d.accepted === true ? "station.decisions.archive" : "station.decisions.keep")}`;
 }
+
+/// The id of the option a check picked, null when it failed.
+const pickedOf = (d: Json): string | null => (typeof d?.result?.selected === "string" ? d.result.selected : null);

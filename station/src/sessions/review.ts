@@ -5,7 +5,8 @@
 // unfinished, or cannot tell, is not. It never holds an agent back.
 import { Effect } from "effect";
 import type { MessageRow } from "../store/store.ts";
-import { type Capability, type ChoiceResult, acceptsCompletion, archiveQuestion, decide, type DecisionConfig, resolvedModel } from "./decision.ts";
+import { type ArchivePolicy, archiveMass, currentPolicy, policyQuestion, recommends } from "./archive-policy.ts";
+import { type Capability, type ChoiceResult, decide, type DecisionConfig, resolvedModel } from "./decision.ts";
 import type { Hub } from "./hub.ts";
 import { usable } from "./pool.ts";
 
@@ -14,6 +15,12 @@ type Json = any;
 /// The decision reads the latest messages of a chat that fit these: how many it is given, and how many bytes of them.
 const ARCHIVE_REVIEW_MESSAGES = 400;
 const ARCHIVE_REVIEW_BYTES = 80_000;
+
+/// The archive policy in force.
+export const policyOf = (hub: Hub): ArchivePolicy => currentPolicy(hub.store);
+
+/// Which policy a check was made under: its number as saved (0 for the default).
+export const policyStamp = (hub: Hub): number => hub.store.archivePolicy()?.change.id ?? 0;
 
 /// Starts the review in the background (a fiber of the hub's).
 export function suggestArchive(hub: Hub, key: string) {
@@ -44,8 +51,21 @@ export async function review(hub: Hub, key: string): Promise<void> {
       hub.store.recordDecision(key, detail);
     } catch {}
   };
+  const policy = policyOf(hub);
+  const policyAt = policyStamp(hub);
+  // What the chats look like to their pages: the option picked, or why none was, for each thread as it stands.
+  const verdict = (versions: [number, number][], v: Json) => {
+    for (const [id, version] of versions) {
+      try {
+        hub.store.setArchiveVerdict(key, id, version, v);
+      } catch {}
+    }
+  };
+  const standing = (): [number, number][] => hub.store.sessionThreads(key).map((t) => [t.thread.id, hub.store.lastEntry(t.thread.id)]);
   if (candidates.length === 0) {
-    record({ purpose: "archive", version: 2, model: rule.model ?? "", accepted: false, elapsedMs: 0, error: "配置的模型在现有 Profile 中暂不可用" });
+    const error = "配置的模型在现有 Profile 中暂不可用";
+    record({ purpose: "archive", version: 3, model: rule.model ?? "", accepted: false, elapsedMs: 0, error });
+    verdict(standing(), { error });
     return;
   }
   const started = hub.now();
@@ -83,7 +103,7 @@ export async function review(hub: Hub, key: string): Promise<void> {
     for (let i = 0; i < candidates.length; i++) {
       selected = i;
       try {
-        answer = { ok: await decide(candidates[i]![1], archiveQuestion(), state) };
+        answer = { ok: await decide(candidates[i]![1], policyQuestion(policy), state) };
         break;
       } catch (error) {
         answer = { error: (error as Error).message };
@@ -94,13 +114,17 @@ export async function review(hub: Hub, key: string): Promise<void> {
     reviewed = { error: (error as Error).message };
   }
   const config = candidates[selected]![1];
-  const accepted = "ok" in reviewed && acceptsCompletion(reviewed.ok, config.threshold);
+  const accepted = "ok" in reviewed && recommends(reviewed.ok, policy, config.threshold);
+  const picked = "ok" in reviewed ? policy.options.find((o) => o.id === reviewed.ok.selected) : undefined;
   // Said while the chat stood still: anything said since makes it a question for another review.
   const now = hub.config().automaticDecisions.completion;
-  const unchanged = versions.every(([id, version]) => hub.store.lastEntry(id) === version) && now.enabled === rule.enabled && now.model === rule.model;
+  const unchanged = versions.every(([id, version]) => hub.store.lastEntry(id) === version) && now.enabled === rule.enabled && now.model === rule.model && policyStamp(hub) === policyAt;
   record({
     purpose: "archive",
-    version: 2,
+    version: 3,
+    policyAt,
+    option: picked ? { id: picked.id, name: picked.name, archive: picked.archive } : null,
+    archiveMass: "ok" in reviewed ? archiveMass(reviewed.ok, policy) : null,
     profile: candidates[selected]![0],
     provider: config.provider,
     model: config.model,
@@ -112,6 +136,10 @@ export async function review(hub: Hub, key: string): Promise<void> {
     error: "error" in reviewed ? reviewed.error : null,
   });
   if (!unchanged) return;
+  verdict(
+    versions,
+    picked ? { option: picked.id, name: picked.name, archive: picked.archive, recommended: accepted } : { error: "error" in reviewed ? reviewed.error : "没有判断结果" },
+  );
   for (const [id, version] of versions) {
     try {
       if (accepted) hub.store.suggestArchive(key, id, version);
@@ -121,10 +149,11 @@ export async function review(hub: Hub, key: string): Promise<void> {
 }
 
 /// The done chats no decision has answered as they stand now: ended all_done before the rule was on (or under another
-/// model), or while the model could not be reached. Nothing running or waiting to be heard, and not archived.
+/// model or policy), or while the model could not be reached. Nothing running or waiting to be heard, and not archived.
 export function undecided(hub: Hub): string[] {
   const { store } = hub;
   const stats = store.sessionStats(null);
+  const policy = policyStamp(hub);
   const keys: string[] = [];
   for (const s of store.listSessions()) {
     if (s.archivedAt !== null || s.running) continue;
@@ -132,10 +161,12 @@ export function undecided(hub: Hub): string[] {
     const last = stat?.lastTurn ?? null;
     if (!last || last.endedAt === null || last.ending !== "all_done" || (stat?.pending ?? 0) > 0) continue;
     const threads = store.sessionThreads(s.key).map((t) => t.thread.id);
-    if (threads.length === 0 || threads.every((id) => store.archiveSuggested(id))) continue;
     const decided = store.lastDecision(s.key);
+    // Under another policy than now, it is asked again, the recommended ones too.
+    const samePolicy = (decided?.policyAt ?? 0) === policy;
+    if (threads.length === 0 || (samePolicy && threads.every((id) => store.archiveSuggested(id)))) continue;
     const seen = new Map<number, number>(Array.isArray(decided?.threads) ? decided.threads : []);
-    if (decided?.result && decided.error == null && threads.every((id) => seen.get(id) === store.lastEntry(id))) continue;
+    if (decided?.result && decided.error == null && samePolicy && threads.every((id) => seen.get(id) === store.lastEntry(id))) continue;
     keys.push(s.key);
   }
   return keys;

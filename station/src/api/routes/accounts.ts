@@ -88,6 +88,12 @@ export const routes = ({ accounts, sharing, overview }: AccountsRouteDeps): Rout
         return ok(await view(r));
       }),
     ),
+    route("PUT", /^\/*automatic-decisions\/+policy\/*$/, (r) =>
+      answer(async (a) => {
+        a.putArchivePolicy(input(r), r.viewer);
+        return ok(await view(r));
+      }),
+    ),
     route("POST", /^\/*automatic-decisions\/+review\/*$/, (r) =>
       answer(async (a) => {
         const queued = a.reviewUndecided(r.viewer);

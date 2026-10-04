@@ -594,6 +594,41 @@ export class Store {
     return row ? (parsed(row.result) ?? null) : null;
   }
 
+  /// The checks recorded since `since` (ms), oldest first.
+  decisionsSince(since: number): Json[] {
+    return this.#all("SELECT id, session, created_at, result FROM decision_checks WHERE created_at >= ? ORDER BY id", since).map((r) => ({
+      id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
+    }));
+  }
+
+  /// The archive policy as last saved, and who saved it; null until anyone has (the default then).
+  archivePolicy(): { policy: Json; change: Json } | null {
+    const r = this.#one("SELECT id, at, policy, author, summary FROM archive_policy ORDER BY id DESC LIMIT 1");
+    if (!r) return null;
+    const policy = parsed(r.policy);
+    if (!policy) return null;
+    return { policy, change: { id: r.id, at: r.at, by: parsed(r.author) ?? null, summary: r.summary } };
+  }
+
+  /// A new archive policy, by whom, and what it changed.
+  setArchivePolicy(policy: Json, author: Json, summary: string): void {
+    this.#with((changes) => {
+      this.#run("INSERT INTO archive_policy(at, policy, author, summary) VALUES (?, ?, ?, ?)", this.now(), JSON.stringify(policy), JSON.stringify(author), summary);
+      changes.push({ type: "decisionChecks" });
+    });
+  }
+
+  /// What the latest review found for a thread as it stood at `version`: the option picked, or why there is none.
+  setArchiveVerdict(session: string, thread: number, version: number, verdict: Json): void {
+    this.#with((changes) => {
+      this.#run(
+        "INSERT INTO archive_verdicts(thread, version, at, verdict) VALUES (?, ?, ?, ?) ON CONFLICT(thread) DO UPDATE SET version = excluded.version, at = excluded.at, verdict = excluded.verdict",
+        thread, version, this.now(), JSON.stringify(verdict),
+      );
+      changes.push({ type: "session", key: session });
+    });
+  }
+
   /// The decision found nothing left to do in this thread as it stood at `version` (its last entry then).
   suggestArchive(session: string, thread: number, version: number): void {
     this.#with((changes) => {

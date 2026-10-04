@@ -13,6 +13,19 @@ CREATE TABLE IF NOT EXISTS archive_suggestions (
   version INTEGER NOT NULL,
   at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS archive_policy (
+  id INTEGER PRIMARY KEY,
+  at INTEGER NOT NULL,
+  policy TEXT NOT NULL,
+  author TEXT NOT NULL,
+  summary TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS archive_verdicts (
+  thread INTEGER PRIMARY KEY,
+  version INTEGER NOT NULL,
+  at INTEGER NOT NULL,
+  verdict TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS decision_checks (
   id INTEGER PRIMARY KEY,
   session TEXT NOT NULL,

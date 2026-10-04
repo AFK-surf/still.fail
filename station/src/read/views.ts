@@ -431,7 +431,12 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
     // The decision looked at it (after its agent said all done) and found nothing left to do; with the review on, only
     // such a chat is shown as one to archive (`archiveReviewed`), not every one whose agents are done.
     row.archiveRecommended = !archived && store.archiveSuggested(s, t.thread.id);
-    if (api.reviews) row.archiveReviewed = true;
+    if (api.reviews) {
+      row.archiveReviewed = true;
+      // What the review made of it as it stands: the option picked (and whether that recommends it), or its failure.
+      const verdict = archived ? null : store.archiveVerdict(s, t.thread.id);
+      if (verdict !== null) row.archiveCheck = verdict;
+    }
     // The client key it was made with, while the hub remembers it.
     const clientKey = s.clientKeys.get(String(key));
     if (clientKey !== undefined) row.clientKey = clientKey;
