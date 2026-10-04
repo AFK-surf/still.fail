@@ -612,20 +612,11 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val lineShown = remember { mutableStateOf(false) }
     LaunchedEffect(follow.placed, first, reveal.revealing) {
         val target = host.goTo ?: return@LaunchedEffect
-        android.util.Log.d("SMDBG", "goTo $target placed=${follow.placed} revealing=${reveal.revealing} first=$first")
         if (!follow.placed || reveal.revealing) return@LaunchedEffect
         val m = rows.firstNotNullOfOrNull { (it as? Entry.Said)?.m?.takeIf { m -> m.seq == target } }
         when {
             // There it stays: the unread line showing after it does not take the chat away from it.
-            m != null -> {
-                host.goTo = null
-                lineShown.value = true
-                // After the frame that lays out what came in: what was in view is kept there in it (requestScrollToItem,
-                // below), which would take the list back from the message.
-                androidx.compose.runtime.withFrameNanos { }
-                androidx.compose.runtime.withFrameNanos { }
-                jumpTo(m.ts, "")
-            }
+            m != null -> { host.goTo = null; lineShown.value = true; jumpTo(m.ts, "") }
             view.more && thread != null && first != null && first > target -> {
                 asked.value = first
                 try { api.older(thread.id) } catch (_: CoreException) { host.goTo = null }
@@ -640,7 +631,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         val saved = place
         val back = saved?.let { p -> rows.indexOfFirst { it.place == p.id } }?.takeIf { it >= 0 }
         val line = rows.indexOfFirst { it is Entry.Line }.takeIf { it >= 0 }
-        android.util.Log.d("SMDBG", "place line=${rows.indexOfFirst { it is Entry.Line }} back=$back at=$atIndex")
         when {
             line != null -> list.scrollToItem(line, lineOffset)
             back != null -> list.scrollToItem(back, -saved.offset)
@@ -761,7 +751,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         val index = rows.indexOfFirst { it.id == at.key }
         when {
             index < 0 -> if (!short) atLatest()
-            shown.first().key != at.key && index != at.index -> { android.util.Log.d("SMDBG", "keep index=$index"); list.requestScrollToItem(index, -at.offset) }
+            shown.first().key != at.key && index != at.index -> list.requestScrollToItem(index, -at.offset)
         }
     }
     // Near the top: the page before comes in (once per page); what is on screen stays put.
@@ -1302,9 +1292,12 @@ private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, r
             val follow = motion.follow
             follow?.anchor = null
             motion.lead(ts, passage, accent)
+            // The list's own move (not the reader's): it stays there through a resize, the keyboard going as the chat
+            // opens from a search (Follow.topHeld), until the reader moves it.
+            follow?.own = (follow?.own ?: 0) + 1
+            try {
             // Its top just below the bar (the list's top padding).
             list.scrollToItem(index)
-            android.util.Log.d("SMDBG", "jump index=$index first=${list.firstVisibleItemIndex} off=${list.firstVisibleItemScrollOffset} rows=${rows.size}")
             if (passage.isNotEmpty()) {
                 val info = list.layoutInfo
                 info.visibleItemsInfo.firstOrNull { it.index == index }?.let { item ->
@@ -1315,6 +1308,8 @@ private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, r
                 val mid = pane?.let { p -> motion.mark?.middleIn(p) }
                 if (pane != null && mid != null) list.scrollBy(mid.y - pane.size.height / 2f)
             }
+            } finally { follow?.let { it.own-- } }
+            follow?.topHeld = true
             follow?.on = follow?.atEnd() == true
             motion.flash()
         }

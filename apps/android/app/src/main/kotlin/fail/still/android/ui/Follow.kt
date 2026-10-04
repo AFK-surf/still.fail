@@ -56,6 +56,9 @@ class Follow(val list: LazyListState, private val margin: Int) {
     var indexOf: (Any) -> Int = { -1 }
     /** Something else puts the list in place for now, frame by frame (words sent flying in, ChatHost.kt): not followed meanwhile. */
     var paused by mutableStateOf(false)
+    /** A message was gone to (its top under the bar): the list keeping it there through a resize (the keyboard going as
+     *  the chat opens from a search) rather than what is at its bottom, until the reader moves it. */
+    var topHeld = false
     /** Someone else moved the list since it was last at rest. */
     internal var touched = false
     /** How many of its own scrolls are going (snapshot state: read with the list's scrolling). */
@@ -164,7 +167,7 @@ fun rememberFollow(list: LazyListState): Follow {
         // A scroll it did not make itself, once the list is at rest: at the end it follows again, elsewhere it stops.
         launch {
             snapshotFlow { list.isScrollInProgress to (follow.own > 0) }.collect { (scrolling, own) ->
-                if (scrolling && !own && follow.placed) { follow.touched = true; follow.anchor = null }
+                if (scrolling && !own && follow.placed) { follow.touched = true; follow.anchor = null; follow.topHeld = false }
                 if (!scrolling && follow.touched) { follow.touched = false; follow.on = follow.atEnd() }
             }
         }
@@ -180,7 +183,7 @@ fun rememberFollow(list: LazyListState): Follow {
         launch {
             var last = -1
             snapshotFlow { list.layoutInfo.viewportSize.height }.collect { h ->
-                if (last > 0 && h > 0 && h != last && follow.placed) { follow.own++; try { list.scrollBy((last - h).toFloat()) } finally { follow.own-- } }
+                if (last > 0 && h > 0 && h != last && follow.placed && !follow.topHeld) { follow.own++; try { list.scrollBy((last - h).toFloat()) } finally { follow.own-- } }
                 if (h > 0) last = h
             }
         }
