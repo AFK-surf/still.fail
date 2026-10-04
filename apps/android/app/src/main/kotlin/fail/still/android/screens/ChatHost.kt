@@ -227,6 +227,8 @@ class Host {
     internal var showSaid: ((Long) -> Unit)? = null
     /** A message (seq) to show once the chat's list is in place (Screen.Chat.at), the pages before it brought in. */
     internal var goTo: Long? = null
+    /** The words to mark in that message (opened from a search, Search.kt), instead of flashing it. */
+    internal var goToWords: List<String> = emptyList()
     var flight by mutableStateOf<Flight?>(null)
         private set
     /** The composer's hint is away (words just sent are over it). */
@@ -354,7 +356,7 @@ fun ChatHost(current: WorkspaceEntry, screen: Screen) {
     host.density = LocalDensity.current
     val chat = screen as? Screen.Chat
     // Where to go, once each time the chat or its place changes (not on every recomposition: the page clears it once there).
-    remember(chat?.id, chat?.at) { host.goTo = chat?.at; chat?.at }
+    remember(chat?.id, chat?.at, chat?.words) { host.goTo = chat?.at; host.goToWords = chat?.words.orEmpty(); chat?.at }
     CompositionLocalProvider(LocalSendTextWidth provides host.fieldWidth) {
       Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
         if (chat != null) key(chat.id) { ChatScreen(chat.station, chat.of, host) }

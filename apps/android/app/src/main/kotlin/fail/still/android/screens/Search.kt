@@ -173,7 +173,7 @@ internal fun SearchPage(scope: String, from: Float, onClose: () -> Unit) {
             }
             if (messages.isNotEmpty()) {
                 item(key = "messages") { SectionHeader(t("android-chat.search.messages")) }
-                items(messages, key = { "m/${it.station}/${it.thread}/${it.seq}" }) { FoundRow(it) }
+                items(messages, key = { "m/${it.station}/${it.thread}/${it.seq}" }) { FoundRow(it, view?.words) }
             }
         }
     }
@@ -185,9 +185,9 @@ private fun SearchNote(text: String) {
 }
 
 /** A message the words found: its chat, who said it and when, over the line that has them (in ink, bold); tapped, its
- *  chat opens at it. */
+ *  chat opens at it, the words marked there. */
 @Composable
-private fun FoundRow(found: FoundMessage) {
+private fun FoundRow(found: FoundMessage, words: List<String>?) {
     val app = LocalApp.current
     val ink = C.ink
     val line = remember(found.text, found.marks, ink) {
@@ -205,7 +205,7 @@ private fun FoundRow(found: FoundMessage) {
         }
     }
     Column(
-        Modifier.fillMaxWidth().height(66.dp).clickable { app.push(Screen.Chat(found.station, found.chat.page, at = found.seq)) }
+        Modifier.fillMaxWidth().height(66.dp).clickable { app.push(Screen.Chat(found.station, found.chat.page, at = found.seq, words = words)) }
             .padding(start = 22.dp, end = 16.dp),
         verticalArrangement = Arrangement.Center,
     ) {

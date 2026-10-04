@@ -113,7 +113,7 @@ sealed interface Screen {
     data object Home : Screen { override val id = "home" }
     /** An item's page: its chat, or its agent before it has one. */
     /** `at`: a message (seq) to show once it opens, flashing (a row's state line: what it is about). */
-    data class Chat(val station: String, val of: ChatOf, val at: Long? = null) : Screen {
+    data class Chat(val station: String, val of: ChatOf, val at: Long? = null, val words: List<String>? = null) : Screen {
         override val id = "chat/$station/" + when (of) { is ChatOf.Thread -> of.id.toString(); is ChatOf.Session -> of.key }
     }
     /** One message of a chat on a page of its own, to pick passages of and say something about (a long press on it). */

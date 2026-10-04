@@ -22,7 +22,7 @@ import androidx.compose.ui.text.TextLayoutResult
 
 /** What to mark and how strongly now (`level`, the ground's opacity); `found` once some text holds it. */
 @Stable
-class TextMark(passage: String, val color: Color) {
+class TextMark(passage: String, val color: Color, val words: List<String> = emptyList()) {
     val needle = passage.replace(Regex("\\s+"), " ").trim()
     var level by mutableFloatStateOf(0f)
     var found by mutableStateOf(false)
@@ -47,6 +47,18 @@ fun findPassage(text: String, needle: String): IntRange? {
     return if (at < 0) null else back[at]..back[at + needle.length - 1]
 }
 
+/** Where each of `words` (case aside) is in `text`, in order (a search's words, marked where it led). */
+fun findWords(text: String, words: List<String>): List<IntRange> {
+    val lower = text.lowercase()
+    if (lower.length != text.length) return emptyList()
+    val out = ArrayList<IntRange>()
+    for (w in words.map { it.lowercase() }.filter { it.isNotEmpty() }) {
+        var at = lower.indexOf(w)
+        while (at >= 0) { out += at until at + w.length; at = lower.indexOf(w, at + w.length) }
+    }
+    return out.sortedBy { it.first }
+}
+
 /**
  * The hook for a text that may hold the marked passage: a modifier to put last on the text (it draws behind the range)
  * and what to give the text's onTextLayout. Nothing when no mark is asked for or the text does not hold it.
@@ -54,14 +66,16 @@ fun findPassage(text: String, needle: String): IntRange? {
 @Composable
 fun passageMark(text: String): Pair<Modifier, (TextLayoutResult) -> Unit> {
     val mark = LocalTextMark.current ?: return Modifier to {}
-    val range = remember(text, mark.needle) { findPassage(text, mark.needle) } ?: return Modifier to {}
+    val ranges = remember(text, mark.needle, mark.words) { if (mark.words.isNotEmpty()) findWords(text, mark.words) else listOfNotNull(findPassage(text, mark.needle)) }
+    if (ranges.isEmpty()) return Modifier to {}
     if (!mark.found) mark.found = true
+    val first = ranges.first()
     val layout = remember { arrayOfNulls<TextLayoutResult>(1) }
     val modifier = Modifier
-        .onGloballyPositioned { c -> layout[0]?.let { l -> mark.where = c to l.getPathForRange(range.first, range.last + 1).getBounds() } }
+        .onGloballyPositioned { c -> layout[0]?.let { l -> if (mark.where?.first?.isAttached != true || mark.where?.first == c) mark.where = c to l.getPathForRange(first.first, first.last + 1).getBounds() } }
         .drawBehind {
             val l = layout[0] ?: return@drawBehind
-            if (mark.level > 0f) drawPath(l.getPathForRange(range.first, range.last + 1), mark.color.copy(alpha = mark.level))
+            if (mark.level > 0f) for (r in ranges) if (r.last < l.layoutInput.text.length) drawPath(l.getPathForRange(r.first, r.last + 1), mark.color.copy(alpha = mark.level))
         }
     return modifier to { layout[0] = it }
 }

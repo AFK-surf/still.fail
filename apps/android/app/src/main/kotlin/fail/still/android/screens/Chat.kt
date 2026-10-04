@@ -611,6 +611,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     motion.scope = scope
     // A card over the composer tapped (AskCard.kt): the message that asked it, as a quote's (no passage: it flashes whole).
     val jumpTo = rememberJump(list, rows, motion)
+    val accent = chatInk().accent
     SideEffect { host.showSaid = { seq -> rows.firstNotNullOfOrNull { (it as? Entry.Said)?.m?.takeIf { m -> m.seq == seq } }?.let { jumpTo(it.ts, "") } } }
     // The page before asked for (once per page: here, or near the top below).
     val asked = remember { mutableStateOf<Long?>(null) }
@@ -624,7 +625,15 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         val m = rows.firstNotNullOfOrNull { (it as? Entry.Said)?.m?.takeIf { m -> m.seq == target } }
         when {
             // There it stays: the unread line showing after it does not take the chat away from it.
-            m != null -> { host.goTo = null; lineShown.value = true; jumpTo(m.ts, "") }
+            m != null -> {
+                host.goTo = null
+                lineShown.value = true
+                // Opened from a search: its words marked in it, the first in view, rather than the message flashing.
+                val words = host.goToWords
+                host.goToWords = emptyList()
+                if (words.isNotEmpty()) motion.markWords(m.ts, words, accent)
+                jumpTo(m.ts, if (words.isNotEmpty()) FOUND else "")
+            }
             view.more && thread != null && first != null && first > target -> {
                 asked.value = first
                 try { api.older(thread.id) } catch (_: CoreException) { host.goTo = null }
@@ -1014,7 +1023,7 @@ private fun plain(text: String) = text.replace(Regex("[`*#>]"), "").replace(Rege
 private fun Said(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.compose.foundation.lazy.LazyListState, rows: List<Entry>, waitingNow: Boolean) {
     // A quote led here: the passage it quotes is marked where these words hold it (TextMark.kt).
     val motion = LocalChatMotion.current
-    val mark = motion?.mark?.takeIf { motion.flashed == m.ts }
+    val mark = motion?.mark?.takeIf { motion.flashed == m.ts } ?: motion?.found?.takeIf { motion.foundAt == m.ts }
     CompositionLocalProvider(LocalTextMark provides mark) { SaidRow(ctx, m, draft, list, rows, waitingNow) }
 }
 
@@ -1342,17 +1351,25 @@ private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, r
     val accent = chatInk().accent
     return { ts, passage ->
         val index = rows.indexOfFirst { it is Entry.Said && it.m.ts == ts }
+        // Opened from a search: its words are marked already (ChatMotion.markWords), nothing flashes.
+        val found = passage == FOUND
         if (index >= 0 && motion != null) motion.scope?.launch {
             val follow = motion.follow
             follow?.anchor = null
-            motion.lead(ts, passage, accent)
+            if (!found) motion.lead(ts, passage, accent)
             // The list's own move (not the reader's): it stays there through a resize, the keyboard going as the chat
             // opens from a search (Follow.topHeld), until the reader moves it.
             follow?.own = (follow?.own ?: 0) + 1
             try {
             // Its top just below the bar (the list's top padding).
             list.scrollToItem(index)
-            if (passage.isNotEmpty()) {
+            if (found) {
+                // The first word low in a long message: it is what comes to the middle.
+                androidx.compose.runtime.withFrameNanos { }
+                val pane = motion.pane
+                val mid = pane?.let { p -> motion.found?.middleIn(p) }
+                if (pane != null && mid != null && mid.y > pane.size.height * 0.8f) list.scrollBy(mid.y - pane.size.height / 2f)
+            } else if (passage.isNotEmpty()) {
                 val info = list.layoutInfo
                 info.visibleItemsInfo.firstOrNull { it.index == index }?.let { item ->
                     list.scrollBy((item.offset + item.size / 2 - (info.viewportStartOffset + info.viewportEndOffset) / 2).toFloat())
@@ -1365,10 +1382,13 @@ private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, r
             } finally { follow?.let { it.own-- } }
             follow?.topHeld = true
             follow?.on = follow?.atEnd() == true
-            motion.flash()
+            if (!found) motion.flash()
         }
     }
 }
+
+/** What rememberJump is given in place of a passage for a message opened from a search (its words marked instead). */
+private const val FOUND = "\u0000found"
 
 /** A quote's passage as a card shows it: the mark in the accent, whose it is, what it says. */
 @Composable

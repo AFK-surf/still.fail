@@ -271,6 +271,19 @@ internal class ChatMotion(private val reduced: Boolean) {
     val flash = Animatable(0f)
     private val marking = Animatable(0f)
 
+    /** The message a search opened the chat at, by ts, and its words marked in it (web ::highlight(search-hit)): kept
+     *  until the chat is left, not flashed. */
+    var foundAt by mutableStateOf<String?>(null)
+        private set
+    var found by mutableStateOf<fail.still.android.ui.TextMark?>(null)
+        private set
+
+    /** Marks `words` in the message `ts` (drawn once its row composes), for as long as the chat shows. */
+    fun markWords(ts: String, words: List<String>, accent: Color) {
+        foundAt = ts
+        found = fail.still.android.ui.TextMark("", accent, words).also { it.level = 0.28f }
+    }
+
     /** Starts marking `passage` in the message `ts` (drawn once its row composes); `flash` then plays it out. */
     fun lead(ts: String, passage: String, accent: Color) {
         flashes++
