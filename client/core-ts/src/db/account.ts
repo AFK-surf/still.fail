@@ -17,7 +17,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureSaid, migrate, versionOf } from "./schema.ts";
+import { ensureKept, ensureSaid, migrate, versionOf } from "./schema.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -218,6 +218,8 @@ export class AccountDb {
   readonly found: number;
   /// How what was said is found: by its full-text index, by scanning it, or not at all (it could not be made).
   readonly #said: "index" | "scan" | null = null;
+  /// The logs let go for room (`log_use`), by K(kind, station, id).
+  readonly #evicted = new Set<string>();
   readonly #runner: Runner;
   readonly #derive: Derive;
   #inTx = false;
@@ -256,6 +258,12 @@ export class AccountDb {
         this.#said = ensureSaid(sql) ? "index" : "scan";
       } catch {
         // No room to make it: messages are not found by their words this time.
+      }
+      try {
+        ensureKept(sql);
+        for (const r of sql.all("SELECT kind, station, id FROM log_use WHERE evicted = 1")) this.#evicted.add(K(String(r[0]), String(r[1]), String(r[2])));
+      } catch {
+        // No room to make it: nothing is let go this time.
       }
     } else if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said'").length > 0) {
       this.#said = "scan";
@@ -1281,6 +1289,62 @@ export class AccountDb {
       .map((r) => ({ station: String(r[0]), thread: Number(r[1]), seq: Number(r[2]), at: typeof r[3] === "number" ? r[3] : null, text: String(r[4]) }));
   }
 
+  // ── what is kept within the device's room ──
+
+  /// How much of the database is in use (its pages less the free ones), in bytes.
+  used(): number {
+    const n = (q: string) => Number(this.sql.all(q)[0]?.[0] ?? 0);
+    return (n("PRAGMA page_count") - n("PRAGMA freelist_count")) * n("PRAGMA page_size");
+  }
+
+  /// Whether a log's items were let go for room (and not brought back since).
+  evicted(kind: "entry" | "transcript", station: string, id: string): boolean {
+    return this.#evicted.has(K(kind, station, id));
+  }
+
+  /// A log's chat opened here: the most recently opened, and kept again (its items brought back by the sync). Answers
+  /// whether they had been let go.
+  opened(kind: "entry" | "transcript", station: string, id: string, at: number): boolean {
+    const was = this.#evicted.delete(K(kind, station, id));
+    this.#write(() => {
+      this.sql.run("INSERT INTO log_use (kind, station, id, opened, evicted) VALUES (?, ?, ?, ?, 0) ON CONFLICT (kind, station, id) DO UPDATE SET opened = excluded.opened, evicted = 0", [kind, station, id, at]);
+    });
+    return was;
+  }
+
+  /// The logs held, of `kind`, least recently used first: by when their chat was last opened here or last said
+  /// something (an agent's: last active), whichever is later.
+  logsByUse(kind: "entry" | "transcript", limit: number): { station: string; id: string }[] {
+    const rows =
+      kind === "entry"
+        ? this.sql.all(
+            `SELECT e.station, e.thread FROM (SELECT DISTINCT station, thread FROM entry) e
+             LEFT JOIN log_use u ON u.kind = 'entry' AND u.station = e.station AND u.id = CAST(e.thread AS TEXT)
+             LEFT JOIN thread t ON t.station = e.station AND t.id = e.thread
+             ORDER BY max(coalesce(u.opened, 0), coalesce(t.sort_at, 0), coalesce(t.created_at, 0)), e.station, e.thread LIMIT ?`,
+            [limit],
+          )
+        : this.sql.all(
+            `SELECT x.station, x.session FROM (SELECT DISTINCT station, session FROM transcript) x
+             LEFT JOIN log_use u ON u.kind = 'transcript' AND u.station = x.station AND u.id = x.session
+             LEFT JOIN session s ON s.station = x.station AND s.key = x.session
+             ORDER BY max(coalesce(u.opened, 0), coalesce(s.last_active, 0)), x.station, x.session LIMIT ?`,
+            [limit],
+          );
+    return rows.map((r) => ({ station: String(r[0]), id: String(r[1]) }));
+  }
+
+  /// A log's items let go for room: they are read again when its chat is opened. Its thread, read position and row stay.
+  evict(kind: "entry" | "transcript", station: string, id: string): void {
+    this.#evicted.add(K(kind, station, id));
+    this.#write(() => {
+      this.#logCache.clear();
+      if (kind === "entry") this.#forgetEntries(station, Number(id));
+      else if (this.sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", [station, id]) > 0) this.#tellLog("transcript", station, id);
+      this.sql.run("INSERT INTO log_use (kind, station, id, evicted) VALUES (?, ?, ?, 1) ON CONFLICT (kind, station, id) DO UPDATE SET evicted = 1", [kind, station, id]);
+    });
+  }
+
   // ── a thread's entries and a session's transcript ──
 
   /// The numbers of a log's items held, in order.
@@ -1386,6 +1450,8 @@ export class AccountDb {
       for (const [table, column] of [["station", "address"], ["slack_app", "station"], ["list", "station"], ["chat", "station"], ["session", "station"], ["thread", "station"], ["thread_member", "station"], ["entry", "station"], ["transcript", "station"], ["job", "station"], ["outbox", "station"], ["pending", "station"], ["first", "station"], ["changing", "station"], ["draft", "station"]]) {
         this.sql.run(`DELETE FROM ${table} WHERE ${column} = ?`, [station]);
       }
+      if (this.sql.all("SELECT 1 FROM sqlite_master WHERE name = 'log_use'").length > 0) this.sql.run("DELETE FROM log_use WHERE station = ?", [station]);
+      for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
       this.#cache.clear();
       this.#logCache.clear();
       for (const key of [...this.#lists.keys()]) if (key.endsWith(`\u0001${station}`)) this.#lists.delete(key);

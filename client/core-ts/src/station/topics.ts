@@ -115,10 +115,13 @@ export class StationTopics implements Owner {
     if (urgent) this.#core.scheduler.prioritize(topicKey(topic), urgent, Priority.shown);
     if (topic.topic === "thread") {
       const id = topic.thread as number;
-      // A chat no list has (opened from an old notification's link): the sync is told of it, and brings it.
-      if (this.summary(station, id) === null) this.#sync.syncEntries(station, id, Priority.shown);
+      // Opened: the most recently used, kept while shown. Let go for room before, or a chat no list has (opened from an
+      // old notification's link): the sync brings it.
+      const evicted = this.#core.data.opened("entry", station, String(id), true);
+      if (evicted || this.summary(station, id) === null) this.#sync.syncEntries(station, id, Priority.shown);
       this.#moveOldPlace(station, id);
     }
+    if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.syncTranscript(station, topic.key as string, Priority.shown);
     if (topic.topic === "net") this.#sampleNet(topic);
     // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
     if (topic.topic === "jobLog") this.#sync.readLog(station, topic.job as string, topic.lines as number);
@@ -129,6 +132,8 @@ export class StationTopics implements Owner {
     const station = topicStation(topic);
     if (station === null) return;
     const key = topicKey(topic);
+    if (topic.topic === "thread") this.#core.data.opened("entry", station, String(topic.thread), false);
+    if (topic.topic === "live") this.#core.data.opened("transcript", station, topic.key as string, false);
     this.#core.scheduler.prioritize(key, null);
     this.#windows.delete(key);
     this.#firsts.delete(key);

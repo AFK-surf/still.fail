@@ -512,7 +512,7 @@ export class StationsSync {
   #details(address: string): void {
     for (const [key, again] of this.#core.data.sessionsToRead(address)) {
       if (again) this.#enqueue(address, `session/${key}`, Priority.background, this.#session(address, key));
-      this.#enqueue(address, `transcript/${key}`, Priority.background - 1, this.transcript(address, key, null));
+      this.syncTranscript(address, key, Priority.background - 1);
     }
   }
 
@@ -528,6 +528,8 @@ export class StationsSync {
   /// Brings a thread's entries onto the device: what came after what is held, then any gap, then the pages before,
   /// one page a run (the task asks itself again while there is more, so what is more urgent goes between).
   syncEntries(address: string, id: number, priority: number): void {
+    // Let go for room and not opened since: left as it is (data.ts KEPT).
+    if (this.#core.data.evicted("entry", address, String(id))) return;
     this.#enqueue(address, `entries/${id}`, priority, this.#entriesPage(address, id, priority));
   }
 
@@ -545,7 +547,7 @@ export class StationsSync {
   #entriesPage(address: string, id: number, priority: number): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
-      if (!link || !this.reachable(address)) return;
+      if (!link || !this.reachable(address) || this.#core.data.evicted("entry", address, String(id))) return;
       const data = this.#core.data;
       const held = data.logNumbers("entry", address, String(id));
       let path: string;
@@ -590,6 +592,12 @@ export class StationsSync {
       return n === null ? [] : [[n, e] as [number, unknown]];
     });
     if (items.length > 0) this.#core.data.putItems("entry", address, String(id), items);
+  }
+
+  /// Brings a session's transcript onto the device (its latest page), unless it was let go for room and not opened since.
+  syncTranscript(address: string, key: string, priority: number): void {
+    if (this.#core.data.evicted("transcript", address, key)) return;
+    this.#enqueue(address, `transcript/${key}`, priority, this.transcript(address, key, null));
   }
 
   /// A session's transcript: its latest page when none is held, or the page before `before` (history.older).
@@ -645,8 +653,11 @@ export class StationsSync {
         // How far the thread goes, at once; the rest of its summary is read below.
         if (newest >= 0) core.data.raiseLast(address, id, newest);
         this.onTold(address, id, entries);
-        this.putEntries(address, id, entries);
-        this.syncEntries(address, id, Priority.shown);
+        // A chat let go for room (and not opened since) is not kept current: what it said is read when it is opened.
+        if (!core.data.evicted("entry", address, String(id))) {
+          this.putEntries(address, id, entries);
+          this.syncEntries(address, id, Priority.shown);
+        }
         this.#markDirty(address, id);
         return;
       }
@@ -821,7 +832,9 @@ export class StationsSync {
       }
       const now = core.host.nowMs();
       const kind = str(get(message, "type")) ?? "";
-      if (kind === "timeline") {
+      if (kind === "timeline" && core.data.evicted("transcript", address, key)) {
+        // Let go for room and not opened since: its items are read when it is opened.
+      } else if (kind === "timeline") {
         const start = u64(get(message, "start")) ?? 0;
         const entries = (get(message, "entries") as unknown[] | undefined) ?? [];
         // Written anew from before what is held ends: what came after it goes. Past what is held (the latest page

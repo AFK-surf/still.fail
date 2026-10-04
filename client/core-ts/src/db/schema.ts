@@ -168,6 +168,13 @@ export function ensureSaid(sql: Sql): boolean {
   return ensureSaidIndex(sql);
 }
 
+/// What is kept of each log (a thread's entries, `entry`; an agent's transcript, `transcript`) as the device holds
+/// within its room (data.ts KEPT): when its chat was last opened here, and whether its items were let go for room.
+/// Made where missing at every open, as `said`.
+export function ensureKept(sql: Sql): void {
+  sql.exec("CREATE TABLE IF NOT EXISTS log_use (kind TEXT NOT NULL, station TEXT NOT NULL, id TEXT NOT NULL, opened INTEGER, evicted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, station, id))");
+}
+
 /// The full-text index of `said`, made and filled where missing. A build without FTS5 (or its trigram tokenizer) has
 /// none, and its triggers are taken away if an earlier one left them: `said` is then searched by scanning it.
 function ensureSaidIndex(sql: Sql): boolean {

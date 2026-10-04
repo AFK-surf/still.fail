@@ -117,7 +117,18 @@ export type DataOptions = {
   /// The signed-in account that reaches a workspace (Workspaces' owner): its database keeps the workspace's.
   owner: (workspace: string) => string | null;
   derive?: Derive;
+  /// The most an account's database may take on the device (KEPT by default).
+  kept?: number;
 };
+
+/// How much room an account's database may take on the device: past it, the items of the logs least recently used go
+/// (agents' transcripts first, then threads' entries, and what was said in them with them), down to KEPT_TO of it.
+/// Rows, threads, sessions, read positions and what was done here are small and always kept; a log let go is read
+/// again once its chat is opened. The database's file keeps the room it took (its free pages are used again).
+export const KEPT = 256 * 1024 * 1024;
+const KEPT_TO = 0.8;
+/// How often, at most, the room taken is looked at as logs are written.
+const KEPT_CHECK_MS = 10_000;
 
 /// What a database's state says through the `status` topic: a burst not written for want of room, a database a newer
 /// core wrote (read only), one another process holds.
@@ -147,9 +158,15 @@ export class Data {
   /// Told once an account's database is opened (a sign-in), to bring in what it may (db/import.ts).
   onOpened: (db: AccountDb) => Effect.Effect<void> = () => Effect.void;
 
+  /// The most a database may take (KEPT); the logs a UI shows now, with how many show each; when room was last looked at.
+  readonly #kept: number;
+  readonly #shown = new Map<string, number>();
+  #keptAt = -Infinity;
+
   constructor(host: Host, runner: Runner, options: DataOptions) {
     this.#host = host;
     this.#runner = runner;
+    this.#kept = options.kept ?? KEPT;
     this.#owner = options.owner;
     this.#derive = options.derive ?? NO_DERIVE;
     this.device = new Device(host, runner);
@@ -217,6 +234,7 @@ export class Data {
       this.#dbs.set(sub, db);
       if (note) this.#setNote(sub, note);
       yield* this.onOpened(db);
+      this.#keepWithin(db);
       this.#tellAll();
     });
   }
@@ -250,6 +268,13 @@ export class Data {
   }
 
   #committed(changes: Changes): void {
+    if (changes.logs.size > 0) {
+      const now = this.#host.nowMs();
+      if (now - this.#keptAt >= KEPT_CHECK_MS) {
+        this.#keptAt = now;
+        for (const db of this.#dbs.values()) this.#keepWithin(db);
+      }
+    }
     for (const topic of changes.topics.values()) this.#tell(topic);
     for (const [table, station, id] of changes.logs.values()) for (const l of this.#logChanged) l(table, station, id);
     for (const [station, rows] of changes.chats) {
@@ -652,6 +677,45 @@ export class Data {
     }
     const found = [...by].flatMap(([db, list]) => db.findSaid(list, terms, limit));
     return by.size > 1 ? found.sort((a, b) => (b.at ?? -Infinity) - (a.at ?? -Infinity)).slice(0, limit) : found;
+  }
+
+  // ── what is kept within the device's room ──
+
+  /// Whether a log's items were let go for room and its chat is not shown: the sync leaves it as it is.
+  evicted(kind: "entry" | "transcript", station: string, id: string): boolean {
+    return !this.#shown.has(`${kind}\u0001${station}\u0001${id}`) && (this.of(station)?.evicted(kind, station, id) ?? false);
+  }
+
+  /// A UI shows a log's chat (`open`), or no longer does: shown, it is the most recently opened and not let go. Answers
+  /// whether its items had been let go (the sync is to bring them back).
+  opened(kind: "entry" | "transcript", station: string, id: string, open: boolean): boolean {
+    const key = `${kind}\u0001${station}\u0001${id}`;
+    const count = (this.#shown.get(key) ?? 0) + (open ? 1 : -1);
+    if (count > 0) this.#shown.set(key, count);
+    else this.#shown.delete(key);
+    const db = this.of(station);
+    return db !== undefined && !db.readOnly ? db.opened(kind, station, id, this.#host.nowMs()) && open : false;
+  }
+
+  /// Past its room: the logs not shown, least recently used first, transcripts before entries, let go down to KEPT_TO.
+  #keepWithin(db: AccountDb): void {
+    if (db.readOnly || db.used() <= this.#kept) return;
+    const to = this.#kept * KEPT_TO;
+    const gone = new Set<string>();
+    for (const kind of ["transcript", "entry"] as const) {
+      for (;;) {
+        const logs = db.logsByUse(kind, 50).filter((l) => {
+          const key = `${kind}\u0001${l.station}\u0001${l.id}`;
+          return !this.#shown.has(key) && !gone.has(key);
+        });
+        if (logs.length === 0) break;
+        for (const l of logs) {
+          gone.add(`${kind}\u0001${l.station}\u0001${l.id}`);
+          db.evict(kind, l.station, l.id);
+          if (db.used() <= to) return;
+        }
+      }
+    }
   }
 
   running(station: string): unknown[] {

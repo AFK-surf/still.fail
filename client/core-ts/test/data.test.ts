@@ -465,6 +465,46 @@ test("without_full_text_search_what_was_said_is_scanned", async () => {
   runner.shutdown();
 });
 
+test("past_its_room_the_logs_least_recently_used_go_transcripts_first_and_come_back_when_opened", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  const sql = new NodeSql(new DatabaseSync(":memory:"), true);
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1", kept: 1024 * 1024 });
+  await run(data.open(["s1"]));
+  const big = "字".repeat(2000);
+  const said = (thread: number) => Array.from({ length: 20 }, (_, i) => [i + 1, { n: i + 1, kind: "message", text: `${thread} ${big}`, at: i }] as [number, J]);
+  // Two transcripts and eight threads, thread 1 the least recently used; thread 2 shown.
+  data.putItems("transcript", "w/a", "k1", [[0, { text: big }], [1, { text: big }]]);
+  data.putItems("transcript", "w/a", "k2", [[0, { text: big }]]);
+  await run(data.written);
+  data.opened("entry", "w/a", "2", true);
+  for (let t = 1; t <= 8; t++) {
+    host.advance(60_000);
+    data.putItems("entry", "w/a", String(t), said(t));
+    await run(data.written);
+  }
+  await run(data.written);
+  const db = data.db("s1")!;
+  assert.ok(db.used() <= 1024 * 1024, `${db.used()}`);
+  // The transcripts went first; then the threads least recently used, not the one shown.
+  assert.deepEqual(sql.all("SELECT count(*) FROM transcript"), [[0]]);
+  const kept = sql.all("SELECT DISTINCT thread FROM entry ORDER BY thread").map((r) => r[0]);
+  assert.ok(kept.includes(2) && kept.includes(8) && !kept.includes(1), JSON.stringify(kept));
+  assert.equal(data.evicted("entry", "w/a", "1"), true);
+  assert.equal(data.evicted("transcript", "w/a", "k1"), true);
+  assert.equal(data.evicted("entry", "w/a", "2"), false);
+  // What was said in it goes with it.
+  assert.deepEqual(data.findSaid(["w/a"], ["1 字字字"], 5), []);
+  // Opened again: kept, and said to be brought back; let go no more after a restart either.
+  assert.equal(data.opened("entry", "w/a", "1", true), true);
+  assert.equal(data.evicted("entry", "w/a", "1"), false);
+  await run(data.written);
+  assert.deepEqual(sql.all("SELECT evicted FROM log_use WHERE kind = 'entry' AND id = '1'"), [[0]]);
+  assert.deepEqual(sql.all("SELECT count(*) FROM log_use WHERE evicted = 1 AND kind = 'transcript'"), [[2]]);
+  runner.shutdown();
+});
+
 test("model_selection_survives_old_events_and_finishes_without_reverting", async () => {
   const { data, open, again, runner } = fresh();
   await open();
