@@ -80,8 +80,35 @@ private fun <T> follow(core: StillFailCore, topic: JsonObject, serializer: KSeri
         .conflate()
 }
 
-/** The next state as shown: a value is kept through a later error. */
-private fun <T> Topic<T>.after(next: Topic<T>): Topic<T> = if (next.value == null && next.error != null) next.copy(value = value) else next
+/** The next state as shown: a value is kept through a later error, and while it is being read again (followed anew). */
+private fun <T> Topic<T>.after(next: Topic<T>): Topic<T> = if (next.value == null && (next.error != null || next.loading)) next.copy(value = value) else next
+
+/** What a topic followed now was last shown as, and by how many. */
+private class Latest(var shown: Topic<*>, var followers: Int)
+
+/**
+ * What each topic followed now was last decoded to (on the main thread): one followed again elsewhere (a sheet over its
+ * page, a page pushed over another showing it) starts from it, not from nothing for the frames the core takes to send
+ * it again and it is decoded anew.
+ */
+private val latest = HashMap<Pair<JsonObject, SerialDescriptor>, Latest>()
+
+@Suppress("UNCHECKED_CAST")
+private fun <T> latestOf(topic: JsonObject, serializer: KSerializer<T>): Topic<T> =
+    (latest[topic to serializer.descriptor]?.shown as Topic<T>?) ?: Topic(null, null, true)
+
+/** Follows `topic` from `start`, each state as shown given to `show` and kept in `latest` while it is followed. */
+private suspend fun <T> followShown(core: StillFailCore, topic: JsonObject, serializer: KSerializer<T>, start: Topic<T>, show: (Topic<T>) -> Unit) {
+    val key = topic to serializer.descriptor
+    val entry = latest.getOrPut(key) { Latest(start, 0) }
+    entry.followers++
+    var shown = start
+    try {
+        follow(core, topic, serializer).collect { shown = shown.after(it); entry.shown = shown; show(shown) }
+    } finally {
+        if (--entry.followers == 0 && latest[key] === entry) latest.remove(key)
+    }
+}
 
 /**
  * The topics a page of the stack follows, kept while the page is in the stack rather than only while it is drawn
@@ -102,8 +129,8 @@ class PageTopics {
     @Suppress("UNCHECKED_CAST")
     fun <T> of(core: StillFailCore, topic: JsonObject, serializer: KSerializer<T>): State<Topic<T>> =
         followed.getOrPut(topic to serializer.descriptor) {
-            val state = mutableStateOf(Topic<T>(null, null, true))
-            val job = scope.launch { follow(core, topic, serializer).collect { state.value = state.value.after(it) } }
+            val state = mutableStateOf(latestOf(topic, serializer))
+            val job = scope.launch { followShown(core, topic, serializer, state.value) { state.value = it } }
             Followed(state as State<Topic<*>>, job)
         }.state as State<Topic<T>>
 
@@ -142,9 +169,11 @@ fun <T> rememberTopic(core: StillFailCore, topic: JsonObject?, serializer: KSeri
         }
         return state
     }
-    return produceState(Topic<T>(null, null, topic != null), core, topic) {
+    return produceState(if (topic == null) Topic(null, null, false) else latestOf(topic, serializer), core, topic) {
         if (topic == null) return@produceState
-        follow(core, topic, serializer).collect { value = value.after(it) }
+        // From what another following it shows, if one does; never from the topic this one followed before.
+        value = latestOf(topic, serializer)
+        followShown(core, topic, serializer, value) { value = it }
     }
 }
 

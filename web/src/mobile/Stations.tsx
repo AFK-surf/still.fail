@@ -2,6 +2,8 @@ import { useDoing } from "../doing.ts";
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
 // with the buddy's face for its state and its load as rings; one station's page is the machine (its load, network,
 // versions), with how many connects and profiles run on it (settings' lists have them, ./Settings.tsx).
+import { useReady } from "../core/react.ts";
+import { LOCAL_MS } from "../motion.ts";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { useStations, type StationView } from "../api.ts";
@@ -177,6 +179,8 @@ function AddStationSheet({ known }: { known: string[] }) {
 export function StationScreen() {
   const app = useApp();
   const { station: id = "" } = useParams();
+  // Slides in once what it shows is read from the device (LOCAL_MS at most, as Chat.tsx): not its loading look first.
+  useReady({ topic: "stations", scope: app.entry.id }, LOCAL_MS);
   const stations = useStations(app.entry.id);
   const s = stations.value?.find((x) => x.id === id);
   const manager = useManager();

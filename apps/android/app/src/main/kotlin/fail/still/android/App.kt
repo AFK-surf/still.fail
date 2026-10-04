@@ -580,6 +580,20 @@ private const val LOCAL_MS = 100L
 /** How long a chat read ahead of its page (`AppState.prime`) is kept for it. */
 private const val PRIME_MS = 3_000L
 
+/** What a page shows first, which it waits for as it opens (Pages): its main topics, as its screen follows them. */
+private fun opening(screen: Screen, workspace: String): List<Pair<JsonObject, kotlinx.serialization.KSerializer<*>>> = when (screen) {
+    is Screen.Chat -> listOf(Topics.chat(screen.station, screen.of) to fail.still.android.data.ChatView.serializer())
+    is Screen.History -> listOf(
+        Topics.chat(screen.station, screen.of) to fail.still.android.data.ChatView.serializer(),
+        Topics.history(screen.station, screen.key) to fail.still.android.data.HistoryView.serializer(),
+    )
+    is Screen.Preview -> listOf(Topics.job(screen.station, screen.job) to fail.still.android.data.Job.serializer())
+    is Screen.Station -> listOf(Topics.stations(workspace) to kotlinx.serialization.builtins.ListSerializer(fail.still.android.data.StationView.serializer()))
+    Screen.Archive -> listOf(Topics.archive(workspace) to fail.still.android.data.ArchiveView.serializer())
+    Screen.Decisions -> listOf(Topics.decisions(workspace) to fail.still.android.data.DecisionsView.serializer())
+    else -> emptyList()
+}
+
 @Composable
 private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry) {
     val top = app.stack.last()
@@ -648,13 +662,14 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     }
     LaunchedEffect(top) {
         if (pages.currentState == top && pages.targetState == top) return@LaunchedEffect
-        // A chat opened slides in once the core has given it, from what is on the device (LOCAL_MS at most, as web
-        // mobile/Chat.tsx useReady): not first as an empty page swapped for the chat a frame or two later. One that has
-        // to come from its station is not waited for: it slides in, showing it coming.
-        if (top is Screen.Chat && app.forward && !swiped && app.pageOf(top) != "new-chat") {
-            val chat = followed.getOrPut(keyOf(top)) { fail.still.android.data.PageTopics() }
-                .of(app.core, Topics.chat(top.station, top.of), fail.still.android.data.ChatView.serializer())
-            withTimeoutOrNull(LOCAL_MS) { snapshotFlow { chat.value.value != null || chat.value.error != null }.first { it } }
+        // A page opened slides in once the core has given what it shows, from what is on the device (LOCAL_MS at most,
+        // as web mobile/Chat.tsx useReady): not first as its loading look swapped for it a frame or two later. What has
+        // to come from a station is not waited for: the page slides in, showing it coming.
+        val shows = if (app.forward && !swiped && app.pageOf(top) != "new-chat") opening(top, workspace) else emptyList()
+        if (shows.isNotEmpty()) {
+            val topics = followed.getOrPut(keyOf(top)) { fail.still.android.data.PageTopics() }
+            @Suppress("UNCHECKED_CAST") val states = shows.map { (topic, serializer) -> topics.of(app.core, topic, serializer as kotlinx.serialization.KSerializer<Any?>) }
+            withTimeoutOrNull(LOCAL_MS) { snapshotFlow { states.all { it.value.value != null || it.value.error != null } }.first { it } }
         }
         pages.animateTo(top, if (swiped) tween(300, easing = FastOutSlowInEasing) else null)
         swiped = false

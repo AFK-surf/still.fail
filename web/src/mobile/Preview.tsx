@@ -1,6 +1,8 @@
 // A web service an agent started (or a visualization it posted), full screen on a narrow screen: the desktop's preview (../Preview.tsx) under a bar
 // that goes back to the chat. Found by its job; people know it by its name. The core keeps the job as it changes (a
 // restart is said over the page, and it loads again once the service is back).
+import { useReady } from "../core/react.ts";
+import { LOCAL_MS } from "../motion.ts";
 import { useParams } from "react-router";
 import { useJob } from "../api.ts";
 import { fileSourceOf, StationPreview } from "../Preview.tsx";
@@ -21,6 +23,8 @@ export function PreviewScreen() {
   // A visualization an agent posted opens here too, as a service does (../Preview.tsx's fileService).
   const file = fileSourceOf(service);
   // Kept current by the core (its events, or read again from a station too old to send them).
+  // Slides in once what it shows is read from the device (LOCAL_MS at most, as Chat.tsx): not its loading look first.
+  useReady(file ? null : { topic: "job", station: station.address, id: service }, LOCAL_MS);
   const found = useJob(station.address, file ? null : service);
   const job = found.value ?? null;
   const error = found.error?.message ?? null;

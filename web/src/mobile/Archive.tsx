@@ -2,6 +2,8 @@
 // the wide screen's archive (../pages/Archive.tsx useArchive: every station online, newest first, by the day archived),
 // each row put back in the list or deleted for good. With no pointer to point with, a row's actions are always there,
 // and what the archive is is said at the top.
+import { useReady } from "../core/react.ts";
+import { LOCAL_MS } from "../motion.ts";
 import { Retry, Trash } from "../icons.tsx";
 import type { ArchiveItem } from "../core/shapes.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
@@ -15,6 +17,8 @@ import { t } from "../i18n.ts";
 
 export function ArchiveScreen() {
   const app = useApp();
+  // Slides in once what it shows is read from the device (LOCAL_MS at most, as Chat.tsx): not its loading look first.
+  useReady({ topic: "archive", scope: app.entry.id }, LOCAL_MS);
   const { days, errors, note, restore, remove } = useArchive(app.entry.id, app.toast);
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>

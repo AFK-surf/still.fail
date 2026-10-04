@@ -3,6 +3,8 @@ import { useAction } from "../action.ts";
 // full-screen page. What it received and what it sent are drawn alike (a line, then the
 // words beside a bar); what it did in between is grouped, each group opening to its commands and output; its details
 // (how it runs, what it used, the station). Changing how it runs is a page of its own.
+import { useReady } from "../core/react.ts";
+import { LOCAL_MS } from "../motion.ts";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useChat, useHistory, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
@@ -46,6 +48,8 @@ export function HistoryScreen() {
   const raw = search.get("entry");
   const entry = raw !== null && /^\d+$/.test(raw) && Number.isSafeInteger(Number(raw)) ? Number(raw) : undefined;
   const bar = <NavBar back={t("common.back")} onBack={app.pop} title={t("web-mobile.app.runHistory")} />;
+  // Slides in once what it shows is read from the device (LOCAL_MS at most, as Chat.tsx): not its loading look first.
+  useReady({ topic: "history", station, key: agentKey }, LOCAL_MS);
   const view = useChat(station, { session: chat });
   const history = useHistory(station, agentKey).value;
   const [tab, setTab] = useState(0);
