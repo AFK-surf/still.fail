@@ -506,16 +506,13 @@ function Relays({ view, account, manager }: { view: WorkspaceView; account: Acco
   return (
     <Section title={t("web-pages.settings.relays.title")} description={t("web-pages.settings.relays.lead", { name: NAME })}>
       <div className={pagesCss.card}>
-        {relays.length > 0 && (
-          <ul className={pagesCss.list}>
-            {relays.map((url) => (
-              <li key={url} className={pagesCss.listRow}>
-                <span className={pagesCss.listRowText}><span className={pagesCss.listRowTitle}>{relayLabel(url)}</span></span>
-                {manager && <Button variant="ghost" busy={set.busy && !set.arg?.includes(url)} disabled={set.busy} onClick={() => set.run(relays.filter((u) => u !== url))}>{t("web-pages.settings.relays.remove")}</Button>}
-              </li>
-            ))}
-          </ul>
-        )}
+        {/* Rows of the card, as leaving and deleting are: on the card's own edges. */}
+        {relays.map((url) => (
+          <div key={url} className={pagesCss.cardRow}>
+            <span className={pagesCss.cardRowText}><strong>{relayLabel(url)}</strong></span>
+            {manager && <Button variant="ghost" busy={set.busy && !set.arg?.includes(url)} disabled={set.busy} onClick={() => set.run(relays.filter((u) => u !== url))}>{t("web-pages.settings.relays.remove")}</Button>}
+          </div>
+        ))}
         {manager && (
           <Field label={t("web-pages.settings.relays.add")} htmlFor="ws-relay" hint={t("web-pages.settings.relays.hint")}>
             <div className={additionsCss.inputRow}>
