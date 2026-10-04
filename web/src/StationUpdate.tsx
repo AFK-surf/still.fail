@@ -19,7 +19,7 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
       <Popover.Anchor asChild><span className={css.dot} /></Popover.Anchor>{notice.label ?? notice.text}
     </Popover.Trigger>
     <Popover.Portal>
-      <Popover.Content className={css.popover} data-tone={notice.tone} side="bottom" align="end" alignOffset={-30} sideOffset={10} collisionPadding={12} arrowPadding={22} onOpenAutoFocus={(e) => e.preventDefault()}>
+      <Popover.Content className={css.popover} data-tone={notice.tone} side="bottom" align="end" sideOffset={6} collisionPadding={12} onOpenAutoFocus={(e) => e.preventDefault()}>
         <div className={css.head}>
           <div className={css.words}>
             {notice.station
@@ -38,7 +38,6 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
             <DoingMark calls="software.update" on={{ station, id: "station" }} size={12} />{busy ? "更新中" : notice.tone === "trouble" ? "重试" : "现在更新"}
           </button>}
         </div>}
-        <Popover.Arrow className={css.arrow} width={12} height={6} />
       </Popover.Content>
     </Popover.Portal>
   </Popover.Root>;
