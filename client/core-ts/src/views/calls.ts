@@ -84,20 +84,28 @@ export class ViewCalls {
         const made = yield* Effect.result(
           Effect.gen({ self: this }, function* () {
             yield* parse(station);
-            const op: ops.Request = { target: { station }, method: "POST", path: "/sessions", body: ask, fallback: null, effect: { kind: "session", key: null } };
+            // What the new chat changes (the lists, the footprint) is read again beside what waited for it, not before.
+            const op: ops.Request = { target: { station }, method: "POST", path: "/sessions", body: ask, fallback: null, effect: { kind: "none" } };
             const answer = yield* this.#inner.stations.perform(op, null);
             const session = get(answer, "key");
             const thread = get(get(answer, "thread"), "id");
             if (typeof session !== "string" || typeof thread !== "number") return yield* Effect.fail(new CoreError("bad_response", t("core-misc.call.no_new_session")));
-            return [session, thread] as [string, number];
+            return [session, thread, answer] as [string, number, unknown];
           }),
         );
         if (made._tag === "Failure") {
           this.#local.pendingFailed(key, made.failure.message);
           return;
         }
-        const [session, thread] = made.success;
-        for (const [id] of this.#local.pendingMade(key, session, thread)) yield* Effect.ignore(this.deliver(station, thread, id, null));
+        const [session, thread, answer] = made.success;
+        const sends = this.#local.pendingMade(key, session, thread);
+        yield* Effect.all(
+          [
+            this.#inner.stations.afterWrite(station, { kind: "session", key: null }, answer),
+            Effect.forEach(sends, ([id]) => Effect.ignore(this.deliver(station, thread, id, null)), { discard: true }),
+          ],
+          { concurrency: "unbounded", discard: true },
+        );
       }),
     );
   }

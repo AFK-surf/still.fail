@@ -941,6 +941,28 @@ test("a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_statio
   core.close();
 });
 
+test("what_waited_for_a_new_chat_goes_as_soon_as_it_is_made_not_after_the_lists_are_read_again", async () => {
+  const { host, core } = await started();
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (req.method === "POST" && path === "/sessions") return { key: "ember:c-1", thread: { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "ember:c-1", connect: "ember", joinedAt: 1 }] } };
+    if (req.method === "POST" && path === "/threads/9/messages") return { n: 1 };
+    return undefined;
+  });
+  const ui = core.connect();
+  // A slow link: what the new chat changes (its lists, the footprint) is not read back yet.
+  const release = [host.hold("/admin/api/chats"), host.hold("/admin/api/footprint")];
+  const key = String((await ask(host, core, ui, 1, "chat.create", { station: "ws/st", runtime: "claude", model: "opus" })).key);
+  call(core, ui, 2, "chat.send", { station: "ws/st", session: key, text: "修一下登录" });
+  await host.settle();
+  await host.settle();
+  const posted = host.requests.filter((r) => r.method === "POST" && r.url.includes("/admin/api/")).map((r) => r.url.replace("https://stillfail.test/admin/api", ""));
+  assert.ok(posted.includes("/threads/9/messages"), posted.join(", "));
+  for (const r of release) r();
+  await host.settle();
+  core.close();
+});
+
 test("a_chat_being_archived_leaves_the_list_at_once_and_comes_back_if_it_could_not_be", async () => {
   let archived = false;
   let refused = true;
