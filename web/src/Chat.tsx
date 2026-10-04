@@ -350,7 +350,10 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   const opened = chat.unreadLine == null && chat.at != null ? messages.find((m) => m.seq >= chat.at!) ?? null : null;
   const at = opened ? { ts: opened.ts, offset: opened.seq === chat.at ? chat.atOffset ?? null : null } : null;
   useRememberPlace(list, place, messages.length > 0, short, leave, at);
-  const divider = useUnreadLine(list, chat);
+  // A message asked to be shown (jumpTo.ts) is where it opens this time, rather than the unread line.
+  const asked = useRef(false);
+  if (useJump(station, id) !== null) asked.current = true;
+  const divider = useUnreadLine(list, chat, asked);
   // Without a chat there is nothing older (or newer) to load.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   useOlderOnScroll(list, chat.more, chat.messages[0]?.seq, older);
@@ -506,7 +509,7 @@ export function sameMessage(a: ChatMessage, b: ChatMessage): boolean {
  * them). Nothing unread: no line, and the chat opens at its bottom or where it was left; something unread takes it to
  * the line even so. Answers the seq of the message the line goes over.
  */
-export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView): number | null {
+export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, elsewhere?: RefObject<boolean>): number | null {
   const target = chat.unreadLine ?? null;
   // Until something unread shows (it may come from the station a moment after opening), there is nothing to jump to.
   // Coming back to a chat with something unread goes to the line too, over where it was left (useRememberPlace).
@@ -514,6 +517,8 @@ export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView
   useEffect(() => {
     if (jumped.current || target === null) return;
     jumped.current = true;
+    // Opened at a message asked to be shown (`elsewhere`, jumpTo.ts): the line is drawn, the pane not moved to it.
+    if (elsewhere?.current) return;
     const pane = ref.current;
     const line = pane?.querySelector<HTMLElement>("[data-unread-line]");
     if (!pane || !line) return;
