@@ -778,6 +778,9 @@ test("turning the rule on reviews the done chats no decision has answered, once 
   // Done while the rule was off: nothing looked at it.
   r.edit((raw) => (raw.automaticDecisions.completion.enabled = false));
   await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "It controls retention.", kind: "all_done", done: "Explained the setting" });
+  // The rig runs no turn of the agent's: the one that ended so, as the actor records it.
+  r.store.startTurn("done", key, "input");
+  r.store.endTurn("done", "completed", null, "all_done", null);
   await review(r.hub, key);
   assert.ok(!r.store.archiveSuggested(thread()));
   assert.equal(r.store.recentDecisions().length, 0);
