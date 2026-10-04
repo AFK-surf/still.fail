@@ -344,7 +344,9 @@ private fun ColumnScope.ServicePage(station: String, service: String, port: Int,
     Stage(stage, viewport, moving = stage.moving, onFit = { stage.view = null }) { placed ->
         AndroidView(
             factory = { ctx ->
-                @SuppressLint("SetJavaScriptEnabled")
+                // PreviewLink's methods the page calls are @JavascriptInterface (PreviewWeb.kt); lint, typed val or not,
+                // sees remember's type parameter (T) here and finds none.
+                @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
                 val web = WebView(ctx).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
