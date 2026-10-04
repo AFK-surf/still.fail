@@ -5,6 +5,7 @@ import { useDoing } from "../doing.ts";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { useStations, type StationView } from "../api.ts";
+import type { StationNet } from "../core/shapes.ts";
 import { illustrationUrl } from "../brand.tsx";
 import { ChevronRight, More, Plus } from "../icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
@@ -63,18 +64,31 @@ export function StationsScreen() {
             <span className={partsCss.mGrow}><b className={css.mStationName}>{s.name}</b><span className={css.mStationSummary}>{s.summary}</span></span>
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </span>
-          {s.online && s.host ? (
-            <>
-              <span className={css.mStationRings}><MeterChips meters={s.host.meters} bare /></span>
-              {s.net && <Net net={s.net} stacked />}
-            </>
-          ) : !s.online ? (
-            <span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>{t("web-mobile.stations.longGone", { name: NAME })}</span></span>
-          ) : null}
+          <StationBody s={s} />
         </Card>
       ))}
       <div style={{ height: 30 }} />
     </div>
+  );
+}
+
+/** Laid out while a station has no network to show, so that its card keeps the room. */
+const noNet: StationNet = { path: " ", rtt: { text: " ", level: "ok" }, rttHistory: [], down: " ", up: " ", total: "" };
+
+/**
+ * Under a station's name in the list: its load as rings and its network, in the same room whatever state it is in —
+ * online, offline, or not yet read — so no card grows, shrinks or pushes the ones below it as states change.
+ * Offline, the line saying so is where they would be; what is not read yet is left blank.
+ */
+function StationBody({ s }: { s: StationView }) {
+  return (
+    <span className={css.mStationBody}>
+      <span className={css.mStationLoad} data-hidden={!s.online || undefined}>
+        <span className={css.mStationRings} data-hidden={!s.host || undefined}><MeterChips meters={s.host?.meters ?? []} bare /></span>
+        <span className={css.mStationNet} data-hidden={!s.net || undefined}><Net net={s.net ?? noNet} stacked /></span>
+      </span>
+      {!s.online && <span className={css.mStationSilent}>{t("web-mobile.stations.longGone", { name: NAME })}</span>}
+    </span>
   );
 }
 

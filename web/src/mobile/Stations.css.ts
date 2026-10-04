@@ -7,7 +7,14 @@ export const mBuddy = style({ display: "block", flex: "none" });
 export const mStationHead = style({ display: "flex", alignItems: "center", gap: "12px" });
 export const mStationName = style({ fontSize: "16px", fontWeight: "700" });
 export const mStationSummary = style({ fontSize: "13px", color: "var(--m-muted)" });
-export const mStationRings = style({ display: "flex", gap: "14px", paddingTop: "10px" });
+export const mStationRings = style({ display: "flex", gap: "14px", paddingTop: "10px", minHeight: "30px" });
+/** A station's load and network in the list, always in their room: what is not there is laid out unseen. */
+export const mStationBody = style({ display: "grid", alignItems: "center" });
+export const mStationLoad = style({ gridArea: "1 / 1", display: "flex", flexDirection: "column", minWidth: "0" });
+export const mStationNet = style({ display: "block" });
+globalStyle(`${mStationBody} [data-hidden]`, { visibility: "hidden" });
+/** Offline: where the load would be. */
+export const mStationSilent = style({ gridArea: "1 / 1", paddingTop: "10px", fontSize: "13px", color: "var(--m-muted)" });
 export const mStationOffline = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", paddingTop: "6px", textAlign: "center",
 });

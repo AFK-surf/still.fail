@@ -42,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -119,24 +120,36 @@ fun StationsScreen(current: WorkspaceEntry) {
                         Buddy(s)
                         Column(Modifier.weight(1f)) {
                             Text(s.name, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink)
-                            Text(s.summary, fontSize = 13.sp, color = C.muted)
+                            Text(s.summary, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                     }
-                    val host = s.host
-                    if (s.online && host != null) {
-                        MeterChips(host.meters, Modifier.padding(top = 10.dp))
-                        s.net?.let { NetLine(it, Modifier.padding(top = 10.dp)) }
-                    } else if (!s.online) {
-                        Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
-                            Text(t("android-settings.stations.silent", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
-                        }
-                    }
+                    StationBody(s)
                 }
             }
         }
         Spacer(Modifier.height(30.dp))
+    }
+}
+
+/** Laid out while a station has no load or network to show, so that its card keeps their room. */
+private val noNet = StationNet(path = " ", rtt = NetFigure(" ", "ok"), rttHistory = emptyList(), down = " ", up = " ", total = "")
+
+/**
+ * Under a station's name in the list: its load as rings and its network, in the same room whatever state it is in —
+ * online, offline, or not yet read — so no card grows, shrinks or pushes the ones below it as states change.
+ * Offline, the line saying so is where they would be; what is not read yet is left blank.
+ */
+@Composable
+private fun StationBody(s: StationView) {
+    val host = s.host
+    val net = s.net
+    Box(Modifier.fillMaxWidth().padding(top = 10.dp), contentAlignment = Alignment.CenterStart) {
+        Column(Modifier.fillMaxWidth().alpha(if (s.online) 1f else 0f)) {
+            Box(Modifier.height(20.dp).alpha(if (host != null) 1f else 0f)) { MeterChips(host?.meters.orEmpty()) }
+            NetLine(net ?: noNet, Modifier.padding(top = 10.dp).alpha(if (net != null) 1f else 0f))
+        }
+        if (!s.online) Text(t("android-settings.stations.silent", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
