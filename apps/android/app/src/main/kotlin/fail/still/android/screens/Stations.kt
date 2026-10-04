@@ -197,8 +197,9 @@ private fun StationFigures(s: StationView) {
 /** A grey line of text, one line however long; a grey bar `bar` wide in its room while it is not known. */
 @Composable
 private fun Line(text: String?, bar: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) = Box(modifier, contentAlignment = Alignment.CenterStart) {
-    Text(text ?: "直连", fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(if (text != null) 1f else 0f))
-    if (text == null) Bar(bar)
+    // Its room, as tall as a line in Chinese (a line in Latin is a little shorter), whatever it says.
+    Text("直连", fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, modifier = Modifier.alpha(0f))
+    if (text != null) Text(text, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) else Bar(bar)
 }
 
 /** The station is up but not reached just now: what shows of it is from before. */
