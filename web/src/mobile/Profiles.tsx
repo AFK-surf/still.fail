@@ -175,7 +175,10 @@ function ShareRows({ p }: { p: Profile }) {
         )}
         {shared && (
           <ListRow onClick={pick}>
-            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-pages.profiles.share.stations")}</span>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+              <span className={listsCss.mRowTitle}>{t("web-pages.profiles.share.stations")}</span>
+              {(p.share?.users?.length ?? 0) > 0 && <span className={listsCss.mRowNote}>{t("web-pages.profiles.share.users", { stations: p.share!.users!.map((u) => stations.find((x) => x.id === u)?.name ?? u.slice(0, 8)).join("、") })}</span>}
+            </span>
             <span className={listsCss.mRowNote}>{names}</span>
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>

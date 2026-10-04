@@ -750,7 +750,9 @@ data class ProfileShare (
 	/// The stations that may use it; absent: every station of the workspace.
 	val allow: List<String>? = null,
 	/// For a copy: whether its host answered lately (absent on the host).
-	val reachable: Boolean? = null
+	val reachable: Boolean? = null,
+	/// On its host: the stations that have it (a copy, or borrowing it).
+	val users: List<String>? = null
 )
 
 /// A profile, with its last check in words and its models' makers.

@@ -35,7 +35,7 @@ Task files and records remain under the target's data directory `remote/incoming
 
 ## Shares
 
-Stations also share profiles and skills over this transport (`share.get`, `share.lend`, `share.status`, `share.put`, `share.take`; [station-share.md](station-share.md)). Any station of the workspace may ask; what each share allows is checked by its host against still.fail cloud's list (the `shares` field of the presence state frame). No `remoteTasks.allow` is needed: these are not execution.
+Stations also share profiles and skills over this transport (`share.get`, `share.lend`, `share.status`, `share.put`, `share.take`; [station-share.md](station-share.md)). Any station of the workspace may ask; what each share allows is checked by its host, which keeps it (still.fail cloud keeps nothing of shares). No `remoteTasks.allow` is needed: these are not execution.
 
 ## Transport
 

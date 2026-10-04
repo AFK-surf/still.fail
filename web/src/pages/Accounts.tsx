@@ -225,7 +225,8 @@ function ShareSection({ profile }: { profile: Profile }) {
         </div>
       )}
       <div className={pagesCss.cardRow}>
-        <span className={pagesCss.cardRowText}><b>{t("web-pages.profiles.share.stations")}</b></span>
+        <span className={pagesCss.cardRowText}><b>{t("web-pages.profiles.share.stations")}</b>
+          {(share?.users?.length ?? 0) > 0 && <span className={shellCss.muted}>{t("web-pages.profiles.share.users", { stations: share!.users!.map((u) => stations.find((x) => x.id === u)?.name ?? u.slice(0, 8)).join("、") })}</span>}</span>
         <span className={css.shareValue}>{names}</span>
         <Button variant="ghost" disabled={sharing} onClick={() => setPicking(true)}>{t("web-pages.profiles.share.change")}</Button>
       </div>

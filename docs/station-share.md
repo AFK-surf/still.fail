@@ -1,6 +1,6 @@
 # Station 之间分享东西（设计稿）
 
-> 状态：已实现（分支 station-share），实现跟下面设计的出入见文末。chat EMBER/1791121239.467000。
+> 状态：已实现（分支 station-share）。cloud 不参与分享（见「cloud：什么都不记」）；实现跟下面设计的其他出入见文末。chat EMBER/1791121239.467000。
 
 ## 要解决的事
 
@@ -34,25 +34,15 @@
 | `key` | API key 类 profile（Anthropic、OpenCode、各 provider） | 完整的 profile 和 key 存在本地 `config.json` | 照常用，用最后一次拿到的 |
 | `skills` | `agent/skills/` 里选定的几个 skill，可以带上 `MEMORY.md` | 镜像在本地，agent 可读可写，写入发给 host | 照常读写，修改攒着，重连后交给 host |
 
-## cloud：只记 host
+## cloud：什么都不记
 
-`Directory` 加一张表（`CREATE TABLE IF NOT EXISTS`）：
+除了账号系统，没有任何东西由 cloud 保证。cloud 只照旧给出 workspace 里有哪些 station（presence 的 `peers`），分享的事全在 station 之间：
 
-```
-shares (workspace TEXT, id TEXT, kind TEXT, name TEXT, host TEXT, allow TEXT, version INTEGER,
-        updated_at INTEGER, PRIMARY KEY (workspace, id))
-```
-
-- `allow`：可用 station 的 JSON 数组，空（NULL）表示整个 workspace。`version`：host 改了内容就提高，别的 station 据此重新取。
-- presence 的 `state` 帧加字段 `shares: [{id, kind, name, host, allow, version}]`，变了就推（跟 `peers` 一样）。station 存在 `cloud.json` 里。
-- 接口只有一个，由 station 用自己的密钥签名（`stillfail-station-shares-v1`，同 notify）：`POST /v1/stations/shares {op, id, …}`
-  - `put {kind, name, allow, version}`：登记或更新；已登记的只有它的 host 能改。成员在页面上点「分享」「改」，是页面通过 host station 的管理接口让它去做。
-  - `move {host}`：交给同一 workspace 的另一台；只有当前 host 能做（见「换 host」）。
-  - `delete`：停止分享；只有当前 host 能做。
-- `GET /v1/workspaces/:ws` 的答复加上 `shares`。
-- host 被移出 workspace：它分享的一起删掉。只是离线：一切保留，订阅暂时用不了。
-
-旧 cloud 不给 `shares`：分享功能整个关掉，station 照旧运行。部署顺序是先 cloud，再 station，再客户端。
+- **host 记**：分享了什么、谁能用（`allow`，null 是整个 workspace）、告诉过谁、告诉的是第几版（state.json `hosted[id].told`），也就是谁有副本、谁在借用。
+- **使用方记**：每个副本是从哪台来的（profile 的 `share.host`、state.json `borrowed[id].host`）、是第几版。
+- **host 主动告诉**（`share.changed`）：分享了、内容变了、不再给这台了、搬到哪台了。没联系上的记着，过一阵再告诉（1 分钟起，越来越久，最多 30 分钟）。
+- **使用方每次启动问一次**（`share.version`），补上自己离线期间的变化；对方说搬走了就转去问新的 host。
+- **一台 station 被移出 workspace**：它分享的副本在各台被删掉，它作为使用方被各 host 忘掉。
 
 ## station 之间：`share.*` 方法
 
@@ -171,15 +161,15 @@ core（`client/core-ts`）：
 
 ## 实现跟设计的出入
 
-- **没有 `share.watch` 长流，变化照样走 mesh**：host 改了内容就提高自己的版本号，直接用 `share.changed` 告诉每台能用它的 station（没联系上的记着，之后再告诉）；收到的那台再 `share.get`。每台 station 每次启动对每个副本问一次 `share.version`，补上它离线期间的变化。cloud 只记谁是 host、谁能用，不经手版本。配额和状态由使用方需要时问 host（`share.status`）：检查、额度轮询（有人看着时每 5 分钟）、借 token 时。
-- **使用方怎么知道 host 不在**：借 token、问状态失败就记下这台 host 联系不上（overview 的 `share.reachable`），之后每分钟试一次，通了就把借来的订阅重新检查一遍。客户端把「cloud 说它离线」和「借用方联系不上它」都当作 host 不在。
-- **换 host 只能由原 host 交出**（订阅和 key 一样），没有做「原 host 不在时把 key、skill 交给别台」。一台 station 被移出 workspace 时，cloud 把它分享的东西一起删掉，各台的副本随之去掉；只是离线则一切保留。
+- **cloud 不参与**（2026-10-04 用户定：「没有任何东西由 cloud 保证，除了账号系统」；「租借方记一下找谁借的，host 记一下谁借了」）：上面 cloud 一节已按此重写，前面各节里提到 cloud 记 host、`PATCH`、`state` 帧带 shares 的地方都作废。同一个订阅只有一台在续登录，由交接本身保证：只有 host 能交出去，交出去以后它删掉自己的登录。
+- **没有 `share.watch` 长流**：变化由 host 用 `share.changed` 推，内容由使用方 `share.get` 取；配额和状态由使用方需要时问 host（`share.status`）：检查、额度轮询（有人看着时每 5 分钟）、借 token 时。
+- **使用方怎么知道 host 不在**：借 token、问状态失败就记下联系不上（overview 的 `share.reachable`），之后按上面的退避再试，通了就把借来的订阅重新检查一遍。客户端把「cloud 说它离线」和「借用方联系不上它」都当作 host 不在。
+- **换 host 只能由原 host 交出**（订阅和 key 一样），没有做「原 host 不在时把 key、skill 交给别台」。
 - **`MEMORY.md` 不分享**，只分享 skills；记忆页仍按 station 分组，每个 skill 展开后有分享开关，分享来的标「来自 X」。同名时本台自己的 skill 优先，分享来的不链接进去。
 - **Codex 订阅**：在 studio 上验证过（codex-cli 0.160.0），`auth.json` 里只有 access token、refresh token 是假的、`last_refresh` 是现在时，Codex 照常用到过期，不会自己去刷新；token 坏了干净地报 401 退出。ChatGPT 的 access token 约 10 天有效，借用方的 app-server 在离过期 6 小时内、没有会话在跑时重启并重新借。host 只在自己没有 Codex 进程用这个登录时才替它续期（续期会换掉 refresh token，正在跑的 Codex 手里还是旧的）。
 
 ## 测试
 
-- `station/test/share.test.ts`：两台 station、一个只记 host 的假 cloud，验证 key 的复制与同步、host 离线时副本还在、停止分享后删掉、按名单拒绝、借订阅 token（host 不在时借不到）、交出订阅（登录搬过去，原 host 留副本、id 不变）、skill 的复制、链接、改动回传、旧版本上的改动存成冲突文件。
-- `cloud/test/shares.test.ts`：登记、改名单、交出、删除只有 host 能做，签名不对拒绝，state 帧和 workspace 答复里有 shares，host 被移出 workspace 后它分享的跟着删掉。
+- `station/test/share.test.ts`：两台 station、一个只给成员名单的假 cloud，验证 key 的复制与同步、host 离线时副本还在、停止分享后删掉、按名单拒绝、借订阅 token（host 不在时借不到）、交出订阅（登录搬过去，原 host 留副本、id 不变）、skill 的复制、链接、改动回传、旧版本上的改动存成冲突文件。
 - `client/core-ts/test/profiles-view.test.ts`：workspace 的 Profile 列表去重、「登录在 / 只给 / 只在」、host 不在时不可用且排在前面。
 - 端到端：studio 上 dev cloud 加两台临时 TS station，在网页上分享订阅和 key、改可用的 station、分享 skill、把订阅换到另一台、关掉 host 后列表变灰，都是真的走 iroh 的站间请求。

@@ -733,6 +733,8 @@ export interface ProfileShare {
 	allow?: string[];
 	/** For a copy: whether its host answered lately (absent on the host). */
 	reachable?: boolean;
+	/** On its host: the stations that have it (a copy, or borrowing it). */
+	users?: string[];
 }
 
 /** A profile, with its last check in words and its models' makers. */

@@ -242,7 +242,11 @@ private fun ShareSection(current: WorkspaceEntry, s: StationView, p: Profile) {
         }
         if (shared) {
             ListRow(onClick = { openPickShare(app, s, p, stations, allowed) }) {
-                Text(t("web-pages.profiles.share.stations"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                Column(Modifier.weight(1f)) {
+                    Text(t("web-pages.profiles.share.stations"), fontSize = 15.sp, color = C.ink)
+                    val users = share?.users.orEmpty()
+                    if (users.isNotEmpty()) Text(t("web-pages.profiles.share.users", "stations" to users.joinToString("、") { u -> stations.firstOrNull { it.id == u }?.name ?: u.take(8) }), fontSize = 13.sp, color = C.muted)
+                }
                 Text(names, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 IconIn(Icons.ChevronRight, 14.dp, C.subtle)
             }

@@ -894,5 +894,6 @@
   "web-pages.profiles.share.copy": "This profile is shared by {station}; change it there.",
   "web-pages.profiles.share.goHost": "Go to {station}",
   "web-pages.profiles.share.hostAway": "{station} is not answering; it can't be used now",
-  "web-pages.profiles.share.changeThere": "Change it there"
+  "web-pages.profiles.share.changeThere": "Change it there",
+  "web-pages.profiles.share.users": "In use on {stations}"
 }
