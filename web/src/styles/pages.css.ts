@@ -37,11 +37,11 @@ export const identitySub = style({
 export const section = style({ marginBottom: "28px" });
 /**
  * A grey ground, no line round it (its buttons have none either: controls.css.ts), and round corners concentric with the
- * pills in them: a 32px button (16px ends) 20px from the side and, in a row of a title and a line under it (42px), from
- * the top or bottom too (15px + 5px), so 16 + 20px.
+ * pills in them: a 32px button (16px ends) 25px from the side and, in a row of a title and a line under it (42px), from
+ * the top or bottom too (20px + 5px), so 16 + 25px. Its text keeps as far from the edges.
  */
 export const card = style({
-  borderRadius: "calc(16px + 20px)", padding: "15px 20px", background: `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`,
+  borderRadius: "calc(16px + 25px)", padding: "20px 25px", background: `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`,
   display: "grid", gap: "14px",
   selectors: {
     "& + &": { marginTop: "10px" },
