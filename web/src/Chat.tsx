@@ -1171,7 +1171,8 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (video && sessionKey !== null) {
     return (
       <>
-        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={thumbId(station.address, sessionKey, file.path)} onClick={() => setOpen(true)} aria-label={t(videoFailed ? "web-main.file.view" : "web-main.file.play", { name: file.name })} style={look.box(file)} data-unavailable={videoFailed || undefined}>
+        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={thumbId(station.address, sessionKey, file.path)} onClick={() => setOpen(true)} aria-label={t(videoFailed ? "web-main.file.view" : "web-main.file.play", { name: file.name })} style={look.box(file)} data-unavailable={videoFailed || undefined}
+          data-loaded={still.poster ? "instant" : undefined}>
           {still.url && !videoFailed && (still.poster
             ? <img src={still.url} alt="" aria-hidden="true" />
             : <video src={still.url} muted playsInline preload="auto" aria-hidden="true" onError={() => setVideoFailed(true)} />)}
