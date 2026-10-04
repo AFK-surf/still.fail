@@ -13,7 +13,7 @@ import { TestClock } from "effect/testing";
 import { signalGroup } from "../src/jobs/group.ts";
 import { Jobs } from "../src/jobs/jobs.ts";
 import { IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, readJson, writeJson } from "../src/jobs/remote.ts";
-import { type Json, Store, nowMs } from "../src/store/store.ts";
+import { type Json, Store } from "../src/store/store.ts";
 import { remoteTools } from "../src/tools/remote.ts";
 
 const dirs: string[] = [];
@@ -206,7 +206,7 @@ describe("remote", { concurrency: true }, () => {
     const old = join(r.remote.root, "incoming", "from-before");
     mkdirSync(join(old, "work"), { recursive: true });
     writeJson(join(old, "task.json"), { spec: { command: "true" }, workspace: "ws", station: "peer-a", session: "x", key: "k" });
-    const later = nowMs() + IDLE_MS + 1000;
+    const later = Date.now() + IDLE_MS + 1000;
     const record = join(r.remote.room("ws", "peer-a", "recent"), "session.json");
     const seen = readJson(record);
     seen.seen = later;
@@ -295,7 +295,7 @@ describe("remote", { concurrency: true }, () => {
     writeFileSync(join(a.dir, "mesh", "cloud.json"), JSON.stringify({ workspace: "ws", station: "A" }));
     const home = join(a.dir, "work");
     mkdirSync(home);
-    a.store.insertSession({ key: "s1", connect: "ds", runtime: "claude", profile: "cc", workspace: home, token: "t1", createdBy: "ann", createdAt: nowMs(), lastActiveAt: nowMs() });
+    a.store.insertSession({ key: "s1", connect: "ds", runtime: "claude", profile: "cc", workspace: home, token: "t1", createdBy: "ann", createdAt: Date.now(), lastActiveAt: Date.now() });
     const asked: Json[] = [];
     const transport: PeerCall = async (target, workspace, request) => {
       asked.push(request);

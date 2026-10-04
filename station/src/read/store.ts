@@ -8,6 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
+import { wall } from "../ops/fibers.ts";
 
 export type Json = any;
 
@@ -20,7 +21,8 @@ const ARCHIVE_CACHE = 32;
 /// SQLite's and Rust's i64::MAX, for "no bound".
 export const I64_MAX = 9223372036854775807n;
 
-export const nowMs = () => Date.now();
+/// The readers' threads have no clock of their own: the machine's time.
+export const nowMs = () => wall.now();
 
 // ---- rows ----
 

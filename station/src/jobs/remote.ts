@@ -18,7 +18,7 @@ import { basename, dirname, isAbsolute, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
-import { type Json, type Store, nowMs } from "../store/store.ts";
+import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
 
 /// The answer of a peer that refused a request (its `{"error": …}`): final, unlike a request that did not get through.
@@ -177,7 +177,7 @@ export class Remote {
       } catch {}
     }
     void this.run(
-      Effect.promise(() => this.sweep(nowMs())).pipe(Effect.repeat(Schedule.spaced(SWEEP_EVERY)), Effect.asVoid),
+      Effect.promise(() => this.sweep(this.store.now())).pipe(Effect.repeat(Schedule.spaced(SWEEP_EVERY)), Effect.asVoid),
     ).catch(() => undefined);
   }
 
@@ -209,7 +209,7 @@ export class Remote {
     const room = this.room(workspace, peer, session);
     mkdirSync(join(room, "work"), { recursive: true });
     const record = join(room, "session.json");
-    const now = nowMs();
+    const now = this.store.now();
     let fresh = false;
     try {
       fresh = now - (asI64(field(readJson(record), "seen")) ?? 0) < 60_000;
@@ -332,7 +332,7 @@ export class Remote {
       return;
     }
     v.closing = true;
-    v.since = nowMs();
+    v.since = this.store.now();
     try {
       writeJson(path, v);
     } catch {
@@ -367,7 +367,7 @@ export class Remote {
       if (v.closing !== true) return true;
       const closed = Array.isArray(v.closed) ? v.closed : [];
       const pending: string[] = (Array.isArray(v.stations) ? v.stations : []).filter((s: Json) => !closed.includes(s) && typeof s === "string");
-      if (pending.length === 0 || nowMs() - (asI64(v.since) ?? 0) > CLOSE_FOR_MS) {
+      if (pending.length === 0 || this.store.now() - (asI64(v.since) ?? 0) > CLOSE_FOR_MS) {
         try {
           if (readJson(path).closing === true) rmSync(path, { force: true });
         } catch {}

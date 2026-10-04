@@ -4,6 +4,7 @@
 // batch that cannot be sent is dropped. Off unless the config turns traces on (telemetry.traces), read at start.
 import { randomBytes } from "node:crypto";
 import { Clock, Effect, Exit, FiberSet, Scope } from "effect";
+import { wall } from "../ops/fibers.ts";
 import { nowSecs } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { type StationKey, sha256hex } from "../cloud/key.ts";
@@ -82,7 +83,7 @@ export class Traces {
   /// A span under `parent`, when traces are on and the caller records this trace.
   start(parent: Parent | null): Span | null {
     if (!this.enabled || parent === null || !parent.sampled) return null;
-    return { parent, id: randomBytes(8).toString("hex"), wallNs: BigInt(Date.now()) * 1_000_000n, started: process.hrtime.bigint() };
+    return { parent, id: randomBytes(8).toString("hex"), wallNs: BigInt(wall.now()) * 1_000_000n, started: process.hrtime.bigint() };
   }
 
   /// The `traceparent` for what this span asks of others.

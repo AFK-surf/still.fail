@@ -17,7 +17,7 @@ import { TestClock } from "effect/testing";
 import { endGroup, groupAlive, signalGroup } from "../src/jobs/group.ts";
 import { Jobs, notifyEndpoint, readExit, restartPause, shown, tail, watching } from "../src/jobs/jobs.ts";
 import { jobTools } from "../src/tools/jobs.ts";
-import { Store, nowMs } from "../src/store/store.ts";
+import { Store } from "../src/store/store.ts";
 
 const dirs: string[] = [];
 const all: Jobs[] = [];
@@ -216,7 +216,7 @@ describe("jobs", { concurrency: true }, () => {
 
   /// A session whose agent was last at work `agoMs` ago.
   function sessionActive(store: Store, key: string, agoMs: number) {
-    const at = nowMs() - agoMs;
+    const at = store.now() - agoMs;
     store.insertSession({ key, connect: "ds", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: at, lastActiveAt: at });
   }
 

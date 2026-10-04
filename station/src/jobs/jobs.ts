@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
 import { outputAt, tail } from "../read/jobs.ts";
-import { type JobRow, type Json, type ProcessRow, type Store, nowMs } from "../store/store.ts";
+import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "./group.ts";
 
 export { outputAt, tail };
@@ -258,7 +258,7 @@ export class Jobs {
       state: "running",
       pgid: null,
       exitCode: null,
-      startedAt: nowMs(),
+      startedAt: this.store.now(),
       endedAt: null,
       restarts: 0,
       watch,
@@ -313,14 +313,14 @@ export class Jobs {
     const pgid = child.pid;
     if (pgid === undefined) throw new Error("the job ended before it started");
     child.unref();
-    this.store.recordProcess(pgid, nowMs(), "job", `job: ${job.name}`);
+    this.store.recordProcess(pgid, this.store.now(), "job", `job: ${job.name}`);
     this.store.jobStarted(job.id, pgid, restarted);
     const exited = new Promise<number | null>((resolve) => child.once("exit", (code) => resolve(code)));
     const running = this.track(job.id, pgid, exited.then(() => undefined));
-    const began = Date.now();
+    const began = this.store.now();
     void this.run(
       Effect.promise(() => exited).pipe(
-        Effect.flatMap((code) => Effect.sync(() => this.ended(job.id, pgid, code, running.stopping, Date.now() - began))),
+        Effect.flatMap((code) => Effect.sync(() => this.ended(job.id, pgid, code, running.stopping, this.store.now() - began))),
       ),
     ).catch(() => undefined);
   }
@@ -370,7 +370,7 @@ export class Jobs {
     let heard = () => {};
     const gone = new Promise<void>((resolve) => (heard = resolve));
     const running = this.track(job.id, pgid, gone);
-    const began = Date.now() - Math.max(0, nowMs() - job.startedAt);
+    const began = this.store.now() - Math.max(0, this.store.now() - job.startedAt);
     const id = job.id;
     void this.run(
       this.leaderGone(id, pgid).pipe(
@@ -378,7 +378,7 @@ export class Jobs {
           Effect.sync(() => {
             heard();
             // What its shell wrote, if it did.
-            this.ended(id, pgid, readExit(this.exitFile(id)), running.stopping, Date.now() - began);
+            this.ended(id, pgid, readExit(this.exitFile(id)), running.stopping, this.store.now() - began);
           }),
         ),
       ),
@@ -534,7 +534,7 @@ export class Jobs {
   /// Whether a session's agent is in a turn, or was within AWAKE.
   private awake(session: string): boolean {
     const s = this.store.getSession(session);
-    return s !== null && (s.running || nowMs() - s.lastActiveAt < AWAKE_MS);
+    return s !== null && (s.running || this.store.now() - s.lastActiveAt < AWAKE_MS);
   }
 
   /// After a start of the station: what still runs is followed again; what ended meanwhile is told as ended; what was
@@ -557,7 +557,7 @@ export class Jobs {
         const code = readExit(this.exitFile(job.id));
         if (code !== null) {
           // It ended while no station was running: as if it had just ended.
-          const ran = Math.max(0, nowMs() - job.startedAt);
+          const ran = Math.max(0, this.store.now() - job.startedAt);
           const id = job.id;
           void this.run(Effect.sync(() => this.ended(id, null, code, false, ran))).catch(() => undefined);
           continue;

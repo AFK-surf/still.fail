@@ -2,6 +2,7 @@
 // who it is, not a member's credential. Who belongs is only what still.fail cloud's presence socket said last
 // (`peers`, current while the socket holds): until a fresh roster comes, calls fail closed. One request a stream: a
 // JSON `{workspace, request}` the caller finishes, a JSON `{result}` or `{error}` back.
+import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { type PeerCall, Refused, type Remote } from "../jobs/remote.ts";
@@ -31,10 +32,7 @@ async function readAll(stream: Stream, limit: number): Promise<Buffer> {
   return Buffer.concat(parts);
 }
 
-const within = <T>(ms: number, what: Promise<T>, why: string): Promise<T> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  return Promise.race([what, new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(why)), ms)))]).finally(() => clearTimeout(timer));
-};
+const within = wall.within;
 
 /// How this station asks the others: a connection kept per peer, dropped when a call fails other than by refusal.
 /// `addr`: where a peer is (its id and still.fail's relays, found by them; tests give its sockets).

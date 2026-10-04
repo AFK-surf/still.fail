@@ -9,11 +9,13 @@ import { latest as latestNote } from "../agents/migrations.ts";
 //
 // What changed is told to subscribers once the method's writes are done (Store::with): the same StoreChange values at
 // the same points as the Rust, in the same order.
+import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
+import { liveClock } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { archiveText, readArchive, threadFile, writeCompressed } from "./archive.ts";
 import {
@@ -21,7 +23,7 @@ import {
   type MessageRow, type NewMessage, type NewSession, type PendingMessage, type Post, type ProcessRow, type ProfileStatus,
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
-  byBytes, cardOf, jsonList, mergeEntries, nowMs, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
+  byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   toMessage, toPost, toSession, toSessionThread, toThread, toTurnSummary,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addWatchColumn } from "./schema.ts";
@@ -53,15 +55,19 @@ export class Store {
   #listeners: ((change: StoreChange) => void)[] = [];
   #statements = new Map<string, StatementSync>();
 
-  private constructor(db: DatabaseSync, archiveDir: string, temp: string | null) {
+  /// Its time: what the rows say things happened at (a TestClock in tests).
+  readonly clock: Clock.Clock;
+
+  private constructor(db: DatabaseSync, archiveDir: string, temp: string | null, clock: Clock.Clock) {
     this.db = db;
+    this.clock = clock;
     this.#archiveDir = archiveDir;
     this.#temp = temp;
   }
 
   /// Opens the store at `path` (":memory:" for one of its own); archived threads go to `archive`, else `archive/`
   /// beside the database. A database of another schema version is refused.
-  static open(path: string, archive: string | null = null): Store {
+  static open(path: string, archive: string | null = null, clock: Clock.Clock = liveClock): Store {
     const memory = path === ":memory:";
     if (!memory) mkdirSync(dirname(path), { recursive: true });
     // Busy for a moment (another process reading, the WAL recovered after a crash): waited for, from the first statement.
@@ -85,13 +91,18 @@ export class Store {
       db.close();
       throw e;
     }
-    if (archive !== null) return new Store(db, archive, null);
+    if (archive !== null) return new Store(db, archive, null, clock);
     if (memory) {
       const dir = join(tmpdir(), `stillfail-archive-${randomBytes(8).toString("hex")}`);
       mkdirSync(dir, { recursive: true });
-      return new Store(db, dir, dir);
+      return new Store(db, dir, dir, clock);
     }
-    return new Store(db, join(dirname(path), "archive"), null);
+    return new Store(db, join(dirname(path), "archive"), null, clock);
+  }
+
+  /// Now, by its clock.
+  now(): number {
+    return this.clock.currentTimeMillisUnsafe();
   }
 
   /// Closes the database (and removes an in-memory store's archive): the Rust's drop.
@@ -247,7 +258,7 @@ export class Store {
   }
 
   setRunning(key: string, running: boolean): void {
-    this.#updateSession(key, "UPDATE sessions SET running = ?1, last_active_at = ?2 WHERE key = ?3", flag(running), nowMs(), key);
+    this.#updateSession(key, "UPDATE sessions SET running = ?1, last_active_at = ?2 WHERE key = ?3", flag(running), this.now(), key);
   }
 
   #updateSession(key: string, sql: string, ...args: Arg[]): void {
@@ -258,7 +269,7 @@ export class Store {
   }
 
   touch(key: string): void {
-    this.#run("UPDATE sessions SET last_active_at = ? WHERE key = ?", nowMs(), key);
+    this.#run("UPDATE sessions SET last_active_at = ? WHERE key = ?", this.now(), key);
   }
 
   /// Hides a session from lists, or shows it again, with its own chat (ThreadRow.home); `by` is MANUAL or AUTO. A thread
@@ -415,7 +426,7 @@ export class Store {
   openThreadOf(surface: string, channel: string, threadTs: string, title: string | null, createdBy: string | null, home: string | null): ThreadRow {
     this.#run(
       "INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at, home) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      surface, channel, threadTs, title, createdBy, nowMs(), home,
+      surface, channel, threadTs, title, createdBy, this.now(), home,
     );
     const thread = this.threadAt(surface, channel, threadTs);
     if (thread === null) throw new Error(`thread ${surface} ${channel}/${threadTs} not made`);
@@ -434,7 +445,7 @@ export class Store {
   /// Makes a session take part in a thread, posting through `connect`. False if it already did.
   joinThread(thread: number, session: string, connect: string): boolean {
     return this.#with((changes) => {
-      const joined = this.#run("INSERT OR IGNORE INTO thread_sessions (thread, session, connect, joined_at) VALUES (?, ?, ?, ?)", thread, session, connect, nowMs()) > 0;
+      const joined = this.#run("INSERT OR IGNORE INTO thread_sessions (thread, session, connect, joined_at) VALUES (?, ?, ?, ?)", thread, session, connect, this.now()) > 0;
       if (joined) {
         changes.push({ type: "session", key: session });
         changes.push({ type: "thread", id: thread, entries: [] });
@@ -535,7 +546,7 @@ export class Store {
           // An options card is kept as options too (what stations and clients from before cards read).
           options: options ?? (card !== undefined && card !== null && typeof card === "object" && card.type === "options" ? card.options : undefined),
           card: card ?? (options === undefined ? undefined : optionsCard(options)),
-          at: m.at ?? nowMs(),
+          at: m.at ?? this.now(),
         },
         changes,
       );
@@ -555,7 +566,7 @@ export class Store {
         {
           agentIdentity: undefined, thread: message.thread, n: 0, kind: "edit", target: message.n, ts: null,
           authorKind: message.authorKind, author: message.author, text, attachments: message.attachments, quotes: message.quotes,
-          declared: null, client: null, profile: null, options: undefined, card: undefined, at: nowMs(),
+          declared: null, client: null, profile: null, options: undefined, card: undefined, at: this.now(),
         },
         changes,
       );
@@ -572,7 +583,7 @@ export class Store {
   /// Audit metadata only: no conversation text or API credentials.
   recordDecision(session: string, result: Json): void {
     this.#with((changes) => {
-      this.#run("INSERT INTO decision_checks(session, created_at, result) VALUES (?, ?, ?)", session, nowMs(), JSON.stringify(result));
+      this.#run("INSERT INTO decision_checks(session, created_at, result) VALUES (?, ?, ?)", session, this.now(), JSON.stringify(result));
       changes.push({ type: "decisionChecks" });
     });
   }
@@ -582,7 +593,7 @@ export class Store {
     this.#with((changes) => {
       this.#run(
         "INSERT INTO archive_suggestions(thread, version, at) VALUES (?, ?, ?) ON CONFLICT(thread) DO UPDATE SET version = excluded.version, at = excluded.at",
-        thread, version, nowMs(),
+        thread, version, this.now(),
       );
       changes.push({ type: "session", key: session });
     });
@@ -678,7 +689,7 @@ export class Store {
   /// Marks messages (thread, n) read by the session.
   markDelivered(session: string, messages: [number, number][]): void {
     this.#with((changes) => {
-      const now = nowMs();
+      const now = this.now();
       for (const [thread, n] of messages) {
         this.#run("UPDATE deliveries SET delivered_at = ? WHERE thread = ? AND n = ? AND session = ? AND delivered_at IS NULL", now, thread, n, session);
       }
@@ -748,7 +759,7 @@ export class Store {
       this.#run(
         `INSERT INTO reads (viewer, thread, n, at) VALUES (?, ?, ?, ?)
          ON CONFLICT (viewer, thread) DO UPDATE SET n = MAX(n, excluded.n), at = excluded.at`,
-        viewer, thread, n, nowMs(),
+        viewer, thread, n, this.now(),
       );
       const now = this.readPosition(viewer, thread);
       changes.push({ type: "read", viewer, thread, n: now });
@@ -771,7 +782,7 @@ export class Store {
   /// Pins a chat to the top of a viewer's list, or lets it go. Pinned again, it keeps when it was first pinned.
   setPin(viewer: string, session: string, pinned: boolean): void {
     this.#with((changes) => {
-      if (pinned) this.#run("INSERT OR IGNORE INTO pins (viewer, session, at) VALUES (?, ?, ?)", viewer, session, nowMs());
+      if (pinned) this.#run("INSERT OR IGNORE INTO pins (viewer, session, at) VALUES (?, ?, ?)", viewer, session, this.now());
       else this.#run("DELETE FROM pins WHERE viewer = ? AND session = ?", viewer, session);
       changes.push({ type: "pins", viewer });
     });
@@ -880,7 +891,7 @@ export class Store {
   /// A viewer will not take up a card (the post at `n`): it leaves their list, on every device of theirs.
   dismiss(viewer: string, thread: number, n: number): void {
     this.#with((changes) => {
-      this.#run("INSERT OR IGNORE INTO dismissed (viewer, thread, n, at) VALUES (?, ?, ?, ?)", viewer, thread, n, nowMs());
+      this.#run("INSERT OR IGNORE INTO dismissed (viewer, thread, n, at) VALUES (?, ?, ?, ?)", viewer, thread, n, this.now());
       changes.push({ type: "dismissed", viewer });
     });
   }
@@ -893,7 +904,7 @@ export class Store {
         thread, ts, agent,
       );
       if (r === undefined) return false;
-      this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, r.n, agent, nowMs());
+      this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, r.n, agent, this.now());
       changes.push({ type: "thread", id: thread, entries: [] });
       return true;
     });
@@ -923,7 +934,7 @@ export class Store {
         // Do not race the agent still composing its question / recording its ending.
         const composing = this.#one("SELECT ended_at IS NULL AS c FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1", asked.author);
         if (composing !== undefined && composing.c !== 0) return false;
-        this.#run("INSERT INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, n, viewer, nowMs());
+        this.#run("INSERT INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, n, viewer, this.now());
         const changed = this.#run(
           `UPDATE turns SET declared = 'final', need = ?5, wait_seconds = NULL
            WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1)
@@ -953,7 +964,7 @@ export class Store {
   /// Binds a Slack user to a viewer ("这是我"), or unbinds it. Nobody checks: it is the viewer's word.
   setSlackIdentity(viewer: string, user: string, bound: boolean): void {
     this.#with((changes) => {
-      if (bound) this.#run("INSERT OR IGNORE INTO identities (viewer, slack_user, at) VALUES (?, ?, ?)", viewer, user, nowMs());
+      if (bound) this.#run("INSERT OR IGNORE INTO identities (viewer, slack_user, at) VALUES (?, ?, ?)", viewer, user, this.now());
       else this.#run("DELETE FROM identities WHERE viewer = ? AND slack_user = ?", viewer, user);
       changes.push({ type: "identities", viewer });
     });
@@ -977,7 +988,7 @@ export class Store {
       const before = (column: string) => `(SELECT ${column} FROM turns WHERE session_key = ?2 AND ${column} IS NOT NULL ORDER BY started_at DESC LIMIT 1)`;
       this.#run(
         `INSERT INTO turns (id, session_key, kind, started_at, profile, person, thread) VALUES (?1, ?2, ?3, ?4, ?5, COALESCE(?6, ${before("person")}), COALESCE(?7, ${before("thread")}))`,
-        id, session, kind, nowMs(), by.profile, by.person, by.thread,
+        id, session, kind, this.now(), by.profile, by.person, by.thread,
       );
       changes.push({ type: "session", key: session });
     });
@@ -1011,7 +1022,7 @@ export class Store {
   /// Ends a turn; `waitSeconds` is how long a turn ending as waiting waits at most.
   endTurn(id: string, outcome: string, detail: string | null, declared: string | null, waitSeconds: number | null): void {
     this.#with((changes) => {
-      this.#run("UPDATE turns SET ended_at = ?, outcome = ?, detail = ?, declared = ?, wait_seconds = ? WHERE id = ?", nowMs(), outcome, detail, declared, waitSeconds, id);
+      this.#run("UPDATE turns SET ended_at = ?, outcome = ?, detail = ?, declared = ?, wait_seconds = ? WHERE id = ?", this.now(), outcome, detail, declared, waitSeconds, id);
       const r = this.#one("SELECT session_key FROM turns WHERE id = ?", id);
       if (r !== undefined) changes.push({ type: "session", key: r.session_key });
     });
@@ -1127,7 +1138,7 @@ export class Store {
 
   /// A job ended: `state` exited, stopped or failed.
   jobEnded(id: string, state: string, exitCode: number | null): void {
-    this.#jobUpdate(id, "UPDATE jobs SET state = ?1, exit_code = ?2, ended_at = ?3, pgid = NULL WHERE id = ?4", state, exitCode, nowMs(), id);
+    this.#jobUpdate(id, "UPDATE jobs SET state = ?1, exit_code = ?2, ended_at = ?3, pgid = NULL WHERE id = ?4", state, exitCode, this.now(), id);
   }
 
   #jobUpdate(id: string, sql: string, ...args: Arg[]): void {
@@ -1164,7 +1175,7 @@ export class Store {
   /// What a job said (`stillfail-job notify`), kept for the pages: a job's latest words are how people see what it is up to.
   addJobNotice(id: string, text: string): void {
     this.#with((changes) => {
-      this.#run("INSERT INTO job_notices (job_id, at, text) VALUES (?, ?, ?)", id, nowMs(), text);
+      this.#run("INSERT INTO job_notices (job_id, at, text) VALUES (?, ?, ?)", id, this.now(), text);
       // A job keeps its latest words only.
       this.#run(
         "DELETE FROM job_notices WHERE job_id = ?1 AND rowid NOT IN (SELECT rowid FROM job_notices WHERE job_id = ?1 ORDER BY at DESC, rowid DESC LIMIT ?2)",
@@ -1215,7 +1226,7 @@ export class Store {
       `INSERT INTO widget_states (session, path, state, model, updated_at) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (session, path) DO UPDATE SET state = excluded.state, model = excluded.model, updated_at = excluded.updated_at,
          told_at = CASE WHEN widget_states.model IS excluded.model THEN widget_states.told_at END`,
-      session, path, state, model, nowMs(),
+      session, path, state, model, this.now(),
     );
   }
 
@@ -1243,7 +1254,7 @@ export class Store {
 
   /// The agent was told these (path, model): each is marked told unless its model changed since.
   markWidgetModelsTold(session: string, told: [string, string][]): void {
-    const now = nowMs();
+    const now = this.now();
     for (const [path, model] of told) {
       this.#run("UPDATE widget_states SET told_at = ? WHERE session = ? AND path = ? AND model = ?", now, session, path, model);
     }
@@ -1378,7 +1389,7 @@ export class Store {
   }
 
   #setArchived(key: string, archived: boolean, by: string, changes: Changes): void {
-    const now = nowMs();
+    const now = this.now();
     this.#tx(() => {
       if (archived) {
         this.#run("UPDATE sessions SET archived_at = ?, archived_by = ? WHERE key = ?", now, by, key);
@@ -1396,7 +1407,7 @@ export class Store {
   }
 
   #setThreadHidden(thread: number, hidden: boolean, by: string, changes: Changes): void {
-    const now = nowMs();
+    const now = this.now();
     if (hidden) {
       this.#run("UPDATE threads SET hidden_at = ?, hidden_by = ? WHERE id = ?", now, by, thread);
     } else {
@@ -1459,7 +1470,7 @@ export class Store {
     try {
       this.#tx(() => {
         this.#run("DELETE FROM entries WHERE thread = ?", thread);
-        this.#run("UPDATE threads SET archived_at = ? WHERE id = ?", nowMs(), thread);
+        this.#run("UPDATE threads SET archived_at = ? WHERE id = ?", this.now(), thread);
       });
     } catch (e) {
       rmSync(path, { force: true });

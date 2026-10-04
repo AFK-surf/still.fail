@@ -13,7 +13,6 @@ export const AUTO = "auto";
 /// SQLite's and Rust's i64::MAX, for "no bound".
 export const I64_MAX = 9223372036854775807n;
 
-export const nowMs = (): number => Date.now();
 
 /// Where a Slack connect's threads live: its team, or the connect itself while the team is unknown.
 export function slackSurface(connect: string, teamId: string | null): string {

@@ -8,7 +8,8 @@
 // Reads never overlap. The reading itself must not hold the main thread: files are read asynchronously in chunks cut
 // at whole lines, each chunk parsed and recorded on its own, with the event loop let through between chunks.
 // The prices (what a call costs) are the usage page's: src/read/usage.ts.
-import { Effect, Fiber, Queue } from "effect";
+import { Clock, Effect, Fiber, Queue } from "effect";
+import { liveClock } from "../ops/fibers.ts";
 import { createReadStream } from "node:fs";
 import { type FileHandle, open, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -41,6 +42,8 @@ export type UsageCounterOptions = {
   config: () => UsageConfig;
   settleMs?: number;
   safetyMs?: number;
+  /// Its time (a TestClock in tests).
+  clock?: Clock.Clock;
 };
 
 // ── reading transcripts ──
@@ -359,19 +362,21 @@ export class UsageCounter {
   #fiber: Fiber.Fiber<void> | null = null;
   #unsubscribe: (() => void) | null = null;
   #abort = new AbortController();
+  #clock: Clock.Clock;
 
   constructor(options: UsageCounterOptions) {
     this.#store = options.store;
     this.#config = options.config;
     this.#settleMs = options.settleMs ?? SETTLE_MS;
     this.#safetyMs = options.safetyMs ?? SAFETY_MS;
+    this.#clock = options.clock ?? liveClock;
   }
 
   /// Reads every transcript now, then those of sessions whose turn ended (shortly after), and all that ran every
   /// SAFETY_MS. Stopped by `stop`.
   start(): void {
     if (this.#fiber !== null) return;
-    this.#startedAt = Date.now();
+    this.#startedAt = this.#clock.currentTimeMillisUnsafe();
     this.#unsubscribe = this.#store.subscribe((change) => {
       if (change.type !== "session") return;
       this.#changed.add(change.key);
@@ -394,22 +399,22 @@ export class UsageCounter {
     });
     const loop = Effect.gen(function* () {
       yield* readNow;
-      let due = Date.now() + me.#safetyMs;
+      let due = (yield* Clock.currentTimeMillis) + me.#safetyMs;
       while (true) {
         const woken = yield* Effect.raceFirst(
           Queue.take(me.#wake).pipe(Effect.as(true)),
-          Effect.suspend(() => Effect.sleep(Math.max(1, due - Date.now()))).pipe(Effect.as(false)),
+          Clock.currentTimeMillis.pipe(Effect.flatMap((now) => Effect.sleep(Math.max(1, due - now))), Effect.as(false)),
         );
         if (woken) {
           yield* Effect.sleep(me.#settleMs);
           yield* Queue.clear(me.#wake);
-          if (!(yield* turnEnded) && Date.now() < due) continue;
+          if (!(yield* turnEnded) && (yield* Clock.currentTimeMillis) < due) continue;
         }
         yield* readNow;
-        due = Date.now() + me.#safetyMs;
+        due = (yield* Clock.currentTimeMillis) + me.#safetyMs;
       }
     });
-    this.#fiber = Effect.runFork(loop);
+    this.#fiber = Effect.runFork(loop.pipe(Effect.provideService(Clock.Clock, this.#clock)));
   }
 
   /// Stops reading: the read under way stops at its next part (what it recorded stays).
@@ -444,7 +449,7 @@ export class UsageCounter {
   }
 
   async #read(): Promise<number> {
-    const started = Date.now();
+    const started = this.#clock.currentTimeMillisUnsafe();
     const last = this.#last;
     this.#first = last === 0;
     const store = this.#store;
@@ -523,7 +528,7 @@ export class UsageCounter {
     this.#last = started;
     this.#first = false;
     if (added > 0) {
-      if (last === 0) log.info("usage", "usage read from every transcript", { calls: added, ms: Date.now() - started });
+      if (last === 0) log.info("usage", "usage read from every transcript", { calls: added, ms: this.#clock.currentTimeMillisUnsafe() - started });
       store.usageChanged();
     }
     return added;

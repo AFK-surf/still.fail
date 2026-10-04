@@ -2,6 +2,7 @@
 // cloud signed with one of the workspace's grant keys, for this workspace and the device at the other end, unexpired
 // and not revoked.
 import { createPublicKey, verify } from "node:crypto";
+import { wall } from "../ops/fibers.ts";
 
 const MEMBER_TYPES = ["stillfail-member+jwt", "ember-member+jwt"];
 const ISSUERS = ["stillfail-cloud", "ember-cloud"];
@@ -11,7 +12,8 @@ export type Admitted = { viewer: Viewer; exp: number; iat: number; sid: string }
 export type Revocation = { kind: string; id: string; at: number };
 
 const b64 = (s: string) => Buffer.from(s, "base64url");
-const now = () => Math.floor(Date.now() / 1000);
+/// Credentials' times are the cloud's, in the machine's time.
+const now = () => Math.floor(wall.now() / 1000);
 
 export function verifyMember(credential: string, keys: any, workspace: string, device: string, revocations: Revocation[]): Admitted {
   const parts = credential.split(".");

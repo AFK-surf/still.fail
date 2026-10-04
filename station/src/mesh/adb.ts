@@ -16,6 +16,7 @@ import net from "node:net";
 import { delimiter, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope } from "effect";
 import { langOfCore } from "../api/request.ts";
+import { wall } from "../ops/fibers.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Viewer } from "./credential.ts";
@@ -335,11 +336,11 @@ export async function tunnel(conn: Connection, kind: string, socket: net.Socket,
   };
   signal?.addEventListener("abort", abort, { once: true });
   try {
-    stream = await within(TUNNEL_OPEN, conn.openBi(), "the phone did not take the tunnel");
+    stream = await wall.within(TUNNEL_OPEN, conn.openBi(), "the phone did not take the tunnel");
     if (signal?.aborted) return abort();
     await writeLine(stream, { tunnel: kind });
     const reader = new Reader(stream);
-    const answer = await within(TUNNEL_OPEN, reader.line(), "the phone did not answer");
+    const answer = await wall.within(TUNNEL_OPEN, reader.line(), "the phone did not answer");
     if (answer === null) throw new Error("the phone closed the tunnel");
     if (typeof answer.error === "string") throw new Error(`the phone did not reach adb: ${answer.error}`);
     const s = stream;
@@ -438,9 +439,9 @@ async function pair(shares: Shares, share: Share, typed: string, lang: Lang): Pr
   const port = (server.address() as net.AddressInfo).port;
   const conn = share.conn;
   const done = new AbortController();
-  const timer = setTimeout(() => server.close(), ADB_TIMEOUT);
+  const timer = wall.after(ADB_TIMEOUT, () => server.close());
   server.once("connection", (socket) => {
-    clearTimeout(timer);
+    timer();
     server.close();
     tunnel(conn, "pair", socket, done.signal).catch((error) => log.info("adb", "adb pairing tunnel ended", { error: (error as Error).message }));
   });
@@ -448,7 +449,7 @@ async function pair(shares: Shares, share: Share, typed: string, lang: Lang): Pr
   try {
     said = await run(adb, ["pair", `127.0.0.1:${port}`, code], ADB_TIMEOUT);
   } finally {
-    clearTimeout(timer);
+    timer();
     server.close();
     done.abort();
   }
@@ -494,16 +495,16 @@ export function run(adb: string, args: string[], timeout: number): Promise<strin
     const err: Buffer[] = [];
     child.stdout.on("data", (b) => out.push(b));
     child.stderr.on("data", (b) => err.push(b));
-    const timer = setTimeout(() => {
+    const timer = wall.after(timeout, () => {
       child.kill("SIGKILL");
       reject(new Error("adb did not answer in time"));
-    }, timeout);
+    });
     child.on("error", (error) => {
-      clearTimeout(timer);
+      timer();
       reject(error);
     });
     child.on("close", () => {
-      clearTimeout(timer);
+      timer();
       resolve((Buffer.concat(out).toString() + Buffer.concat(err).toString()).trim());
     });
   });
@@ -520,7 +521,4 @@ export function isPackage(name: string): boolean {
   return name.length > 0 && name.length <= 200 && /^[A-Za-z0-9._]+$/.test(name);
 }
 
-function within<T>(ms: number, promise: Promise<T>, message: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  return Promise.race([promise, new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(message)), ms)))]).finally(() => clearTimeout(timer));
-}
+

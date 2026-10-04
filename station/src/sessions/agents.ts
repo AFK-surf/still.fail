@@ -323,7 +323,7 @@ export const AgentsLive = (control: Control) =>
       yield* Effect.forkScoped(Effect.promise(() => start().catch((e) => log.error("hub", "the agents' side did not start", { error: (e as Error).message }))));
 
       // What the agents spent, read from their transcripts: now, and after each turn ends.
-      const usage = new UsageCounter({ store, config: () => ({ dataDir: data, profiles: settings().profiles }) });
+      const usage = new UsageCounter({ store, config: () => ({ dataDir: data, profiles: settings().profiles }), clock: hub.clock });
       usage.start();
 
       // What the chats' people hear about while no client of theirs runs: pushed by still.fail cloud.

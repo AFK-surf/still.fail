@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import { Effect } from "effect";
 import type { ProcessRow } from "../store/store.ts";
-import { nowMs } from "../store/store.ts";
+import { wall } from "../ops/fibers.ts";
 
 /// Signals a whole group; one already gone is no error.
 export function signalGroup(pgid: number, signal: NodeJS.Signals): void {
@@ -58,7 +58,8 @@ export function startTimeOf(pid: number): number | null {
   if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
   else if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
   else return null;
-  return nowMs() - (seconds + days * 86_400) * 1000;
+  // ps says it on the machine's time.
+  return wall.now() - (seconds + days * 86_400) * 1000;
 }
 
 /// Whether a group recorded by an earlier run is still that group. One whose leader is alive is only if the leader

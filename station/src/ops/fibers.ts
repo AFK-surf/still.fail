@@ -96,8 +96,9 @@ export function within<A>(clock: Clock.Clock, ms: number, what: Promise<A>, why:
   );
 }
 
-/// The machine's own time, for what the station shares with other programs (a file's mtime they compare, a login's
-/// expiry they read too, a lock's heartbeat): on the live Clock whatever clock a part was given, as theirs is.
+/// The machine's own time, for what the station shares with other programs or waits on them for (a file's mtime they
+/// compare, a login's or a credential's expiry they read too, a lock's heartbeat; how long a child process, a socket or
+/// a peer is given to answer): on the live Clock whatever clock a part was given, as theirs is.
 export const wall = {
   now: (): number => liveClock.currentTimeMillisUnsafe(),
   sleep: (ms: number): Promise<void> => Effect.runPromise(liveClock.sleep(Duration.millis(Math.max(0, ms)))),
@@ -111,4 +112,6 @@ export const wall = {
     const fiber = Effect.runFork(Effect.forever(Effect.andThen(liveClock.sleep(Duration.millis(ms)), Effect.sync(f))));
     return () => void Effect.runFork(Fiber.interrupt(fiber));
   },
+  /// `what`, failed with an Error saying `why` if it is not settled within `ms`.
+  within: <A>(ms: number, what: Promise<A>, why: string): Promise<A> => within(liveClock, ms, what, () => new Error(why)),
 };

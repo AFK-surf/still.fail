@@ -7,6 +7,7 @@ import type { Admin } from "../api/admin.ts";
 import { langOfCore, queryPairs } from "../api/request.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { log } from "../ops/log.ts";
+import { wall } from "../ops/fibers.ts";
 import { nowSecs } from "../ops/files.ts";
 import { type Admitted, revoked, verifyMember } from "./credential.ts";
 import type { Connection, Stream } from "./native.ts";
@@ -95,7 +96,7 @@ export async function serve(m: Members, conn: Connection) {
   } catch (e) {
     await writeLine(first, { error: (e as Error).message }).catch(() => {});
     await first.finish().catch(() => {});
-    setTimeout(() => conn.close(1, "credential_refused"), 200);
+    wall.after(200, () => conn.close(1, "credential_refused"));
     throw e;
   }
   const protocol = Number.isInteger(hello.protocol) && hello.protocol >= 0 ? hello.protocol : 1;
@@ -107,7 +108,7 @@ export async function serve(m: Members, conn: Connection) {
       update_url: "https://still.fail",
     });
     await first.finish().catch(() => {});
-    setTimeout(() => conn.close(4, "client_upgrade_required"), 200);
+    wall.after(200, () => conn.close(4, "client_upgrade_required"));
     throw new Error("client upgrade required");
   }
   await writeLine(first, { ok: true, station: state().name, expires_at: current.exp });
@@ -122,11 +123,11 @@ export async function serve(m: Members, conn: Connection) {
     else return false;
     return true;
   };
-  let expiry: ReturnType<typeof setTimeout> | undefined;
+  // A credential's expiry is the cloud's word, in the machine's time.
+  let expiry: (() => void) | undefined;
   const watchExpiry = () => {
-    clearTimeout(expiry);
-    // A timer holds at most ~24.8 days (2^31-1 ms): a credential good for longer is looked at again then.
-    expiry = setTimeout(() => gone() || watchExpiry(), Math.min(2 ** 31 - 1, Math.max(0, current.exp * 1000 - Date.now()) + 50));
+    expiry?.();
+    expiry = wall.after(Math.max(0, current.exp * 1000 - wall.now()) + 50, () => void (gone() || watchExpiry()));
   };
   watchExpiry();
   const unlisten = m.cloud.listen(gone);
@@ -152,14 +153,14 @@ export async function serve(m: Members, conn: Connection) {
       request(m, stream, viewer, conn).catch((e) => log.info("mesh", "request failed", { error: (e as Error).message }));
     }
   } finally {
-    clearTimeout(expiry);
+    expiry?.();
     unlisten();
   }
 }
 
 /// One request: to the admin API in this process.
 async function request(m: Members, raw: Stream, viewer: Admitted["viewer"], conn: Connection) {
-  const accepted = { wall: Date.now(), at: process.hrtime.bigint() };
+  const accepted = { wall: wall.now(), at: process.hrtime.bigint() };
   const firstReader = new Reader(raw);
   const head = await firstReader.line();
   if (head === null) return;
