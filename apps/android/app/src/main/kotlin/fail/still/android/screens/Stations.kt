@@ -124,10 +124,9 @@ fun StationsScreen(current: WorkspaceEntry) {
                             Text(s.name, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(s.summary, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        if (stationLook == "C") StationSide(s)
                         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                     }
-                    if (stationLook != "C") StationBody(s)
+                    StationBody(s)
                 }
             }
         }
@@ -138,13 +137,10 @@ fun StationsScreen(current: WorkspaceEntry) {
 /** Laid out unseen while a station has no network to show, so that its card keeps the room (its path in Chinese, as tall as a real one). */
 private val noNet = StationNet(path = "直连", rtt = NetFigure("0 ms", "ok"), rttHistory = emptyList(), down = " ", up = " ", total = "")
 
-/** Which look the list's cards have, while one is picked: A grey bars, B a small picture when offline, C one line. */
-internal var stationLook by mutableStateOf("A")
-
 /**
  * Under a station's name in the list: its load as rings and its network, in the same room whatever state it is in —
  * online, offline, or not yet read — so no card grows, shrinks or pushes the ones below it as states change.
- * What is not known (offline, not read yet) is grey bars where it would be.
+ * Offline, a small picture of it asleep and a line saying so are there; not read yet, grey bars where the figures go.
  */
 @Composable
 private fun StationBody(s: StationView) {
@@ -155,7 +151,7 @@ private fun StationBody(s: StationView) {
             Box(Modifier.height(20.dp).alpha(if (host != null) 1f else 0f)) { MeterChips(host?.meters.orEmpty()) }
             NetLine(net ?: noNet, Modifier.padding(top = 10.dp).alpha(if (net != null) 1f else 0f))
         }
-        if (!s.online && stationLook == "B") {
+        if (!s.online) {
             Row(Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Image(painterResource(if (C.dark) R.drawable.illus_station_offline_dark else R.drawable.illus_station_offline), null, Modifier.fillMaxHeight())
                 Text(t("android-settings.stations.silent", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -174,14 +170,6 @@ private fun StationBody(s: StationView) {
 @Composable
 private fun Bar(width: androidx.compose.ui.unit.Dp, height: androidx.compose.ui.unit.Dp = 10.dp, radius: androidx.compose.ui.unit.Dp = 5.dp) =
     Box(Modifier.width(width).height(height).clip(RoundedCornerShape(radius)).background(C.line.copy(alpha = 0.7f)))
-
-/** Look C: the figures that matter beside the name, the network on the station's page; offline, nothing there. */
-@Composable
-private fun StationSide(s: StationView) {
-    val host = s.host?.takeIf { s.online }
-    if (host != null) MeterChips(host.meters)
-    else if (s.online) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, 6.dp) } }
-}
 
 @Composable
 fun StationScreen(current: WorkspaceEntry, address: String) {

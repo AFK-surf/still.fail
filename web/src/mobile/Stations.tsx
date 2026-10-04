@@ -78,16 +78,25 @@ const noNet: StationNet = { path: "直连", rtt: { text: "0 ms", level: "ok" }, 
 /**
  * Under a station's name in the list: its load as rings and its network, in the same room whatever state it is in —
  * online, offline, or not yet read — so no card grows, shrinks or pushes the ones below it as states change.
- * Offline, the line saying so is where they would be; what is not read yet is left blank.
+ * Offline, a small picture of it asleep and a line saying so are there; not read yet, grey bars where the figures go.
  */
 function StationBody({ s }: { s: StationView }) {
+  const host = s.online ? s.host : undefined;
+  const net = s.online ? s.net : undefined;
   return (
     <span className={css.mStationBody}>
-      <span className={css.mStationLoad} data-hidden={!s.online || undefined}>
-        <span className={css.mStationRings} data-hidden={!s.host || undefined}><MeterChips meters={s.host?.meters ?? []} bare /></span>
-        <span className={css.mStationNet} data-hidden={!s.net || undefined}><Net net={s.net ?? noNet} stacked /></span>
+      <span className={css.mStationLoad}>
+        <span className={css.mStationRings} data-hidden={!host || undefined}><MeterChips meters={host?.meters ?? []} bare /></span>
+        <span className={css.mStationNet} data-hidden={!net || undefined}><Net net={net ?? noNet} stacked /></span>
       </span>
-      {!s.online && <span className={css.mStationSilent}>{t("web-mobile.stations.longGone", { name: NAME })}</span>}
+      {!s.online ? (
+        <span className={css.mStationNap}><img src={illustrationUrl("station-offline")} alt="" decoding="sync" /><span>{t("web-mobile.stations.longGone", { name: NAME })}</span></span>
+      ) : (
+        <span className={css.mStationBars} aria-hidden>
+          <span className={css.mBarChips}>{!host && [46, 52, 50].map((w) => <i key={w} style={{ width: w }} />)}</span>
+          {!net && <span className={css.mBarNet}><span><i style={{ width: 34 }} /><i style={{ width: 96 }} /></span><span><i style={{ width: 132 }} /><i style={{ width: 132 }} /></span></span>}
+        </span>
+      )}
     </span>
   );
 }
