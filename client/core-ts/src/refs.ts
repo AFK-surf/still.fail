@@ -120,6 +120,57 @@ export function search(chats: J, query: string, station: string | null | undefin
   return { items: [...titled, ...rest].slice(0, limit ?? Infinity) };
 }
 
+/// The words a search looks for: what is typed, split at spaces, each to be found (case aside).
+export function terms(query: string): string[] {
+  return [...new Set(query.toLowerCase().split(/\s+/).filter((w) => w !== ""))];
+}
+
+/// How much of a line goes before the first word found, at most, when the line is cut to show it.
+const LEAD = 24;
+/// How much of a line a found message gives (the page fits it to its width).
+const LINE_MAX = 240;
+
+/// The line of a message's text that has what was looked for, as a found message shows it: Markdown's marks out, on one
+/// line, its start cut (`…`) when the word found lies far into it; and where the words are in it, as UTF-16 ranges.
+export function excerpt(text: string, words: string[]): { text: string; marks: { from: number; to: number }[] } {
+  const plain = text
+    .replace(/^ {0,3}(```|~~~).*$/gm, "")
+    .replace(/!?\[([^\]\n]*)\]\([^)\s]*\)/g, "$1")
+    .replace(/<((?:https?|mailto):[^>\s]+)>/g, "$1")
+    .replace(/(\*\*|__|~~|`)/g, "")
+    .replace(/^ {0,3}(#{1,6} |> ?|[-*+] |\d+[.)] )/gm, "");
+  const lines = plain.split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter((l) => l !== "");
+  const has = (line: string, w: string) => line.toLowerCase().includes(w);
+  const line = lines.find((l) => words.every((w) => has(l, w))) ?? lines.find((l) => words.some((w) => has(l, w))) ?? lines[0] ?? "";
+  const lower = line.toLowerCase();
+  const first = Math.min(...words.map((w) => lower.indexOf(w)).filter((i) => i >= 0), Infinity);
+  let start = 0;
+  if (first !== Infinity && first > LEAD) {
+    start = first - LEAD;
+    // At a word's start where there is one near.
+    const space = line.indexOf(" ", start);
+    if (space >= 0 && space < first) start = space + 1;
+  }
+  const lead = start > 0 ? "…" : "";
+  const body = line.slice(start, start + LINE_MAX);
+  const shown = lead + body;
+  const low = shown.toLowerCase();
+  const found: [number, number][] = [];
+  if (low.length === shown.length) {
+    for (const w of words) {
+      for (let at = low.indexOf(w); at >= 0; at = low.indexOf(w, at + w.length)) found.push([at, at + w.length]);
+    }
+  }
+  found.sort((a, b) => a[0] - b[0]);
+  const marks: { from: number; to: number }[] = [];
+  for (const [from, to] of found) {
+    const last = marks[marks.length - 1];
+    if (last && from <= last.to) last.to = Math.max(last.to, to);
+    else marks.push({ from, to });
+  }
+  return { text: shown, marks };
+}
+
 /// The chat a draft's key names, as the pages key them: `new:<station>` a new chat there, else `<station>:<chat>`.
 export function draftAt(key: string): [string, string] | null {
   if (key.startsWith("new:")) {

@@ -1365,12 +1365,41 @@ export interface ChatMessage {
 	decision?: MessageDecision;
 }
 
+/** A range of a text, `from` to `to` (UTF-16 units). */
+export interface TextMark {
+	from: number;
+	to: number;
+}
+
+/** A message a search's words found (`ChatSearchView.messages`): its chat opens at it (thread, seq). */
+export interface FoundMessage {
+	station: string;
+	thread: number;
+	seq: number;
+	/** Its chat, as the sidebar lists it. */
+	chat: ChatItem;
+	/** Who said it, as a chat names them (empty when not known). */
+	by: string;
+	/** The line of it that has the words, on one line, Markdown's marks out; `…` first when cut to the words. */
+	text: string;
+	/** Where the words are in `text` (UTF-16 ranges), in order. */
+	marks: TextMark[];
+	createdAt?: number;
+	/** Its times in words, by field (`createdAt`). */
+	time?: Record<string, Stamp>;
+}
+
 /**
  * The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words
  * first. What the composer's `@` menu and the switcher list.
  */
 export interface ChatSearchView {
 	items: ChatItem[];
+	/**
+	 * The messages that have the words (asked for by `messages`, at most that many), newest first: only in the chats
+	 * listed. Empty when not asked for.
+	 */
+	messages?: FoundMessage[];
 }
 
 /** Who is looking: the account that reaches the workspace, by its email. */

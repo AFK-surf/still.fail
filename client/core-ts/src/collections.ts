@@ -27,7 +27,7 @@ const rows: Spec = { key: ["station", "id"] };
 /// Each topic's keyed lists.
 const SPECS: Record<string, Spec> = {
   chats: { fields: { days: { key: ["daysAgo"], item: { fields: { items: rows } } } } },
-  chatSearch: { fields: { items: rows } },
+  chatSearch: { fields: { items: rows, messages: { key: ["station", "thread", "seq"] } } },
   chat: { fields: { messages: { key: ["seq", "outgoing"] }, outbox: items("id") } },
   decisions: { fields: { items: { key: ["station", "session", "seq"] } } },
   archive: { fields: { days: { key: ["label"], item: { fields: { items: rows } } } } },

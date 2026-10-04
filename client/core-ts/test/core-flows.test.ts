@@ -724,6 +724,52 @@ test("the_chats_a_few_words_find_are_a_view_of_the_list", async () => {
   core.close();
 });
 
+test("the_messages_a_few_words_find_are_those_of_the_chats_listed_newest_first_as_last_edited", async () => {
+  const row = (id: string, thread: number, title: string) => ({ id, session: id, thread, title, agents: [], last: null, unread: false, mine: true, lastActiveAt: thread, connect: null, origin: null });
+  const said = (thread: number, n: number, text: string, at: number) => ({ thread, n, kind: "message", ts: `${n}.0`, authorKind: "person", author: "a@x", authorName: "阿甲", text, at });
+  const { host, core } = await started({
+    ...base(),
+    "GET /chats": [row("a", 7, "别的"), row("b", 8, "登录页")],
+    "GET /threads": [threadView(7, 4, 4, 0), threadView(8, 1, 1, 0)],
+    "GET /threads/7/entries?limit=50": {
+      first: 1,
+      last: 4,
+      entries: [
+        said(7, 1, "先看一下 **登录流程** 哪里慢", 1000),
+        said(7, 2, "无关的话", 2000),
+        said(7, 3, "第一行\n很长很长很长很长的前文，一直一直一直说到这里才终于提到了 Login 页面的问题，后面还有一些", 3000),
+        { thread: 7, n: 4, kind: "edit", target: 2, text: "改成也说登录", at: 4000 },
+      ],
+    },
+    "GET /threads/8/entries?limit=50": { first: 1, last: 1, entries: [said(8, 1, "登录按钮", 500)] },
+  });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "登录", messages: 10 });
+  subscribe(core, ui, 2, { topic: "chatSearch", scope: "ws", query: "登录" });
+  subscribe(core, ui, 3, { topic: "chatSearch", scope: "ws", query: "login 页面", messages: 10, exclude: "b" });
+  subscribe(core, ui, 4, { topic: "chatSearch", scope: "ws", query: "登录流程", messages: 10 });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  // Newest first; the edited one by its edit's words; each with its chat's row and who said it.
+  assert.deepEqual(v(values, 1).messages.map((m: J) => [m.thread, m.seq, m.text]), [[7, 2, "改成也说登录"], [7, 1, "先看一下 登录流程 哪里慢"], [8, 1, "登录按钮"]]);
+  const first = v(values, 1).messages[1];
+  assert.equal(first.chat.id, "a");
+  assert.equal(first.by, "阿甲");
+  assert.deepEqual(first.marks, [{ from: 5, to: 7 }]);
+  assert.equal(typeof first.time.createdAt, "object");
+  // Not asked for: none looked for.
+  assert.deepEqual(v(values, 2).messages ?? [], []);
+  // Every word, case aside, on the line that has them; a line's start cut to the words.
+  const cut = v(values, 3).messages;
+  assert.deepEqual(cut.map((m: J) => m.seq), [3]);
+  assert.ok(cut[0].text.startsWith("…") && cut[0].text.includes("Login 页面"), cut[0].text);
+  assert.equal(cut[0].text.slice(cut[0].marks[0].from, cut[0].marks[0].to), "Login");
+  // Three characters or more: the full-text index.
+  assert.deepEqual(v(values, 4).messages.map((m: J) => m.seq), [1]);
+  core.close();
+});
+
 test("a_chat_shown_has_its_unread_line_and_is_read_while_its_end_is_in_view", async () => {
   const said = (n: number) => ({ thread: 7, n, kind: "message", ts: `${n}.0`, authorKind: "agent", author: "k1", authorName: null, text: "好", at: n });
   const { host, core } = await started({

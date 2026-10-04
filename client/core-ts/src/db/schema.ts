@@ -94,6 +94,116 @@ export const MIGRATIONS: string[] = [
   `,
 ];
 
+/// What was said in the threads, for finding messages by their words (`said`): each message's latest text (an edit's
+/// replaces it), kept by triggers on `entry`, so whatever writes entries keeps it, a core that knows nothing of it too;
+/// and SQLite's full-text index of it (`said_index`: FTS5, trigram, so any three characters match, Chinese too) where
+/// the build has FTS5. Not a migration (a version bump would leave an older core the database only to read): made
+/// where missing at every open, filled once from the entries held. Answers whether the index is there.
+export function ensureSaid(sql: Sql): boolean {
+  const had = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said'").length > 0;
+  sql.exec("BEGIN IMMEDIATE");
+  try {
+    sql.exec(`
+      CREATE TABLE IF NOT EXISTS said (
+        id INTEGER PRIMARY KEY, station TEXT NOT NULL, thread INTEGER NOT NULL, seq INTEGER NOT NULL,
+        n INTEGER NOT NULL, at INTEGER, text TEXT NOT NULL,
+        UNIQUE (station, thread, seq)
+      );
+      CREATE INDEX IF NOT EXISTS said_from ON said (station, thread, n);
+      CREATE TRIGGER IF NOT EXISTS said_put AFTER INSERT ON entry
+      WHEN json_extract(new.json, '$.kind') = 'message' OR (json_extract(new.json, '$.kind') = 'edit' AND json_type(new.json, '$.target') = 'integer')
+      BEGIN
+        INSERT INTO said (station, thread, seq, n, at, text)
+        VALUES (
+          new.station, new.thread,
+          CASE json_extract(new.json, '$.kind') WHEN 'message' THEN new.n ELSE json_extract(new.json, '$.target') END,
+          new.n,
+          CASE json_extract(new.json, '$.kind') WHEN 'message' THEN json_extract(new.json, '$.at') END,
+          coalesce(CASE json_type(new.json, '$.text') WHEN 'text' THEN json_extract(new.json, '$.text') END, '')
+        )
+        ON CONFLICT (station, thread, seq) DO UPDATE SET
+          text = CASE WHEN excluded.n >= said.n THEN excluded.text ELSE said.text END,
+          n = max(said.n, excluded.n),
+          at = coalesce(excluded.at, said.at);
+      END;
+      CREATE TRIGGER IF NOT EXISTS said_drop AFTER DELETE ON entry
+      BEGIN
+        DELETE FROM said WHERE station = old.station AND thread = old.thread AND n = old.n;
+      END;
+    `);
+    if (!had) {
+      // Oldest first, as they came: an edit's text over its message's.
+      sql.exec(`
+        INSERT INTO said (station, thread, seq, n, at, text)
+        SELECT station, thread,
+          CASE json_extract(json, '$.kind') WHEN 'message' THEN n ELSE json_extract(json, '$.target') END,
+          n,
+          CASE json_extract(json, '$.kind') WHEN 'message' THEN json_extract(json, '$.at') END,
+          coalesce(CASE json_type(json, '$.text') WHEN 'text' THEN json_extract(json, '$.text') END, '')
+        FROM entry
+        WHERE json_extract(json, '$.kind') = 'message' OR (json_extract(json, '$.kind') = 'edit' AND json_type(json, '$.target') = 'integer')
+        ORDER BY station, thread, n
+        ON CONFLICT (station, thread, seq) DO UPDATE SET
+          text = CASE WHEN excluded.n >= said.n THEN excluded.text ELSE said.text END,
+          n = max(said.n, excluded.n),
+          at = coalesce(excluded.at, said.at);
+      `);
+    }
+    sql.exec("COMMIT");
+  } catch (e) {
+    try {
+      sql.exec("ROLLBACK");
+    } catch {
+      // Rolled back already.
+    }
+    throw e;
+  }
+  return ensureSaidIndex(sql);
+}
+
+/// The full-text index of `said`, made and filled where missing. A build without FTS5 (or its trigram tokenizer) has
+/// none, and its triggers are taken away if an earlier one left them: `said` is then searched by scanning it.
+function ensureSaidIndex(sql: Sql): boolean {
+  const has = (name: string) => sql.all("SELECT 1 FROM sqlite_master WHERE name = ?", [name]).length > 0;
+  let fts = true;
+  try {
+    sql.exec("CREATE VIRTUAL TABLE IF NOT EXISTS temp.said_probe USING fts5(text, tokenize = 'trigram'); DROP TABLE temp.said_probe;");
+  } catch {
+    fts = false;
+  }
+  if (!fts) {
+    for (const trigger of ["said_index_put", "said_index_drop", "said_index_set"]) if (has(trigger)) sql.exec(`DROP TRIGGER ${trigger}`);
+    return false;
+  }
+  if (has("said_index") && has("said_index_put")) return true;
+  sql.exec("BEGIN IMMEDIATE");
+  try {
+    sql.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS said_index USING fts5(text, content = 'said', content_rowid = 'id', tokenize = 'trigram');
+      CREATE TRIGGER IF NOT EXISTS said_index_put AFTER INSERT ON said BEGIN
+        INSERT INTO said_index (rowid, text) VALUES (new.id, new.text);
+      END;
+      CREATE TRIGGER IF NOT EXISTS said_index_drop AFTER DELETE ON said BEGIN
+        INSERT INTO said_index (said_index, rowid, text) VALUES ('delete', old.id, old.text);
+      END;
+      CREATE TRIGGER IF NOT EXISTS said_index_set AFTER UPDATE OF text ON said WHEN old.text IS NOT new.text BEGIN
+        INSERT INTO said_index (said_index, rowid, text) VALUES ('delete', old.id, old.text);
+        INSERT INTO said_index (rowid, text) VALUES (new.id, new.text);
+      END;
+      INSERT INTO said_index (said_index) VALUES ('rebuild');
+    `);
+    sql.exec("COMMIT");
+  } catch {
+    try {
+      sql.exec("ROLLBACK");
+    } catch {
+      // Rolled back already.
+    }
+    return false;
+  }
+  return true;
+}
+
 /// The database's version.
 export function versionOf(sql: Sql): number {
   const v = sql.all("PRAGMA user_version")[0]?.[0];

@@ -1369,11 +1369,40 @@ data class ChatMessage (
 	val decision: MessageDecision? = null
 )
 
+/// A range of a text, `from` to `to` (UTF-16 units).
+@Serializable
+data class TextMark (
+	val from: UInt,
+	val to: UInt
+)
+
+/// A message a search's words found (`ChatSearchView.messages`): its chat opens at it (thread, seq).
+@Serializable
+data class FoundMessage (
+	val station: String,
+	val thread: Long,
+	val seq: Long,
+	/// Its chat, as the sidebar lists it.
+	val chat: ChatItem,
+	/// Who said it, as a chat names them (empty when not known).
+	val by: String,
+	/// The line of it that has the words, on one line, Markdown's marks out; `…` first when cut to the words.
+	val text: String,
+	/// Where the words are in `text` (UTF-16 ranges), in order.
+	val marks: List<TextMark>,
+	val createdAt: Long? = null,
+	/// Its times in words, by field (`createdAt`).
+	val time: Map<String, Stamp>? = null
+)
+
 /// The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words
 /// first. What the composer's `@` menu and the switcher list.
 @Serializable
 data class ChatSearchView (
-	val items: List<ChatItem>
+	val items: List<ChatItem>,
+	/// The messages that have the words (asked for by `messages`, at most that many), newest first: only in the chats
+	/// listed. Empty when not asked for.
+	val messages: List<FoundMessage>? = null
 )
 
 /// Who is looking: the account that reaches the workspace, by its email.

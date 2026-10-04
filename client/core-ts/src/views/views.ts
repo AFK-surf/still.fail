@@ -325,6 +325,10 @@ export class Views implements Owner {
     this.local = new Local(core.data, () => core.host.nowMs());
     this.local.load();
     this.local.onChange = (change) => this.#localChanged(change);
+    // What was said changed: the searches that find messages look again.
+    core.data.onLogChange((table) => {
+      if (table === "entry") this.#invalidate((v) => v.topic === "chatSearch" && typeof v.messages === "number" && v.messages > 0 && refs.terms(String(v.query ?? "")).length > 0);
+    });
   }
 
   owns(topic: Topic): boolean {
@@ -662,7 +666,9 @@ export class Views implements Owner {
       case "chatSearch": {
         const chats = this.#chats(view.scope as string, false, false);
         if (chats === undefined || !("ok" in chats)) return chats;
-        return { ok: refs.search(chats.ok, view.query as string, view.station as string | undefined, view.exclude as string | undefined, view.limit as number | undefined) };
+        const found = refs.search(chats.ok, view.query as string, view.station as string | undefined, view.exclude as string | undefined, view.limit as number | undefined);
+        if (typeof view.messages === "number" && view.messages > 0) found.messages = this.#foundMessages(chats.ok, view);
+        return { ok: found };
       }
       case "stations":
         return this.#stationsView(view.scope as string);
@@ -836,6 +842,43 @@ export class Views implements Owner {
 
   /// The rows a scope's list shows on top (HEAD of them), by station, while its stations' rows load: one is loaded
   /// after another, the list computed again after each.
+  /// The messages a search's words find in the chats the sidebar lists (those `refs.search` would list, by the same
+  /// station and exclusion), newest first, at most `view.messages`: each with its chat's row, who said it and its line.
+  #foundMessages(chats: J, view: Topic): J[] {
+    const words = refs.terms(view.query as string);
+    if (words.length === 0) return [];
+    const scope = view.scope as string;
+    const rows = new Map<string, J>();
+    for (const item of arr(get(chats, "days")).flatMap((d) => arr(get(d, "items")))) {
+      if (get(item, "pending") === true || typeof item.thread !== "number") continue;
+      if (typeof view.station === "string" && item.station !== view.station) continue;
+      if (typeof view.exclude === "string" && (item.id === view.exclude || item.session === view.exclude)) continue;
+      rows.set(`${item.station}\u0001${item.thread}`, item);
+    }
+    const stations = [...new Set([...rows.values()].map((i) => i.station as string))];
+    const wanted = view.messages as number;
+    const data = this.#core.data;
+    const me = this.me(scope);
+    const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
+    const clock = this.#clock();
+    const out: J[] = [];
+    // Those of chats not listed (archived) are passed over: some more are asked for.
+    for (const hit of data.findSaid(stations, words, wanted * 3)) {
+      const chat = rows.get(`${hit.station}\u0001${hit.thread}`);
+      if (!chat) continue;
+      const entry = data.logRange("entry", hit.station, String(hit.thread), hit.seq, hit.seq).get(hit.seq);
+      const slackUsers = arr(get(this.ok({ topic: "overview", station: hit.station }), "slackUsers")).filter((u): u is string => typeof u === "string");
+      const by = isObject(entry) ? present.lastBy({ last: entry }, me, slackUsers, members_) : null;
+      const message: J = { station: hit.station, thread: hit.thread, seq: hit.seq, by: str(get(by, "name")) ?? "", ...refs.excerpt(hit.text, words) };
+      if (hit.at !== null) message.createdAt = hit.at;
+      present.times(message, clock);
+      // Its chat's row as the list made it (frozen, its times in words already).
+      out.push({ chat, ...message });
+      if (out.length >= wanted) break;
+    }
+    return out;
+  }
+
   #head(scope: string, stations: string[]): Map<string, J[]> {
     const data = this.#core.data;
     const out = new Map<string, J[]>();

@@ -643,6 +643,17 @@ export class Data {
     return [...by].flatMap(([db, list]) => db.desk(list));
   }
 
+  /// The messages of these stations that have all of `terms`, newest first, across their databases (AccountDb.findSaid).
+  findSaid(stations: string[], terms: string[], limit: number): ReturnType<AccountDb["findSaid"]> {
+    const by = new Map<AccountDb, string[]>();
+    for (const s of stations) {
+      const db = this.of(s);
+      if (db) by.set(db, [...(by.get(db) ?? []), s]);
+    }
+    const found = [...by].flatMap(([db, list]) => db.findSaid(list, terms, limit));
+    return by.size > 1 ? found.sort((a, b) => (b.at ?? -Infinity) - (a.at ?? -Infinity)).slice(0, limit) : found;
+  }
+
   running(station: string): unknown[] {
     return this.of(station)?.running(station) ?? [];
   }

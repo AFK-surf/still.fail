@@ -17,7 +17,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { migrate, versionOf } from "./schema.ts";
+import { ensureSaid, migrate, versionOf } from "./schema.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -216,6 +216,8 @@ export class AccountDb {
   readonly readOnly: boolean;
   /// Its version as found (before migrating): 0 for a database made now.
   readonly found: number;
+  /// How what was said is found: by its full-text index, by scanning it, or not at all (it could not be made).
+  readonly #said: "index" | "scan" | null = null;
   readonly #runner: Runner;
   readonly #derive: Derive;
   #inTx = false;
@@ -250,6 +252,13 @@ export class AccountDb {
     if (!this.readOnly) {
       const was = this.sql.all("SELECT value FROM meta WHERE key = 'account'")[0]?.[0];
       if (was === undefined) this.sql.run("INSERT INTO meta (key, value) VALUES ('account', ?)", [sub]);
+      try {
+        this.#said = ensureSaid(sql) ? "index" : "scan";
+      } catch {
+        // No room to make it: messages are not found by their words this time.
+      }
+    } else if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said'").length > 0) {
+      this.#said = "scan";
     }
     this.#bursts = Effect.runSync(Queue.unbounded<void>());
     // The one write fiber: a burst is committed once what started it has run.
@@ -1248,6 +1257,28 @@ export class AccountDb {
       this.#putJobRow(station, id, json, (r?.[2] as string | null | undefined) ?? null, nowOpen, (r?.[0] as number | undefined) ?? 0, str(get(job, "session")));
     });
     return unknown;
+  }
+
+  // ── what was said ──
+
+  /// The messages of these stations whose latest text has every one of `terms` (case aside), newest first: the full-text
+  /// index finds those of three characters or more, shorter ones are looked for in what it found (or in everything).
+  findSaid(stations: string[], terms: string[], limit: number): { station: string; thread: number; seq: number; at: number | null; text: string }[] {
+    if (this.#said === null || stations.length === 0 || terms.length === 0) return [];
+    const indexed = this.#said === "index" ? terms.filter((t) => [...t].length >= 3) : [];
+    const scanned = terms.filter((t) => !indexed.includes(t));
+    const where = [`s.station IN (${stations.map(() => "?").join(", ")})`, ...scanned.map(() => "s.text LIKE ? ESCAPE '\\'")];
+    const params: SqlValue[] = [...stations, ...scanned.map((t) => `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`)];
+    let from = "said s";
+    if (indexed.length > 0) {
+      from = "said_index JOIN said s ON s.id = said_index.rowid";
+      where.unshift("said_index MATCH ?");
+      params.unshift(indexed.map((t) => `"${t.replace(/"/g, '""')}"`).join(" "));
+    }
+    params.push(limit);
+    return this.sql
+      .all(`SELECT s.station, s.thread, s.seq, s.at, s.text FROM ${from} WHERE ${where.join(" AND ")} ORDER BY s.at IS NULL, s.at DESC, s.seq DESC LIMIT ?`, params)
+      .map((r) => ({ station: String(r[0]), thread: Number(r[1]), seq: Number(r[2]), at: typeof r[3] === "number" ? r[3] : null, text: String(r[4]) }));
   }
 
   // ── a thread's entries and a session's transcript ──

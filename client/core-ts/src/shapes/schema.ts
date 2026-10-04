@@ -1031,7 +1031,23 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the\nsystem was asked to allow them, whether the device should hold a push registration, and the notices a page is to\nshow now, each taken by one page (`notice.claim`).", keepNone: true }),
   ChatSearchView: struct([
     ["items", vec("ChatItem")],
+    ["messages", vec("FoundMessage"), { default: true, doc: "The messages that have the words (asked for by `messages`, at most that many), newest first: only in the chats\nlisted. Empty when not asked for." }],
   ], { doc: "The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words\nfirst. What the composer's `@` menu and the switcher list.", keepNone: true }),
+  FoundMessage: struct([
+    ["station", "String"],
+    ["thread", "i64", { client: "I54" }],
+    ["seq", "i64", { client: "I54" }],
+    ["chat", "ChatItem", { doc: "Its chat, as the sidebar lists it." }],
+    ["by", "String", { doc: "Who said it, as a chat names them (empty when not known)." }],
+    ["text", "String", { doc: "The line of it that has the words, on one line, Markdown's marks out; `…` first when cut to the words." }],
+    ["marks", vec("TextMark"), { doc: "Where the words are in `text` (UTF-16 ranges), in order." }],
+    ["createdAt", opt("i64"), { client: opt("I54") }],
+    ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`)." }],
+  ], { doc: "A message a search's words found (`ChatSearchView.messages`): its chat opens at it (thread, seq)." }),
+  TextMark: struct([
+    ["from", "u32"],
+    ["to", "u32"],
+  ], { doc: "A range of a text, `from` to `to` (UTF-16 units)." }),
   ArchiveView: struct([
     ["days", vec("ArchiveDay")],
     ["errors", vec("ArchiveError"), { doc: "A station's archive that could not be read, in a line (named where there are several)." }],
