@@ -490,6 +490,9 @@ function useJumpTo(list: RefObject<HTMLDivElement | null>, station: string, thre
       // Its top near the pane's, below what floats over it there (the phone's bar: its scroll padding), as the unread line.
       const covered = parseFloat(getComputedStyle(pane).scrollPaddingTop) || 0;
       pane.scrollTop += target.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered - 12;
+      // Said at once (the browser says it a frame later): the pane keeps this place, not the one it held as the list
+      // re-renders for the jump being taken (scroll.ts).
+      pane.dispatchEvent(new Event("scroll"));
       target.classList.remove(css.msgFlash);
       void target.offsetWidth;
       target.classList.add(css.msgFlash);
