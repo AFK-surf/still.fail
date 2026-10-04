@@ -388,7 +388,7 @@ export function ProfileAccountSettings({ entry }: { entry: WorkspaceEntry }) {
       <Section title={t("web-pages.profiles.account.each")} description={t("web-pages.profiles.account.eachLead")}>
         <ul className={pagesCss.list}>
           {(found.members ?? []).map((m) => (
-            <li key={m.station}>
+            <li key={`${m.station}/${m.profileId}`}>
               <Link className={pagesCss.listRow} to={`${stationBase(m.station)}/settings/accounts/${encodeURIComponent(m.profileId)}`}>
                 <StatusDot state={m.online ? "online" : "offline"} />
                 <span className={pagesCss.listRowText}>

@@ -133,7 +133,7 @@ export function ProfileAccountScreen() {
         <SectionHeader title={t("web-pages.profiles.account.each")} start={24} />
         <ListCard>
           {(e.members ?? []).map((m) => (
-            <ListRow key={m.station} onClick={() => app.push(app.at(`/s/${m.stationId}/settings/accounts/${encodeURIComponent(m.profileId)}`))}>
+            <ListRow key={`${m.station}/${m.profileId}`} onClick={() => app.push(app.at(`/s/${m.stationId}/settings/accounts/${encodeURIComponent(m.profileId)}`))}>
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
                 <span className={listsCss.mRowTitle}><Presence state={!m.online ? "offline" : !m.usable ? "error" : toneDot(m.checkTone)} /> {m.stationName}</span>
                 <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{m.online ? m.about : t("web-mobile.profiles.offline")}</span>
