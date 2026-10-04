@@ -171,9 +171,10 @@ fun HomeScreen(current: WorkspaceEntry) {
         BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze).graphicsLayer { translationY = -awayBy * away; alpha = 1f - away }) {
             val width = constraints.maxWidth
             val onSearch = { at: Float -> searchFrom = at }
-            ChatPane(current, all, "all", allList, padding, onSearch, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
-            ChatPane(current, mine, "mine", mineList, padding, onSearch, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
-            ChatPane(current, watching, "watching", watchingList, padding, onSearch, Modifier.width(maxWidth).offset { IntOffset(((2 - shift) * width).roundToInt(), 0) })
+            val searching = searchFrom != null
+            ChatPane(current, all, "all", allList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
+            ChatPane(current, mine, "mine", mineList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
+            ChatPane(current, watching, "watching", watchingList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset(((2 - shift) * width).roundToInt(), 0) })
         }
         Row(
             Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.graphicsLayer { alpha = 1f - away }.glass(haze)
@@ -240,7 +241,7 @@ fun HomeScreen(current: WorkspaceEntry) {
 
 /** One of the lists, all, the viewer's or the watching ones: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
 @Composable
-private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: String, list: LazyListState, padding: PaddingValues, onSearch: (Float) -> Unit, modifier: Modifier) {
+private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: String, list: LazyListState, padding: PaddingValues, onSearch: (Float) -> Unit, searching: Boolean, modifier: Modifier) {
     val view = chats.value
     val app = LocalApp.current
     // The rows move as the list changes (ListMotion.kt); while a finger is on the list or it scrolls, they keep their
@@ -268,7 +269,7 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: S
         if (view != null) for (g in motion.ghosts) key(g.key, g.at) { Leaving(g, view, motion) }
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = padding) {
         // The search (Search.kt), at the list's top: there once the list is scrolled to it.
-        if (view != null && view.note?.empty != true) item(key = "search") { SearchField(onSearch) }
+        if (view != null && view.note?.empty != true) item(key = "search") { SearchField(onSearch, hidden = searching) }
         // What the last update brought (Changelog.kt), until it is seen: even while the list is being read.
         item(key = "changelog-news") { ChangelogNews() }
         if (view == null) {

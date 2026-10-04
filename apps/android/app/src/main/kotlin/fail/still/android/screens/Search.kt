@@ -80,13 +80,14 @@ private const val FOUND_MESSAGES = 50
 private val FIELD = 38.dp
 private val BAR_TOP = 8.dp
 
-/** At a list's top: tapped, the search opens from it (`onOpen`, with its top in the root, px). */
+/** At a list's top: tapped, the search opens from it (`onOpen`, with its top in the root, px). `hidden` while the
+ *  search's field is it (one field at a time, flying from and back to here). */
 @Composable
-internal fun SearchField(onOpen: (Float) -> Unit) {
+internal fun SearchField(onOpen: (Float) -> Unit, hidden: Boolean) {
     var top by remember { mutableStateOf(0f) }
     Row(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp).height(FIELD).onGloballyPositioned { top = it.boundsInRoot().top }
-            .clip(RoundedCornerShape(FIELD / 2)).background(C.ink.copy(alpha = 0.06f)).clickable { onOpen(top) }.padding(horizontal = 12.dp),
+            .graphicsLayer { alpha = if (hidden) 0f else 1f }.clip(RoundedCornerShape(FIELD / 2)).background(C.ink.copy(alpha = 0.06f)).clickable { onOpen(top) }.padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         IconIn(Icons.Search, 17.dp, C.muted)
