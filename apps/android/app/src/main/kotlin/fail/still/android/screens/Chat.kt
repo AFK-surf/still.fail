@@ -616,7 +616,15 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         val m = rows.firstNotNullOfOrNull { (it as? Entry.Said)?.m?.takeIf { m -> m.seq == target } }
         when {
             // There it stays: the unread line showing after it does not take the chat away from it.
-            m != null -> { host.goTo = null; lineShown.value = true; jumpTo(m.ts, "") }
+            m != null -> {
+                host.goTo = null
+                lineShown.value = true
+                // After the frame that lays out what came in: what was in view is kept there in it (requestScrollToItem,
+                // below), which would take the list back from the message.
+                androidx.compose.runtime.withFrameNanos { }
+                androidx.compose.runtime.withFrameNanos { }
+                jumpTo(m.ts, "")
+            }
             view.more && thread != null && first != null && first > target -> {
                 asked.value = first
                 try { api.older(thread.id) } catch (_: CoreException) { host.goTo = null }
