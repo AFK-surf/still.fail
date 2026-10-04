@@ -11,7 +11,7 @@ import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
-import { RunnerConnection, existingRunners, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
+import { RunnerConnection, existingRunners, leave, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
 
 /// A wait that does not keep the station running (a grace raced against an exit).
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref());
@@ -167,7 +167,7 @@ export class AgentProcess {
     this.frozen = true;
     if (this.gone) return;
     this.gone = true;
-    setImmediate(() => this.conn.detach());
+    leave(new Promise((resolve) => setImmediate(() => resolve(this.conn.detach()))));
   }
 
   /// Once it has exited by itself and been read to the end, its runner (told `done`) cleans up and goes, a moment after:

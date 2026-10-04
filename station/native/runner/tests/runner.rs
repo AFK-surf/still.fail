@@ -137,6 +137,14 @@ impl Client {
         }
     }
 
+    /// Closes its side and reads to the end: the runner reads a connection's messages in order up to its end, so once
+    /// the end is back, everything sent before (an ack, say) has been taken. Dropping the connection instead leaves it
+    /// to a race: the next connection, coming first, ends this one with its messages unread.
+    fn leave(mut self) {
+        self.writer.shutdown(std::net::Shutdown::Write).unwrap();
+        while self.recv().is_some() {}
+    }
+
     fn write(&mut self, data: &[u8]) {
         self.send(json!({"op": "write", "data": B64.encode(data)}));
     }
@@ -257,7 +265,7 @@ fn a_second_connection_attaching_resumes_from_the_ack() {
     client.send(json!({"op": "ack", "out": 9, "err": 0}));
     assert_eq!(client.recv().unwrap()["op"], "error", "an ack past the end is refused");
     client.send(json!({"op": "ack", "out": 2, "err": 0}));
-    drop(client);
+    client.leave();
 
     let mut second = runner.connect();
     second.send(json!({"op": "attach"}));
@@ -265,7 +273,7 @@ fn a_second_connection_attaching_resumes_from_the_ack() {
     second.read_until(&mut at, &mut got, 0, 2);
     assert_eq!(got[0], b"e\n");
     second.send(json!({"op": "ack", "out": 4}));
-    drop(second);
+    second.leave();
 
     let mut third = runner.connect();
     third.send(json!({"op": "attach"}));

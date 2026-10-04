@@ -19,7 +19,7 @@ test("lines in order; a station that lets go and comes back reads on where it ac
   const first: string[] = [];
   const a = new RunnerConnection(info, (stream, text) => void (stream === "out" && first.push(text)));
   while (first.length < 2) await sleep(20);
-  a.detach();
+  await a.detach();
   const seenByA = first.length;
 
   // Lines come meanwhile, with nobody to read them.

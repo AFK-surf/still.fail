@@ -25,7 +25,7 @@ import { join } from "node:path";
 import { Effect, Fiber } from "effect";
 import type { AgentDriver, AgentSession } from "../agents/runtime.ts";
 import { runnerId } from "../agents/process.ts";
-import { existingRunners } from "../agents/runner.ts";
+import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { postEntries, transcriptPath } from "../read/transcript.ts";
@@ -229,6 +229,8 @@ export class Hub {
       else actor.close();
     }
     for (const driver of this.drivers.values()) driver.detach();
+    // The next station attaches to their runners once this file is there: every ack is in by then.
+    await allLeft();
     this.stopTimers();
     const handed: Handover = { sessions };
     const file = handoverFile(this.config().dataDir);

@@ -78,6 +78,21 @@ export function existingRunners(data: string): RunnerInfo[] {
     });
 }
 
+/// Connections being let go: each one closed on this side and read to its end, so its runner has taken every ack sent on
+/// it (a runner reads a connection's messages in order up to its end). One dropped instead could be ended by the next
+/// station's attach with its last acks unread, and those lines handled again by it.
+const leaving = new Set<Promise<void>>();
+
+export function leave(left: Promise<void>) {
+  leaving.add(left);
+  void left.finally(() => leaving.delete(left));
+}
+
+/// Once every connection let go so far has reached its end.
+export async function allLeft() {
+  while (leaving.size > 0) await Promise.all(leaving);
+}
+
 /// A connection to one runner: what the agent says, line by line, from where this station last acknowledged.
 export class RunnerConnection {
   readonly info: RunnerInfo;
@@ -88,6 +103,7 @@ export class RunnerConnection {
   private at: Record<"out" | "err", number> = { out: -1, err: -1 };
   private acked: Record<"out" | "err", number> = { out: 0, err: 0 };
   private queue: Promise<void> = Promise.resolve();
+  private left = false;
   readonly exited: Promise<Exit>;
   private exit!: (e: Exit) => void;
 
@@ -99,6 +115,7 @@ export class RunnerConnection {
     this.socket = createConnection(info.socket);
     this.socket.on("connect", () => this.send({ op: "attach" }));
     this.socket.on("data", (chunk) => {
+      if (this.left) return;
       this.carry += chunk.toString("utf8");
       for (let i = this.carry.indexOf("\n"); i >= 0; i = this.carry.indexOf("\n")) {
         const message = JSON.parse(this.carry.slice(0, i));
@@ -127,7 +144,7 @@ export class RunnerConnection {
   }
 
   private send(message: unknown) {
-    if (!this.socket.destroyed) this.socket.write(JSON.stringify(message) + "\n");
+    if (this.socket.writable) this.socket.write(JSON.stringify(message) + "\n");
   }
 
   write(text: string) {
@@ -148,8 +165,13 @@ export class RunnerConnection {
     this.socket.end();
   }
 
-  /// This station lets go (stopping, handing over): the runner keeps the agent for the next one.
-  detach() {
-    this.socket.destroy();
+  /// This station lets go (stopping, handing over): the runner keeps the agent for the next one. Its side is closed and
+  /// what comes meanwhile is not handled; resolved once the runner, having read to the end, closed it too (or was gone).
+  detach(): Promise<void> {
+    this.left = true;
+    if (this.socket.destroyed) return Promise.resolve();
+    const closed = new Promise<void>((resolve) => this.socket.once("close", () => resolve()));
+    this.socket.end();
+    return closed;
   }
 }
