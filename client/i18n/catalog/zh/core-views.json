@@ -187,7 +187,6 @@
   "core-views.present.profile.decision_pending": "正在识别决策模型…",
   "core-views.present.profile.models": "已启用 {enabled} / {n} 个模型",
   "core-views.present.profile.no_models": "还没有列出模型",
-  "core-views.present.recommended": "推荐归档 · {state}",
   "core-views.present.resets_left": "剩余 {n} 次",
   "core-views.present.started_by": "{name} 发起",
   "core-views.present.trouble.blocked": "账号被停用",

@@ -326,8 +326,7 @@ export function rowStateLine(row: J): [string, number | null] | null {
   }
   if (!settled(row)) return null;
   const done = agents.find((a) => nonEmpty(get(get(a, "lastTurn"), "need")) !== null);
-  let text = (done && textOf(done)) ?? t("core-views.present.done");
-  if (get(row, "archiveRecommended") === true && get(row, "archiveReminderDismissed") !== true) text = t("core-views.present.recommended", { state: text });
+  const text = (done && textOf(done)) ?? t("core-views.present.done");
   let about = done ? stateAbout(done, thread) : null;
   if (about === null) {
     for (const a of agents) {

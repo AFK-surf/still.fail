@@ -244,10 +244,9 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   assert.ok(p.pinned(kept));
   assert.ok(!p.pinned(row([done], false)));
   assert.equal(p.rowStateText(row([done], false)), "做完了");
+  // A recommendation shows in how the row is drawn (archivable, below), not in its words.
   const recommended = row([done], false);
   recommended.archiveRecommended = true;
-  assert.equal(p.rowStateText(recommended), "推荐归档 · 做完了");
-  recommended.archiveReminderDismissed = true;
   assert.equal(p.rowStateText(recommended), "做完了");
   // Where the station's archive review is on, a done chat is offered for the archive only once it recommended so.
   assert.ok(p.archivable(row([done], false)));

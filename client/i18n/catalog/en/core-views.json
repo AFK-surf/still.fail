@@ -229,7 +229,6 @@
     "other": "{enabled}/{n} models on"
   },
   "core-views.present.profile.no_models": "No models listed yet",
-  "core-views.present.recommended": "Archive suggested · {state}",
   "core-views.present.resets_left": "{n} left",
   "core-views.present.started_by": "Started by {name}",
   "core-views.present.trouble.blocked": "Account suspended",
