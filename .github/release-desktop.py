@@ -7,12 +7,14 @@ import os
 from pathlib import Path
 import secrets
 import shlex
+import shutil
 import subprocess
 import tempfile
 import time
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--stable', action='store_true', help='Publish the stable channel; defaults to beta')
+parser.add_argument('--out', help='Put the signed release in this directory (desktop/…) instead of the bucket: CI puts it once the check passed (scripts/release-put.sh)')
 args = parser.parse_args()
 suffix = '' if args.stable else '-beta'
 root = Path(__file__).resolve().parents[1]
@@ -51,9 +53,9 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
         identities = subprocess.check_output(['security', 'find-identity', '-v', '-p', 'codesigning'], text=True)
         if identity not in identities:
             raise SystemExit('Existing still.fail signing identity is missing. Provision MACOS_SIGNING_CERTIFICATE_B64 and MACOS_SIGNING_CERTIFICATE_PASSWORD in production; no unsigned replacement was published.')
-        if not os.environ.get('CLOUDFLARE_API_TOKEN'):
+        if not args.out and not os.environ.get('CLOUDFLARE_API_TOKEN'):
             raise SystemExit('CLOUDFLARE_API_TOKEN is required')
-        for folder in (root, root / 'cloud', root / 'apps/desktop'):
+        for folder in (root, *(() if args.out else (root / 'cloud',)), root / 'apps/desktop'):
             run(['pnpm', 'install', '--frozen-lockfile', '--prefer-offline'], cwd=folder)
         env = dict(os.environ)
         env.pop('UNSIGNED', None)
@@ -70,6 +72,10 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
         for name, mime in ((archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8')):
             path = Path(env['RELEASE_DIR']) / 'desktop' / name
             if not path.is_file(): raise SystemExit('Expected desktop artifact missing: ' + name)
+            if args.out:
+                (Path(args.out) / 'desktop').mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, Path(args.out) / 'desktop' / name)
+                continue
             put = ['pnpm', 'exec', 'wrangler', 'r2', 'object', 'put', 'stillfail-releases/desktop/' + name, '--file', str(path), '--content-type', mime, '--remote']
             # Cloudflare's API fails now and then on the way (a 502, "fetch failed"): put again, twice at most.
             for attempt in range(3):

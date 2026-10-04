@@ -309,10 +309,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "cloud-web-${{ github.sha }}", path: dist/cloud-web, include-hidden-files: true, retention-days: 90 }
 
-  # The test channel's station release: what a station on it updates to (studio's at once, the others when they update).
+  # The test channel's releases are built beside the check (the builds are most of a release: before 2026-10-04 they
+  # waited for the check and the API), each kept as this run's artifact, and put in the bucket together by `put` once
+  # the check passed and the API is out (scripts/release-put.sh: the files, then the feeds that point at them).
+
+  # The station's (darwin-arm64, linux-x64, linux-arm64): what a station on the test channel updates to.
   station:
-    needs: [plan, natives, check, check-linux, check-android, api]
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' }}
     runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 60
@@ -320,24 +324,15 @@ jobs:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the release's number is the commits in the history
       - uses: ./.github/actions/setup-mac
-      - name: Release the station (darwin-arm64, linux-x64, linux-arm64)
+      - name: Build the station's release (darwin-arm64, linux-x64, linux-arm64)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh station
+      - uses: actions/upload-artifact@v4
+        with: { name: "release-station-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
-  station-update:
-    needs: station
-    if: always() && !cancelled() && github.ref == 'refs/heads/main' && needs.station.result == 'success'
-    runs-on: [self-hosted, mini1]
-    timeout-minutes: 10
-    steps:
-      - name: studio's station takes the published release
-        run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
-
-  # The test channel's Android app (fail.still.android.beta), on android/beta/latest.json: built and signed beside the
-  # check (the build is most of the release: it waited ~70 s for the check and the API before), put in the bucket by
-  # android-put once the check passed and the API is out.
+  # The Android app (fail.still.android.beta), on android/beta/latest.json.
   android:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true' }}
@@ -357,30 +352,12 @@ jobs:
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh android
       - uses: actions/upload-artifact@v4
-        with: { name: "android-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+        with: { name: "release-android-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
-  android-put:
-    needs: [plan, check, check-linux, check-android, api, android]
-    if: always() && github.ref == 'refs/heads/main' && needs.android.result == 'success' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: ubuntu-24.04
-    environment: production
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
-      - uses: actions/download-artifact@v4
-        with: { name: "android-${{ github.sha }}", path: "${{ runner.temp }}/release" }
-      - name: Put the beta Android app (the apk, then android/beta/latest.json)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-          sh scripts/release-put.sh "$RUNNER_TEMP/release"
-
-  # The test channel's desktop app (fail.still.desktop.beta), on desktop/stillfail-beta-mac.yml: built and signed on the organization Mac runner.
+  # The desktop app (fail.still.desktop.beta), on desktop/stillfail-beta-mac.yml: built and signed on the organization Mac.
   desktop:
-    needs: [plan, natives, check, check-linux, check-android, api]
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' }}
     runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 90
@@ -390,17 +367,46 @@ jobs:
       - uses: ./.github/actions/setup-mac
       - name: Build and sign the beta desktop app on the organization Mac
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
-        run: python3 .github/release-desktop.py
+        run: python3 .github/release-desktop.py --out "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@v4
+        with: { name: "release-desktop-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+
+  # What was built put in the bucket, once the check passed and the API is out; nothing when a build failed.
+  put:
+    needs: [plan, check, check-linux, check-android, api, station, android, desktop]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success')
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with: { pattern: "release-*-${{ github.sha }}", path: "${{ runner.temp }}/release", merge-multiple: true }
+      - name: Put the releases (their files, then their feeds)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh "$RUNNER_TEMP/release"
+
+  station-update:
+    needs: [station, put]
+    if: always() && !cancelled() && github.ref == 'refs/heads/main' && needs.station.result == 'success' && needs.put.result == 'success'
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 10
+    steps:
+      - name: studio's station takes the published release
+        run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
 
   # The changelog people read in the apps (docs/changelog.md), from main's history, once what it says is out: the
   # releases bucket's changelog.json, which still.fail cloud serves and marks bug reports fixed by.
   changelog:
-    needs: [plan, check, check-linux, check-android, api, static, station, android-put, desktop]
+    needs: [plan, check, check-linux, check-android, api, static, put]
     # A fix in still.fail cloud counts as out as soon as it is listed: not before the API carrying it is deployed.
     if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: ubuntu-24.04
@@ -429,8 +435,8 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, check-android, api, static, station, android, android-put, desktop]
-    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.android-put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result)
+    needs: [plan, natives, check, check-linux, check-android, api, static, station, android, desktop, put]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result)
     runs-on: [self-hosted, mini1]
     permissions:
       contents: write # only this job updates the tag deployed/beta
@@ -449,7 +455,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, check-android, bundle, mac-build, api, static, station, station-update, android, android-put, desktop, changelog, done]
+    needs: [plan, natives, check, check-linux, check-android, bundle, mac-build, api, static, station, station-update, android, desktop, put, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
