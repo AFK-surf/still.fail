@@ -231,3 +231,7 @@ export const mFoundChat = style({
 export const mFoundMeta = style({ flex: "none", fontSize: "12px", color: "var(--m-muted)", whiteSpace: "nowrap" });
 /** The words found, in a found message's line: in ink, bold (the rest of the line muted). */
 export const mFoundHit = style({ background: "none", color: "var(--m-ink)", fontWeight: "600" });
+// Over the page's own buttons' ink.
+globalStyle(`${mSearchBar} button${mSearchCancel}`, { color: "var(--m-accent)" });
+// One field at a time: the list's is the search's while it is open (it flies from and back to the list's place).
+globalStyle(`${mHome}[data-searching] ${mSearchField}`, { visibility: "hidden" });
