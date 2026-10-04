@@ -47,6 +47,14 @@ instead.
 | `draft` | station, chat | — | `draft.put` |
 | `workspace_pref` | workspace, key | — | a workspace's new-chat picks (`choice:…`), chats' links (`links`) |
 | `meta` | key | — | the account, when what came before was imported |
+| `said` (+ `said_index`, FTS5 trigram) | id; station, thread, seq | n, at, text | each message's latest words, kept by triggers on `entry` (`ensureSaid`): what ⌘K's search finds |
+| `log_use` | kind, station, id | opened, evicted | when a log's chat was last opened here, whether its items were let go for room (`ensureKept`) |
+
+`said` and `log_use` are made where missing at every open, not by a migration (the version stays, so an older core
+still writes the database; `said`'s triggers keep it current under it too). The room an account's database takes is
+kept within `KEPT` (data.ts, 256 MB): past it, the items of the logs not shown, least recently used first (opened here,
+or last active), transcripts before entries, go down to 80% of it, their words with them; a log let go is not synced
+again until its chat is opened.
 
 Indexes: `chat (archived, pinned_at DESC, last_active DESC)` (a list's first screen across stations), by thread, by
 session, the rows at work (`running`), those that ask something or are unread (`tone`/`asks`), those the 奏 page
@@ -136,7 +144,7 @@ what is its own and what is of the workspaces it reaches, as the accounts' `/v1/
 to the device's storage once (`device-imported`). Lists, documents, details, the outbox and drafts come first, before
 the first view; threads' entries and transcripts after, in the background, a station at a time, without writing over
 what the sync brought meanwhile. Nothing is taken away, so an older core still finds what it kept (a rollback works).
-No size cap: all of it comes over, and the sync keeps everything the reached stations hold.
+All of it comes over; past the room an account may take (`KEPT`, above), the least used logs go as the sync writes.
 
 ## Tests
 

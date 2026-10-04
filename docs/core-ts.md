@@ -164,7 +164,7 @@ core 这边怎么做到「一行变只算一行」：
 - 规则 3、6：Rust 每个 thread 只保留一段连续的 entries（`kept.rs` 的 extend：隔着缺口的丢掉），前面只预读一页；TS 把每个
   thread 的全部 entries 都同步到本机（先最新一页，再往前一页一页补，缺口按 `from..to` 只读缺的那段），听到的每条都留下。
   所以「往上翻」「打开 chat」基本不再请求。
-- 规则 3、6：Rust 的 kept 分块有 50 MB 上限，最久没打开的先丢；TS 保留能到的 station 的全部数据，只在没有任何已登录账号
+- 规则 3、6：Rust 的 kept 分块有 50 MB 上限，最久没打开的先丢；TS 每个账号的库最多 256 MB（`KEPT`，docs/core-db.md），超了先删最久没用的 transcript，再删 chat 的消息，打开时再拉；只在没有任何已登录账号
   能到某台 station 时删它（`Data.retain`），账号登出时删掉它的整个库。
 - 规则 3：transcript 收到「比已有的更后」的一页（中间有缺口）时 Rust 丢掉之前的，TS 留着，`live` 话题显示结尾那一段连续的；
   被改写得更短时（`start` 小于已有的末尾，哪怕 entries 为空）都从 `start` 截断。
