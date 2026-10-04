@@ -203,7 +203,6 @@ fun ProfileAccountScreen(current: WorkspaceEntry, key: String) {
         NavBar("Profile", app::pop, p.name, sub = { Text(listOfNotNull(p.email, if (p.machine == true) t("android-settings.profile.machine") else p.providerName ?: ACCESS_LABEL[p.access.kind] ?: p.access.kind).joinToString(" · "), fontSize = 11.sp, color = C.muted, maxLines = 1) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 4.dp)) {
             SectionHeader(t("web-pages.profiles.account.common"), start = 24.dp)
-            PageNote(t("web-pages.profiles.account.commonLead"))
             ListCard {
                 ListRow {
                     Column(Modifier.weight(1f)) {

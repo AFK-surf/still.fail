@@ -377,7 +377,7 @@ export function ProfileAccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const kind = p.machine ? t("web-main.profile.machine") : p.providerName ?? ACCESS[p.access.kind].label;
   return (
     <Page title={p.name} lead={[p.email, kind].filter(Boolean).join(" · ")} back={back} backLabel="Profile">
-      <Section title={t("web-pages.profiles.account.common")} description={t("web-pages.profiles.account.commonLead")}>
+      <Section title={t("web-pages.profiles.account.common")}>
         <div className={css.accountState}>
           {p.checkTone !== "green" && <Pill tone={p.checkTone}>{p.checkText}</Pill>}
           <span className={shellCss.muted}>{p.check ? p.check.detail : t("web-pages.profiles.neverChecked")}</span>
@@ -385,7 +385,7 @@ export function ProfileAccountSettings({ entry }: { entry: WorkspaceEntry }) {
         <QuotaBars quota={p.quota} />
         {p.modelsText && <p className={shellCss.muted}>{p.modelsText}</p>}
       </Section>
-      <Section title={t("web-pages.profiles.account.each")} description={t("web-pages.profiles.account.eachLead")}>
+      <Section title={t("web-pages.profiles.account.each")}>
         <ul className={pagesCss.list}>
           {(found.members ?? []).map((m) => (
             <li key={`${m.station}/${m.profileId}`}>

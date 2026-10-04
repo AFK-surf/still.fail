@@ -120,7 +120,6 @@ export function ProfileAccountScreen() {
       <NavBar back="Profile" onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{[p.email, accessLabel(p)].filter(Boolean).join(" · ")}</span>} />
       <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
         <SectionHeader title={t("web-pages.profiles.account.common")} start={24} />
-        <p className={settingsCss.mPageNote}>{t("web-pages.profiles.account.commonLead")}</p>
         <ListCard>
           <ListRow>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
