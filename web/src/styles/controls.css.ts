@@ -7,6 +7,7 @@ import { newChatStatus } from "../NewChat.css.ts";
 import { signIn } from "../pages/Accounts.css.ts";
 import { stepActions } from "../pages/Connect.css.ts";
 import { spinner } from "./waiting.css.ts";
+import { card } from "./pages.css.ts";
 
 export const btn = style({
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "32px",
@@ -41,6 +42,13 @@ export const btnDangerSolid = style({
   selectors: {
     "&:hover:not(:disabled)": { background: `color-mix(in oklch, ${vars.red} 85%, black)` },
   },
+});
+/** In a settings card (its grey ground and no line round it), a button that is not solid has no line either: a tint of its text's colour. */
+globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnGhost}, ${btnDangerSolid})`, {
+  borderColor: "transparent", background: "color-mix(in oklab, currentColor 8%, transparent)",
+});
+globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnGhost}, ${btnDangerSolid}):hover:not(:disabled)`, {
+  background: "color-mix(in oklab, currentColor 14%, transparent)",
 });
 export const textToggle = style({
   display: "inline-flex", alignItems: "center", gap: "2px", border: "0", background: "none", padding: "2px 4px",

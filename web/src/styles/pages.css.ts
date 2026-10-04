@@ -35,8 +35,12 @@ export const identitySub = style({
   fontSize: vars.textSm, lineHeight: "20px",
 });
 export const section = style({ marginBottom: "28px" });
+/**
+ * A grey ground, no line round it: a line here and its buttons' lines a few px inside it never quite followed each
+ * other round the corners (its buttons have none either: controls.css.ts).
+ */
 export const card = style({
-  border: `1px solid ${vars.line}`, borderRadius: vars.rCard, padding: "18px 20px", background: vars.canvas,
+  borderRadius: vars.rCard, padding: "18px 20px", background: `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`,
   display: "grid", gap: "14px", cornerShape: vars.cornerShape,
   selectors: {
     "& + &": { marginTop: "10px" },
