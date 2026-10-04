@@ -32,7 +32,8 @@ import { spawn } from "node:child_process";
 import { type FSWatcher, createWriteStream, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Exit, Fiber, FiberSet, Scope } from "effect";
+import { type Clock, Effect, Fiber } from "effect";
+import { Fibers } from "../ops/fibers.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
@@ -116,6 +117,8 @@ export type UpdatesOptions = {
   /// Told when a runtime was installed or updated here (the machine's logins read again).
   runtimeChanged?: () => void;
   timing?: Partial<Timing>;
+  /// Its time (a TestClock in tests).
+  clock?: Clock.Clock;
 };
 
 type Item = {
@@ -186,16 +189,15 @@ export class Updates {
   private checkedAt: number | null = null;
   private checking: Promise<void> | null = null;
   private listeners = new Set<() => void>();
-  private lastUsed = Date.now();
+  private lastUsed: number;
   /// The version the station's last update in this process went for: updating by itself, not tried again.
   tried: string | null = null;
   private lastCheck: number | null = null;
   private running: () => number;
   private inUse: () => boolean;
   private runtimeChanged: () => void;
-  // Long-lived work: fibers in this part's scope, ended with it.
-  private scope: Scope.Closeable;
-  private fork: (effect: Effect.Effect<unknown, unknown, never>) => Fiber.Fiber<unknown, unknown>;
+  // Long-lived work, and time: fibers in this part's scope on its clock, ended with it.
+  private fibers: Fibers;
   private closed = false;
   /// Started: it reads on its own (made but not started, as in tests, it reads only when asked).
   private started = false;
@@ -219,8 +221,8 @@ export class Updates {
     this.runtimeChanged = o.runtimeChanged ?? (() => {});
     // Read before an update can replace the release.
     this.installed = releaseChannel(this.app) ?? channelOf(this.config.raw(), this.app);
-    this.scope = Effect.runSync(Scope.make());
-    this.fork = Effect.runSync(Scope.provide(FiberSet.makeRuntime<never, unknown, unknown>(), this.scope));
+    this.fibers = new Fibers("updates", o.clock);
+    this.lastUsed = this.fibers.now();
   }
 
   // ---- what is wired in after it is made (the hub, the event streams, the machine's logins) ----
@@ -242,7 +244,7 @@ export class Updates {
 
   /// Someone used the station (a request, an event stream): an automatic update waits five quiet minutes after.
   used() {
-    this.lastUsed = Date.now();
+    this.lastUsed = this.fibers.now();
   }
 
   /// Hears each change of what `get` says; gives the function that stops it.
@@ -288,7 +290,7 @@ export class Updates {
     this.unlisten?.();
     this.following?.();
     this.following = null;
-    await Effect.runPromise(Scope.close(this.scope, Exit.void));
+    await this.fibers.close();
   }
 
   private setting() {
@@ -297,29 +299,22 @@ export class Updates {
 
   private spawn(f: () => Promise<unknown>) {
     if (this.closed) return;
-    this.fork(Effect.promise(() => f().catch((e) => log.warn("updates", "background work failed", { error: (e as Error)?.message ?? String(e) }))));
+    this.fibers.spawn(f);
   }
 
   /// Runs `f` after `ms` in this part's scope; the function returned cancels it.
   private later(ms: number, f: () => unknown): () => void {
     if (this.closed) return () => {};
-    const fiber = this.fork(Effect.sleep(Math.max(0, ms)).pipe(Effect.andThen(Effect.promise(async () => {
-      try {
-        await f();
-      } catch (e) {
-        log.warn("updates", "background work failed", { error: (e as Error)?.message ?? String(e) });
-      }
-    }))));
-    return () => void Effect.runFork(Fiber.interrupt(fiber));
+    return this.fibers.after(ms, f);
   }
 
   /// The next look: when the next reading is due, or (while it updates itself) soon, to see whether it is quiet.
   private schedule() {
     if (this.closed || !this.started) return;
     if (this.tick) void Effect.runFork(Fiber.interrupt(this.tick));
-    const due = this.lastCheck === null ? 0 : Math.max(0, this.lastCheck + (this.auto() ? this.timing.autoEvery : this.timing.every) - Date.now());
+    const due = this.lastCheck === null ? 0 : Math.max(0, this.lastCheck + (this.auto() ? this.timing.autoEvery : this.timing.every) - this.fibers.now());
     const wait = this.auto() ? Math.min(due, this.timing.idlePoll) : due;
-    this.tick = this.fork(Effect.sleep(wait).pipe(Effect.andThen(Effect.promise(() => this.look()))));
+    this.tick = this.fibers.fork(Effect.sleep(wait).pipe(Effect.andThen(Effect.promise(() => this.look()))));
   }
 
   private async look() {
@@ -329,11 +324,11 @@ export class Updates {
       const every = this.auto() ? this.timing.autoEvery : this.timing.every;
       // A reading under way (asked from a page) is waited for, not looked at again and again.
       if (this.checking) await this.checking;
-      else if (this.lastCheck === null || Date.now() - this.lastCheck >= every) await this.check();
+      else if (this.lastCheck === null || this.fibers.now() - this.lastCheck >= every) await this.check();
       this.autoUpdate("the station idle");
     } catch (e) {
       // Not read: tried again when the next reading is due, not at once.
-      this.lastCheck = Date.now();
+      this.lastCheck = this.fibers.now();
       log.warn("updates", "the updates not looked at", { error: (e as Error).message });
     }
     if (this.tick === null) this.schedule();
@@ -412,8 +407,8 @@ export class Updates {
       if (item.updating === null) this.items[kind] = { ...read, failed: item.failed, done: item.done };
       else if (!item.installed) this.items[kind] = { ...read, updating: item.updating, progress: item.progress, step: item.step, percent: item.percent };
     }
-    this.checkedAt = Date.now();
-    this.lastCheck = Date.now();
+    this.checkedAt = this.fibers.now();
+    this.lastCheck = this.fibers.now();
     this.changed();
     this.autoUpdate("a newer release out");
     this.schedule();
@@ -523,7 +518,7 @@ export class Updates {
       this.used();
       return false;
     }
-    return Date.now() - this.lastUsed >= this.timing.idleFor;
+    return this.fibers.now() - this.lastUsed >= this.timing.idleFor;
   }
 
   /// The runtime being installed or updated now, when one is: the station is not updated meanwhile (its update hands
@@ -571,7 +566,7 @@ export class Updates {
     const how = item.how;
     if (how === null) throw refused(lang, "station.updates.notHere", { name });
     this.set(kind, (i) => {
-      i.updating = Date.now();
+      i.updating = this.fibers.now();
       i.progress = null;
       i.percent = null;
       i.failed = null;
@@ -680,9 +675,11 @@ export class Updates {
   /// Downloads `url` to `to`, saying how much of it is in; a minute without anything coming in ends it.
   private async download(kind: Kind, version: string, url: string, to: string) {
     const stalled = new AbortController();
-    let timer = setTimeout(() => stalled.abort(), 60_000);
+    const over = new AbortController();
+    let stall = this.fibers.after(60_000, () => stalled.abort());
+    const limit = this.fibers.after(this.timing.runtimeLimit, () => over.abort(new DOMException("timed out", "TimeoutError")));
     try {
-      const response = await fetch(url, { headers: UA, signal: AbortSignal.any([stalled.signal, AbortSignal.timeout(this.timing.runtimeLimit)]) });
+      const response = await fetch(url, { headers: UA, signal: AbortSignal.any([stalled.signal, over.signal]) });
       if (!response.ok || !response.body) throw new Error(`${url}: ${response.status}`);
       const length = Number(response.headers.get("content-length"));
       const total = Number.isFinite(length) && length > 0 ? length : null;
@@ -691,8 +688,8 @@ export class Updates {
       this.sayDownloading(kind, version, got, total);
       try {
         for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
-          clearTimeout(timer);
-          timer = setTimeout(() => stalled.abort(), 60_000);
+          stall();
+          stall = this.fibers.after(60_000, () => stalled.abort());
           if (!out.write(chunk)) await new Promise<void>((r) => out.once("drain", () => r()));
           got += chunk.length;
           this.sayDownloading(kind, version, got, total);
@@ -704,7 +701,8 @@ export class Updates {
         await new Promise<void>((r) => out.end(() => r()));
       }
     } finally {
-      clearTimeout(timer);
+      stall();
+      limit();
     }
   }
 
@@ -716,7 +714,7 @@ export class Updates {
     const p = platform();
     if (!home || p === null) return () => {};
     let stopped = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    let next: (() => void) | null = null;
     void (async () => {
       let version: string;
       let plain: number | null = null;
@@ -743,13 +741,13 @@ export class Updates {
         const [gotZst, gotPlain] = [len(`${file}.zst`), len(file)];
         const got = gotZst !== null ? (zst !== null ? [gotZst, zst] : null) : gotPlain !== null && plain !== null ? [gotPlain, plain] : null;
         if (got) this.sayDownloading("claude", version, got[0]!, got[1]!);
-        timer = setTimeout(look, 500);
+        next = this.fibers.after(500, look);
       };
       look();
     })();
     return () => {
       stopped = true;
-      if (timer) clearTimeout(timer);
+      next?.();
     };
   }
 
@@ -764,7 +762,7 @@ export class Updates {
     const station = this.items.station;
     // Taken now, so another ask meanwhile finds it updating.
     const before = { updating: station.updating, failed: station.failed, done: station.done };
-    station.updating = Date.now();
+    station.updating = this.fibers.now();
     // In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a
     // handover (this process is let go) and a restart (the service's processes are stopped).
     const script = `( curl -fsSL "$1/install.sh?lang=$3" | sh; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &`;
@@ -786,7 +784,7 @@ export class Updates {
     }
     log.info("updates", "updating the station", { origin, channel });
     this.tried = station.latest;
-    const started: Started = { at: Date.now(), from: stationVersion(this.app) ?? null };
+    const started: Started = { at: this.fibers.now(), from: stationVersion(this.app) ?? null };
     try {
       writeFileSync(join(runDir, "update.started"), JSON.stringify(started));
     } catch (e) {
@@ -806,7 +804,7 @@ export class Updates {
     } catch {
       return;
     }
-    if (Date.now() - started.at > this.timing.stationLimit) {
+    if (this.fibers.now() - started.at > this.timing.stationLimit) {
       for (const f of ["update.started", "update.step"]) rmSync(join(runDir, f), { force: true });
       return;
     }
@@ -830,14 +828,14 @@ export class Updates {
     const [exitFile, logFile, stepFile] = ["update.exit", "update.log", "update.step"].map((f) => join(runDir, f)) as [string, string, string];
     let over = false;
     let watcher: FSWatcher | null = null;
-    let soon: ReturnType<typeof setTimeout> | null = null;
-    let slow: ReturnType<typeof setInterval> | null = null;
+    let soon: (() => void) | null = null;
+    let slow: (() => void) | null = null;
     let lastRunning = this.running();
     const end = () => {
       over = true;
       watcher?.close();
-      if (soon) clearTimeout(soon);
-      if (slow) clearInterval(slow);
+      soon?.();
+      slow?.();
     };
     this.following = end;
     const look = () => {
@@ -860,7 +858,7 @@ export class Updates {
           said = readFileSync(logFile, "utf8");
         } catch {}
         failed = said !== null ? { text: tail(said, stationLang()) } : { key: "station.updates.installerExit", args: { code: code.trim() } };
-      } else if (Date.now() - started.at > this.timing.stationLimit) failed = { key: "station.updates.installerTimedOut" };
+      } else if (this.fibers.now() - started.at > this.timing.stationLimit) failed = { key: "station.updates.installerTimedOut" };
       else {
         const item = this.items.station;
         const percent = step === "download" ? stationDownloadPercent(logFile) : null;
@@ -895,7 +893,7 @@ export class Updates {
       }
     };
     const lookSoon = () => {
-      if (!over && soon === null) soon = setTimeout(look, 50);
+      if (!over && soon === null) soon = this.fibers.after(50, look);
     };
     try {
       mkdirSync(runDir, { recursive: true });
@@ -906,8 +904,7 @@ export class Updates {
     } catch (e) {
       log.warn("updates", "run/ not watched; the update is looked at now and then", { error: (e as Error).message });
     }
-    slow = setInterval(look, this.timing.followLook);
-    slow.unref?.();
+    slow = this.fibers.every(this.timing.followLook, look);
     look();
   }
 
@@ -957,7 +954,7 @@ export class Updates {
   }
 
   backdateUse(ms: number) {
-    this.lastUsed = Date.now() - ms;
+    this.lastUsed = this.fibers.now() - ms;
   }
 }
 
