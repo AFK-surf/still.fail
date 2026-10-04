@@ -22,6 +22,15 @@ function endOf(el: Element): number {
 function startOf(el: Element): number {
   return el === document.scrollingElement ? 0 : parseFloat(getComputedStyle(el).scrollPaddingTop) || 0;
 }
+/** Where a thumb runs along the pane, and how long it is: always inside the pane (between what floats over its top and
+ * foot while that leaves room for a thumb, over them in a pane too short for that). */
+function trackOf(el: Element, axis: Axis, size: number, content: number): { start: number; track: number; length: number } {
+  let start = axis === "y" ? startOf(el) : 0;
+  let track = axis === "y" ? size - start - endOf(el) : size;
+  if (track < MIN_THUMB * 2) { start = 0; track = size; }
+  const length = Math.min(track, Math.max(MIN_THUMB, (track * size) / content)) - INSET * 2;
+  return { start, track, length };
+}
 
 /** The innermost element at or above `from` that scrolls along some axis. */
 function scrollerOf(from: EventTarget | null): Element | null {
@@ -102,11 +111,10 @@ export function startScrollbars(): void {
       const box = page ? { left: 0, top: 0 } : el.getBoundingClientRect();
       const left = box.left + (page ? 0 : el.clientLeft);
       const top = box.top + (page ? 0 : el.clientTop);
-      const start = axis === "y" ? startOf(el) : 0;
-      const track = axis === "y" ? Math.max(MIN_THUMB * 2, size - start - endOf(el)) : size;
-      const length = Math.max(MIN_THUMB, (track * size) / content) - INSET * 2;
+      const { start, track, length } = trackOf(el, axis, size, content);
       const scrolled = axis === "y" ? el.scrollTop : Math.abs(el.scrollLeft);
-      const at = start + INSET + (scrolled / (content - size)) * (track - INSET * 2 - length);
+      // Pulled past either end (an elastic scroll), the thumb stops at the track's end.
+      const at = start + INSET + Math.min(1, Math.max(0, scrolled / (content - size))) * (track - INSET * 2 - length);
       place(thumb, el);
       if (axis === "y") {
         put(thumb, left + el.clientWidth - SIZE - INSET, top + at);
@@ -131,8 +139,7 @@ export function startScrollbars(): void {
     const start = axis === "y" ? el.scrollTop : el.scrollLeft;
     const size = axis === "y" ? el.clientHeight : el.clientWidth;
     const content = axis === "y" ? el.scrollHeight : el.scrollWidth;
-    const track = axis === "y" ? Math.max(MIN_THUMB * 2, size - startOf(el) - endOf(el)) : size;
-    const length = Math.max(MIN_THUMB, (track * size) / content) - INSET * 2;
+    const { track, length } = trackOf(el, axis, size, content);
     const ratio = (content - size) / Math.max(1, track - INSET * 2 - length);
     const move = (m: PointerEvent) => {
       const to = start + ((axis === "y" ? m.clientY : m.clientX) - from) * ratio;
