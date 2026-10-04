@@ -23,7 +23,8 @@ case "$platform" in
   darwin-arm64|linux-x64|linux-arm64) ;;
   *) echo "no such platform: $platform" >&2; exit 1 ;;
 esac
-NODE_VERSION=24.15.0
+# The Node every release carries, and CI runs (.node-version): one version, so what the tests ran on is what ships.
+NODE_VERSION=$(cat "$root/.node-version")
 # Written afresh here, so a release never carries what an older build left in dist/admin (its page), nor an old key.
 node "$root/scripts/posthog-key.ts" >&2
 native() { node "$root/scripts/native.ts" file "$1" "$platform"; }

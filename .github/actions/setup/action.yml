@@ -15,7 +15,9 @@ runs:
   steps:
     - uses: actions/setup-node@v5
       with:
-        node-version: '24'
+        # The Node the station ships (.node-version), not whichever 24 the runner has cached: node:sqlite on Linux
+        # bound TextEncoder's empty Uint8Array as NULL in 24.13 (core-ts's bridge test, 2026-10-04), not in 24.15.
+        node-version-file: .node-version
         package-manager-cache: false
     - shell: bash
       run: |
