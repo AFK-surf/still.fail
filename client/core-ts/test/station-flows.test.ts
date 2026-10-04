@@ -125,11 +125,11 @@ test("fetches_a_file_in_parts_and_a_poster", async () => {
   });
   const requests = core.inner.stations.requests;
   const got = await run(requests.filePart(remote(), "k", "v.mp4", 0, 4, null));
-  assert.equal(new TextDecoder().decode(got.bytes), "abcd");
+  assert.equal(new TextDecoder().decode(got.bytes), JSON.stringify("abcd"));
   // A station from before parts, and a file that is not there, apart.
   assert.equal((await failure(requests.filePart(remote(), "k", "old.mp4", 0, 4, null))).code, "unsupported");
   assert.equal((await failure(requests.filePart(remote(), "k", "gone.mp4", 0, 4, null))).code, "http_404");
-  assert.equal(new TextDecoder().decode((await run(requests.poster(remote(), "k", "v.mp4", null)))!), "jpeg");
+  assert.equal(new TextDecoder().decode((await run(requests.poster(remote(), "k", "v.mp4", null)))!), JSON.stringify("jpeg"));
   assert.equal(await run(requests.poster(remote(), "k", "none.mp4", null)), null);
   core.close();
 });

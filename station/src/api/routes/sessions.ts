@@ -131,7 +131,7 @@ async function posterOf(read: Tools["read"], r: Request, key: string, dataDir: s
   return made === null ? error(404, "no poster") : fromDisk("image/jpeg", made);
 }
 
-export const routes = ({ read, store }: Tools): Route[] => [
+export const routes = ({ read, agents }: Tools): Route[] => [
   {
     method: "GET",
     pattern: /^\/sessions$/,
@@ -147,7 +147,7 @@ export const routes = ({ read, store }: Tools): Route[] => [
       if (action === "timeline") return read(r, "timeline", { key, before: param(r, "before"), limit: param(r, "limit"), lang: r.lang });
       if (action === "files") return file(read, r, { key, name: param(r, "name") ?? "", thumb: param(r, "thumb") === "1", lang: r.lang });
       if (action === "parts") return part(read, r, key);
-      if (action === "poster") return posterOf(read, r, key, store?.dataDir);
+      if (action === "poster") return posterOf(read, r, key, agents?.hub.config().dataDir);
       if (action === "widget-state") return read(r, "widgetState", { key, path: param(r, "path"), lang: r.lang });
       return noRoute(r);
     },
