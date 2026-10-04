@@ -1,6 +1,7 @@
 package fail.still.core
 
 import android.content.Context
+import android.util.Log
 
 /** One running core as [StillFailCore] sees it: a client id, JSON messages each way. Tests put a fake in its place. */
 internal interface Engine {
@@ -42,7 +43,15 @@ internal fun hermesEngines(context: Context, dataDir: String, cloudOrigin: Strin
     val script by lazy { context.assets.open(CORE_SCRIPT).use { it.readBytes() } }
     return { deliver ->
         object : Engine {
-            private val handle: Long = HermesNative.start(script, CORE_SCRIPT, dataDir, cloudOrigin, beta, HermesListener { deliver(this, String(it, Charsets.UTF_8)) })
+            // A message the app fails on is said in the log and dropped: an exception thrown back into the engine's
+            // thread through JNI aborts the whole app.
+            private val handle: Long = HermesNative.start(script, CORE_SCRIPT, dataDir, cloudOrigin, beta, HermesListener {
+                try {
+                    deliver(this, String(it, Charsets.UTF_8))
+                } catch (e: Throwable) {
+                    Log.e("stillfail-core", "a message from the core failed: ${String(it, Charsets.UTF_8).take(300)}", e)
+                }
+            })
             override fun connect() = HermesNative.connect(handle)
             override fun receive(client: Long, json: String) = HermesNative.receive(handle, client, json)
             override fun close() = HermesNative.close(handle)

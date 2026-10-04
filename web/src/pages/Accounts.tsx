@@ -188,8 +188,10 @@ function ShareSection({ profile }: { profile: Profile }) {
   const workspace = station.address.split("/")[0]!;
   const entries = useProfiles(workspace).value?.items ?? [];
   const share = profile.share;
-  const entry = share ? entries.find((e) => e.key === share.id) : undefined;
+  // Its row of the workspace's list (the account it is), and there the station that lends it.
+  const entry = entries.find((e) => e.members?.some((m) => m.station === station.address && m.profileId === profile.id));
   const stations = entry?.stations ?? [];
+  const lender = share ? entry?.members?.find((m) => m.stationId === share.host && m.role === "host") : undefined;
   const on = { station: station.address, id: profile.id };
   const sharing = useDoing("profile.share", on);
   const moving = useDoing("profile.move", on);
@@ -197,10 +199,10 @@ function ShareSection({ profile }: { profile: Profile }) {
   const [moveOpen, setMoveOpen] = useState(false);
   const subscription = profile.access.kind === "subscription";
   if (share?.role === "user") {
-    const host = entry?.hostName ?? share.host.slice(0, 8);
+    const host = stations.find((x) => x.id === share.host)?.name ?? share.host.slice(0, 8);
     return (
       <Section title={t("web-pages.profiles.share.title")}>
-        <p>{t("web-pages.profiles.share.copy", { station: host })}{entry?.editable && <> <Link to={`${stationBase(entry.station)}/settings/accounts/${encodeURIComponent(entry.profile.id)}`}>{t("web-pages.profiles.share.goHost", { station: host })}</Link></>}</p>
+        <p>{t("web-pages.profiles.share.copy", { station: host })}{lender && <> <Link to={`${stationBase(lender.station)}/settings/accounts/${encodeURIComponent(lender.profileId)}`}>{t("web-pages.profiles.share.goHost", { station: host })}</Link></>}</p>
         {subscription && share.reachable === false && <p className={controlsCss.fieldError}>{t("web-pages.profiles.share.hostAway", { station: host })}</p>}
       </Section>
     );

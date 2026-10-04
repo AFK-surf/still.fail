@@ -155,25 +155,27 @@ function ShareRows({ p }: { p: Profile }) {
   const api = useApi();
   const act = useAct();
   const station = useStation();
-  const entry = useProfiles(station.address.split("/")[0]!).value?.items.find((e) => e.key === p.share?.id);
+  // Its row of the workspace's list (the account it is), and there the station that lends it.
+  const entry = useProfiles(station.address.split("/")[0]!).value?.items.find((e) => e.members?.some((m) => m.station === station.address && m.profileId === p.id));
   const stations = entry?.stations ?? [];
+  const lender = p.share ? entry?.members?.find((m) => m.stationId === p.share!.host && m.role === "host") : undefined;
   const on = { station: station.address, id: p.id };
   const sharing = useDoing("profile.share", on);
   const moving = useDoing("profile.move", on);
   const subscription = p.access.kind === "subscription";
   if (p.share?.role === "user") {
-    const host = entry?.hostName ?? p.share.host.slice(0, 8);
+    const host = stations.find((x) => x.id === p.share!.host)?.name ?? p.share.host.slice(0, 8);
     return (
       <>
         <SectionHeader title={t("web-pages.profiles.share.title")} start={24} />
         <ListCard>
-          <ListRow onClick={entry?.editable ? () => app.push(app.at(`/s/${entry.stationId}/settings/accounts/${encodeURIComponent(entry.profile.id)}`)) : undefined}>
+          <ListRow onClick={lender ? () => app.push(app.at(`/s/${lender.stationId}/settings/accounts/${encodeURIComponent(lender.profileId)}`)) : undefined}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
               <span className={listsCss.mRowTitle}>{t("web-main.memory.share.from", { station: host })}</span>
               <span className={listsCss.mRowNote}>{t("web-pages.profiles.share.changeThere")}</span>
               {subscription && p.share.reachable === false && <span className={`${listsCss.mRowNote} ${partsCss.mRed}`}>{t("web-pages.profiles.share.hostAway", { station: host })}</span>}
             </span>
-            {entry?.editable && <ChevronRight size={14} className={partsCss.mSubtle} />}
+            {lender && <ChevronRight size={14} className={partsCss.mSubtle} />}
           </ListRow>
         </ListCard>
       </>

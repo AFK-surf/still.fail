@@ -246,20 +246,22 @@ private fun ShareSection(current: WorkspaceEntry, s: StationView, p: Profile) {
     val api = app.api(s.station)
     val topic by rememberTopic<ProfilesView>(app.core, Topics.profiles(current.workspace.id))
     val share = p.share
-    val entry = share?.let { sh -> topic.value?.items?.firstOrNull { it.key == sh.id } }
+    // Its row of the workspace's list (the account it is), and there the station that lends it.
+    val entry = topic.value?.items?.firstOrNull { e -> e.members.orEmpty().any { it.station == s.station && it.profileId == p.id } }
     val stations = entry?.stations.orEmpty()
+    val lender = share?.let { sh -> entry?.members?.firstOrNull { it.stationId == sh.host && it.role == "host" } }
     val subscription = p.access.kind == "subscription"
     SectionHeader(t("web-pages.profiles.share.title"), start = 24.dp)
     if (share?.role == "user") {
-        val host = entry?.hostName ?: share.host.take(8)
+        val host = stations.firstOrNull { it.id == share.host }?.name ?: share.host.take(8)
         ListCard {
-            ListRow(onClick = if (entry?.editable == true) ({ app.push(Screen.Profile(entry.station, entry.profile.id)) }) else null) {
+            ListRow(onClick = if (lender != null) ({ app.push(Screen.Profile(lender.station, lender.profileId)) }) else null) {
                 Column(Modifier.weight(1f)) {
                     Text(t("web-main.memory.share.from", "station" to host), fontSize = 15.sp, color = C.ink)
                     Text(t("web-pages.profiles.share.changeThere"), fontSize = 13.sp, color = C.muted)
                     if (subscription && share.reachable == false) Text(t("web-pages.profiles.share.hostAway", "station" to host), fontSize = 13.sp, color = C.red)
                 }
-                if (entry?.editable == true) IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                if (lender != null) IconIn(Icons.ChevronRight, 14.dp, C.subtle)
             }
         }
         return
