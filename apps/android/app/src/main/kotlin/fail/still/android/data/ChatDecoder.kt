@@ -9,6 +9,9 @@ import kotlinx.serialization.json.JsonObject
  * One chat subscription's typed messages. The bridge preserves unchanged JSON subtrees when applying deltas;
  * keep that sharing when decoding, too. Only the current window is retained, never every chat visited.
  */
+/** How many of a chat's newest messages have their words parsed as they are decoded. */
+private const val PREPARED = 40
+
 internal class ChatDecoder {
     private var source: JsonArray? = null
     private var messages = emptyList<ChatMessage>()
@@ -25,6 +28,8 @@ internal class ChatDecoder {
             val list = incoming.map { item ->
                 (decoded[item] ?: decode(ChatMessage.serializer(), item)).also { next[item] = it }
             }
+            // What the newest of them say, parsed here (off the UI thread) for the page to draw at once (ui/Markdown.kt).
+            for (m in list.takeLast(PREPARED)) if (m.authorKind == "agent") fail.still.android.ui.prepareMarkdown(m.text)
             // Commit only after the entire value decoded: a malformed update must not poison the cache.
             source = incoming
             decoded = next

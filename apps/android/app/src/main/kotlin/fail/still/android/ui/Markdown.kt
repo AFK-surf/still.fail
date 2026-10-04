@@ -141,6 +141,15 @@ private val documents = object : android.util.LruCache<String, Node>(256 * 1024)
     override fun sizeOf(key: String, value: Node) = key.length.coerceAtLeast(1)
 }
 
+/**
+ * Parses `text` into the documents a message draws from, if not there yet: done off the UI thread as a chat's messages
+ * are decoded (data/ChatDecoder.kt), so they are drawn whole as the chat first shows, not "laying out" first.
+ */
+fun prepareMarkdown(text: String) {
+    if (text.isEmpty() || documents.get(text) != null) return
+    documents.put(text, markdownParser().parse(text))
+}
+
 private fun Node.children(): List<Node> = generateSequence(firstChild) { it.next }.toList()
 
 /**

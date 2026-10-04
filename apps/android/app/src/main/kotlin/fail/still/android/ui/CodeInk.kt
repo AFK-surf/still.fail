@@ -36,6 +36,8 @@ private val codeLayouts = object : LruCache<CodeKey, TextLayoutResult>(128 * 102
     override fun sizeOf(key: CodeKey, value: TextLayoutResult) = key.code.length.coerceAtLeast(1)
 }
 private val codeWork = Dispatchers.Default.limitedParallelism(2)
+/** Code up to this long (characters) is shaped plain on the UI thread as it is first drawn; longer, never. */
+private const val SHAPED_AT_ONCE = 4_000
 
 /** Code is only drawn here. Tokenizing AND shaping thousands of colored spans happens off the UI thread. */
 @Composable
@@ -49,14 +51,21 @@ internal fun CodeInk(code: String, language: String?, dark: Boolean) {
     val key = remember(code, language, dark, style, density.density, density.fontScale, direction, fonts) {
         CodeKey(code, language?.lowercase(), dark, style, density.density, density.fontScale, direction, fonts)
     }
-    val cached = remember(key) { codeLayouts.get(key)?.let { CodeLayout(key, it, true) } }
+    val cached = remember(key) {
+        codeLayouts.get(key)?.let { CodeLayout(key, it, true) }
+            // A little code is shaped plain here at once (well under a millisecond), so its message has its height as
+            // it is first drawn, not "laying out" and then taller; its colours come after, off the UI thread.
+            ?: if (code.length <= SHAPED_AT_ONCE) CodeLayout(key, TextMeasurer(fonts, Density(key.density, key.fontScale), direction, cacheSize = 0).measure(AnnotatedString(code), style, softWrap = false), false) else null
+    }
     val prepared by produceState(cached, key) {
         value = cached
-        if (cached != null) return@produceState
+        if (cached?.colored == true) return@produceState
         val measurer = TextMeasurer(fonts, Density(key.density, key.fontScale), direction, cacheSize = 0)
         // Plain code first, with its final dimensions. Coloring changes only ink, never glyph metrics or scrolling.
-        val plain = withContext(codeWork) { measurer.measure(AnnotatedString(code), style, softWrap = false) }
-        value = CodeLayout(key, plain, false)
+        if (cached == null) {
+            val plain = withContext(codeWork) { measurer.measure(AnnotatedString(code), style, softWrap = false) }
+            value = CodeLayout(key, plain, false)
+        }
         val colored = withContext(codeWork) { measurer.measure(highlight(code, key.language, dark), style, softWrap = false) }
         codeLayouts.put(key, colored)
         value = CodeLayout(key, colored, true)
