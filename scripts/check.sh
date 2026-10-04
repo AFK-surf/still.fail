@@ -10,7 +10,7 @@
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
-# STILLFAIL_CHECK_PART=ts|station|core|android runs only that part of it: ts the icons, the clients' types and
+# STILLFAIL_CHECK_PART="<part> …" (ts, station, core, android) runs only those parts of it: ts the icons, the clients' types and
 # bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts); station
 # the station (station/, its typecheck and tests) and its native parts' own tests (station/native); core client/'s Rust
 # (the core's native shells: iroh for the web and Android's IO); android the app. Unset: all of them.
@@ -42,7 +42,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 touches() { printf '%s\n' "$changed" | grep -qE "$1"; }
 # Whether this run does a part (STILLFAIL_CHECK_PART): any when it says none.
-part() { [ -z "${STILLFAIL_CHECK_PART:-}" ] || [ "$STILLFAIL_CHECK_PART" = "$1" ]; }
+part() { [ -z "${STILLFAIL_CHECK_PART:-}" ] || case " $STILLFAIL_CHECK_PART " in *" $1 "*) true ;; *) false ;; esac; }
 
 failed=""
 n=0

@@ -111,27 +111,32 @@ jobs:
             node scripts/native.ts ensure --publish
             node scripts/native.ts prune 20
           else
-            # What a branch's checks and builds use (the Linux station parts are built and published from main).
+            # What a branch's checks and builds use (the Linux station parts are built and published from main; the
+            # Linux check's mesh addon is built here when the branch changed it).
             node scripts/native.ts ensure --outbox "$RUNNER_TEMP/natives" \
-              mesh:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine
+              mesh:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine \
+              mesh:linux-x64
           fi
       - if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
 
-  # The full check (scripts/check.sh), one job on mini1: its steps run side by side in it, so a part the range leaves
-  # alone costs nothing, where as a job of its own (four of them, 2026-10-03) it took a runner of three and ~10 s of
-  # setting up. Rust builds in targets under the job's own (setup-mac, check.sh), through sccache. The native parts come
-  # from mini1's cache, the release or the natives job running beside it (scripts/native.ts).
+  # The full check (scripts/check.sh) in two jobs: the parts that need a Mac (the station with its native parts' own
+  # tests, client/'s Rust) here on mini1, the rest beside it on Linux (check-linux). In each, the steps run side by
+  # side, so a part the range leaves alone costs nothing. Rust builds in targets under the job's own (setup-mac,
+  # check.sh), through sccache. The native parts come from mini1's cache, the release or the natives job running beside
+  # it (scripts/native.ts).
   check:
     needs: plan
     runs-on: [self-hosted, mini1]
     timeout-minutes: 60
+    env:
+      STILLFAIL_CHECK_PART: station core
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup-mac
-      - name: Full check
+      - name: Full check (station, core)
         run: |
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
@@ -151,6 +156,34 @@ jobs:
             if wait $undone; then echo "· undoes nothing on main … ok"; else echo "· undoes nothing on main … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/undone.log"; status=1; fi
           fi
           exit $status
+
+  # The parts of the full check that need no Mac (ts, android), on a Linux runner of their own, so they never wait for
+  # one of mini1's (2026-10-04: a run's jobs there queued up to 4 minutes behind one another). The native parts they
+  # use come from the release or this run's natives job (mesh and iroh's relay for linux-x64, Android's shell and
+  # engine); what passed before at the same inputs is kept in the Actions cache (scripts/check.sh, `remembered`).
+  check-linux:
+    needs: [plan, natives]
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 45
+    env:
+      STILLFAIL_CHECK_PART: ts android
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+        with:
+          android: 'true'
+      - uses: ./.github/actions/natives
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/stillfail-check
+          key: check-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: check-${{ runner.os }}-
+      - name: Full check (ts, android)
+        run: |
+          range='${{ needs.plan.outputs.range }}'
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
+          if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
 
   # A branch: what main would deploy, built and bundled beside the check (not after it: the build is most of the run);
   # nothing sent, no secrets.
@@ -209,7 +242,7 @@ jobs:
           ls -la apps/desktop/out/*.zip
 
   api:
-    needs: [plan, check]
+    needs: [plan, check, check-linux]
     if: github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true'
     runs-on: ubuntu-24.04
     environment: production
@@ -230,9 +263,9 @@ jobs:
         run: sh .github/deploy.sh api
 
   static:
-    needs: [plan, natives, check, api]
+    needs: [plan, natives, check, check-linux, api]
     # After the API (a page may need what it adds), or without it when it did not change.
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && needs.natives.result == 'success' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && needs.natives.result == 'success' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: production
     timeout-minutes: 30
@@ -252,8 +285,8 @@ jobs:
 
   # The test channel's station release: what a station on it updates to (studio's at once, the others when they update).
   station:
-    needs: [plan, natives, check, api]
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' && needs.natives.result == 'success' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    needs: [plan, natives, check, check-linux, api]
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' && needs.natives.result == 'success' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 60
@@ -278,8 +311,8 @@ jobs:
 
   # The test channel's Android app (fail.still.android.beta), on android/beta/latest.json.
   android:
-    needs: [plan, natives, check, api]
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true' && needs.natives.result == 'success' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    needs: [plan, natives, check, check-linux, api]
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true' && needs.natives.result == 'success' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: blacksmith-8vcpu-ubuntu-2404
     environment: production
     timeout-minutes: 60
@@ -298,8 +331,8 @@ jobs:
 
   # The test channel's desktop app (fail.still.desktop.beta), on desktop/stillfail-beta-mac.yml: built and signed on the organization Mac runner.
   desktop:
-    needs: [plan, natives, check, api]
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' && needs.natives.result == 'success' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    needs: [plan, natives, check, check-linux, api]
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' && needs.natives.result == 'success' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 90
@@ -319,9 +352,9 @@ jobs:
   # The changelog people read in the apps (docs/changelog.md), from main's history, once what it says is out: the
   # releases bucket's changelog.json, which still.fail cloud serves and marks bug reports fixed by.
   changelog:
-    needs: [plan, check, api, static, station, android, desktop]
+    needs: [plan, check, check-linux, api, static, station, android, desktop]
     # A fix in still.fail cloud counts as out as soon as it is listed: not before the API carrying it is deployed.
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
@@ -348,8 +381,8 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, api, static, station, android, desktop]
-    if: always() && github.ref == 'refs/heads/main' && needs.natives.result == 'success' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result)
+    needs: [plan, natives, check, check-linux, api, static, station, android, desktop]
+    if: always() && github.ref == 'refs/heads/main' && needs.natives.result == 'success' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result)
     runs-on: [self-hosted, mini1]
     permissions:
       contents: write # only this job updates the tag deployed/beta
@@ -368,7 +401,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, bundle, android-build, mac-build, api, static, station, station-update, android, desktop, changelog, done]
+    needs: [plan, natives, check, check-linux, bundle, android-build, mac-build, api, static, station, station-update, android, desktop, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

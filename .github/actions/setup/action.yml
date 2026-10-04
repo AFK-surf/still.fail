@@ -18,7 +18,15 @@ runs:
         node-version: '24'
         package-manager-cache: false
     - shell: bash
-      run: npm install --global pnpm@10.11.1
+      run: |
+        npm install --global pnpm@10.11.1
+        echo "PNPM_STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+    # pnpm's store, which every install here links from: kept between runs by the lockfiles.
+    - uses: actions/cache@v4
+      with:
+        path: ${{ env.PNPM_STORE }}
+        key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: pnpm-${{ runner.os }}-
     - if: inputs.native == 'true'
       shell: bash
       run: |
