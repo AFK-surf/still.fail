@@ -1404,7 +1404,7 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
   let v = u.value;
   assert.deepEqual(v.elsewhere.map((s: J) => [s.after, s.text, s.place.name, s.failed, s.received ?? false, s.by.name]), [
     [1, "**部署** 好了 [看这里](https://x.y)", "#C0OPS", false, false, v.elsewhere[0].by.name],
-    [1, "**收到**，<@U9> 看一下", "#C0OPS", false, true, "Mia"],
+    [1, "**收到**，@U9 看一下", "#C0OPS", false, true, "Mia"],
     [2, "新话题", "#C0DEV", false, false, v.elsewhere[0].by.name],
   ]);
   assert.equal(v.messages.length, 2);
@@ -1418,7 +1418,7 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
   v = u.value;
   assert.deepEqual(v.elsewhere.map((s: J) => [s.after, s.text, s.failed]), [
     [1, "**部署** 好了 [看这里](https://x.y)", false],
-    [1, "**收到**，<@U9> 看一下", false],
+    [1, "**收到**，@U9 看一下", false],
     [2, "新话题", false],
     [2, "补一句", true],
   ]);
