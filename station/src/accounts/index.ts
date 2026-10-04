@@ -11,6 +11,7 @@
 // - every profile checked 3 s after start (what changed while the station was off: keys revoked, logins expired).
 // - the machine's logins: read again when the overview is read with a reading over 2 minutes old (machine.ts).
 // - a sign-in times out after 15 minutes; a finished sign-in for a new profile is kept 15 minutes for its page.
+import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -27,7 +28,7 @@ import { type Capability, discover as discoverDecisions, fingerprint, resolvedMo
 import { type ProfileHealth, serves, usable } from "../sessions/pool.ts";
 import type { Store } from "../store/store.ts";
 import { modelKey } from "../read/usage.ts";
-import { Background } from "./background.ts";
+import { Fibers } from "../ops/fibers.ts";
 import { checkAutomaticDecisions } from "./check.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
 import { codexClaims, type MachineLogin, MachineLogins } from "./machine.ts";
@@ -87,6 +88,8 @@ export type AccountsDeps = {
   machine?: MachineLogins | null;
   /// Check every profile shortly after start (the real station; tests leave it off).
   checkOnStart?: boolean;
+  /// Its time (a TestClock in tests).
+  clock?: Clock.Clock;
 };
 
 /// A sign-in with no profile yet: its runtime, its home while signing in, who started it, what it made.
@@ -109,7 +112,7 @@ export class Accounts {
   private quotaBusy = new Map<string, Promise<void>>();
   private pending = new Map<string, Pending>();
   private listeners = new Set<() => void>();
-  private background = new Background("accounts");
+  private background: Fibers;
   private stops: (() => void)[] = [];
   private readonly env: Env;
   private readonly urls: Urls;
@@ -122,11 +125,12 @@ export class Accounts {
 
   constructor(deps: AccountsDeps) {
     this.deps = deps;
+    this.background = new Fibers("accounts", deps.clock);
     this.env = deps.env ?? (process.env as Env);
     this.urls = deps.urls ?? URLS;
-    this.logins = new LoginManager(deps.data, deps.loginCommands);
+    this.logins = new LoginManager(deps.data, deps.loginCommands, undefined, deps.clock);
     this.machine =
-      deps.machine !== undefined ? deps.machine : new MachineLogins(this.env, (runtime, env) => machineUsage(runtime, env, this.urls));
+      deps.machine !== undefined ? deps.machine : new MachineLogins(this.env, (runtime, env) => machineUsage(runtime, env, this.urls), undefined, deps.clock);
     this.checkFn =
       deps.check ?? ((request, lang) => checkProfile({ ...request, env: this.env, machineToken: (env) => this.machineToken(env), urls: this.urls, lang }));
     this.quotaFn =
@@ -170,7 +174,7 @@ export class Accounts {
       this.background.spawn(() => this.machine!.refresh());
     }
     if (this.deps.checkOnStart !== false) {
-      this.background.later(CHECK_ON_START_MS, () => {
+      this.background.after(CHECK_ON_START_MS, () => {
         for (const p of this.profiles()) this.background.spawn(() => this.check(p.id));
       });
     }
@@ -516,7 +520,7 @@ export class Accounts {
     p.created = profileId;
     this.afterSignIn(profileId);
     // Kept a while for the page that started it to follow it to the profile.
-    this.background.later(PENDING_KEPT_MS, () => this.dropLogin(id));
+    this.background.after(PENDING_KEPT_MS, () => this.dropLogin(id));
   }
 
   private pendingFailed(id: string, error: string) {
@@ -540,6 +544,7 @@ export class Accounts {
   // ── checks and allowances ──
 
   private keepCheck(id: string, check: ProfileCheck) {
+    check.checkedAt = this.background.now();
     this.checks.set(id, check);
     this.deps.store.setProfileCheck(id, check);
     this.changed();
@@ -613,7 +618,7 @@ export class Accounts {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
     if (!this.quotaFn) return this.quotas.get(id) ?? null;
-    const read = await this.quotaFn(profile);
+    const read = { ...(await this.quotaFn(profile)), checkedAt: this.background.now() };
     this.quotas.set(id, read);
     this.deps.store.setProfileQuota(id, read);
     this.changed();
@@ -623,7 +628,7 @@ export class Accounts {
   /// Asks again every profile's allowance older than a round (all of them, `all`).
   refreshQuotas(all: boolean) {
     if (!this.quotaFn) return;
-    const now = Date.now();
+    const now = this.background.now();
     for (const p of this.profiles()) {
       const q = this.quotas.get(p.id);
       const fresh = q !== undefined && now - q.checkedAt < QUOTA_EVERY_MS - 1000;

@@ -95,3 +95,20 @@ export function within<A>(clock: Clock.Clock, ms: number, what: Promise<A>, why:
     }).pipe(Effect.provideService(Clock.Clock, clock)),
   );
 }
+
+/// The machine's own time, for what the station shares with other programs (a file's mtime they compare, a login's
+/// expiry they read too, a lock's heartbeat): on the live Clock whatever clock a part was given, as theirs is.
+export const wall = {
+  now: (): number => liveClock.currentTimeMillisUnsafe(),
+  sleep: (ms: number): Promise<void> => Effect.runPromise(liveClock.sleep(Duration.millis(Math.max(0, ms)))),
+  /// `f` once, `ms` from now; the returned function calls it off.
+  after(ms: number, f: () => void): () => void {
+    const fiber = Effect.runFork(Effect.andThen(liveClock.sleep(Duration.millis(Math.max(0, ms))), Effect.sync(f)));
+    return () => void Effect.runFork(Fiber.interrupt(fiber));
+  },
+  /// `f` every `ms`; the returned function stops it.
+  every(ms: number, f: () => void): () => void {
+    const fiber = Effect.runFork(Effect.forever(Effect.andThen(liveClock.sleep(Duration.millis(ms)), Effect.sync(f))));
+    return () => void Effect.runFork(Fiber.interrupt(fiber));
+  },
+};

@@ -106,7 +106,8 @@ export type CheckOptions = {
   lang?: Lang;
 };
 
-const check = (state: string, detail: string, models: string[] | null): ProfileCheck => ({ state, detail, models, checkedAt: Date.now() });
+/// `checkedAt`: stamped by whoever keeps it, on its clock (Accounts).
+const check = (state: string, detail: string, models: string[] | null): ProfileCheck => ({ state, detail, models, checkedAt: 0 });
 
 async function get(url: string, headers: Record<string, string>): Promise<Response> {
   return fetch(url, { headers, signal: AbortSignal.timeout(15_000) });

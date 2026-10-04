@@ -7,6 +7,7 @@
 //   the command finishes by itself.
 // A stand-in `open` on PATH keeps the commands from opening a browser on the server. Who follows hears each change of a
 // job (`changes`): pushed, not asked again.
+import type { Clock } from "effect";
 import { type ChildProcess, spawn } from "node:child_process";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,7 +16,7 @@ import { cleanEnv } from "../agents/runtime.ts";
 import type { Runtime } from "../agents/profiles.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
-import { Background } from "./background.ts";
+import { Fibers } from "../ops/fibers.ts";
 
 export type LoginState = "starting" | "needs_code" | "needs_approval" | "verifying" | "done" | "failed" | "cancelled";
 
@@ -49,11 +50,12 @@ export class LoginManager {
   private runs = 0;
   private noBrowserDir: string;
   private commands: LoginCommands;
-  private background = new Background("login");
+  private background: Fibers;
   /// The environment the commands start from (the station's, less what points elsewhere).
   private env: () => Record<string, string>;
 
-  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED)) {
+  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED), clock?: Clock.Clock) {
+    this.background = new Fibers("login", clock);
     this.noBrowserDir = join(data, "run", "no-browser");
     this.commands = commands;
     this.env = () => Object.fromEntries(Object.entries(env()).filter(([k]) => !SCRUBBED.includes(k)));
@@ -91,7 +93,7 @@ export class LoginManager {
       env.CODEX_HOME = profile.home;
       [command, args] = [this.commands.codex, ["login", "--device-auth"]];
     }
-    const now = Date.now();
+    const now = this.background.now();
     const job: LoginJob = { profile: profile.id, runtime: profile.runtime, state: "starting", url: null, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
     const run = ++this.runs;
     const id = profile.id;
@@ -116,7 +118,7 @@ export class LoginManager {
       output: "",
       exited: false,
       lang,
-      cancelTimer: this.background.later(TIMEOUT_MS, () => this.failRun(id, run, tr(lang, "station.login.timedOut"))),
+      cancelTimer: this.background.after(TIMEOUT_MS, () => this.failRun(id, run, tr(lang, "station.login.timedOut"))),
     };
     this.jobs.set(id, running);
     for (const stream of [child.stdout, child.stderr]) stream?.on("data", (chunk: Buffer) => this.output(id, run, chunk.toString("utf8")));

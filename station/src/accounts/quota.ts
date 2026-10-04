@@ -16,7 +16,8 @@ type Json = any;
 
 const TIMEOUT_MS = 15_000;
 
-const quota = (state: string, windows: QuotaWindow[], detail: string | null): ProfileQuota => ({ state, windows, detail, checkedAt: Date.now() });
+/// `checkedAt`: stamped by whoever keeps it, on its clock (Accounts, MachineLogins).
+const quota = (state: string, windows: QuotaWindow[], detail: string | null): ProfileQuota => ({ state, windows, detail, checkedAt: 0 });
 
 const okOrUnavailable = (windows: QuotaWindow[], empty: string) => (windows.length === 0 ? quota("unavailable", [], empty) : quota("ok", windows, null));
 

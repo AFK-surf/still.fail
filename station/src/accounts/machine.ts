@@ -6,10 +6,12 @@
 // reading older than two minutes (in the background: the overview answers with the last one). Nothing on the machine
 // says when someone signs in or out in a terminal, so that age is what tells it to read again; who follows hears a
 // reading that differs from the last (`changes`).
+import type { Clock } from "effect";
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { codexHome, type Env, readClaudeCredentials } from "../agents/machine-logins.ts";
+import { liveClock } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import type { ProfileQuota } from "./profiles.ts";
 
@@ -53,7 +55,10 @@ export class MachineLogins {
   private usage?: Usage;
   private lang: () => Lang;
 
-  constructor(env: Env, usage?: Usage, lang: () => Lang = stationLang) {
+  private clock: Clock.Clock;
+
+  constructor(env: Env, usage?: Usage, lang: () => Lang = stationLang, clock: Clock.Clock = liveClock) {
+    this.clock = clock;
     this.env = env;
     this.usage = usage;
     this.lang = lang;
@@ -61,7 +66,7 @@ export class MachineLogins {
 
   /// The last reading, at once; read again in the background when it is old.
   get(): MachineLogin[] {
-    if (Date.now() - this.readAt > FRESH_MS) void this.refresh();
+    if (this.clock.currentTimeMillisUnsafe() - this.readAt > FRESH_MS) void this.refresh();
     return this.logins.map((l) => ({ ...l }));
   }
 
@@ -84,15 +89,18 @@ export class MachineLogins {
     if (this.usage) {
       for (const l of logins.filter((l) => l.loggedIn && l.usable)) {
         try {
-          l.quota = (await this.usage(l.runtime, this.env)) ?? null;
+          const q = (await this.usage(l.runtime, this.env)) ?? null;
+          l.quota = q !== null && typeof q === "object" ? { ...q, checkedAt: this.clock.currentTimeMillisUnsafe() } : q;
         } catch {
           l.quota = null;
         }
       }
     }
-    const changed = JSON.stringify(logins) !== JSON.stringify(this.logins);
+    // When it was read is not a change: what was read is.
+    const said = (ls: MachineLogin[]) => JSON.stringify(ls, (k, v) => (k === "checkedAt" ? undefined : v));
+    const changed = said(logins) !== said(this.logins);
     this.logins = logins;
-    this.readAt = Date.now();
+    this.readAt = this.clock.currentTimeMillisUnsafe();
     if (changed) for (const listener of this.listeners) listener();
   }
 }

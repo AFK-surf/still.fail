@@ -7,6 +7,7 @@ import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, realpathSync, 
 import { join } from "node:path";
 import type { Env } from "../agents/machine-logins.ts";
 import { writePrivate } from "../agents/no-keychain.ts";
+import { wall } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 
 type Json = any;
@@ -40,7 +41,7 @@ function access(c: Credentials, lang: Lang): [string, number] {
 function usable(c: Credentials, rejected: string | null, lang: Lang): boolean {
   try {
     const [token, expires] = access(c, lang);
-    return rejected !== token && (expires === 0 || expires - Date.now() > MARGIN_MS);
+    return rejected !== token && (expires === 0 || expires - wall.now() > MARGIN_MS);
   } catch {
     return false;
   }
@@ -100,16 +101,16 @@ async function save(env: Env, home: string, c: Credentials, lang: Lang) {
   const input = `add-generic-password -U -a "${account}" -s "${ITEM}" -X "${Buffer.from(JSON.stringify(c.data)).toString("hex")}"\n`;
   await new Promise<void>((resolve, reject) => {
     const child = spawn("security", ["-i"], { env: env as NodeJS.ProcessEnv, stdio: ["pipe", "ignore", "ignore"] });
-    const timer = setTimeout(() => {
+    const timer = wall.after(10_000, () => {
       child.kill("SIGKILL");
       reject(new Error(tr(lang, "station.claudeAuth.keychainTimeout")));
-    }, 10_000);
+    });
     child.on("error", () => {
-      clearTimeout(timer);
+      timer();
       reject(new Error(tr(lang, "station.claudeAuth.keychainWrite")));
     });
     child.on("exit", (code) => {
-      clearTimeout(timer);
+      timer();
       if (code === 0) resolve();
       else reject(new Error(tr(lang, "station.claudeAuth.keychainSaveFailed")));
     });
@@ -183,13 +184,13 @@ async function renew(env: Env, home: string, machine: boolean, rejected: string 
   }
   const updated = latest.data.claudeAiOauth;
   updated.accessToken = token;
-  updated.expiresAt = Date.now() + seconds * 1000;
+  updated.expiresAt = wall.now() + seconds * 1000;
   if (typeof answer.refresh_token === "string" && answer.refresh_token !== "") updated.refreshToken = answer.refresh_token;
   if (typeof answer.scope === "string") updated.scopes = answer.scope.split(/\s+/).filter((s: string) => s !== "");
-  if (sane(answer.refresh_token_expires_in)) updated.refreshTokenExpiresAt = Date.now() + answer.refresh_token_expires_in * 1000;
+  if (sane(answer.refresh_token_expires_in)) updated.refreshTokenExpiresAt = wall.now() + answer.refresh_token_expires_in * 1000;
   let error: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await new Promise((r) => setTimeout(r, 100));
+    if (attempt > 0) await wall.sleep(100);
     try {
       await save(env, home, latest, lang);
       error = undefined;
@@ -207,16 +208,16 @@ async function renew(env: Env, home: string, machine: boolean, rejected: string 
 export class RefreshLock {
   private path: string;
   private fd: number;
-  private heartbeat: ReturnType<typeof setInterval>;
+  private heartbeat: () => void;
 
-  private constructor(path: string, fd: number, heartbeat: ReturnType<typeof setInterval>) {
+  private constructor(path: string, fd: number, heartbeat: () => void) {
     this.path = path;
     this.fd = fd;
     this.heartbeat = heartbeat;
   }
 
   static async acquire(path: string, lang: Lang = stationLang()): Promise<RefreshLock> {
-    const deadline = Date.now() + LOCK_WAIT_MS;
+    const deadline = wall.now() + LOCK_WAIT_MS;
     for (;;) {
       try {
         mkdirSync(path);
@@ -225,7 +226,7 @@ export class RefreshLock {
         if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw new Error(tr(lang, "station.claudeAuth.lockFailed"));
         let age = 0;
         try {
-          age = Date.now() - statSync(path).mtimeMs;
+          age = wall.now() - statSync(path).mtimeMs;
         } catch {
           continue;
         }
@@ -237,25 +238,24 @@ export class RefreshLock {
             if ((e as NodeJS.ErrnoException).code === "ENOENT") continue;
           }
         }
-        if (Date.now() >= deadline) throw new Error(tr(lang, "station.claudeAuth.refreshLocked"));
-        await new Promise((r) => setTimeout(r, 100));
+        if (wall.now() >= deadline) throw new Error(tr(lang, "station.claudeAuth.refreshLocked"));
+        await wall.sleep(100);
       }
     }
     const fd = openSync(path, "r");
-    const heartbeat = setInterval(() => {
+    const heartbeat = wall.every(HEARTBEAT_MS, () => {
       try {
-        const now = new Date();
+        const now = new Date(wall.now());
         futimesSync(fd, now, now);
       } catch {
-        clearInterval(heartbeat);
+        heartbeat();
       }
-    }, HEARTBEAT_MS);
-    heartbeat.unref();
+    });
     return new RefreshLock(path, fd, heartbeat);
   }
 
   release() {
-    clearInterval(this.heartbeat);
+    this.heartbeat();
     try {
       const held = fstatSync(this.fd);
       const current = statSync(this.path);
