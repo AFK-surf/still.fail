@@ -31,6 +31,10 @@ export const RECONNECT_MAX_MS = 60_000;
 /// How many tries in a row a station that was up may miss before it is taken for down.
 export const MISSES = 3;
 export const LINK_KEY = "link";
+/// Where a station's last host sample is kept (`host/<address>`), so its figures show from before it is reached again;
+/// written at most every HOST_SAVE_MS.
+export const HOST_KEY = "host";
+export const HOST_SAVE_MS = 60_000;
 /// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone.
 export const STREAM_IDLE_MS = 40_000;
 /// A stream silent past one keepalive (and a little) may be on a link that is gone.
@@ -102,6 +106,8 @@ export class Link {
   readonly errors = new Map<string, CoreError>();
   /// Host samples and jobs' logs as they come (measurements and output shown while watched).
   readonly memory = new Map<string, unknown>();
+  /// When the host sample was last written down (HOST_KEY).
+  hostSaved = 0;
 
   constructor(address: string, addr: StationAddr, scoped: Scoped) {
     this.address = address;
@@ -180,6 +186,19 @@ export class StationsSync {
           link.state = { state: "connecting", last: new TextDecoder().decode(bytes) };
           this.onChange(address, "link");
         }
+      }),
+      link.scoped,
+    );
+    // Its figures as last heard, until it says them anew.
+    core.runner.fork(
+      Effect.map(Effect.orElseSucceed(core.host.storageGet(`${HOST_KEY}/${address}`), () => null), (bytes) => {
+        if (!bytes || link.memory.has("host")) return;
+        try {
+          link.memory.set("host", JSON.parse(new TextDecoder().decode(bytes)));
+        } catch {
+          return;
+        }
+        this.onChange(address, "host");
       }),
       link.scoped,
     );
@@ -674,6 +693,11 @@ export class StationsSync {
         if (link) {
           link.memory.set("host", data);
           this.onChange(address, "host");
+          const now = core.host.nowMs();
+          if (now - link.hostSaved >= HOST_SAVE_MS) {
+            link.hostSaved = now;
+            core.runner.fork(Effect.ignore(core.host.storageSet(`${HOST_KEY}/${address}`, new TextEncoder().encode(JSON.stringify(data)))));
+          }
         }
         return;
       }

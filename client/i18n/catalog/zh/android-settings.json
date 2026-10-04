@@ -449,6 +449,7 @@
   "android-settings.stations.reading": "正在读取 station…",
   "android-settings.stations.rtt": "当前延时 ",
   "android-settings.stations.silent": "这台机器很久没联系 {app} 了",
+  "android-settings.stations.reconnecting": "重连中",
   "android-settings.stations.total": "共 {total}",
   "android-settings.theme.dark": "深色",
   "android-settings.theme.light": "浅色",

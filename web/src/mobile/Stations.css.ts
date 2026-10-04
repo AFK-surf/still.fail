@@ -13,6 +13,11 @@ export const mStationBody = style({ display: "grid", position: "relative" });
 export const mStationLoad = style({ gridArea: "1 / 1", display: "flex", flexDirection: "column", minWidth: "0" });
 export const mStationNet = style({ display: "block" });
 globalStyle(`${mStationBody} [data-hidden]`, { visibility: "hidden" });
+/** Reconnecting: the figures as last heard, faded. */
+globalStyle(`${mStationLoad}[data-stale]`, { opacity: "0.45" });
+export const mStationFaded = style({ display: "block", selectors: { "&[data-stale]": { opacity: "0.45" } } });
+/** The station is up but not reached just now (its card's head, its page's title). */
+export const mReconnecting = style({ display: "inline-flex", alignItems: "center", gap: "5px", flex: "none", fontSize: "12px", lineHeight: "16px", color: "var(--m-muted)" });
 /** Offline, over that room (taking none of its own): the picture of it asleep as tall as the room, the line beside it. */
 export const mStationNap = style({
   position: "absolute", inset: "10px 0 0 0", display: "flex", alignItems: "center", gap: "12px",

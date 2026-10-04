@@ -62,6 +62,7 @@ export function StationsScreen() {
           <span className={css.mStationHead}>
             <Buddy s={s} />
             <span className={partsCss.mGrow}><b className={css.mStationName}>{s.name}</b><span className={css.mStationSummary}>{s.summary}</span></span>
+            {s.reconnecting && <Reconnecting />}
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </span>
           <StationBody s={s} />
@@ -75,6 +76,11 @@ export function StationsScreen() {
 /** Laid out while a station has no network to show, so that its card keeps the room. */
 const noNet: StationNet = { path: "直连", rtt: { text: "0 ms", level: "ok" }, rttHistory: [], down: " ", up: " ", total: "" };
 
+/** The station is up but not reached just now: what shows of it is from before. */
+function Reconnecting() {
+  return <span className={css.mReconnecting}><Spinner size={11} />{t("web-mobile.stations.reconnecting")}</span>;
+}
+
 /**
  * Under a station's name in the list: its load as rings and its network, in the same room whatever state it is in —
  * online, offline, or not yet read — so no card grows, shrinks or pushes the ones below it as states change.
@@ -85,7 +91,7 @@ function StationBody({ s }: { s: StationView }) {
   const net = s.online ? s.net : undefined;
   return (
     <span className={css.mStationBody}>
-      <span className={css.mStationLoad}>
+      <span className={css.mStationLoad} data-stale={s.reconnecting || undefined}>
         <span className={css.mStationRings} data-hidden={!host || undefined}><MeterChips meters={host?.meters ?? []} bare /></span>
         <span className={css.mStationNet} data-hidden={!net || undefined}><Net net={net ?? noNet} stacked /></span>
       </span>
@@ -152,16 +158,18 @@ export function StationScreen() {
   const manager = useManager();
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s ? <span className={barsCss.mNavbarNote}>{s.host?.cpuModel || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline"))}</span> : undefined}
+      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{s.host?.cpuModel || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline"))}</span> : undefined}
         trailing={s && manager ? <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
       {!s ? <Loading text={stations.error?.message ?? t("web-mobile.reading")} /> : (
         <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
           {s.online && s.host ? (
             <Card>
+              <span className={css.mStationFaded} data-stale={s.reconnecting || undefined}>
               <span className={css.mStationRings}><MeterChips meters={s.host.meters} /></span>
               <span className={css.mStationLine}>{s.host.line}</span>
               {s.net && <Net net={s.net} stacked />}
               {s.overview?.processesText && <span className={css.mStationLine}>{s.overview.processesText}</span>}
+              </span>
             </Card>
           ) : !s.online ? (
             <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>{t("web-mobile.stations.offlineNote", { name: NAME })}</span><RetryPill /></span></Card>

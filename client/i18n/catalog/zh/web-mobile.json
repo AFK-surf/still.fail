@@ -486,6 +486,7 @@
   "web-mobile.stations.firstNote": "agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。",
   "web-mobile.stations.joined": "「{name}」已加入，现在可以打开它了。",
   "web-mobile.stations.longGone": "这台机器很久没联系 {name} 了",
+  "web-mobile.stations.reconnecting": "重连中",
   "web-mobile.stations.makeCommand": "生成命令",
   "web-mobile.stations.nameIt": "给这台机器起个名字",
   "web-mobile.stations.namePlaceholder": "比如机器名：studio、mac-mini",

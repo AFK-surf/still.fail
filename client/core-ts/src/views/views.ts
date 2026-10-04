@@ -949,6 +949,7 @@ export class Views implements Owner {
         summary = `${what} · ${running > 0 ? t("core-views.station.running", { n: running }) : t("core-views.station.idle")}`;
       } else summary = t("core-views.station.connecting");
       const net = this.ok({ topic: "net", station: s.address });
+      const state = str(this.link(s.address).state);
       return {
         station: s.address,
         id: s.id,
@@ -957,6 +958,7 @@ export class Views implements Owner {
         face: looks.face(s.online, overview),
         line: looks.stationLine(s.online, host),
         online: s.online,
+        reconnecting: s.online && state !== "online" && state !== "error",
         lastSeen: s.lastSeen,
         version: s.version,
         link: this.link(s.address),

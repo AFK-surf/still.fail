@@ -124,6 +124,7 @@ fun StationsScreen(current: WorkspaceEntry) {
                             Text(s.name, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(s.summary, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
+                        if (s.reconnecting == true) Reconnecting()
                         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                     }
                     StationBody(s)
@@ -147,7 +148,8 @@ private fun StationBody(s: StationView) {
     val host = s.host?.takeIf { s.online }
     val net = s.net?.takeIf { s.online }
     Box(Modifier.fillMaxWidth().padding(top = 10.dp)) {
-        Column(Modifier.fillMaxWidth()) {
+        // Reconnecting: the figures as last heard, faded.
+        Column(Modifier.fillMaxWidth().alpha(if (s.reconnecting == true) 0.45f else 1f)) {
             Box(Modifier.height(20.dp).alpha(if (host != null) 1f else 0f)) { MeterChips(host?.meters.orEmpty()) }
             NetLine(net ?: noNet, Modifier.padding(top = 10.dp).alpha(if (net != null) 1f else 0f))
         }
@@ -166,6 +168,13 @@ private fun StationBody(s: StationView) {
     }
 }
 
+/** The station is up but not reached just now: what shows of it is from before. */
+@Composable
+private fun Reconnecting() = Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+    Spinner(11.dp)
+    Text(t("android-settings.stations.reconnecting"), fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1)
+}
+
 /** A grey bar where a figure would be, not known now. */
 @Composable
 private fun Bar(width: androidx.compose.ui.unit.Dp, height: androidx.compose.ui.unit.Dp = 10.dp, radius: androidx.compose.ui.unit.Dp = 5.dp) =
@@ -180,17 +189,20 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
     Column(Modifier.fillMaxSize()) {
         val manager = isManager(current)
         NavBar("Station", app::pop, s?.name ?: stationName(address), sub = s?.let { st ->
-            { Text(st.line.orEmpty(), fontSize = 11.sp, color = C.muted, maxLines = 1) }
+            { if (st.reconnecting == true) Reconnecting() else Text(st.line.orEmpty(), fontSize = 11.sp, color = C.muted, maxLines = 1) }
         }, trailing = if (s != null && manager) ({ NavButton(Icons.More, { openStationMenu(app, current, s) }) }) else null)
         if (s == null) return Loading(stations.error?.message ?: t("android-settings.reading"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             val host = s.host
             if (s.online && host != null) {
                 Card {
-                    MeterChips(host.meters, Modifier.padding(vertical = 4.dp))
-                    Text(host.line, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp))
-                    s.net?.let { NetLine(it, Modifier.padding(top = 6.dp)) }
-                    s.overview?.processesText?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp)) }
+                    // Reconnecting: as last heard, faded.
+                    Column(Modifier.alpha(if (s.reconnecting == true) 0.45f else 1f)) {
+                        MeterChips(host.meters, Modifier.padding(vertical = 4.dp))
+                        Text(host.line, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp))
+                        s.net?.let { NetLine(it, Modifier.padding(top = 6.dp)) }
+                        s.overview?.processesText?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp)) }
+                    }
                 }
             } else if (!s.online) {
                 Card {

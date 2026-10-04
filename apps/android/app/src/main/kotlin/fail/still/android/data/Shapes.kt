@@ -2378,6 +2378,8 @@ data class StationView (
 	val face: String? = null,
 	val line: String? = null,
 	val online: Boolean,
+	/// Up, but not reached just now (connecting or coming back): its figures are from before.
+	val reconnecting: Boolean? = null,
 	/// Seconds, from still.fail cloud.
 	val lastSeen: Long? = null,
 	val version: String? = null,

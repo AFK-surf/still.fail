@@ -476,6 +476,7 @@
   "android-settings.stations.reading": "Loading stations…",
   "android-settings.stations.rtt": "Latency ",
   "android-settings.stations.silent": "Hasn't reached {app} in a long time",
+  "android-settings.stations.reconnecting": "Reconnecting",
   "android-settings.stations.total": "{total} total",
   "android-settings.theme.dark": "Dark",
   "android-settings.theme.light": "Light",

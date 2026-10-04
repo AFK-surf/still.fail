@@ -427,8 +427,10 @@ export class StationTopics implements Owner {
       const now = core.host.nowMs();
       let value: unknown = null;
       if (net === null) {
+        // No connection now (coming back): how it went last is kept, the station's card saying it is reconnecting.
         last = null;
         samples = [];
+        value = this.#nets.get(key) ?? null;
       } else {
         const since = last !== null && net.rxBytes >= last[1].rxBytes && net.txBytes >= last[1].txBytes ? last : null;
         if (since) {

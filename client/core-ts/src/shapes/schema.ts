@@ -1421,6 +1421,7 @@ export const SHAPES: Record<string, Shape> = {
     ["face", opt("String"), { doc: "Its buddy's face: offline | working | idle; and what it is under its name (its processor, else 在线/离线)." }],
     ["line", opt("String")],
     ["online", "bool"],
+    ["reconnecting", "bool", { default: true, doc: "Up, but not reached just now (connecting or coming back): its figures are from before." }],
     ["lastSeen", opt("i64"), { client: opt("I54"), doc: "Seconds, from still.fail cloud." }],
     ["version", opt("String")],
     ["link", "Link"],

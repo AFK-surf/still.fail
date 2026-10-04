@@ -2357,6 +2357,8 @@ export interface StationView {
 	face?: string;
 	line?: string;
 	online: boolean;
+	/** Up, but not reached just now (connecting or coming back): its figures are from before. */
+	reconnecting?: boolean;
 	/** Seconds, from still.fail cloud. */
 	lastSeen?: number;
 	version?: string;

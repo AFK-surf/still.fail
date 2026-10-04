@@ -504,6 +504,7 @@
   "web-mobile.stations.firstNote": "Agents work on your machines. Start by adding a Mac or Linux machine.",
   "web-mobile.stations.joined": "\"{name}\" joined. Open it now.",
   "web-mobile.stations.longGone": "Hasn't reached {name} in a while",
+  "web-mobile.stations.reconnecting": "Reconnecting",
   "web-mobile.stations.makeCommand": "Get command",
   "web-mobile.stations.nameIt": "Name this machine",
   "web-mobile.stations.namePlaceholder": "Machine name, e.g. studio, mac-mini",

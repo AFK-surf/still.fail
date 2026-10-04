@@ -31,10 +31,10 @@ class StationsLayoutTest {
     )
     private val net = StationNet(path = "直连", rtt = NetFigure("12 ms", "ok"), rttHistory = emptyList(), down = "1.2 MB/s", up = "30 KB/s", total = "", downTotal = "212 MB", upTotal = "9.6 MB")
 
-    private fun station(name: String, online: Boolean, read: Boolean = true) = StationView(
+    private fun station(name: String, online: Boolean, read: Boolean = true, reconnecting: Boolean = false) = StationView(
         station = "${Fixtures.WS}/$name", id = name, name = name, summary = if (online) "10 核 · 32 GB" else "3 小时前离线",
         face = if (online) "idle" else "offline", online = online, link = Link(if (online) "online" else "offline"),
-        runtimes = emptyList(), models = emptyList(), host = if (online && read) host else null, net = if (online && read) net else null,
+        runtimes = emptyList(), models = emptyList(), host = if (online && read) host else null, net = if (online && read) net else null, reconnecting = reconnecting,
     )
 
     @Test fun states() {
@@ -44,6 +44,7 @@ class StationsLayoutTest {
             "online" to listOf(station("studio", true), station("mini", true), station("air", true)),
             "mixed" to listOf(station("studio", false), station("mini", true, read = false), station("air", true)),
             "offline" to listOf(station("studio", true), station("mini", false), station("air", false)),
+            "reconnecting" to listOf(station("studio", true, reconnecting = true), station("mini", true, read = false, reconnecting = true), station("air", true)),
         )
         val tops = shown.map { (name, list) ->
             rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), list) }
@@ -65,5 +66,11 @@ class StationsLayoutTest {
         rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(station("studio", true), station("mini", false), station("air", true, read = false))) }
         h.settle()
         h.record("look-${if (dark) "dark" else "light"}").end()
+        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(station("studio", true, reconnecting = true), station("mini", false), station("air", true))) }
+        h.settle()
+        h.record("reconnecting-${if (dark) "dark" else "light"}").end()
+        rule.runOnUiThread { h.app.push(Screen.Station("${Fixtures.WS}/studio")) }
+        h.settle()
+        h.record("page-reconnecting-${if (dark) "dark" else "light"}").end()
     }
 }
