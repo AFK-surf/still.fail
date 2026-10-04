@@ -14,6 +14,7 @@ import { t } from "../i18n.ts";
 /** What a UI can subscribe to (`Topic` in client/core-ts/src/protocol.ts). */
 export type Topic =
   | { topic: "decisionForm"; station: string; form: string }
+  | { topic: "policyForm"; station: string; form: string }
   | { topic: "profileFlow"; station: string; form: string }
   | { topic: "connectFlow"; station: string; form: string }
   | { topic: "slackTokens"; station: string; form: string }

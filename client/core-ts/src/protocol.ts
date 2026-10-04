@@ -85,6 +85,7 @@ export const TOPICS: Record<string, Spec> = {
   slackTokens: { station: S, form: S },
   connectFlow: { station: S, form: S },
   decisionForm: { station: S, form: S },
+  policyForm: { station: S, form: S },
   profileFlow: { station: S, form: S },
   changelog: {},
   workspaceMarks: { workspace: ["string", "skip"] },

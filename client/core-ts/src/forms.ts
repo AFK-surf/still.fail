@@ -163,6 +163,134 @@ export class DecisionForms {
   }
 }
 
+// ── the archive policy, as one page edits it ──
+
+type PolicyOption = { key: string; id: string | null; name: string; rubric: string; archive: boolean };
+type PolicyDraft = { owner: ClientId; policy: string; options: PolicyOption[]; next: number; dirty: boolean; pending: boolean; watch: Watch };
+
+/// The station's policy as it is now (its overview's), for a draft to start from and to tell whether it changed.
+function savedPolicy(store: Store, station: string): { policy: string; options: Omit<PolicyOption, "key">[] } | null {
+  const p = get(get(overviewOf(store, station), "automaticDecisions"), "policy");
+  if (!isObject(p)) return null;
+  return {
+    policy: str(get(p, "text")),
+    options: arr(get(p, "options")).map((o) => ({ id: str(get(o, "id")) || null, name: str(get(o, "name")), rubric: str(get(o, "rubric")), archive: get(o, "archive") === true })),
+  };
+}
+
+const sameOptions = (a: Omit<PolicyOption, "key">[], b: Omit<PolicyOption, "key">[]) =>
+  a.length === b.length && a.every((o, i) => o.id === b[i]!.id && o.name === b[i]!.name && o.rubric === b[i]!.rubric && o.archive === b[i]!.archive);
+
+export class PolicyForms {
+  readonly #store: Store;
+  readonly #drafts = new Map<string, PolicyDraft>();
+
+  constructor(store: Store) {
+    this.#store = store;
+  }
+
+  disconnect(owner: ClientId): void {
+    for (const [k, d] of [...this.#drafts]) {
+      if (d.owner !== owner) continue;
+      d.watch.drop();
+      this.#drafts.delete(k);
+    }
+  }
+
+  value(topic: Topic): J {
+    const d = this.#drafts.get(topicKey(topic));
+    if (!d) return null;
+    // Not edited: follows the station's (changed elsewhere, by a person or an agent).
+    if (!d.dirty && !d.pending) this.#reset(d, topic.station as string);
+    return { policy: d.policy, options: d.options.map((o) => ({ ...o })), dirty: d.dirty, pending: d.pending };
+  }
+
+  #reset(d: PolicyDraft, station: string): void {
+    const saved = savedPolicy(this.#store, station);
+    if (!saved) return;
+    d.policy = saved.policy;
+    if (!sameOptions(d.options, saved.options)) d.options = saved.options.map((o) => ({ ...o, key: `o${d.next++}` }));
+  }
+
+  change(topic: Topic, owner: ClientId, action: string, patch: J): J {
+    const station = topic.station as string;
+    const key = topicKey(topic);
+    const existing = this.#drafts.get(key);
+    if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-misc.policy.notYours"));
+    if (action === "drop") {
+      existing?.watch.drop();
+      this.#drafts.delete(key);
+      this.#store.invalidate(topic);
+      return null;
+    }
+    let d = existing;
+    if (!d) {
+      const watch = this.#store.watch({ topic: "overview", station }, () => this.#store.invalidate(topic));
+      d = { owner, policy: "", options: [], next: 0, dirty: false, pending: false, watch };
+      this.#reset(d, station);
+      this.#drafts.set(key, d);
+    }
+    if (action === "edit" && isObject(patch)) {
+      if (d.pending) throw CoreError.invalid(t("core-misc.policy.saving"));
+      if (patch.reset === true) {
+        d.dirty = false;
+        this.#reset(d, station);
+      } else {
+        this.#edit(d, patch);
+        const saved = savedPolicy(this.#store, station);
+        d.dirty = saved === null || saved.policy !== d.policy || !sameOptions(d.options, saved.options);
+      }
+    }
+    this.#store.invalidate(topic);
+    return this.value(topic);
+  }
+
+  #edit(d: PolicyDraft, patch: J): void {
+    if (typeof patch.policy === "string") d.policy = patch.policy;
+    const at = (k: unknown) => {
+      const i = d.options.findIndex((o) => o.key === k);
+      if (i < 0) throw CoreError.invalid(t("core-misc.policy.noOption"));
+      return i;
+    };
+    if (typeof patch.add === "boolean") d.options.push({ key: `o${d.next++}`, id: null, name: "", rubric: "", archive: patch.add });
+    if (typeof patch.remove === "string") d.options.splice(at(patch.remove), 1);
+    if (typeof patch.option === "string") {
+      const o = d.options[at(patch.option)]!;
+      if (typeof patch.name === "string") o.name = patch.name;
+      if (typeof patch.rubric === "string") o.rubric = patch.rubric;
+      if (typeof patch.archive === "boolean") {
+        // Moved to the other group: at its end.
+        if (o.archive !== patch.archive) {
+          d.options.splice(at(patch.option), 1);
+          o.archive = patch.archive;
+          d.options.push(o);
+        }
+      }
+    }
+  }
+
+  begin(topic: Topic, owner: ClientId): J {
+    const d = this.#drafts.get(topicKey(topic));
+    if (!d || d.owner !== owner) throw CoreError.invalid(t("core-misc.policy.closed"));
+    if (d.pending) throw CoreError.invalid(t("core-misc.policy.saving"));
+    d.pending = true;
+    this.#store.invalidate(topic);
+    return {
+      policy: d.policy,
+      options: d.options.map((o) => ({ ...(o.id !== null ? { id: o.id } : {}), name: o.name, rubric: o.rubric, archive: o.archive })),
+    };
+  }
+
+  finish(topic: Topic, owner: ClientId, ok: boolean): void {
+    const d = this.#drafts.get(topicKey(topic));
+    if (d && d.owner === owner) {
+      d.pending = false;
+      if (ok) d.dirty = false;
+    }
+    this.#store.invalidate(topic);
+  }
+}
+
 // ── a Slack token form (slack_tokens.rs) ──
 
 type TokenDraft = { owner: ClientId; revision: number; checking: boolean; input: J; verified: J; errors: string[] };

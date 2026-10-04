@@ -5,7 +5,7 @@ import { handlers } from "./core/execute.ts";
 import type { Call } from "./core/calls.ts";
 import type { Owner } from "./core/routing.ts";
 import { CoreError, asCoreError } from "./error.ts";
-import { ConnectFlows, DecisionForms, ProfileFlows, Tokens, tokensOf } from "./forms.ts";
+import { ConnectFlows, DecisionForms, PolicyForms, ProfileFlows, Tokens, tokensOf } from "./forms.ts";
 import { t } from "./i18n.ts";
 import * as ops from "./ops.ts";
 import type { ClientId, Topic } from "./protocol.ts";
@@ -14,16 +14,18 @@ import type { Value } from "./store.ts";
 // deno-lint-ignore no-explicit-any
 type J = any;
 
-const FORMS = new Set(["decisionForm", "profileFlow", "connectFlow", "slackTokens"]);
+const FORMS = new Set(["decisionForm", "policyForm", "profileFlow", "connectFlow", "slackTokens"]);
 
 export class Forms implements Owner {
   readonly decisions: DecisionForms;
+  readonly policies: PolicyForms;
   readonly profiles: ProfileFlows;
   readonly tokens: Tokens;
   readonly connects: ConnectFlows;
 
   constructor(inner: Inner) {
     this.decisions = new DecisionForms(inner.store);
+    this.policies = new PolicyForms(inner.store);
     this.profiles = new ProfileFlows(inner.store);
     this.tokens = new Tokens();
     this.connects = new ConnectFlows(
@@ -48,6 +50,8 @@ export class Forms implements Owner {
       switch (topic.topic) {
         case "decisionForm":
           return { ok: this.decisions.value(topic) };
+        case "policyForm":
+          return { ok: this.policies.value(topic) };
         case "profileFlow":
           return { ok: this.profiles.value(topic) };
         case "connectFlow":
@@ -63,6 +67,7 @@ export class Forms implements Owner {
   /// A UI went away: its forms go with it.
   disconnect(inner: Inner, client: ClientId): void {
     this.decisions.disconnect(client);
+    this.policies.disconnect(client);
     this.profiles.disconnect(client);
     this.connects.disconnect(client);
     this.tokens.disconnect(client);
@@ -85,6 +90,17 @@ export function installForms(inner: Inner): Forms {
       const input = yield* attempt(() => forms.decisions.begin(c.topic, at[0]));
       const answer = yield* Effect.result(Effect.flatMap(request("automaticDecisions.save", { station: c.topic.station, input }), (op) => perform(op, ctx)));
       forms.decisions.finish(c.topic, at[0], answer._tag === "Success");
+      if (answer._tag === "Failure") return yield* Effect.fail(answer.failure);
+      return answer.success;
+    });
+  };
+  handlers.policyForm = (_i, call, _p, at, ctx) => {
+    const c = call as Extract<Call, { kind: "policyForm" }>;
+    if (["open", "edit", "drop"].includes(c.action)) return attempt(() => forms.policies.change(c.topic, at[0], c.action, c.patch));
+    return Effect.gen(function* () {
+      const input = yield* attempt(() => forms.policies.begin(c.topic, at[0]));
+      const answer = yield* Effect.result(Effect.flatMap(request("automaticDecisions.policy", { station: c.topic.station, input }), (op) => perform(op, ctx)));
+      forms.policies.finish(c.topic, at[0], answer._tag === "Success");
       if (answer._tag === "Failure") return yield* Effect.fail(answer.failure);
       return answer.success;
     });

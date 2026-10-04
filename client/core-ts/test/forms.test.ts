@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
-import { DecisionForms, ProfileFlows, Tokens } from "../src/forms.ts";
+import { DecisionForms, PolicyForms, ProfileFlows, Tokens } from "../src/forms.ts";
+import { archiveCheck } from "../src/present.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
@@ -63,6 +64,54 @@ test("late_settings_update_clean_drafts_but_do_not_overwrite_edits", () => {
   s.set(overview, { ok: { automaticDecisions: { settings: { completion: { enabled: false, model: null } } } } });
   assert.equal(forms.value(form).model, "another");
   forms.change(form, 1, "drop", {});
+});
+
+test("the archive policy draft follows the station until edited, moves an option to the other group's end, and saves whole", () => {
+  const s = store();
+  const forms = new PolicyForms(s);
+  const form: Topic = { topic: "policyForm", station: "ws/st", form: "p" };
+  const policy = (text: string) => ({ ok: { automaticDecisions: { policy: { text, options: [
+    { id: "answered", name: "已回答", rubric: "给了答案", archive: true, count: 0, chats: [] },
+    { id: "awaiting_review", name: "等人看结果", rubric: "等人看", archive: false, count: 0, chats: [] },
+    { id: "uncertain", name: "看不出来", rubric: "不够判断", archive: false, count: 0, chats: [] },
+  ], days: 7, checked: 0, failed: 0, edited: false } } } });
+  forms.change(form, 1, "open", {});
+  s.set(overview, policy("看用户要的"));
+  let v = forms.value(form);
+  assert.ok("ok" in conform("ArchivePolicyDraft", v), JSON.stringify(conform("ArchivePolicyDraft", v)));
+  assert.equal(v.policy, "看用户要的");
+  assert.equal(v.dirty, false);
+  // Changed elsewhere while not edited here: shown so.
+  s.set(overview, policy("只看最初要的"));
+  assert.equal(forms.value(form).policy, "只看最初要的");
+  const review = forms.value(form).options[1].key;
+  forms.change(form, 1, "edit", { option: review, archive: true });
+  v = forms.value(form);
+  assert.deepEqual(v.options.map((o: J) => [o.id, o.archive]), [["answered", true], ["uncertain", false], ["awaiting_review", true]]);
+  assert.equal(v.dirty, true);
+  forms.change(form, 1, "edit", { add: false });
+  const added = forms.value(form).options.at(-1);
+  forms.change(form, 1, "edit", { option: added.key, name: "等部署", rubric: "等人部署" });
+  // An edited draft is not overwritten by the station's.
+  s.set(overview, policy("又改了"));
+  assert.equal(forms.value(form).policy, "只看最初要的");
+  assert.throws(() => forms.change(form, 2, "edit", { policy: "x" }), CoreError);
+  const input = forms.begin(form, 1);
+  assert.deepEqual(input.options.at(-1), { name: "等部署", rubric: "等人部署", archive: false });
+  assert.equal(input.options[0].id, "answered");
+  assert.equal(forms.value(form).pending, true);
+  forms.finish(form, 1, true);
+  assert.equal(forms.value(form).dirty, false);
+  forms.change(form, 1, "drop", {});
+  assert.equal(forms.value(form), null);
+});
+
+test("the archive check under a done post says the option and what came of it", () => {
+  assert.deepEqual(archiveCheck({ option: "landed", name: "已落地", archive: true, recommended: true }), { text: "已落地 · 推荐归档", recommended: true, failed: false });
+  assert.deepEqual(archiveCheck({ option: "landed", name: "已落地", archive: true, recommended: false }), { text: "已落地 · 把握不够，不推荐归档", recommended: false, failed: false });
+  assert.deepEqual(archiveCheck({ option: "awaiting_review", name: "等人看结果", archive: false, recommended: false }), { text: "等人看结果 · 不推荐归档", recommended: false, failed: false });
+  assert.deepEqual(archiveCheck({ error: "timeout" }), { text: "归档检查没做成", recommended: false, failed: true });
+  assert.equal(archiveCheck(undefined), null);
 });
 
 const tokensTopic = (station: string): Topic => ({ topic: "slackTokens", station, form: "form" });

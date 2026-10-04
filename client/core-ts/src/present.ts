@@ -870,6 +870,8 @@ function overview(v: J, c: Clock): void {
   for (const row of arr(get(v.automaticDecisions, "recent")) ?? []) {
     if (typeof get(row, "at") === "number") row.stamp = stamp(row.at, c);
   }
+  const policy = get(v.automaticDecisions, "policy");
+  if (isObject(policy)) archivePolicy(policy as J, c);
   const processes = arr(v.processes);
   if (processes) {
     let mb = 0;
@@ -910,4 +912,32 @@ function overview(v: J, c: Clock): void {
       !(get(l, "runtime") !== undefined && taken.some((r) => equal(r, get(l, "runtime")))) &&
       !(email !== undefined && subscriptions.some(([runtime, bound]) => equal(get(l, "runtime"), runtime) && email.trim().toLowerCase() === bound));
   }
+}
+
+/// The archive policy's lines: the checks it counted, and who changed it last, where, when and what.
+function archivePolicy(p: J, c: Clock): void {
+  const failed = u64(p.failed) ?? 0;
+  const counted = t("core-views.policy.checked", { n: u64(p.checked) ?? 0, days: u64(p.days) ?? 7 });
+  p.summaryText = failed > 0 ? `${counted} · ${t("core-views.policy.failed", { n: failed })}` : counted;
+  const change = p.change;
+  if (!isObject(change)) return;
+  const by: J = change.by ?? {};
+  const who =
+    by.kind === "agent"
+      ? t("core-views.policy.byAgent", { agent: format.runtimeLabel(str(by.runtime) || "claude"), chat: str(by.title) || str(by.session) })
+      : str(by.name) || str(by.email) || t("core-views.policy.someone");
+  const when = typeof change.at === "number" ? format.relativeTime(change.at, c.now, c.offsetMin) : "";
+  p.changeText = [t("core-views.policy.changedBy", { who }), when, str(change.summary)].filter((x) => x !== "").join(" · ");
+}
+
+/// What the archive check made of a chat (its row's `archiveCheck`), in a line under the agent's all-done post.
+export function archiveCheck(v: J): J | null {
+  if (!isObject(v)) return null;
+  if (typeof v.error === "string") return { text: t("core-views.policy.checkFailed"), recommended: false, failed: true };
+  const name = str(v.name);
+  if (name === "") return null;
+  const recommended = v.recommended === true;
+  // Counted as archive yet not recommended: the model was not sure enough.
+  const what = recommended ? t("core-views.policy.archive") : v.archive === true ? t("core-views.policy.unsure") : t("core-views.policy.keep");
+  return { text: `${name} · ${what}`, recommended, failed: false };
 }

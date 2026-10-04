@@ -122,6 +122,15 @@ data class AppRelease (
 	val size: Long
 )
 
+/// What the archive check made of a chat as it stands, under its agent's all-done post.
+@Serializable
+data class ArchiveCheck (
+	/// The option the check picked and what came of it, or that it failed, in a line.
+	val text: String,
+	val recommended: Boolean,
+	val failed: Boolean
+)
+
 /// An archived chat: its thread (or, an agent with no chat, only its session), its title and last line, when it was
 /// archived (`at`, and `clock` 14:05) and how (`how`: 手动归档, 空闲后自动归档). `place`: its station's name, where there
 /// is more than one to tell apart. Not `deletable` when archived alone (its agents still at work elsewhere).
@@ -150,6 +159,82 @@ data class ArchiveDay (
 data class ArchiveError (
 	val station: String,
 	val text: String
+)
+
+@Serializable
+data class ArchiveOptionChat (
+	val session: String,
+	val title: String,
+	val at: Long,
+	val recommended: Boolean
+)
+
+@Serializable
+data class ArchiveOptionDraft (
+	/// Stable while the draft lasts, for the list's keys.
+	val key: String,
+	val id: String? = null,
+	val name: String,
+	val rubric: String,
+	val archive: Boolean
+)
+
+@Serializable
+data class ArchiveOptionView (
+	val id: String,
+	val name: String,
+	val rubric: String,
+	/// A chat in this situation is recommended for archiving.
+	val archive: Boolean,
+	/// Chats the checks of the last days put here.
+	val count: UInt,
+	val chats: List<ArchiveOptionChat>
+)
+
+@Serializable
+data class ArchivePolicyAuthor (
+	/// person or agent
+	val kind: String,
+	val email: String? = null,
+	val name: String? = null,
+	val session: String? = null,
+	val title: String? = null,
+	val runtime: String? = null
+)
+
+@Serializable
+data class ArchivePolicyChange (
+	val at: Long,
+	val summary: String,
+	val by: ArchivePolicyAuthor
+)
+
+/// The archive policy as one page edits it (policyForm).
+@Serializable
+data class ArchivePolicyDraft (
+	val policy: String,
+	val options: List<ArchiveOptionDraft>,
+	val dirty: Boolean,
+	val pending: Boolean
+)
+
+@Serializable
+data class ArchivePolicyView (
+	/// The policy in words: what the decision model is told.
+	val text: String,
+	val options: List<ArchiveOptionView>,
+	val days: UInt,
+	/// Chats checked in the last `days` (each by its latest check).
+	val checked: UInt,
+	/// Of them, those whose latest check failed.
+	val failed: UInt,
+	/// Saved by someone; else the default.
+	val edited: Boolean,
+	val change: ArchivePolicyChange? = null,
+	/// The checks counted, in a line (core).
+	val summaryText: String? = null,
+	/// Who changed it last, where, when and what, in a line (core).
+	val changeText: String? = null
 )
 
 /// The archive of a scope's stations online (the `archive` topic): chats archived by hand or by their station once
@@ -216,8 +301,6 @@ data class AutomaticDecisionCheck (
 	val at: Long,
 	val stamp: Stamp? = null,
 	val label: String,
-	/// suggested (archiving), kept or failed; absent from older stations, where `accepted` alone tells.
-	val outcome: String? = null,
 	val accepted: Boolean,
 	val model: String,
 	val profile: String? = null,
@@ -417,7 +500,9 @@ data class AutomaticDecisionView (
 	val canReview: Boolean? = null,
 	val settings: AutomaticDecisionSettings,
 	val models: List<AutomaticDecisionModel>,
-	val recent: List<AutomaticDecisionCheck>
+	val recent: List<AutomaticDecisionCheck>,
+	/// The archive policy the completion check follows. Absent from stations before it.
+	val policy: ArchivePolicyView? = null
 )
 
 @Serializable
@@ -1405,7 +1490,9 @@ data class ChatView (
 	val decision: RowDecision? = null,
 	/// Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
 	/// (`chat.archive`). Absent otherwise.
-	val archivable: Boolean? = null
+	val archivable: Boolean? = null,
+	/// What the archive check made of it as it stands (the option picked, or a failure). Absent when none did.
+	val archiveCheck: ArchiveCheck? = null
 )
 
 @Serializable

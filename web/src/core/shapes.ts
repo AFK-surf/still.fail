@@ -117,6 +117,14 @@ export interface AppRelease {
 	size: number;
 }
 
+/** What the archive check made of a chat as it stands, under its agent's all-done post. */
+export interface ArchiveCheck {
+	/** The option the check picked and what came of it, or that it failed, in a line. */
+	text: string;
+	recommended: boolean;
+	failed: boolean;
+}
+
 /**
  * An archived chat: its thread (or, an agent with no chat, only its session), its title and last line, when it was
  * archived (`at`, and `clock` 14:05) and how (`how`: 手动归档, 空闲后自动归档). `place`: its station's name, where there
@@ -144,6 +152,75 @@ export interface ArchiveDay {
 export interface ArchiveError {
 	station: string;
 	text: string;
+}
+
+export interface ArchiveOptionChat {
+	session: string;
+	title: string;
+	at: number;
+	recommended: boolean;
+}
+
+export interface ArchiveOptionDraft {
+	/** Stable while the draft lasts, for the list's keys. */
+	key: string;
+	id?: string;
+	name: string;
+	rubric: string;
+	archive: boolean;
+}
+
+export interface ArchiveOptionView {
+	id: string;
+	name: string;
+	rubric: string;
+	/** A chat in this situation is recommended for archiving. */
+	archive: boolean;
+	/** Chats the checks of the last days put here. */
+	count: number;
+	chats: ArchiveOptionChat[];
+}
+
+export interface ArchivePolicyAuthor {
+	/** person or agent */
+	kind: string;
+	email?: string;
+	name?: string;
+	session?: string;
+	title?: string;
+	runtime?: string;
+}
+
+export interface ArchivePolicyChange {
+	at: number;
+	summary: string;
+	by: ArchivePolicyAuthor;
+}
+
+/** The archive policy as one page edits it (policyForm). */
+export interface ArchivePolicyDraft {
+	policy: string;
+	options: ArchiveOptionDraft[];
+	dirty: boolean;
+	pending: boolean;
+}
+
+export interface ArchivePolicyView {
+	/** The policy in words: what the decision model is told. */
+	text: string;
+	options: ArchiveOptionView[];
+	days: number;
+	/** Chats checked in the last `days` (each by its latest check). */
+	checked: number;
+	/** Of them, those whose latest check failed. */
+	failed: number;
+	/** Saved by someone; else the default. */
+	edited: boolean;
+	change?: ArchivePolicyChange;
+	/** The checks counted, in a line (core). */
+	summaryText?: string;
+	/** Who changed it last, where, when and what, in a line (core). */
+	changeText?: string;
 }
 
 /**
@@ -208,8 +285,6 @@ export interface AutomaticDecisionCheck {
 	at: number;
 	stamp?: Stamp;
 	label: string;
-	/** suggested (archiving), kept or failed; absent from older stations, where `accepted` alone tells. */
-	outcome?: string;
 	accepted: boolean;
 	model: string;
 	profile?: string;
@@ -404,6 +479,8 @@ export interface AutomaticDecisionView {
 	settings: AutomaticDecisionSettings;
 	models: AutomaticDecisionModel[];
 	recent: AutomaticDecisionCheck[];
+	/** The archive policy the completion check follows. Absent from stations before it. */
+	policy?: ArchivePolicyView;
 }
 
 export interface Bind {
@@ -1419,6 +1496,8 @@ export interface ChatView {
 	 * (`chat.archive`). Absent otherwise.
 	 */
 	archivable?: boolean;
+	/** What the archive check made of it as it stands (the option picked, or a failure). Absent when none did. */
+	archiveCheck?: ArchiveCheck;
 }
 
 export interface StationState {

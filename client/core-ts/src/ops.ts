@@ -71,6 +71,7 @@ export const PARAMS: Record<string, string> = {
   "automaticDecisions.save": "input:json",
   "automaticDecisions.refresh": "",
   "automaticDecisions.review": "",
+  "automaticDecisions.policy": "input:json",
   "connect.create": "input?:json id?:string",
   "connect.put": "id:string input?:json",
   "connect.delete": "id:string",
@@ -281,6 +282,8 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => "/automatic-decisions", p.has("input") ? p.v.input : {}, OVERVIEW);
     case "automaticDecisions.review":
       return op("POST", () => "/automatic-decisions/review", {}, OVERVIEW);
+    case "automaticDecisions.policy":
+      return op("PUT", () => "/automatic-decisions/policy", p.has("input") ? p.v.input : {}, OVERVIEW);
     case "automaticDecisions.refresh":
       return op("POST", () => "/automatic-decisions/refresh", {}, OVERVIEW);
     case "connect.create":

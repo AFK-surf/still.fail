@@ -1145,6 +1145,8 @@ export class Views implements Owner {
     const card = row !== undefined ? decisions.ofRow(row) : null;
     if (card !== null && open(card)) view.decision = decisions.shown(card);
     if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
+    const check = row !== undefined && view.archived !== true ? present.archiveCheck(row.archiveCheck) : null;
+    if (check !== null) view.archiveCheck = check;
     return { ok: view };
   }
 
