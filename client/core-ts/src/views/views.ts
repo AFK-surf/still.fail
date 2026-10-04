@@ -868,7 +868,7 @@ export class Views implements Owner {
       if (!chat) continue;
       const entry = data.logRange("entry", hit.station, String(hit.thread), hit.seq, hit.seq).get(hit.seq);
       const slackUsers = arr(get(this.ok({ topic: "overview", station: hit.station }), "slackUsers")).filter((u): u is string => typeof u === "string");
-      const by = isObject(entry) ? present.lastBy({ last: entry }, me, slackUsers, members_) : null;
+      const by = isObject(entry) ? present.lastBy({ last: entry, agents: chat.agents }, me, slackUsers, members_) : null;
       const message: J = { station: hit.station, thread: hit.thread, seq: hit.seq, by: str(get(by, "name")) ?? "", ...refs.excerpt(hit.text, words) };
       if (hit.at !== null) message.createdAt = hit.at;
       present.times(message, clock);
