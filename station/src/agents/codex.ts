@@ -6,7 +6,7 @@
 // - per-session settings (the MCP endpoint and token) travel in the thread/start|resume `config`, not the process
 //   environment;
 // - threads need sandbox "danger-full-access" with approvalPolicy "never", or MCP tool calls are refused.
-import { existsSync, mkdirSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
 import { LiveFromCodex, chars, type CodexLiveState } from "./live.ts";
@@ -168,13 +168,18 @@ class Host {
     return { label, line: (line: string) => this.onLine(line), exit: (said: string) => this.onExit(said) };
   }
 
-  static async start(profile: Profile, command: string, data: string, env: Env, caBundle: string): Promise<Host> {
+  /// When the login it was started with runs out, if it was lent by another station.
+  lentUntil: number | null = null;
+
+  static async start(profile: Profile, command: string, data: string, env: Env, caBundle: string, lent?: CodexDriverOptions["lent"]): Promise<Host> {
     mkdirSync(profile.home, { recursive: true });
     if (isMachine(profile)) linkCodexAuth(profile.home, env);
+    const until = lent?.borrowed(profile) ? await lent.write(profile) : null;
     const childEnv: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(profile, "codex"), profile.id) };
     childEnv.CODEX_HOME = profile.home;
     withCaBundle(childEnv, caBundle);
     const host = new Host(profile.id, hostSignature(profile), 1, false);
+    host.lentUntil = until;
     const label = `codex app-server ${profile.id}`;
     host.proc = await AgentProcess.start(data, runnerId("codex", profile.id), command, hostArgs(profile), childEnv, profile.home, host.processOptions(label));
     return host;
@@ -329,7 +334,24 @@ export type CodexDriverOptions = {
   fast?: (threadId: string) => boolean | undefined;
   /// A profile as the config says now (settings), for what a turn reads of it; the opened one otherwise.
   currentProfile?: (id: string) => Profile | undefined;
+  /// Another station's subscription, borrowed (share/index.ts): its home's auth.json written with tokens lent by the
+  /// station signed in on it (none Codex could renew with); when they run out.
+  lent?: { borrowed(profile: Profile): boolean; write(profile: Profile): Promise<number> };
 };
+
+/// A borrowed login this close to its end is replaced (its app-server started again, once idle).
+const LENT_RENEW_MS = 6 * 3600_000;
+
+/// When the access token in a home's auth.json runs out (0 when it does not say).
+function lentExpiry(home: string): number {
+  try {
+    const token = JSON.parse(readFileSync(join(home, "auth.json"), "utf8"))?.tokens?.access_token;
+    const claims = JSON.parse(Buffer.from(String(token).split(".")[1] ?? "", "base64url").toString("utf8"));
+    return typeof claims?.exp === "number" ? claims.exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
 
 export class CodexDriver implements AgentDriver {
   private readonly data: string;
@@ -354,6 +376,11 @@ export class CodexDriver implements AgentDriver {
     return "codex";
   }
 
+  /// Whether an app-server runs on a profile now (its login is not renewed from outside meanwhile).
+  running(profileId: string): boolean {
+    return this.hosts.get(profileId)?.alive() === true;
+  }
+
   /// One at a time, as Rust's hosts mutex: starting, replacing and taking up hosts.
   private serial<T>(work: () => Promise<T>): Promise<T> {
     const next = this.hostQueue.then(work, work);
@@ -364,6 +391,12 @@ export class CodexDriver implements AgentDriver {
   private async host(profile: Profile): Promise<Host> {
     const host = await this.serial(async () => {
       const current = this.hosts.get(profile.id);
+      // A borrowed login about to run out: a new process with a new one, once none of its sessions is in a turn.
+      if (current && current.alive() && current.lentUntil !== null && current.lentUntil - wall.now() < LENT_RENEW_MS && current.threads.size === 0) {
+        log.info("agents::codex", "its borrowed login runs out; restarting its codex app-server", { profile: profile.id });
+        this.hosts.delete(profile.id);
+        await current.proc.kill(5000);
+      }
       if (current && current.alive() && current.signature !== hostSignature(profile)) {
         // The profile changed. Replace the process once no session uses it; until then keep serving.
         if (current.threads.size === 0) {
@@ -380,7 +413,9 @@ export class CodexDriver implements AgentDriver {
       if (alive) await alive.proc.released();
       // One an earlier station left running (its threads may be taken up yet) is taken up rather than replaced.
       const left = findRunner(this.data, runnerId("codex", profile.id));
-      const host = left ? await this.takeUp(profile, left) : await Host.start(profile, this.command, this.data, this.env, this.caBundle);
+      const host = left ? await this.takeUp(profile, left) : await Host.start(profile, this.command, this.data, this.env, this.caBundle, this.options.lent);
+      // Taken up on a borrowed login: when that one runs out, as its auth.json says.
+      if (left && this.options.lent?.borrowed(profile)) host.lentUntil = lentExpiry(profile.home);
       this.hosts.set(profile.id, host);
       return host;
     });

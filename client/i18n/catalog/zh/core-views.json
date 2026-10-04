@@ -273,5 +273,8 @@
   "core-views.usage.unknown_model": "未知模型",
   "core-views.usage.unknown_person": "说不清是谁",
   "core-views.usage.unknown_which_model": "说不清是哪个模型",
-  "core-views.usage.unpriced": "未计价"
+  "core-views.usage.unpriced": "未计价",
+  "core-views.profiles.only": "只在 {station}",
+  "core-views.profiles.signedIn": "登录在 {station}",
+  "core-views.profiles.allowed": "只给 {stations}"
 }

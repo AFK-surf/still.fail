@@ -333,5 +333,8 @@
   "core-views.usage.unknown_model": "Unknown model",
   "core-views.usage.unknown_person": "Unknown person",
   "core-views.usage.unknown_which_model": "Unknown model",
-  "core-views.usage.unpriced": "Unpriced"
+  "core-views.usage.unpriced": "Unpriced",
+  "core-views.profiles.only": "Only on {station}",
+  "core-views.profiles.signedIn": "Signed in on {station}",
+  "core-views.profiles.allowed": "Only for {stations}"
 }

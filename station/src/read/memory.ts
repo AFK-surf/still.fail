@@ -1,6 +1,6 @@
 // The agents' memory, for the pages to show (GET /memory; the agents write it): the global one, and the shared skills
 // (projects' memories among them). admin/mod.rs's route over agent_home.rs `agent_home_paths` and `list_skills`.
-import { readFileSync, readdirSync } from "node:fs";
+import { lstatSync, readFileSync, readdirSync, readlinkSync } from "node:fs";
 import type { Json } from "./store.ts";
 
 /// The skills the station brings (agent_home.rs BUILTIN_SKILLS, and FEEDBACK_SKILL): rewritten at every start, so not
@@ -22,15 +22,43 @@ function readText(path: string): string | null {
   }
 }
 
-/// config.rs: the agents' home, `agentHome` in config.json under the data directory (default `agent`).
-function agentHome(dataDir: string): string {
-  let raw: Json;
+function readJson(path: string): Json {
   try {
-    raw = JSON.parse(readFileSync(joined(dataDir, "config.json"), "utf8"));
+    return JSON.parse(readFileSync(path, "utf8"));
   } catch {
-    raw = {};
+    return {};
   }
+}
+
+/// config.rs: the agents' home, `agentHome` in config.json under the data directory (default `agent`).
+function agentHome(raw: Json, dataDir: string): string {
   return joined(dataDir, typeof raw?.agentHome === "string" ? raw.agentHome : "agent");
+}
+
+/// What a skill's sharing is (share/index.ts): shared from here (config.json `sharedSkills`), a copy of another
+/// station's (its link into <data>/share/<id>/skill), or neither (null).
+function sharing(dataDir: string, raw: Json, dir: string, name: string): Json {
+  const cloud = readJson(joined(dataDir, "mesh/cloud.json"));
+  const shares: Json[] = Array.isArray(cloud?.shares) ? cloud.shares : [];
+  const hosted = raw?.sharedSkills?.[name];
+  if (typeof hosted === "string") {
+    const share = shares.find((s) => s?.id === hosted);
+    let conflicts: string[] = [];
+    try {
+      conflicts = readdirSync(joined(dir, name)).filter((n) => /^SKILL\.conflict-.*\.md$/.test(n));
+    } catch {}
+    return { id: hosted, role: "host", host: cloud?.station ?? "", allow: share?.allow ?? null, conflicts };
+  }
+  try {
+    const path = joined(dir, name);
+    if (!lstatSync(path).isSymbolicLink()) return null;
+    const target = readlinkSync(path);
+    const m = /\/share\/(sh-[0-9a-z]+)\/skill$/.exec(target);
+    const share = m ? shares.find((s) => s?.id === m[1]) : undefined;
+    return share ? { id: share.id, role: "user", host: share.host, allow: share.allow ?? null, conflicts: [] } : null;
+  } catch {
+    return null;
+  }
 }
 
 /// front: a SKILL.md's frontmatter field (`key: value`), if it has one.
@@ -50,7 +78,7 @@ function front(text: string, key: string): string | null {
 const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 
 /// list_skills: the shared skills, the team's first (projects' memories before the rest), then the station's own; by name.
-function listSkills(home: string): Json[] {
+function listSkills(home: string, dataDir: string, raw: Json): Json[] {
   const dir = joined(home, "skills");
   let names: string[];
   try {
@@ -62,14 +90,16 @@ function listSkills(home: string): Json[] {
     const text = readText(joined(joined(dir, name), "SKILL.md"));
     if (text === null) return [];
     const description = front(text, "description") ?? "";
-    return [{ name, description, project: description.startsWith(PROJECT_PREFIX), builtin: BUILTIN.includes(name), text }];
+    const builtin = BUILTIN.includes(name);
+    return [{ name, description, project: description.startsWith(PROJECT_PREFIX), builtin, text, share: builtin ? null : sharing(dataDir, raw, dir, name) }];
   });
   return skills.sort((a, b) => Number(a.builtin) - Number(b.builtin) || Number(!a.project) - Number(!b.project) || byBytes(a.name, b.name));
 }
 
 /// GET /memory.
 export function memory(dataDir: string): Json {
-  const home = agentHome(dataDir);
+  const raw = readJson(joined(dataDir, "config.json"));
+  const home = agentHome(raw, dataDir);
   const path = joined(home, "MEMORY.md");
-  return { global: { path, text: readText(path) ?? "" }, skills: listSkills(home) };
+  return { global: { path, text: readText(path) ?? "" }, skills: listSkills(home, dataDir, raw) };
 }

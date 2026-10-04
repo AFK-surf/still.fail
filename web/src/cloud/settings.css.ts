@@ -35,3 +35,6 @@ globalStyle(`${onboardingCard} ${command}`, { marginTop: "8px" });
 globalStyle(`${enrollWait} strong`, { fontWeight: "600" });
 globalStyle(`${enrollWait} ${muted}`, { fontSize: vars.textXs });
 globalStyle(`${firstStation} ${machineLogins}`, { marginTop: "14px" });
+
+/** A shared profile nobody can use now (the station signed in to its subscription is away): dimmed, its state said. */
+export const profileAway = style({ opacity: ".55" });

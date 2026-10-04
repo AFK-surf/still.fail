@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useMemo, useRef } from "react";
 import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
+import type { ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
 import { t } from "./i18n.ts";
@@ -111,6 +111,11 @@ export function useArchiveView(scope: string): TopicState<ArchiveView> {
 
 export function useStations(scope: string): TopicState<StationView[]> {
   return useTopic<StationView[]>({ topic: "stations", scope });
+}
+
+/** The workspace's profiles in one list: each shared one once (the core's `profiles` view). */
+export function useProfiles(scope: string): TopicState<ProfilesView> {
+  return useTopic<ProfilesView>({ topic: "profiles", scope });
 }
 
 export function useConnects(scope: string, mine = false): TopicState<ConnectsView> {
@@ -279,6 +284,12 @@ export function stationApi(t: StationCall) {
     resetQuota: (id: string) => ops.profileResetQuota({ id }),
     refreshQuota: (id: string) => ops.profileQuota<Quota | null>({ id }),
     checkProfile: (id: string) => ops.profileCheck<ProfileCheck>({ id }),
+    /** Shared with the workspace's other stations (`allow` null: every one), or no longer. */
+    shareProfile: (id: string, on: boolean, allow: string[] | null) => ops.profileShare<Overview>({ id, on, ...(allow === null ? {} : { allow }) }),
+    /** A shared profile moved to another station (its subscription signed in there from now on). */
+    moveProfile: (id: string, to: string) => ops.profileMove<Overview>({ id, to }),
+    /** A skill shared with the workspace's other stations, or no longer. */
+    shareSkill: (name: string, on: boolean, allow: string[] | null) => ops.skillShare<unknown>({ name, on, ...(allow === null ? {} : { allow }) }),
     verifySlack: (input: { connect?: string; install?: string; appToken?: string; botToken?: string }) =>
       ops.slackVerify<{ identity: SlackIdentity | null; errors: string[] }>(input),
     bindSession: (connect: string, session: string | null, title?: string) =>

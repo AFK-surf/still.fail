@@ -540,5 +540,9 @@
   "web-main.webUpdate.label": "网页更新",
   "web-main.webUpdate.later": "稍后",
   "web-main.webUpdate.refresh": "刷新更新",
-  "web-main.webUpdate.short": "有新版本，刷新"
+  "web-main.webUpdate.short": "有新版本，刷新",
+  "web-main.memory.share.switch": "分享给其他 station",
+  "web-main.memory.share.from": "来自 {station}",
+  "web-main.memory.share.shared": "已分享",
+  "web-main.memory.share.conflict": "两台同时改了，有冲突的改动"
 }

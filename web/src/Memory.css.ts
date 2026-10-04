@@ -15,6 +15,8 @@ export const memorySkillRow = style({
 });
 export const memorySkillText = style({ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "1px" });
 export const memorySkillOwn = style({ fontSize: vars.textXs, fontWeight: "400", color: vars.subtle });
+export const memoryShare = style({ padding: "4px 12px 0 38px" });
+export const memoryConflict = style({ margin: "6px 0 0", fontSize: vars.textXs, color: vars.amber });
 export const memoryNone = style({ margin: "0", fontSize: vars.textSm });
 globalStyle(`${memoryDoc} > :first-child`, { marginTop: "0" });
 globalStyle(`${memoryDoc} > :last-child`, { marginBottom: "0" });

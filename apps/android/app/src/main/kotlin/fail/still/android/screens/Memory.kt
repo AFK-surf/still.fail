@@ -65,8 +65,14 @@ fun MemoryScreen(current: WorkspaceEntry, address: String) {
     val s = stations.value?.firstOrNull { it.station == address }
     var memory by remember { mutableStateOf<StationMemory?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    // Read once as the page opens (it changes as agents write it, not while it is looked at).
-    LaunchedEffect(address) {
+    // Read once as the page opens (it changes as agents write it, not while it is looked at), and after a skill's
+    // sharing changed here.
+    var round by remember { mutableStateOf(0) }
+    val names = stations.value.orEmpty().associate { it.id to it.name }
+    val share = { skill: SkillFile, on: Boolean ->
+        app.act(t("web-main.memory.share.switch")) { app.api(address).shareSkill(skill.name, on); round += 1 }
+    }
+    LaunchedEffect(address, round) {
         try { memory = StillFailJson.decodeFromJsonElement(StationMemory.serializer(), app.api(address).memory()) }
         catch (e: CoreException) { error = e.message }
         catch (e: IllegalArgumentException) { error = e.message }
@@ -84,11 +90,11 @@ fun MemoryScreen(current: WorkspaceEntry, address: String) {
             SectionHeader(t("android-misc.memory.projects"), start = 24.dp)
             Note(t("android-misc.memory.projects.note"))
             if (projects.isEmpty()) Note(t("android-misc.memory.projects.none"))
-            else ListCard { projects.forEach { SkillRow(it) } }
+            else ListCard { projects.forEach { SkillRow(it, address, names, share) } }
             if (others.isNotEmpty()) {
                 SectionHeader(t("android-misc.memory.skills"), start = 24.dp)
                 Note(t("android-misc.memory.skills.note"))
-                ListCard { others.forEach { SkillRow(it) } }
+                ListCard { others.forEach { SkillRow(it, address, names, share) } }
             }
             Spacer(Modifier.height(30.dp))
         }
@@ -127,9 +133,11 @@ fun MemoriesScreen(current: WorkspaceEntry) {
 @Composable
 private fun Note(text: String) = Text(text, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp))
 
-/** A skill as a row that opens to its text, rendered. */
+/** A skill as a row that opens to its text, rendered; whether it is shared with the workspace's other stations (a switch
+ * when open, on this station's own), or whose it is. */
 @Composable
-private fun SkillRow(skill: SkillFile) {
+private fun SkillRow(skill: SkillFile, station: String, names: Map<String, String>, share: (SkillFile, Boolean) -> Unit) {
+    val app = LocalApp.current
     var open by rememberSaveable(skill.name) { mutableStateOf(false) }
     val about = skill.about ?: skill.description
     // As the web's row (Memory.tsx, shared by its phone and PC): inset in the card, tinted while open (the web's --hover).
@@ -145,9 +153,27 @@ private fun SkillRow(skill: SkillFile) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(skill.name, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.ink)
                     if (skill.builtin) Text(t("android-misc.memory.builtin"), fontSize = 12.sp, color = C.subtle)
+                    when (skill.share?.role) {
+                        "user" -> Text(t("web-main.memory.share.from", "station" to (names[skill.share.host] ?: skill.share.host.take(8))), fontSize = 12.sp, color = C.subtle)
+                        "host" -> Text(t("web-main.memory.share.shared"), fontSize = 12.sp, color = C.subtle)
+                    }
                 }
                 Text(about.ifEmpty { t("android-misc.memory.noWhen") }, fontSize = 13.sp, color = C.muted)
             }
+        }
+        if (open && !skill.builtin && skill.share?.role != "user") {
+            val busy = app.isDoing("skill.share", "station" to station, "name" to skill.name)
+            val on = skill.share?.role == "host"
+            Row(
+                Modifier.fillMaxWidth().clickable(enabled = !busy) { share(skill, !on) }.padding(start = 38.dp, end = 12.dp, top = 10.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(t("web-main.memory.share.switch"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                DoingMark(busy, app.failedOf("skill.share", "station" to station, "name" to skill.name), 14.dp)
+                Switch(on)
+            }
+            val conflicts = skill.share?.conflicts.orEmpty()
+            if (conflicts.isNotEmpty()) Text("${t("web-main.memory.share.conflict")}: ${conflicts.joinToString("、")}", fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(start = 38.dp, end = 12.dp, top = 6.dp))
         }
         if (open) Markdown((skill.body ?: skill.text).ifEmpty { t("android-misc.memory.empty") }, Modifier.padding(start = 38.dp, end = 12.dp, top = 12.dp, bottom = 18.dp), size = 14)
     }

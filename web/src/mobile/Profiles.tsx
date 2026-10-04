@@ -4,8 +4,8 @@
 // key or variables; renaming, checking and deleting under "…"), and a new one.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { stationApi, useAction, useOverview, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
-import type { MachineLogin, ProfileFlowView } from "../core/shapes.ts";
+import { stationApi, useAction, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
+import type { MachineLogin, ProfileFlowView, WorkspaceProfile } from "../core/shapes.ts";
 import { ACCESS, KEYED } from "../format.ts";
 import { Check, ChevronRight, More, Plus } from "../icons.tsx";
 import type { Choice } from "../pages/Accounts.tsx";
@@ -58,7 +58,9 @@ export function ProfilesScreen() {
       <TopBack label={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label={t("web-mobile.newChat.addProfile")} onClick={add} /> : undefined} />
       <LargeTitle small={one ? t("web-mobile.connects.on", { station: one.name }) : ""} big="Profile" />
       <p className={settingsCss.mPageNote}>{t("web-mobile.profiles.note")}</p>
-      {!stations ? <Loading text={t("web-mobile.memory.readingStations")} /> : stations.map((s) => (
+      {/* The workspace's: one list, each shared profile once (the core's `profiles`); a station's own: as before. */}
+      {!one && <WorkspaceList scope={app.entry.id} />}
+      {!stations ? <Loading text={t("web-mobile.memory.readingStations")} /> : stations.filter(() => !!one).map((s) => (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
           {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} />}
           <ListCard>
@@ -70,8 +72,138 @@ export function ProfilesScreen() {
           {s.online && s.overview && <MachineLoginOffers logins={s.overview.machineLogins} onSignIn={(kind) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${kind}`))} />}
         </StationContext.Provider>
       ))}
+      {!one && online.map((s) => s.overview && (
+        <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
+          <MachineLoginOffers logins={s.overview.machineLogins} onSignIn={(kind) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${kind}`))} />
+        </StationContext.Provider>
+      ))}
       <div style={{ height: 30 }} />
     </div>
+  );
+}
+
+/** The workspace's profiles in one list: a shared one once, where it is (登录在 / 只给 …) under it; one whose
+ * subscription's station is away dimmed, said why. */
+function WorkspaceList({ scope }: { scope: string }) {
+  const app = useApp();
+  const view = useProfiles(scope).value;
+  if (!view) return <Loading text={t("web-mobile.reading")} />;
+  return (
+    <ListCard>
+      {view.items.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow>}
+      {view.items.map((e: WorkspaceProfile) => (
+        <ListRow key={e.key} onClick={() => app.push(app.at(`/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`} style={e.usable ? undefined : { opacity: 0.55 }}>
+            <span className={listsCss.mRowTitle}><Presence state={e.usable ? toneDot(e.profile.checkTone) : "error"} /> {e.profile.name}</span>
+            <span className={listsCss.mRowNote}>{e.usable ? e.where || `${e.profile.checkText} · ${e.profile.usesText || accessLabel(e.profile)}` : t("web-pages.settings.profiles.hostAway", { station: e.hostName })}</span>
+          </span>
+          {e.usable && <QuotaRings quota={e.profile.quota} />}
+          <ChevronRight size={14} className={partsCss.mSubtle} />
+        </ListRow>
+      ))}
+      {view.loading && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.reading")}</span></ListRow>}
+    </ListCard>
+  );
+}
+
+/** Sharing a profile with the workspace's other stations (as the desktop's ShareSection): a switch; once on, where a
+ * subscription is signed in (moved from here) and which stations may use it. A copy of another station's says whose. */
+function ShareRows({ p }: { p: Profile }) {
+  const app = useApp();
+  const api = useApi();
+  const act = useAct();
+  const station = useStation();
+  const entry = useProfiles(station.address.split("/")[0]!).value?.items.find((e) => e.key === p.share?.id);
+  const stations = entry?.stations ?? [];
+  const on = { station: station.address, id: p.id };
+  const sharing = useDoing("profile.share", on);
+  const moving = useDoing("profile.move", on);
+  const subscription = p.access.kind === "subscription";
+  if (p.share?.role === "user") {
+    const host = entry?.hostName ?? p.share.host.slice(0, 8);
+    return (
+      <>
+        <SectionHeader title={t("web-pages.profiles.share.title")} start={24} />
+        <ListCard>
+          <ListRow onClick={entry?.editable ? () => app.push(app.at(`/s/${entry.stationId}/settings/accounts/${encodeURIComponent(entry.profile.id)}`)) : undefined}>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+              <span className={listsCss.mRowTitle}>{t("web-pages.profiles.share.copy", { station: host })}</span>
+              {subscription && p.share.reachable === false && <span className={`${listsCss.mRowNote} ${partsCss.mRed}`}>{t("web-pages.profiles.share.hostAway", { station: host })}</span>}
+            </span>
+            {entry?.editable && <ChevronRight size={14} className={partsCss.mSubtle} />}
+          </ListRow>
+        </ListCard>
+      </>
+    );
+  }
+  const shared = p.share !== undefined;
+  const allowed = p.share?.allow ?? null;
+  const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join("、");
+  const targets = stations.filter((x) => x.id !== station.id);
+  const pick = () => app.sheet({ height: 0.6, content: () => <PickShareStations p={p} stations={stations} self={station.id} allowed={allowed} /> });
+  const move = () => app.sheet({ height: 0.5, content: () => (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-pages.profiles.share.moveTitle")} />
+      <div className={sheetsCss.mSheetScroll}>
+        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{t("web-pages.profiles.share.moveLead", { station: station.name })}</p>
+        {targets.map((x) => <PickRow key={x.id} label={x.name} sub={x.online ? undefined : t("web-mobile.profiles.offline")} enabled={x.online}
+          onClick={() => { app.sheet(null); act(api.moveProfile(p.id, x.id), t("web-pages.profiles.share.move"), t("web-pages.profiles.share.moved", { station: x.name })); }} />)}
+      </div>
+    </>
+  ) });
+  return (
+    <>
+      <SectionHeader title={t("web-pages.profiles.share.title")} start={24} />
+      <ListCard>
+        <ListRow onClick={sharing ? undefined : () => act(api.shareProfile(p.id, !shared, null), t("web-pages.profiles.share.switch"), shared ? t("web-pages.profiles.share.unshared") : t("web-pages.profiles.share.shared"))}>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+            <span className={listsCss.mRowTitle}>{t("web-pages.profiles.share.switch")}</span>
+            <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{!shared ? t("web-pages.profiles.share.onlyHere", { station: station.name }) : subscription ? t("web-pages.profiles.share.lent") : t("web-pages.profiles.share.copied")}</span>
+          </span>
+          {sharing && <Spinner size={14} />}
+          <span className={connectsCss.mSwitch} data-on={shared || undefined} />
+        </ListRow>
+        {shared && subscription && !p.machine && (
+          <ListRow onClick={moving || targets.length === 0 ? undefined : move}>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-pages.profiles.share.signedIn")}</span>
+            {moving && <Spinner size={14} />}
+            <span className={listsCss.mRowNote}>{station.name}</span>
+            <ChevronRight size={14} className={partsCss.mSubtle} />
+          </ListRow>
+        )}
+        {shared && (
+          <ListRow onClick={pick}>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-pages.profiles.share.stations")}</span>
+            <span className={listsCss.mRowNote}>{names}</span>
+            <ChevronRight size={14} className={partsCss.mSubtle} />
+          </ListRow>
+        )}
+      </ListCard>
+    </>
+  );
+}
+
+/** Which stations may use a shared profile, ticked in a sheet; all ticked is every station (those to come too). */
+function PickShareStations({ p, stations, self, allowed }: { p: Profile; stations: { id: string; name: string; online: boolean }[]; self: string; allowed: string[] | null }) {
+  const app = useApp();
+  const api = useApi();
+  const act = useAct();
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set(allowed ?? stations.map((x) => x.id)));
+  const all = stations.every((x) => x.id === self || ticked.has(x.id));
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-pages.profiles.share.stations")} />
+      <div className={sheetsCss.mSheetScroll}>
+        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{all ? t("web-pages.profiles.share.futureIn") : t("web-pages.profiles.share.futureOut")}</p>
+        {stations.map((x) => <PickRow key={x.id} label={x.name} checked={x.id === self || ticked.has(x.id)} enabled={x.id !== self}
+          onClick={() => setTicked((was) => { const next = new Set(was); if (next.has(x.id)) next.delete(x.id); else next.add(x.id); return next; })} />)}
+        <div className={partsCss.mPad}>
+          <Button primary label={t("web-pages.profiles.share.done")} onClick={() => { app.sheet(null); act(api.shareProfile(p.id, true, all ? null : [...new Set([...ticked, self])]), t("web-pages.profiles.share.stations")); }} />
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -152,10 +284,12 @@ function ProfilePage({ p }: { p: Profile }) {
   const quotaFailed = useDoingFailed("profile.quota", { station: station.address, id: p.id });
   const signingIn = !!p.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(p.login.state);
   const keyed = KEYED.has(p.access.kind);
+  // A copy of another station's: shown, used, changed only there.
+  const copy = p.share?.role === "user";
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back={station.name || "Station"} onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{accessLabel(p)}</span>}
-        trailing={<NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
+        trailing={copy ? undefined : <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
       <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
         <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
           <ProviderMark runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={26} />
@@ -168,12 +302,13 @@ function ProfilePage({ p }: { p: Profile }) {
           </span>
         </div>
         {p.trouble && <ProfileRecovery p={p} />}
-        {p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
+        {!copy && p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
         {p.trouble?.action !== "quota" && <Quota p={p} />}
-        {p.fast != null && <><SectionHeader title={t("web-mobile.profiles.run")} start={24} /><ListCard><FastRow p={p} /></ListCard></>}
-        <Models p={p} put={(models) => api.putProfile(p.id, { models })} />
+        {overview?.sharing && <ShareRows p={p} />}
+        {!copy && p.fast != null && <><SectionHeader title={t("web-mobile.profiles.run")} start={24} /><ListCard><FastRow p={p} /></ListCard></>}
+        {!copy && <Models p={p} put={(models) => api.putProfile(p.id, { models })} />}
         {/* A station older than the setting says nothing of it. */}
-        {p.runtimes.includes("claude") && p.backgroundOnMessage !== undefined && (
+        {!copy && p.runtimes.includes("claude") && p.backgroundOnMessage !== undefined && (
           <>
             <SectionHeader title={t("web-mobile.profiles.run")} start={24} />
             <ListCard>
@@ -190,7 +325,7 @@ function ProfilePage({ p }: { p: Profile }) {
             </ListRow>
           ))}
         </ListCard>
-        {keyed && (
+        {keyed && !copy && (
           <>
             <SectionHeader title={t("web-mobile.history.account")} start={24} />
             <ListCard>
@@ -209,7 +344,7 @@ function ProfilePage({ p }: { p: Profile }) {
             </ListCard>
           </>
         )}
-        {p.access.kind === "env" && (
+        {p.access.kind === "env" && !copy && (
           <>
             <SectionHeader title={t("web-mobile.profiles.env")} start={24} />
             <ListCard>

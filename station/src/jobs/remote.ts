@@ -146,6 +146,7 @@ export class Remote {
   private config: () => Json;
   private call: PeerCall | null = null;
   private inbox: Inbox | null = null;
+  private shares: Inbox | null = null;
   /// Target-side requests, the sweep and withdrawals, one at a time.
   private serial: Promise<unknown> = Promise.resolve();
   /// The records followed now (outgoing tasks, closing sessions).
@@ -411,6 +412,12 @@ export class Remote {
     this.inbox = inbox;
   }
 
+  /// Where requests about what stations share go (share.*, share/index.ts): any station of the workspace may ask;
+  /// what each share allows is checked there.
+  setShares(shares: Inbox): void {
+    this.shares = shares;
+  }
+
   /// A request to another station of the workspace (session_send's messages, and this module's own).
   ask(station: string, request: Json): Promise<Json> {
     const call = this.call;
@@ -429,6 +436,11 @@ export class Remote {
     const method = text(request, "method");
     if (method === "describe") {
       return { protocol: 1, os: OS, arch: ARCH, tasks: this.allowed(peer), sessions: true, messages: true, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
+    }
+    if (method.startsWith("share.")) {
+      const shares = this.shares;
+      if (!shares) throw new Error("station is starting");
+      return shares(peer, request);
     }
     // A message, not execution: workspace membership (checked by the transport) is enough.
     if (method === "session.message") {

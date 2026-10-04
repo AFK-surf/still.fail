@@ -293,5 +293,8 @@
   "station.updates.upToDate": "Up to date",
   "station.updates.withDesktop": "Updates with the still.fail desktop app",
   "station.usage.notKept": "This station doesn't track usage",
-  "station.usage.priceNote": "USD per 1M tokens · each kind of token × its price, added up; Claude fast ×2. GPT is estimated at standard short-context prices, recording only input, cache reads and output. GPT prices checked on 2026-10-02; Claude uses the 2026-09 prices"
+  "station.usage.priceNote": "USD per 1M tokens · each kind of token × its price, added up; Claude fast ×2. GPT is estimated at standard short-context prices, recording only input, cache reads and output. GPT prices checked on 2026-10-02; Claude uses the 2026-09 prices",
+  "station.share.borrowedEdit": "This profile is shared by another station; change it on the station it is on",
+  "station.share.hostOffline": "{host}, the station signed in to it, is not answering; it can't be used now",
+  "station.share.managersOnly": "Only workspace admins can share"
 }

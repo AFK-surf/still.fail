@@ -91,6 +91,9 @@ export const PARAMS: Record<string, string> = {
   "profile.put": "id:string input?:json",
   "profile.addModel": "id:string model:string",
   "profile.delete": "id:string",
+  "profile.share": "id:string on?:boolean allow?:strings",
+  "profile.move": "id:string to:string",
+  "skill.share": "name:string on?:boolean allow?:strings",
   "profile.resetQuota": "id:string",
   "profile.quota": "id:string",
   "profile.check": "id:string",
@@ -320,6 +323,13 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => `/profiles/${p.at("id")}`, { addModel: p.word("model") ?? "" }, OVERVIEW);
     case "profile.delete":
       return op("DELETE", () => `/profiles/${p.at("id")}`, null, OVERVIEW);
+    // Shared with the workspace's other stations (absent `allow`: every one), or not; moved to another station.
+    case "profile.share":
+      return op("POST", () => `/profiles/${p.at("id")}/share`, { on: p.bool("on"), allow: p.has("allow") ? p.v.allow : null }, OVERVIEW);
+    case "profile.move":
+      return op("POST", () => `/profiles/${p.at("id")}/move`, { station: p.word("to") ?? "" }, OVERVIEW);
+    case "skill.share":
+      return op("POST", () => `/skills/${p.at("name")}/share`, { on: p.bool("on"), allow: p.has("allow") ? p.v.allow : null }, NONE);
     case "profile.resetQuota":
       return op("POST", () => `/profiles/${p.at("id")}/reset-quota`, null, OVERVIEW);
     case "profile.quota":

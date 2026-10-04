@@ -42,6 +42,9 @@ export interface OperationParams {
   "profile.put": { id: string; input?: unknown };
   "profile.addModel": { id: string; model: string };
   "profile.delete": { id: string };
+  "profile.share": { id: string; on?: boolean | null | undefined; allow?: string[] | null | undefined };
+  "profile.move": { id: string; to: string };
+  "skill.share": { name: string; on?: boolean | null | undefined; allow?: string[] | null | undefined };
   "profile.resetQuota": { id: string };
   "profile.quota": { id: string };
   "profile.check": { id: string };
@@ -140,6 +143,9 @@ export function bindStationOperations(call: Call) {
     profilePut: <T = unknown>(params: OperationParams["profile.put"]) => call("profile.put", params) as Promise<T>,
     profileAddModel: <T = unknown>(params: OperationParams["profile.addModel"]) => call("profile.addModel", params) as Promise<T>,
     profileDelete: <T = unknown>(params: OperationParams["profile.delete"]) => call("profile.delete", params) as Promise<T>,
+    profileShare: <T = unknown>(params: OperationParams["profile.share"]) => call("profile.share", params) as Promise<T>,
+    profileMove: <T = unknown>(params: OperationParams["profile.move"]) => call("profile.move", params) as Promise<T>,
+    skillShare: <T = unknown>(params: OperationParams["skill.share"]) => call("skill.share", params) as Promise<T>,
     profileResetQuota: <T = unknown>(params: OperationParams["profile.resetQuota"]) => call("profile.resetQuota", params) as Promise<T>,
     profileQuota: <T = unknown>(params: OperationParams["profile.quota"]) => call("profile.quota", params) as Promise<T>,
     profileCheck: <T = unknown>(params: OperationParams["profile.check"]) => call("profile.check", params) as Promise<T>,

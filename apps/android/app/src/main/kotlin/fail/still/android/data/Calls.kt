@@ -110,6 +110,12 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Changes a profile: any of `name`, `access`, `env`, `models`. */
     suspend fun putProfile(id: String, body: JsonObject) { ops.profilePut(id = id) { this.input = body } }
     suspend fun deleteProfile(id: String) { ops.profileDelete(id = id) }
+    /** Shared with the workspace's other stations (`allow` null: every one), or no longer. */
+    suspend fun shareProfile(id: String, on: Boolean, allow: List<String>?) { ops.profileShare(id = id) { this.on = on; if (allow != null) this.allow = allow } }
+    /** A shared profile moved to another station (its subscription signed in there from then on). */
+    suspend fun moveProfile(id: String, to: String) { ops.profileMove(id = id, to = to) }
+    /** A skill shared with the workspace's other stations, or no longer. */
+    suspend fun shareSkill(name: String, on: Boolean) { ops.skillShare(name = name) { this.on = on } }
     suspend fun resetQuota(id: String) { ops.profileResetQuota(id = id) }
     suspend fun refreshQuota(id: String) { ops.profileQuota(id = id) }
     suspend fun startLogin(profile: String) { ops.profileLogin(id = profile) }

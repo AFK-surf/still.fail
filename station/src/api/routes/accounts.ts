@@ -4,10 +4,27 @@
 import { type Request, type Answer, error, json, percentDecode } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { type Accounts, Refusal } from "../../accounts/index.ts";
+import type { Sharing } from "../../share/index.ts";
+import type { Viewer } from "../../mesh/credential.ts";
+import { tr, type Lang } from "../../ops/i18n.ts";
+
+/// Who may share: a workspace manager.
+function manager(viewer: Viewer, lang: Lang) {
+  if (viewer.role !== "owner" && viewer.role !== "admin") throw new Refusal(403, tr(lang, "station.share.managersOnly"));
+}
+
+/// Which stations may use a share: null (every one), or station ids.
+function stations(v: unknown): string[] | null {
+  if (v === null || v === undefined || v === "all") return null;
+  if (!Array.isArray(v) || !v.every((x) => typeof x === "string" && /^[0-9a-f]{64}$/.test(x))) throw new Refusal(400, "allow must be null or station ids");
+  return v as string[];
+}
 
 export type AccountsRouteDeps = {
   /// The station's accounts; none while the station starts (503).
   accounts?: Accounts;
+  /// What the station shares with the workspace's other stations (share/index.ts).
+  sharing?: Sharing;
   /// GET /overview's answer for the request's viewer, in its language: what edits answer with.
   overview(r: Request): Promise<unknown> | unknown;
 };
@@ -34,7 +51,7 @@ function input(r: Request): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-export const routes = ({ accounts, overview }: AccountsRouteDeps): Route[] => {
+export const routes = ({ accounts, sharing, overview }: AccountsRouteDeps): Route[] => {
   /// Answered by the accounts, their refusals as `{error}` with their status; 503 while there are none.
   const answer = async (f: (a: Accounts) => Promise<Answer> | Answer): Promise<Answer> => {
     if (accounts === undefined) return error(503, "station starting");
@@ -131,6 +148,50 @@ export const routes = ({ accounts, overview }: AccountsRouteDeps): Route[] => {
         } catch (e) {
           throw new Refusal(400, (e as Error).message);
         }
+      }),
+    ),
+    // Shared with the workspace's other stations (on, and which may use it), or no longer; moved to another station.
+    route("POST", /^\/*profiles\/+([^/]+)\/+share\/*$/, (r, [id]) =>
+      answer(async () => {
+        if (!sharing) return error(503, "station starting");
+        manager(r.viewer, r.lang);
+        const body = input(r);
+        try {
+          await sharing.shareProfile(segment(id!), body.on !== false, stations(body.allow));
+        } catch (e) {
+          if (e instanceof Refusal) throw e;
+          throw new Refusal(409, (e as Error).message);
+        }
+        return ok(await view(r));
+      }),
+    ),
+    route("POST", /^\/*profiles\/+([^/]+)\/+move\/*$/, (r, [id]) =>
+      answer(async () => {
+        if (!sharing) return error(503, "station starting");
+        manager(r.viewer, r.lang);
+        const to = input(r).station;
+        if (typeof to !== "string" || !/^[0-9a-f]{64}$/.test(to)) throw new Refusal(400, "station must be a station id");
+        try {
+          await sharing.moveProfile(segment(id!), to);
+        } catch (e) {
+          throw new Refusal(409, (e as Error).message);
+        }
+        return ok(await view(r));
+      }),
+    ),
+    route("POST", /^\/*skills\/+([^/]+)\/+share\/*$/, (r, [name]) =>
+      answer(async () => {
+        if (!sharing) return error(503, "station starting");
+        manager(r.viewer, r.lang);
+        const body = input(r);
+        const skill = segment(name!);
+        if (skill.includes("/") || skill.startsWith(".")) throw new Refusal(400, "bad skill name");
+        try {
+          await sharing.shareSkill(skill, body.on !== false, stations(body.allow));
+        } catch (e) {
+          throw new Refusal(409, (e as Error).message);
+        }
+        return ok({});
       }),
     ),
     // A sign-in for a new profile: dropped, or given its code. Any other id is no route.

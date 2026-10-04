@@ -31,3 +31,6 @@ export const modelPoolGone = style({ fontSize: vars.textXs });
 export const machineLogins = style({ width: "100%", marginTop: "20px", display: "grid", gap: "4px", textAlign: "left" });
 export const machineLoginsHead = style({ margin: "0", fontSize: vars.textXs, color: vars.muted });
 globalStyle(`${deviceCode} p`, { margin: "0", fontSize: vars.textSm });
+
+/** A value beside its name in the share card (a station, the stations): muted, the button after it. */
+export const shareValue = style({ display: "inline-flex", alignItems: "center", gap: "6px", color: vars.muted, fontSize: vars.textSm });

@@ -46,6 +46,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -64,6 +65,8 @@ import fail.still.android.data.MachineLogin
 import fail.still.android.data.Overview
 import fail.still.android.data.ProfileFlowView
 import fail.still.android.data.Profile
+import fail.still.android.data.ProfilesView
+import fail.still.android.data.ShareStation
 import fail.still.android.data.Quota
 import fail.still.android.data.StationView
 import fail.still.android.data.Topics
@@ -134,7 +137,10 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
         }) else null)
         LargeTitle(one?.let { t("android-settings.connects.on", "name" to it.name) } ?: "", "Profile")
         PageNote(t("android-settings.profiles.note"))
+        // The workspace's: one list, each shared profile once (the core's `profiles`); a station's own: as before.
+        if (one == null) WorkspaceList(current.workspace.id)
         if (stations == null) Text(topic.error?.message ?: t("android-settings.stations.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+        else if (one == null) online.forEach { s -> s.overview?.let { MachineLoginOffers(s.station, it) } }
         else stations.forEach { s ->
             if (one == null) SectionHeader(if (s.online) s.name else t("android-settings.connects.offline", "name" to s.name), start = 24.dp)
             val overview = s.overview
@@ -147,6 +153,136 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
             if (s.online && overview != null) MachineLoginOffers(s.station, overview)
         }
         Spacer(Modifier.height(30.dp))
+    }
+}
+
+/** The workspace's profiles in one list: a shared one once, where it is under it; one whose subscription's station is
+ * away dimmed, said why (as the narrow web's WorkspaceList). */
+@Composable
+private fun WorkspaceList(scope: String) {
+    val app = LocalApp.current
+    val topic by rememberTopic<ProfilesView>(app.core, Topics.profiles(scope))
+    val view = topic.value ?: return Text(topic.error?.message ?: t("android-settings.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+    ListCard {
+        if (view.items.isEmpty()) ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) }
+        view.items.forEach { e ->
+            val p = e.profile
+            ListRow(onClick = { app.push(Screen.Profile(e.station, p.id)) }) {
+                Column(Modifier.weight(1f).then(if (e.usable) Modifier else Modifier.alpha(0.55f))) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PresenceDot(if (e.usable) toneDot(p.checkTone) else "error")
+                        Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(
+                        if (!e.usable) t("web-pages.settings.profiles.hostAway", "station" to e.hostName)
+                        else e.where.ifEmpty { listOfNotNull(p.checkText, p.usesText?.ifEmpty { null } ?: ACCESS_LABEL[p.access.kind] ?: p.access.kind).joinToString(" · ") },
+                        fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (e.usable) QuotaRings(p.quota)
+                IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+            }
+        }
+        if (view.loading) ListRow { Text(t("android-settings.reading"), fontSize = 15.sp, color = C.muted) }
+    }
+}
+
+/**
+ * Sharing a profile with the workspace's other stations (as the desktop's ShareSection): a switch; once on, where a
+ * subscription is signed in (moved from here) and which stations may use it. A copy of another station's says whose.
+ */
+@Composable
+private fun ShareSection(current: WorkspaceEntry, s: StationView, p: Profile) {
+    val app = LocalApp.current
+    val api = app.api(s.station)
+    val topic by rememberTopic<ProfilesView>(app.core, Topics.profiles(current.workspace.id))
+    val share = p.share
+    val entry = share?.let { sh -> topic.value?.items?.firstOrNull { it.key == sh.id } }
+    val stations = entry?.stations.orEmpty()
+    val subscription = p.access.kind == "subscription"
+    SectionHeader(t("web-pages.profiles.share.title"), start = 24.dp)
+    if (share?.role == "user") {
+        val host = entry?.hostName ?: share.host.take(8)
+        ListCard {
+            ListRow(onClick = if (entry?.editable == true) ({ app.push(Screen.Profile(entry.station, entry.profile.id)) }) else null) {
+                Column(Modifier.weight(1f)) {
+                    Text(t("web-pages.profiles.share.copy", "station" to host), fontSize = 15.sp, color = C.ink)
+                    if (subscription && share.reachable == false) Text(t("web-pages.profiles.share.hostAway", "station" to host), fontSize = 13.sp, color = C.red)
+                }
+                if (entry?.editable == true) IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+            }
+        }
+        return
+    }
+    val shared = share != null
+    val allowed = share?.allow
+    val sharing = app.isDoing("profile.share", "station" to s.station, "id" to p.id)
+    val moving = app.isDoing("profile.move", "station" to s.station, "id" to p.id)
+    val names = if (allowed == null) t("web-pages.profiles.share.everyStation") else stations.filter { it.id in allowed || it.id == s.id }.joinToString("、") { it.name }
+    val targets = stations.filter { it.id != s.id }
+    ListCard {
+        ListRow(onClick = if (sharing) null else ({
+            app.act(t("web-pages.profiles.share.switch"), if (shared) t("web-pages.profiles.share.unshared") else t("web-pages.profiles.share.shared")) { api.shareProfile(p.id, !shared, null) }
+        })) {
+            Column(Modifier.weight(1f)) {
+                Text(t("web-pages.profiles.share.switch"), fontSize = 15.sp, color = C.ink)
+                Text(if (!shared) t("web-pages.profiles.share.onlyHere", "station" to s.name) else if (subscription) t("web-pages.profiles.share.lent") else t("web-pages.profiles.share.copied"), fontSize = 13.sp, color = C.muted)
+            }
+            DoingMark(sharing, app.failedOf("profile.share", "station" to s.station, "id" to p.id), 14.dp)
+            Switch(shared)
+        }
+        if (shared && subscription && p.machine != true) {
+            ListRow(onClick = if (moving || targets.isEmpty()) null else ({ openMove(app, s, p, targets) })) {
+                Text(t("web-pages.profiles.share.signedIn"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                DoingMark(moving, app.failedOf("profile.move", "station" to s.station, "id" to p.id), 14.dp)
+                Text(s.name, fontSize = 13.sp, color = C.muted)
+                IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+            }
+        }
+        if (shared) {
+            ListRow(onClick = { openPickShare(app, s, p, stations, allowed) }) {
+                Text(t("web-pages.profiles.share.stations"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                Text(names, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+            }
+        }
+    }
+}
+
+private fun openMove(app: AppState, s: StationView, p: Profile, targets: List<ShareStation>) {
+    app.sheet = SheetSpec(0.5f) {
+        SheetGrab()
+        SheetHead(t("web-pages.profiles.share.moveTitle"))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Text(t("web-pages.profiles.share.moveLead", "station" to s.name), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+            targets.forEach { x ->
+                PickRow(x.name, sub = if (x.online) null else t("android-settings.profiles.stationOffline"), enabled = x.online) {
+                    app.sheet = null
+                    app.act(t("web-pages.profiles.share.move"), t("web-pages.profiles.share.moved", "station" to x.name)) { app.api(s.station).moveProfile(p.id, x.id) }
+                }
+            }
+        }
+    }
+}
+
+/** Which stations may use a shared profile, ticked in a sheet; all ticked is every station (those to come too). */
+private fun openPickShare(app: AppState, s: StationView, p: Profile, stations: List<ShareStation>, allowed: List<String>?) {
+    app.sheet = SheetSpec(0.6f) {
+        var ticked by remember { mutableStateOf(allowed?.toSet() ?: stations.map { it.id }.toSet()) }
+        val all = stations.all { it.id == s.id || it.id in ticked }
+        SheetGrab()
+        SheetHead(t("web-pages.profiles.share.stations"))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Text(if (all) t("web-pages.profiles.share.futureIn") else t("web-pages.profiles.share.futureOut"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+            stations.forEach { x ->
+                PickRow(x.name, checked = x.id == s.id || x.id in ticked, enabled = x.id != s.id) { ticked = if (x.id in ticked) ticked - x.id else ticked + x.id }
+            }
+            PickRow(t("web-pages.profiles.share.done"), color = C.accent) {
+                app.sheet = null
+                val allow = if (all) null else (ticked + s.id).toList()
+                app.act(t("web-pages.profiles.share.stations")) { app.api(s.station).shareProfile(p.id, true, allow) }
+            }
+        }
     }
 }
 
@@ -208,9 +344,11 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
     var flipping by remember { mutableStateOf<Boolean?>(null) }
     val users = p.usedBy.mapNotNull { u -> s.overview?.connects?.firstOrNull { it.id == u } }
     val kind = p.access.kind
+    // A copy of another station's: shown, used, changed only there.
+    val copy = p.share?.role == "user"
     Column(Modifier.fillMaxSize()) {
         NavBar(s.name, app::pop, p.name, sub = { Text(if (p.machine == true) t("android-settings.profile.machine") else p.providerName ?: ACCESS_LABEL[kind] ?: kind, fontSize = 11.sp, color = C.muted) },
-            trailing = { NavButton(Icons.More, { openProfileMenu(app, address, p) }) })
+            trailing = if (copy) null else ({ NavButton(Icons.More, { openProfileMenu(app, address, p) }) }))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             Card {
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -230,9 +368,10 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                 }
             }
             if (p.trouble != null) ProfileRecovery(s, p)
-            if (kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
+            if (!copy && kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
             if (p.trouble?.action != "quota") QuotaSection(address, p)
-            if (p.fast != null) {
+            if (s.overview?.sharing == true) ShareSection(current, s, p)
+            if (!copy && p.fast != null) {
                 val busy = app.isDoing("profile.put", "station" to address, "id" to p.id)
                 SectionHeader(t("android-settings.profile.run"), start = 24.dp)
                 ListCard {
@@ -246,10 +385,10 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     }
                 }
             }
-            ModelsSection(address, p, p.models, p.modelsSaving != null) { models -> setModels(models) }
+            if (!copy) ModelsSection(address, p, p.models, p.modelsSaving != null) { models -> setModels(models) }
             // A station older than the setting says nothing of it.
             val background = flipping ?: p.backgroundOnMessage
-            if ("claude" in p.runtimes && background != null) {
+            if (!copy && "claude" in p.runtimes && background != null) {
                 SectionHeader(t("android-settings.profile.run"), start = 24.dp)
                 ListCard {
                     ListRow(onClick = if (flipping != null) null else ({
@@ -280,7 +419,8 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     }
                 }
             }
-            if (p.machine == true) {
+            if (copy) Unit
+            else if (p.machine == true) {
                 // On the machine's own login: whose it is is changed on that machine, not here.
                 val runtime = MACHINE_RUNTIME[p.runtime] ?: p.runtime
                 SectionHeader(t("android-settings.run.account"), start = 24.dp)
@@ -321,7 +461,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     }
                 }
             }
-            if (kind == "env") {
+            if (kind == "env" && !copy) {
                 SectionHeader(t("android-settings.env.title"), start = 24.dp)
                 ListCard {
                     p.env.forEach { e ->

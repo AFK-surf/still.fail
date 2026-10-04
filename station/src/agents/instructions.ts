@@ -64,7 +64,8 @@ Memory and skills:
 - Both runtimes share memory. Keep it short; no credentials or one-off task details.
 - Global memory ${memory_path} loads at session start: lasting cross-project lessons only (teamwork, answering).
 - Project lessons belong in skills/<project>/SKILL.md beside it; create one if absent. Start its description with "项目记忆：" and say when it applies. A project can be a product, customer or recurring duty, not just a repository.
-- Use other shared skills there when their descriptions match the task.`;
+- Use other shared skills there when their descriptions match the task.
+- A skill can be shared with the workspace's other stations (people turn that on). One shared from another station shows there like the others; what you write to it reaches that station. A SKILL.conflict-<station>.md beside a SKILL.md is an edit made on an older copy: merge it into SKILL.md and remove it.`;
 
 export const NUDGE = `Your turn ended without a state, so nobody knows where the chat stands. Only a real unresolved need requires need_human. A factual answer alone does not need a follow-up question; do not invent one. If you still need something after answering a clarification, visibly ask for it; need alone is only a status summary. Cards are optional. Do not reopen a decision the user already made. Decide whether anything in it is still unfinished, then end the turn with exactly one:
 - all_done: nothing in the chat is left unfinished at all. Post the result with chat_post kind "all_done" (or chat_state "all_done" if you already posted it), with done: why nothing is left, naming the evidence (a commit, a release, a person's confirmation, the answer given).

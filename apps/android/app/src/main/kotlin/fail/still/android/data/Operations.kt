@@ -304,6 +304,30 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["id"] = JsonPrimitive(id)
         return call("profile.delete", JsonObject(values))
     }
+    class ProfileShareFields : OperationFields() {
+        var on: Boolean? by field<Boolean>("on") { JsonPrimitive(it) }
+        var allow: List<String>? by field<List<String>>("allow") { JsonArray(it.map(::JsonPrimitive)) }
+    }
+    suspend fun profileShare(id: String, fill: ProfileShareFields.() -> Unit = {}): JsonElement {
+        val values = ProfileShareFields().apply(fill).fields
+        values["id"] = JsonPrimitive(id)
+        return call("profile.share", JsonObject(values))
+    }
+    suspend fun profileMove(id: String, to: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["id"] = JsonPrimitive(id)
+        values["to"] = JsonPrimitive(to)
+        return call("profile.move", JsonObject(values))
+    }
+    class SkillShareFields : OperationFields() {
+        var on: Boolean? by field<Boolean>("on") { JsonPrimitive(it) }
+        var allow: List<String>? by field<List<String>>("allow") { JsonArray(it.map(::JsonPrimitive)) }
+    }
+    suspend fun skillShare(name: String, fill: SkillShareFields.() -> Unit = {}): JsonElement {
+        val values = SkillShareFields().apply(fill).fields
+        values["name"] = JsonPrimitive(name)
+        return call("skill.share", JsonObject(values))
+    }
     suspend fun profileResetQuota(id: String): JsonElement {
         val values = mutableMapOf<String, JsonElement>()
         values["id"] = JsonPrimitive(id)

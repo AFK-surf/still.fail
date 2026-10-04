@@ -20,7 +20,7 @@ import { t } from "./i18n.ts";
  * A profile: its name and runtimes, what it is and who uses it (`uses`, said by the page), its quota and its check.
  * `framed`: a card of its own (not a row of a list); `to`: the whole of it leads there.
  */
-export function ProfileCard({ profile, uses, to, action, framed }: { profile: Profile; uses?: string; to?: string; action?: ReactNode; framed?: boolean }) {
+export function ProfileCard({ profile, uses, to, action, framed, state }: { profile: Profile; uses?: string; to?: string; action?: ReactNode; framed?: boolean; state?: ReactNode }) {
   const quota = profile.quota;
   // Why its allowance could not be read (a refused account, a sign-in gone stale), shown on its state's hover.
   const trouble = quota && (quota.state === "blocked" || quota.state === "unavailable") ? quota.detail : null;
@@ -30,7 +30,7 @@ export function ProfileCard({ profile, uses, to, action, framed }: { profile: Pr
       title={<>{profile.name}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} /></>}
       sub={[profile.machine ? t("web-main.profile.machine") : profile.providerName ? null : ACCESS[profile.access.kind].label, profile.modelsText, uses]}
       quota={quota ? <QuotaBars quota={quota} compact /> : null}
-      state={profile.checkTone !== "green" ? <State pill={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>} why={trouble} /> : null}
+      state={state ?? (profile.checkTone !== "green" ? <State pill={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>} why={trouble} /> : null)}
       action={action ?? (to ? <ChevronRight {...ICON} className={css.profileCardChevron} /> : null)}
     />
   );

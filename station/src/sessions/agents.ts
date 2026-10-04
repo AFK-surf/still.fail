@@ -29,6 +29,7 @@ import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { UsageCounter } from "../usage/counter.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
+import { Sharing } from "../share/index.ts";
 import { overview } from "../api/overview.ts";
 import { type SlackParts, makeConnections } from "../slack/index.ts";
 import type { Viewer } from "../mesh/credential.ts";
@@ -61,6 +62,8 @@ export type AgentsParts = {
   usage: UsageCounter;
   updates: Updates;
   accounts: Accounts;
+  /// What this station shares with the workspace's other stations, and uses of theirs.
+  sharing: Sharing;
   slack: SlackParts;
   /// Where the station is in still.fail cloud while in a workspace.
   place(): { origin: string; workspace: string; station: string } | null;
@@ -123,14 +126,21 @@ export const AgentsLive = (control: Control) =>
       };
 
       const settings = () => hubConfig(config.raw(), data);
-      const codex = new CodexDriver({ data, currentProfile: (id) => settings().profiles.find((p) => p.id === id) });
+      // What other stations of the workspace share with this one, and what it shares (made below, once the accounts are).
+      let sharing: Sharing | null = null;
+      const borrowed = (p: unknown) => sharing?.borrowedSubscription(p) === true;
+      const codex = new CodexDriver({
+        data,
+        currentProfile: (id) => settings().profiles.find((p) => p.id === id),
+        lent: { borrowed, write: (p) => sharing!.lendCodex(p) },
+      });
       const hub = new Hub({
         config: settings,
         store,
         // The connects' Slack (made below); the station's own chat is the hub's.
         chats: (id) => slack.chats(id),
         drivers: [
-          new ClaudeDriver({ data, machineToken: (env) => accounts.machineToken(env) }),
+          new ClaudeDriver({ data, machineToken: (env) => accounts.machineToken(env), lent: { borrowed, token: (p) => sharing!.lendClaude(p) } }),
           codex,
         ],
         mcpUrl: () => door?.url ?? "",
@@ -230,8 +240,28 @@ export const AgentsLive = (control: Control) =>
       });
 
       // Profiles, sign-ins, allowances and the machine's own logins; the Claude driver's machine token renewed by it.
-      const accounts: Accounts = makeAccounts({ data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, following: () => events.inUse(), checkOnStart: true });
+      const hostName = (p: any) => {
+        const host = sharing?.shares().find((s) => s.id === p?.share?.id)?.host;
+        return cloud.state?.peers.find((x) => x?.id === host)?.name ?? host ?? null;
+      };
+      const accounts: Accounts = makeAccounts({
+        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, following: () => events.inUse(), checkOnStart: true,
+        shared: { status: (p) => sharing!.status(p), view: (p) => sharing?.profileView(p) ?? null, hostName },
+      });
       accounts.start();
+      sharing = new Sharing({
+        data, config, cloud, key,
+        ask: (station, request) => remote.ask(station, request),
+        agentHome: () => settings().agentHome,
+        env: process.env as Record<string, string | undefined>,
+        claudeToken: (p) => accounts.claudeToken(p),
+        codexRunning: (id) => codex.running(id),
+        status: (id) => accounts.health(id),
+        changed: () => events.overviewChanged(),
+        recheck: () => accounts.recheckBorrowed(),
+      });
+      remote.setShares((peer, request) => sharing!.handle(peer, request));
+      sharing.start();
       const slackView = {
         connection: (c: any) => slack.state(c.id),
         teams: (viewer: Viewer) => slack.overview(viewer.email).slackTeams,
@@ -397,6 +427,7 @@ export const AgentsLive = (control: Control) =>
           if (handing) return;
           handing = true;
           await time.close();
+          await sharing?.close();
           unlistenRule();
           notifier.close();
           // Slack's events go to the next process from now on.
@@ -422,6 +453,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates, accounts, slack, overview: view, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station } : null; } });
+      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, slack, overview: view, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station } : null; } });
     }),
   );

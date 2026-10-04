@@ -738,6 +738,21 @@ data class ModelSeries (
 	val models: List<String>
 )
 
+/// How a profile is shared between the workspace's stations (docs/station-share.md).
+@Serializable
+data class ProfileShare (
+	/// The share's id: the same on every station that has the profile.
+	val id: String,
+	/// host: this station has it and lends it; user: a copy of another station's.
+	val role: String,
+	/// The station that has it.
+	val host: String,
+	/// The stations that may use it; absent: every station of the workspace.
+	val allow: List<String>? = null,
+	/// For a copy: whether its host answered lately (absent on the host).
+	val reachable: Boolean? = null
+)
+
 /// A profile, with its last check in words and its models' makers.
 @Serializable
 data class Profile (
@@ -795,7 +810,9 @@ data class Profile (
 	val decisionOnly: Boolean? = null,
 	val decisionModels: List<String>? = null,
 	/// Where the decision probe is, in words (what it found, or why it found none).
-	val decisionText: String? = null
+	val decisionText: String? = null,
+	/// Shared with the workspace's other stations, or another station's (absent: neither, or a station older than sharing).
+	val share: ProfileShare? = null
 )
 
 @Serializable
@@ -2341,6 +2358,8 @@ data class Overview (
 	val logins: List<PendingLogin>,
 	/// This machine's own logins (none from a station older than them).
 	val machineLogins: List<MachineLogin>? = null,
+	/// It can share profiles and skills with the workspace's other stations (docs/station-share.md).
+	val sharing: Boolean? = null,
 	/// The providers a key can be added for (none from a station older than them: they are then not offered), as the
 	/// station lists them.
 	val apiProviders: List<ApiProvider>? = null,
@@ -2579,12 +2598,71 @@ data class ProfileFlowView (
 	val usesLine: String
 )
 
+@Serializable
+data class ShareStation (
+	val id: String,
+	val station: String,
+	val name: String,
+	val online: Boolean,
+	val allowed: Boolean
+)
+
+/// A profile in the workspace's list.
+@Serializable
+data class WorkspaceProfile (
+	/// The share's id, or station/profile for one on a station only.
+	val key: String,
+	/// The station whose copy this is (its page is there).
+	val station: String,
+	val stationId: String,
+	val stationName: String,
+	val profile: Profile,
+	val shared: Boolean,
+	/// The station that has it (its id).
+	val host: String,
+	val hostName: String,
+	val hostOnline: Boolean,
+	/// False for a shared subscription while the station signed in to it is away.
+	val usable: Boolean,
+	/// Where it is, in words: 只在 studio / 登录在 studio · 只给 a、b.
+	val where: String,
+	/// The stations that may use a shared one; absent: every one.
+	val allow: List<String>? = null,
+	/// For a shared one: the workspace's stations and whether each may use it.
+	val stations: List<ShareStation>,
+	/// Its page is on the station that has it (its sharing can be changed there).
+	val editable: Boolean,
+	/// Its station can share it (one older than sharing cannot).
+	val canShare: Boolean
+)
+
+/// The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with
+/// the station they are on; usable ones first.
+@Serializable
+data class ProfilesView (
+	val items: List<WorkspaceProfile>,
+	/// A station that is up is not read yet: its profiles come later.
+	val loading: Boolean
+)
+
 /// A session with its threads and turns (`session` topic).
 @Serializable
 data class SessionDetail (
 	val session: Session,
 	val threads: List<ChatThread>,
 	val turns: List<TurnRecord>
+)
+
+/// How a skill is shared between the workspace's stations.
+@Serializable
+data class SkillShare (
+	val id: String,
+	/// host: shared from this station; user: a copy of another station's.
+	val role: String,
+	val host: String,
+	val allow: List<String>? = null,
+	/// Edits made on an older copy, kept beside the skill (SKILL.conflict-*.md), on its host.
+	val conflicts: List<String>? = null
 )
 
 /// A skill: `body` its text as people read it (no frontmatter), `about` when it applies (a project's without its
@@ -2597,7 +2675,9 @@ data class SkillFile (
 	val builtin: Boolean,
 	val text: String,
 	val body: String? = null,
-	val about: String? = null
+	val about: String? = null,
+	/// Shared with the workspace's other stations, or another station's (absent: neither).
+	val share: SkillShare? = null
 )
 
 /// Address of a transient Slack token form, shared by calls and topic subscriptions.

@@ -721,6 +721,20 @@ export interface ModelSeries {
 	models: string[];
 }
 
+/** How a profile is shared between the workspace's stations (docs/station-share.md). */
+export interface ProfileShare {
+	/** The share's id: the same on every station that has the profile. */
+	id: string;
+	/** host: this station has it and lends it; user: a copy of another station's. */
+	role: string;
+	/** The station that has it. */
+	host: string;
+	/** The stations that may use it; absent: every station of the workspace. */
+	allow?: string[];
+	/** For a copy: whether its host answered lately (absent on the host). */
+	reachable?: boolean;
+}
+
 /** A profile, with its last check in words and its models' makers. */
 export interface Profile {
 	id: string;
@@ -784,6 +798,8 @@ export interface Profile {
 	decisionModels?: string[];
 	/** Where the decision probe is, in words (what it found, or why it found none). */
 	decisionText?: string;
+	/** Shared with the workspace's other stations, or another station's (absent: neither, or a station older than sharing). */
+	share?: ProfileShare;
 }
 
 export interface TurnRecord {
@@ -2316,6 +2332,8 @@ export interface Overview {
 	logins: PendingLogin[];
 	/** This machine's own logins (none from a station older than them). */
 	machineLogins?: MachineLogin[];
+	/** It can share profiles and skills with the workspace's other stations (docs/station-share.md). */
+	sharing?: boolean;
 	/**
 	 * The providers a key can be added for (none from a station older than them: they are then not offered), as the
 	 * station lists them.
@@ -2572,11 +2590,68 @@ export interface ProfileFlowView {
 	usesLine: string;
 }
 
+export interface ShareStation {
+	id: string;
+	station: string;
+	name: string;
+	online: boolean;
+	allowed: boolean;
+}
+
+/** A profile in the workspace's list. */
+export interface WorkspaceProfile {
+	/** The share's id, or station/profile for one on a station only. */
+	key: string;
+	/** The station whose copy this is (its page is there). */
+	station: string;
+	stationId: string;
+	stationName: string;
+	profile: Profile;
+	shared: boolean;
+	/** The station that has it (its id). */
+	host: string;
+	hostName: string;
+	hostOnline: boolean;
+	/** False for a shared subscription while the station signed in to it is away. */
+	usable: boolean;
+	/** Where it is, in words: 只在 studio / 登录在 studio · 只给 a、b. */
+	where: string;
+	/** The stations that may use a shared one; absent: every one. */
+	allow?: string[];
+	/** For a shared one: the workspace's stations and whether each may use it. */
+	stations: ShareStation[];
+	/** Its page is on the station that has it (its sharing can be changed there). */
+	editable: boolean;
+	/** Its station can share it (one older than sharing cannot). */
+	canShare: boolean;
+}
+
+/**
+ * The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with
+ * the station they are on; usable ones first.
+ */
+export interface ProfilesView {
+	items: WorkspaceProfile[];
+	/** A station that is up is not read yet: its profiles come later. */
+	loading: boolean;
+}
+
 /** A session with its threads and turns (`session` topic). */
 export interface SessionDetail {
 	session: Session;
 	threads: ChatThread[];
 	turns: TurnRecord[];
+}
+
+/** How a skill is shared between the workspace's stations. */
+export interface SkillShare {
+	id: string;
+	/** host: shared from this station; user: a copy of another station's. */
+	role: string;
+	host: string;
+	allow?: string[];
+	/** Edits made on an older copy, kept beside the skill (SKILL.conflict-*.md), on its host. */
+	conflicts?: string[];
 }
 
 /**
@@ -2591,6 +2666,8 @@ export interface SkillFile {
 	text: string;
 	body?: string;
 	about?: string;
+	/** Shared with the workspace's other stations, or another station's (absent: neither). */
+	share?: SkillShare;
 }
 
 /** Address of a transient Slack token form, shared by calls and topic subscriptions. */

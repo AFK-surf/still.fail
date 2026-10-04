@@ -287,5 +287,8 @@
   "station.updates.upToDate": "已经是最新版",
   "station.updates.withDesktop": "随 still.fail 桌面端一起更新",
   "station.usage.notKept": "这台 station 不记用量",
-  "station.usage.priceNote": "美元 / 100 万 token · 各类 token × 单价后相加；Claude fast ×2。GPT 按标准短上下文估算，仅记录输入、缓存读取和输出。GPT 价目核对于 2026-10-02，Claude 沿用 2026-09 价目"
+  "station.usage.priceNote": "美元 / 100 万 token · 各类 token × 单价后相加；Claude fast ×2。GPT 按标准短上下文估算，仅记录输入、缓存读取和输出。GPT 价目核对于 2026-10-02，Claude 沿用 2026-09 价目",
+  "station.share.borrowedEdit": "这个 Profile 是别的 station 分享来的，要在它所在的 station 上改",
+  "station.share.hostOffline": "登录它的 station {host} 没有响应，现在用不了",
+  "station.share.managersOnly": "只有 workspace 管理员能分享"
 }

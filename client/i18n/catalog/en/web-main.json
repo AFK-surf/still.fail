@@ -597,5 +597,9 @@
   "web-main.webUpdate.label": "Web update",
   "web-main.webUpdate.later": "Later",
   "web-main.webUpdate.refresh": "Reload",
-  "web-main.webUpdate.short": "New version · Reload"
+  "web-main.webUpdate.short": "New version · Reload",
+  "web-main.memory.share.switch": "Share with other stations",
+  "web-main.memory.share.from": "From {station}",
+  "web-main.memory.share.shared": "Shared",
+  "web-main.memory.share.conflict": "Changed on two stations at once; a conflicting edit is kept"
 }

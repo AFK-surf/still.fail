@@ -90,7 +90,7 @@ export class Admin {
             overviewChanged: () => deps.events?.overviewChanged(),
           })
         : []),
-      ...(deps.agents?.accounts ? accounts({ accounts: deps.agents.accounts, overview: (r) => deps.agents!.overview(r.viewer, r.lang) }) : []),
+      ...(deps.agents?.accounts ? accounts({ accounts: deps.agents.accounts, sharing: deps.agents.sharing, overview: (r) => deps.agents!.overview(r.viewer, r.lang) }) : []),
       // The station as its settings pages show it.
       ...(deps.agents?.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await deps.agents!.overview(r.viewer, r.lang))) }] : []),
     ];

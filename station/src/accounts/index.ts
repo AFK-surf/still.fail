@@ -92,6 +92,14 @@ export type AccountsDeps = {
   checkOnStart?: boolean;
   /// Its time (a TestClock in tests).
   clock?: Clock.Clock;
+  /// Profiles other stations share with this one (share/index.ts): how they are doing is their host's to say, and
+  /// what the overview says of each profile's sharing.
+  shared?: {
+    status(profile: Profile): Promise<{ check: Json; quota: Json }>;
+    view(profile: Json): Json | null;
+    /// Whether the station the profile is another's of did not answer lately.
+    hostName?(profile: Json): string | null;
+  };
 };
 
 /// A sign-in with no profile yet: its runtime, its home while signing in, who started it, what it made.
@@ -105,6 +113,8 @@ const accessKindOf = (v: unknown): AccessKind | undefined => (ACCESS_KINDS.inclu
 /// admin/mod.rs Input::text: JavaScript's String(x ?? "").
 const text = (v: unknown) => (v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v));
 const named = (runtime: Runtime) => (runtime === "claude" ? "Claude Code" : "Codex");
+/// A copy of a profile another station shares (share/index.ts): edited, checked and signed in only there.
+export const borrowed = (p: Json): boolean => isObject(p?.share) && p.share.borrowed === true;
 
 export class Accounts {
   readonly logins: LoginManager;
@@ -227,6 +237,20 @@ export class Accounts {
     return { token, expiresAt };
   }
 
+  /// A Claude profile's current token, renewed when about to run out: what a station sharing it lends.
+  async claudeToken(profile: Json): Promise<MachineToken> {
+    if (profile.machine === true) return this.machineToken();
+    const home = String(profile.home ?? "");
+    const [token, expiresAt] = await claudeOAuthToken(this.env, home.startsWith("/") ? home : join(this.deps.data, home), null, this.urls.claudeToken);
+    return { token, expiresAt };
+  }
+
+  /// Refused for a copy of another station's profile: it is changed there.
+  private own(id: string, lang: Lang) {
+    const p = (Array.isArray(this.deps.config.raw()?.profiles) ? this.deps.config.raw().profiles : []).find((x: Json) => x?.id === id);
+    if (p && borrowed(p)) throw new Refusal(409, tr(lang, "station.share.borrowedEdit"));
+  }
+
   // ── edits ──
 
   /// Edits config.json (refused as 400 when the result does not pass), said in the log as `what`.
@@ -241,6 +265,7 @@ export class Accounts {
 
   /// PUT /profiles/:id: a profile made or edited. Its new state is checked after (in the background).
   putProfile(id: string, given: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
+    this.own(id, lang);
     this.save(viewer, `profile ${id}`, (raw) => {
       const list: Json[] = Array.isArray(raw.profiles) ? raw.profiles : [];
       const existing: Json | undefined = list.find((p) => p?.id === id);
@@ -321,6 +346,8 @@ export class Accounts {
       if (model !== undefined) next.model = model;
       if (models !== undefined) next.models = models;
       if (machine) next.machine = true;
+      // Shared with other stations: still (share/index.ts keeps this).
+      if (isObject(existing?.share)) next.share = existing.share;
       // Only the default's opposite is written.
       if (background === false) next.backgroundOnMessage = false;
       if (fast === true) next.fast = true;
@@ -337,6 +364,7 @@ export class Accounts {
 
   /// DELETE /profiles/:id. Its home stays.
   deleteProfile(id: string, viewer: Viewer, lang: Lang = stationLang()) {
+    this.own(id, lang);
     this.save(viewer, `delete profile ${id}`, (raw) => {
       const list: Json[] = Array.isArray(raw.profiles) ? raw.profiles : [];
       const profile = list.find((p) => p?.id === id);
@@ -454,6 +482,7 @@ export class Accounts {
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
     if (accessKind(profile) !== "subscription") throw new Refusal(400, tr(lang, "station.admin.loginSubscriptionOnly"));
     if (profile.machine === true) throw new Refusal(400, tr(lang, "station.admin.loginOnMachine"));
+    if (borrowed(profile)) throw new Refusal(409, tr(lang, "station.share.borrowedEdit"));
     log.info("accounts", "login started from the admin page", { profile: id, by: viewer.email });
     return this.logins.start({ id, runtime: profile.runtime, home: profile.home }, lang);
   }
@@ -558,6 +587,7 @@ export class Accounts {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
     const kind = accessKind(profile);
+    if (borrowed(profile) && kind === "subscription" && this.deps.shared) return this.checkBorrowed(profile, lang);
     const check = await this.checkFn(
       { runtime: profile.runtime, kind, key: String((profile.access as Json)?.key ?? "").trim(), via: profileVia(profile), home: profile.home, machine: profile.machine === true },
       lang,
@@ -591,6 +621,24 @@ export class Accounts {
     return check;
   }
 
+  /// A copy of another station's subscription: how it is doing is what its host says (unusable while it does not answer).
+  private async checkBorrowed(profile: Profile, lang: Lang): Promise<ProfileCheck> {
+    let check: ProfileCheck;
+    try {
+      const got = await this.deps.shared!.status(profile);
+      check = isObject(got.check) ? (got.check as ProfileCheck) : { state: "unknown", detail: "", models: null, checkedAt: 0 };
+      if (isObject(got.quota)) {
+        this.quotas.set(profile.id, got.quota as ProfileQuota);
+        this.deps.store.setProfileQuota(profile.id, got.quota);
+      }
+    } catch {
+      const host = this.deps.shared!.hostName?.(profile) ?? "";
+      check = { state: "failed", detail: tr(lang, "station.share.hostOffline", { host }), models: null, checkedAt: 0 };
+    }
+    this.keepCheck(profile.id, check);
+    return check;
+  }
+
   /// POST /profiles/:id/quota: a profile's allowance asked again (unless a question is on its way already: then the
   /// last one).
   refreshQuota(id: string): Promise<ProfileQuota | null> {
@@ -619,6 +667,11 @@ export class Accounts {
   private async askQuota(id: string): Promise<ProfileQuota | null> {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
+    // Another station's subscription: its allowance comes with its host's check.
+    if (borrowed(profile) && accessKind(profile) === "subscription" && this.deps.shared) {
+      await this.checkBorrowed(profile, stationLang()).catch(() => {});
+      return this.quotas.get(id) ?? null;
+    }
     if (!this.quotaFn) return this.quotas.get(id) ?? null;
     const read = { ...(await this.quotaFn(profile)), checkedAt: this.background.now() };
     this.quotas.set(id, read);
@@ -636,6 +689,13 @@ export class Accounts {
       const fresh = q !== undefined && now - q.checkedAt < QUOTA_EVERY_MS - 1000;
       if (fresh && !all) continue;
       this.background.spawn(() => this.refreshQuota(p.id));
+    }
+  }
+
+  /// Copies of other stations' subscriptions checked again (their host answers again, or may).
+  recheckBorrowed() {
+    for (const p of this.profiles()) {
+      if (borrowed(p) && accessKind(p) === "subscription") this.background.spawn(() => this.check(p.id).catch(() => {}));
     }
   }
 
@@ -777,7 +837,7 @@ export class Accounts {
       }
       return {
         id: p.id, name: p.name, runtime: p.runtime, runtimes: p.runtimes,
-        email: kind === "subscription" && p.machine !== true ? accountEmail(p.runtime, p.home) : null,
+        email: kind === "subscription" && p.machine !== true ? (borrowed(p) ? (typeof (p.share as Json)?.email === "string" ? (p.share as Json).email : null) : accountEmail(p.runtime, p.home)) : null,
         // A provider's key says `env` where an older core reads it; the provider next to it tells a newer core it is not.
         access: {
           kind: kind === "api-provider" ? "env" : kind, key: mask(String(a.key ?? "").trim()),
@@ -794,6 +854,8 @@ export class Accounts {
         check: checkView,
         login: this.logins.get(p.id),
         quota: this.quotas.get(p.id) ?? null,
+        // Shared with the workspace's other stations, or another station's (absent: neither; old clients ignore it).
+        share: this.deps.shared?.view(p) ?? null,
       };
     });
   }

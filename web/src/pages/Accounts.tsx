@@ -1,9 +1,9 @@
 import type { MachineLogin } from "../core/shapes.ts";
-import { profilesPage, useStation, useLink } from "../station.tsx";
+import { profilesPage, stationBase, useStation, useLink } from "../station.tsx";
 import { Edit, External, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
+import { useAction, useApi, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
 import { KEYED } from "../format.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { useAct } from "../toast.tsx";
@@ -11,7 +11,7 @@ import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
 import { MachineLoginCard } from "../ProfileCard.tsx";
-import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, SwitchRow, Time, Tip } from "../ui.tsx";
+import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, SwitchRow, Time, Tip } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as baseCss from "../styles/base.css.ts";
 import * as css from "./Accounts.css.ts";
@@ -102,6 +102,8 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   const [deleting, setDeleting] = useState(false);
 
   const signIn = profile.access.kind === "subscription";
+  // A copy of another station's: shown, used, but changed only there.
+  const copy = profile.share?.role === "user";
   const signingIn = profile.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(profile.login.state);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
@@ -126,20 +128,22 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
           </p>
           {check.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.checkFailed", { error: check.error.message })}</p>}
         </div>
-        <Menu items={[{ label: profile.usedBy.length ? t("web-pages.profiles.inUse", { item: removal.item }) : removal.item, icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
+        {!copy && <Menu items={[{ label: profile.usedBy.length ? t("web-pages.profiles.inUse", { item: removal.item }) : removal.item, icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />}
       </header>
       {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
       {/* A subscription that needs signing in, or is signing in: that comes first. */}
-      {signIn && !profile.machine && (latest?.state === "login" || signingIn) && <section className={pagesCss.section}><SignIn profile={profile} needed /></section>}
+      {!copy && signIn && !profile.machine && (latest?.state === "login" || signingIn) && <section className={pagesCss.section}><SignIn profile={profile} needed /></section>}
 
       <QuotaSection profile={profile} />
 
-      {profile.fast !== undefined && profile.fast !== null && <FastSection profile={profile} />}
+      {overview.sharing && <ShareSection profile={profile} />}
 
-      <ModelPool profile={profile} found={latest?.models ?? null} onSave={(models) => save.run({ models })} />
+      {!copy && profile.fast !== undefined && profile.fast !== null && <FastSection profile={profile} />}
+
+      {!copy && <ModelPool profile={profile} found={latest?.models ?? null} onSave={(models) => save.run({ models })} />}
 
       {/* A station older than the setting says nothing of it. */}
-      {profile.runtimes.includes("claude") && profile.backgroundOnMessage !== undefined && (
+      {!copy && profile.runtimes.includes("claude") && profile.backgroundOnMessage !== undefined && (
         <Section title={t("web-pages.profiles.run")}>
           <SwitchRow title={t("web-pages.profiles.background")} checked={profile.backgroundOnMessage} disabled={save.busy}
             description={profile.backgroundOnMessage
@@ -159,10 +163,10 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
         )}
       </Section>
 
-      {profile.machine ? <MachineAccount profile={profile} /> : <AccountSection profile={profile} signedIn={latest?.state !== "login" && !signingIn}
+      {copy ? null : profile.machine ? <MachineAccount profile={profile} /> : <AccountSection profile={profile} signedIn={latest?.state !== "login" && !signingIn}
         onSave={(input) => saveThen(input, () => toast(t("web-pages.profiles.savedChecking")))} busy={save.busy} />}
 
-      {profile.access.kind === "env" && <EnvSection profile={profile} onSave={(input) => saveThen(input, () => toast(t("web-pages.profiles.saved")))} busy={save.busy} />}
+      {!copy && profile.access.kind === "env" && <EnvSection profile={profile} onSave={(input) => saveThen(input, () => toast(t("web-pages.profiles.saved")))} busy={save.busy} />}
       {/* Gone from here at once: the list shows it until the station has dropped it, a failure said by toast. */}
       <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); navigate(profilesPage(station)); void remove.run(); }}
         title={removal.title} action={removal.action} description={removal.description} />
@@ -171,6 +175,105 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
 }
 
 const MACHINE_RUNTIME: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex" };
+
+/**
+ * Sharing with the workspace's other stations: a switch; once on, where a subscription is signed in (moved to another
+ * station from here) and which stations may use it (every one unless some are picked). A copy of another station's
+ * says whose it is, and leads there.
+ */
+function ShareSection({ profile }: { profile: Profile }) {
+  const station = useStation();
+  const api = useApi();
+  const act = useAct();
+  const workspace = station.address.split("/")[0]!;
+  const entries = useProfiles(workspace).value?.items ?? [];
+  const share = profile.share;
+  const entry = share ? entries.find((e) => e.key === share.id) : undefined;
+  const stations = entry?.stations ?? [];
+  const on = { station: station.address, id: profile.id };
+  const sharing = useDoing("profile.share", on);
+  const moving = useDoing("profile.move", on);
+  const [picking, setPicking] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const subscription = profile.access.kind === "subscription";
+  if (share?.role === "user") {
+    const host = entry?.hostName ?? share.host.slice(0, 8);
+    return (
+      <Section title={t("web-pages.profiles.share.title")}>
+        <p>{t("web-pages.profiles.share.copy", { station: host })}{entry?.editable && <> <Link to={`${stationBase(entry.station)}/settings/accounts/${encodeURIComponent(entry.profile.id)}`}>{t("web-pages.profiles.share.goHost", { station: host })}</Link></>}</p>
+        {subscription && share.reachable === false && <p className={controlsCss.fieldError}>{t("web-pages.profiles.share.hostAway", { station: host })}</p>}
+      </Section>
+    );
+  }
+  const shared = share !== undefined;
+  const allowed = share?.allow ?? null;
+  const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join("、");
+  const describe = !shared
+    ? t("web-pages.profiles.share.onlyHere", { station: station.name })
+    : subscription ? t("web-pages.profiles.share.lent") : t("web-pages.profiles.share.copied");
+  const targets = stations.filter((x) => x.id !== station.id);
+  return (
+    <Section title={t("web-pages.profiles.share.title")}>
+      <SwitchRow title={t("web-pages.profiles.share.switch")} description={describe} checked={shared} busy={sharing} disabled={sharing}
+        onChange={(next) => act(api.shareProfile(profile.id, next, null), t("web-pages.profiles.share.switch"), next ? t("web-pages.profiles.share.shared") : t("web-pages.profiles.share.unshared"))} />
+      {shared && subscription && !profile.machine && (
+        <div className={pagesCss.cardRow}>
+          <span className={pagesCss.cardRowText}><b>{t("web-pages.profiles.share.signedIn")}</b></span>
+          <span className={css.shareValue}><StatusDot state="online" />{station.name}</span>
+          <Button variant="ghost" busy={moving} disabled={moving || targets.length === 0} onClick={() => setMoveOpen(true)}>{t("web-pages.profiles.share.move")}</Button>
+        </div>
+      )}
+      {shared && (
+        <div className={pagesCss.cardRow}>
+          <span className={pagesCss.cardRowText}><b>{t("web-pages.profiles.share.stations")}</b></span>
+          <span className={css.shareValue}>{names}</span>
+          <Button variant="ghost" disabled={sharing} onClick={() => setPicking(true)}>{t("web-pages.profiles.share.change")}</Button>
+        </div>
+      )}
+      <Dialog open={moveOpen} onClose={() => setMoveOpen(false)} title={t("web-pages.profiles.share.moveTitle")} description={t("web-pages.profiles.share.moveLead", { station: station.name })}>
+        <ul className={pagesCss.list}>
+          {targets.map((x) => (
+            <li key={x.id}>
+              <button type="button" className={pagesCss.listRow} disabled={!x.online}
+                onClick={() => { setMoveOpen(false); act(api.moveProfile(profile.id, x.id), t("web-pages.profiles.share.move"), t("web-pages.profiles.share.moved", { station: x.name })); }}>
+                <StatusDot state={x.online ? "online" : "offline"} /><span className={pagesCss.listRowTitle}>{x.name}</span>
+                {!x.online && <span className={shellCss.muted}>{t("web-pages.stations.offline")}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Dialog>
+      {picking && <PickStations stations={stations} self={station.id} allowed={allowed} onClose={() => setPicking(false)}
+        onSave={(next) => { setPicking(false); act(api.shareProfile(profile.id, true, next), t("web-pages.profiles.share.stations")); }} />}
+    </Section>
+  );
+}
+
+/** Which stations may use a share: every one (those to come too), or those ticked; the one that has it always. */
+export function PickStations({ stations, self, allowed, onClose, onSave }: {
+  stations: { id: string; name: string; online: boolean }[]; self: string; allowed: string[] | null; onClose(): void; onSave(allow: string[] | null): void;
+}) {
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set(allowed ?? stations.map((x) => x.id)));
+  const all = stations.every((x) => x.id === self || ticked.has(x.id));
+  const toggle = (id: string) => setTicked((was) => { const next = new Set(was); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  return (
+    <Dialog open onClose={onClose} title={t("web-pages.profiles.share.stations")}
+      description={all ? t("web-pages.profiles.share.futureIn") : t("web-pages.profiles.share.futureOut")}
+      footer={<Button variant="primary" onClick={() => onSave(all ? null : [...new Set([...ticked, self])])}>{t("web-pages.profiles.share.done")}</Button>}>
+      <ul className={pagesCss.list}>
+        {stations.map((x) => (
+          <li key={x.id}>
+            <label className={pagesCss.listRow}>
+              <input type="checkbox" checked={x.id === self || ticked.has(x.id)} disabled={x.id === self} onChange={() => toggle(x.id)} />
+              <StatusDot state={x.online ? "online" : "offline"} /><span className={pagesCss.listRowTitle}>{x.name}</span>
+              {x.id === self && <span className={shellCss.muted}>{t("web-pages.profiles.share.here")}</span>}
+            </label>
+          </li>
+        ))}
+      </ul>
+    </Dialog>
+  );
+}
 
 /** A profile on the machine's own login: whose it is, and that it is changed on the machine. */
 function MachineAccount({ profile }: { profile: Profile }) {

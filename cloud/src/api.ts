@@ -5,7 +5,7 @@
 // admin's console has its own, `adminApi`, which only the console's host
 // routes to (index.ts).
 import { isAdmin } from "./admin";
-import { bearerToken, denied, readJson, reply, verifyToken, type Claims } from "./auth";
+import { bearerToken, denied, readJson, readText, reply, verifyToken, type Claims } from "./auth";
 import { header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
@@ -15,7 +15,7 @@ import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { receiveFeedback } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays } from "./relays";
-import { receiveTraces } from "./tracing";
+import { receiveTraces, stationSender } from "./tracing";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
 const STATUS: Record<string, number> = {
@@ -27,6 +27,8 @@ const STATUS: Record<string, number> = {
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
   invalid_note: 400, invalid_expiry: 400,
   feedback_not_found: 404,
+  not_enrolled: 403, not_host: 403, share_not_found: 404, host_present: 409, too_many_shares: 429,
+  invalid_id: 400, invalid_host: 400, invalid_kind: 400, invalid_allow: 400, invalid_op: 400,
 };
 
 const FEEDBACK_STATUSES: readonly FeedbackStatus[] = ["new", "triaged", "fixed", "wontfix"];
@@ -130,6 +132,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/feedback/fixed" && method === "POST") return serveFixed(request, env);
   if (path === "/v1/changelog" && method === "GET") return serveChangelog(request, env);
 
+  // What a station shares with the others of its workspace: only which station has it and who may use it (directory.ts).
+  if (path === "/v1/stations/shares" && method === "POST") return stationShares(request, env);
   // Notices of a station's chats, signed with its key like its spans, pushed to the people they are for (push.ts).
   if (path === "/v1/stations/notify" && method === "POST") return stationNotify(request, env);
   if (path === "/v1/push/key" && method === "GET") return pushKey(env);
@@ -213,6 +217,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       return { ...signed, ...relays(env) };
     });
   }
+  if (kind === "shares" && target && !action && method === "DELETE") return directory(() => dir.removeShare(sub, ws, target));
   if (kind === "stations" && target && validKeyHex(target)) {
     if (!action && method === "PATCH") return directory(() => dir.renameStation(sub, ws, target, text("name")));
     if (!action && method === "DELETE") return directory(() => dir.removeStation(sub, ws, target));
@@ -293,4 +298,26 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
   const revoke = /^\/v1\/admin\/invite-codes\/([A-Za-z0-9-]{1,32})\/revoke$/.exec(path);
   if (revoke && method === "POST") return directory(() => dir.revokeInviteCode(revoke[1]!));
   return notFound();
+}
+
+/** POST /v1/stations/shares: a station's request about what it shares, signed like its notices ("station-shares-v1"). */
+async function stationShares(request: Request, env: Env): Promise<Response> {
+  if (request.headers.get("content-type")?.split(";")[0] !== "application/json") return reply({ error: "invalid_request" }, 400);
+  let body: string;
+  try {
+    body = await readText(request, 64 * 1024);
+  } catch {
+    return reply({ error: "too_large" }, 413);
+  }
+  const station = await stationSender(request, env, body, "station-shares-v1");
+  if (!station) return reply({ error: "invalid_signature" }, 401);
+  let input: Record<string, unknown>;
+  try {
+    const value = JSON.parse(body);
+    if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("shape");
+    input = value;
+  } catch {
+    return reply({ error: "invalid_request" }, 400);
+  }
+  return directory(() => env.DIRECTORY.getByName("primary").stationShare(station, input));
 }

@@ -10,7 +10,8 @@ import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { ArrowLeft, Bell, Brain, Chart, Check, Info, Key, LogOut, Monitor, Plug, Plus, Read, Refresh, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useNavigate, useSearchParams } from "react-router";
-import { useStations, type Profile, type StationView } from "../api.ts";
+import { useProfiles, useStations, type Profile, type StationView } from "../api.ts";
+import type { WorkspaceProfile } from "../core/shapes.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
@@ -291,13 +292,16 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
   const setAdding = (station: string) => navigate(addProfilePath(entry.id, station));
   const addPlan = (station: string, c: Choice) => navigate(addProfilePath(entry.id, station, c === "claude-sub" ? "anthropic" : "openai", "plan"));
   const online = stations.filter((s) => s.online);
+  const profiles = useProfiles(entry.id);
+  // Which station a profile is added to, asked when there are several.
+  const [choosing, setChoosing] = useState(false);
   const asStation = (s: (typeof stations)[number]): Station => ({ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${entry.id}/settings` });
   if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
   // Not one profile on any station (each read): the page is about adding the first.
   const first = stations.length > 0 && stations.every((s) => s.overview && s.overview.profiles.length === 0);
   return (
     <Page title="Profile" lead={t("web-pages.settings.profiles.lead", { name: NAME })} back={`/w/${entry.id}/settings`}
-      actions={!first && online.length === 1 && <Button icon={Plus} onClick={() => setAdding(online[0]!.station)}>{t("web-pages.settings.profiles.add")}</Button>}>
+      actions={!first && online.length > 0 && <Button icon={Plus} onClick={() => (online.length === 1 ? setAdding(online[0]!.station) : setChoosing(true))}>{t("web-pages.settings.profiles.add")}</Button>}>
       {first ? (
         <FirstOne art={<Illustration name="no-profile" />} title={t("web-pages.settings.profiles.addFirst")} lead={PROFILE_LEAD}>
           {/* Each station in a row: where a profile is added is part of adding it. */}
@@ -320,46 +324,51 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
             ))}
           </div>
         </FirstOne>
-      ) : stations.map((station) => {
-        const { overview } = station;
-        const base = stationBase(station.station);
-        return (
-          <Section key={station.id}
-            title={<span className={css.stationHeading}><StatusDot state={station.online ? "online" : "offline"} label={station.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />{station.name}</span>}
-            actions={station.online && online.length > 1 && <Button variant="ghost" icon={Plus} onClick={() => setAdding(station.station)}>{t("web-pages.settings.profiles.addShort")}</Button>}>
-            {!station.online && !overview ? <p className={shellCss.muted}>{t("web-pages.settings.profiles.offlineNone")}</p>
-              : !overview ? <Loading label={t("web-pages.settings.profiles.connecting", { name: station.name })} fill={false} />
-              : (
-                <>
-                  {overview.profiles.length === 0 ? <p className={shellCss.muted}>{t("web-pages.settings.profiles.none")}</p> : (
-                    <ul className={pagesCss.list}>
-                      {overview.profiles.map((p) => (
-                        <li key={p.id}>
-                          <ProfileRow profile={p} station={station.station} to={`${base}/settings/accounts/${p.id}`} />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {/* The machine's own logins not used yet: each one offered as the first ones were. */}
-                  {station.online && (
-                    <StationContext.Provider value={asStation(station)}>
-                      <MachineLoginOffers logins={overview.machineLogins} onAdd={(c) => addPlan(station.station, c)} />
-                    </StationContext.Provider>
-                  )}
-                </>
-              )}
-          </Section>
-        );
-      })}
+      ) : (
+        <>
+          {/* The workspace's profiles in one list: one shared between stations once (where it is signed in, or which
+              stations may use it, in its line), the others each with the station they are on (the core's `profiles`). */}
+          {profiles.value && profiles.value.items.length > 0 && (
+            <ul className={pagesCss.list}>
+              {profiles.value.items.map((e) => (
+                <li key={e.key}><WorkspaceProfileRow entry={e} /></li>
+              ))}
+            </ul>
+          )}
+          {profiles.value?.loading && <Loading label={t("web-pages.settings.reading")} fill={false} />}
+          {/* The machines' own logins not used yet, each where it is. */}
+          {online.map((station) => (
+            <StationContext.Provider key={station.id} value={asStation(station)}>
+              <MachineLoginOffers logins={station.overview?.machineLogins} onAdd={(c) => addPlan(station.station, c)} />
+            </StationContext.Provider>
+          ))}
+        </>
+      )}
+      <Dialog open={choosing} onClose={() => setChoosing(false)} title={t("web-pages.settings.profiles.addWhere")} description={t("web-pages.settings.profiles.addWhereLead")}>
+        <ul className={pagesCss.list}>
+          {online.map((st) => (
+            <li key={st.id}><button type="button" className={pagesCss.listRow} onClick={() => { setChoosing(false); setAdding(st.station); }}>
+              <StatusDot state="online" /><span className={pagesCss.listRowTitle}>{st.name}</span>
+            </button></li>
+          ))}
+        </ul>
+      </Dialog>
     </Page>
   );
 }
 
-/** A profile in the list: a ring in its arrow's place while it is being deleted (asked on its page, gone back here). */
-function ProfileRow({ profile, station, to }: { profile: Profile; station: string; to: string }) {
-  const state = useDoingState("profile.delete", { station, id: profile.id });
-  return <ProfileCard profile={profile} to={to} uses={profile.usedBy.length ? t("web-pages.settings.profiles.usedBy", { n: profile.usedBy.length }) : ""}
-    action={state.running || state.error !== undefined ? <DoingShown state={state} className={controlsCss.iconSpinner} size={14} label={t("web-main.activity.busy")} /> : undefined} />;
+/** A profile of the workspace's list: on its page's station; one shared that cannot be used now (its subscription's
+ * station away) dimmed, and said why. */
+function WorkspaceProfileRow({ entry }: { entry: WorkspaceProfile }) {
+  const state = useDoingState(["profile.delete", "profile.share", "profile.move"], { station: entry.station, id: entry.profile.id });
+  const uses = [entry.where, entry.profile.usedBy.length ? t("web-pages.settings.profiles.usedBy", { n: entry.profile.usedBy.length }) : ""].filter(Boolean).join(" · ");
+  return (
+    <div className={entry.usable ? undefined : css.profileAway}>
+      <ProfileCard profile={entry.profile} to={`${stationBase(entry.station)}/settings/accounts/${encodeURIComponent(entry.profile.id)}`} uses={uses}
+        state={entry.usable ? undefined : <Pill tone="red">{t("web-pages.settings.profiles.hostAway", { station: entry.hostName })}</Pill>}
+        action={state.running || state.error !== undefined ? <DoingShown state={state} className={controlsCss.iconSpinner} size={14} label={t("web-main.activity.busy")} /> : undefined} />
+    </div>
+  );
 }
 
 function Stations({ view, account, manager, stations }: { view: WorkspaceView; account: Account; manager: boolean; stations: StationView[] }) {

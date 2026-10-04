@@ -21,7 +21,7 @@ import { t } from "../i18n.ts";
 export function MemoryScreen() {
   const app = useApp();
   const station = useStation();
-  const { memory, error } = useMemory(station.address);
+  const { memory, error, reload } = useMemory(station.address);
   const projects = memory?.skills.filter((k) => k.project) ?? [];
   const others = memory?.skills.filter((k) => !k.project) ?? [];
   return (
@@ -35,12 +35,12 @@ export function MemoryScreen() {
           <SectionHeader title={t("web-mobile.memory.projects")} start={24} />
           <p className={css.mMemoryNote}>{MEMORY_TEXT.projects}</p>
           {projects.length === 0 ? <p className={css.mMemoryNote}>{MEMORY_TEXT.none}</p>
-            : <ListCard><div className={`${rootCss.wide} ${css.mMemorySkills}`}>{projects.map((k) => <SkillRow key={k.name} skill={k} />)}</div></ListCard>}
+            : <ListCard><div className={`${rootCss.wide} ${css.mMemorySkills}`}>{projects.map((k) => <SkillRow key={k.name} skill={k} station={station.address} changed={reload} />)}</div></ListCard>}
           {others.length > 0 && (
             <>
               <SectionHeader title={t("web-mobile.memory.others")} start={24} />
               <p className={css.mMemoryNote}>{MEMORY_TEXT.others}</p>
-              <ListCard><div className={`${rootCss.wide} ${css.mMemorySkills}`}>{others.map((k) => <SkillRow key={k.name} skill={k} />)}</div></ListCard>
+              <ListCard><div className={`${rootCss.wide} ${css.mMemorySkills}`}>{others.map((k) => <SkillRow key={k.name} skill={k} station={station.address} changed={reload} />)}</div></ListCard>
             </>
           )}
           <div style={{ height: 30 }} />

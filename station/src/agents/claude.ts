@@ -83,6 +83,9 @@ export type ClaudeDriverOptions = {
   env?: Env;
   /// The machine login's current token, renewed when about to run out (claude_oauth.rs; the accounts module's).
   machineToken?: (env: Env) => Promise<MachineToken>;
+  /// Another station's subscription, borrowed (share/index.ts): a token lent by the station signed in on it, handed
+  /// to the process as the machine's is.
+  lent?: { borrowed(profile: Profile): boolean; token(profile: Profile): Promise<MachineToken> };
 };
 
 const interruptRequest = () => JSON.stringify({ type: "control_request", request_id: `interrupt-${uuid()}`, request: { subtype: "interrupt" } });
@@ -131,6 +134,7 @@ export class ClaudeDriver implements AgentDriver {
   private readonly command: string;
   private readonly env: Env;
   private readonly machineToken: (env: Env) => Promise<MachineToken>;
+  private readonly lent: ClaudeDriverOptions["lent"];
   private live = new Set<ClaudeSession>();
 
   constructor(options: ClaudeDriverOptions) {
@@ -138,6 +142,7 @@ export class ClaudeDriver implements AgentDriver {
     this.command = options.command ?? "claude";
     this.env = options.env ?? process.env;
     this.machineToken = options.machineToken ?? machineClaudeToken;
+    this.lent = options.lent;
   }
 
   runtime(): "claude" {
@@ -169,7 +174,12 @@ export class ClaudeDriver implements AgentDriver {
     // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
     for (const name of bothNames("RUNTIME_SESSION_ID")) env[name] = sessionId;
     // A machine profile runs on the machine's own login, handed over as its current token (machine_logins.rs).
-    const machine = isMachine(options.profile) ? await this.machineToken(this.env) : undefined;
+    // Another station's subscription the same way, with the token that station lends.
+    const machine = isMachine(options.profile)
+      ? await this.machineToken(this.env)
+      : this.lent?.borrowed(options.profile)
+        ? await this.lent.token(options.profile)
+        : undefined;
     if (machine) {
       env.CLAUDE_CODE_OAUTH_TOKEN = machine.token;
     } else {

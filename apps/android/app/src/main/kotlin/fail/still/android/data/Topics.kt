@@ -188,6 +188,8 @@ object Topics {
         put("topic", "chats"); put("scope", scope); put("mine", mine); if (watching) put("watching", true)
     }
     fun stations(scope: String) = buildJsonObject { put("topic", "stations"); put("scope", scope) }
+    /** The workspace's profiles in one list: each shared one once (client/core-ts/src/views/profiles.ts). */
+    fun profiles(scope: String) = buildJsonObject { put("topic", "profiles"); put("scope", scope) }
     /** The archived chats of a scope's stations online, newest first by the day archived (client/core-ts/src/views/archive.ts). */
     fun archive(scope: String) = buildJsonObject { put("topic", "archive"); put("scope", scope) }
     fun connects(scope: String, mine: Boolean) = buildJsonObject { put("topic", "connects"); put("scope", scope); put("mine", mine) }

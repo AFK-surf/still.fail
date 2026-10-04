@@ -28,6 +28,7 @@ import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
+import { workspaceProfiles } from "./profiles.ts";
 import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes } from "./models.ts";
 
@@ -44,7 +45,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "stations", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "stations", "profiles", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -446,6 +447,7 @@ export class Views implements Owner {
         perStation = (s) => [{ topic: "chatRows", station: s }, { topic: "overview", station: s }, { topic: "link", station: s }];
         break;
       case "stations":
+      case "profiles":
         scope = view.scope as string;
         perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }, { topic: "host", station: s }, { topic: "net", station: s }];
         break;
@@ -664,6 +666,11 @@ export class Views implements Owner {
       }
       case "stations":
         return this.#stationsView(view.scope as string);
+      case "profiles": {
+        const stations = this.#stationsView(view.scope as string);
+        if (stations === undefined || !("ok" in stations)) return stations;
+        return { ok: workspaceProfiles(stations.ok as J[]) };
+      }
       case "connects":
         return this.#connects(view.scope as string, view.mine === true);
       case "chat": {
