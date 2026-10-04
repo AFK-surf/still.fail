@@ -167,7 +167,7 @@ private fun WorkspaceList(scope: String) {
         if (view.items.isEmpty()) ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) }
         view.items.forEach { e ->
             val p = e.profile
-            ListRow(onClick = { app.push(Screen.Profile(e.station, p.id)) }) {
+            ListRow(onClick = { app.push(if (e.members.orEmpty().size > 1) Screen.ProfileAccount(e.key) else Screen.Profile(e.station, p.id)) }) {
                 Column(Modifier.weight(1f).then(if (e.usable) Modifier else Modifier.alpha(0.55f))) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         PresenceDot(if (e.usable) toneDot(p.checkTone) else "error")
@@ -184,6 +184,55 @@ private fun WorkspaceList(scope: String) {
             }
         }
         if (view.loading) ListRow { Text(t("android-settings.reading"), fontSize = 15.sp, color = C.muted) }
+    }
+}
+
+/** An account on several stations (as the narrow web's ProfileAccountScreen): what they have in common, then each
+ * station's part, each leading to its page there. */
+@Composable
+fun ProfileAccountScreen(current: WorkspaceEntry, key: String) {
+    val app = LocalApp.current
+    val topic by rememberTopic<ProfilesView>(app.core, Topics.profiles(current.workspace.id))
+    val e = topic.value?.items?.firstOrNull { it.key == key }
+    if (e == null) return Column(Modifier.fillMaxSize()) {
+        NavBar("Profile", app::pop, "Profile")
+        Loading(if (topic.value != null) t("android-settings.profile.none") else t("android-settings.reading"))
+    }
+    val p = e.profile
+    Column(Modifier.fillMaxSize()) {
+        NavBar("Profile", app::pop, p.name, sub = { Text(listOfNotNull(p.email, if (p.machine == true) t("android-settings.profile.machine") else p.providerName ?: ACCESS_LABEL[p.access.kind] ?: p.access.kind).joinToString(" · "), fontSize = 11.sp, color = C.muted, maxLines = 1) })
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 4.dp)) {
+            SectionHeader(t("web-pages.profiles.account.common"), start = 24.dp)
+            PageNote(t("web-pages.profiles.account.commonLead"))
+            ListCard {
+                ListRow {
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            PresenceDot(toneDot(p.checkTone))
+                            Text(p.checkText, fontSize = 15.sp, color = C.ink)
+                        }
+                        Text(p.check?.detail ?: t("android-settings.profile.notChecked"), fontSize = 13.sp, color = C.muted)
+                    }
+                }
+            }
+            QuotaSection(e.station, p)
+            SectionHeader(t("web-pages.profiles.account.each"), start = 24.dp)
+            ListCard {
+                e.members.orEmpty().forEach { m ->
+                    ListRow(onClick = { app.push(Screen.Profile(m.station, m.profileId)) }) {
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                PresenceDot(if (!m.online) "offline" else if (!m.usable) "error" else toneDot(m.checkTone))
+                                Text(m.stationName, fontSize = 15.sp, color = C.ink)
+                            }
+                            Text(if (m.online) m.about else t("android-settings.profiles.stationOffline"), fontSize = 13.sp, color = C.muted)
+                        }
+                        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                    }
+                }
+            }
+            Spacer(Modifier.height(30.dp))
+        }
     }
 }
 

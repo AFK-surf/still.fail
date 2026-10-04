@@ -145,6 +145,8 @@ sealed interface Screen {
     data class Connects(val station: String? = null) : Screen { override val id = "connects" + (station?.let { "/$it" } ?: "") }
     /** Every station's profiles, or (from a station's page) that station's only. */
     data class Profiles(val station: String? = null) : Screen { override val id = "profiles" + (station?.let { "/$it" } ?: "") }
+    /** An account on several stations: what they have in common, and each station's part. */
+    data class ProfileAccount(val key: String) : Screen { override val id = "profile-account/$key" }
     data object AutomaticDecisions : Screen { override val id = "automatic-decisions" }
     data object AutomaticDecisionCompletion : Screen { override val id = "automatic-decisions/completion" }
     data object AutomaticDecisionLogs : Screen { override val id = "automatic-decisions/completion/logs" }
@@ -723,6 +725,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Changelog -> fail.still.android.screens.ChangelogScreen()
                     is Screen.Connects -> fail.still.android.screens.ConnectsScreen(current, screen.station)
                     is Screen.Profiles -> fail.still.android.screens.ProfilesScreen(current, screen.station)
+                    is Screen.ProfileAccount -> fail.still.android.screens.ProfileAccountScreen(current, screen.key)
                     Screen.AutomaticDecisions -> fail.still.android.screens.AutomaticDecisionsScreen()
                     Screen.AutomaticDecisionCompletion -> fail.still.android.screens.AutomaticDecisionCompletionScreen(current)
                     Screen.AutomaticDecisionLogs -> fail.still.android.screens.AutomaticDecisionCompletionScreen(current, logs = true)
