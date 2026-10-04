@@ -41,6 +41,9 @@ export const optionDetail = style({
 export const optionSpinner = style({ position: "absolute", right: "14px", top: "12px" });
 globalStyle(`${optionSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
 
+/** Under an agent's post in its chat: its options, or how it was settled; what settles leaves over it (useSettling). */
+export const decision = style({ position: "relative" });
+
 /** Answered (or replaced), in the chat: who did what, quiet, where the options were. */
 export const settledLine = style({ margin: "2px 0 0", fontSize: vars.textXs, lineHeight: "18px", color: vars.subtle });
 

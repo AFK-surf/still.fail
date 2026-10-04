@@ -636,6 +636,9 @@ export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView
     const covered = parseFloat(style.scrollPaddingTop) || 0;
     const text = parseFloat(style.lineHeight) || 22;
     pane.scrollTop += line.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered - 4 * text;
+    // Said at once (the browser says it a frame later): until then the pane, still following its bottom, would take
+    // itself back there as the list re-renders (scroll.ts).
+    pane.dispatchEvent(new Event("scroll"));
   }, [ref, target]);
   return target;
 }
@@ -785,6 +788,7 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
       pane.dispatchEvent(new WheelEvent("wheel"));
       const offset = opensOffset ?? (parseFloat(getComputedStyle(pane).scrollPaddingTop) || 0);
       pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - offset;
+      pane.dispatchEvent(new Event("scroll"));
       return;
     }
     // Left at the bottom with nothing new since: it opens at the bottom, following it (the top message's offset would
@@ -795,6 +799,7 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     // A reader's move: the pane keeps it rather than holding its bottom.
     pane.dispatchEvent(new WheelEvent("wheel"));
     pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - saved.offset;
+    pane.dispatchEvent(new Event("scroll"));
   }, [ref, saved, ready, opensTs, opensOffset]);
 }
 
