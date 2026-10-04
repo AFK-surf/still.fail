@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
+import { glass } from "./glass.ts";
 
 export const composerBox = style({
   selectors: {
@@ -23,6 +24,5 @@ globalStyle(`${composerBox}:not([data-multiline])`, { alignItems: "center", gap:
 globalStyle(`${composerBox}[data-multiline]`, { gap: "10px" });
 /** Here rather than with its class: it comes after .composer-box[data-dragging], and wins over it. */
 globalStyle(`${composerBox}:focus-within`, {
-  border: "0", background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
-  backdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
+  border: "0", ...glass, boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
 });

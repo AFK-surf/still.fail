@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { composerWrap } from "./styles/cloud.css.ts";
 import { composerBox } from "./styles/composer.css.ts";
+import { glass } from "./styles/glass.ts";
 
 export const newChatSub = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "0 0 8px", color: vars.muted,
@@ -38,6 +39,5 @@ globalStyle(`${newChatInner} > ${composerWrap}, ${newChatInner} > form`, { justi
  */
 /** Here rather than with its class: it comes after .new-chat-held, and wins over it. */
 globalStyle(composerBox, {
-  border: "0", background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
-  backdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
+  border: "0", ...glass, boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
 });

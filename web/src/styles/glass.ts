@@ -1,9 +1,9 @@
-// The frosted ground of whatever floats over the page (menus, popovers, the composer's kind): raised grey let through
-// at 72%, thicker in dark (84%) so a light page beneath does not turn it grey; no border.
+// The composer's frosted ground, for whatever floats over the page (the composer, menus, popovers): raised grey let
+// through at 72% and blurred; no border. Each adds its own shadow.
 import { vars } from "./tokens.css.ts";
 
 export const glass = {
-  background: `light-dark(color-mix(in srgb, ${vars.raised} 72%, transparent), color-mix(in srgb, ${vars.raised} 84%, transparent))`,
-  WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-  backdropFilter: "blur(20px) saturate(1.4)",
+  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`,
+  WebkitBackdropFilter: "blur(20px)",
+  backdropFilter: "blur(20px)",
 } as const;

@@ -1,6 +1,7 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { popKeyframes } from "./styles/keyframes.css.ts";
+import { glass } from "./styles/glass.ts";
 
 /** Where the menu hangs from: the composer's top edge. */
 export const refAnchor = style({ position: "relative", height: "0" });
@@ -8,7 +9,7 @@ export const refAnchor = style({ position: "relative", height: "0" });
 export const refMenu = style({
   position: "absolute", left: "0", right: "0", bottom: "8px", zIndex: "60", maxHeight: "320px", overflowY: "auto",
   padding: "12px", border: "0", borderRadius: `calc(32px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
-  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
+  ...glass,
   boxShadow: "0 4px 12px rgb(0 0 0 / .07), 0 1px 3px rgb(0 0 0 / .05)",
   transformOrigin: "bottom", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
 });

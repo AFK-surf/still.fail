@@ -2,6 +2,7 @@ import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { composerWrap } from "./styles/cloud.css.ts";
 import { vars } from "./styles/tokens.css.ts";
 import { spinner } from "./styles/waiting.css.ts";
+import { glass } from "./styles/glass.ts";
 
 // A decision's options (Decisions.tsx): under the message that asks it in a chat, and at the foot of the decisions
 // page. One per line, as wide as the message's column; the recommended one last, in the accent. The phone's page colours
@@ -123,7 +124,7 @@ globalStyle(`${footColumn} > :not(${reply}), ${reply} > *`, { pointerEvents: "au
 export const hint = style({
   display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", width: "fit-content", height: "24px",
   margin: "8px auto 0", padding: "0 12px", borderRadius: "12px", color: vars.subtle, fontSize: vars.textXs, lineHeight: "24px",
-  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
+  ...glass,
 });
 export const hintButton = style({
   height: "20px", padding: "0 4px", border: "0", borderRadius: "6px", background: "none", color: vars.subtle,
