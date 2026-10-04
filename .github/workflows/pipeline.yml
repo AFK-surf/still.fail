@@ -388,15 +388,17 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: "release-desktop-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
-  # What was built put in the bucket, once the check passed and the API is out; nothing when a build failed.
+  # What was built put in the bucket, once the check passed and the API and the web are out; nothing when a build
+  # failed. Then the changelog that says so (scripts/changelog-put.sh): in this job, not one more after it.
   put:
-    needs: [plan, check, check-linux, check-android, api, station, android, desktop]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success')
+    needs: [plan, check, check-linux, check-android, api, static, station, android, desktop]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+        with: { fetch-depth: 0 } # the changelog's entries are numbered by the commits up to them
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { pattern: "release-*-${{ github.sha }}", path: "${{ runner.temp }}/release", merge-multiple: true }
@@ -406,6 +408,10 @@ jobs:
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release-put.sh "$RUNNER_TEMP/release"
+      - name: Put changelog.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: sh scripts/changelog-put.sh
 
   station-update:
     needs: [station, put]
@@ -416,12 +422,11 @@ jobs:
       - name: studio's station takes the published release
         run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
 
-  # The changelog people read in the apps (docs/changelog.md), from main's history, once what it says is out: the
-  # releases bucket's changelog.json, which still.fail cloud serves and marks bug reports fixed by.
+  # The changelog, when nothing was released (put, which puts it after the releases, did not run): a fix in still.fail
+  # cloud counts as out as soon as it is listed, not before the API carrying it is deployed.
   changelog:
     needs: [plan, check, check-linux, check-android, api, static, put]
-    # A fix in still.fail cloud counts as out as soon as it is listed: not before the API carrying it is deployed.
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    if: always() && github.ref == 'refs/heads/main' && needs.put.result == 'skipped' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
@@ -432,19 +437,7 @@ jobs:
       - name: Put changelog.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          # The test channel's, a commit an entry; the stable channel's, a release an entry (docs/releases).
-          node scripts/changelog.ts > "$RUNNER_TEMP/changelog.json"
-          node scripts/changelog.ts --stable > "$RUNNER_TEMP/changelog-stable.json"
-          cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null
-          for name in changelog changelog-stable; do
-            # Cloudflare's API fails now and then on the way: put again, twice at most.
-            for try in 1 2 3; do
-              pnpm exec wrangler r2 object put "stillfail-releases/$name.json" --file "$RUNNER_TEMP/$name.json" --content-type application/json --remote > /dev/null && break
-              [ $try = 3 ] && exit 1; sleep 15
-            done
-            echo "$name: $(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).length)' "$RUNNER_TEMP/$name.json") entries"
-          done
+        run: sh scripts/changelog-put.sh
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
