@@ -14,10 +14,11 @@ import { keepSentImage } from "./sentImages.ts";
 import { useToast } from "./toast.tsx";
 import { t } from "./i18n.ts";
 
-export const MAX_FILE = 50 * 1024 * 1024;
+export const MAX_FILE = 1024 * 1024 * 1024;
 
-/** A file on its way to the station: uploading, uploaded, or failed. `preview`: an image's local picture, until it leaves the draft. */
-export interface Pending { id: number; name: string; size: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob }
+/** A file on its way to the station: uploading (`sent`: how much of it the station has), uploaded, or failed.
+ * `preview`: an image's local picture, until it leaves the draft. */
+export interface Pending { id: number; name: string; size: number; sent?: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob }
 
 /** A passage quoted in the message being written, with what is said about it. */
 export interface DraftQuote extends Quote { id: string }
@@ -99,6 +100,7 @@ function persist(key: string, draft: { text: string; files: Pending[]; quotes: D
   core().call("draft.put", { key, ...view }).catch(() => undefined);
 }
 
+
 /** `key`'s draft as the core keeps it (null: none, or a core that keeps none). */
 function readKept(key: string): Promise<DraftView | null> {
   return core().call("draft.get", { key }).then((value) => value as DraftView, () => null);
@@ -111,8 +113,8 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
   station?: string | undefined;
   /** A key whose draft goes on from what is written now, instead of its own (a new chat becoming its chat). */
   carry?: MutableRefObject<string | null>;
-  /** Sends a file to the station. */
-  upload(file: File): Promise<Attachment>;
+  /** Sends a file to the station; `onProgress`, how much of it the station has. */
+  upload(file: File, onProgress: (sent: number) => void): Promise<Attachment>;
   /** The quotes, where the page holds them (it offers them from its messages): otherwise the draft does. */
   quotes?: [DraftQuote[], Update<DraftQuote[]>];
 }): Draft {
@@ -221,12 +223,14 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
       if (shown.current !== undefined) leave(shown.current);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  // What is written goes to the core as it changes, once what it kept has been read (not to write over it before).
+  // What is written goes to the core as it changes, once what it kept has been read (not to write over it before). A
+  // file going up changes `files` at each part, which changes nothing kept: it only counts once it is up or gone.
+  const keptFiles = files.map((f) => `${f.id}:${f.done ? 1 : 0}`).join();
   useEffect(() => {
     const at = shown.current;
     if (at === undefined || loaded.current !== at) return;
     persist(at, { text, files, quotes: held ? [] : quotes });
-  }, [text, files, quotes]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [text, keptFiles, quotes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const add = (picked: FileList | File[]) => {
     for (const file of Array.from(picked)) {
@@ -236,7 +240,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
       const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
       setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? t("web-main.draft.tooBig") : null, ...(preview ? { preview, image: file } : {}) }]);
       if (tooBig) continue;
-      sender.current(file).then(
+      sender.current(file, (sent) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, sent } : f)))).then(
         (done) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, done } : f))),
         (error: unknown) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, error: error instanceof Error ? error.message : t("web-main.draft.uploadFailed") } : f))),
       );

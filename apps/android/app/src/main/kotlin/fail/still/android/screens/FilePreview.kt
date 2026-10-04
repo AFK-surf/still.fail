@@ -595,7 +595,7 @@ private suspend fun finish(marks: ImageMarks, bytes: ByteArray, zoom: ZoomState,
         val made = marks.render(bytes, natural) ?: throw IllegalStateException(t("android-chat.file.drawFailed"))
         val stamp = java.text.SimpleDateFormat("HHmmss", java.util.Locale.ROOT).format(java.util.Date())
         val name = t("android-chat.file.marked.name", "name" to file.name.substringBeforeLast('.'), "stamp" to stamp)
-        use(Picked(name, made.bytes, made.width, made.height, made.preview, made.size), marks.quotes(all, name, file.name, natural))
+        use(Picked(name, made.bytes, made.width, made.height, made.preview, made.size, made.open), marks.quotes(all, name, file.name, natural))
     } catch (e: Exception) {
         marks.error = e.message ?: t("android-chat.file.drawFailed")
     } finally {

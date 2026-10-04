@@ -70,6 +70,10 @@ export function install(): void {
     const c = call as Extract<Call, { kind: "stationUpload" }>;
     return inner.stations.upload(c.station, c.name, c.bytes, ctx);
   };
+  handlers.stationUploadPart = (inner, call, _p, _a, ctx) => {
+    const c = call as Extract<Call, { kind: "stationUploadPart" }>;
+    return Effect.flatMap(parse(c.station), (addr) => inner.stations.requests.uploadPart(addr, c, c.bytes, ctx));
+  };
   handlers.stationFile = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationFile" }>;
     return Effect.flatMap(parse(c.station), (addr) =>

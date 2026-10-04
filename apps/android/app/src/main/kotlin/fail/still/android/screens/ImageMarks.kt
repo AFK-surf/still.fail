@@ -633,8 +633,8 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
      * The image (its whole bytes) with the marks drawn on it, as a PNG at its own size, as web's (a canvas of the
      * image's size, `toBlob("image/png")`), with its size and a small picture. Never held whole: read in bands
      * ([BitmapRegionDecoder]), each band's marks drawn on it, its rows written out as they come ([PngRows]) into a
-     * file. Its bytes come in memory only if it can be sent (at most [MAX_MARKED]); a bigger one is handed on empty
-     * with its size, so the draft says it is too big, as web's does, and [save] still puts it in Downloads.
+     * file. Its bytes come in memory only up to [MAX_MARKED]; a bigger one is handed on to be read from that file as it
+     * goes up, and [save] puts it in Downloads.
      */
     suspend fun render(bytes: ByteArray, natural: androidx.compose.ui.unit.IntSize): Picked? = withContext(Dispatchers.Default) {
         val all = all()
@@ -693,7 +693,11 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
             val size = file.length()
             val picture = small.asImageBitmap()
             small = null
-            if (size > MAX_MARKED) Picked("", ByteArray(0), w, h, picture, size) else Picked("", file.readBytes(), w, h, picture)
+            if (size > MAX_MARKED) {
+                // Opened now: the file goes when the marks are cleared, but what is open of it can still be read.
+                var held: java.io.InputStream? = file.inputStream()
+                Picked("", ByteArray(0), w, h, picture, size) { held?.also { held = null } ?: file.inputStream() }
+            } else Picked("", file.readBytes(), w, h, picture)
         } catch (_: OutOfMemoryError) {
             file.delete()
             throw IllegalStateException(t("android-chat.marks.tooBig"))
@@ -725,8 +729,8 @@ private const val NOTE_BOX = 140f
 
 /** How many pixels a band of the image read at a time has (4 bytes each): a few MB, whatever the image. */
 private const val BAND_PIXELS = 2 shl 20
-/** What can be sent (Composer.kt MAX_FILE, the station's MAX_UPLOAD): bigger is not read into memory. */
-private const val MAX_MARKED = 50L * 1024 * 1024
+/** What is read into memory to be sent (Composer.kt IN_MEMORY): a bigger one goes up from its file as it is read. */
+private const val MAX_MARKED = 16L * 1024 * 1024
 
 /**
  * A PNG written a row at a time into `out`: 8-bit RGB (RGBA if `alpha`), each row filtered the way that leaves the

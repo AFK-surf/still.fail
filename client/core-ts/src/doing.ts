@@ -61,5 +61,5 @@ function rustFloat(v: number): string {
 
 /// Calls whose params are too big to keep a copy of while they run.
 export function heavy(name: string): boolean {
-  return ["station.upload", "station.preview", "preview.socket.send", "draft.put", "chat.send", "migrate", "push.register"].includes(name);
+  return ["station.upload", "station.upload.part", "station.preview", "preview.socket.send", "draft.put", "chat.send", "migrate", "push.register"].includes(name);
 }

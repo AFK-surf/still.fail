@@ -84,8 +84,8 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
   const act = useAct();
   const api = useApi();
   const draftKey = `decision:${station}:${thread}:${seq}`;
-  const upload = useRef((file: File) => api.uploadFile(file));
-  const shared = useDraft({ key: draftKey, station, upload: (file) => upload.current(file) });
+  const upload = useRef((file: File, onProgress?: (sent: number) => void) => api.uploadFile(file, onProgress));
+  const shared = useDraft({ key: draftKey, station, upload: (file, onProgress) => upload.current(file, onProgress) });
   const [focus, setFocus] = useState(0);
   const draft = { ...shared, focus, bumpFocus: () => setFocus((n) => n + 1) };
   const send = (written: Draft) => {

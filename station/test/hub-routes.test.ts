@@ -164,6 +164,43 @@ test("uploads wait in the station's uploads, a message takes them into its chat 
   }
 });
 
+test("a file in parts: each added where the file ends, asked again or out of place it adds nothing, whole it is an upload", async () => {
+  const r = rig();
+  try {
+    const part = (offset: number, body: string, size = 10, id = "abcdefgh12") =>
+      r.ask("POST", "/uploads/parts", Buffer.from(body), [["id", id], ["name", "big.bin"], ["size", String(size)], ["offset", String(offset)]]);
+    assert.deepEqual(await part(0, "0123"), [200, { have: 4 }]);
+    // Its answer lost, asked again: nothing added.
+    assert.deepEqual(await part(0, "0123"), [200, { have: 4 }]);
+    // Ahead of the file's end: nothing added, the caller goes on from where it is.
+    assert.deepEqual(await part(8, "89"), [200, { have: 4 }]);
+    // Overlapping the end: only the rest of it added.
+    assert.deepEqual(await part(2, "234567"), [200, { have: 8 }]);
+    const staged = join(r.data, "uploads");
+    assert.equal(readFileSync(join(staged, ".part-abcdefgh12"), "utf8"), "01234567");
+    const [status, done] = await part(8, "89");
+    assert.equal(status, 200);
+    assert.equal(done.have, 10);
+    assert.deepEqual([done.file.name, done.file.size], ["big.bin", 10]);
+    assert.match(done.file.path, /\/uploads\/\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-[0-9a-f]{6}-big\.bin$/);
+    assert.equal(readFileSync(done.file.path, "utf8"), "0123456789");
+    assert.ok(!existsSync(join(staged, ".part-abcdefgh12")));
+    // The last part asked again after it was put together: the same file.
+    assert.deepEqual(await part(8, "89"), [200, done]);
+    // A part file is never sent with a message.
+    await part(0, "01", 10, "otherid123");
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });
+    assert.deepEqual(await r.ask("POST", `/threads/${made.thread.id}/messages`, { attachments: [{ path: join(staged, ".part-otherid123") }] }), [400, { error: en("station.files.notUploaded") }]);
+    // Bounds: the whole file, a part, the id.
+    assert.deepEqual(await part(0, "x", 1024 * 1024 * 1024 + 1, "toolarge12"), [413, { error: en("station.files.tooLargeParts") }]);
+    assert.equal((await part(0, "x", 10, "../../etc"))[0], 400);
+    assert.equal((await part(0, "x".repeat(11), 10, "pastsize12"))[0], 413);
+    assert.equal((await r.ask("POST", "/uploads/parts", Buffer.from("x"), [["id", "noquery123"]]))[0], 400);
+  } finally {
+    await r.close();
+  }
+});
+
 test("a pending card: an option chosen by an old client is refused; an answer quoting it marks it read", async () => {
   const r = rig();
   try {

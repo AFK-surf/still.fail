@@ -178,8 +178,9 @@ export function useHost(station: string): TopicState<Host> {
 export interface StationCall {
   /** Has the core do `name` (client/core-ts/src/ops.ts) on this station, with `params`. */
   op<T>(name: string, params?: Record<string, unknown>): Promise<T>;
-  /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
-  upload(file: File): Promise<Attachment>;
+  /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. `onProgress`: the bytes
+   * the station has so far, after each part. */
+  upload(file: File, onProgress?: (sent: number) => void): Promise<Attachment>;
   /** A file sent to the session, as a blob for previews; `thumb`: an image as a chat shows it (its thumbnail, where the station keeps one). */
   /** `onProgress`: bytes so far and the whole size (null when the station does not say) as a whole file comes. */
   file(key: string, name: string, thumb?: boolean, onProgress?: (got: FileProgress) => void): Promise<Blob>;
@@ -194,6 +195,9 @@ function fromBase64(text: string): Uint8Array<ArrayBuffer> {
   const native = (Uint8Array as unknown as { fromBase64?: (s: string) => Uint8Array<ArrayBuffer> }).fromBase64;
   return native ? native(text) : Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
 }
+
+/** The bytes of a file in one `station.upload.part`. */
+const UPLOAD_PART = 4 * 1024 * 1024;
 
 function toBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -213,8 +217,19 @@ export function useStationCall(station: string): StationCall {
 export function stationCall(call: ReturnType<typeof useCall>, station: string): StationCall {
   return {
     op: <T,>(name: string, params: Record<string, unknown> = {}) => call(name, { ...params, station }) as Promise<T>,
-    upload: async (file) => {
-      const saved = await call("station.upload", { station, name: file.name, bytes: await toBase64(file) }) as Attachment;
+    upload: async (file, onProgress) => {
+      // A part at a time (`station.upload.part`), read from the file as it goes: a big one is never all in memory.
+      const id = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+      let saved: Attachment | undefined;
+      for (let have = 0; saved === undefined;) {
+        const bytes = await toBase64(file.slice(have, have + UPLOAD_PART));
+        const told = await call("station.upload.part", { station, id, name: file.name, size: file.size, offset: have, bytes }) as { have: number; file?: Attachment };
+        if (told.file) saved = told.file;
+        // The station goes on from what it has (less, after it lost a part); nothing more is a part it could not take.
+        else if (told.have === have) throw new Error(t("web-main.draft.uploadFailed"));
+        else have = told.have;
+        onProgress?.(told.file ? file.size : have);
+      }
       // An image's size travels with it, so every page can hold its place before it loads.
       if (file.type.startsWith("image/")) {
         try {

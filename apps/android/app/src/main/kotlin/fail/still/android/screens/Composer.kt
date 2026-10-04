@@ -145,6 +145,8 @@ import kotlinx.serialization.builtins.serializer
 /** A file on its way to the station: uploading, uploaded, or failed. */
 class Pending(val id: Long, val name: String, val size: Long, val preview: ImageBitmap?) {
     var done by mutableStateOf<Attachment?>(null)
+    /** How much of it the station has, as it goes up in parts. */
+    var sent by mutableStateOf<Long?>(null)
     var error by mutableStateOf<String?>(null)
 }
 
@@ -417,13 +419,19 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
 
 // ── files ──────────────────────────────────────────────────────────────
 
-private const val MAX_FILE = 50L * 1024 * 1024
+private const val MAX_FILE = 1024L * 1024 * 1024
+/** A picked file up to this is read into memory (an image's preview and marks read it); a bigger one is read as it goes up. */
+private const val IN_MEMORY = 16L * 1024 * 1024
 
 /**
- * A file picked on the phone, read whole; images also get their size and a preview. `size` is the file's own: one over
- * MAX_FILE is not read at all (`bytes` empty), so a long video does not have to fit in memory only to be refused.
+ * A file picked on the phone; images also get their size and a preview. Up to [IN_MEMORY] it is read whole (`bytes`);
+ * a bigger one is read from `open` as it goes up, a part at a time. `size` is the file's own: one over MAX_FILE is
+ * neither (`bytes` empty, no `open`), and is refused.
  */
-class Picked(val name: String, val bytes: ByteArray, val width: Int?, val height: Int?, val preview: ImageBitmap?, val size: Long = bytes.size.toLong())
+class Picked(val name: String, val bytes: ByteArray, val width: Int?, val height: Int?, val preview: ImageBitmap?, val size: Long = bytes.size.toLong(), val open: (() -> java.io.InputStream)? = null) {
+    /** Where its bytes are read from as it goes up. */
+    fun source(): () -> java.io.InputStream = open ?: { java.io.ByteArrayInputStream(bytes) }
+}
 
 suspend fun readPicked(context: Context, uri: Uri): Picked? = withContext(Dispatchers.IO) {
     val resolver = context.contentResolver
@@ -436,24 +444,38 @@ suspend fun readPicked(context: Context, uri: Uri): Picked? = withContext(Dispat
         }
     }
     known?.let { if (it > MAX_FILE) return@withContext Picked(name, ByteArray(0), null, null, null, it) }
-    // The provider may not say how big (or say wrong): read no further than one byte past MAX_FILE either way.
-    val bytes = try {
-        resolver.openInputStream(uri)?.use { input ->
+    val open = { resolver.openInputStream(uri) ?: throw java.io.IOException("unreadable") }
+    // The provider may not say how big (or say wrong): read no further than one byte past IN_MEMORY into memory.
+    val bytes = if (known != null && known!! > IN_MEMORY) null else try {
+        open().use { input ->
             val out = ByteArrayOutputStream()
             val buf = ByteArray(64 * 1024)
-            while (out.size() <= MAX_FILE) {
-                val n = input.read(buf, 0, minOf(buf.size.toLong(), MAX_FILE + 1 - out.size()).toInt())
+            while (out.size() <= IN_MEMORY) {
+                val n = input.read(buf, 0, minOf(buf.size.toLong(), IN_MEMORY + 1 - out.size()).toInt())
                 if (n < 0) break
                 out.write(buf, 0, n)
             }
             out.toByteArray()
         }
-    } catch (_: java.io.IOException) { null } ?: return@withContext null
-    if (bytes.size > MAX_FILE) return@withContext Picked(name, ByteArray(0), null, null, null, bytes.size.toLong())
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }.also { BitmapFactory.decodeByteArray(bytes, 0, bytes.size, it) }
+    } catch (_: java.io.IOException) { return@withContext null }
+    if (bytes != null && bytes.size <= IN_MEMORY) {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }.also { BitmapFactory.decodeByteArray(bytes, 0, bytes.size, it) }
+        val image = bounds.outWidth > 0
+        val preview = if (image) BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = maxOf(1, bounds.outWidth / 160) })?.asImageBitmap() else null
+        return@withContext Picked(name, bytes, bounds.outWidth.takeIf { image }, bounds.outHeight.takeIf { image }, preview)
+    }
+    // Big: its size as read when the provider did not say (counted, not kept), its picture from a pass of its own.
+    val size = try {
+        known ?: open().use { input -> var n = 0L; val buf = ByteArray(1 shl 16); while (true) { val r = input.read(buf); if (r < 0) break; n += r; if (n > MAX_FILE) break }; n }
+    } catch (_: java.io.IOException) { return@withContext null }
+    if (size > MAX_FILE) return@withContext Picked(name, ByteArray(0), null, null, null, size)
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    try { open().use { BitmapFactory.decodeStream(it, null, bounds) } } catch (_: java.io.IOException) {}
     val image = bounds.outWidth > 0
-    val preview = if (image) BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = maxOf(1, bounds.outWidth / 160) })?.asImageBitmap() else null
-    Picked(name, bytes, bounds.outWidth.takeIf { image }, bounds.outHeight.takeIf { image }, preview)
+    val preview = if (!image) null else try {
+        open().use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = maxOf(1, bounds.outWidth / 160) }) }?.asImageBitmap()
+    } catch (_: java.io.IOException) { null } catch (_: OutOfMemoryError) { null }
+    Picked(name, ByteArray(0), bounds.outWidth.takeIf { image }, bounds.outHeight.takeIf { image }, preview, size, open)
 }
 
 fun photoPicked(bitmap: Bitmap): Picked {
@@ -466,15 +488,24 @@ fun photoPicked(bitmap: Bitmap): Picked {
 fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: CoroutineScope) {
     val p = Pending(System.nanoTime(), picked.name, picked.size, picked.preview)
     draft.files += p
-    if (picked.size > MAX_FILE) { p.error = t("android-chat.file.tooBig"); return }
+    if (picked.size > MAX_FILE || (picked.bytes.isEmpty() && picked.open == null && picked.size > 0)) { p.error = t("android-chat.file.tooBig"); return }
     scope.launch {
         try {
-            p.done = api(station).upload(picked.name, picked.bytes, picked.width?.toLong(), picked.height?.toLong())
+            p.done = api(station).upload(picked.name, picked.size, picked.source(), picked.width?.toLong(), picked.height?.toLong()) { p.sent = it }
             draft.save()
         } catch (e: CoreException) {
             p.error = e.message
+        } catch (_: java.io.IOException) {
+            p.error = t("android-chat.file.uploadFailed")
         }
     }
+}
+
+/** What a file going up says: how far it has gone, when it is more than a part. */
+private fun uploadingText(f: Pending): String {
+    val sent = f.sent
+    return if (sent == null || f.size <= 4L * 1024 * 1024) t("android-chat.file.uploading")
+    else t("android-chat.file.uploading.part", "percent" to (sent * 100 / f.size).toInt(), "size" to fileSize(f.size))
 }
 
 @Composable
@@ -563,7 +594,7 @@ fun DraftExtras(draft: Draft) {
                 Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
                     IconIn(Icons.Close, 12.dp, Color.White)
                 }
-            } else FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) t("android-chat.file.uploading") else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
+            } else FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
         }
     }
 }

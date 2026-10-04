@@ -1223,13 +1223,17 @@ export function imageBox(file: Attachment): { width: number; aspectRatio: string
   return { width, aspectRatio: `${width} / ${height}` };
 }
 
-function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; error?: string | null }) {
+function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; sent?: number | undefined; error?: string | null }) {
+  // A file of more than one part says how far it has gone.
+  const going = pending && sent !== undefined && file.size > 4 * 1024 * 1024
+    ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })
+    : t("web-main.file.uploading");
   return (
     <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-error={error ? true : undefined}>
       {pending ? <span className={waitingCss.spinner} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
       <span className={css.fileCardText}>
         <span className={css.fileCardName}>{file.name}</span>
-        <span className={css.fileCardMeta}>{error ?? (pending ? t("web-main.file.uploading") : fileSize(file.size))}</span>
+        <span className={css.fileCardMeta}>{error ?? (pending ? going : fileSize(file.size))}</span>
       </span>
       {onRemove && <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: file.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span></Tip>
@@ -1276,7 +1280,7 @@ export interface ComposerProps {
 export function Composer(props: ComposerProps) {
   const api = useApi();
   const { draftKey, carry, quotes = [], setQuotes = () => {} } = props;
-  const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}), upload: (file) => api.uploadFile(file), quotes: [quotes, setQuotes] });
+  const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}), upload: (file, onProgress) => api.uploadFile(file, onProgress), quotes: [quotes, setQuotes] });
   return <ComposerView {...props} draft={draft} />;
 }
 
@@ -1598,7 +1602,7 @@ function PendingFile({ file: f, onRemove }: { file: Pending; onRemove?: () => vo
       {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
       {onRemove && <button type="button" className={css.composerThumbRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span></Tip>
-  ) : <FileCard file={f.done ?? f} pending={!f.done && !f.error} error={f.error} {...(onRemove ? { onRemove } : {})} />;
+  ) : <FileCard file={f.done ?? f} pending={!f.done && !f.error} sent={f.sent} error={f.error} {...(onRemove ? { onRemove } : {})} />;
 }
 
 /** An agent in this chat that is at work: who it is, and what it does now. */

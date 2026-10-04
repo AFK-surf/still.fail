@@ -20,7 +20,7 @@ export const FORMER_ALPN = Buffer.from("ember/admin/1");
 // Keep old clients admitted until protocol-2 clients have reached the stable channel.
 const MIN_CLIENT_PROTOCOL = 1;
 const MAX_HEAD = 16 * 1024;
-// Files sent to a session go through here; the station caps them at 50 MB.
+// Files sent to a session go through here: in parts of 16 MB at most, or whole up to 50 MB (clients before parts).
 const MAX_BODY = 64 * 1024 * 1024;
 /// Headers of one hop, not of what is relayed.
 const HOP = ["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host", "content-length"];

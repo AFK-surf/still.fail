@@ -24,6 +24,9 @@ import kotlinx.serialization.json.putJsonArray
 
 
 /** The admin API of one station, by what each call does. */
+/** The bytes of a file in one `station.upload.part` (web/src/api.ts UPLOAD_PART). */
+private const val UPLOAD_PART = 4 * 1024 * 1024
+
 class StationApi(private val core: StillFailCore, val station: String) {
     private val ops = StationOperations { name, params -> core.call(name, JsonObject(params + ("station" to JsonPrimitive(station)))) }
     private suspend fun op(name: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}): JsonElement =
@@ -171,12 +174,41 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** One model named by hand, added to those enabled (a provider that does not list its models). */
     suspend fun addModel(profile: String, model: String) { ops.profileAddModel(id = profile, model = model) }
 
-    /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
-    suspend fun upload(name: String, bytes: ByteArray, width: Long?, height: Long?): Attachment {
-        val encoded = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.encodeToString(bytes, Base64.NO_WRAP) }
-        val saved = decode(Attachment.serializer(), core.call("station.upload", buildJsonObject {
-            put("station", station); put("name", name); put("bytes", encoded)
-        }))
+    /**
+     * Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. It goes a part at a
+     * time (`station.upload.part`, web/src/api.ts the same), read from `open` as it goes, so a big one is never all in
+     * memory; `onProgress` hears how much of it the station has after each part.
+     */
+    suspend fun upload(name: String, size: Long, open: () -> java.io.InputStream, width: Long?, height: Long?, onProgress: (Long) -> Unit = {}): Attachment {
+        val id = java.util.UUID.randomUUID().toString().replace("-", "")
+        val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            var input = open()
+            var at = 0L
+            try {
+                var have = 0L
+                var done: Attachment? = null
+                while (done == null) {
+                    // The station goes on from what it has: elsewhere than where the file was read to, read again from there.
+                    if (at != have) { input.close(); input = open(); var left = have; while (left > 0) { val n = input.skip(left); if (n <= 0) throw java.io.IOException("short file"); left -= n }; at = have }
+                    val part = ByteArray(minOf(UPLOAD_PART.toLong(), size - have).toInt())
+                    var got = 0
+                    while (got < part.size) { val n = input.read(part, got, part.size - got); if (n < 0) throw java.io.IOException("short file"); got += n }
+                    at += got
+                    val told = core.call("station.upload.part", buildJsonObject {
+                        put("station", station); put("id", id); put("name", name); put("size", size); put("offset", have)
+                        put("bytes", Base64.encodeToString(part, Base64.NO_WRAP))
+                    }).jsonObject
+                    val file = told["file"]?.takeIf { it !is JsonNull }
+                    if (file != null) { done = decode(Attachment.serializer(), file); onProgress(size); break }
+                    val next = told["have"]?.jsonPrimitive?.long ?: (have + got)
+                    // Nothing more: a part the station could not take.
+                    if (next == have) throw CoreException("upload", t("android-chat.file.uploadFailed"), null)
+                    have = next
+                    onProgress(have)
+                }
+                done!!
+            } finally { input.close() }
+        }
         // An image's size travels with it, so every page can hold its place before it loads.
         return if (width != null && height != null) saved.copy(width = width, height = height) else saved
     }

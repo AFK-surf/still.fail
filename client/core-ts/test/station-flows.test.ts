@@ -95,6 +95,26 @@ test("uploads_and_reads_files", async () => {
   core.close();
 });
 
+test("uploads_in_parts_and_whole_to_a_station_before_parts", async () => {
+  const { host, core } = await started({
+    ...base(),
+    "POST /uploads/parts?id=abcdefgh12&name=a.bin&size=3&offset=0": { have: 3, file: { name: "a.bin", path: "/u/a.bin", size: 3 } },
+    "POST /uploads?name=b.bin": { name: "b.bin", path: "/u/b.bin", size: 4 },
+  });
+  const requests = core.inner.stations.requests;
+  assert.deepEqual(await run(requests.uploadPart(remote(), { id: "abcdefgh12", name: "a.bin", size: 3, offset: 0 }, new Uint8Array([1, 2, 3]), null)), { have: 3, file: { name: "a.bin", path: "/u/a.bin", size: 3 } });
+  // A station from before parts (404): the parts are kept here, and the whole file goes in one upload.
+  const q = { id: "oldstation", name: "b.bin", size: 4 };
+  assert.deepEqual(await run(requests.uploadPart(remote(), { ...q, offset: 0 }, new Uint8Array([1, 2]), null)), { have: 2 });
+  assert.deepEqual(await run(requests.uploadPart(remote(), { ...q, offset: 0 + 9 }, new Uint8Array([9]), null)), { have: 2 });
+  assert.deepEqual(await run(requests.uploadPart(remote(), { ...q, offset: 2 }, new Uint8Array([3, 4]), null)), { have: 4, file: { name: "b.bin", path: "/u/b.bin", size: 4 } });
+  assert.deepEqual([...host.requests.find((r) => r.url.includes("/uploads?name=b.bin"))!.body!], [1, 2, 3, 4]);
+  // Too big for it: said so.
+  const e = await failure(requests.uploadPart(remote(), { id: "toobig1234", name: "c.bin", size: 60 * 1024 * 1024, offset: 0 }, new Uint8Array([1]), null));
+  assert.equal(e.status, 413);
+  core.close();
+});
+
 test("tells_how_far_a_file_has_come", async () => {
   const big = "x".repeat(300 * 1024);
   const { core } = await started({ ...base(), "GET /sessions/k/files?name=big": big });

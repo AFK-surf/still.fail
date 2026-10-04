@@ -15,6 +15,8 @@ export const IDEMPOTENCY_KEY = "idempotency-key";
 export const IDEMPOTENT = "stillfail-idempotent";
 export const LANG_HEADER = "stillfail-lang";
 export const EVENT_STREAM = "text/event-stream";
+/// The most a station from before uploads in parts takes in one (station/src/api/routes/hub.ts MAX_UPLOAD).
+export const UPLOAD_WHOLE_MAX = 50 * 1024 * 1024;
 /// How long a preview's WebSocket may take to open.
 export const SOCKET_OPEN_MS = 30_000;
 
@@ -143,6 +145,45 @@ export class Requests {
       const data = parsed === undefined ? {} : parsed;
       return r.status >= 200 && r.status < 300 ? Effect.succeed(data as unknown) : Effect.fail(httpError(r.status, data));
     });
+  }
+
+  /// POST /uploads/parts?id=&name=&size=&offset= with a part's bytes: `{ have }`, how much of the file the station has
+  /// (the next part starts there), and `file` once it is whole. A broken connection is the wire's to ask again over
+  /// (the same key, the same offset). A station from before parts (it does not know the route) gets the file whole in
+  /// one upload once all of it is here, as long as that takes it (UPLOAD_WHOLE_MAX).
+  uploadPart(station: StationAddr, q: { id: string; name: string; size: number; offset: number }, bytes: Uint8Array, ctx: SpanContext | null): Effect.Effect<{ have: number; file?: unknown }, CoreError> {
+    const path = `/uploads/parts?id=${encode(q.id)}&name=${encode(q.name)}&size=${q.size}&offset=${q.offset}`;
+    return Effect.flatMap(this.exchange(station, "POST", path, [["content-type", "application/octet-stream"]], bytes, false, ctx), (r) => {
+      const parsed = parseJson(r.body);
+      const data = parsed === undefined ? {} : parsed;
+      if (r.status === 404 || r.status === 405) return this.#wholeUpload(station, q, bytes, ctx);
+      if (r.status < 200 || r.status >= 300) return Effect.fail(httpError(r.status, data));
+      const have = get(data, "have");
+      const file = get(data, "file");
+      return Effect.succeed({ have: typeof have === "number" ? have : q.offset + bytes.length, ...(file !== undefined ? { file } : {}) });
+    });
+  }
+
+  /// Parts kept here for a station from before parts, by station and id, until the file is whole.
+  readonly #wholes = new Map<string, { parts: Uint8Array[]; have: number }>();
+
+  #wholeUpload(station: StationAddr, q: { id: string; name: string; size: number; offset: number }, bytes: Uint8Array, ctx: SpanContext | null): Effect.Effect<{ have: number; file?: unknown }, CoreError> {
+    if (q.size > UPLOAD_WHOLE_MAX) return Effect.fail(new CoreError("http_413", t("station.core.uploadOldStation"), 413));
+    const key = `${station.toString()}\0${q.id}`;
+    let held = this.#wholes.get(key);
+    if (held === undefined || q.offset === 0) this.#wholes.set(key, (held = { parts: [], have: 0 }));
+    if (q.offset !== held.have) return Effect.succeed({ have: held.have });
+    held.parts.push(bytes);
+    held.have += bytes.length;
+    if (held.have < q.size) return Effect.succeed({ have: held.have });
+    const whole = new Uint8Array(held.have);
+    let at = 0;
+    for (const part of held.parts) {
+      whole.set(part, at);
+      at += part.length;
+    }
+    this.#wholes.delete(key);
+    return Effect.map(this.upload(station, q.name, whole, ctx), (file) => ({ have: q.size, file }));
   }
 
   /// GET /sessions/:key/files?name=(&thumb=1): [content type, bytes]; `progress` hears the bytes so far and the whole

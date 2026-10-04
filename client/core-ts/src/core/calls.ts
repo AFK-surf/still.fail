@@ -49,6 +49,7 @@ export type Call =
   | { kind: "stationUpdateNotice"; station: string; action: string; version: string | null }
   | { kind: "chatRead"; station: string; thread: number; seq: number }
   | { kind: "stationUpload"; station: string; name: string; bytes: Uint8Array }
+  | { kind: "stationUploadPart"; station: string; id: string; name: string; size: number; offset: number; bytes: Uint8Array }
   | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean }
   | { kind: "stationPreview"; station: string; port: number; method: string; path: string; headers: [string, string][]; body: Uint8Array; stream: boolean }
   | { kind: "previewSocket"; station: string; port: number; path: string; headers: [string, string][]; socket: string }
@@ -446,6 +447,17 @@ export function parseCall(name: string, params: unknown): Call {
         ["bytes", S, "req"],
       ]);
       return { kind: "stationUpload", bytes: b64(p.bytes as string, "core-misc.call.base64.file"), station: p.station as string, name: p.name as string };
+    }
+    case "station.upload.part": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["id", S, "req"],
+        ["name", S, "req"],
+        ["size", "u64", "req"],
+        ["offset", "u64", "req"],
+        ["bytes", S, "req"],
+      ]);
+      return { kind: "stationUploadPart", station: p.station as string, id: p.id as string, name: p.name as string, size: p.size as number, offset: p.offset as number, bytes: b64(p.bytes as string, "core-misc.call.base64.file") };
     }
     case "station.file": {
       const p = read(params, [

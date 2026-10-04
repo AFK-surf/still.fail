@@ -76,6 +76,8 @@ test("parses_each_call", () => {
   });
   assert.equal(code(() => parseCall("station.request", { station: "ws/st", method: "GET", path: "/sessions" })), "unknown_call");
   assert.equal(code(() => parseCall("cloud.request", { account: "a", method: "GET", path: "/v1/me" })), "unknown_call");
+  const part = parseCall("station.upload.part", { station: "w/s", id: "abcdefgh12", name: "a.bin", size: 10, offset: 4, bytes: "aGVsbG8=" });
+  assert.deepEqual({ ...part, bytes: [...(part as { bytes: Uint8Array }).bytes] }, { kind: "stationUploadPart", station: "w/s", id: "abcdefgh12", name: "a.bin", size: 10, offset: 4, bytes: [...new TextEncoder().encode("hello")] });
   const upload = parseCall("station.upload", { station: "w/s", name: "a.png", bytes: "aGVsbG8=" });
   assert.deepEqual({ ...upload, bytes: [...(upload as { bytes: Uint8Array }).bytes] }, { kind: "stationUpload", station: "w/s", name: "a.png", bytes: [...new TextEncoder().encode("hello")] });
   assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png" }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: false, progress: false });

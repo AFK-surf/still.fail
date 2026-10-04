@@ -3,7 +3,7 @@
 // clearing a chat's ended jobs, stopping a job. What is only written to the store is routes/marks.ts's; the reads are
 // routes/chats.ts's and routes/sessions.ts's (GET /sessions/:key/files among them).
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
@@ -51,8 +51,15 @@ async function as<T>(status: number, f: () => T | Promise<T>): Promise<T> {
   }
 }
 
-/// files.rs: the most an upload takes; how long a staged upload waits for a message to take it.
+/// files.rs: the most an upload in one request takes; how long a staged upload waits for a message to take it.
 const MAX_UPLOAD = 50 * 1024 * 1024;
+/// An upload in parts (POST /uploads/parts): the most the whole file takes, and one part.
+export const MAX_PARTS_UPLOAD = 1024 * 1024 * 1024;
+const MAX_PART = 16 * 1024 * 1024;
+/// Room left on the disk after an upload in parts.
+const DISK_SPARE = 1024 * 1024 * 1024;
+/// A part file's name in the uploads: never a file a message can send.
+const PART_PREFIX = ".part-";
 const STAGED_FOR_MS = 24 * 3600 * 1000;
 
 /// A request's JSON object (`read_json`): nothing is `{}`, as is anything not an object; more than a megabyte refused.
@@ -103,17 +110,66 @@ export function sweepStaged(dir: string, now = wall.now()) {
   }
 }
 
-/// files.rs `save_upload`: a request's body kept in `dir` under its name, made safe and unique.
-function saveUpload(body: Buffer, dir: string, name: string, lang: Request["lang"]): Attachment {
+/// Where an upload named `name` is kept in `dir`: its name made safe, and a path of its own.
+function uploadPath(dir: string, name: string): { safe: string; path: string } {
   const base = name.replace(/\\/g, "/").split("/").at(-1) ?? "";
   const safe = chars([...base].map((c) => (c.codePointAt(0)! < 0x20 ? "_" : c)).join("").replace(/^\.+/, ""), 120) || "file";
   mkdirSync(dir, { recursive: true });
   const stamp = new Date(wall.now()).toISOString().slice(0, 19).replace(/[:.]/g, "-");
   const random = randomBytes(3).toString("hex");
-  const path = join(dir, `${stamp}-${random}-${safe}`);
+  return { safe, path: join(dir, `${stamp}-${random}-${safe}`) };
+}
+
+/// files.rs `save_upload`: a request's body kept in `dir` under its name, made safe and unique.
+function saveUpload(body: Buffer, dir: string, name: string, lang: Request["lang"]): Attachment {
+  const { safe, path } = uploadPath(dir, name);
   if (body.length > MAX_UPLOAD) throw new Refused(413, tr(lang, "station.files.tooLarge"));
   writeFileSync(path, body, { flag: "wx" });
   return { name: safe, path, size: body.length };
+}
+
+/// Uploads in parts that are whole, by their id: a part asked again after its file was put together gets the file.
+const assembled = new Map<string, { at: number; file: Attachment }>();
+const ASSEMBLED_KEEP_MS = 3600_000;
+
+/// POST /uploads/parts?id=&name=&size=&offset=: a part of a file at `offset`, added to what came of it before (kept as
+/// `.part-<id>` in the uploads). The answer is how much of it is here (`have`), and the file once it is whole. A part
+/// that does not start where the file ends adds nothing: the caller goes on from `have` (one asked again after a lost
+/// answer, or after a broken connection, is answered as the first was).
+export function savePart(body: Buffer, dir: string, q: { id: string; name: string; size: number; offset: number }, lang: Request["lang"]): { have: number; file?: Attachment } {
+  const now = wall.now();
+  for (const [k, v] of assembled) if (now - v.at > ASSEMBLED_KEEP_MS) assembled.delete(k);
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(q.id)) throw new Refused(400, "invalid upload id");
+  if (!Number.isSafeInteger(q.size) || q.size < 0 || !Number.isSafeInteger(q.offset) || q.offset < 0 || q.offset > q.size) throw new Refused(400, "invalid upload size or offset");
+  if (q.size > MAX_PARTS_UPLOAD) throw new Refused(413, tr(lang, "station.files.tooLargeParts"));
+  if (body.length > MAX_PART || q.offset + body.length > q.size) throw new Refused(413, "upload part too large");
+  const done = assembled.get(q.id);
+  if (done !== undefined) return { have: q.size, file: done.file };
+  mkdirSync(dir, { recursive: true });
+  const part = join(dir, `${PART_PREFIX}${q.id}`);
+  const have = statSync(part, { throwIfNoEntry: false })?.size ?? 0;
+  if (have > q.size) {
+    rmSync(part, { force: true });
+    throw new Refused(400, "invalid upload size");
+  }
+  if (have === 0 && q.offset === 0) {
+    // A new file: refused at once when the disk cannot take it.
+    try {
+      const fs = statfsSync(dir);
+      if (fs.bavail * fs.bsize < q.size + DISK_SPARE) throw new Refused(507, tr(lang, "station.files.noRoom"));
+    } catch (e) {
+      if (e instanceof Refused) throw e;
+    }
+  }
+  // Only what follows the file's end is added: none of a part asked again, the rest of one that overlaps it.
+  if (q.offset <= have && q.offset + body.length > have) appendFileSync(part, body.subarray(have - q.offset));
+  const got = statSync(part, { throwIfNoEntry: false })?.size ?? 0;
+  if (got < q.size) return { have: got };
+  const { safe, path } = uploadPath(dir, q.name);
+  renameSync(part, path);
+  const file = { name: safe, path, size: q.size };
+  assembled.set(q.id, { at: now, file });
+  return { have: q.size, file };
 }
 
 /// files.rs `quotes_of`: quotes as the page sends them, bounded.
@@ -188,6 +244,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
       const o = item !== null && typeof item === "object" && !Array.isArray(item) ? (item as Record<string, unknown>) : {};
       let path = clean(str(o.path) ?? "");
       const first = dirs[0];
+      if (inside(path, stagedDir) && fileName(path).startsWith(PART_PREFIX)) throw new Refused(400, tr(r.lang, "station.files.notUploaded"));
       if (inside(path, stagedDir) && first !== undefined) {
         const into = join(first.dir, fileName(path));
         // Sent again (a retry after the first try got here): it has moved already.
@@ -319,6 +376,21 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
           const dir = staged(a);
           sweepStaged(dir);
           return ok(saveUpload(r.body, dir, param(r, "name") ?? "file", r.lang));
+        }),
+    },
+    // A file in parts (savePart): a big one goes up a piece at a time, and on from where it was after a broken connection.
+    {
+      method: "POST",
+      pattern: /^\/uploads\/parts$/,
+      handle: (r) =>
+        write((_s, a) => {
+          const dir = staged(a);
+          sweepStaged(dir);
+          const num = (name: string) => {
+            const v = param(r, name);
+            return v === undefined || !/^[0-9]+$/.test(v) ? -1 : Number(v);
+          };
+          return ok(savePart(r.body, dir, { id: param(r, "id") ?? "", name: param(r, "name") ?? "file", size: num("size"), offset: num("offset") }, r.lang));
         }),
     },
     // A session: deleted (DELETE); its ended jobs cleared.

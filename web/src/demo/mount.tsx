@@ -152,7 +152,7 @@ function answer(name: string, params: Record<string, unknown>): unknown {
   }
   // What reaches past the demo is offered in a real still.fail instance instead, and fails here as not done.
   try {
-    if (name === "station.upload" || name.startsWith("auth.")) throw new station.NeedsReal();
+    if (name === "station.upload" || name === "station.upload.part" || name.startsWith("auth.")) throw new station.NeedsReal();
     // still.fail cloud's operations (ops.ts: by the account they go as): every one would reach out.
     if ("account" in params) throw new station.NeedsReal();
     if (typeof params.station === "string") return station.op(name);

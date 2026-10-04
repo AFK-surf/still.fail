@@ -73,9 +73,9 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const writesTo = stations?.find((s) => s.address === shown?.station) ?? station;
   // Each chat keeps what is written to it; a new chat's goes on into the chat it makes. Files go to the station the
   // page writes to (its composer says which).
-  const upload = useRef<(file: File) => Promise<Attachment>>(() => Promise.reject(new Error(t("web-mobile.chat.noStationUpload"))));
+  const upload = useRef<(file: File, onProgress?: (sent: number) => void) => Promise<Attachment>>(() => Promise.reject(new Error(t("web-mobile.chat.noStationUpload"))));
   const draftKey = chat === undefined || station === undefined ? undefined : draftKeyOf(station.address, chat);
-  const shared = useDraft({ key: draftKey, station: shown?.station ?? station?.address, upload: (file) => upload.current(file) });
+  const shared = useDraft({ key: draftKey, station: shown?.station ?? station?.address, upload: (file, onProgress) => upload.current(file, onProgress) });
   const [focus, setFocus] = useState(0);
   const draft: Draft = { ...shared, focus, bumpFocus: () => setFocus((n) => n + 1) };
   const now = useRef(draft);
@@ -100,11 +100,11 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
 /** The composer: a floating capsule at the page's foot, with the files and quotes going with the message, as the wide screen's composer shows them. */
 export function MobileComposer({ shown, draftKey, latest, draft, now, root, upload: uploader, inline = false }: {
   shown: Shown; draftKey: string | undefined; latest: RefObject<HostComposer | null>; draft: Draft; now: RefObject<Draft>;
-  root: RefObject<HTMLDivElement | null>; upload: RefObject<(file: File) => Promise<Attachment>>; inline?: boolean;
+  root: RefObject<HTMLDivElement | null>; upload: RefObject<(file: File, onProgress?: (sent: number) => void) => Promise<Attachment>>; inline?: boolean;
 }) {
   const app = useApp();
   const call = useStationCall(shown.station);
-  uploader.current = (file) => call.upload(file);
+  uploader.current = (file, onProgress) => call.upload(file, onProgress);
   const upload = draft.add;
   const locked = shown.offline || !!shown.archived || draft.starting;
   const capsule = useRef<HTMLDivElement>(null);
