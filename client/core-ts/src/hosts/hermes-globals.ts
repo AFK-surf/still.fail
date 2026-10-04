@@ -1,7 +1,8 @@
 // What the core and Effect take from a JS host that Hermes has not (the Android app's engine, apps/android/core):
 // timers on the engine's loop (`__native.setTimer`), TextEncoder/TextDecoder, structuredClone of plain data,
 // AbortController, a URL that reads absolute URLs, performance.now, crypto.getRandomValues, console. Each is put in only
-// where the engine has none of its own. Imported first by hosts/hermes.ts.
+// where the engine has none of its own; case conversion always (hermes-case.ts: the engine's needs Java the app has
+// not). Imported first by hosts/hermes.ts.
 
 /// What the engine (C++) puts on the global object for the JS (also hosts/hermes.ts's).
 export interface HermesNative {
@@ -17,6 +18,8 @@ export interface HermesNative {
   clearTimer(id: number): void;
   log(level: number, message: string): void;
 }
+
+import { lowerCase, upperCase } from "./hermes-case.ts";
 
 // deno-lint-ignore no-explicit-any
 const g = globalThis as any;
@@ -282,4 +285,14 @@ if (typeof g.crypto !== "object" || typeof g.crypto?.getRandomValues !== "functi
 if (typeof g.console !== "object") {
   const say = (level: number) => (...a: unknown[]) => native.log(level, a.map((x) => (typeof x === "string" ? x : x instanceof Error ? `${x.message}\n${x.stack ?? ""}` : JSON.stringify(x))).join(" "));
   g.console = { log: say(1), info: say(1), debug: say(0), warn: say(2), error: say(3) };
+}
+
+// ── case conversion: all but ASCII would go through Java (hermes-case.ts) ──
+
+{
+  const lower = String.prototype.toLowerCase;
+  const upper = String.prototype.toUpperCase;
+  const proto = String.prototype as unknown as Record<string, unknown>;
+  proto.toLowerCase = function (this: unknown) { return lowerCase(String(this), (s) => lower.call(s)); };
+  proto.toUpperCase = function (this: unknown) { return upperCase(String(this), (s) => upper.call(s)); };
 }
