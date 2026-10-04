@@ -251,7 +251,7 @@ if [ $full = 1 ]; then
   if part android && touches '^(apps/android|client)/'; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
     if [ -d "$sdk/platforms" ]; then
-      step "Android" heavy python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest
+      step "Android" heavy python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest :app:lintDebug :core:lintDebug
     else later "Android"; fi
   fi
 fi

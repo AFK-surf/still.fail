@@ -257,7 +257,8 @@ private fun ColumnScope.ServicePage(station: String, service: String, port: Int,
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val state = remember { PageState() }
-    val link = remember(station, port) {
+    // Typed: lint looks for the @JavascriptInterface methods of what is added to the WebView by its declared type.
+    val link: PreviewLink = remember(station, port) {
         val script = context.assets.open("preview/page.js").use { it.readBytes() }
         PreviewLink(app.core, station, port, script)
     }

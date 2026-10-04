@@ -29,6 +29,9 @@ val beta = providers.gradleProperty("stillfailBeta").isPresent
 android {
     namespace = "fail.still.android"
     compileSdk = 36
+    // Lint runs in the check, on every branch that changes the app (scripts/check.sh: lintDebug, errors fail it), not
+    // in a release build, where it took ~18 s of each (2026-10-04).
+    lint { checkReleaseBuilds = false }
 
     defaultConfig {
         applicationId = if (beta) "fail.still.android.beta" else "fail.still.android"

@@ -353,7 +353,8 @@ fun ChatHost(current: WorkspaceEntry, screen: Screen) {
     host.still = reducedMotion()
     host.density = LocalDensity.current
     val chat = screen as? Screen.Chat
-    remember(chat?.id, chat?.at) { host.goTo = chat?.at; Unit }
+    // Where to go, once each time the chat or its place changes (not on every recomposition: the page clears it once there).
+    remember(chat?.id, chat?.at) { host.goTo = chat?.at; chat?.at }
     CompositionLocalProvider(LocalSendTextWidth provides host.fieldWidth) {
       Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
         if (chat != null) key(chat.id) { ChatScreen(chat.station, chat.of, host) }
