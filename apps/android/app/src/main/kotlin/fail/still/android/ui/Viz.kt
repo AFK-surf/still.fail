@@ -206,8 +206,13 @@ fun VizFrame(html: String, state: JsonElement? = null, fill: Boolean = false, mo
     val doc = remember(html) { if (page) pageDocument(context, html) else documentOf(context, html, state, dark) }
     val dispatcher = remember { NestedScrollDispatcher() }
     var web by remember { mutableStateOf<WebView?>(null) }
+    // The theme the page was made in (a fragment's document carries it): told only when it changes, as a page told it
+    // as it loads draws again (a chart redrawn, a mermaid chart made twice).
+    var told by remember(html) { mutableStateOf(dark) }
     LaunchedEffect(dark, web) {
         val view = web ?: return@LaunchedEffect
+        if (dark == told) return@LaunchedEffect
+        told = dark
         view.evaluateJavascript("postMessage({emberViz:true,type:\"theme\",tokens:${tokensJson(dark)},scheme:\"${if (dark) "dark" else "light"}\"},\"*\")", null)
     }
     DisposableEffect(Unit) { onDispose { web?.destroy() } }
@@ -224,7 +229,10 @@ fun VizFrame(html: String, state: JsonElement? = null, fill: Boolean = false, mo
     }
     AndroidView(
         factory = { ctx ->
-            WebView(ctx).apply {
+            // Shown once the page has drawn itself (a fragment at the height it says), not while the WebView is still
+            // blank or drawn at the height it had before: what is under it shows meanwhile, then the page at once.
+            VizView(ctx).apply {
+                alpha = 0f
                 // A whole page fills its window: a WebView whose height is WRAP_CONTENT (AndroidView's default) lays its
                 // page out in a window 0 high (height:100% is nothing), sizing itself to the content instead.
                 if (page) layoutParams = android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
@@ -233,11 +241,18 @@ fun VizFrame(html: String, state: JsonElement? = null, fill: Boolean = false, mo
                 settings.domStorageEnabled = false
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
+                // All of the page kept drawn, not only what was last in view: the chat's list is the source of its frosted
+                // bars (Haze), which draw it a second time, clipped to the bar; drawn so, the page dropped the rest and
+                // showed blank for a frame each time the bars were drawn again (a caret blinking, an agent at work).
+                settings.offscreenPreRaster = true
                 isVerticalScrollBarEnabled = fill
                 isHorizontalScrollBarEnabled = false
                 overScrollMode = WebView.OVER_SCROLL_NEVER
                 // Links in a page leave it for the browser (or still.fail's own, the app); the page itself stays.
                 webViewClient = object : WebViewClient() {
+                    // A whole page (or a fragment that never says its height) is shown once it has loaded and drawn.
+                    override fun onPageFinished(view: WebView, url: String?) { (view as VizView).reveal() }
+
                     override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                         val url = request.url.toString()
                         if (request.isForMainFrame && (url.startsWith("http://") || url.startsWith("https://"))) {
@@ -255,6 +270,7 @@ fun VizFrame(html: String, state: JsonElement? = null, fill: Boolean = false, mo
                                 "height" -> if (!page) (m["height"] as? JsonPrimitive)?.content?.toDoubleOrNull()?.takeIf { it.isFinite() }?.let { h ->
                                     val shown = minOf(MAX_HEIGHT, kotlin.math.ceil(h).toInt())
                                     heights[id] = shown; height = shown
+                                    reveal()
                                 }
                                 "state" -> { val s = m["state"] ?: JsonNull; if (s.toString().length <= MAX_STATE) keep?.invoke(s) }
                                 "failed" -> (m["message"] as? JsonPrimitive)?.content?.let { failed?.invoke(it) }
@@ -272,6 +288,18 @@ fun VizFrame(html: String, state: JsonElement? = null, fill: Boolean = false, mo
         },
         modifier = if (fill) frame else frame.nestedScroll(object : NestedScrollConnection {}, dispatcher).passVerticalDrags(dispatcher),
     )
+}
+
+/** A page's WebView, hidden until it has drawn. */
+private class VizView(context: Context) : WebView(context) {
+    private var shown = false
+
+    /** Shows the page once what it has now is drawn (its height applied first: the next layout, then the WebView's own visual state), once. */
+    fun reveal() {
+        if (shown) return
+        shown = true
+        post { postVisualStateCallback(0, object : VisualStateCallback() { override fun onComplete(requestId: Long) { alpha = 1f } }) }
+    }
 }
 
 /**
@@ -324,6 +352,14 @@ internal sealed interface Loaded {
 
 /** Pages fetched, by station, session and path: a file sent never changes. */
 private val pages = android.util.LruCache<String, String>(12)
+/** What their widgets kept, as last read or kept here (JsonNull: nothing), so a page shown again is shown at once. */
+private val keptStates = android.util.LruCache<String, JsonElement>(64)
+
+/** Keeps what a visualization's widget keeps next: here at once, on its station after. */
+internal fun keepViz(app: fail.still.android.AppState, scope: kotlinx.coroutines.CoroutineScope, station: String, key: String, path: String, state: JsonElement) {
+    keptStates.put("$station/$key/$path", state)
+    scope.launch { try { app.api(station).setWidgetState(key, path, state) } catch (_: CoreException) {} }
+}
 
 /**
  * A placed HTML file, drawn in its message, with ways to open it on its own under it (icons, as the web has them):
@@ -340,7 +376,7 @@ fun VizFile(station: String, key: String, file: Attachment, failed: @Composable 
         Loaded.Waiting -> Box(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(120.dp).clip(RoundedCornerShape(12.dp)).background(if (C.dark) androidx.compose.ui.graphics.Color(0xFF26272B) else androidx.compose.ui.graphics.Color(0xFFF6F2EA)))
         is Loaded.Ready -> {
             var kept by remember(l) { mutableStateOf(l.state) }
-            val keep: (JsonElement) -> Unit = { s -> kept = s; scope.launch { try { app.api(station).setWidgetState(key, file.path, s) } catch (_: CoreException) {} } }
+            val keep: (JsonElement) -> Unit = { s -> kept = s; keepViz(app, scope, station, key, file.path, s) }
             Column(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                 VizFrame(l.html, l.state, onState = keep)
                 // Under the page, out of its way: the way to open it on its own, an icon in the chat's grey.
@@ -364,14 +400,18 @@ fun VizFile(station: String, key: String, file: Attachment, failed: @Composable 
 internal fun rememberViz(station: String, key: String, file: Attachment): Loaded {
     val app = LocalApp.current
     val id = "$station/$key/${file.path}"
-    val loaded by produceState<Loaded>(Loaded.Waiting, id) {
+    // Read before: at once, from here (a page scrolled back to, a chat opened again), not after asking its station again.
+    val known = remember(id) { pages.get(id)?.let { html -> keptStates.get(id)?.let { Loaded.Ready(html, it.takeIf { s -> s !is JsonNull }) } } }
+    val loaded by produceState(known ?: Loaded.Waiting, id) {
+        if (known != null) { value = known; return@produceState }
         val api = app.api(station)
         val html = pages.get(id) ?: try {
             api.file(key, file.path.substringAfterLast('/')).toString(Charsets.UTF_8).also { pages.put(id, it) }
         } catch (_: CoreException) { null }
         // What the station cannot say (an older one) is nothing kept.
-        val state = try { api.widgetState(key, file.path) } catch (_: CoreException) { null }
-        value = if (html == null) Loaded.Failed else Loaded.Ready(html, state)
+        val state = keptStates.get(id) ?: try { api.widgetState(key, file.path) ?: JsonNull } catch (_: CoreException) { null }
+        if (state != null) keptStates.put(id, state)
+        value = if (html == null) Loaded.Failed else Loaded.Ready(html, state?.takeIf { it !is JsonNull })
     }
     return loaded
 }
@@ -386,7 +426,7 @@ fun VizOpen(station: String, key: String, file: Attachment, onClose: () -> Unit)
         Loaded.Failed -> LaunchedEffect(Unit) { app.toast = t("android-misc.viz.cantRead"); onClose() }
         is Loaded.Ready -> {
             var kept by remember(l) { mutableStateOf(l.state) }
-            VizFull(file.name, l.html, kept, { s -> kept = s; scope.launch { try { app.api(station).setWidgetState(key, file.path, s) } catch (_: CoreException) {} } }, onClose)
+            VizFull(file.name, l.html, kept, { s -> kept = s; keepViz(app, scope, station, key, file.path, s) }, onClose)
         }
     }
 }

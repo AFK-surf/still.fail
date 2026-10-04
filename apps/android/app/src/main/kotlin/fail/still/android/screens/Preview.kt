@@ -174,7 +174,7 @@ fun PreviewFileScreen(station: String, session: String, path: String, name: Stri
                 val kept = remember(l) { arrayOf(l.state) }
                 val page = FilePage(l.html, { kept[0] }) { s ->
                     kept[0] = s
-                    scope.launch { try { app.api(station).setWidgetState(session, path, s) } catch (_: CoreException) {} }
+                    fail.still.android.ui.keepViz(app, scope, station, session, path, s)
                 }
                 ServicePage(station, "file:$session\n$path", 0, name, restarting = false, restarts = 0, session = session, file = page)
             }
