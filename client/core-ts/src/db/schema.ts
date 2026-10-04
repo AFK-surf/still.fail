@@ -175,6 +175,15 @@ export function ensureKept(sql: Sql): void {
   sql.exec("CREATE TABLE IF NOT EXISTS log_use (kind TEXT NOT NULL, station TEXT NOT NULL, id TEXT NOT NULL, opened INTEGER, evicted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, station, id))");
 }
 
+/// What agents sent to Slack, read from their transcripts as they are written (elsewhere.ts): kept beyond the
+/// transcript's items (let go for room, they are still shown in their chats). Made where missing at every open, as
+/// `said`; answers whether it was made now (to be filled from the transcripts held).
+export function ensureSent(sql: Sql): boolean {
+  const had = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sent'").length > 0;
+  sql.exec("CREATE TABLE IF NOT EXISTS sent (station TEXT NOT NULL, session TEXT NOT NULL, i INTEGER NOT NULL, call TEXT, at INTEGER NOT NULL, dest TEXT NOT NULL, text TEXT NOT NULL, failed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (station, session, i))");
+  return !had;
+}
+
 /// The full-text index of `said`, made and filled where missing. A build without FTS5 (or its trigram tokenizer) has
 /// none, and its triggers are taken away if an earlier one left them: `said` is then searched by scanning it.
 function ensureSaidIndex(sql: Sql): boolean {

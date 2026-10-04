@@ -212,6 +212,11 @@ export const msgMain = style({
   },
 });
 export const msgAvatarAgent = style({ background: vars.neutralBg });
+/** Slack's mark on the corner of an agent's avatar, over what it sent to Slack (Chat.tsx SentElsewhere). */
+export const msgAvatarSlack = style({
+  position: "absolute", right: "-4px", bottom: "-4px", width: "12px", height: "12px", display: "grid", placeItems: "center",
+  borderRadius: "50%", background: vars.list, boxShadow: `0 0 0 1px ${vars.line}`,
+});
 export const fileCard = style({
   selectors: {
     [`${composerFiles} &`]: { animation: `${enterUpKeyframes} 180ms ${vars.easeOut} both` },

@@ -1028,7 +1028,15 @@ private fun SentElsewhere(ctx: Here, s: ChatSentElsewhere) {
     val ink = chatInk()
     val agent = s.by.agent?.let { ctx.agent(it) }
     Box(Modifier.fillMaxWidth()) {
-        Box(Modifier.padding(top = 3.dp)) { AgentAvatar(s.by.maker, s.by.runtime) }
+        Box(Modifier.padding(top = 3.dp)) {
+            AgentAvatar(s.by.maker, s.by.runtime)
+            // What it said went to Slack, not here: Slack's mark on its corner (web: msgAvatarSlack).
+            Box(
+                Modifier.align(Alignment.BottomEnd).offset(4.dp, 4.dp).size(12.dp).clip(CircleShape).background(chatInk().canvas)
+                    .border(1.dp, C.line, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { SlackMark(8.dp) }
+        }
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(Modifier.padding(start = 25.dp).heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(

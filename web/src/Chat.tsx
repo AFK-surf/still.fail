@@ -894,7 +894,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s, agentHere, onOpenHi
     ? <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
     : <><SlackLogo size={12} />Slack</>;
   return (
-    <OthersMessage data-role="agent" data-author={s.by.name} data-elsewhere="" avatar={<AgentAvatar maker={s.by.maker} runtime={s.by.runtime} />} time={s.time?.createdAt}
+    <OthersMessage data-role="agent" data-author={s.by.name} data-elsewhere="" avatar={<AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack />} time={s.time?.createdAt}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{s.by.name}</button>
         : <span className={css.msgName}>{s.by.name}</span>}>
@@ -1025,8 +1025,14 @@ export function OthersMessage({ avatar, name, time, children, ...data }: Data & 
 }
 
 /** An agent's picture in a chat: its model's maker, in the agents' ground. */
-export function AgentAvatar({ maker, runtime }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined }) {
-  return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}>{runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}</span>;
+export function AgentAvatar({ maker, runtime, slack }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean }) {
+  return (
+    <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}>
+      {runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
+      {/* What it said went to Slack, not here: Slack's mark on its corner. */}
+      {slack && <span className={css.msgAvatarSlack}><SlackLogo size={8} /></span>}
+    </span>
+  );
 }
 
 /** An agent's words as a chat draws them (Markdown). */

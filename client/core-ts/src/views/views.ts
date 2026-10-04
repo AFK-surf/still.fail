@@ -24,7 +24,6 @@ import type { Value, Watch } from "../store.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
-import { Elsewhere, markdownOf } from "../elsewhere.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import * as marks from "./marks.ts";
@@ -332,8 +331,6 @@ export class Views implements Owner {
   /// Per live view, the topics it watches.
   readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch> }>();
   readonly #updateNoticesOpen = new Set<string>();
-  /// What chats' agents sent to Slack, read from their transcripts.
-  readonly #elsewhere = new Elsewhere();
   /// Views whose words count seconds (a chat's jobs): each computed again when they next change.
   readonly #again = new Map<string, Fiber.Fiber<unknown, unknown>>();
   /// The scopes whose stations' rows are being loaded (the list showed its first screen meanwhile).
@@ -348,12 +345,11 @@ export class Views implements Owner {
     core.data.onLogChange((table) => {
       if (table === "entry") this.#invalidate((v) => v.topic === "chatSearch" && typeof v.messages === "number" && v.messages > 0 && refs.terms(String(v.query ?? "")).length > 0);
     });
-    // An agent's transcript grew: the chats it is in show what it sent to Slack, when that changed.
+    // What an agent sent to Slack changed: the chats it is in show it.
     core.data.onLogChange((table, station, key) => {
-      if (table !== "transcript") return;
+      if (table !== "sent") return;
       const session = topicKey({ topic: "session", station, key });
-      const chats = [...this.#views.values()].filter((v) => v.topic.topic === "chat" && v.topic.station === station && v.watches.has(session));
-      if (chats.length > 0 && this.#sentBy(station, key).changed) for (const v of chats) this.#core.store.invalidate(v.topic);
+      for (const v of [...this.#views.values()]) if (v.topic.topic === "chat" && v.topic.station === station && v.watches.has(session)) this.#core.store.invalidate(v.topic);
     });
   }
 
@@ -1221,12 +1217,6 @@ export class Views implements Owner {
     return { ok: view };
   }
 
-  /// What session `key` sent to Slack, as its transcript held here says.
-  #sentBy(station: string, key: string): ReturnType<Elsewhere["of"]> {
-    const data = this.#core.data;
-    return this.#elsewhere.of(station, key, data.logSpan("transcript", station, key), (from, to) => data.logRange("transcript", station, key, from, to));
-  }
-
   /// What a chat's agents sent to Slack (not to the chat itself), each after the message it followed. Only what falls in
   /// the window of messages shown (`more`/`newer`: the chat goes on before/after it): the rest comes with its page.
   #sentElsewhere(station: string, thread: J, agents: J[], messages: J[], more: boolean, newer: boolean): J[] {
@@ -1240,7 +1230,7 @@ export class Views implements Owner {
     for (const a of agents) {
       const key = str(get(a.session, "key"));
       if (key === null) continue;
-      const sent = this.#sentBy(station, key).sent.filter((s) => s.to !== own && !(more && s.at < first!) && !(newer && s.at >= last!));
+      const sent = this.#core.data.sentBy(station, key).filter((s) => s.to !== own && !(more && s.at < first!) && !(newer && s.at >= last!));
       if (sent.length === 0) continue;
       const threads = arr(get(this.ok({ topic: "session", station, key }), "threads"));
       const by = { name: str(get(a.session, "agentText")) ?? "agent", agent: key, maker: get(a.session, "maker") ?? null, runtime: get(a.session, "runtime") ?? null };
@@ -1256,7 +1246,7 @@ export class Views implements Owner {
           const named = threads.find((th) => get(th, "channel") === s.to && typeof get(th, "channelName") === "string");
           place = { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
         }
-        out.push({ key: `${key}/${s.i}`, after, createdAt: s.at, text: markdownOf(s.text), place, failed: s.failed, by: structuredClone(by) });
+        out.push({ key: `${key}/${s.i}`, after, createdAt: s.at, text: s.text, place, failed: s.failed, by: structuredClone(by) });
       }
     }
     return out.sort((a, b) => a.createdAt - b.createdAt);
