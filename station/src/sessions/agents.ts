@@ -40,6 +40,7 @@ import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
 import { autoArchive } from "./lifecycle.ts";
 import { fromPeer } from "./messages.ts";
+import { reviewUndecided } from "./review.ts";
 
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
@@ -349,6 +350,18 @@ export const AgentsLive = (control: Control) =>
         }
       });
 
+      // The archive review turned on, or given another model: the done chats no decision has answered are reviewed then,
+      // not only the ones that end all_done from now on; and once after the start (the profiles' checks read by then).
+      const reviewing = () => void reviewUndecided(hub).catch((error) => log.warn("hub", "reviewing done chats failed", { error: (error as Error).message }));
+      let rule = hub.config().automaticDecisions.completion;
+      const unlistenRule = config.listen(() => {
+        const now = hub.config().automaticDecisions.completion;
+        const changed = now.enabled && (!rule.enabled || now.model !== rule.model);
+        rule = now;
+        if (changed) reviewing();
+      });
+      time.after(120_000, reviewing);
+
       // A drain (SIGUSR1): no new turns; said when none runs (run/drained), turns again if nobody stops the station.
       let draining = false;
       control.on("drain", () => {
@@ -384,6 +397,7 @@ export const AgentsLive = (control: Control) =>
           if (handing) return;
           handing = true;
           await time.close();
+          unlistenRule();
           notifier.close();
           // Slack's events go to the next process from now on.
           unlearn();

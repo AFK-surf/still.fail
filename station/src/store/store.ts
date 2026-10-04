@@ -588,6 +588,12 @@ export class Store {
     });
   }
 
+  /// The session's latest decision record, if any.
+  lastDecision(session: string): Json | null {
+    const row = this.#one("SELECT result FROM decision_checks WHERE session = ? ORDER BY id DESC LIMIT 1", session);
+    return row ? (parsed(row.result) ?? null) : null;
+  }
+
   /// The decision found nothing left to do in this thread as it stood at `version` (its last entry then).
   suggestArchive(session: string, thread: number, version: number): void {
     this.#with((changes) => {

@@ -12,7 +12,7 @@ import { fingerprint } from "../src/sessions/decision.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer } from "../src/sessions/messages.ts";
 import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
-import { review } from "../src/sessions/review.ts";
+import { review, reviewUndecided } from "../src/sessions/review.ts";
 import { cleanTitle } from "../src/sessions/titles.ts";
 import { adbTools } from "../src/tools/adb.ts";
 import { chatTools } from "../src/tools/chat.ts";
@@ -761,6 +761,33 @@ test("nothing is recommended while the rule is off or its model is not verified"
   await r.call(key, "chat_post", args);
   await review(r.hub, key);
   assert.ok(!r.store.archiveSuggested(r.thread("C1", m.threadTs).id));
+  server.close();
+  await r.close();
+});
+
+test("turning the rule on reviews the done chats no decision has answered, once each", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> explain retention");
+  await r.accept(m);
+  await settle();
+  const key = `cl:C1:${m.threadTs}`;
+  const thread = () => r.thread("C1", m.threadTs).id;
+  const { url, server } = await provider(true);
+  installDecisionProfile(r, url);
+  // Done while the rule was off: nothing looked at it.
+  r.edit((raw) => (raw.automaticDecisions.completion.enabled = false));
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "It controls retention.", kind: "all_done", done: "Explained the setting" });
+  await review(r.hub, key);
+  assert.ok(!r.store.archiveSuggested(thread()));
+  assert.equal(r.store.recentDecisions().length, 0);
+  // Turned on: it is reviewed then, without the agent ending another turn.
+  r.edit((raw) => (raw.automaticDecisions.completion.enabled = true));
+  await reviewUndecided(r.hub);
+  assert.ok(r.store.archiveSuggested(thread()));
+  assert.equal(r.store.recentDecisions().length, 1);
+  // A chat already answered as it stands is not asked about again.
+  await reviewUndecided(r.hub);
+  assert.equal(r.store.recentDecisions().length, 1);
   server.close();
   await r.close();
 });

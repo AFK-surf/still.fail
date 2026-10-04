@@ -20,10 +20,9 @@ export function suggestArchive(hub: Hub, key: string) {
   hub.fork(Effect.promise(() => review(hub, key).catch(() => {})));
 }
 
-/// The review itself; resolves once its result is recorded.
-export async function review(hub: Hub, key: string): Promise<void> {
+/// The profiles whose verified model the rule names, in order: the ones a review may ask.
+function candidatesOf(hub: Hub): [string, DecisionConfig][] {
   const rule = hub.config().automaticDecisions.completion;
-  if (!rule.enabled) return;
   const candidates: [string, DecisionConfig][] = [];
   for (const profile of hub.config().profiles) {
     const health = hub.accounts.healthOf(profile.id);
@@ -32,6 +31,14 @@ export async function review(hub: Hub, key: string): Promise<void> {
     const config = capability ? resolvedModel(profile, capability, rule.model) : undefined;
     if (config) candidates.push([profile.id, config]);
   }
+  return candidates;
+}
+
+/// The review itself; resolves once its result is recorded.
+export async function review(hub: Hub, key: string): Promise<void> {
+  const rule = hub.config().automaticDecisions.completion;
+  if (!rule.enabled) return;
+  const candidates = candidatesOf(hub);
   const record = (detail: Json) => {
     try {
       hub.store.recordDecision(key, detail);
@@ -111,4 +118,51 @@ export async function review(hub: Hub, key: string): Promise<void> {
       else hub.store.clearArchiveSuggestion(key, id);
     } catch {}
   }
+}
+
+/// The done chats no decision has answered as they stand now: ended all_done before the rule was on (or under another
+/// model), or while the model could not be reached. Nothing running or waiting to be heard, and not archived.
+export function undecided(hub: Hub): string[] {
+  const { store } = hub;
+  const stats = store.sessionStats(null);
+  const keys: string[] = [];
+  for (const s of store.listSessions()) {
+    if (s.archivedAt !== null || s.running) continue;
+    const stat = stats.get(s.key);
+    const last = stat?.lastTurn ?? null;
+    if (!last || last.endedAt === null || last.ending !== "all_done" || (stat?.pending ?? 0) > 0) continue;
+    const threads = store.sessionThreads(s.key).map((t) => t.thread.id);
+    if (threads.length === 0 || threads.every((id) => store.archiveSuggested(id))) continue;
+    const decided = store.lastDecision(s.key);
+    const seen = new Map<number, number>(Array.isArray(decided?.threads) ? decided.threads : []);
+    if (decided?.result && decided.error == null && threads.every((id) => seen.get(id) === store.lastEntry(id))) continue;
+    keys.push(s.key);
+  }
+  return keys;
+}
+
+/// Per hub: the sweep going on, and whether it was asked for again meanwhile.
+const sweeps = new WeakMap<Hub, { done: Promise<void>; again: boolean }>();
+
+/// Reviews each undecided chat, one after another, in the background: when the rule is turned on or given another
+/// model, and once after the station starts. Asked while one runs, it goes over them again after.
+export function reviewUndecided(hub: Hub): Promise<void> {
+  const running = sweeps.get(hub);
+  if (running) {
+    running.again = true;
+    return running.done;
+  }
+  const sweep = { done: Promise.resolve(), again: false };
+  sweep.done = (async () => {
+    do {
+      sweep.again = false;
+      if (!hub.config().automaticDecisions.completion.enabled || candidatesOf(hub).length === 0) break;
+      for (const key of undecided(hub)) {
+        if (!hub.config().automaticDecisions.completion.enabled) break;
+        await review(hub, key).catch(() => {});
+      }
+    } while (sweep.again);
+  })().finally(() => sweeps.delete(hub));
+  sweeps.set(hub, sweep);
+  return sweep.done;
 }
