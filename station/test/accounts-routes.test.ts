@@ -381,7 +381,7 @@ describe("the accounts routes", { concurrency: true }, () => {
   test("the review log names each chat as its list does and says what came of the review", async () => {
     const store = Store.open(":memory:", null);
     store.insertSession({ key: "titled", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/a", token: "t", createdAt: 1, lastActiveAt: 1 });
-    store.insertSession({ key: "loose", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/b", token: "t", createdAt: 1, lastActiveAt: 1 });
+    store.insertSession({ key: "loose", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/b", token: "t2", createdAt: 1, lastActiveAt: 1 });
     const thread = store.openThread("slack:T1", "C1", "1.1", null, null);
     store.joinThread(thread.id, "titled", "ds");
     store.setThreadTitle(thread.id, "修登录页");
