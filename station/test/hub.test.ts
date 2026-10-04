@@ -11,7 +11,7 @@ import { classifyResult } from "../src/agents/claude.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { addToThread, autoArchive, archive, archiveChat, bindSingle, configure, deleteSession, newSession, openChat, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { AUTO, MANUAL } from "../src/store/store.ts";
-import { FakeDriver, Rig, matches, message, reply, say, settle } from "./hub-fakes.ts";
+import { FakeDriver, Rig, matches, message, reply, say, settle, testClock } from "./hub-fakes.ts";
 
 const chat = (runtime: "claude" | "codex" = "claude") => ({ runtime, createdBy: "local" });
 
@@ -640,14 +640,15 @@ test("when the runtime session cannot be resumed, a new one starts and is told t
 });
 
 test("idle claude processes beyond the warm limit are evicted, oldest first, as soon as another goes idle", async () => {
-  const r = new Rig({ maxWarmClaude: 1, warmMinutes: 0 });
+  const time = testClock();
+  const r = new Rig({ maxWarmClaude: 1, warmMinutes: 0, clock: time.clock });
   await r.accept(message({ ts: "1.1", threadTs: "1.1" }));
   await settle();
   r.claude.last().end({ kind: "aborted" });
   await settle();
   assert.ok(!r.claude.last().disposed, "within the limit");
   // Idle for a moment longer than the next one will be.
-  await new Promise((resolve) => setTimeout(resolve, 5));
+  await time.adjust(5);
   await r.accept(message({ ts: "2.1", threadTs: "2.1" }));
   await settle();
   r.claude.last().end({ kind: "aborted" });
@@ -660,22 +661,26 @@ test("idle claude processes beyond the warm limit are evicted, oldest first, as 
 });
 
 test("an idle process beyond the limit is evicted at its own deadline", async () => {
-  const r = new Rig({ maxWarmClaude: 0, warmMinutes: 0.002 }); // 120 ms
+  const time = testClock();
+  const r = new Rig({ maxWarmClaude: 0, warmMinutes: 0.002, clock: time.clock }); // 120 ms
   await r.accept(message());
   await settle();
   r.claude.last().end({ kind: "aborted" });
   await settle();
+  await time.adjust(119);
+  await settle();
   assert.ok(!r.claude.last().disposed, "not idle long enough yet");
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  await time.adjust(1);
   await settle();
   assert.ok(r.claude.last().disposed);
   await r.close();
 });
 
 test("a running turn is never evicted", async () => {
-  const r = new Rig({ maxWarmClaude: 0, warmMinutes: 0 });
+  const time = testClock();
+  const r = new Rig({ maxWarmClaude: 0, warmMinutes: 0, clock: time.clock });
   await r.accept(message());
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await time.adjust(60_000);
   await settle();
   assert.ok(!r.claude.last().disposed);
   await r.close();

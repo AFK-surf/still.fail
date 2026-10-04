@@ -1,5 +1,7 @@
 // What the hub tests run on (the Rust station's hub/tests.rs's fakes and rig): a chat platform that records what is posted,
 // runtimes that script turns in-process, a real Store, and a hub over them in a temporary data directory.
+import { type Clock, Effect, Scope } from "effect";
+import { TestClock } from "effect/testing";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -191,7 +193,14 @@ export const reply = (to: InboundMessage, ts: string, text: string, over: Partia
   ...over,
 });
 
-export type Setup = { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage };
+export type Setup = { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage; clock?: Clock.Clock };
+
+/// A TestClock for a rig (its hub's, its store's, its sessions'): `adjust(ms)` moves it on, and what was due by then runs.
+export function testClock(): { clock: Clock.Clock; adjust(ms: number): Promise<void> } {
+  const scope = Effect.runSync(Scope.make());
+  const clock = Effect.runSync(Scope.provide(TestClock.make(), scope));
+  return { clock, adjust: (ms) => Effect.runPromise(clock.adjust(`${ms} millis`)) };
+}
 
 export class Rig {
   dir: string;
@@ -204,8 +213,10 @@ export class Rig {
   claude = new FakeDriver("claude");
   codex = new FakeDriver("codex");
   hub: Hub;
+  clock: Clock.Clock | undefined;
 
   constructor(o: Setup = {}) {
+    this.clock = o.clock;
     this.dir = mkdtempSync(join(tmpdir(), "hub-"));
     this.raw = {
       profiles: [
@@ -222,7 +233,7 @@ export class Rig {
     if (o.maxWarmClaude !== undefined) this.raw.maxWarmClaude = o.maxWarmClaude;
     if (o.warmMinutes !== undefined) this.raw.warmMinutes = o.warmMinutes;
     this.config = hubConfig(this.raw, this.dir);
-    this.store = Store.open(":memory:");
+    this.store = Store.open(":memory:", null, o.clock);
     const chats = new Map<string, ChatSurface>([
       ["cl", this.chat],
       ["gpt", this.gptChat],
@@ -243,6 +254,7 @@ export class Rig {
       link: o.link ? (key) => `https://ember.test/o/ws/st/${key.replaceAll(":", "%3A")}` : undefined,
       runners: () => [],
       cold: o.cold,
+      clock: this.clock,
     });
   }
 
