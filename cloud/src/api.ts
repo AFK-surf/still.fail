@@ -27,7 +27,7 @@ const STATUS: Record<string, number> = {
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
   invalid_note: 400, invalid_expiry: 400,
   feedback_not_found: 404,
-  not_enrolled: 403, not_host: 403, share_not_found: 404, host_present: 409, too_many_shares: 429,
+  not_enrolled: 403, not_host: 403, share_not_found: 404, too_many_shares: 429,
   invalid_id: 400, invalid_host: 400, invalid_kind: 400, invalid_allow: 400, invalid_op: 400,
 };
 
@@ -217,7 +217,6 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       return { ...signed, ...relays(env) };
     });
   }
-  if (kind === "shares" && target && !action && method === "DELETE") return directory(() => dir.removeShare(sub, ws, target));
   if (kind === "stations" && target && validKeyHex(target)) {
     if (!action && method === "PATCH") return directory(() => dir.renameStation(sub, ws, target, text("name")));
     if (!action && method === "DELETE") return directory(() => dir.removeStation(sub, ws, target));

@@ -39,19 +39,18 @@
 `Directory` 加一张表（`CREATE TABLE IF NOT EXISTS`）：
 
 ```
-shares (workspace TEXT, id TEXT, kind TEXT, name TEXT, host TEXT, allow TEXT,
-        updated_by TEXT, updated_at INTEGER, PRIMARY KEY (workspace, id))
+shares (workspace TEXT, id TEXT, kind TEXT, name TEXT, host TEXT, allow TEXT, version INTEGER,
+        updated_at INTEGER, PRIMARY KEY (workspace, id))
 ```
 
-- `allow`：可用 station 的 JSON 数组，空表示整个 workspace。
-- presence 的 `state` 帧加可选字段 `shares: [{id, kind, name, host, allow}]`，变了就推（跟 `peers` 一样）。station 存在 `cloud.json` 里。
-- 接口：
-  - `POST /v1/workspaces/:ws/shares {id, kind, name, allow}`：由 host station 用自己的密钥签名登记（签名方式同 enroll）。成员在客户端点「分享」时，是客户端通过 station 的管理接口让它去登记的。
-  - `PATCH /v1/workspaces/:ws/shares/:id {allow}`：改可用名单（成员凭据，owner/admin）。
-  - `PATCH /v1/workspaces/:ws/shares/:id {host}`：`subscription` 只接受**当前 host** 签名的请求，也就是只能由原 host 交出去（见「换 host」）；其余种类 owner/admin 也可以直接改，原 host 不在线也行。
-  - `DELETE /v1/workspaces/:ws/shares/:id`：host 签名，或者 owner/admin。后者用来清掉 host 已经不在的分享项。
-  - `GET /v1/workspaces/:ws` 的答复加上 `shares`。
-- host 被移出 workspace，或者机器没了：订阅只能删掉、在别处重新登录；其余的由 owner/admin 换一台当 host。
+- `allow`：可用 station 的 JSON 数组，空（NULL）表示整个 workspace。`version`：host 改了内容就提高，别的 station 据此重新取。
+- presence 的 `state` 帧加字段 `shares: [{id, kind, name, host, allow, version}]`，变了就推（跟 `peers` 一样）。station 存在 `cloud.json` 里。
+- 接口只有一个，由 station 用自己的密钥签名（`stillfail-station-shares-v1`，同 notify）：`POST /v1/stations/shares {op, id, …}`
+  - `put {kind, name, allow, version}`：登记或更新；已登记的只有它的 host 能改。成员在页面上点「分享」「改」，是页面通过 host station 的管理接口让它去做。
+  - `move {host}`：交给同一 workspace 的另一台；只有当前 host 能做（见「换 host」）。
+  - `delete`：停止分享；只有当前 host 能做。
+- `GET /v1/workspaces/:ws` 的答复加上 `shares`。
+- host 被移出 workspace：它分享的一起删掉。只是离线：一切保留，订阅暂时用不了。
 
 旧 cloud 不给 `shares`：分享功能整个关掉，station 照旧运行。部署顺序是先 cloud，再 station，再客户端。
 
@@ -174,13 +173,13 @@ core（`client/core-ts`）：
 
 - **没有 `share.watch` 长流**：版本号放在 cloud 的 shares 表里，host 改了内容就提高版本，cloud 用 presence 的 `state` 帧推给各台，使用方看到版本变了再 `share.get`。这样不用在一请求一流的传输上做长连。配额和状态由使用方需要时问 host（`share.status`）：检查、额度轮询（有人看着时每 5 分钟）、借 token 时。
 - **使用方怎么知道 host 不在**：借 token、问状态失败就记下这台 host 联系不上（overview 的 `share.reachable`），之后每分钟试一次，通了就把借来的订阅重新检查一遍。客户端把「cloud 说它离线」和「借用方联系不上它」都当作 host 不在。
-- **换 host 只能由原 host 交出**（订阅和 key 一样）；原 host 不在时把非订阅项交给别台、以及 owner/admin 删除这些分享项（cloud 有 `DELETE /v1/workspaces/:ws/shares/:id`），界面上还没有入口。
+- **换 host 只能由原 host 交出**（订阅和 key 一样），没有做「原 host 不在时把 key、skill 交给别台」。一台 station 被移出 workspace 时，cloud 把它分享的东西一起删掉，各台的副本随之去掉；只是离线则一切保留。
 - **`MEMORY.md` 不分享**，只分享 skills；记忆页仍按 station 分组，每个 skill 展开后有分享开关，分享来的标「来自 X」。同名时本台自己的 skill 优先，分享来的不链接进去。
 - **Codex 订阅**：在 studio 上验证过（codex-cli 0.160.0），`auth.json` 里只有 access token、refresh token 是假的、`last_refresh` 是现在时，Codex 照常用到过期，不会自己去刷新；token 坏了干净地报 401 退出。ChatGPT 的 access token 约 10 天有效，借用方的 app-server 在离过期 6 小时内、没有会话在跑时重启并重新借。host 只在自己没有 Codex 进程用这个登录时才替它续期（续期会换掉 refresh token，正在跑的 Codex 手里还是旧的）。
 
 ## 测试
 
 - `station/test/share.test.ts`：两台 station、一个只记 host 的假 cloud，验证 key 的复制与同步、host 离线时副本还在、停止分享后删掉、按名单拒绝、借订阅 token（host 不在时借不到）、交出订阅（登录搬过去，原 host 留副本、id 不变）、skill 的复制、链接、改动回传、旧版本上的改动存成冲突文件。
-- `cloud/test/shares.test.ts`：登记、改名单、交出、删除只有 host 能做，签名不对拒绝，state 帧和 workspace 答复里有 shares，host 被移出后 owner/admin 能删。
+- `cloud/test/shares.test.ts`：登记、改名单、交出、删除只有 host 能做，签名不对拒绝，state 帧和 workspace 答复里有 shares，host 被移出 workspace 后它分享的跟着删掉。
 - `client/core-ts/test/profiles-view.test.ts`：workspace 的 Profile 列表去重、「登录在 / 只给 / 只在」、host 不在时不可用且排在前面。
 - 端到端：studio 上 dev cloud 加两台临时 TS station，在网页上分享订阅和 key、改可用的 station、分享 skill、把订阅换到另一台、关掉 host 后列表变灰，都是真的走 iroh 的站间请求。

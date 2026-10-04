@@ -609,6 +609,8 @@ export class Directory extends DurableObject<Env> {
     this.#role(sub, workspace, MANAGERS);
     if (!this.#one("SELECT 1 AS x FROM stations WHERE id = ? AND workspace = ?", station, workspace)) return;
     this.#run("DELETE FROM stations WHERE id = ?", station);
+    // What it shared goes with it: nothing else could hand its logins over.
+    this.#run("DELETE FROM shares WHERE workspace = ? AND host = ?", workspace, station);
     this.#changed(workspace, true);
     this.#disconnect(station, CLOSE.removed, "station_removed");
   }
@@ -616,7 +618,7 @@ export class Directory extends DurableObject<Env> {
   // ── shares ──────────────────────────────────────────────────────────────
   // What stations share with each other (docs/station-share.md). The cloud only says which station has each thing and
   // which may use it; what it is goes between the stations. Only the host changes its row: a station signs its own
-  // requests (api.ts `/v1/stations/shares`); a manager may only take away one whose host is gone.
+  // requests (api.ts `/v1/stations/shares`); a station removed from the workspace takes what it shared with it.
 
   #shares(workspace: string): ShareView[] {
     return this.#rows("SELECT id, kind, name, host, allow, version, updated_at FROM shares WHERE workspace = ? ORDER BY updated_at", workspace).map((r) => ({
@@ -663,15 +665,7 @@ export class Directory extends DurableObject<Env> {
     return { shares: this.#shares(workspace) };
   }
 
-  /** A manager takes away a share whose host is no longer in the workspace (nothing else can). */
-  removeShare(sub: string, workspace: string, id: string): WorkspaceView {
-    this.#role(sub, workspace, MANAGERS);
-    const row = this.#one("SELECT host FROM shares WHERE workspace = ? AND id = ?", workspace, id);
-    if (row && this.#one("SELECT 1 AS x FROM stations WHERE id = ? AND workspace = ?", row.host as string, workspace)) fail(409, "host_present");
-    this.#run("DELETE FROM shares WHERE workspace = ? AND id = ?", workspace, id);
-    this.#changed(workspace, false);
-    return this.workspace(sub, workspace);
-  }
+
 
   /** What a grant to reach `station` should say about the caller, if it may. */
   /** Whether a station is enrolled (in some workspace). */

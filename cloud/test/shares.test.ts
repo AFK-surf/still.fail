@@ -52,7 +52,7 @@ async function connect(h: Harness, station: Station) {
   return { ws, frames, ping };
 }
 
-test("a station shares, changes who may use it, hands it over and stops; only its host may, and the others hear it", { timeout: 30000 }, async () => {
+test("a station shares, changes who may use it, hands it over; only its host may, the others hear it, and it goes with its host", { timeout: 30000 }, async () => {
   const h = await harness();
   try {
     const alice = h.as(await h.login("alice"));
@@ -90,10 +90,8 @@ test("a station shares, changes who may use it, hands it over and stops; only it
     assert.equal(heard.frames.at(-1).shares[0].host, mini.id);
     assert.equal((await share(h, studio, { op: "delete", id })).status, 403, "no longer studio's");
 
-    // A host gone from the workspace: a manager takes what it shared away (and only then).
-    assert.equal((await alice("DELETE", `/v1/workspaces/${w}/shares/${id}`)).status, 409);
+    // Its host removed from the workspace: what it shared goes with it.
     assert.equal((await alice("DELETE", `/v1/workspaces/${w}/stations/${mini.id}`)).status, 200);
-    assert.equal((await alice("DELETE", `/v1/workspaces/${w}/shares/${id}`)).status, 200);
     const after = (await (await alice("GET", `/v1/workspaces/${w}`)).json()) as any;
     assert.deepEqual(after.shares, []);
   } finally {
