@@ -18,7 +18,7 @@ import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken, type Env, type MachineToken
 import { fileCredentials, takeBack } from "./no-keychain.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { bothNames, expandRoute, isMachine, profileEnv, profileModel } from "./profiles.ts";
-import { cleanEnv, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { cleanEnv, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
 
 type Json = any;
