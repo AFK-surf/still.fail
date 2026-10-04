@@ -17,6 +17,7 @@
 //   node scripts/native.ts run <part>… -- <command…>   the command, with each part's variable set (STILLFAIL_MESH_NATIVE, …)
 //   node scripts/native.ts iroh-pkg [dir]              the web's iroh (iroh-wasm) put in web/src/core/iroh-pkg
 //   node scripts/native.ts status                      every part and target: key, and whether cached / published
+//   node scripts/native.ts missing [part[:target]…]    those (default: all of ours) the release lacks, one a line
 //   node scripts/native.ts ensure [--publish] [--outbox DIR] [part[:target]…]
 //        CI: each (default: all) in the cache, built when not prebuilt; --publish uploads what the release lacks
 //        (gh, main only); --outbox copies the artifacts the release lacks there (a branch's run artifact)
@@ -520,6 +521,15 @@ async function main(argv: string[]) {
         const up = remote ? (remote.has(asset(p, t, k)) ? "published" : "-") : (await exists(asset(p, t, k))) ? "published" : "-";
         console.log(`${p.padEnd(12)} ${t.padEnd(14)} ${k}  ${local.padEnd(7)} ${up}`);
       }
+      return;
+    }
+    case "missing": {
+      // Each part (default: all of ours) the release lacks, one a line: CI's plan skips the natives job when none is.
+      const wanted: [string, Target][] = [];
+      for (const a of args) { const [p, t] = a.split(":"); wanted.push(pair(t ? [p!, t] : [p!])); }
+      if (wanted.length === 0) for (const [p, part] of Object.entries(PARTS)) if (p !== "iroh-relay") for (const t of part.publish ?? part.targets) wanted.push([p, t]);
+      const remote = published() ?? fail("the release's assets could not be listed");
+      for (const [p, t] of wanted) if (!remote.has(asset(p, t, key(p, t)))) console.log(`${p}:${t}`);
       return;
     }
     case "ensure": {

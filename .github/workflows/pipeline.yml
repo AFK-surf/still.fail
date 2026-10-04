@@ -24,6 +24,10 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 permissions:
   contents: read
+env:
+  # The native parts a branch's checks and builds use (the Linux station parts are built and published from main; the
+  # Linux check's mesh addon is built on a branch that changed it).
+  BRANCH_NATIVES: mesh:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64
 jobs:
   plan:
     # Trusted repository pushes only. Never add pull_request or pull_request_target here:
@@ -39,9 +43,23 @@ jobs:
       station: ${{ steps.plan.outputs.station }}
       android: ${{ steps.plan.outputs.android }}
       desktop: ${{ steps.plan.outputs.desktop }}
+      natives: ${{ steps.natives.outputs.natives }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true }
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      # Whether the natives job has anything to do: a part this run uses that the release native-artifacts lacks (the
+      # keys are the sources' hashes: scripts/native.ts). None, and it is skipped (~25 s on mini1 that everything
+      # building waited for).
+      - id: natives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF" = refs/heads/main ]; then missing=$(node scripts/native.ts missing)
+          else missing=$(node scripts/native.ts missing $BRANCH_NATIVES); fi
+          echo "missing: ${missing:-none}"
+          echo "natives=$([ -n "$missing" ] && echo needed || echo ready)" >> "$GITHUB_OUTPUT"
       - id: plan
         run: |
           if [ "$GITHUB_REF" = refs/heads/main ]; then base=$(git rev-parse -q --verify "refs/tags/deployed/beta^{commit}" || true)
@@ -86,6 +104,7 @@ jobs:
   # publishes nothing, and passes what it built to its other jobs as a run artifact. Seconds when none changed.
   natives:
     needs: plan
+    if: needs.plan.outputs.natives == 'needed'
     runs-on: [self-hosted, mini1]
     timeout-minutes: 60
     permissions:
@@ -111,11 +130,8 @@ jobs:
             node scripts/native.ts ensure --publish
             node scripts/native.ts prune 20
           else
-            # What a branch's checks and builds use (the Linux station parts are built and published from main; the
-            # Linux check's mesh addon is built here when the branch changed it).
-            node scripts/native.ts ensure --outbox "$RUNNER_TEMP/natives" \
-              mesh:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine \
-              mesh:linux-x64
+            # What a branch's checks and builds use (BRANCH_NATIVES).
+            node scripts/native.ts ensure --outbox "$RUNNER_TEMP/natives" $BRANCH_NATIVES
           fi
       - if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
@@ -163,6 +179,7 @@ jobs:
   # engine); what passed before at the same inputs is kept in the Actions cache (scripts/check.sh, `remembered`).
   check-linux:
     needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() }}
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 45
     env:
@@ -191,7 +208,7 @@ jobs:
   # nothing sent, no secrets.
   bundle:
     needs: [plan, natives]
-    if: github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true')
+    if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true') }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
@@ -205,7 +222,7 @@ jobs:
   # Linux, the desktop app and the TypeScript station's bundle on mini1.
   mac-build:
     needs: [plan, natives]
-    if: github.ref != 'refs/heads/main' && (needs.plan.outputs.desktop == 'true' || needs.plan.outputs.station == 'true')
+    if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.desktop == 'true' || needs.plan.outputs.station == 'true') }}
     runs-on: [self-hosted, mini1]
     timeout-minutes: 60
     steps:
@@ -250,7 +267,7 @@ jobs:
   static:
     needs: [plan, natives, check, check-linux, api]
     # After the API (a page may need what it adds), or without it when it did not change.
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && needs.natives.result == 'success' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: production
     timeout-minutes: 30
@@ -271,7 +288,7 @@ jobs:
   # The test channel's station release: what a station on it updates to (studio's at once, the others when they update).
   station:
     needs: [plan, natives, check, check-linux, api]
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' && needs.natives.result == 'success' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 60
@@ -299,7 +316,7 @@ jobs:
   # android-put once the check passed and the API is out.
   android:
     needs: [plan, natives]
-    if: github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true'
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true' }}
     runs-on: blacksmith-8vcpu-ubuntu-2404
     environment: production
     timeout-minutes: 60
@@ -339,7 +356,7 @@ jobs:
   # The test channel's desktop app (fail.still.desktop.beta), on desktop/stillfail-beta-mac.yml: built and signed on the organization Mac runner.
   desktop:
     needs: [plan, natives, check, check-linux, api]
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' && needs.natives.result == 'success' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 90
@@ -389,7 +406,7 @@ jobs:
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
     needs: [plan, natives, check, check-linux, api, static, station, android, android-put, desktop]
-    if: always() && github.ref == 'refs/heads/main' && needs.natives.result == 'success' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.android-put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result)
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.android-put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result)
     runs-on: [self-hosted, mini1]
     permissions:
       contents: write # only this job updates the tag deployed/beta
