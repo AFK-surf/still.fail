@@ -86,7 +86,8 @@ build=$(git -C "$root" rev-list --count HEAD)
 releases=${RELEASES-https://app.still.fail/releases}
 # Whether the releases have <name> already: in RELEASE_DIR, or where they are read from.
 released() {
-  { [ -n "${RELEASE_DIR:-}" ] && [ -f "$RELEASE_DIR/$1" ]; } || { [ -n "$releases" ] && curl -fsI "$releases/$1" > /dev/null 2>&1; }
+  # Its first byte asked for: the releases answer GET (ranges too), not HEAD.
+  { [ -n "${RELEASE_DIR:-}" ] && [ -f "$RELEASE_DIR/$1" ]; } || { [ -n "$releases" ] && curl -fs -r 0-0 -o /dev/null "$releases/$1"; }
 }
 [ -z "$(git -C "$root" status --porcelain)" ] || echo "note: the working tree has changes; the apps are numbered by the commit ($build) all the same" >&2
 
