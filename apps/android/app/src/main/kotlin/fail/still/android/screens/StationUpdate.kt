@@ -104,7 +104,7 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
                         Text(versions, Modifier.weight(1f), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = FontFamily.Monospace, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (notice.canUpdate == true) Row(Modifier.clip(CircleShape).background(C.accentBg).clickable(enabled = !busy, role = Role.Button) { app.act("更新 station") { app.api(station).updateSoftware("station") } }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             DoingMark(busy, failed, 12.dp)
-                            Text(if (busy) "更新中" else "现在更新", fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
+                            Text(if (busy) "更新中" else if (notice.tone == "trouble") "重试" else "现在更新", fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
                         }
                     }
                 }
@@ -120,7 +120,7 @@ private fun UpdateBar(percent: Double?) {
     val fill = C.accent
     val sweep = if (percent == null && !still) rememberInfiniteTransition(label = "update-bar")
         .animateFloat(-0.4f, 1f, infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing)), label = "sweep").value else 0f
-    Canvas(Modifier.fillMaxWidth().padding(end = 4.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(C.chip)) {
+    Canvas(Modifier.fillMaxWidth().padding(end = 4.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(fill.copy(alpha = 0.18f))) {
         when {
             percent != null -> drawRect(fill, size = Size(size.width * (percent / 100).toFloat(), size.height))
             still -> drawRect(fill.copy(alpha = 0.35f))

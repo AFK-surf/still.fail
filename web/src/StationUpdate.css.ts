@@ -13,7 +13,7 @@ export const title = style({ display: "flex", alignItems: "baseline", gap: "8px"
 export const name = style({ fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 });
 export const state = style({ flexShrink: 0, fontSize: "12px", color: vars.accentText, selectors: { '[data-tone="trouble"] &': { color: vars.red } } });
 export const detail = style({ color: vars.muted, fontSize: "12px", lineHeight: "17px", overflowWrap: "anywhere" });
-export const bar = style({ position: "relative", height: "3px", marginRight: "4px", borderRadius: "2px", overflow: "hidden", background: vars.neutralBg });
+export const bar = style({ position: "relative", height: "3px", marginRight: "4px", borderRadius: "2px", overflow: "hidden", background: `color-mix(in srgb, ${vars.accent} 18%, transparent)` });
 export const fill = style({ position: "absolute", inset: "0 auto 0 0", borderRadius: "inherit", background: vars.accent, transition: "width .3s ease" });
 export const sweeping = style({ width: "40%", animation: `${sweep} 1.4s ease-in-out infinite`, "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", width: "100%", opacity: .35 } } });
 export const foot = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", minHeight: "24px", marginRight: "4px" });

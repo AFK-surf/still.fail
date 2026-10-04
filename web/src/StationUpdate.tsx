@@ -35,7 +35,7 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
         {(notice.from || notice.to || notice.canUpdate) && <div className={css.foot}>
           {(notice.from || notice.to) && <span className={css.versions}>{[notice.from, notice.to].filter(Boolean).join(" → ")}</span>}
           {notice.canUpdate && <button className={css.update} disabled={busy} onClick={() => act(api.updateSoftware("station"), "更新 station")}>
-            <DoingMark calls="software.update" on={{ station, id: "station" }} size={12} />{busy ? "更新中" : "现在更新"}
+            <DoingMark calls="software.update" on={{ station, id: "station" }} size={12} />{busy ? "更新中" : notice.tone === "trouble" ? "重试" : "现在更新"}
           </button>}
         </div>}
         <Popover.Arrow className={css.arrow} width={12} height={6} />
