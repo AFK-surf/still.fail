@@ -401,6 +401,70 @@ test("retain_forgets_the_stations_no_one_reaches", async () => {
   runner.shutdown();
 });
 
+test("what_was_said_is_found_by_its_words_as_its_entries_change", async () => {
+  const { data, open, db, runner, again } = fresh();
+  await open();
+  const said = (n: number, text: string, at = n) => [n, { n, kind: "message", text, at }] as [number, J];
+  const found = (d: Data, ...words: string[]) => d.findSaid(["w/a", "w/b"], words, 10).map((f) => `${f.station} ${f.thread} ${f.seq} ${f.text}`);
+  data.putItems("entry", "w/a", "7", [said(1, "排查登录很慢"), said(2, "Deploy the LOGIN page"), [3, { n: 3, kind: "edit", target: 1, text: "排查注册很慢", at: 9 }]]);
+  data.putItems("entry", "w/b", "8", [said(1, "登录好了", 5)]);
+  data.putItems("entry", "w/c", "9", [said(1, "登录别处的")]);
+  data.set(rows("w/c"), [{ id: "z" }]);
+  await run(data.written);
+  // The edit's words are the message's; newest first; only the stations asked about.
+  assert.deepEqual(found(data, "登录"), ["w/b 8 1 登录好了"]);
+  assert.deepEqual(found(data, "注册"), ["w/a 7 1 排查注册很慢"]);
+  // Case aside, every word, through the index (three or more) and without it (shorter).
+  assert.deepEqual(found(data, "login", "de"), ["w/a 7 2 Deploy the LOGIN page"]);
+  assert.deepEqual(found(data, "login", "zz"), []);
+  // An edit read before its message (older pages come later) keeps its words.
+  data.putItems("entry", "w/b", "10", [[5, { n: 5, kind: "edit", target: 4, text: "新的说法", at: 6 }]]);
+  data.putItems("entry", "w/b", "10", [said(4, "旧的说法", 4)]);
+  await run(data.written);
+  assert.deepEqual(found(data, "说法"), ["w/b 10 4 新的说法"]);
+  assert.deepEqual(db().all("SELECT at FROM said WHERE thread = 10"), [[4]]);
+  // A thread cut: the words of what went go with it, a message whose edit went has its own again.
+  data.putItems("entry", "w/a", "7", [], 1);
+  await run(data.written);
+  assert.deepEqual(found(data, "login"), []);
+  assert.deepEqual(found(data, "排查"), ["w/a 7 1 排查登录很慢"]);
+  // A thread dropped, a station forgotten: all its words go.
+  data.dropThread("w/b", 8);
+  data.retain((s) => s !== "w/c", null);
+  await run(data.written);
+  assert.deepEqual(found(data, "登录"), ["w/a 7 1 排查登录很慢"]);
+  assert.deepEqual(db().all("SELECT station, thread, seq FROM said ORDER BY station, thread, seq"), [["w/a", 7, 1], ["w/b", 10, 4]]);
+  // A database from before (none of it) has it filled from the entries held when opened.
+  db().exec("DROP TRIGGER said_put; DROP TRIGGER said_drop; DROP TABLE said_index; DROP TABLE said;");
+  const d = await again();
+  assert.deepEqual(found(d, "说法"), ["w/b 10 4 新的说法"]);
+  assert.deepEqual(found(d, "排查"), ["w/a 7 1 排查登录很慢"]);
+  runner.shutdown();
+});
+
+test("without_full_text_search_what_was_said_is_scanned", async () => {
+  const { host, runner } = fresh();
+  const inner = new NodeSql(new DatabaseSync(":memory:"), true);
+  // A build without FTS5.
+  const sql: Sql = {
+    exec: (q) => {
+      if (/fts5/i.test(q)) throw new SqlError("no such module: fts5", "other");
+      inner.exec(q);
+    },
+    run: (q, p) => inner.run(q, p),
+    all: (q, p) => inner.all(q, p),
+    close: () => {},
+  };
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1" });
+  await run(data.open(["s1"]));
+  data.putItems("entry", "w/a", "7", [[1, { n: 1, kind: "message", text: "登录流程太慢", at: 1 }]]);
+  await run(data.written);
+  assert.deepEqual(data.findSaid(["w/a"], ["登录流程"], 5).map((f) => f.seq), [1]);
+  assert.deepEqual(inner.all("SELECT name FROM sqlite_master WHERE name LIKE 'said_index%'"), []);
+  runner.shutdown();
+});
+
 test("model_selection_survives_old_events_and_finishes_without_reverting", async () => {
   const { data, open, again, runner } = fresh();
   await open();

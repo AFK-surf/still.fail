@@ -94,6 +94,19 @@ export const MIGRATIONS: string[] = [
   `,
 ];
 
+// An entry's part in what was said (`e` the entry row): whether it says something (a message, or an edit of one), the
+// message it is of, when that was said (a message's own time), and its words.
+const kind = (e: string) => `json_extract(${e}.json, '$.kind')`;
+const SAYS = (e: string) => `(${kind(e)} = 'message' OR (${kind(e)} = 'edit' AND json_type(${e}.json, '$.target') = 'integer'))`;
+const SEQ = (e: string) => `(CASE ${kind(e)} WHEN 'message' THEN ${e}.n ELSE json_extract(${e}.json, '$.target') END)`;
+const AT = (e: string) => `(CASE ${kind(e)} WHEN 'message' THEN json_extract(${e}.json, '$.at') END)`;
+const TEXT = (e: string) => `coalesce(CASE json_type(${e}.json, '$.text') WHEN 'text' THEN json_extract(${e}.json, '$.text') END, '')`;
+// The latest words win, whichever came first (a thread's older pages are read after its newer ones).
+const UPSERT = `ON CONFLICT (station, thread, seq) DO UPDATE SET
+  text = CASE WHEN excluded.n >= said.n THEN excluded.text ELSE said.text END,
+  n = max(said.n, excluded.n),
+  at = coalesce(excluded.at, said.at)`;
+
 /// What was said in the threads, for finding messages by their words (`said`): each message's latest text (an edit's
 /// replaces it), kept by triggers on `entry`, so whatever writes entries keeps it, a core that knows nothing of it too;
 /// and SQLite's full-text index of it (`said_index`: FTS5, trigram, so any three characters match, Chinese too) where
@@ -109,44 +122,38 @@ export function ensureSaid(sql: Sql): boolean {
         n INTEGER NOT NULL, at INTEGER, text TEXT NOT NULL,
         UNIQUE (station, thread, seq)
       );
-      CREATE INDEX IF NOT EXISTS said_from ON said (station, thread, n);
-      CREATE TRIGGER IF NOT EXISTS said_put AFTER INSERT ON entry
-      WHEN json_extract(new.json, '$.kind') = 'message' OR (json_extract(new.json, '$.kind') = 'edit' AND json_type(new.json, '$.target') = 'integer')
+      -- A message's edits, by the message (for when the entry its words came from goes).
+      CREATE INDEX IF NOT EXISTS entry_edit ON entry (station, thread, json_extract(json, '$.target')) WHERE json_extract(json, '$.kind') = 'edit';
+      CREATE TRIGGER IF NOT EXISTS said_put AFTER INSERT ON entry WHEN ${SAYS("new")}
       BEGIN
-        INSERT INTO said (station, thread, seq, n, at, text)
-        VALUES (
-          new.station, new.thread,
-          CASE json_extract(new.json, '$.kind') WHEN 'message' THEN new.n ELSE json_extract(new.json, '$.target') END,
-          new.n,
-          CASE json_extract(new.json, '$.kind') WHEN 'message' THEN json_extract(new.json, '$.at') END,
-          coalesce(CASE json_type(new.json, '$.text') WHEN 'text' THEN json_extract(new.json, '$.text') END, '')
-        )
-        ON CONFLICT (station, thread, seq) DO UPDATE SET
-          text = CASE WHEN excluded.n >= said.n THEN excluded.text ELSE said.text END,
-          n = max(said.n, excluded.n),
-          at = coalesce(excluded.at, said.at);
+        INSERT INTO said (station, thread, seq, n, at, text) VALUES (new.station, new.thread, ${SEQ("new")}, new.n, ${AT("new")}, ${TEXT("new")})
+        ${UPSERT};
       END;
-      CREATE TRIGGER IF NOT EXISTS said_drop AFTER DELETE ON entry
+      -- The entry a message's words came from gone: its words are those of what is left of it (nothing, when it went).
+      CREATE TRIGGER IF NOT EXISTS said_drop AFTER DELETE ON entry WHEN ${SAYS("old")}
       BEGIN
-        DELETE FROM said WHERE station = old.station AND thread = old.thread AND n = old.n;
+        DELETE FROM said WHERE station = old.station AND thread = old.thread AND seq = ${SEQ("old")} AND n = old.n;
+        INSERT INTO said (station, thread, seq, n, at, text)
+        SELECT * FROM (
+          SELECT e.station, e.thread, e.n AS seq, e.n, ${AT("e")}, ${TEXT("e")} FROM entry e
+          WHERE e.station = old.station AND e.thread = old.thread AND e.n = ${SEQ("old")} AND ${kind("e")} = 'message'
+          UNION ALL
+          SELECT e.station, e.thread, json_extract(e.json, '$.target'), e.n, NULL, ${TEXT("e")} FROM entry e
+          WHERE e.station = old.station AND e.thread = old.thread AND json_extract(e.json, '$.target') = ${SEQ("old")} AND json_extract(e.json, '$.kind') = 'edit'
+        )
+        WHERE NOT EXISTS (SELECT 1 FROM said WHERE station = old.station AND thread = old.thread AND seq = ${SEQ("old")})
+        ORDER BY 4
+        ${UPSERT};
       END;
     `);
     if (!had) {
-      // Oldest first, as they came: an edit's text over its message's.
+      // Oldest first, as they came.
       sql.exec(`
         INSERT INTO said (station, thread, seq, n, at, text)
-        SELECT station, thread,
-          CASE json_extract(json, '$.kind') WHEN 'message' THEN n ELSE json_extract(json, '$.target') END,
-          n,
-          CASE json_extract(json, '$.kind') WHEN 'message' THEN json_extract(json, '$.at') END,
-          coalesce(CASE json_type(json, '$.text') WHEN 'text' THEN json_extract(json, '$.text') END, '')
-        FROM entry
-        WHERE json_extract(json, '$.kind') = 'message' OR (json_extract(json, '$.kind') = 'edit' AND json_type(json, '$.target') = 'integer')
-        ORDER BY station, thread, n
-        ON CONFLICT (station, thread, seq) DO UPDATE SET
-          text = CASE WHEN excluded.n >= said.n THEN excluded.text ELSE said.text END,
-          n = max(said.n, excluded.n),
-          at = coalesce(excluded.at, said.at);
+        SELECT e.station, e.thread, ${SEQ("e")}, e.n, ${AT("e")}, ${TEXT("e")} FROM entry e
+        WHERE ${SAYS("e")}
+        ORDER BY e.station, e.thread, e.n
+        ${UPSERT};
       `);
     }
     sql.exec("COMMIT");
