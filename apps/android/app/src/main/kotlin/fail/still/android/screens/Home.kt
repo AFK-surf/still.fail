@@ -163,15 +163,20 @@ fun HomeScreen(current: WorkspaceEntry) {
     var topBar by rememberSaveable { mutableIntStateOf(statusTop + with(density) { 50.dp.roundToPx() }) }
     var bottomBar by rememberSaveable { mutableIntStateOf(0) }
     val padding = with(density) { PaddingValues(top = topBar.toDp() + 8.dp, bottom = bottomBar.toDp() + 8.dp) }
+    // Searching (Search.kt): where the field at the list's top was when tapped. The lists go up and away, the bars fade.
+    var searchFrom by rememberSaveable { mutableStateOf<Float?>(null) }
+    val away by animateFloatAsState(if (searchFrom != null) 1f else 0f, tween(if (searchFrom != null) 280 else 240, easing = if (searchFrom != null) Ease.Arrive else Ease.Standard), label = "search")
+    val awayBy = with(density) { 56.dp.toPx() }
     Box(Modifier.fillMaxSize()) {
-        BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze)) {
+        BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze).graphicsLayer { translationY = -awayBy * away; alpha = 1f - away }) {
             val width = constraints.maxWidth
-            ChatPane(current, all, "all", allList, padding, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
-            ChatPane(current, mine, "mine", mineList, padding, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
-            ChatPane(current, watching, "watching", watchingList, padding, Modifier.width(maxWidth).offset { IntOffset(((2 - shift) * width).roundToInt(), 0) })
+            val onSearch = { at: Float -> searchFrom = at }
+            ChatPane(current, all, "all", allList, padding, onSearch, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
+            ChatPane(current, mine, "mine", mineList, padding, onSearch, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
+            ChatPane(current, watching, "watching", watchingList, padding, onSearch, Modifier.width(maxWidth).offset { IntOffset(((2 - shift) * width).roundToInt(), 0) })
         }
         Row(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.glass(haze)
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.graphicsLayer { alpha = 1f - away }.glass(haze)
                 .windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -228,13 +233,14 @@ fun HomeScreen(current: WorkspaceEntry) {
             }
         }
         // Wide (Wide.kt), the new-chat button is at the screen's corner instead, not the column's.
-        if (!LocalWide.current) Toolbar(app, decisionsWaiting(current), haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height })
+        if (!LocalWide.current) Toolbar(app, decisionsWaiting(current), haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.graphicsLayer { alpha = 1f - away })
+        searchFrom?.let { from -> SearchPage(scope, from) { searchFrom = null } }
     }
 }
 
 /** One of the lists, all, the viewer's or the watching ones: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
 @Composable
-private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: String, list: LazyListState, padding: PaddingValues, modifier: Modifier) {
+private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: String, list: LazyListState, padding: PaddingValues, onSearch: (Float) -> Unit, modifier: Modifier) {
     val view = chats.value
     val app = LocalApp.current
     // The rows move as the list changes (ListMotion.kt); while a finger is on the list or it scrolls, they keep their
@@ -261,6 +267,8 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: S
         // Rows gone, each drawn where it was as it goes, under the rows closing over it.
         if (view != null) for (g in motion.ghosts) key(g.key, g.at) { Leaving(g, view, motion) }
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = padding) {
+        // The search (Search.kt), at the list's top: there once the list is scrolled to it.
+        if (view != null && view.note?.empty != true) item(key = "search") { SearchField(onSearch) }
         // What the last update brought (Changelog.kt), until it is seen: even while the list is being read.
         item(key = "changelog-news") { ChangelogNews() }
         if (view == null) {

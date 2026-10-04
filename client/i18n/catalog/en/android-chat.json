@@ -318,5 +318,11 @@
   "android-chat.web.redirects": "Too many redirects",
   "android-chat.web.slow": "Page too slow; stopped",
   "android-chat.web.timeout": "Station didn't answer in {s}s",
-  "android-chat.web.unreachable": "Couldn't get it from station: {error}"
+  "android-chat.web.unreachable": "Couldn't get it from station: {error}",
+  "android-chat.search.field": "Search chats and messages",
+  "android-chat.search.cancel": "Cancel",
+  "android-chat.search.chats": "Chats",
+  "android-chat.search.messages": "Messages",
+  "android-chat.search.none": "No chats or messages found",
+  "android-chat.search.update": "Update to search"
 }

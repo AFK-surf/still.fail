@@ -300,5 +300,11 @@
   "android-chat.web.redirects": "跳转太多次了",
   "android-chat.web.slow": "网页读得太慢，已停止",
   "android-chat.web.timeout": "station 过了 {s} 秒还没有回答",
-  "android-chat.web.unreachable": "没能从 station 取到：{error}"
+  "android-chat.web.unreachable": "没能从 station 取到：{error}",
+  "android-chat.search.field": "搜索对话和消息",
+  "android-chat.search.cancel": "取消",
+  "android-chat.search.chats": "对话",
+  "android-chat.search.messages": "消息",
+  "android-chat.search.none": "没有找到对话或消息",
+  "android-chat.search.update": "更新后才能搜索"
 }

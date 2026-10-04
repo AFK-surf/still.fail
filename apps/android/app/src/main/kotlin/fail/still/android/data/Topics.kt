@@ -247,10 +247,10 @@ object Topics {
     fun workspaceMarks(workspace: String) = buildJsonObject { put("topic", "workspaceMarks"); put("workspace", workspace) }
     /** What is written to a chat on this device until sent (`chat`: its key, `thread:<id>`, or `new`; Drafts). */
     fun draft(station: String, chat: String) = buildJsonObject { put("topic", "draft"); put("station", station); put("chat", chat) }
-    /** The chats of a scope a few words find, titles first: only `station`'s, not `exclude` (a chat's id or agent), `limit` at most (ChatRefMenu). */
-    fun chatSearch(scope: String, query: String, station: String? = null, exclude: String? = null, limit: Int? = null) = buildJsonObject {
+    /** The chats of a scope a few words find, titles first: only `station`'s, not `exclude` (a chat's id or agent), `limit` at most (ChatRefMenu); with `messages`, that many of the messages that have the words too (Search.kt). */
+    fun chatSearch(scope: String, query: String, station: String? = null, exclude: String? = null, limit: Int? = null, messages: Int? = null) = buildJsonObject {
         put("topic", "chatSearch"); put("scope", scope); put("query", query)
-        station?.let { put("station", it) }; exclude?.let { put("exclude", it) }; limit?.let { put("limit", it) }
+        station?.let { put("station", it) }; exclude?.let { put("exclude", it) }; limit?.let { put("limit", it) }; messages?.let { put("messages", it) }
     }
     /** A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here (web/src/pick.ts). */
     fun newChat(scope: String) = buildJsonObject { put("topic", "newChat"); put("scope", scope) }
