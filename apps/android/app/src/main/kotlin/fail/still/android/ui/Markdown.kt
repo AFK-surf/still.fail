@@ -111,6 +111,32 @@ private fun markdownParser(): Parser = Parser.builder()
     .extensions(listOf(TablesExtension.create(), StrikethroughExtension.create(), AutolinkExtension.create(), TaskListItemsExtension.create()))
     .build()
 
+/** A table's delimiter row: `|---|:--:|`, or `--- | ---` without the outer pipes. */
+private val tableDelimiter = Regex("""^ {0,3}\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$""")
+
+/**
+ * GFM (and the web's parser) starts a table on a paragraph's last line (`**这些**` and then the table, no blank line
+ * between); commonmark-java only on a paragraph of its own, and prints the table as text. So a blank line goes before
+ * such a table's header (outside fenced code).
+ */
+internal fun tablesApart(text: String): String {
+    if ('|' !in text || '-' !in text) return text
+    val lines = text.split('\n')
+    val out = StringBuilder(text.length + 8)
+    var fence: String? = null
+    lines.forEachIndexed { i, line ->
+        val lead = line.trimStart()
+        val open = fence
+        if (open == null && (lead.startsWith("```") || lead.startsWith("~~~"))) fence = lead.take(3)
+        else if (open != null && lead.startsWith(open)) fence = null
+        else if (open == null && i > 0 && i < lines.lastIndex && '|' in line && '|' in lines[i + 1] && tableDelimiter.matches(lines[i + 1]) &&
+            lines[i - 1].isNotBlank() && '|' !in lines[i - 1]) out.append('\n')
+        out.append(line)
+        if (i < lines.lastIndex) out.append('\n')
+    }
+    return out.toString()
+}
+
 private val documents = object : android.util.LruCache<String, Node>(256 * 1024) {
     override fun sizeOf(key: String, value: Node) = key.length.coerceAtLeast(1)
 }
@@ -219,7 +245,7 @@ fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placin
     val ready by androidx.compose.runtime.produceState(cached?.let { text to it }, text) {
         value = cached?.let { text to it }
         if (cached == null) {
-            val doc = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { markdownParser().parse(text) }
+            val doc = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { markdownParser().parse(tablesApart(text)) }
             documents.put(text, doc)
             value = text to doc
         }
