@@ -411,7 +411,7 @@ export const quoteCards = style({
 });
 export const quoteCard = style({
   position: "relative", display: "grid", overflow: "hidden", cornerShape: vars.cornerShape, border: "0",
-  borderRadius: `calc(12px * ${vars.cornerScale})`, background: `color-mix(in oklch, ${vars.text} 4%, ${vars.canvas})`,
+  borderRadius: `calc(12px * ${vars.cornerScale})`, background: `color-mix(in srgb, ${vars.text} 4%, ${vars.canvas})`,
   selectors: {
     // Inside the composer, cards follow its curve: inner radius = the frame's radius less its padding.
     [`${composerQuote} &`]: { maxWidth: "none", borderRadius: `calc(32px * ${vars.cornerScale} - 12px)` },

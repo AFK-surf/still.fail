@@ -99,7 +99,7 @@ export const fpBody = style({
   placeItems: "center",
   selectors: {
 
-    [`${fp}[data-kind="pdf"] &`]: { background: `color-mix(in oklch, ${vars.text} 5%, ${vars.canvas})` },
+    [`${fp}[data-kind="pdf"] &`]: { background: `color-mix(in srgb, ${vars.text} 5%, ${vars.canvas})` },
   },
 });
 globalStyle(`${fpBody} > *`, { gridArea: "1 / 1" });

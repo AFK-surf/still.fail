@@ -5,7 +5,7 @@ import { codeBar, codeLang } from "./Prose.css.ts";
 
 const box = {
   margin: "0", padding: "8px 12px", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
-  background: `color-mix(in oklch, ${vars.text} 4%, ${vars.canvas})`,
+  background: `color-mix(in srgb, ${vars.text} 4%, ${vars.canvas})`,
   font: `12px/1.55 ${vars.fontMono}`, whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: "360px", overflow: "auto",
 } as const;
 

@@ -40,7 +40,7 @@ globalStyle(`${markdown} a`, { color: vars.blue });
 globalStyle(`${markdown} table`, { borderCollapse: "collapse", fontSize: vars.textSm, fontVariantNumeric: "tabular-nums" });
 globalStyle(`${markdown} th, ${markdown} td`, { borderBottom: `1px solid ${vars.line}`, padding: "7px 12px", textAlign: "left" });
 globalStyle(`${markdown} th`, {
-  fontSize: vars.textXs, fontWeight: "500", color: vars.muted, background: `color-mix(in oklch, ${vars.text} 4%, ${vars.canvas})`,
+  fontSize: vars.textXs, fontWeight: "500", color: vars.muted, background: `color-mix(in srgb, ${vars.text} 4%, ${vars.canvas})`,
 });
 globalStyle(`${markdown} tr:last-child td`, { borderBottom: "0" });
 globalStyle(`${markdown} blockquote`, { paddingLeft: "10px", borderLeft: `2px solid ${vars.lineStrong}`, color: vars.muted });

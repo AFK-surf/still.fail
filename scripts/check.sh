@@ -196,6 +196,11 @@ if part ts; then
   if touches '^(web/src|apps/desktop/src|apps/android)/'; then
     step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src apps/desktop/src apps/android'
   fi
+  # Colours mixed in sRGB: Chromium leaves an OKLCH mix of near greys with its hue unset but a little chroma, and draws
+  # it at hue 0, so the grey grounds (code, tables, tool steps) turned pink.
+  if touches '^(web/src|apps/desktop/src)/'; then
+    step "colours mixed in sRGB" sh -c '! git grep -n "in oklch" -- web/src apps/desktop/src'
+  fi
   # Core tests also run for Rust-only client changes. A fresh CI checkout needs both
   # their JS dependencies and the real wasm package even when no TS file changed.
   core_tests=0

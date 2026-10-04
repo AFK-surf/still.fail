@@ -23,7 +23,7 @@ export const fileLink = style({
 /** Code: a quiet tinted block, no frame; language and copy sit in the corner and come forward on hover. */
 export const codeBlock = style({
   position: "relative", margin: "0 0 8px", border: "0", borderRadius: `calc(12px * ${vars.cornerScale})`,
-  background: `color-mix(in oklch, ${vars.text} 4%, ${vars.canvas})`, overflow: "hidden",
+  background: `color-mix(in srgb, ${vars.text} 4%, ${vars.canvas})`, overflow: "hidden",
   cornerShape: vars.cornerShape,
 });
 export const codeBar = style({
@@ -59,7 +59,7 @@ export const codeShiki = style({});
  */
 export const tableScroll = style({
   width: "fit-content", maxWidth: "100%", overflowX: "auto", margin: "0 0 8px", border: `1px solid ${vars.line}`,
-  borderRadius: vars.rCard, cornerShape: vars.cornerShape, background: `color-mix(in oklch, ${vars.text} 2%, ${vars.canvas})`,
+  borderRadius: vars.rCard, cornerShape: vars.cornerShape, background: `color-mix(in srgb, ${vars.text} 2%, ${vars.canvas})`,
 });
 globalStyle(`${tableScroll}:last-child`, { marginBottom: "0" });
 globalStyle(`${tableScroll} > table`, { margin: "0" });

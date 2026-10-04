@@ -40,7 +40,7 @@ export const btnDanger = style({ color: vars.red });
 export const btnDangerSolid = style({
   background: vars.red, borderColor: vars.red, color: "#fff",
   selectors: {
-    "&:hover:not(:disabled)": { background: `color-mix(in oklch, ${vars.red} 85%, black)` },
+    "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${vars.red} 85%, black)` },
   },
 });
 /** In a settings card (its grey ground and no line round it), a button that is not solid is its words and icon alone, to its edge. */
