@@ -138,6 +138,8 @@ sealed interface Screen {
     data object Me : Screen { override val id = "me" }
     /** How this device shows still.fail: its theme, whose pictures lead a chat's row. */
     data object Appearance : Screen { override val id = "appearance" }
+    /** Files opened in the app and kept on this device, to delete (screens/KeptFiles.kt). */
+    data object KeptFiles : Screen { override val id = "kept-files" }
     /** What changed in still.fail (screens/Changelog.kt). */
     data object Changelog : Screen { override val id = "changelog" }
     /** Every station's connects, profiles and memory, from settings. */
@@ -721,6 +723,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Me -> MeScreen(current)
                     Screen.Settings -> fail.still.android.screens.SettingsScreen(current)
                     Screen.Appearance -> fail.still.android.screens.AppearanceScreen()
+                    Screen.KeptFiles -> fail.still.android.screens.KeptFilesScreen()
                     Screen.Changelog -> fail.still.android.screens.ChangelogScreen()
                     is Screen.Connects -> fail.still.android.screens.ConnectsScreen(current, screen.station)
                     is Screen.Profiles -> fail.still.android.screens.ProfilesScreen(current, screen.station)

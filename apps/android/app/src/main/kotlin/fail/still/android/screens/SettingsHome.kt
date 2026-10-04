@@ -128,12 +128,23 @@ fun SettingsScreen(current: WorkspaceEntry) {
         SectionHeader(t("android-settings.home.device"), start = 24.dp)
         ListCard {
             GoRow(t("android-settings.appearance.title"), themes().firstOrNull { it.first == app.theme }?.second) { app.push(Screen.Appearance) }
+            KeptFilesRow()
             Notify()
             Version()
             GoRow(t("android-settings.changelog.title")) { app.push(Screen.Changelog) }
         }
         Spacer(Modifier.height(30.dp))
     }
+}
+
+/** The files kept on this device, how much they take. */
+@Composable
+private fun KeptFilesRow() {
+    val app = LocalApp.current
+    val context = LocalContext.current
+    var total by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(Unit) { total = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { KeptFiles.list(context).sumOf { it.size } } }
+    GoRow(t("android-settings.files.title"), total?.let { fileSize(it) }) { app.push(Screen.KeptFiles) }
 }
 
 /** Local notices and pushes alike, on this device (Notices.kt, Push.kt); turned on, the system is asked too. */
