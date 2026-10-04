@@ -183,9 +183,18 @@ export interface StationCall {
    * the station has so far, after each part. */
   upload(file: File, onProgress?: (sent: number) => void): Promise<Attachment>;
   /** A file sent to the session, as a blob for previews; `thumb`: an image as a chat shows it (its thumbnail, where the station keeps one). */
-  /** `onProgress`: bytes so far and the whole size (null when the station does not say) as a whole file comes. */
-  file(key: string, name: string, thumb?: boolean, onProgress?: (got: FileProgress) => void): Promise<Blob>;
+  /** `onProgress`: bytes so far and the whole size (null when the station does not say) as a whole file comes. `size`:
+   * the file's, as its message says: a big one comes a part at a time (`station.file.part`), never all through at once. */
+  file(key: string, name: string, thumb?: boolean, onProgress?: (got: FileProgress) => void, size?: number): Promise<Blob>;
+  /** A video's poster as the station makes it (a small JPEG of its first frame); null when it has none. */
+  poster(key: string, name: string): Promise<Blob | null>;
 }
+
+/** Over this a file comes a part at a time; a part's bytes. */
+export const BIG_FILE = 16 * 1024 * 1024;
+const FILE_PART = 4 * 1024 * 1024;
+/** The most a station from before parts sends (whole). */
+const WHOLE_FILE_MAX = 50 * 1024 * 1024;
 
 /** The whole file as base64, the protocol's form for bytes. */
 /** Bytes from base64: natively where the browser can (a chat's images are megabytes; decoding them char by char held up frames). */
@@ -244,10 +253,39 @@ export function stationCall(call: ReturnType<typeof useCall>, station: string): 
       }
       return saved;
     },
-    file: async (key, name, thumb = false, onProgress) => {
-      const { type, bytes } = await call("station.file", { station, key, name, ...(thumb ? { thumb } : {}), ...(onProgress ? { progress: true } : {}) },
-        onProgress && ((got) => onProgress(got as FileProgress))) as { type: string; bytes: string };
-      return new Blob([fromBase64(bytes)], { type });
+    file: async (key, name, thumb = false, onProgress, size) => {
+      const whole = async () => {
+        const { type, bytes } = await call("station.file", { station, key, name, ...(thumb ? { thumb } : {}), ...(onProgress ? { progress: true } : {}) },
+          onProgress && ((got) => onProgress(got as FileProgress))) as { type: string; bytes: string };
+        return new Blob([fromBase64(bytes)], { type });
+      };
+      if (thumb || size === undefined || size <= BIG_FILE) return whole();
+      // Big: a part at a time, each a blob of its own (the browser keeps big ones on the disk), so it is never all in
+      // memory at once on its way.
+      const parts: Blob[] = [];
+      let type = "";
+      for (let at = 0, total = size; at < total;) {
+        let got: { type: string; total: number; bytes: string };
+        try {
+          got = await call("station.file.part", { station, key, name, offset: at, length: FILE_PART }) as typeof got;
+        } catch (e) {
+          // A station from before parts sends it whole, as long as it is not too big for that.
+          if (at === 0 && e instanceof CoreError && e.code === "unsupported" && size <= WHOLE_FILE_MAX) return whole();
+          throw e;
+        }
+        const bytes = fromBase64(got.bytes);
+        if (bytes.length === 0) break;
+        parts.push(new Blob([bytes]));
+        type = got.type;
+        total = got.total;
+        at += bytes.length;
+        onProgress?.({ loaded: at, total });
+      }
+      return new Blob(parts, { type });
+    },
+    poster: async (key, name) => {
+      const got = await call("station.poster", { station, key, name }) as { type: string; bytes: string } | null;
+      return got ? new Blob([fromBase64(got.bytes)], { type: got.type }) : null;
     },
   };
 }
@@ -325,6 +363,7 @@ export function stationApi(t: StationCall) {
     /** A chat going on with one of them (the one already going on with it, if any). */
     continueMachineSession: (runtime: RuntimeKind, id: string) => ops.machineSessionsContinue<{ key: string; thread: ChatThread }>({ runtime, id }),
     file: t.file,
+    poster: t.poster,
     uploadFile: t.upload,
     startLogin: (profile: string) => ops.profileLogin<{ job: LoginJob }>({ id: profile }),
     cancelLogin: (profile: string) => ops.profileCancelLogin<{ job: LoginJob | null }>({ id: profile }),

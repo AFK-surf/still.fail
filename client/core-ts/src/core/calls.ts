@@ -51,6 +51,8 @@ export type Call =
   | { kind: "stationUpload"; station: string; name: string; bytes: Uint8Array }
   | { kind: "stationUploadPart"; station: string; id: string; name: string; size: number; offset: number; bytes: Uint8Array }
   | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean }
+  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number }
+  | { kind: "stationPoster"; station: string; key: string; name: string }
   | { kind: "stationPreview"; station: string; port: number; method: string; path: string; headers: [string, string][]; body: Uint8Array; stream: boolean }
   | { kind: "previewSocket"; station: string; port: number; path: string; headers: [string, string][]; socket: string }
   | { kind: "previewSocketSend"; socket: string; frame: SocketFrame }
@@ -468,6 +470,24 @@ export function parseCall(name: string, params: unknown): Call {
         ["progress", "bool", "default"],
       ]);
       return { kind: "stationFile", station: p.station as string, key: p.key as string, name: p.name as string, thumb: p.thumb as boolean, progress: p.progress as boolean };
+    }
+    case "station.file.part": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["key", S, "req"],
+        ["name", S, "req"],
+        ["offset", "u64", "req"],
+        ["length", "u64", "req"],
+      ]);
+      return { kind: "stationFilePart", station: p.station as string, key: p.key as string, name: p.name as string, offset: p.offset as number, length: p.length as number };
+    }
+    case "station.poster": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["key", S, "req"],
+        ["name", S, "req"],
+      ]);
+      return { kind: "stationPoster", station: p.station as string, key: p.key as string, name: p.name as string };
     }
     case "station.preview": {
       const p = read(params, [

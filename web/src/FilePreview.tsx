@@ -4,7 +4,7 @@
 // else says it cannot be shown and offers the download.
 import { Dialog as RDialog } from "radix-ui";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
+import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
 import { ChevronLeft, ChevronRight, Close, Download, Minus, Plus } from "./icons.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
 import { isFragment, vizDocument } from "./Viz.tsx";
@@ -103,7 +103,7 @@ function fetchFile(api: Api, station: string, sessionKey: string, file: Attachme
     // A whole file may be big: how far it has come is kept for whoever shows it (thumbnails are small).
     const on = thumb ? null : { got: null as FileProgress | null, watchers: new Set<(got: FileProgress) => void>() };
     if (on) coming.set(id, on);
-    blob = api.file(sessionKey, storedName(file), thumb, on ? (got) => { on.got = got; on.watchers.forEach((w) => w(got)); } : undefined)
+    blob = api.file(sessionKey, storedName(file), thumb, on ? (got) => { on.got = got; on.watchers.forEach((w) => w(got)); } : undefined, file.size)
       .then((b) => (!thumb && type !== "application/octet-stream" && b.type !== type ? b.slice(0, b.size, type) : b));
     if (on) void blob.finally(() => coming.delete(id)).catch(() => {});
     // A failure is not kept: the next look tries again.
@@ -162,6 +162,41 @@ export function useFileText(sessionKey: string, file: Attachment): { state: "loa
   }, [blob]);
   if (loaded.state === "error") return { state: "error" };
   return text && text.blob === blob ? { state: "ready", text: text.text } : { state: "loading" };
+}
+
+/** Videos' posters on their way or come, by file: null when the station has none. */
+const posters = new Map<string, Promise<Blob | null>>();
+
+/**
+ * A video's still for a chat: its poster as the station makes it; where it has none, the video itself as long as it is
+ * small (BIG_FILE: its first frame is drawn from it), else none (the chat shows it without, rather than fetch it whole).
+ * `url` is a picture's (`poster`) or the video's.
+ */
+export function useVideoStill(sessionKey: string, file: Attachment, enabled: boolean): { url: string | null; poster: boolean; failed: boolean } {
+  const api = useApi();
+  const station = useStation();
+  const [poster, setPoster] = useState<{ url: string } | "none" | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const id = fileId(station.address, sessionKey, file, false);
+    let p = posters.get(id);
+    if (!p) {
+      p = api.poster(sessionKey, storedName(file)).catch(() => null);
+      posters.set(id, p);
+    }
+    let u: string | null = null;
+    let current = true;
+    void p.then((blob) => {
+      if (!current) return;
+      if (blob) setPoster({ url: (u = URL.createObjectURL(blob)) });
+      else setPoster("none");
+    });
+    return () => { current = false; if (u) URL.revokeObjectURL(u); };
+  }, [api, station.address, sessionKey, file.path, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  const small = file.size > 0 && file.size <= BIG_FILE;
+  const video = useFileShown(sessionKey, file, enabled && poster === "none" && small, false);
+  if (poster !== null && poster !== "none") return { url: poster.url, poster: true, failed: false };
+  return { url: video.url, poster: false, failed: video.failed };
 }
 
 /** A chat attachment as a blob URL. Images use thumbnails; video stills need the original file. */

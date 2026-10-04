@@ -575,7 +575,7 @@ export const msgVideo = style({
     'button&[data-unavailable]': { background: vars.neutralBg, color: vars.muted, boxShadow: `inset 0 0 0 1px ${vars.line}` },
   },
 });
-globalStyle(`${msgVideo} video`, { width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" });
+globalStyle(`${msgVideo} video, ${msgVideo} img`, { width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" });
 export const msgVideoPlay = style({
   position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
   width: "40px", height: "40px", display: "grid", placeItems: "center", borderRadius: "50%",

@@ -142,6 +142,11 @@ fun isImage(name: String) = kindOf(name).kind == PreviewKind.Image
  * Files sent never change: each is fetched once (a chat's image as its thumbnail, a whole file when opened), the
  * most recent kept. How far each whole file on its way has come is kept for whoever shows it.
  */
+/** Over this a file is fetched onto the disk a part at a time (FileData.toDisk), not into memory; web's BIG_FILE. */
+const val BIG_FILE = 16L * 1024 * 1024
+/** The most a station from before parts sends (whole). */
+private const val WHOLE_FILE_MAX = 50L * 1024 * 1024
+
 internal object FileData {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     // Bounded by what a phone's heap can spare: bytes up to 32 MB (a larger file is fetched again when opened again),
@@ -183,6 +188,42 @@ internal object FileData {
 
     fun keptPicture(id: String, longest: Int): ImageBitmap? = pictures.get("$id@$longest")
     fun keepPicture(id: String, longest: Int, picture: ImageBitmap) { pictures.put("$id@$longest", picture) }
+
+    private val comingToDisk = HashMap<String, Deferred<File>>()
+
+    /**
+     * A big file (over [BIG_FILE]) onto the phone's disk a part at a time, never all in memory: what the viewers of a
+     * big one read. Fetched once however many ask, and gone on from where it stopped when asked again; its progress as
+     * a whole file's. A station from before parts sends it whole, as long as that takes it ([WHOLE_FILE_MAX]). Call on
+     * the main thread.
+     */
+    fun toDisk(app: AppState, context: Context, station: String, key: String, file: Attachment): Deferred<File> {
+        val id = id(station, key, file, thumb = false)
+        comingToDisk[id]?.let { return it }
+        val got = scope.async {
+            try {
+                val dir = File(context.cacheDir, "files").apply { mkdirs() }
+                val ext = file.name.substringAfterLast('.', "").take(8)
+                val done = File(dir, "${Integer.toHexString(id.hashCode())}-${file.size}${if (ext.isEmpty()) "" else ".$ext"}")
+                if (done.exists() && done.length() == file.size) return@async done
+                val part = File(dir, done.name + ".part")
+                val name = file.path.substringAfterLast('/')
+                try {
+                    app.api(station).fileToDisk(key, name, part) { loaded, total -> scope.launch { if (id in comingToDisk) progress[id] = loaded to total } }
+                } catch (e: CoreException) {
+                    if (e.code != "unsupported" || file.size > WHOLE_FILE_MAX) throw e
+                    return@async onDisk(context, id, file.name, app.api(station).file(key, name, false, null).second)
+                }
+                withContext(Dispatchers.IO) { part.renameTo(done) }
+                done
+            } finally {
+                comingToDisk.remove(id)
+                progress.remove(id)
+            }
+        }
+        comingToDisk[id] = got
+        return got
+    }
 
     /** The file on the phone's disk, for what reads a file rather than bytes (the players, PdfRenderer). */
     suspend fun onDisk(context: Context, id: String, name: String, bytes: ByteArray): File = withContext(Dispatchers.IO) {
@@ -458,6 +499,12 @@ private fun ChatVideo(station: String, key: String, file: Attachment, onOpen: ()
     LaunchedEffect(id) {
         if (still != null) return@LaunchedEffect
         try {
+            // The station's poster where it makes one; else the video itself while it is small, its first frame drawn
+            // here; a big one shows without (fetched whole only to be drawn from, it would not fit in memory).
+            val poster = try { app.api(station).poster(key, file.path.substringAfterLast('/')) } catch (_: CoreException) { null }
+            val drawn = poster?.let { withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(it, 0, it.size) } }
+            if (drawn != null) { still = drawn.asImageBitmap().also { FileData.keepPicture("$id#still", 0, it) }; return@LaunchedEffect }
+            if (file.size <= 0 || file.size > BIG_FILE) return@LaunchedEffect
             val bytes = FileData.fetch(app, station, key, file, thumb = false).await()
             val path = FileData.onDisk(context, id, file.name, bytes)
             val frame = withContext(Dispatchers.IO) {
@@ -506,6 +553,16 @@ suspend fun download(context: Context, name: String, bytes: ByteArray, type: Str
     }
     val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return@withContext false
     context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } != null
+}
+
+/** A file on the phone's disk saved to Downloads (a big one, not read into memory). */
+suspend fun download(context: Context, name: String, from: File): Boolean = withContext(Dispatchers.IO) {
+    val values = ContentValues().apply {
+        put(MediaStore.Downloads.DISPLAY_NAME, name)
+        kindOf(name).type.takeIf { it != "application/octet-stream" }?.let { put(MediaStore.Downloads.MIME_TYPE, it) }
+    }
+    val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return@withContext false
+    context.contentResolver.openOutputStream(uri)?.use { out -> from.inputStream().use { it.copyTo(out, 1 shl 16) } } != null
 }
 
 /**

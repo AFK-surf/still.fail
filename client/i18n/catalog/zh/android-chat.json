@@ -70,6 +70,7 @@
   "android-chat.file.tab.preview": "预览",
   "android-chat.file.tab.source": "源码",
   "android-chat.file.tooBig": "超过 1 GB",
+  "android-chat.file.tooBigToShow": "文件太大，没法在这里显示，下载后再打开",
   "android-chat.file.uploading": "正在上传…",
   "android-chat.file.uploadFailed": "上传失败",
   "android-chat.file.uploading.part": "正在上传 {percent}% · {size}",

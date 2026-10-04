@@ -14,7 +14,7 @@ import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
 import { shortcutOf, takesKeys, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
-import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear } from "./FilePreview.tsx";
+import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
 import { thumbhashRatio, thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
 import { useStickToBottom } from "./scroll.ts";
@@ -1153,7 +1153,8 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   const [videoFailed, setVideoFailed] = useState(false);
   const box = useRef<HTMLButtonElement>(null);
   const near = useNear(box, image || video);
-  const fetched = useFileShown(sessionKey ?? "", file, (image || video) && sessionKey !== null && near, !video);
+  const fetched = useFileShown(sessionKey ?? "", file, image && sessionKey !== null && near, true);
+  const still = useVideoStill(sessionKey ?? "", file, video && sessionKey !== null && near);
   const [local] = useState(() => image ? sentImage(station.address, file.path) : undefined);
   const url = local ?? fetched.url;
   const failed = !local && fetched.failed;
@@ -1171,7 +1172,9 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
     return (
       <>
         <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={thumbId(station.address, sessionKey, file.path)} onClick={() => setOpen(true)} aria-label={t(videoFailed ? "web-main.file.view" : "web-main.file.play", { name: file.name })} style={look.box(file)} data-unavailable={videoFailed || undefined}>
-          {url && !videoFailed && <video src={url} muted playsInline preload="auto" aria-hidden="true" onError={() => setVideoFailed(true)} />}
+          {still.url && !videoFailed && (still.poster
+            ? <img src={still.url} alt="" aria-hidden="true" />
+            : <video src={still.url} muted playsInline preload="auto" aria-hidden="true" onError={() => setVideoFailed(true)} />)}
           <span className={videoFailed ? css.msgVideoUnavailable : css.msgVideoPlay} aria-hidden="true">
             {videoFailed ? <><Read size={24} /><span>{t("web-main.file.noPreview")}</span><small>{fileSize(file.size)}</small></> : "▶"}
           </span>

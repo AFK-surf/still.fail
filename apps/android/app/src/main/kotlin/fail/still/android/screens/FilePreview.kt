@@ -165,6 +165,8 @@ private sealed interface FileLoad {
     class Loading(val got: Pair<Long, Long?>?) : FileLoad
     class Failed(val message: String) : FileLoad
     class Ready(val bytes: ByteArray) : FileLoad
+    /** A big file (over BIG_FILE), on the disk: never read into memory. */
+    class OnDisk(val file: File) : FileLoad
 }
 
 /**
@@ -386,16 +388,20 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
         if (value.first == fullId && value.second is FileLoad.Ready) return@produceState
         value = fullId to keptLoad()
         if (value.second is FileLoad.Ready) return@produceState
-        value = fullId to try { FileLoad.Ready(FileData.fetch(app, station, key, file, thumb = false).await()) } catch (e: CoreException) { FileLoad.Failed(e.message) }
+        value = fullId to try {
+            if (file.size > BIG_FILE) FileLoad.OnDisk(FileData.toDisk(app, context, station, key, file).await())
+            else FileLoad.Ready(FileData.fetch(app, station, key, file, thumb = false).await())
+        } catch (e: CoreException) { FileLoad.Failed(e.message) }
     }
     val loaded = got.second.takeIf { got.first == fullId } ?: keptLoad()
     val progress = FileData.progress[fullId]
     val shownLoaded = (loaded as? FileLoad.Loading)?.let { FileLoad.Loading(progress) } ?: loaded
     // The neighbours are fetched ahead, so a step shows the next one at once.
     LaunchedEffect(before?.file?.path, after?.file?.path) {
-        listOfNotNull(before, after).forEach { n -> FileData.fetch(app, station, n.key, n.file, thumb = false) }
+        listOfNotNull(before, after).filter { it.file.size <= BIG_FILE }.forEach { n -> FileData.fetch(app, station, n.key, n.file, thumb = false) }
     }
     val bytes = (loaded as? FileLoad.Ready)?.bytes
+    val disk = (loaded as? FileLoad.OnDisk)?.file
     // What a file of no known kind is: text, when its first bytes read as UTF-8 with no NULs.
     val kind = known.kind ?: bytes?.let { if (looksLikeText(it)) PreviewKind.Text else null }
     val dark = kind == PreviewKind.Image || kind == PreviewKind.Video
@@ -494,13 +500,28 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
             }
             when {
                 // One of its own for each image: what it remembers of one (its picture) is not the next one's.
-                known.kind == PreviewKind.Image -> key(file.path) {
+                known.kind == PreviewKind.Image && file.size <= BIG_FILE -> key(file.path) {
                     ImageStage(station, key, file, bytes, zoom, marks, Modifier.viewerFlying(flight), onTap = ::toggle,
                         swipe = if (marks.on) null else swipe, slide = { strip.value })
                 }
-                known.kind == PreviewKind.Video && still != null && (bytes == null || shownLoaded !is FileLoad.Ready) -> Poster(still, videoZoom, Modifier.viewerFlying(flight))
+                known.kind == PreviewKind.Video && still != null && (bytes == null && disk == null || shownLoaded !is FileLoad.Ready && shownLoaded !is FileLoad.OnDisk) -> Poster(still, videoZoom, Modifier.viewerFlying(flight))
                 shownLoaded is FileLoad.Loading -> Note { if (progress != null) Progress(progress, file.size, dark = false) else Waiting() }
                 shownLoaded is FileLoad.Failed -> Note { Text(t("android-chat.file.loadFailed", "error" to shownLoaded.message), fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center) }
+                disk != null -> when (kind) {
+                    PreviewKind.Video -> VideoViewer(disk, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, RoundedCornerShape(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
+                        startAtUs = FileViewers.frames[FileViewers.id(station, key, file.path)]?.atUs ?: 0L, frameOut = { flight.frame = it })
+                    PreviewKind.Audio -> Note { AudioViewer(disk, file.name) }
+                    PreviewKind.Pdf -> PdfViewer(disk, ::toggle)
+                    // Too big to be read in here: it can be saved.
+                    else -> Note {
+                        Text(t("android-chat.file.tooBigToShow"), fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center)
+                        Row(
+                            Modifier.clip(RoundedCornerShape(12.dp)).background(C.chip).clickable { scope.launch { app.toast = if (download(context, file.name, disk)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") } }
+                                .padding(horizontal = 14.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) { IconIn(Icons.Download, 16.dp, C.ink); Text(t("android-chat.file.download"), fontSize = 15.sp, color = C.ink) }
+                    }
+                }
                 bytes == null -> {}
                 kind == PreviewKind.Video -> OnDisk(fullId, file.name, bytes, waiting = { if (still != null) Poster(still, videoZoom, Modifier.viewerFlying(flight)) else Note { Waiting() } }) {
                     VideoViewer(it, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, RoundedCornerShape(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
@@ -570,9 +591,10 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                     kind == PreviewKind.Markdown || kind == PreviewKind.Csv || kind == PreviewKind.Html ->
                         Seg(listOf(t("android-chat.file.tab.preview"), t("android-chat.file.tab.source")), if (source) 1 else 0, { source = it == 1 }, Modifier.width(120.dp), height = 30.dp, fill = true, radius = 15.dp, inset = 2.dp)
                 }
-                if (!marks.on && !coming) Box(Modifier.alpha(if (bytes != null) 1f else 0f)) {
-                    PictureButton(Icons.Download, t("android-chat.file.download"), enabled = bytes != null, tint = tint) {
+                if (!marks.on && !coming) Box(Modifier.alpha(if (bytes != null || disk != null) 1f else 0f)) {
+                    PictureButton(Icons.Download, t("android-chat.file.download"), enabled = bytes != null || disk != null, tint = tint) {
                         if (bytes != null) scope.launch { app.toast = if (download(context, file.name, bytes)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") }
+                        else if (disk != null) scope.launch { app.toast = if (download(context, file.name, disk)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") }
                     }
                 }
                 PictureButton(Icons.Close, t("common.close"), tint = tint, onClick = onClose)

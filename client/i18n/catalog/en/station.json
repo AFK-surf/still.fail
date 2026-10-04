@@ -88,6 +88,7 @@
   "station.core.connecting": "Connecting",
   "station.core.disconnected": "Disconnected",
   "station.core.fileUnreadable": "Can't read file",
+  "station.core.fileOldStation": "This station is too old to send big files; update it first",
   "station.core.uploadOldStation": "This station is too old to take files over 50 MB; update it first",
   "station.core.localGone": "Local page no longer available",
   "station.core.noChat": "No such chat",

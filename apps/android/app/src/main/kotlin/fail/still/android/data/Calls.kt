@@ -26,6 +26,8 @@ import kotlinx.serialization.json.putJsonArray
 /** The admin API of one station, by what each call does. */
 /** The bytes of a file in one `station.upload.part` (web/src/api.ts UPLOAD_PART). */
 private const val UPLOAD_PART = 4 * 1024 * 1024
+/** The bytes of a file in one `station.file.part`. */
+private const val FILE_PART = 4 * 1024 * 1024
 
 class StationApi(private val core: StillFailCore, val station: String) {
     private val ops = StationOperations { name, params -> core.call(name, JsonObject(params + ("station" to JsonPrimitive(station)))) }
@@ -211,6 +213,38 @@ class StationApi(private val core: StillFailCore, val station: String) {
         }
         // An image's size travels with it, so every page can hold its place before it loads.
         return if (width != null && height != null) saved.copy(width = width, height = height) else saved
+    }
+
+    /**
+     * A big file sent to the session, onto the disk at `into` a part at a time (`station.file.part`), never all in
+     * memory; `onProgress` hears the bytes so far and the whole size. What is already in `into` is gone on from. Throws
+     * `unsupported` from a station from before parts.
+     */
+    suspend fun fileToDisk(key: String, name: String, into: java.io.File, onProgress: (Long, Long) -> Unit = { _, _ -> }) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            java.io.FileOutputStream(into, true).use { out ->
+                var at = into.length()
+                var total = Long.MAX_VALUE
+                while (at < total) {
+                    val got = core.call("station.file.part", buildJsonObject {
+                        put("station", station); put("key", key); put("name", name); put("offset", at); put("length", FILE_PART)
+                    }).jsonObject
+                    total = got["total"]?.jsonPrimitive?.long ?: total
+                    val bytes = Base64.decode(got["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT)
+                    if (bytes.isEmpty()) break
+                    out.write(bytes)
+                    at += bytes.size
+                    onProgress(at, total)
+                }
+            }
+        }
+    }
+
+    /** A video's poster as the station makes it (a small JPEG of its first frame); null when it has none. */
+    suspend fun poster(key: String, name: String): ByteArray? {
+        val got = core.call("station.poster", buildJsonObject { put("station", station); put("key", key); put("name", name) })
+        if (got is JsonNull) return null
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.decode(got.jsonObject["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT) }
     }
 
     /** A file sent to the session. */

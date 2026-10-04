@@ -73,6 +73,7 @@
   "android-chat.file.tab.preview": "Preview",
   "android-chat.file.tab.source": "Source",
   "android-chat.file.tooBig": "Over 1 GB",
+  "android-chat.file.tooBigToShow": "Too big to show here; download it to open",
   "android-chat.file.uploading": "Uploading…",
   "android-chat.file.uploadFailed": "Upload failed",
   "android-chat.file.uploading.part": "Uploading {percent}% · {size}",

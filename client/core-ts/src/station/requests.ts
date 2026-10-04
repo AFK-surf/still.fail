@@ -39,6 +39,12 @@ export function answered(span: Span, reply: WireReply): void {
 
 const empty = new Uint8Array();
 
+/// A station's answer to a path it has no route for (`no route GET /…`): a station from before that route.
+function isNoRoute(body: Uint8Array): boolean {
+  const e = get(parseJson(body), "error");
+  return typeof e === "string" && e.startsWith("no route ");
+}
+
 export class Requests {
   readonly #core: Inner;
   readonly wire: StationWire;
@@ -225,6 +231,34 @@ export class Requests {
         return result.success;
       }),
     );
+  }
+
+  /// GET /sessions/:key/parts?name=&offset=&length=: a part of a file and its whole size, for a big one fetched a part at
+  /// a time (onto the disk) rather than whole. `unsupported` from a station from before parts (it has no such route).
+  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
+    const path = `/sessions/${encode(key)}/parts?name=${encode(name)}&offset=${offset}&length=${length}`;
+    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, false, ctx), (r) => {
+      if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.fileOldStation"), 404));
+      if (r.status !== 200) {
+        const data = parseJson(r.body);
+        return Effect.fail(r.status === 404 ? new CoreError("http_404", t("station.core.fileUnreadable"), 404) : httpError(r.status, data === undefined ? {} : data));
+      }
+      const header = (name: string) => r.headers.find(([k]) => k.toLowerCase() === name)?.[1];
+      const total = Number(header("stillfail-total"));
+      return Effect.succeed({ type: header("content-type") ?? "", total: Number.isSafeInteger(total) ? total : offset + r.body.length, bytes: r.body });
+    });
+  }
+
+  /// GET /sessions/:key/poster?name=: a video's poster (a JPEG), or null when the station has none (it cannot make one,
+  /// or is from before posters).
+  poster(station: StationAddr, key: string, name: string, ctx: SpanContext | null): Effect.Effect<Uint8Array | null, CoreError> {
+    const path = `/sessions/${encode(key)}/poster?name=${encode(name)}`;
+    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, true, ctx), (r) => {
+      if (r.status === 200) return Effect.succeed(r.body);
+      if (r.status === 404) return Effect.succeed(null);
+      const data = parseJson(r.body);
+      return Effect.fail(httpError(r.status, data === undefined ? {} : data));
+    });
   }
 
   /// A request to a web service on the station's machine (`/preview/<port>`), passed through as it is.

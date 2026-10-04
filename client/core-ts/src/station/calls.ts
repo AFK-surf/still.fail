@@ -83,6 +83,16 @@ export function install(): void {
       ),
     );
   };
+  handlers.stationFilePart = (inner, call, _p, _a, ctx) => {
+    const c = call as Extract<Call, { kind: "stationFilePart" }>;
+    return Effect.flatMap(parse(c.station), (addr) =>
+      Effect.map(inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx), (got) => ({ type: got.type, total: got.total, bytes: base64(got.bytes) })),
+    );
+  };
+  handlers.stationPoster = (inner, call, _p, _a, ctx) => {
+    const c = call as Extract<Call, { kind: "stationPoster" }>;
+    return Effect.flatMap(parse(c.station), (addr) => Effect.map(inner.stations.requests.poster(addr, c.key, c.name, ctx), (bytes) => (bytes === null ? null : { type: "image/jpeg", bytes: base64(bytes) })));
+  };
   handlers.stationPreview = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationPreview" }>;
     return Effect.flatMap(parse(c.station), (addr) => {

@@ -369,8 +369,8 @@ export function ioMessage(e: NodeJS.ErrnoException): string {
 }
 
 /// GET /sessions/:key/files?name&thumb=1 (files.rs `session_file`): a file sent to the session, for previews: only from
-/// its upload directory, else from its archived workspace. `thumb`: an image as a chat shows it. Its bytes as base64 and
-/// its type, for the route to answer with (cache-control `private, max-age=3600`); or, for a thumbnail not made yet,
+/// its upload directory, else from its archived workspace. `thumb`: an image as a chat shows it. Its path and its type,
+/// for the route to answer with (cache-control `private, max-age=3600`); or, for a thumbnail not made yet,
 /// `{contentType, image, thumbs}`: the route has it made (else answers the image itself, of that type).
 export function sessionFile(s: Store, key: string, name: string, thumb: boolean, lang: Lang): Json {
   setLang(lang);
@@ -389,11 +389,6 @@ export function sessionFile(s: Store, key: string, name: string, thumb: boolean,
   const small = thumb ? thumbnail(path, s.dataDir) : null;
   if (small === "make") return { contentType: mime(path), image: path, thumbs: thumbsDir(s.dataDir) };
   const [file, kind] = small !== null ? [small.path, small.type] : [path, mime(path)];
-  let bytes: Buffer;
-  try {
-    bytes = readFileSync(file);
-  } catch (e) {
-    throw new Error(ioMessage(e as NodeJS.ErrnoException));
-  }
-  return { contentType: kind, base64: bytes.toString("base64") };
+  // Read by the route, as it goes out: a big file is never all in memory here, nor sent across as base64.
+  return { contentType: kind, file };
 }

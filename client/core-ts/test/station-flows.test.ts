@@ -115,6 +115,25 @@ test("uploads_in_parts_and_whole_to_a_station_before_parts", async () => {
   core.close();
 });
 
+test("fetches_a_file_in_parts_and_a_poster", async () => {
+  const { core } = await started({
+    ...base(),
+    "GET /sessions/k/parts?name=v.mp4&offset=0&length=4": "abcd",
+    "GET /sessions/k/parts?name=old.mp4&offset=0&length=4": status(404, { error: "no route GET /sessions/k/parts" }),
+    "GET /sessions/k/parts?name=gone.mp4&offset=0&length=4": status(404, { error: "没有这个文件" }),
+    "GET /sessions/k/poster?name=v.mp4": "jpeg",
+  });
+  const requests = core.inner.stations.requests;
+  const got = await run(requests.filePart(remote(), "k", "v.mp4", 0, 4, null));
+  assert.equal(new TextDecoder().decode(got.bytes), "abcd");
+  // A station from before parts, and a file that is not there, apart.
+  assert.equal((await failure(requests.filePart(remote(), "k", "old.mp4", 0, 4, null))).code, "unsupported");
+  assert.equal((await failure(requests.filePart(remote(), "k", "gone.mp4", 0, 4, null))).code, "http_404");
+  assert.equal(new TextDecoder().decode((await run(requests.poster(remote(), "k", "v.mp4", null)))!), "jpeg");
+  assert.equal(await run(requests.poster(remote(), "k", "none.mp4", null)), null);
+  core.close();
+});
+
 test("tells_how_far_a_file_has_come", async () => {
   const big = "x".repeat(300 * 1024);
   const { core } = await started({ ...base(), "GET /sessions/k/files?name=big": big });
