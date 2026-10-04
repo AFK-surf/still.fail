@@ -2,11 +2,13 @@
 // (decision/profiles.rs), as far as the hub uses them: after an agent ends a turn all_done, whether the chat has
 // anything left in it (the archive suggestion). Token probabilities are not calibrated confidence. Discovery (probing
 // a profile's models) is the accounts module's; its result reaches here as the profile's check (`decision`).
+import type { Clock } from "effect";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { accessKind, apiSource, profileEnv, profileVia } from "../agents/profiles.ts";
 import { endpoints, find } from "../agents/providers.ts";
+import { liveClock, within } from "../ops/fibers.ts";
 import type { Profile } from "./config.ts";
 
 type Json = any;
@@ -317,7 +319,7 @@ export const byDecisionPriority = (a: string, b: string) => decisionPriority(a) 
 
 /// Probes which of a profile's models answer a decision with real probabilities (synthetic evidence only; no
 /// conversation, tools or agent). `check` is the profile's check: its listed models are the first candidates.
-export async function discover(profile: Profile, check: { state: string; models?: string[] | null }): Promise<Capability> {
+export async function discover(profile: Profile, check: { state: string; models?: string[] | null }, clock: Clock.Clock = liveClock): Promise<Capability> {
   const capability: Capability = { state: "unsupported", detail: "当前登录未提供决策概率接口", model: null, provider: null, models: [], fingerprint: fingerprint(profile) };
   if (check.state === "login" || check.state === "failed") return { ...capability, state: "unavailable", detail: "账号恢复后自动检查决策能力" };
   const c = connection(profile);
@@ -344,11 +346,11 @@ export async function discover(profile: Profile, check: { state: string; models?
   // Sorted, then equal neighbours dropped (Rust's sort_by + dedup).
   models = models.sort(byDecisionPriority).filter((m, i, all) => i === 0 || all[i - 1] !== m);
   const verified: string[] = [];
-  const until = Date.now() + 25_000;
+  const until = clock.currentTimeMillisUnsafe() + 25_000;
   const evidence = { user: "What is 2 + 2?", proposedPost: "4", done: "Answered the arithmetic question" };
   const probe = (async () => {
     for (const model of models.slice(0, 8)) {
-      if (Date.now() >= until) return;
+      if (clock.currentTimeMillisUnsafe() >= until) return;
       const config = transport(c, model);
       try {
         const result = await decide(config, completionQuestion(), evidence);
@@ -357,7 +359,7 @@ export async function discover(profile: Profile, check: { state: string; models?
     }
   })();
   // Bound discovery work.
-  await Promise.race([probe, new Promise((resolve) => setTimeout(resolve, 25_000).unref())]);
+  await within(clock, 25_000, probe, () => new Error("discovery bounded")).catch(() => undefined);
   if (verified.length > 0) {
     return { ...capability, state: "ready", detail: `已识别 ${verified.length} 个决策模型`, model: verified[0]!, provider: c.provider, models: [...verified] };
   }

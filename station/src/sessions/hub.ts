@@ -23,7 +23,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Clock, Effect, Fiber } from "effect";
-import { liveClock } from "../ops/fibers.ts";
+import { liveClock, within } from "../ops/fibers.ts";
 import type { AgentDriver, AgentSession } from "../agents/runtime.ts";
 import { runnerId } from "../agents/process.ts";
 import { allLeft, existingRunners } from "../agents/runner.ts";
@@ -260,19 +260,13 @@ export class Hub {
   /// Resolves once no actor has a task queued or running: each queue is run out, and again while new tasks came
   /// meanwhile (a runtime's events). Fails after `limitMs`.
   private async settled(limitMs: number) {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const late = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`sessions did not settle within ${Math.round(limitMs / 1000)} s`)), limitMs);
-    });
-    try {
+    const runOut = async () => {
       for (;;) {
-        const actors = [...this.actors.values()];
-        await Promise.race([Promise.all(actors.map((a) => a.flushed())), late]);
+        await Promise.all([...this.actors.values()].map((a) => a.flushed()));
         if ([...this.actors.values()].every((a) => a.settled())) return;
       }
-    } finally {
-      clearTimeout(timer);
-    }
+    };
+    await within(this.clock, limitMs, runOut(), () => new Error(`sessions did not settle within ${Math.round(limitMs / 1000)} s`));
   }
 
   /// Takes up what the previous station left: the snapshots of its handover, then the runners it left without one (it

@@ -59,7 +59,7 @@ const watchingIn = (hub: Hub, thread: number) => hub.store.threadSessions(thread
 
 const isOpen = (hub: Hub, thread: number) => {
   const at = hub.store.lastReadAt(thread);
-  return at !== null && Date.now() - at < OPEN_MS;
+  return at !== null && hub.now() - at < OPEN_MS;
 };
 
 function applyTitle(hub: Hub, thread: number, title: string) {
@@ -74,7 +74,7 @@ function waitToName(hub: Hub, thread: number, title: string) {
   if (waiting) return;
   const look: Effect.Effect<void> = Effect.suspend(() => {
     const at = hub.store.lastReadAt(thread);
-    const left = at === null ? 0 : at + OPEN_MS - Date.now();
+    const left = at === null ? 0 : at + OPEN_MS - hub.now();
     return Effect.sleep(Math.max(1, left)).pipe(
       Effect.andThen(
         Effect.suspend(() => {

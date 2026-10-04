@@ -148,7 +148,7 @@ export class Accounts {
             if (!codex) throw new Refusal(503, tr(stationLang(), "station.quota.resetUnsupported"));
             return codex.resetQuota(profile, key);
           };
-    this.discoverFn = deps.discover ?? discoverDecisions;
+    this.discoverFn = deps.discover ?? ((profile, check) => discoverDecisions(profile, check, this.background.clock));
     // What the last run learned about profiles shows until they are checked again.
     for (const [id, status] of deps.store.profileStatus()) {
       if (isObject(status.check)) this.checks.set(id, status.check as ProfileCheck);

@@ -75,7 +75,7 @@ function attach(hub: Hub, key: string, paths: string[]): Attachment[] {
     if (!meta.isFile()) throw new Error(`not a file: ${given}`);
     if (meta.size > 50 * 1024 * 1024) throw new Error(`too large (over 50 MB): ${given}`);
     const name = basename(path);
-    const stamp = iso(Date.now()).slice(0, 19).replace(/[:.]/g, "-");
+    const stamp = iso(hub.now()).slice(0, 19).replace(/[:.]/g, "-");
     const safe = Array.from(name)
       .map((c) => (c === "\\" || c === "/" || c.codePointAt(0)! < 0x20 ? "_" : c))
       .join("");

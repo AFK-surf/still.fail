@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Context, Effect, Layer, Stream } from "effect";
+import { Fibers, wall } from "../ops/fibers.ts";
 import { ClaudeDriver } from "../agents/claude.ts";
 import { CodexDriver } from "../agents/codex.ts";
 import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
@@ -88,9 +89,10 @@ async function previousGone(run: string) {
   }
   if (typeof pid !== "number" || pid === process.pid || !alive(pid)) return;
   log.info("hub", "waiting for the previous station process to hand over", { pid });
-  const until = Date.now() + PREVIOUS_LIMIT_MS;
-  // A process's end can only be looked for: every 100 ms, for the seconds a handover takes.
-  while (alive(pid) && Date.now() < until) await new Promise((r) => setTimeout(r, 100));
+  const until = wall.now() + PREVIOUS_LIMIT_MS;
+  // A process's end can only be looked for (another program's: the machine's time): every 100 ms, for the seconds a
+  // handover takes.
+  while (alive(pid) && wall.now() < until) await wall.sleep(100);
   if (alive(pid)) log.warn("hub", "the previous station process is still there; taking up its sessions all the same", { pid });
 }
 
@@ -331,20 +333,21 @@ export const AgentsLive = (control: Control) =>
       // every hour (the cloud has no way to say so as it happens).
       const tellingFixed = () =>
         void tellFixed(fixed, (session, text) => hub.notify(session, text)).catch((error) => log.warn("feedback", "fixed bug reports not read", { error: (error as Error).message }));
-      const fixedFirst = stable ? setTimeout(tellingFixed, 300_000) : undefined;
-      const fixedHourly = stable ? setInterval(tellingFixed, 3_600_000) : undefined;
-      fixedFirst?.unref();
-      fixedHourly?.unref();
+      // What runs on a clock here (on the hub's): ended at the handover, below.
+      const time = new Fibers("station", hub.clock);
+      if (stable) {
+        time.after(300_000, tellingFixed);
+        time.every(3_600_000, tellingFixed);
+      }
 
-      // Chats idle long enough go to the archive: looked at now and every hour.
-      const archiving = setInterval(() => {
+      // Chats idle long enough go to the archive: looked at every hour.
+      time.every(3_600_000, () => {
         try {
-          autoArchive(hub, Date.now());
+          autoArchive(hub, hub.now());
         } catch (error) {
           log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
         }
-      }, 3_600_000);
-      archiving.unref();
+      });
 
       // A drain (SIGUSR1): no new turns; said when none runs (run/drained), turns again if nobody stops the station.
       let draining = false;
@@ -353,25 +356,24 @@ export const AgentsLive = (control: Control) =>
         draining = true;
         log.info("station", "draining: no new turns; waiting for running ones to end");
         hub.hold("drain");
-        const until = Date.now() + DRAIN_LIMIT_MS;
         const done = (said: "idle" | "timeout") => {
           stopListening();
-          clearTimeout(limit);
+          limit();
           log.info("station", "drained", { said });
           writeFileSync(join(run, "drained"), `${said}\n`);
           control.drained(said);
-          setTimeout(() => {
+          time.after(DRAINED_LIMIT_MS, () => {
             log.warn("station", "drained but not stopped; taking turns again");
             rmSync(join(run, "drained"), { force: true });
             hub.release("drain");
             draining = false;
-          }, DRAINED_LIMIT_MS).unref();
+          });
         };
         // A turn's end is a session change: looked at then, not on a timer.
         const stopListening = store.subscribe((change) => {
           if (change.type === "session" && !hub.anyRunning()) done("idle");
         });
-        const limit = setTimeout(() => done("timeout"), Math.max(0, until - Date.now()));
+        const limit = time.after(DRAIN_LIMIT_MS, () => done("timeout"));
         if (!hub.anyRunning()) done("idle");
       });
 
@@ -381,9 +383,7 @@ export const AgentsLive = (control: Control) =>
         Effect.promise(async () => {
           if (handing) return;
           handing = true;
-          clearInterval(archiving);
-          clearTimeout(fixedFirst);
-          clearInterval(fixedHourly);
+          await time.close();
           notifier.close();
           // Slack's events go to the next process from now on.
           unlearn();

@@ -41,7 +41,7 @@ export async function review(hub: Hub, key: string): Promise<void> {
     record({ purpose: "archive", version: 2, model: rule.model ?? "", accepted: false, elapsedMs: 0, error: "配置的模型在现有 Profile 中暂不可用" });
     return;
   }
-  const started = Date.now();
+  const started = hub.now();
   const versions: [number, number][] = [];
   let selected = 0;
   let reviewed: { ok: ChoiceResult } | { error: string };
@@ -98,7 +98,7 @@ export async function review(hub: Hub, key: string): Promise<void> {
     provider: config.provider,
     model: config.model,
     threshold: config.threshold,
-    elapsedMs: Date.now() - started,
+    elapsedMs: hub.now() - started,
     threads: versions,
     accepted: accepted && unchanged,
     result: "ok" in reviewed ? reviewed.ok : null,
