@@ -12,7 +12,17 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-const LAUNCHER: &str = env!("CARGO_BIN_EXE_stillfail-station");
+const BUILT: &str = env!("CARGO_BIN_EXE_stillfail-station");
+
+/// The launcher, run once (untimed) before any test starts it. macOS looks at each new executable the first time it
+/// runs, and the tests that start it at once all wait for that look: on a busy machine (CI's runners side by side) it
+/// took longer than the 5 s a test gives the launcher to exit (a_held_lock_exits_3, a_named_port_taken_fails_the_start:
+/// nothing logged by then, the launcher not yet running). After it, a start is the launcher's own time.
+fn launcher() -> &'static str {
+    static LOOKED_AT: std::sync::Once = std::sync::Once::new();
+    LOOKED_AT.call_once(|| assert!(output(Command::new(BUILT).arg("handoff-version")).status.success()));
+    BUILT
+}
 
 fn node() -> String {
     std::env::var("STILLFAIL_NODE").unwrap_or_else(|_| format!("{}/.local/node-v24.15.0-darwin-arm64/bin/node", std::env::var("HOME").unwrap()))
@@ -94,7 +104,7 @@ impl Station {
     }
 
     fn command(&self, times: &str) -> Command {
-        let mut command = Command::new(LAUNCHER);
+        let mut command = Command::new(launcher());
         command
             .env("STILLFAIL_NODE", node())
             .env("STILLFAIL_LAUNCHER_TIMES", times)
@@ -240,7 +250,7 @@ fn answered_by(port: u16) -> i32 {
 
 #[test]
 fn handoff_version_is_2() {
-    let out = output(Command::new(LAUNCHER).arg("handoff-version"));
+    let out = output(Command::new(launcher()).arg("handoff-version"));
     assert!(out.status.success());
     assert_eq!(String::from_utf8(out.stdout).unwrap(), "2\n");
 }
@@ -490,7 +500,7 @@ fn with_parent_it_stops_once_the_parent_is_gone() {
         let script = format!("\"$0\" {args} --with-parent >/dev/null 2>>'{}' & echo $!; exec sleep 60", log.display());
         let mut shell = spawn(
             Command::new("/bin/sh")
-                .args(["-c", &script, LAUNCHER])
+                .args(["-c", &script, launcher()])
                 .env("STILLFAIL_NODE", node())
                 .env("STILLFAIL_LAUNCHER_TIMES", "parent=200")
                 .env_remove("STILLFAIL_DATA")

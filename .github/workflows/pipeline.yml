@@ -80,22 +80,6 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android desktop=$desktop relay=$relay"
 
-  mac-runner:
-    if: github.repository == 'AFK-surf/still.fail'
-    runs-on: [self-hosted, mini1]
-    timeout-minutes: 5
-    steps:
-      - name: Check organization Mac capabilities
-        run: |
-          uname -sm
-          sw_vers
-          for tool in brew rustup cargo node python3; do command -v "$tool" || true; done
-          if security find-identity -v -p codesigning | grep -Fq 'Apple Development: zuozijian1994@gmail.com (9C49UVFRK3)'; then
-            echo 'Existing still.fail signing identity is available'
-          else
-            echo 'Existing still.fail signing identity needs provisioning'
-          fi
-
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
   # for a build under way rather than doing it again). main publishes them, and keeps the newest 20 of each; a branch
@@ -107,6 +91,16 @@ jobs:
     permissions:
       contents: write # the release native-artifacts' assets, on main only
     steps:
+      - name: Check organization Mac capabilities
+        run: |
+          uname -sm
+          sw_vers
+          for tool in brew rustup cargo node python3; do command -v "$tool" || true; done
+          if security find-identity -v -p codesigning | grep -Fq 'Apple Development: zuozijian1994@gmail.com (9C49UVFRK3)'; then
+            echo 'Existing still.fail signing identity is available'
+          else
+            echo 'Existing still.fail signing identity needs provisioning'
+          fi
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
       - name: Get or build the native parts
@@ -125,36 +119,38 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
 
-  # The full check, in four parts side by side on mini1's runners (scripts/check.sh, STILLFAIL_CHECK_PART): each part
-  # untouched by the range is over in seconds. Each builds in a target of its own, through sccache (setup-mac). The
-  # native parts come from mini1's cache, the release or the natives job running beside it (scripts/native.ts).
+  # The full check (scripts/check.sh), one job on mini1: its steps run side by side in it, so a part the range leaves
+  # alone costs nothing, where as a job of its own (four of them, 2026-10-03) it took a runner of three and ~10 s of
+  # setting up. Rust builds in targets under the job's own (setup-mac, check.sh), through sccache. The native parts come
+  # from mini1's cache, the release or the natives job running beside it (scripts/native.ts).
   check:
     needs: plan
     runs-on: [self-hosted, mini1]
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        part: [ts, station, core, android]
-    name: check (${{ matrix.part }})
-    env:
-      STILLFAIL_CHECK_PART: ${{ matrix.part }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup-mac
-      - name: Full check (${{ matrix.part }})
+      - name: Full check
         run: |
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
-          if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
-      - name: Stable release selection guards
-        if: matrix.part == 'ts'
-        run: python3 -m unittest discover -s .github -p 'test_stable_plan.py'
-      # A branch takes back nothing merged into main meanwhile (a squash onto a main that moved: scripts/undone.sh).
-      - name: Undoes nothing on main
-        if: matrix.part == 'ts' && github.ref != 'refs/heads/main'
-        run: sh scripts/undone.sh "$(git merge-base HEAD origin/main)" HEAD
+          # Its guards beside it: the stable release's selection, and (a branch) nothing merged into main taken back by
+          # a squash onto a main that moved (scripts/undone.sh).
+          python3 -m unittest discover -s .github -p 'test_stable_plan.py' > "$RUNNER_TEMP/stable.log" 2>&1 &
+          stable=$!
+          undone=""
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            sh scripts/undone.sh "$(git merge-base HEAD origin/main)" HEAD > "$RUNNER_TEMP/undone.log" 2>&1 &
+            undone=$!
+          fi
+          status=0
+          if [ "$range" = all ]; then sh scripts/check.sh all || status=1; else sh scripts/check.sh full "$range" || status=1; fi
+          if wait $stable; then echo "· stable release selection guards … ok"; else echo "· stable release selection guards … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/stable.log"; status=1; fi
+          if [ -n "$undone" ]; then
+            if wait $undone; then echo "· undoes nothing on main … ok"; else echo "· undoes nothing on main … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/undone.log"; status=1; fi
+          fi
+          exit $status
 
   # A branch: what main would deploy, built and bundled; nothing sent, no secrets.
   bundle:

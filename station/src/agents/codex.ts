@@ -375,6 +375,8 @@ export class CodexDriver implements AgentDriver {
       }
       const alive = this.hosts.get(profile.id);
       if (alive && alive.alive()) return alive;
+      // Its app-server exited: its runner, on its way out, is not one to take up.
+      if (alive) await alive.proc.released();
       // One an earlier station left running (its threads may be taken up yet) is taken up rather than replaced.
       const left = findRunner(this.data, runnerId("codex", profile.id));
       const host = left ? await this.takeUp(profile, left) : await Host.start(profile, this.command, this.data, this.env, this.caBundle);
@@ -478,6 +480,7 @@ export class CodexDriver implements AgentDriver {
     const host = await this.serial(async () => {
       const current = this.hosts.get(profileId);
       if (current && current.alive()) return current;
+      if (current) await current.proc.released();
       const id = handed?.host.runner ?? runnerId("codex", profileId);
       const info = findRunner(this.data, id);
       if (!info) throw new Error(`codex app-server ${profileId} was not taken up: no runner keeps it`);

@@ -474,10 +474,12 @@ test("a_direct_rtt_is_never_reported_as_a_relay_measurement", { skip }, async ()
 /// (2026-10-01, bft: 11 s a round trip); measured, it moves to the relay that is quicker the whole way.
 test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, async () => {
   const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
-  // The station reaches a slowly (130 ms each way: a round trip through a at least 260 ms, QUIC's estimate never below
-  // its least sample), b at once; the device reaches both at once. (Its keeper on a (keep.rs), on the relay before the
-  // station dials it there, is the first relay connection through: not held, not being what is measured.)
-  const station = await Station.on(b, await slowed(a, 130, 1));
+  // The station reaches a slowly (65 ms each way: a round trip through a at least 130 ms, QUIC's estimate never below
+  // its least sample; well past what quicker() asks of a move, QUICKER_MS and QUICKER_SHARE, and each round trip of the
+  // connecting and measuring through a is the test's time), b at once; the device reaches both at once. (Its keeper on a
+  // (keep.rs), on the relay before the station dials it there, is the first relay connection through: not held, not
+  // being what is measured.)
+  const station = await Station.on(b, await slowed(a, 65, 1));
   const id = station.id();
   const host = new FakeHost();
   // Real timers until the last measuring (connecting through the slow relay takes its time), then quick ones.
@@ -497,7 +499,7 @@ test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, 
   for (const reply of asked) assert.equal(reply.status, 200);
   const slow = link.net().rttMs!;
   assert.ok(sameRelay(link.via(), a), `${link.via()}`);
-  assert.ok(slow > 250, `${slow}`);
+  assert.ok(slow > 125, `${slow}`);
   // Now on both: measured, it moves to b.
   (mesh.relays as string[]).push(b);
   await runner.run(mesh.remeasure(id));

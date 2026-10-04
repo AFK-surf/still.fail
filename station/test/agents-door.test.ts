@@ -7,8 +7,10 @@ import { McpEndpoint } from "../src/tools/mcp.ts";
 test("the agents' door answers /mcp, /jobs/notify and /health, and finishes its calls when closed", async () => {
   let release: () => void = () => {};
   const slow = new Promise<void>((r) => (release = r));
+  let arrived: () => void = () => {};
+  const called = new Promise<void>((r) => (arrived = r));
   const mcp = new McpEndpoint((t) => (t === "tok" ? "s1" : undefined), [
-    { name: "wait", description: "", inputSchema: {}, run: async (key) => (await slow, `done ${key}`) },
+    { name: "wait", description: "", inputSchema: {}, run: async (key) => (arrived(), await slow, `done ${key}`) },
   ]);
   const said: string[] = [];
   const door = await openAgentsDoor({ port: 0 }, mcp, (auth, body) => {
@@ -28,7 +30,9 @@ test("the agents' door answers /mcp, /jobs/notify and /health, and finishes its 
     headers: { authorization: "Bearer tok", "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "wait", arguments: {} } }),
   });
-  await new Promise((r) => setTimeout(r, 50));
+  // Closed once the door has the call (not on a guess of how long it takes to get there: a busy machine took longer,
+  // and the call came to a door already closed).
+  await called;
   let closed = false;
   const closing = door.close().then(() => (closed = true));
   await new Promise((r) => setTimeout(r, 50));

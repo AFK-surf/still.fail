@@ -170,6 +170,15 @@ export class AgentProcess {
     setImmediate(() => this.conn.detach());
   }
 
+  /// Once it has exited by itself and been read to the end, its runner (told `done`) cleans up and goes, a moment after:
+  /// waited for, so a process started or taken up under its id next is never that runner on its way out (taken up, it
+  /// would be gone under the one taking it: its socket removed, its agent long exited). One let go stays for the next
+  /// station; one still running is not this to wait for.
+  async released() {
+    if (this.frozen || this.said === null) return;
+    for (let i = 0; i < 200 && pidAlive(this.info.runner); i++) await sleep(10);
+  }
+
   /// SIGTERM the whole group, SIGKILL whatever is left after `graceMs`; then the runner may go.
   async kill(graceMs: number) {
     if (this.frozen) return;
