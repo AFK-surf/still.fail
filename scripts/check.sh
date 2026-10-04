@@ -253,7 +253,7 @@ if [ $full = 1 ]; then
   if part android && touches '^(apps/android|client|web/src/viz)/|^scripts/native\.ts$'; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
     if [ -d "$sdk/platforms" ]; then
-      step "Android" heavy python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest :app:lintDebug :core:lintDebug ${STILLFAIL_CHECK_APK:+:app:assembleDebug}
+      remembered "Android${STILLFAIL_CHECK_APK:+ (and the debug app)}" "apps/android client web/src/viz scripts/native.ts scripts/icons.py design/icons package.json pnpm-lock.yaml" heavy python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest :app:lintDebug :core:lintDebug ${STILLFAIL_CHECK_APK:+:app:assembleDebug}
     else later "Android"; fi
   fi
 fi
