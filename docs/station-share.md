@@ -14,7 +14,9 @@
 
 已定的规则（2026-10-04）：
 
-- 分享出去默认整个 workspace 都能用，也可以只选某几台。
+- 界面上只有一条规则：**Profile 和记忆属于 workspace**。每样东西有一个「可用的 station」名单，新加的默认全部，可以改成只勾几台。界面上不出现「分享」「host」这类词；只有订阅显示「登录在 X」，因为它离线时别处用不了。
+- **升级时已有的东西不变**：各台已有的 Profile 和 skills，「可用的 station」只勾原来那台（有些东西本来就只能在那台用），要给别处用的人自己去改。
+- 自动决策的设置不做分享：现在的自动决策页本来就能在一处改所有 station。
 - **订阅只能由 host 刷新**：refresh token 一刷就换，两处各刷一次就互相踢掉，所以只有 host 拿着它，使用方借短期 token，联系不上 host 就借不到。不留备用、不做接替；订阅换 host 只能在原 host 在线时由它交出去，host 那台机器没了就要重新登录。
 - 其余的（API key、设置、skills）没有这个问题：使用方各存一份，host 不在线照常用；host 不在了，owner/admin 可以把 host 换到任意一台（它手上就有完整的一份）。不会自动换。
 - Slack bot 先不做。
@@ -31,7 +33,6 @@
 |---|---|---|---|
 | `subscription` | Claude / Codex 订阅登录 | 向 host 借短期 access token 交给进程 | 不能开新轮次；手上那个 token 过期前，正在跑的那轮能跑完 |
 | `key` | API key 类 profile（Anthropic、OpenCode、各 provider） | 完整的 profile 和 key 存在本地 `config.json` | 照常用，用最后一次拿到的 |
-| `settings` | 自动决策的规则和模型 | 跟随 host 的设置，本地存一份 | 照常用，用最后一次拿到的 |
 | `skills` | `agent/skills/` 里选定的几个 skill，可以带上 `MEMORY.md` | 镜像在本地，agent 可读可写，写入发给 host | 照常读写，修改攒着，重连后交给 host |
 
 ## cloud：只记 host
@@ -65,8 +66,8 @@ shares (workspace TEXT, id TEXT, kind TEXT, name TEXT, host TEXT, allow TEXT,
 | `share.watch {id}` | 使用方 → host | 长连的流：先推当前值，之后有变化就推（状态、配额、设置、skills 的新版本） |
 | `share.lend {id}` | 使用方 → host | 借订阅的 access token：`{token, expiresAt}` |
 | `share.key {id}` | 使用方 → host | 拿 `key` 分享项的 profile 内容和 key |
-| `share.read {id, since}` | 使用方 → host | 拿 `settings` / `skills` 的当前版本（skills 按文件给差异） |
-| `share.put {id, base, change}` | 使用方 → host | 写 `skills`（以后也可以写 `settings`）；`base` 对不上就拒绝 |
+| `share.read {id, since}` | 使用方 → host | 拿 `skills` 的当前版本（按文件给差异） |
+| `share.put {id, base, change}` | 使用方 → host | 写 `skills`；`base` 对不上就拒绝 |
 | `share.spent {id, until}` | 使用方 → host | 用这个订阅的某轮撞到额度了，host 去重读配额，再推给所有人 |
 | `share.handover {id}` | 原 host → 新 host | 换 host：把正本整个交过去（见下） |
 
@@ -116,7 +117,6 @@ agent 和 hub 的代码继续读 `config.json`。分享来的东西写成一条�
 - `accounts/check.ts`（`parse_config` 的检查）要接受 `share` 字段、允许分享来的 profile 没有 key，并防止 share id 跟本地 profile 的 id 撞车。
 - 退回 Rust station 的话：`key` 类照常能用；订阅的占位显示要登录，不会刷坏 host 的登录。
 
-`settings`：使用方选「跟随」某个设置分享项后，`config.json` 里只记 `"automaticDecisionsShare": "sh_…"`。host 推来的值存进 `<data>/share/<id>/`，生效的就是它；本台可以覆盖某几项（记在 `automaticDecisionsShare` 旁边），页面上能「恢复跟随」。
 
 ## skills 和记忆
 
@@ -131,22 +131,26 @@ agent 和 hub 的代码继续读 `config.json`。分享来的东西写成一条�
 
 ## 客户端
 
+原型：`share-prototype-v2.html`（chat EMBER/1791121239.467000）。
+
 core（`client/core-ts`）：
 
-- 新 topic `shares`（按 workspace）：cloud 的 host 表（`GET /v1/workspaces/:ws` 的 `shares`），加上每台 station 的 `share.list` / overview 里的状态。哪台先到先显示哪台，其他的后补进来，不用 loading 挡住整个页面。
-- 新的具名调用（都走 `doing`）：`share.publish {station, profile|kind, allow}`、`share.unpublish {id}`、`share.allow {id, stations}`、`share.move {id, station}`、`share.use {station, id, on}`（这台不用某个分享项）、`share.follow {station, id}`（跟随设置）。
-- station 的 overview 里每个 profile 加可选的 `share: {id, role: "host"|"user", host, state}`。`state` 可以是 `ok` / `host_offline` / `not_allowed`。旧 station 不给这个字段，页面就按「只在这台」显示。
+- Profile 列表改成 workspace 级的 topic：cloud 的 `shares` 表，加上每台 station 的 overview（其中带 `share` 字段的 profile）。同一个分享项在各台上的占位只算一条；还没分享出去的 profile 按「可用的 station 只有这台」算，也是一条。哪台先到先显示哪台，其他的后补进来。
+- 具名调用（都走 `doing`）：`profile.allow {id, stations|"all"}`（改可用的 station；第一次从「只有这台」改宽时，背后就是登记分享项）、`profile.moveLogin {id, station}`（订阅换登录的 station）、`skill.allow {name, stations|"all"}`。
+- overview 里每个 profile 加可选的 `share: {id, host, allow, state}`。旧 station 不给这个字段，就按「只在这台」显示。
 
-界面（web 的 `pages/Accounts.tsx`、`cloud/settings.tsx` 里的 `RuntimeSettings`、`ProfileCard.tsx`、`mobile/Profiles.tsx`，安卓的 `screens/Profiles.kt`、`data/Accounts.kt`）：
+界面（web 的 `cloud/settings.tsx` 里的 `RuntimeSettings`、`pages/Accounts.tsx`、`ProfileCard.tsx`、记忆页、`mobile/Profiles.tsx`，安卓的 `screens/Profiles.kt`、`data/Accounts.kt`）：
 
-- 「Profile」页从「按 station 分组」改成「workspace 的账号」：每个分享项一张卡片，写明 host、哪几台在用、状态（host 不在线时整张卡片是灰的）。只在某台上的 profile 放在下面「只在 X」一组，卡片上有「分享」按钮。
-- 分享项详情：host 和「换到…」（原 host 不在线时不能点，并说明原因）、可用的 station（默认整个 workspace，可以改成只选几台）、各台的用量、停止分享。
-- 设置页的自动决策：「跟随 X 的设置」/「X 不在线，正在用本台的设置」。
-- 新加一台 station 后，它的 profile 列表里直接就有已经分享出来的东西。
+- **Profile 列表**：一条平的列表，不再按 station 分组。副标题：订阅写「登录在 ● studio」，可用范围不是全部时写「只给 studio、mac-mini」。只在出问题时上色：订阅登录的那台离线时，整行变淡，标红「macbook 离线」。
+- **详情页**多两行：
+  - 「登录在」（只有订阅才有）+「换」。那台离线时按钮不可用，并写明「macbook 上线后才能换」。点「换」弹出 station 列表，点一台就开始交接，那一行转圈，离线的灰掉。
+  - 「可用的 station：全部 / studio、mac-mini」+「改」。弹出勾选列表；订阅登录的那台锁定勾着。下面一行小字说明以后新加的 station 会不会自动加进来。
+- **添加 Profile**：流程不变。订阅在哪台登录，就登录在哪台；key 不选 station。新加的东西默认可用的 station 是全部。
+- **记忆**：一个列表，跟 Profile 一样有「可用的 station」。两台同时改了同一个文件时，标黄「两台同时改了，agent 在合并」。
 
 ## 兼容和部署
 
-- 新字段全是可选的：`config.json` 的 `share` 和 `automaticDecisionsShare`、overview 的 `share`、state 帧的 `shares`。旧 station、旧客户端、旧 cloud 都当没有。
+- 新字段全是可选的：`config.json` 的 `share`、overview 的 `share`、state 帧的 `shares`。旧 station、旧客户端、旧 cloud 都当没有。
 - `stillfail.db` 不改。分享相关的状态放在 `<data>/share/` 下的文件里，写法跟 `remote/` 一样（原子写，权限 600）。
 - 部署顺序：cloud → station → 客户端。新客户端配旧 station：显示「只在这台」，不能分享；旧客户端配新 station：只看到普通的 profile，分享来的那些显示成一条条 profile。
 - 改了 agent 能感知的东西（skills 会同步），所以要在 `migrations.ts` 加说明。
@@ -160,10 +164,10 @@ core（`client/core-ts`）：
 | station 新模块 | `station/src/share/`（新） | 登记、`share.*` 的服务端和调用端、`share.watch` 连接的管理、内存里的凭据、交接流程、`<data>/share/` 的存储、往 `config.json` 写占位 profile |
 | 站间传输 | `station/src/mesh/peer.ts`、`jobs/remote.ts` | `handle` 把 `share.*` 交给新模块；`share.watch` 要做成长流（现在一个请求一个 QUIC 流，`servePeer` 60 秒没新请求就断，要改成按流保活） |
 | 订阅和 key | `agents/claude.ts`、`agents/codex.ts`、`agents/profiles.ts`、`agents/machine-logins.ts`、`accounts/quota.ts` | 借来的 token（只有订阅）、配额由 host 推送 |
-| 账号 | `accounts/index.ts`、`accounts/check.ts`、`accounts/profiles.ts`、`sessions/accounts.ts`、`sessions/config.ts`、`api/routes/accounts.ts`、`api/overview.ts` | profile 的 `share` 字段，分享/停止/改名单/交出的管理接口，overview 带分享状态，使用方的检查和额度，跟随设置 |
+| 账号 | `accounts/index.ts`、`accounts/check.ts`、`accounts/profiles.ts`、`sessions/accounts.ts`、`sessions/config.ts`、`api/routes/accounts.ts`、`api/overview.ts` | profile 的 `share` 字段，改可用名单（含第一次登记）、交出的管理接口，overview 带分享状态，使用方的检查和额度 |
 | skills | `sessions/agent-home.ts`、`agents/migrations.ts` | 镜像链接进 agent home，盯文件变化，离线攒写入，冲突文件，迁移说明 |
 | core | `client/core-ts/src/ops.ts`、`station/sync.ts`、新 `shares.ts` | `shares` topic、具名调用、`doing` |
-| web | `cloud/settings.tsx`、`pages/Accounts.tsx`、`ProfileCard.tsx`、`mobile/Profiles.tsx`、`AutomaticDecisions.tsx` | workspace 账号列表、分享项详情、换 host、可用名单、跟随设置 |
+| web | `cloud/settings.tsx`、`pages/Accounts.tsx`、`ProfileCard.tsx`、`mobile/Profiles.tsx`、记忆页 | workspace 级 Profile 列表、详情页的「登录在」「可用的 station」、记忆页的可用范围 |
 | 安卓 | `screens/Profiles.kt`、`data/Accounts.kt` | 同 web |
 | 文档 | 本文、`docs/station-peers.md` | 把新方法写进站间协议 |
 
