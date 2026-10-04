@@ -30,6 +30,8 @@ import fail.still.android.LocalApp
 import fail.still.android.data.SoftwareVersion
 import fail.still.android.ui.C
 import fail.still.android.ui.DownloadChip
+import fail.still.android.ui.IconIn
+import fail.still.android.ui.Icons
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
@@ -152,14 +154,21 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
                 }
                 !v.installed -> action(t("android-misc.versions.install"))
                 v.newer && v.latest != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("→ ${v.latest}", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
+                    Latest(v.latest)
                     action(t("android-misc.versions.update"))
                 }
                 v.downgrade == true && v.latest != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("→ ${v.latest}", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
+                    Latest(v.latest)
                     action(t("android-misc.versions.backToStable"))
                 }
             }
         }
     }
+}
+
+/** What it would go to: an arrow drawn as tall as the figures, at their stroke, centred on them, then the version. */
+@Composable
+private fun Latest(version: String) = Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+    IconIn(Icons.ArrowRight, 18.dp, C.accentInk)
+    Text(version, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
 }
