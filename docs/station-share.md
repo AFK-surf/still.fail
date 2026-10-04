@@ -1,6 +1,6 @@
 # Station 之间分享东西（设计稿）
 
-> 状态：设计，未实现。chat EMBER/1791121239.467000。
+> 状态：已实现（分支 station-share），实现跟下面设计的出入见文末。chat EMBER/1791121239.467000。
 
 ## 要解决的事
 
@@ -170,10 +170,17 @@ core（`client/core-ts`）：
 | 安卓 | `screens/Profiles.kt`、`data/Accounts.kt` | 同 web |
 | 文档 | 本文、`docs/station-peers.md` | 把新方法写进站间协议 |
 
-## 先验证的事
+## 实现跟设计的出入
 
-1. Codex 在 `auth.json` 里只有 access token 时的表现，决定 Codex 订阅走「写 auth.json」还是「本地转发」。
-2. Claude 订阅的 access token 实际能用多久，决定多久借一次。
-3. 在现有传输上做 `share.watch` 长流：保活、断开的检测、重连。
+- **没有 `share.watch` 长流**：版本号放在 cloud 的 shares 表里，host 改了内容就提高版本，cloud 用 presence 的 `state` 帧推给各台，使用方看到版本变了再 `share.get`。这样不用在一请求一流的传输上做长连。配额和状态由使用方需要时问 host（`share.status`）：检查、额度轮询（有人看着时每 5 分钟）、借 token 时。
+- **使用方怎么知道 host 不在**：借 token、问状态失败就记下这台 host 联系不上（overview 的 `share.reachable`），之后每分钟试一次，通了就把借来的订阅重新检查一遍。客户端把「cloud 说它离线」和「借用方联系不上它」都当作 host 不在。
+- **换 host 只能由原 host 交出**（订阅和 key 一样）；原 host 不在时把非订阅项交给别台、以及 owner/admin 删除这些分享项（cloud 有 `DELETE /v1/workspaces/:ws/shares/:id`），界面上还没有入口。
+- **`MEMORY.md` 不分享**，只分享 skills；记忆页仍按 station 分组，每个 skill 展开后有分享开关，分享来的标「来自 X」。同名时本台自己的 skill 优先，分享来的不链接进去。
+- **Codex 订阅**：在 studio 上验证过（codex-cli 0.160.0），`auth.json` 里只有 access token、refresh token 是假的、`last_refresh` 是现在时，Codex 照常用到过期，不会自己去刷新；token 坏了干净地报 401 退出。ChatGPT 的 access token 约 10 天有效，借用方的 app-server 在离过期 6 小时内、没有会话在跑时重启并重新借。host 只在自己没有 Codex 进程用这个登录时才替它续期（续期会换掉 refresh token，正在跑的 Codex 手里还是旧的）。
 
-测试照 `docs/station-peers.md` 的做法：在 studio 上起本地控制面，加两三台临时 station，验证这些：分享、借 token 跑一轮、按名单拒绝、host 下线后订阅马上不能用而 key/设置/skills 照常、重新上线后恢复、非订阅项在原 host 离线时换 host 以及原 host 回来退成使用方、换 host（包括中途失败回退）、skills 的写入、冲突。
+## 测试
+
+- `station/test/share.test.ts`：两台 station、一个只记 host 的假 cloud，验证 key 的复制与同步、host 离线时副本还在、停止分享后删掉、按名单拒绝、借订阅 token（host 不在时借不到）、交出订阅（登录搬过去，原 host 留副本、id 不变）、skill 的复制、链接、改动回传、旧版本上的改动存成冲突文件。
+- `cloud/test/shares.test.ts`：登记、改名单、交出、删除只有 host 能做，签名不对拒绝，state 帧和 workspace 答复里有 shares，host 被移出后 owner/admin 能删。
+- `client/core-ts/test/profiles-view.test.ts`：workspace 的 Profile 列表去重、「登录在 / 只给 / 只在」、host 不在时不可用且排在前面。
+- 端到端：studio 上 dev cloud 加两台临时 TS station，在网页上分享订阅和 key、改可用的 station、分享 skill、把订阅换到另一台、关掉 host 后列表变灰，都是真的走 iroh 的站间请求。

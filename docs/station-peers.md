@@ -33,6 +33,10 @@ A task is keyed by **workspace + source station + source session + caller key**.
 
 Task files and records remain under the target's data directory `remote/incoming`; source receipts are under `remote/outgoing`. Automatic retention/cleanup, remote long-lived services, and delegating to another model are not provided in this first service.
 
+## Shares
+
+Stations also share profiles and skills over this transport (`share.get`, `share.lend`, `share.status`, `share.put`, `share.take`; [station-share.md](station-share.md)). Any station of the workspace may ask; what each share allows is checked by its host against still.fail cloud's list (the `shares` field of the presence state frame). No `remoteTasks.allow` is needed: these are not execution.
+
 ## Transport
 
 ALPN `stillfail/station/1` is separate from the member/admin protocol. Each bounded request contains `{workspace, request:{method,...}}`, answered with `{result}` or `{error}` on a QUIC bidirectional stream. Services accept explicit methods (`describe`, `task.*`, `file.*`); this is not an arbitrary management-path proxy. Network timeouts explicitly report uncertain execution. The transport can carry further services without encoding build-specific concepts.
