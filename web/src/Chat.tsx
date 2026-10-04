@@ -521,8 +521,50 @@ function useJumpTo(list: RefObject<HTMLDivElement | null>, station: string, thre
   useEffect(() => () => unmarkWords(), [station, thread]);
 }
 
-/** Where the words a search found are marked in the message it opened (CSS custom highlights: `search-hit`). */
+/** Where the words a search found are marked in the message it opened: bold (CSS custom highlights: `search-hit`), and
+ *  a hand-drawn stroke under each, drawn in left to right one word after another (`[data-search-marks]`, global.css.ts). */
 let searchHits: Range[] = [];
+let searchStrokes: { layer: HTMLElement; observer: ResizeObserver } | null = null;
+
+/** The strokes under `ranges`, in a layer over `root` (its box, so they move with it); laid out again as it resizes. */
+function drawStrokes(root: HTMLElement, ranges: Range[]): void {
+  const layer = document.createElement("span");
+  layer.dataset.searchMarks = "";
+  layer.setAttribute("aria-hidden", "true");
+  if (getComputedStyle(root).position === "static") root.style.position = "relative";
+  const svgNs = "http://www.w3.org/2000/svg";
+  const place = () => {
+    const box = root.getBoundingClientRect();
+    const strokes: Element[] = [];
+    for (const range of ranges) {
+      for (const rect of range.getClientRects()) {
+        if (rect.width < 1) continue;
+        const svg = document.createElementNS(svgNs, "svg");
+        svg.setAttribute("viewBox", "0 0 100 9");
+        svg.setAttribute("preserveAspectRatio", "none");
+        Object.assign(svg.style, { left: `${rect.left - box.left - 2}px`, top: `${rect.bottom - box.top - 4}px`, width: `${rect.width + 4}px`, height: "9px" });
+        const path = document.createElementNS(svgNs, "path");
+        path.setAttribute("d", "M1 6 C 25 3, 55 8, 99 4");
+        path.setAttribute("pathLength", "1");
+        path.style.animationDelay = `${strokes.length * 180}ms`;
+        svg.append(path);
+        strokes.push(svg);
+      }
+    }
+    layer.replaceChildren(...strokes);
+  };
+  place();
+  root.append(layer);
+  // Laid out again (the pane resized): drawn where the words are now, not drawn in again.
+  let first = true;
+  const observer = new ResizeObserver(() => {
+    if (first) { first = false; return; }
+    layer.dataset.settled = "";
+    place();
+  });
+  observer.observe(root);
+  searchStrokes = { layer, observer };
+}
 
 /** Marks each of `words` (case aside) in the text of `root`; false when none is in it (or the browser cannot). */
 function markWords(root: Element, words: string[]): boolean {
@@ -550,11 +592,15 @@ function markWords(root: Element, words: string[]): boolean {
   const highlights = (CSS as unknown as { highlights: Map<string, unknown> }).highlights;
   const Highlight = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
   highlights.set("search-hit", new Highlight(...ranges));
+  if (root instanceof HTMLElement) drawStrokes(root, ranges);
   return true;
 }
 
 function unmarkWords(): void {
   searchHits = [];
+  searchStrokes?.observer.disconnect();
+  searchStrokes?.layer.remove();
+  searchStrokes = null;
   if ("highlights" in CSS) (CSS as unknown as { highlights: Map<string, unknown> }).highlights.delete("search-hit");
 }
 

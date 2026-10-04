@@ -22,6 +22,8 @@ export const nowInKeyframes = keyframes({ "from": { opacity: "0", transform: "tr
 export const nowOutKeyframes = keyframes({ "from": { opacity: "1", transform: "none" }, "to": { opacity: "0", transform: "translateY(-5px)" } });
 export const emitOutKeyframes = keyframes({ "from": { opacity: "0", transform: "scale(.35)", clipPath: "inset(0 0 100% 0)" }, "35%": { opacity: "1" }, "to": { opacity: "1", transform: "none", clipPath: "inset(0 0 0 0)" } });
 export const msgFlashKeyframes = keyframes({ "0%, 60%": { background: vars.accentBg }, "100%": { background: "transparent" } });
+/** A search's stroke under a word it found, drawn in left to right (global.css.ts [data-search-marks]). */
+export const searchStrokeKeyframes = keyframes({ to: { strokeDashoffset: "0" } });
 export const buddyHopKeyframes = keyframes({ "50%": { transform: "translateY(-9px)" } });
 export const msgWaitingInKeyframes = keyframes({ "from": { visibility: "hidden" }, "to": { visibility: "visible" } });
 export const mFromRightKeyframes = keyframes({ "from": { transform: "translateX(100%)" }, "to": { transform: "none" } });

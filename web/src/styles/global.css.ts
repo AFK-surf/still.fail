@@ -1,6 +1,6 @@
 import { globalStyle } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
-import { splashFloatKeyframes } from "./keyframes.css.ts";
+import { searchStrokeKeyframes, splashFloatKeyframes } from "./keyframes.css.ts";
 
 /**
  * Corners, after Codex: plain rounding by default; where the browser draws superellipses, rounded rectangles get a
@@ -221,8 +221,18 @@ globalStyle("::view-transition-group(*), ::view-transition-old(*), ::view-transi
 });
 /** The words a search found, marked in the message it opened, until the chat is left. */
 globalStyle("::highlight(search-hit)", {
-  backgroundColor: `color-mix(in srgb, ${vars.accent} 28%, transparent)`, color: "inherit",
+  // Bold without laying the words out anew (a highlight cannot change the font): the glyphs drawn a little wider.
+  color: vars.text, textShadow: "0.35px 0 0 currentColor, -0.35px 0 0 currentColor",
 });
+/** Under each, a hand-drawn stroke in the accent (Chat.tsx drawStrokes), drawn in left to right, one after another. */
+globalStyle("[data-search-marks]", { position: "absolute", inset: "0", pointerEvents: "none" });
+globalStyle("[data-search-marks] svg", { position: "absolute", overflow: "visible" });
+globalStyle("[data-search-marks] path", {
+  fill: "none", stroke: vars.accent, strokeWidth: "3", strokeLinecap: "round", vectorEffect: "non-scaling-stroke",
+  strokeDasharray: "1", strokeDashoffset: "1", animation: `${searchStrokeKeyframes} 520ms cubic-bezier(.4, 0, .2, 1) forwards`,
+});
+globalStyle("[data-search-marks][data-settled] path", { animation: "none", strokeDashoffset: "0" });
+globalStyle("[data-search-marks] path", { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", strokeDashoffset: "0" } } });
 /** The quoted passage, highlighted where it was said after following a quote. */
 globalStyle("::highlight(quote-flash)", {
   backgroundColor: `color-mix(in srgb, ${vars.accent} 28%, transparent)`, color: "inherit",
