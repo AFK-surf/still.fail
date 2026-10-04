@@ -82,6 +82,23 @@ Measured on studio, a fresh worktree each, step by step (seconds; rustc calls in
 
 With the parts published and an empty cache, the first column plus their download (33 MB, about 12 s; measured at f5b84fbf, when the core tests still took 58 s: 144 s on studio, 150 s on mini1). A worktree takes 2.1 GB (no Cargo target) against 4.8 GB building the parts and 11.1 GB in the Rust era; the shared cache 0.09 GB. A TypeScript-only commit's full check, part by part as CI runs it, made no rustc call and ran no cargo.
 
+## CI time
+
+Every run of the pipeline ends with `timing` (`scripts/ci-time.ts`): the time from its first job starting to its last
+ending, against a budget, in the run's summary, with a warning when over. The budgets (`BUDGET` there):
+
+| Run | Budget | Typical (2026-10-04) |
+|---|---|---|
+| A branch | 180 s | ~100 s with caches warm |
+| main, releasing nothing | 180 s | ~100 s |
+| main, releasing apps or the station | 480 s | — |
+
+`node scripts/ci-time.ts <run id>` prints any run's jobs and longest steps. A run over its budget is a regression to
+find the cause of, as one that fails is: what got slower (a step, a cache missed, a test waiting in real time, jobs
+queued behind one another on mini1), fixed or the budget changed on purpose, not left. The check's Rust tests are
+remembered by their inputs (`scripts/check.sh`, `rust_step`), and CI keeps Gradle's caches (`.github/actions/setup`):
+a run that missed them is the usual first suspect.
+
 ## Browser and station builds
 
 `client/iroh-wasm/build.sh` (what builds the `iroh-wasm` part) uses `LLVM_BIN` when set, otherwise checks Homebrew LLVM installations and then `clang`/`llvm-ar` on `PATH`. It checks for WebAssembly support before compiling. To choose a particular LLVM installation, set `LLVM_BIN` to its `bin` directory.

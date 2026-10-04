@@ -364,3 +364,27 @@ jobs:
           git push --no-verify -f "https://github.com/$GITHUB_REPOSITORY" refs/tags/deployed/beta
       - if: needs.plan.outputs.relay == 'true'
         run: echo "::warning::the relay changed and is not deployed here, as that drops every connection. Run ~/bin/ember-deploy on studio."
+
+  # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
+  # station's watch reads the same of every run and has an agent find why one went over.
+  timing:
+    needs: [plan, natives, check, bundle, android-build, mac-build, api, static, station, station-update, android, desktop, changelog, done]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with: { sparse-checkout: scripts/ci-time.ts, sparse-checkout-cone-mode: false }
+      - uses: actions/setup-node@v5
+        with: { node-version: '24', package-manager-cache: false }
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rc=0
+          node scripts/ci-time.ts "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$RUNNER_TEMP/timing.txt" || rc=$?
+          cat "$RUNNER_TEMP/timing.txt"
+          { echo '```'; cat "$RUNNER_TEMP/timing.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [ $rc = 3 ]; then echo "::warning::$(head -1 "$RUNNER_TEMP/timing.txt")"; elif [ $rc != 0 ]; then exit $rc; fi
