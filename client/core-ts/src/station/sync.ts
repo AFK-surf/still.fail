@@ -179,16 +179,29 @@ export class StationsSync {
     }
     const link = new Link(address, addr, core.runner.child());
     this.#links.set(address, link);
-    // How it was last time, until the link finds out anew.
-    core.runner.fork(
-      Effect.map(Effect.orElseSucceed(core.host.storageGet(`${LINK_KEY}/${address}`), () => null), (bytes) => {
-        if (bytes && link.state.state === "connecting") {
-          link.state = { state: "connecting", last: new TextDecoder().decode(bytes) };
-          this.onChange(address, "link");
-        }
-      }),
-      link.scoped,
-    );
+    // How it was last time, until the link finds out anew: kept in its workspace's database, there as the link is.
+    const last = core.data.record("link", address);
+    if (last === "online" || last === "offline") link.state = { state: "connecting", last };
+    else
+      // As cores before kept it, in the host's storage (a file of its own): moved into the database once.
+      core.runner.fork(
+        Effect.ignore(
+          Effect.gen({ self: this }, function* () {
+            const bytes = yield* core.host.storageGet(`${LINK_KEY}/${address}`);
+            if (!bytes) return;
+            const was = new TextDecoder().decode(bytes);
+            if ((was === "online" || was === "offline") && core.data.record("link", address) === undefined) {
+              core.data.put("link", address, was);
+              if (link.state.state === "connecting" && link.state.last === undefined) {
+                link.state = { state: "connecting", last: was };
+                this.onChange(address, "link");
+              }
+            }
+            yield* core.host.storageDelete(`${LINK_KEY}/${address}`);
+          }),
+        ),
+        link.scoped,
+      );
     // Its figures as last heard, until it says them anew.
     core.runner.fork(
       Effect.map(Effect.orElseSucceed(core.host.storageGet(`${HOST_KEY}/${address}`), () => null), (bytes) => {
@@ -209,9 +222,7 @@ export class StationsSync {
     const link = this.#links.get(address);
     if (!link) return;
     const state = value.state;
-    if ((state === "online" || state === "offline") && link.state.state !== state) {
-      this.#core.runner.fork(Effect.ignore(this.#core.host.storageSet(`${LINK_KEY}/${address}`, new TextEncoder().encode(state))));
-    }
+    if ((state === "online" || state === "offline") && this.#core.data.record("link", address) !== state) this.#core.data.put("link", address, state);
     link.state = value;
     this.onChange(address, "link");
   }

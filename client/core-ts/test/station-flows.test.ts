@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect, Queue } from "effect";
 import { dbName } from "../src/data.ts";
+import { Core } from "../src/core.ts";
 import { CoreError } from "../src/error.ts";
 import { encode, request } from "../src/ops.ts";
 import { StationAddr } from "../src/station/addr.ts";
@@ -118,7 +119,7 @@ test("a_station_not_reached_is_down_and_asked_for_nothing_until_it_is", async ()
   await host.settle();
   apply(host, values);
   assert.equal(linkOf(values, 1), "offline");
-  assert.equal(text(host.stored(`${LINK_KEY}/${ST}`)), "offline");
+  assert.equal(core.inner.data.record("link", ST), "offline");
   assert.equal(gets(host, "/admin/api/overview"), 0, "down: nothing asked");
   // Reached: what it holds is read.
   gate.stream = "open";
@@ -126,7 +127,7 @@ test("a_station_not_reached_is_down_and_asked_for_nothing_until_it_is", async ()
   apply(host, values);
   assert.equal(linkOf(values, 1), "online");
   assert.equal(gets(host, "/admin/api/overview"), 1, "back: what it holds is read");
-  assert.equal(text(host.stored(`${LINK_KEY}/${ST}`)), "online");
+  assert.equal(core.inner.data.record("link", ST), "online");
   core.close();
 });
 
@@ -1276,4 +1277,30 @@ test("the_core_keeps_its_workspaces_stations_and_agents_at_work_with_nobody_look
   await host.settle();
   assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?live=k&from=0&last=200"]);
   core.close();
+});
+
+test("how_a_station_was_last_time_is_there_as_its_link_starts_and_an_old_file_of_it_moves_into_the_database", async () => {
+  const { host, core } = await started({ ...base(), "GET /overview": { connects: [], profiles: [] } }, 0, undefined, (s) => (s.gate.stream = "fail"));
+  await host.settle();
+  assert.equal(core.inner.data.record("link", ST), "offline");
+  await run(core.inner.data.written);
+  core.close();
+  host.onFetchStream(() => Effect.never);
+  const again = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  const ui = again.connect();
+  const values = new Map();
+  subscribe(again, ui, 1, { topic: "link", station: ST });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(values.get(1), { state: "connecting", last: "offline" }, "as it was, from the start");
+  again.inner.data.forgetRecord("link", ST);
+  await run(again.inner.data.written);
+  again.close();
+  host.store(`${LINK_KEY}/${ST}`, new TextEncoder().encode("offline"));
+  const third = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  third.connect();
+  await host.settle();
+  assert.equal(third.inner.data.record("link", ST), "offline");
+  assert.equal(host.stored(`${LINK_KEY}/${ST}`), undefined);
+  third.close();
 });

@@ -480,7 +480,7 @@ export class Data {
   // ── records by table and key: the account's own and the device's ──
 
   /// A value the core keeps itself: `me` by account; a new chat's picks (`choice`) and chats' links (`chat_ref`), a
-  /// workspace's in its account's database (`ws:<id>:…`, `links:<id>`), where chats were left (`place`) too; the rest the
+  /// workspace's in its account's database (`ws:<id>:…`, `links:<id>`), a station's (`place`, `link`) too; the rest the
   /// device's; the changelog's.
   record(table: string, key: string): unknown {
     const [db, k] = this.#recordAt(table, key);
@@ -517,10 +517,11 @@ export class Data {
       const ws = key.slice(6);
       return [this.#ofWorkspace(ws) ?? null, [ws, "links"]];
     }
-    if (table === "place") {
-      // Where a chat was left (`<station address>/<thread>`): its workspace's, read with the chat as it opens.
+    if (table === "place" || table === "link") {
+      // A station's own, kept by its address (`<workspace>/<station>…`), in its workspace's: where a chat was left
+      // (`place`, `<address>/<thread>`), how its link was last time (`link`). Read with what shows them, not on the way.
       const ws = ofAddress(key);
-      return [this.#ofWorkspace(ws) ?? null, [ws, `place:${key}`]];
+      return [this.#ofWorkspace(ws) ?? null, [ws, `${table}:${key}`]];
     }
     return ["device", ["", ""]];
   }
