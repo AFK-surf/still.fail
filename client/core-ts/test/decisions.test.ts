@@ -185,6 +185,22 @@ test("cards_in_a_chat_say_whether_they_wait_and_who_answered_how", () => {
   assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", text: "林晓 回复了" });
 });
 
+test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () => {
+  // Written in the composer instead of picking: settled at once, as the viewer's reply.
+  let messages: J[] = [askedMsg(2)];
+  d.inMessages(messages, null, [{ text: "都不要，换个做法" }]);
+  assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "你", text: "你 回复了" });
+  // A picked option on its way says which.
+  messages = [askedMsg(2)];
+  d.inMessages(messages, null, [{ text: "B", quotes: [{ author: "Claude", text: "选哪个？", ts: "9.000002", role: "agent" }] }]);
+  assert.equal(messages[0].decision.text, "你 选了「B」");
+  // The row not known yet: what is sent settles it too; an older card stays replaced.
+  messages = [askedMsg(2), said(3, "agent", "进度"), typed(4)];
+  d.inMessages(messages, undefined, [{ text: "sk_test_1" }]);
+  assert.deepEqual(messages[0].decision, { resolved: true, text: "已换成新的问题" });
+  assert.deepEqual(messages[2].decision, { resolved: true, answeredBy: "你", text: "你 回复了" });
+});
+
 test("a_picked_option_or_a_written_answer_quotes_the_post", () => {
   const c = d.ofRow({ decision: decision(4, false) });
   const [text, quotes] = d.answer(c, "先不改")!;

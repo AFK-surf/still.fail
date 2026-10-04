@@ -224,7 +224,9 @@ export function presentRow(row: J): void {
 }
 
 /// Where each card in a chat's messages stands. `pending`: undefined when the row is not known; null when none waits.
-export function inMessages(messages: J[], pendingOf: [number, boolean] | null | undefined): void {
+/// `sending`: what the viewer sent into the chat that has not come back as its entries yet (the outbox, not failed): it
+/// answers the last card at once, as the chat shows it sent, rather than when the station has it.
+export function inMessages(messages: J[], pendingOf: [number, boolean] | null | undefined, sending: J[] = []): void {
   const cards: [number, J][] = [];
   for (let i = 0; i < messages.length; i++) {
     const c = ofMessage(messages[i]);
@@ -235,8 +237,9 @@ export function inMessages(messages: J[], pendingOf: [number, boolean] | null | 
     const ts = str(get(messages[i], "ts")) ?? "";
     const s = cardShown(card);
     const options: J[] = s.options ?? [];
-    const answer = messages.slice(i + 1).find((m) => get(m, "authorKind") === "person");
     const replaced = at + 1 < cards.length;
+    const answer = messages.slice(i + 1).find((m) => get(m, "authorKind") === "person")
+      ?? (replaced || sending.length === 0 ? undefined : { ...sending[0], authorKind: "person", mine: true });
     let isWaiting: boolean;
     let isDismissed: boolean;
     if (pendingOf === undefined) {

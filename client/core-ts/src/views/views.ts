@@ -1181,7 +1181,7 @@ export class Views implements Owner {
       const d = row !== undefined ? decisions.ofRow(row) : null;
       pendingCard = d !== null && open(d) ? [u64(d.seq) ?? 0, decisions.dismissed(d)] : null;
     }
-    decisions.inMessages(messages, pendingCard);
+    decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed"));
     const elsewhere = this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots });
     const focusLast = page.end !== false && outbox.length === 0 && messages.length > 0 && present.focusMessage(messages[messages.length - 1]);
     const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : chatTitle(thread);
