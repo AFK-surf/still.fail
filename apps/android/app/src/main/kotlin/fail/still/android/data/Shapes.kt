@@ -1144,7 +1144,8 @@ data class ChatItem (
 	/// there is none (and from a station before decisions).
 	val decision: RowDecision? = null,
 	/// Nothing is left in it: each of its agents ended all_done, nothing at work, no card waiting for the viewer,
-	/// nothing unread. Drawn faded, below the rest of its day (the core orders it so). Absent otherwise.
+	/// nothing unread; where its station's archive review is on, only once the review recommended archiving it. Drawn faded,
+	/// below the rest of its day (the core orders it so). Absent otherwise.
 	val settled: Boolean? = null,
 	/// With `settled`: offer to archive it with one tap (`chat.archive`). Absent otherwise.
 	val archivable: Boolean? = null,

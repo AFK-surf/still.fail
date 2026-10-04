@@ -249,6 +249,14 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   assert.equal(p.rowStateText(recommended), "推荐归档 · 做完了");
   recommended.archiveReminderDismissed = true;
   assert.equal(p.rowStateText(recommended), "做完了");
+  // Where the station's archive review is on, a done chat is offered for the archive only once it recommended so.
+  assert.ok(p.archivable(row([done], false)));
+  const reviewed = row([done], false);
+  reviewed.archiveReviewed = true;
+  assert.ok(!p.archivable(reviewed));
+  reviewed.archiveRecommended = true;
+  assert.ok(p.archivable(reviewed));
+  assert.ok(!p.archivable(kept));
   const merged = agent({ declared: "final", ending: "all_done", need: "已合并所有代码", outcome: "completed" }, "warm");
   assert.equal(merged.statusText, "做完了：已合并所有代码");
   assert.equal(p.rowStateText(row([merged], false)), "做完了：已合并所有代码");

@@ -53,14 +53,16 @@ const SPLIT = new RegExp(`[${WS}]+`);
 const trim = (s: string) => s.replace(TRIM, "");
 const splitWhitespace = (s: string) => s.split(SPLIT).filter((w) => w !== "");
 
-// ---- the station's config: its connects' names ----
+// ---- the station's config: its connects' names, and whether the archive review is on ----
 
 type Connect = { id: string; name: string };
-const configs = new WeakMap<Store, { stamp: string; connects: Connect[] }>();
+type Config = { connects: Connect[]; reviews: boolean };
+const configs = new WeakMap<Store, { stamp: string } & Config>();
 
-/// The config's connects (config.rs), each with what it is called (Connect::name: its bot's name, else its id); read
-/// again when config.json changed.
-function connectsOf(s: Store): Connect[] {
+/// The config's connects (config.rs), each with what it is called (Connect::name: its bot's name, else its id), and
+/// whether the decision reviews done chats for the archive (automaticDecisions.completion); read again when config.json
+/// changed.
+function configOf(s: Store): Config {
   const path = join(s.dataDir, "config.json");
   let stamp = "none";
   try {
@@ -68,10 +70,12 @@ function connectsOf(s: Store): Connect[] {
     stamp = `${st.size}:${st.mtimeMs}:${st.ino}`;
   } catch {}
   const had = configs.get(s);
-  if (had && had.stamp === stamp) return had.connects;
+  if (had && had.stamp === stamp) return had;
   const connects: Connect[] = [];
+  let reviews = false;
   try {
     const raw = JSON.parse(readFileSync(path, "utf8"));
+    reviews = raw?.automaticDecisions?.completion?.enabled === true;
     for (const c of Array.isArray(raw.connects) ? raw.connects : []) {
       const bot = typeof c?.slack?.botName === "string" && c.slack.botName !== "" ? c.slack.botName : undefined;
       if (typeof c?.id === "string") connects.push({ id: c.id, name: bot ?? c.id });
@@ -79,12 +83,16 @@ function connectsOf(s: Store): Connect[] {
   } catch {
     // No config: no connects.
   }
-  configs.set(s, { stamp, connects });
-  return connects;
+  const config = { stamp, connects, reviews };
+  configs.set(s, config);
+  return config;
 }
 
-export type Api = { store: Store; connects: Connect[] };
-export const apiOf = (s: Store): Api => ({ store: s, connects: connectsOf(s) });
+export type Api = { store: Store; connects: Connect[]; reviews: boolean };
+export const apiOf = (s: Store): Api => {
+  const { connects, reviews } = configOf(s);
+  return { store: s, connects, reviews };
+};
 /// The cloud's names of the store being answered for, for `people` and `authorNames` used on their own.
 export const useNames = (s: Store) => ((cloudNames = s.names), (currentStore = s));
 /// The store being answered for, for Slack's names (slack-known.ts).
@@ -420,6 +428,10 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
       people: people_,
     };
     row.archiveReminderDismissed = kept.has(t.thread.id);
+    // The decision looked at it (after its agent said all done) and found nothing left to do; with the review on, only
+    // such a chat is shown as one to archive (`archiveReviewed`), not every one whose agents are done.
+    row.archiveRecommended = !archived && store.archiveSuggested(s, t.thread.id);
+    if (api.reviews) row.archiveReviewed = true;
     // The client key it was made with, while the hub remembers it.
     const clientKey = s.clientKeys.get(String(key));
     if (clientKey !== undefined) row.clientKey = clientKey;

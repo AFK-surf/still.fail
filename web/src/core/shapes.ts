@@ -1133,7 +1133,8 @@ export interface ChatItem {
 	decision?: RowDecision;
 	/**
 	 * Nothing is left in it: each of its agents ended all_done, nothing at work, no card waiting for the viewer,
-	 * nothing unread. Drawn faded, below the rest of its day (the core orders it so). Absent otherwise.
+	 * nothing unread; where its station's archive review is on, only once the review recommended archiving it. Drawn faded,
+	 * below the rest of its day (the core orders it so). Absent otherwise.
 	 */
 	settled?: boolean;
 	/** With `settled`: offer to archive it with one tap (`chat.archive`). Absent otherwise. */

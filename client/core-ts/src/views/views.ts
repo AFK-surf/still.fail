@@ -889,7 +889,7 @@ export class Views implements Owner {
       by.maker = present.maker(str(by.model));
     }
     decisions.presentRow(row);
-    if (present.settled(row) && !present.pinned(row) && row.archiveReminderDismissed !== true) {
+    if (present.archivable(row)) {
       row.settled = true;
       row.archivable = true;
     }
@@ -1137,7 +1137,7 @@ export class Views implements Owner {
     if (watch !== null) view.watch = watch;
     const card = row !== undefined ? decisions.ofRow(row) : null;
     if (card !== null && open(card)) view.decision = decisions.shown(card);
-    if (row !== undefined && present.settled(row) && !present.pinned(row) && row.archiveReminderDismissed !== true && view.archived !== true) view.archivable = true;
+    if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
     return { ok: view };
   }
 

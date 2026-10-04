@@ -451,6 +451,14 @@ export function messagesBefore(s: Store, thread: number, n: number | null, limit
   return all(s, "SELECT * FROM merged WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?", thread, before, limit).map(toMessage).reverse();
 }
 
+// ── the archive review ──
+
+/// Whether the decision recommended the thread for the archive as it stands now (its last entry then is its last now).
+export function archiveSuggested(s: Store, thread: number): boolean {
+  const version = one(s, "SELECT version FROM archive_suggestions WHERE thread = ?", thread)?.version ?? null;
+  return version !== null && version === lastEntry(s, thread);
+}
+
 // ── pins, kept chats ──
 
 /// The chats a viewer pinned (by their session's key), with when.
