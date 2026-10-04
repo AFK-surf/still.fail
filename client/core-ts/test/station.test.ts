@@ -169,3 +169,59 @@ test("a_session_at_work_is_followed_live", async () => {
   assert.equal(v(values, 1).activity.now.key, "think");
   core.close();
 });
+
+test("where_a_chat_was_left_is_there_as_it_opens_after_a_restart_from_the_database", async () => {
+  const first = await started();
+  const ui1 = first.core.connect();
+  call(first.core, ui1, 1, "chat.place", { station: "ws/st", thread: 7, seq: 2, offset: 5 });
+  await first.host.settle();
+  await run(first.core.inner.data.written);
+  first.core.close();
+  const host = first.host;
+  assert.equal(host.storage.has("place/ws/st/7"), false, "not a file of its own");
+  host.onFetch(() => {
+    throw new HostError("offline");
+  });
+  host.onFetchStream(() => Effect.fail(new HostError("offline")));
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "thread", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).at, 2);
+  assert.equal(v(values, 1).atOffset, 5);
+  core.close();
+});
+
+test("where_a_chat_was_left_in_a_file_of_its_own_moves_into_the_database", async () => {
+  const first = await started();
+  await run(first.core.inner.data.written);
+  first.core.close();
+  const host = first.host;
+  host.store("place/ws/st/7", { at: 2, offset: null });
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "thread", station: "ws/st", thread: 7 });
+  await host.settle();
+  await run(core.inner.data.written);
+  assert.equal(host.storage.has("place/ws/st/7"), false);
+  assert.deepEqual(core.inner.data.record("place", "ws/st/7"), { at: 2, offset: null });
+  core.close();
+});
+
+test("a_chat_with_something_unread_opens_from_what_is_held_while_what_is_before_it_comes", async () => {
+  const answers = base();
+  answers["GET /threads"] = [threadView(7, 120, 100, 20)];
+  answers["GET /threads/7/entries?limit=50"] = { last: 120, entries: entries(71, 120) };
+  const { host, core } = await started(answers);
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "thread", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).at, 101);
+  assert.deepEqual([v(values, 1).first, v(values, 1).last, v(values, 1).end], [71, 120, true]);
+  core.close();
+});

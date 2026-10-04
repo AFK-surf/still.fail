@@ -12,6 +12,7 @@ import { HostError, SqlError } from "./host.ts";
 import type { Topic } from "./protocol.ts";
 import type { Runner } from "./runtime.ts";
 import { equal, isObject, parseJson, toJsonBytes } from "./util.ts";
+import { ofAddress } from "./workspace.ts";
 
 export { frozen };
 export type { ListKind, RowChange };
@@ -479,7 +480,8 @@ export class Data {
   // ── records by table and key: the account's own and the device's ──
 
   /// A value the core keeps itself: `me` by account; a new chat's picks (`choice`) and chats' links (`chat_ref`), a
-  /// workspace's in its account's database (`ws:<id>:…`, `links:<id>`), the rest the device's; the changelog's.
+  /// workspace's in its account's database (`ws:<id>:…`, `links:<id>`), where chats were left (`place`) too; the rest the
+  /// device's; the changelog's.
   record(table: string, key: string): unknown {
     const [db, k] = this.#recordAt(table, key);
     if (db === "device") return this.device.get(table, key);
@@ -514,6 +516,11 @@ export class Data {
     if (table === "chat_ref" && key.startsWith("links:")) {
       const ws = key.slice(6);
       return [this.#ofWorkspace(ws) ?? null, [ws, "links"]];
+    }
+    if (table === "place") {
+      // Where a chat was left (`<station address>/<thread>`): its workspace's, read with the chat as it opens.
+      const ws = ofAddress(key);
+      return [this.#ofWorkspace(ws) ?? null, [ws, `place:${key}`]];
     }
     return ["device", ["", ""]];
   }

@@ -374,7 +374,8 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
     val onArchive = if (archivable) ({ if (!rowBusy(app, item)) archiveRow(app, item) }) else null
     val body = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending, item.stateAbout) {
         detectTapGestures(
-            onPress = { tryAwaitRelease(); held = false },
+            // Pressed, the chat is read ahead of its page (AppState.prime).
+            onPress = { app.prime(item.station, item.page); tryAwaitRelease(); held = false },
             onLongPress = { at ->
                 held = true
                 // Held long, what can be done to the chat, as the wide screen's right click: always just below the row (over it

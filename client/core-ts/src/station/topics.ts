@@ -11,7 +11,7 @@ import { topicKey, topicStation, type Topic } from "../protocol.ts";
 import type { Owner } from "../core/routing.ts";
 import type { Value } from "../store.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { equal, get, isObject, parseJson, toJsonBytes } from "../util.ts";
+import { equal, get, isObject, parseJson } from "../util.ts";
 import { StationAddr } from "./addr.ts";
 import { PAGE, TRANSCRIPT_PAGE, type StationsSync } from "./sync.ts";
 
@@ -42,8 +42,10 @@ export class StationTopics implements Owner {
   readonly #windows = new Map<string, Window>();
   /// Each live topic's first item shown (history.older moves it back).
   readonly #firsts = new Map<string, number>();
-  /// Where chats were left (`chat.place`), as told this run or read from the device.
+  /// Where chats were left (`chat.place`), as told this run or read from the database.
   readonly #places = new Map<string, LeftAt | null>();
+  /// The chats whose place cores before kept in the host's storage was looked for this run.
+  readonly #oldPlaces = new Set<string>();
   /// Entries told as they were said (an event), by thread: they come in with a motion; the rest is caught up on.
   readonly told = new Map<string, Set<number>>();
   /// Connection samplers, by topic.
@@ -115,7 +117,7 @@ export class StationTopics implements Owner {
       const id = topic.thread as number;
       // A chat no list has (opened from an old notification's link): the sync is told of it, and brings it.
       if (this.summary(station, id) === null) this.#sync.syncEntries(station, id, Priority.shown);
-      this.#core.runner.fork(Effect.andThen(this.#place(station, id), Effect.sync(() => this.#core.store.invalidate(topic))));
+      this.#moveOldPlace(station, id);
     }
     if (topic.topic === "net") this.#sampleNet(topic);
     // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
@@ -242,26 +244,52 @@ export class StationTopics implements Owner {
     return this.#core.data.thread(station, id) ?? null;
   }
 
-  /// Where a chat was left (`chat.place`): as told this run, else as kept on the device.
-  #place(station: string, thread: number): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      const key = `${station}\u0001${thread}`;
-      if (this.#places.has(key)) return;
-      const kept = parseJson(yield* Effect.orElseSucceed(this.#core.host.storageGet(placeKey(station, thread)), () => null));
-      const at = u64(get(kept, "at"));
-      const offset = get(kept, "offset");
-      if (!this.#places.has(key)) this.#places.set(key, at === null ? null : { at, offset: typeof offset === "number" ? offset : null });
-    });
+  /// Where a chat was left (`chat.place`), as told this run or kept in its account's database: there as the chat opens, not read from
+  /// anywhere on the way (an empty first frame is a page swapped for another).
+  #placeOf(station: string, thread: number): LeftAt | null {
+    const key = `${station}\u0001${thread}`;
+    if (this.#places.has(key)) return this.#places.get(key) ?? null;
+    const kept = this.#core.data.record("place", `${station}/${thread}`);
+    const at = u64(get(kept, "at"));
+    const offset = get(kept, "offset");
+    const place = at === null ? null : { at, offset: typeof offset === "number" ? offset : null };
+    this.#places.set(key, place);
+    return place;
   }
 
-  /// Where the reader leaves a chat: at entry `at` short of its end, or at its end (null). Kept on the device too.
+  /// Where a chat was left as cores before kept it, in the host's storage (a file of its own): moved into the
+  /// database once, the file let go. Read on the way, it is for the next time the chat opens.
+  #moveOldPlace(station: string, thread: number): void {
+    const storage = placeKey(station, thread);
+    const moved = `${station}\u0001${thread}`;
+    if (this.#oldPlaces.has(moved)) return;
+    this.#oldPlaces.add(moved);
+    const host = this.#core.host;
+    this.#core.runner.fork(
+      Effect.ignore(
+        Effect.gen({ self: this }, function* () {
+          const kept = parseJson(yield* host.storageGet(storage));
+          if (kept === null || kept === undefined) return;
+          const at = u64(get(kept, "at"));
+          if (at !== null && this.#core.data.record("place", `${station}/${thread}`) === undefined) {
+            const offset = get(kept, "offset");
+            this.#places.set(moved, { at, offset: typeof offset === "number" ? offset : null });
+            this.#core.data.put("place", `${station}/${thread}`, { at, offset: typeof offset === "number" ? offset : null });
+          }
+          yield* host.storageDelete(storage);
+        }),
+      ),
+    );
+  }
+
+  /// Where the reader leaves a chat: at entry `at` short of its end, or at its end (null). Kept in its account's database.
   place(station: string, thread: number, at: number | null, offset: number | null): void {
     const key = `${station}\u0001${thread}`;
     const place: LeftAt | null = at === null ? null : { at, offset: offset !== null && Number.isFinite(offset) ? offset : null };
-    if (this.#places.has(key) && equal(this.#places.get(key), place)) return;
+    if (equal(this.#placeOf(station, thread), place)) return;
     this.#places.set(key, place);
-    const storage = placeKey(station, thread);
-    this.#core.runner.fork(Effect.ignore(place ? this.#core.host.storageSet(storage, toJsonBytes({ at: place.at, offset: place.offset })) : this.#core.host.storageDelete(storage)));
+    if (place) this.#core.data.put("place", `${station}/${thread}`, { at: place.at, offset: place.offset });
+    else this.#core.data.forgetRecord("place", `${station}/${thread}`);
   }
 
   /// How far a thread is known to go: its summary's last, or what is held past it.
@@ -280,24 +308,28 @@ export class StationTopics implements Owner {
     const latest = this.#latest(station, id);
     let window = this.#windows.get(tk);
     if (!window) {
-      const placeKeyOf = `${station}\u0001${id}`;
-      if (!this.#places.has(placeKeyOf)) return undefined;
       // Where the chat is to be read: the first entry not read while something is unread, else where it was left, else
       // its end.
       const unread = u64(get(summary, "unread")) ?? 0;
       const read = u64(get(summary, "read"));
-      const place = this.#places.get(placeKeyOf) ?? null;
+      const place = this.#placeOf(station, id);
       const at = read !== null && unread > 0 ? read + 1 : (place?.at ?? null);
       const atOffset = read !== null && unread > 0 ? null : (place?.offset ?? null);
       if (at !== null && at <= latest) {
         const from = Math.max(at - PAGE, 1);
         const to = Math.min(at + PAGE - 1, latest);
+        let first = from;
         if (data.logCount("entry", station, String(id), from, to) !== to - from + 1) {
-          // Not on the device yet: brought first.
+          // Not all on the device yet: brought. What is held from where it opens on (the sync brings the latest first)
+          // opens it now, what is before it coming in as it does when read back; only with that not held either does
+          // it wait.
           this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.range(station, id, from, to, null))));
-          return undefined;
+          const held = data.logRange("entry", station, String(id), from, to);
+          for (let n = at; n <= to; n++) if (!held.has(n)) return undefined;
+          first = at;
+          while (first > from && held.has(first - 1)) first--;
         }
-        window = { first: from, last: to >= latest ? null : to, at, atOffset, caught: to };
+        window = { first, last: to >= latest ? null : to, at, atOffset, caught: to };
       } else {
         if (span === null) {
           // Nothing of it yet: it opens once its latest page is here (an empty thread opens empty).

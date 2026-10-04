@@ -25,6 +25,9 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.animation.AnimatedContent
@@ -353,6 +356,15 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     fun strings(name: String): List<String> = prefs.getString(name, null)?.split('\u0000')?.filter { it.isNotEmpty() } ?: emptyList()
     fun setStrings(name: String, values: List<String>) = prefs.edit().putString(name, values.joinToString("\u0000")).apply()
 
+    /**
+     * Starts the core reading a chat ahead of its page (its row pressed), kept a moment for it: the page then has it as
+     * it comes in, instead of a frame of its loading look first (web core/react.ts prime).
+     */
+    fun prime(station: String, of: ChatOf) {
+        val topic = Topics.chat(station, of)
+        scope.launch { withTimeoutOrNull(PRIME_MS) { core.topic(topic).first { it.value != null || it.error != null } } }
+    }
+
     fun push(screen: Screen) { sheet = null; menu = null; forward = true; if (screen == Screen.NewChat || screen == madeChat) madeChat = null; stack = stack + screen }
     fun pop() { if (stack.size > 1) { sheet = null; menu = null; forward = false; stack = stack.dropLast(1) } }
     /** The top page gives way to another (a new chat becomes the chat it made). */
@@ -563,6 +575,11 @@ private fun AppContent(app: AppState) {
     } }
 }
 
+/** How long an opening page waits for what the core has on the device (web motion.ts LOCAL_MS): never for a station. */
+private const val LOCAL_MS = 100L
+/** How long a chat read ahead of its page (`AppState.prime`) is kept for it. */
+private const val PRIME_MS = 3_000L
+
 @Composable
 private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry) {
     val top = app.stack.last()
@@ -578,11 +595,6 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     val width = with(density) {
         val dp = window.toDp()
         if (dp >= fail.still.android.screens.WideAt) fail.still.android.screens.columnWidth(dp).toPx() else window.toFloat()
-    }
-    LaunchedEffect(top) {
-        if (pages.currentState == top && pages.targetState == top) return@LaunchedEffect
-        pages.animateTo(top, if (swiped) tween(300, easing = FastOutSlowInEasing) else null)
-        swiped = false
     }
     PredictiveBackHandler(enabled = app.stack.size > 1 && app.sheet == null && app.menu == null && !fail.still.android.screens.FileViewers.open) { progress ->
         val under = app.stack.getOrNull(app.stack.size - 2)
@@ -633,6 +645,19 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         letGo { it in stacked }
         val pagesIn = app.stack.mapTo(HashSet(), app::pageOf)
         kept.filterNot { it in pagesIn }.forEach { kept.remove(it); saved.removeState(it) }
+    }
+    LaunchedEffect(top) {
+        if (pages.currentState == top && pages.targetState == top) return@LaunchedEffect
+        // A chat opened slides in once the core has given it, from what is on the device (LOCAL_MS at most, as web
+        // mobile/Chat.tsx useReady): not first as an empty page swapped for the chat a frame or two later. One that has
+        // to come from its station is not waited for: it slides in, showing it coming.
+        if (top is Screen.Chat && app.forward && !swiped && app.pageOf(top) != "new-chat") {
+            val chat = followed.getOrPut(keyOf(top)) { fail.still.android.data.PageTopics() }
+                .of(app.core, Topics.chat(top.station, top.of), fail.still.android.data.ChatView.serializer())
+            withTimeoutOrNull(LOCAL_MS) { snapshotFlow { chat.value.value != null || chat.value.error != null }.first { it } }
+        }
+        pages.animateTo(top, if (swiped) tween(300, easing = FastOutSlowInEasing) else null)
+        swiped = false
     }
     // Wider than a phone (screens/Wide.kt): the pages in a column, the latest chats and the new-chat button at the screen's corners.
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
