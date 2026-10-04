@@ -377,4 +377,30 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal((await t.call("POST", "/automatic-decisions/refresh"))[0], 200);
     await t.close();
   });
+
+  test("the review log names each chat as its list does and says what came of the review", async () => {
+    const store = Store.open(":memory:", null);
+    store.insertSession({ key: "titled", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/a", token: "t", createdAt: 1, lastActiveAt: 1 });
+    store.insertSession({ key: "loose", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/b", token: "t", createdAt: 1, lastActiveAt: 1 });
+    const thread = store.openThread("slack:T1", "C1", "1.1", null, null);
+    store.joinThread(thread.id, "titled", "ds");
+    store.setThreadTitle(thread.id, "修登录页");
+    const result = (selected: string, complete: number) => ({ selected, probabilities: { complete }, model: "m", source: "native", retainedMass: 1 });
+    const base = { purpose: "archive", version: 2, model: "m", threshold: 0.9, elapsedMs: 1 };
+    store.recordDecision("titled", { ...base, accepted: true, result: result("complete", 0.97) });
+    store.recordDecision("titled", { ...base, accepted: false, result: result("complete", 0.8) });
+    store.recordDecision("titled", { ...base, accepted: false, result: result("complete", 0.95) });
+    store.recordDecision("titled", { ...base, accepted: false, result: result("human_needed", 0.1) });
+    store.recordDecision("loose", { ...base, accepted: false, result: null, error: "timeout" });
+    const t = await rig({ store });
+    const recent = t.accounts.automaticDecisionsView(owner).recent.map((r: any) => [r.title, r.outcome, r.label]);
+    assert.deepEqual(recent, [
+      ["loose", "failed", "没检查成"],
+      ["修登录页", "kept", "不推荐：还在等人回答或处理"],
+      ["修登录页", "kept", "不推荐：检查时 chat 又有了新消息，等下次检查"],
+      ["修登录页", "kept", "不推荐：像是做完了，但把握不够（80%，要 90%）"],
+      ["修登录页", "suggested", "推荐归档：没有后续事项"],
+    ]);
+    await t.close();
+  });
 });

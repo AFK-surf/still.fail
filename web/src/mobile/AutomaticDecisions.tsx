@@ -1,6 +1,6 @@
 import { t } from "../i18n.ts";
 import { Fragment } from "react";
-import { useAutomaticDecisionForm } from "../AutomaticDecisions.tsx";
+import { failed, useAutomaticDecisionForm } from "../AutomaticDecisions.tsx";
 import { useStations } from "../api.ts";
 import type { AutomaticDecisionView } from "../core/shapes.ts";
 import { ChevronRight, Read, Refresh } from "../icons.tsx";
@@ -53,7 +53,7 @@ function DecisionRecords({station,name,view}:{station:string;name:string;view:Au
       {view.recent.map(row=><ListRow key={row.id} onClick={()=>app.push(`${stationBase(station)}/chats/${encodeURIComponent(row.session)}`)}>
         <span className={`${parts.mGrow} ${lists.mRowText}`}>
           <span className={css.rowHead}><span className={`${parts.mGrow} ${lists.mRowTitle}`}>{row.title}</span><Time stamp={row.stamp} className={css.time} /></span>
-          <span className={css.meta}><span className={row.accepted ? undefined : parts.mRed}>{row.label}</span><span>·</span><span>{row.model}</span></span>
+          <span className={css.meta}><span className={failed(row) ? parts.mRed : undefined}>{row.label}</span></span>
           {row.error && <span className={`${lists.mRowNote} ${parts.mRed}`}>{row.error}</span>}
         </span>
       </ListRow>)}

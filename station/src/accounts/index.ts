@@ -28,6 +28,7 @@ import { type Capability, discover as discoverDecisions, fingerprint, resolvedMo
 import { type ProfileHealth, serves, usable } from "../sessions/pool.ts";
 import type { Store } from "../store/store.ts";
 import { modelKey } from "../read/usage.ts";
+import { titleOf } from "../read/views.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { checkAutomaticDecisions } from "./check.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
@@ -791,17 +792,23 @@ export class Accounts {
 
   // ── what the overview shows of the accounts (admin/views.rs `overview`) ──
 
+  /// What the session's chat is called in the chat list; its key only where it has no chat.
+  private chatTitleOf(session: string): string {
+    const summary = this.deps.store.listThreads("", session, null)[0];
+    if (summary) return titleOf(summary.thread, summary.firstText, null);
+    return this.deps.store.getSession(session)?.title ?? session;
+  }
+
   /// The overview's `automaticDecisions`.
   automaticDecisionsView(viewer: Viewer): Json {
     if (!manages(viewer)) return { canEdit: false, settings: {}, models: [], recent: [] };
-    const labels: Record<string, string> = { complete: "没有后续事项，推荐归档", agent_work: "还有工作可以继续", human_needed: "仍需人处理", uncertain: "证据不足，不推荐" };
+    const lang = stationLang();
     const recent = this.deps.store.recentDecisions().map((row: Json) => {
       const d = row.detail ?? {};
-      const status = typeof d?.result?.selected === "string" ? d.result.selected : "unavailable";
       const session = typeof row.session === "string" ? row.session : "";
-      const title = this.deps.store.getSession(session)?.title ?? session;
+      const [label, outcome] = decisionOutcome(d, lang);
       return {
-        id: row.id, session, title, at: row.at, label: labels[status] ?? "检查失败",
+        id: row.id, session, title: this.chatTitleOf(session), at: row.at, label, outcome,
         accepted: d.accepted ?? null, model: d.model ?? null, profile: d.profile ?? null, elapsedMs: d.elapsedMs ?? null, error: d.error ?? null,
       };
     });
@@ -983,4 +990,22 @@ export function modelName(id: string): string {
   const named = namedModel(base);
   if (named === undefined) return id.trim();
   return context === "" ? named : `${named} ${context}`;
+}
+
+/// A review's outcome in words, and whether it suggested archiving (`suggested`), did not (`kept`) or could not tell (`failed`).
+export function decisionOutcome(d: Json, lang: Lang): [string, "suggested" | "kept" | "failed"] {
+  const selected = typeof d?.result?.selected === "string" ? d.result.selected : null;
+  if (selected === null) return [tr(lang, "station.decisions.failed"), "failed"];
+  if (d.accepted === true) return [tr(lang, "station.decisions.suggested"), "suggested"];
+  if (selected !== "complete") {
+    const known = ["agent_work", "human_needed", "uncertain"].includes(selected);
+    return [tr(lang, known ? `station.decisions.${selected}` : "station.decisions.uncertain"), "kept"];
+  }
+  // Leaning to done, yet not suggested: not sure enough, else the chat (or the rule) changed while it was asked.
+  const p = d.result.probabilities?.complete;
+  const threshold = d.threshold;
+  if (typeof p === "number" && typeof threshold === "number" && p < threshold) {
+    return [tr(lang, "station.decisions.unsure", { p: Math.floor(p * 100), threshold: Math.round(threshold * 100) }), "kept"];
+  }
+  return [tr(lang, "station.decisions.changed"), "kept"];
 }

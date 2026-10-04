@@ -208,6 +208,8 @@ export interface AutomaticDecisionCheck {
 	at: number;
 	stamp?: Stamp;
 	label: string;
+	/** suggested (archiving), kept or failed; absent from older stations, where `accepted` alone tells. */
+	outcome?: string;
 	accepted: boolean;
 	model: string;
 	profile?: string;

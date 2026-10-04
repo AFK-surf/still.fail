@@ -3,7 +3,7 @@ import { useEffect, useId } from "react";
 import { Link } from "react-router";
 import { useStations } from "./api.ts";
 import { useCall, useTopic } from "./core/react.ts";
-import type { AutomaticDecisionDraft, AutomaticDecisionView } from "./core/shapes.ts";
+import type { AutomaticDecisionCheck, AutomaticDecisionDraft, AutomaticDecisionView } from "./core/shapes.ts";
 import { useAct } from "./toast.tsx";
 import { useDoing, useDoingFailed } from "./doing.ts";
 import { Button, Section, StatusDot, Switch, Time } from "./ui.tsx";
@@ -52,13 +52,15 @@ export function AutomaticDecisionLogs({ workspace }: { workspace: string }) {
     </Section>)}
   </div>;
 }
+/** Red only where the check itself failed; a station from before `outcome` knew only whether it was suggested. */
+export const failed = (row: AutomaticDecisionCheck) => row.outcome ? row.outcome === "failed" : !row.accepted;
 function DecisionRecords({station,view}:{station:string;view:AutomaticDecisionView}) {
   return !view.recent.length ? <p className={css.note}>{t("web-pages.automaticDecisions.empty")}</p> : <ul className={pages.list}>
     {view.recent.map(row => <li key={row.id}>
       <Link className={pages.listRow} to={`${stationBase(station)}/chats/${encodeURIComponent(row.session)}`}>
         <span className={pages.listRowText}>
           <span className={css.recordHead}><span className={pages.listRowTitle}>{row.title}</span><Time stamp={row.stamp} className={css.time} /></span>
-          <span className={css.meta}><span className={row.accepted ? undefined : css.bad}>{row.label}</span><span>·</span><span>{row.model}</span></span>
+          <span className={css.meta}><span className={failed(row) ? css.bad : undefined}>{row.label}</span></span>
           {row.error && <span className={css.error}>{row.error}</span>}
         </span>
       </Link>

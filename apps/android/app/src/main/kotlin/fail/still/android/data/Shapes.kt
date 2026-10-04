@@ -216,6 +216,8 @@ data class AutomaticDecisionCheck (
 	val at: Long,
 	val stamp: Stamp? = null,
 	val label: String,
+	/// suggested (archiving), kept or failed; absent from older stations, where `accepted` alone tells.
+	val outcome: String? = null,
 	val accepted: Boolean,
 	val model: String,
 	val profile: String? = null,

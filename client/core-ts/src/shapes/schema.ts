@@ -1785,6 +1785,7 @@ export const SHAPES: Record<string, Shape> = {
     ["at", "i64", { client: "I54" }],
     ["stamp", opt("Stamp"), { default: true }],
     ["label", "String"],
+    ["outcome", opt("String"), { default: true, doc: "suggested (archiving), kept or failed; absent from older stations, where `accepted` alone tells." }],
     ["accepted", "bool"],
     ["model", "String"],
     ["profile", opt("String")],

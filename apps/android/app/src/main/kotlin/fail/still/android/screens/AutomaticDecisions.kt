@@ -75,8 +75,8 @@ private fun AutomaticDecisionRecords(station: String, name: String, view: Automa
                     row.stamp?.let { Text(it.ago, fontSize = 12.sp, color = C.subtle) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(row.label, fontSize = 13.sp, color = if (row.accepted) C.muted else C.red)
-                    Text("· ${row.model}", fontSize = 13.sp, color = C.muted)
+                    // Red only where the check itself failed; a station from before `outcome` knew only whether it was suggested.
+                    Text(row.label, fontSize = 13.sp, color = if (row.outcome?.let { it == "failed" } ?: !row.accepted) C.red else C.muted)
                 }
                 row.error?.let { Text(it, fontSize = 12.sp, color = C.red) }
             }
