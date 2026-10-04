@@ -38,3 +38,6 @@ globalStyle(`${firstStation} ${machineLogins}`, { marginTop: "14px" });
 
 /** A shared profile nobody can use now (the station signed in to its subscription is away): dimmed, its state said. */
 export const profileAway = style({ opacity: ".55" });
+
+/** An account's state on its page: its pill, what its check said. */
+export const accountState = style({ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "12px", fontSize: vars.textSm });

@@ -336,5 +336,13 @@
   "core-views.usage.unpriced": "Unpriced",
   "core-views.profiles.only": "Only on {station}",
   "core-views.profiles.signedIn": "Signed in on {station}",
-  "core-views.profiles.allowed": "Only for {stations}"
+  "core-views.profiles.allowed": "Only for {stations}",
+  "core-views.profiles.on": "On {stations}",
+  "core-views.profiles.borrows": "Borrowed from {station}",
+  "core-views.profiles.copyOf": "A copy shared by {station}",
+  "core-views.profiles.lends": "Signed in here, lent to {stations}",
+  "core-views.profiles.sharedWith": "Shared with {stations}",
+  "core-views.profiles.sharedNone": "Shared; no other station uses it yet",
+  "core-views.profiles.ownLogin": "Signed in here on its own",
+  "core-views.profiles.ownKey": "This station's own key"
 }

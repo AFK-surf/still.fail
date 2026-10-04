@@ -276,5 +276,13 @@
   "core-views.usage.unpriced": "未计价",
   "core-views.profiles.only": "只在 {station}",
   "core-views.profiles.signedIn": "登录在 {station}",
-  "core-views.profiles.allowed": "只给 {stations}"
+  "core-views.profiles.allowed": "只给 {stations}",
+  "core-views.profiles.on": "在 {stations}",
+  "core-views.profiles.borrows": "向 {station} 借用",
+  "core-views.profiles.copyOf": "{station} 分享来的副本",
+  "core-views.profiles.lends": "登录在这台，借给 {stations}",
+  "core-views.profiles.sharedWith": "分享给 {stations}",
+  "core-views.profiles.sharedNone": "已分享，还没有别的 station 在用",
+  "core-views.profiles.ownLogin": "在这台单独登录",
+  "core-views.profiles.ownKey": "这台自己的 key"
 }

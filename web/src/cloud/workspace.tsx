@@ -27,7 +27,7 @@ import { NotificationsPage } from "../pages/Notifications.tsx";
 import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
-import { AutomaticDecisionCompletionSettings, AutomaticDecisionLogsSettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
+import { AutomaticDecisionCompletionSettings, AutomaticDecisionLogsSettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
@@ -124,6 +124,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/automatic-decisions/completion/logs" element={<AutomaticDecisionLogsSettings entry={entry} />} />
             <Route path="settings/profiles/add/:provider?" element={<AddProfile workspace={entry.id} />} />
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
+            <Route path="settings/profiles/account/:key" element={<ProfileAccountSettings entry={entry} />} />
             <Route path="settings/memory" element={<MemorySettings entry={entry} />} />
             <Route path="settings/usage/prices" element={<UsagePricesSettings entry={entry} />} />
             <Route path="settings/usage" element={<UsageSettings entry={entry} />} />

@@ -92,7 +92,7 @@ function WorkspaceList({ scope }: { scope: string }) {
     <ListCard>
       {view.items.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow>}
       {view.items.map((e: WorkspaceProfile) => (
-        <ListRow key={e.key} onClick={() => app.push(app.at(`/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
+        <ListRow key={e.key} onClick={() => app.push(app.at((e.members?.length ?? 0) > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
           <span className={`${partsCss.mGrow} ${listsCss.mRowText}`} style={e.usable ? undefined : { opacity: 0.55 }}>
             <span className={listsCss.mRowTitle}><Presence state={e.usable ? toneDot(e.profile.checkTone) : "error"} /> {e.profile.name}</span>
             <span className={listsCss.mRowNote}>{e.usable ? e.where || `${e.profile.checkText} · ${e.profile.usesText || accessLabel(e.profile)}` : t("web-pages.settings.profiles.hostAway", { station: e.hostName })}</span>
@@ -103,6 +103,48 @@ function WorkspaceList({ scope }: { scope: string }) {
       ))}
       {view.loading && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.reading")}</span></ListRow>}
     </ListCard>
+  );
+}
+
+/** An account on several stations (as the desktop's ProfileAccountSettings): what they have in common, then each
+ * station's part, each leading to its page there. */
+export function ProfileAccountScreen() {
+  const app = useApp();
+  const { key = "" } = useParams();
+  const view = useProfiles(app.entry.id).value;
+  const e = view?.items.find((x) => x.key === key);
+  if (!e) return <div className={pagesCss.mScreen}><NavBar back="Profile" onBack={app.pop} title="Profile" /><Loading text={view ? t("web-mobile.profiles.notFound") : t("web-mobile.reading")} /></div>;
+  const p = e.profile;
+  return (
+    <div className={pagesCss.mScreen}>
+      <NavBar back="Profile" onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{[p.email, accessLabel(p)].filter(Boolean).join(" · ")}</span>} />
+      <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
+        <SectionHeader title={t("web-pages.profiles.account.common")} start={24} />
+        <p className={settingsCss.mPageNote}>{t("web-pages.profiles.account.commonLead")}</p>
+        <ListCard>
+          <ListRow>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+              <span className={listsCss.mRowTitle}><Presence state={toneDot(p.checkTone)} /> {p.checkText}</span>
+              <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail : t("web-mobile.profiles.notChecked")}</span>
+            </span>
+          </ListRow>
+          {p.quota?.state === "ok" && p.quota.windows.length > 0 && <div className={css.mQuotaDials}><QuotaBars quota={p.quota} /></div>}
+        </ListCard>
+        <SectionHeader title={t("web-pages.profiles.account.each")} start={24} />
+        <ListCard>
+          {(e.members ?? []).map((m) => (
+            <ListRow key={m.station} onClick={() => app.push(app.at(`/s/${m.stationId}/settings/accounts/${encodeURIComponent(m.profileId)}`))}>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                <span className={listsCss.mRowTitle}><Presence state={!m.online ? "offline" : !m.usable ? "error" : toneDot(m.checkTone)} /> {m.stationName}</span>
+                <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{m.online ? m.about : t("web-mobile.profiles.offline")}</span>
+              </span>
+              <ChevronRight size={14} className={partsCss.mSubtle} />
+            </ListRow>
+          ))}
+        </ListCard>
+        <div style={{ height: 30 }} />
+      </div>
+    </div>
   );
 }
 

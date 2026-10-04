@@ -895,5 +895,9 @@
   "web-pages.profiles.share.goHost": "Go to {station}",
   "web-pages.profiles.share.hostAway": "{station} is not answering; it can't be used now",
   "web-pages.profiles.share.changeThere": "Change it there",
-  "web-pages.profiles.share.users": "In use on {stations}"
+  "web-pages.profiles.share.users": "In use on {stations}",
+  "web-pages.profiles.account.common": "In common",
+  "web-pages.profiles.account.commonLead": "Its allowance and whether it works are the account's own, the same on every station",
+  "web-pages.profiles.account.each": "On each station",
+  "web-pages.profiles.account.eachLead": "What it is on each station: signed in there, borrowed from another, or signed in on each. Open one to change it"
 }

@@ -2592,6 +2592,25 @@ export interface ProfileFlowView {
 	usesLine: string;
 }
 
+/** One station's copy of an account in the workspace's list. */
+export interface ProfileMember {
+	station: string;
+	stationId: string;
+	stationName: string;
+	online: boolean;
+	/** Its id on that station (its page there). */
+	profileId: string;
+	/** host: has it and lends it; user: borrows it (or a copy of a key); own: signed in there on its own. */
+	role: string;
+	/** What it is there, in words: 借给 mini / 向 studio 借 / 自己登录. */
+	about: string;
+	usable: boolean;
+	checkText: string;
+	checkTone: string;
+	/** How many connects use it there. */
+	usedBy: number;
+}
+
 export interface ShareStation {
 	id: string;
 	station: string;
@@ -2600,7 +2619,7 @@ export interface ShareStation {
 	allowed: boolean;
 }
 
-/** A profile in the workspace's list. */
+/** An account in the workspace's list: the same subscription or key on several stations (shared or each signed in) is one. */
 export interface WorkspaceProfile {
 	/** The share's id, or station/profile for one on a station only. */
 	key: string;
@@ -2626,6 +2645,8 @@ export interface WorkspaceProfile {
 	editable: boolean;
 	/** Its station can share it (one older than sharing cannot). */
 	canShare: boolean;
+	/** Each station that has this account: one row, its page their parts. */
+	members?: ProfileMember[];
 }
 
 /**

@@ -20,7 +20,8 @@ test("a shared profile is listed once, from its host, with where it is signed in
   ]);
   assert.equal(view.items.length, 2);
   const shared = view.items.find((e: any) => e.shared);
-  assert.equal(shared.key, "sh-1");
+  assert.equal(shared.key, "share:sh-1");
+  assert.deepEqual(shared.members.map((m: any) => [m.stationName, m.role]), [["studio", "host"], ["mini", "user"]]);
   assert.equal(shared.station, `w/${A}`, "its page is on its host");
   assert.equal(shared.profile.id, "max");
   assert.equal(shared.where, "登录在 studio · 只给 studio、mini");
@@ -37,7 +38,7 @@ test("a shared subscription whose host is away comes from a copy, unusable, firs
     station(A, "studio", false, null),
     station(B, "mini", true, [profile("b-own", { access: { kind: "env" } }), profile("sh-1", { name: "Max", share: { ...share, role: "user", reachable: true } })]),
   ]);
-  assert.equal(view.items[0].key, "sh-1");
+  assert.equal(view.items[0].key, "share:sh-1");
   assert.equal(view.items[0].usable, false);
   assert.equal(view.items[0].editable, false);
   // Still listed as up by the cloud, but not answering the station borrowing it: away all the same.
@@ -47,4 +48,22 @@ test("a shared subscription whose host is away comes from a copy, unusable, firs
   ]);
   assert.equal(late.items[0].usable, false);
   assert.equal(late.loading, true, "studio is up and not read yet");
+});
+
+test("the same account signed in on two stations each is one row, each station a member", () => {
+  const view = workspaceProfiles([
+    station(A, "studio", true, [profile("max", { email: "Z@x.test", runtime: "claude" })]),
+    station(B, "mini", true, [profile("max-2", { email: "z@x.test", runtime: "claude", checkTone: "red" })]),
+  ]);
+  assert.equal(view.items.length, 1);
+  const row = view.items[0];
+  assert.equal(row.where, "登录在 studio、mini");
+  assert.equal(row.profile.id, "max", "the row shows the first one that is up and has its login");
+  assert.deepEqual(row.members.map((m: any) => [m.stationName, m.role, m.about]), [["studio", "own", "在这台单独登录"], ["mini", "own", "在这台单独登录"]]);
+  // Two different accounts stay two rows.
+  const two = workspaceProfiles([
+    station(A, "studio", true, [profile("a", { email: "a@x.test", runtime: "claude" })]),
+    station(B, "mini", true, [profile("b", { email: "b@x.test", runtime: "claude" })]),
+  ]);
+  assert.equal(two.items.length, 2);
 });

@@ -1,21 +1,35 @@
-// The workspace's profiles in one list (the `profiles` view, docs/station-share.md): a profile shared between stations
-// once (the copy on its host when that one is read, else one of the others'), each other one with the station it is
-// on. Made from what the stations' overviews say as they come in: a station not read yet adds its own later.
+// The workspace's profiles in one list (the `profiles` view, docs/station-share.md), one row an account: the same
+// subscription (by its runtime and the address signed in) or the same key (by its provider and key), whether shared
+// between stations or signed in on several of them each, is one row; its stations are its members, each with what it
+// is there (the one that has it and lends it, one borrowing it, one signed in on its own). Made from what the stations'
+// overviews say as they come in: a station not read yet adds its own later.
 import { t } from "../i18n.ts";
 
 type J = any;
 
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
+const KEYED = new Set(["opencode-go", "anthropic-api", "api-provider"]);
 
 /// A station of the workspace as the entries name it.
 export type ShareStation = { id: string; station: string; name: string; online: boolean; allowed: boolean };
+
+/// Which account a profile is: the same one on several stations has the same identity (null: none to tell by).
+function account(p: J): string | null {
+  const a = isObject(p.access) ? p.access : {};
+  if (a.kind === "subscription") {
+    const email = typeof p.email === "string" && p.email !== "" ? p.email.toLowerCase() : null;
+    return email === null ? null : `sub:${p.runtime}:${email}`;
+  }
+  // The key as the station shows it (its first five and last four characters): enough to tell two apart.
+  if ((KEYED.has(a.kind) || (a.kind === "env" && a.provider)) && typeof a.key === "string" && a.key !== "") return `key:${a.provider ?? a.kind}:${a.endpoint ?? ""}:${a.key}`;
+  return null;
+}
 
 /// `stations`: the `stations` view's items (each with its decorated overview).
 export function workspaceProfiles(stations: J[]): J {
   const byId = new Map(stations.map((s) => [String(s.id), s]));
   const name = (id: string) => String(byId.get(id)?.name ?? id.slice(0, 8));
-  const shared = new Map<string, { host?: [J, J]; copies: [J, J][] }>();
-  const items: J[] = [];
+  const groups = new Map<string, [J, J][]>();
   let loading = false;
   for (const s of stations) {
     const overview = s.overview;
@@ -25,43 +39,50 @@ export function workspaceProfiles(stations: J[]): J {
     }
     for (const p of Array.isArray(overview.profiles) ? overview.profiles : []) {
       const share = isObject(p.share) ? p.share : null;
-      if (share === null) {
-        items.push({ ...entry(s, p, overview.sharing === true), where: t("core-views.profiles.only", { station: String(s.name) }) });
-        continue;
-      }
-      const at = shared.get(share.id) ?? { copies: [] };
-      if (share.role === "host") at.host = [s, p];
-      else at.copies.push([s, p]);
-      shared.set(share.id, at);
+      const key = account(p) ?? (share ? `share:${share.id}` : `${s.station}/${p.id}`);
+      const list = groups.get(key) ?? [];
+      list.push([s, p]);
+      groups.set(key, list);
     }
   }
-  for (const [, at] of shared) {
-    const [s, p] = at.host ?? at.copies[0]!;
-    const share = p.share;
-    const host = byId.get(String(share.host));
-    // Away: so still.fail cloud says, or (its word coming later) a station borrowing it found it not answering.
-    const hostOnline = host?.online === true && !at.copies.some(([, c]) => c.share?.reachable === false);
+  const items: J[] = [];
+  for (const [key, list] of groups) {
+    const members = list.map(([s, p]) => member(s, p, name, byId));
+    // What the row shows of it: the copy that has the login (a host, one signed in on its own) on a station that is up.
+    const owns = (m: J) => m.role !== "user";
+    const at = members.findIndex((m) => owns(m) && m.online) >= 0 ? members.findIndex((m) => owns(m) && m.online) : members.findIndex(owns) >= 0 ? members.findIndex(owns) : 0;
+    const [s, p] = list[at]!;
     const subscription = p.access?.kind === "subscription";
-    const allow: string[] | null = Array.isArray(share.allow) ? share.allow : null;
+    const share = list.map(([, x]) => x.share).find((x) => isObject(x)) ?? null;
+    const signedIn = members.filter(owns).map((m) => m.stationName);
+    const allow: string[] | null = share && Array.isArray(share.allow) ? share.allow : null;
     const parts: string[] = [];
-    if (subscription) parts.push(t("core-views.profiles.signedIn", { station: name(String(share.host)) }));
+    if (members.length === 1 && !share) parts.push(t("core-views.profiles.only", { station: String(s.name) }));
+    else if (subscription) parts.push(t("core-views.profiles.signedIn", { station: signedIn.join("、") }));
+    else if (!share) parts.push(t("core-views.profiles.on", { stations: members.map((m) => m.stationName).join("、") }));
     if (allow !== null) parts.push(t("core-views.profiles.allowed", { stations: allow.map(name).join("、") }));
-    const e = entry(s, p, true);
-    e.key = String(share.id);
-    e.shared = true;
-    e.host = String(share.host);
-    e.hostName = name(String(share.host));
-    e.hostOnline = hostOnline;
-    // A subscription is lent by its host: none can use it while that one is away.
-    e.usable = !subscription || hostOnline;
-    e.where = parts.join(" · ");
-    e.allow = allow;
-    e.stations = stations.map(
-      (x): ShareStation => ({ id: String(x.id), station: String(x.station), name: String(x.name), online: x.online === true, allowed: allow === null || allow.includes(String(x.id)) || String(x.id) === String(share.host) }),
-    );
-    // Its page: on its host (where it is changed), while that one is read.
-    e.editable = at.host !== undefined;
-    items.push(e);
+    const host = share ? String(share.host) : String(s.id);
+    items.push({
+      key,
+      station: String(s.station),
+      stationId: String(s.id),
+      stationName: String(s.name),
+      profile: p,
+      shared: share !== null,
+      host,
+      hostName: name(host),
+      hostOnline: byId.get(host)?.online === true,
+      // Usable where any of its copies is.
+      usable: members.some((m) => m.usable),
+      where: parts.join(" · "),
+      allow,
+      stations: stations.map(
+        (x): ShareStation => ({ id: String(x.id), station: String(x.station), name: String(x.name), online: x.online === true, allowed: allow === null || allow.includes(String(x.id)) || String(x.id) === host }),
+      ),
+      editable: owns(members[at]),
+      canShare: s.overview?.sharing === true,
+      members,
+    });
   }
   // What needs a look first (one nobody can use now, one whose check failed), then by name.
   const look = (e: J) => !e.usable || e.profile.checkTone === "red";
@@ -69,22 +90,31 @@ export function workspaceProfiles(stations: J[]): J {
   return { items, loading };
 }
 
-function entry(s: J, p: J, canShare: boolean): J {
+/// One station's copy of an account: what it is there and how it is doing.
+function member(s: J, p: J, name: (id: string) => string, byId: Map<string, J>): J {
+  const share = isObject(p.share) ? p.share : null;
+  const role = share?.role === "user" ? "user" : share ? "host" : "own";
+  const subscription = p.access?.kind === "subscription";
+  // A borrowed subscription: as good as its host is reachable (the cloud's word, and the borrower's).
+  const hostUp = role !== "user" || (byId.get(String(share.host))?.online === true && share.reachable !== false);
+  const online = s.online === true;
+  const usable = online && (role !== "user" || !subscription || hostUp);
+  const users: string[] = role === "host" && Array.isArray(share.users) ? share.users.map((u: string) => name(u)) : [];
+  let about: string;
+  if (role === "user") about = t(subscription ? "core-views.profiles.borrows" : "core-views.profiles.copyOf", { station: name(String(share.host)) });
+  else if (role === "host") about = users.length > 0 ? t(subscription ? "core-views.profiles.lends" : "core-views.profiles.sharedWith", { stations: users.join("、") }) : t("core-views.profiles.sharedNone");
+  else about = t(subscription ? "core-views.profiles.ownLogin" : "core-views.profiles.ownKey");
   return {
-    key: `${s.station}/${p.id}`,
     station: String(s.station),
     stationId: String(s.id),
     stationName: String(s.name),
-    profile: p,
-    shared: false,
-    host: String(s.id),
-    hostName: String(s.name),
-    hostOnline: s.online === true,
-    usable: true,
-    where: "",
-    allow: null,
-    stations: [],
-    editable: true,
-    canShare,
+    online,
+    profileId: String(p.id),
+    role,
+    about,
+    usable,
+    checkText: String(p.checkText ?? ""),
+    checkTone: String(p.checkTone ?? "neutral"),
+    usedBy: Array.isArray(p.usedBy) ? p.usedBy.length : 0,
   };
 }

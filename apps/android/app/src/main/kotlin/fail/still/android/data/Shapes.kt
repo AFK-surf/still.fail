@@ -2600,6 +2600,26 @@ data class ProfileFlowView (
 	val usesLine: String
 )
 
+/// One station's copy of an account in the workspace's list.
+@Serializable
+data class ProfileMember (
+	val station: String,
+	val stationId: String,
+	val stationName: String,
+	val online: Boolean,
+	/// Its id on that station (its page there).
+	val profileId: String,
+	/// host: has it and lends it; user: borrows it (or a copy of a key); own: signed in there on its own.
+	val role: String,
+	/// What it is there, in words: 借给 mini / 向 studio 借 / 自己登录.
+	val about: String,
+	val usable: Boolean,
+	val checkText: String,
+	val checkTone: String,
+	/// How many connects use it there.
+	val usedBy: Long
+)
+
 @Serializable
 data class ShareStation (
 	val id: String,
@@ -2609,7 +2629,7 @@ data class ShareStation (
 	val allowed: Boolean
 )
 
-/// A profile in the workspace's list.
+/// An account in the workspace's list: the same subscription or key on several stations (shared or each signed in) is one.
 @Serializable
 data class WorkspaceProfile (
 	/// The share's id, or station/profile for one on a station only.
@@ -2635,7 +2655,9 @@ data class WorkspaceProfile (
 	/// Its page is on the station that has it (its sharing can be changed there).
 	val editable: Boolean,
 	/// Its station can share it (one older than sharing cannot).
-	val canShare: Boolean
+	val canShare: Boolean,
+	/// Each station that has this account: one row, its page their parts.
+	val members: List<ProfileMember>? = null
 )
 
 /// The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with

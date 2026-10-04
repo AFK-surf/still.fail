@@ -7,9 +7,9 @@ import { Illustration } from "../brand.tsx";
 import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
-import { ArrowLeft, Bell, Brain, Chart, Check, Info, Key, LogOut, Monitor, Plug, Plus, Read, Refresh, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
+import { ArrowLeft, Bell, Brain, Chart, Check, ChevronRight, Info, Key, LogOut, Monitor, Plug, Plus, Read, Refresh, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, Navigate, NavLink, useNavigate, useSearchParams } from "react-router";
+import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from "react-router";
 import { useProfiles, useStations, type Profile, type StationView } from "../api.ts";
 import type { WorkspaceProfile } from "../core/shapes.ts";
 import { ConnectList } from "../pages/Connects.tsx";
@@ -332,7 +332,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
           {profiles.value && profiles.value.items.length > 0 && (
             <ul className={pagesCss.list}>
               {profiles.value.items.map((e) => (
-                <li key={e.key}><WorkspaceProfileRow entry={e} /></li>
+                <li key={e.key}><WorkspaceProfileRow entry={e} workspace={entry.id} /></li>
               ))}
             </ul>
           )}
@@ -358,14 +358,64 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
+/** An account's page, where it is on several stations. */
+export const accountPath = (workspace: string, key: string) => `/w/${workspace}/settings/profiles/account/${encodeURIComponent(key)}`;
+
+/**
+ * An account on several stations (the same subscription or key, shared or signed in on each): what they have in common
+ * (its allowance, how it is doing), then each station's part (lending it, borrowing it, signed in on its own), each
+ * leading to its page there.
+ */
+export function ProfileAccountSettings({ entry }: { entry: WorkspaceEntry }) {
+  const { key = "" } = useParams();
+  const view = useProfiles(entry.id).value;
+  const found = view?.items.find((e) => e.key === key);
+  const back = `/w/${entry.id}/settings/profiles`;
+  if (!view) return <Page title="Profile" back={back}><Loading label={t("web-pages.settings.reading")} fill={false} /></Page>;
+  if (!found) return <Page title="Profile" back={back}><p className={shellCss.muted}>{t("web-pages.profiles.notFound", { id: key })}</p></Page>;
+  const p = found.profile;
+  const kind = p.machine ? t("web-main.profile.machine") : p.providerName ?? ACCESS[p.access.kind].label;
+  return (
+    <Page title={p.name} lead={[p.email, kind].filter(Boolean).join(" · ")} back={back} backLabel="Profile">
+      <Section title={t("web-pages.profiles.account.common")} description={t("web-pages.profiles.account.commonLead")}>
+        <div className={css.accountState}>
+          {p.checkTone !== "green" && <Pill tone={p.checkTone}>{p.checkText}</Pill>}
+          <span className={shellCss.muted}>{p.check ? p.check.detail : t("web-pages.profiles.neverChecked")}</span>
+        </div>
+        <QuotaBars quota={p.quota} />
+        {p.modelsText && <p className={shellCss.muted}>{p.modelsText}</p>}
+      </Section>
+      <Section title={t("web-pages.profiles.account.each")} description={t("web-pages.profiles.account.eachLead")}>
+        <ul className={pagesCss.list}>
+          {(found.members ?? []).map((m) => (
+            <li key={m.station}>
+              <Link className={pagesCss.listRow} to={`${stationBase(m.station)}/settings/accounts/${encodeURIComponent(m.profileId)}`}>
+                <StatusDot state={m.online ? "online" : "offline"} />
+                <span className={pagesCss.listRowText}>
+                  <span className={pagesCss.listRowTitle}>{m.stationName}</span>
+                  <span className={shellCss.muted}>{[m.about, m.usedBy > 0 ? t("web-pages.settings.profiles.usedBy", { n: m.usedBy }) : ""].filter(Boolean).join(" · ")}</span>
+                </span>
+                {!m.online ? <Pill tone="neutral">{t("web-pages.stations.offline")}</Pill> : !m.usable ? <Pill tone="red">{t("web-pages.settings.profiles.hostAway", { station: found.hostName })}</Pill> : m.checkTone !== "green" && <Pill tone={m.checkTone as never}>{m.checkText}</Pill>}
+                <ChevronRight {...ICON} className={shellCss.muted} />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Section>
+    </Page>
+  );
+}
+
 /** A profile of the workspace's list: on its page's station; one shared that cannot be used now (its subscription's
  * station away) dimmed, and said why. */
-function WorkspaceProfileRow({ entry }: { entry: WorkspaceProfile }) {
+function WorkspaceProfileRow({ entry, workspace }: { entry: WorkspaceProfile; workspace: string }) {
   const state = useDoingState(["profile.delete", "profile.share", "profile.move"], { station: entry.station, id: entry.profile.id });
   const uses = [entry.where, entry.profile.usedBy.length ? t("web-pages.settings.profiles.usedBy", { n: entry.profile.usedBy.length }) : ""].filter(Boolean).join(" · ");
+  // On several stations: its own page, what they share and what each has; on one: that station's page.
+  const to = (entry.members?.length ?? 0) > 1 ? accountPath(workspace, entry.key) : `${stationBase(entry.station)}/settings/accounts/${encodeURIComponent(entry.profile.id)}`;
   return (
     <div className={entry.usable ? undefined : css.profileAway}>
-      <ProfileCard profile={entry.profile} to={`${stationBase(entry.station)}/settings/accounts/${encodeURIComponent(entry.profile.id)}`} uses={uses}
+      <ProfileCard profile={entry.profile} to={to} uses={uses}
         state={entry.usable ? undefined : <Pill tone="red">{t("web-pages.settings.profiles.hostAway", { station: entry.hostName })}</Pill>}
         action={state.running || state.error !== undefined ? <DoingShown state={state} className={controlsCss.iconSpinner} size={14} label={t("web-main.activity.busy")} /> : undefined} />
     </div>

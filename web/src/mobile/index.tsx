@@ -19,7 +19,7 @@ import { UsageScreen, UsagePricesScreen } from "./Usage.tsx";
 import { PreviewScreen } from "./Preview.tsx";
 import { Loading } from "./parts.tsx";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
-import { NewProfileScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
+import { NewProfileScreen, ProfileAccountScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
 import { AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
 import { ChangelogScreen } from "./Changelog.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
@@ -50,6 +50,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/automatic-decisions/completion" element={<AutomaticDecisionCompletionScreen />} />
       <Route path="settings/automatic-decisions/completion/logs" element={<AutomaticDecisionCompletionScreen logs />} />
       <Route path="settings/profiles" element={<ProfilesScreen />} />
+      <Route path="settings/profiles/account/:key" element={<ProfileAccountScreen />} />
       <Route path="settings/memory" element={<MemoriesScreen />} />
       <Route path="settings/usage/prices" element={<UsagePricesScreen />} />
       <Route path="settings/usage" element={<UsageScreen />} />
