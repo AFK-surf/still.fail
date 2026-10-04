@@ -33,7 +33,7 @@ jobs:
 
   android:
     needs: plan
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     environment: production
     timeout-minutes: 60
     steps:
