@@ -9,8 +9,8 @@ import { wall } from "../ops/fibers.ts";
 export type Revocation = { kind: string; id: string; at: number };
 
 /// Something a station of the workspace shares (docs/station-share.md), as still.fail cloud lists it: which station has
-/// it, which may use it (null: every one), and its version (raised by the host when what it is changes).
-export type Share = { id: string; kind: "profile" | "skill"; name: string; host: string; allow: string[] | null; version: number; updated_at: number };
+/// it and which may use it (null: every one). What it is goes between the stations.
+export type Share = { id: string; kind: "profile" | "skill"; name: string; host: string; allow: string[] | null; updated_at: number };
 
 export type CloudState = {
   origin: string;

@@ -190,4 +190,4 @@ const isRevocation = (r: any): r is Revocation => typeof r?.kind === "string" &&
 
 const isShare = (x: any): x is Share =>
   typeof x?.id === "string" && (x.kind === "profile" || x.kind === "skill") && typeof x.name === "string" && typeof x.host === "string" &&
-  (x.allow === null || (Array.isArray(x.allow) && x.allow.every((a: unknown) => typeof a === "string"))) && Number.isInteger(x.version);
+  (x.allow === null || (Array.isArray(x.allow) && x.allow.every((a: unknown) => typeof a === "string")));

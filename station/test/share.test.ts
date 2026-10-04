@@ -41,9 +41,9 @@ class FakeCloud {
     const at = this.shares.findIndex((s) => s.id === body.id);
     if (at >= 0 && this.shares[at]!.host !== station) throw new Error("not_host");
     if (body.op === "delete") this.shares = this.shares.filter((s) => s.id !== body.id);
-    else if (body.op === "move") this.shares[at] = { ...this.shares[at]!, host: body.host, version: this.shares[at]!.version + 1 };
-    else if (at >= 0) this.shares[at] = { ...this.shares[at]!, name: body.name, allow: body.allow ?? null, version: body.version };
-    else this.shares.push({ id: body.id, kind: body.kind, name: body.name, host: station, allow: body.allow ?? null, version: body.version, updated_at: 0 });
+    else if (body.op === "move") this.shares[at] = { ...this.shares[at]!, host: body.host };
+    else if (at >= 0) this.shares[at] = { ...this.shares[at]!, name: body.name, allow: body.allow ?? null };
+    else this.shares.push({ id: body.id, kind: body.kind, name: body.name, host: station, allow: body.allow ?? null, updated_at: 0 });
     this.shares = [...this.shares];
     setImmediate(() => this.tell());
     return { shares: this.shares };
@@ -109,10 +109,17 @@ test("a shared key profile is copied to the other station, key and all; stopping
   assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).access.key, "sk-new");
   // The host offline: the copy stays.
   all.delete(A);
-  a.config.update((raw) => (raw.profiles[0].name = "DeepSeek 2"));
   await settle(b);
   assert.equal(b.config.raw().profiles.length, 1);
   all.set(A, a);
+  // The other away when it changed: told once it can be (the host tries again), over the mesh, not through the cloud.
+  all.delete(B);
+  a.config.update((raw) => (raw.profiles[0].name = "DeepSeek 2"));
+  await settle(a);
+  assert.equal(b.config.raw().profiles[0].name, "DeepSeek");
+  all.set(B, b);
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles[0].name, "DeepSeek 2");
   await a.sharing.shareProfile("deepseek", false, null);
   await settle(a, b);
   assert.equal(b.config.raw().profiles.length, 0);

@@ -60,8 +60,8 @@ shares (workspace TEXT, id TEXT, kind TEXT, name TEXT, host TEXT, allow TEXT, ve
 
 | 方法 | 谁问谁 | 做什么 |
 |---|---|---|
-| `share.list` | 任意 → 任意 | 对方 host 着哪些分享项、各自的状态、版本、配额（客户端也读这个） |
-| `share.watch {id}` | 使用方 → host | 长连的流：先推当前值，之后有变化就推（状态、配额、设置、skills 的新版本） |
+| `share.changed {id, version}` | host → 使用方 | 内容变了；使用方再 `share.get` |
+| `share.version {id}` | 使用方 → host | 现在是第几版（每次启动问一次） |
 | `share.lend {id}` | 使用方 → host | 借订阅的 access token：`{token, expiresAt}` |
 | `share.key {id}` | 使用方 → host | 拿 `key` 分享项的 profile 内容和 key |
 | `share.read {id, since}` | 使用方 → host | 拿 `skills` 的当前版本（按文件给差异） |
@@ -171,7 +171,7 @@ core（`client/core-ts`）：
 
 ## 实现跟设计的出入
 
-- **没有 `share.watch` 长流**：版本号放在 cloud 的 shares 表里，host 改了内容就提高版本，cloud 用 presence 的 `state` 帧推给各台，使用方看到版本变了再 `share.get`。这样不用在一请求一流的传输上做长连。配额和状态由使用方需要时问 host（`share.status`）：检查、额度轮询（有人看着时每 5 分钟）、借 token 时。
+- **没有 `share.watch` 长流，变化照样走 mesh**：host 改了内容就提高自己的版本号，直接用 `share.changed` 告诉每台能用它的 station（没联系上的记着，之后再告诉）；收到的那台再 `share.get`。每台 station 每次启动对每个副本问一次 `share.version`，补上它离线期间的变化。cloud 只记谁是 host、谁能用，不经手版本。配额和状态由使用方需要时问 host（`share.status`）：检查、额度轮询（有人看着时每 5 分钟）、借 token 时。
 - **使用方怎么知道 host 不在**：借 token、问状态失败就记下这台 host 联系不上（overview 的 `share.reachable`），之后每分钟试一次，通了就把借来的订阅重新检查一遍。客户端把「cloud 说它离线」和「借用方联系不上它」都当作 host 不在。
 - **换 host 只能由原 host 交出**（订阅和 key 一样），没有做「原 host 不在时把 key、skill 交给别台」。一台 station 被移出 workspace 时，cloud 把它分享的东西一起删掉，各台的副本随之去掉；只是离线则一切保留。
 - **`MEMORY.md` 不分享**，只分享 skills；记忆页仍按 station 分组，每个 skill 展开后有分享开关，分享来的标「来自 X」。同名时本台自己的 skill 优先，分享来的不链接进去。

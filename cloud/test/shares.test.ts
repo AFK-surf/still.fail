@@ -64,22 +64,22 @@ test("a station shares, changes who may use it, hands it over; only its host may
     assert.deepEqual(heard.frames.at(-1).shares, [], "an empty list from a cloud that has shares");
 
     const id = "sh-0123456789abcdef0123";
-    const made = await share(h, studio, { op: "put", id, kind: "profile", name: "Claude Max", allow: null, version: 1 });
+    const made = await share(h, studio, { op: "put", id, kind: "profile", name: "Claude Max", allow: null });
     assert.equal(made.status, 200);
     await heard.ping();
-    assert.deepEqual(heard.frames.at(-1).shares.map((s: any) => [s.id, s.host, s.allow, s.version]), [[id, studio.id, null, 1]]);
+    assert.deepEqual(heard.frames.at(-1).shares.map((s: any) => [s.id, s.host, s.allow]), [[id, studio.id, null]]);
     // Seen by the workspace's members too.
     const view = (await (await alice("GET", `/v1/workspaces/${w}`)).json()) as any;
     assert.equal(view.shares[0].name, "Claude Max");
 
     // Not its host: refused; signed by another key: refused.
-    assert.equal((await share(h, mini, { op: "put", id, kind: "profile", name: "mine now", version: 2 })).status, 403);
+    assert.equal((await share(h, mini, { op: "put", id, kind: "profile", name: "mine now" })).status, 403);
     assert.equal((await share(h, mini, { op: "delete", id })).status, 403);
     assert.equal((await share(h, studio, { op: "delete", id }, mini)).status, 401);
     assert.equal((await share(h, studio, { op: "put", id: "Bad Id", kind: "profile", name: "x" })).status, 400);
     assert.equal((await share(h, studio, { op: "put", id: "sh-aaaaaaaaaaaa", kind: "car", name: "x" })).status, 400);
 
-    assert.equal((await share(h, studio, { op: "put", id, kind: "profile", name: "Claude Max", allow: [studio.id], version: 2 })).status, 200);
+    assert.equal((await share(h, studio, { op: "put", id, kind: "profile", name: "Claude Max", allow: [studio.id] })).status, 200);
     await heard.ping();
     assert.deepEqual(heard.frames.at(-1).shares[0].allow, [studio.id]);
 

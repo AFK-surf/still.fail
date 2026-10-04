@@ -109,7 +109,7 @@ export class Directory extends DurableObject<Env> {
       CREATE UNIQUE INDEX IF NOT EXISTS feedback_by_key ON feedback (sender, key);
       CREATE INDEX IF NOT EXISTS feedback_by_sender ON feedback (sender, created_at);
       CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, at INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS shares (workspace TEXT NOT NULL, id TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL, host TEXT NOT NULL, allow TEXT, version INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, PRIMARY KEY (workspace, id));
+      CREATE TABLE IF NOT EXISTS shares (workspace TEXT NOT NULL, id TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL, host TEXT NOT NULL, allow TEXT, updated_at INTEGER NOT NULL, PRIMARY KEY (workspace, id));
     `);
     // users had neither column before invite codes, nor beta (1: let into the test channel) before it, nor blocked (1:
     // the admin blocked the account; the account's own object is what keeps it out) before the console could block;
@@ -621,14 +621,14 @@ export class Directory extends DurableObject<Env> {
   // requests (api.ts `/v1/stations/shares`); a station removed from the workspace takes what it shared with it.
 
   #shares(workspace: string): ShareView[] {
-    return this.#rows("SELECT id, kind, name, host, allow, version, updated_at FROM shares WHERE workspace = ? ORDER BY updated_at", workspace).map((r) => ({
+    return this.#rows("SELECT id, kind, name, host, allow, updated_at FROM shares WHERE workspace = ? ORDER BY updated_at", workspace).map((r) => ({
       id: r.id as string, kind: r.kind as ShareView["kind"], name: r.name as string, host: r.host as string,
-      allow: r.allow === null ? null : (JSON.parse(r.allow as string) as string[]), version: r.version as number, updated_at: r.updated_at as number,
+      allow: r.allow === null ? null : (JSON.parse(r.allow as string) as string[]), updated_at: r.updated_at as number,
     }));
   }
 
   /**
-   * A station's request about what it shares: `put` (made, or its name, who may use it, its version), `move` (to
+   * A station's request about what it shares: `put` (made, or its name and who may use it), `move` (to
    * another station of the workspace, which has taken it already), `delete`. Answers the workspace's shares.
    */
   stationShare(station: string, input: Record<string, unknown>): { shares: ShareView[] } {
@@ -644,19 +644,18 @@ export class Directory extends DurableObject<Env> {
       if (!row) fail(404, "share_not_found");
       const to = typeof input.host === "string" ? input.host : "";
       if (!this.#one("SELECT 1 AS x FROM stations WHERE id = ? AND workspace = ?", to, workspace)) fail(400, "invalid_host");
-      this.#run("UPDATE shares SET host = ?, version = version + 1, updated_at = ? WHERE workspace = ? AND id = ?", to, nowSeconds(), workspace, id);
+      this.#run("UPDATE shares SET host = ?, updated_at = ? WHERE workspace = ? AND id = ?", to, nowSeconds(), workspace, id);
     } else if (op === "put") {
       const kind = input.kind === "profile" || input.kind === "skill" ? input.kind : fail(400, "invalid_kind");
       const name = typeof input.name === "string" && input.name.trim() && input.name.length <= 200 ? input.name.trim() : fail(400, "invalid_name");
       const allow = input.allow === null || input.allow === undefined ? null
         : Array.isArray(input.allow) && input.allow.length <= MAX_ALLOW && input.allow.every(validKeyHex) ? JSON.stringify([...new Set(input.allow as string[])])
         : fail(400, "invalid_allow");
-      const version = Number.isSafeInteger(input.version) && (input.version as number) >= 0 ? (input.version as number) : 0;
       if (row) {
-        this.#run("UPDATE shares SET name = ?, allow = ?, version = ?, updated_at = ? WHERE workspace = ? AND id = ?", name, allow, version, nowSeconds(), workspace, id);
+        this.#run("UPDATE shares SET name = ?, allow = ?, updated_at = ? WHERE workspace = ? AND id = ?", name, allow, nowSeconds(), workspace, id);
       } else {
         if ((this.#one("SELECT count(*) AS n FROM shares WHERE workspace = ?", workspace)!.n as number) >= MAX_SHARES) fail(400, "too_many_shares");
-        this.#run("INSERT INTO shares (workspace, id, kind, name, host, allow, version, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", workspace, id, kind, name, station, allow, version, nowSeconds());
+        this.#run("INSERT INTO shares (workspace, id, kind, name, host, allow, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", workspace, id, kind, name, station, allow, nowSeconds());
       }
     } else {
       fail(400, "invalid_op");

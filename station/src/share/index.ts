@@ -3,8 +3,9 @@
 // lists which station hosts what and which may use it (cloud.json `shares`), and everything else goes between the
 // stations over the station transport (`share.*`, jobs/remote.ts hands them here):
 //
-// - a key profile and a skill: each station that may use it keeps a copy (config.json, <data>/share/<id>/), fetched
-//   again whenever the host raises its version; the host being offline changes nothing for them.
+// - a key profile and a skill: each station that may use it keeps a copy (config.json, <data>/share/<id>/). Its host
+//   tells each of them over the mesh when it changed (share.changed), and each asks it once a run what it is at
+//   (share.version: what changed while it was away); the host being offline changes nothing for them.
 // - a subscription: only its host keeps the login and renews it (a refresh token is spent when used, so two renewing
 //   would sign each other out). The others borrow a short-lived access token for each process they start; with the host
 //   offline they cannot.
@@ -78,8 +79,10 @@ export type SharingDeps = {
 };
 
 type State = {
-  hosted: Record<string, { version: number; hash: string }>;
-  borrowed: Record<string, { version: number; hash: string; kind: "profile" | "skill"; name: string; pending?: boolean }>;
+  /// What this station shares: its version (raised when what it is changes) and the stations told of that one.
+  hosted: Record<string, { version: number; hash: string; told: string[] }>;
+  /// What it copies of others': the version it has, from which host.
+  borrowed: Record<string, { version: number; hash: string; kind: "profile" | "skill"; name: string; host?: string; pending?: boolean }>;
 };
 
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -162,6 +165,10 @@ export class Sharing {
   /// Shares this station is handing to another right now: not lent meanwhile.
   private moving = new Set<string>();
   private reconciling: Promise<void> | null = null;
+  /// Copies whose host said they changed since they were fetched.
+  private stale = new Set<string>();
+  /// Copies asked about in this run (what changed while this station was away is found that way).
+  private checked = new Set<string>();
   private again = false;
 
   constructor(deps: SharingDeps) {
@@ -195,7 +202,9 @@ export class Sharing {
   private readState(): State {
     try {
       const s = JSON.parse(readFileSync(join(this.root, "state.json"), "utf8"));
-      return { hosted: isObject(s.hosted) ? s.hosted : {}, borrowed: isObject(s.borrowed) ? s.borrowed : {} };
+      const hosted = isObject(s.hosted) ? s.hosted : {};
+      for (const h of Object.values(hosted) as any[]) if (!Array.isArray(h.told)) h.told = [];
+      return { hosted, borrowed: isObject(s.borrowed) ? s.borrowed : {} };
     } catch {
       return { hosted: {}, borrowed: {} };
     }
@@ -263,63 +272,66 @@ export class Sharing {
     let pending = false;
     const silent = new Set(this.unreachable.keys());
 
-    // What this station hosts: its version raised when what it is changed, said to the cloud.
+    // What this station hosts: its version raised when what it is changed, and the stations that may use it told so
+    // directly (each until it has heard; one away asks when it is back).
+    const peers = (cloud.state?.peers ?? []).flatMap((p: any) => (typeof p?.id === "string" && p.id !== me ? [p.id as string] : []));
+    const hosted: [string, string][] = [];
     for (const p of this.profiles()) {
       if (!isObject(p.share) || p.share.borrowed === true || typeof p.share.id !== "string") continue;
-      const id = p.share.id as string;
-      const listed = this.share(id);
-      if (current && listed && listed.host !== me) continue;
-      const hash = hashOf(portable(p));
-      const was = state.hosted[id];
-      if (was?.hash === hash && listed) continue;
-      const version = (was?.version ?? listed?.version ?? 0) + (was?.hash === hash ? 0 : 1);
-      try {
-        await this.put({ op: "put", id, kind: "profile", name: String(p.name ?? p.id), allow: listed?.allow ?? null, version });
-        state.hosted[id] = { version, hash };
-      } catch (e) {
-        pending = true;
-        log.warn("share", "telling still.fail cloud of a shared profile failed", { id, error: (e as Error).message });
-      }
+      hosted.push([p.share.id as string, hashOf(portable(p))]);
     }
-    const sharedSkills: Record<string, string> = isObject(this.deps.config.raw()?.sharedSkills) ? this.deps.config.raw().sharedSkills : {};
-    for (const [name, id] of Object.entries(sharedSkills)) {
-      const listed = this.share(id);
-      if (current && listed && listed.host !== me) continue;
+    for (const [name, id] of Object.entries(this.sharedSkills())) {
       const dir = join(this.skillsDir(), name);
       this.watchHosted(name, dir);
-      let files: Record<string, Buffer>;
       try {
-        files = readSkill(dir);
+        hosted.push([id, skillHash(readSkill(dir))]);
       } catch (e) {
         log.warn("share", "a shared skill could not be read", { name, error: (e as Error).message });
-        continue;
       }
-      const hash = skillHash(files);
+    }
+    for (const [id, hash] of hosted) {
+      const listed = this.share(id);
+      if (current && listed && listed.host !== me) continue;
       const was = state.hosted[id];
-      if (was?.hash === hash && listed) continue;
-      const version = (was?.version ?? listed?.version ?? 0) + (was?.hash === hash ? 0 : 1);
-      try {
-        await this.put({ op: "put", id, kind: "skill", name, allow: listed?.allow ?? null, version });
-        state.hosted[id] = { version, hash };
-      } catch (e) {
-        pending = true;
-        log.warn("share", "telling still.fail cloud of a shared skill failed", { id, error: (e as Error).message });
+      if (was?.hash !== hash) state.hosted[id] = { version: (was?.version ?? 0) + 1, hash, told: [] };
+      const now = state.hosted[id]!;
+      if (!listed) continue;
+      for (const peer of peers) {
+        if (now.told.includes(peer) || !this.mayUse(listed, peer)) continue;
+        try {
+          await this.deps.ask(peer, { method: "share.changed", id, version: now.version });
+          now.told.push(peer);
+        } catch {
+          pending = true;
+        }
       }
     }
 
-    // What others share with this station: copied here (or kept current), and what is no longer for it taken away.
+    // What others share with this station: copied here, fetched again when its host says it changed, asked once a run
+    // (what changed while this station was away), and what is no longer for it taken away.
     if (current) {
       const wanted = new Map(this.shares().filter((s) => s.host !== me && this.mayUse(s, me)).map((s) => [s.id, s]));
       for (const share of wanted.values()) {
         const had = state.borrowed[share.id];
-        if (had && had.version === share.version && !had.pending) continue;
+        const fresh = had && !had.pending && had.host === share.host && !this.stale.has(share.id);
+        if (fresh && this.checked.has(share.id)) continue;
         try {
-          if (had?.pending && share.kind === "skill") await this.sendSkillEdit(share, state);
+          if (fresh) {
+            const now = await this.deps.ask(share.host, { method: "share.version", id: share.id });
+            this.unreachable.delete(share.host);
+            if (now?.version === had.version) {
+              this.checked.add(share.id);
+              continue;
+            }
+          }
+          if (had?.pending && share.kind === "skill" && had.host === share.host) await this.sendSkillEdit(share, state);
           const got = await this.deps.ask(share.host, { method: "share.get", id: share.id });
           this.unreachable.delete(share.host);
           if (share.kind === "profile") this.placeProfile(share, got);
           else this.placeSkill(share, got, state);
-          state.borrowed[share.id] = { version: Number(got?.version ?? share.version), hash: share.kind === "skill" ? String(got?.hash ?? "") : "", kind: share.kind, name: share.name };
+          state.borrowed[share.id] = { version: Number(got?.version ?? 0), hash: share.kind === "skill" ? String(got?.hash ?? "") : "", kind: share.kind, name: share.name, host: share.host };
+          this.stale.delete(share.id);
+          this.checked.add(share.id);
         } catch (e) {
           pending = true;
           this.unreachable.set(share.host, this.time.now());
@@ -416,7 +428,7 @@ export class Sharing {
     const dir = this.mirror(share.id);
     this.stopWatch(`borrowed:${share.id}`);
     writeSkill(dir, got.files);
-    state.borrowed[share.id] = { version: Number(got.version ?? share.version), hash: String(got.hash ?? ""), kind: "skill", name: share.name };
+    state.borrowed[share.id] = { version: Number(got.version ?? 0), hash: String(got.hash ?? ""), kind: "skill", name: share.name, host: share.host };
   }
 
   private removeSkill(id: string, name: string) {
@@ -521,15 +533,23 @@ export class Sharing {
     const me = this.me();
     if (method === "share.take") return this.take(peer, request);
     const share = this.share(id);
+    // Its host says a copy here is behind: fetched again.
+    if (method === "share.changed") {
+      if (!share || share.host !== peer) throw new Error("only the station that has it says it changed");
+      this.stale.add(id);
+      void this.reconcile();
+      return { heard: true };
+    }
     if (!share || share.host !== me) throw new Error("this station does not share that");
     if (!this.mayUse(share, peer)) throw new Error("that share is not for this station");
     if (share.kind === "profile") {
       const p = this.profiles().find((x) => isObject(x.share) && x.share.id === id && x.share.borrowed !== true);
       if (!p) throw new Error("this station does not share that");
+      if (method === "share.version") return { version: this.readState().hosted[id]?.version ?? 0 };
       if (method === "share.get") {
         const state = this.readState();
         const email = p.access?.kind === "subscription" ? this.emailOf(p) : null;
-        return { version: state.hosted[id]?.version ?? share.version, profile: portable(p), email };
+        return { version: state.hosted[id]?.version ?? 0, profile: portable(p), email };
       }
       if (method === "share.lend") {
         if (this.moving.has(id)) throw new Error("the login is being moved to another station");
@@ -540,9 +560,10 @@ export class Sharing {
       const name = Object.entries(this.sharedSkills()).find(([, v]) => v === id)?.[0];
       if (!name) throw new Error("this station does not share that");
       const dir = join(this.skillsDir(), name);
+      if (method === "share.version") return { version: this.readState().hosted[id]?.version ?? 0 };
       if (method === "share.get") {
         const files = readSkill(dir);
-        return { version: this.readState().hosted[id]?.version ?? share.version, hash: skillHash(files), files: encodeFiles(files) };
+        return { version: this.readState().hosted[id]?.version ?? 0, hash: skillHash(files), files: encodeFiles(files) };
       }
       if (method === "share.put") return this.takeEdit(peer, id, name, dir, request);
     }
@@ -597,12 +618,11 @@ export class Sharing {
     }
     const now = readSkill(dir);
     const next = version + 1;
-    state.hosted[id] = { version: next, hash: skillHash(now) };
+    // The station that sent it has it (unless it conflicted); the others are told.
+    state.hosted[id] = { version: next, hash: skillHash(now), told: conflict ? [] : [peer] };
     this.writeState(state);
     log.info("share", conflict ? "a skill edit on an older copy kept beside it" : "a skill edit taken", { name, from: peer });
-    void this.put({ op: "put", id, kind: "skill", name, allow: this.share(id)?.allow ?? null, version: next }).catch((e) =>
-      log.warn("share", "telling still.fail cloud of a skill's new version failed", { id, error: (e as Error).message }),
-    );
+    void this.reconcile();
     return { version: next, conflict };
   }
 
@@ -737,8 +757,8 @@ export class Sharing {
     const id = had ?? newId();
     const state = this.readState();
     const version = (state.hosted[id]?.version ?? 0) + 1;
-    await this.put({ op: "put", id, kind: "profile", name: String(p.name ?? p.id), allow, version });
-    state.hosted[id] = { version, hash: hashOf(portable(p)) };
+    await this.put({ op: "put", id, kind: "profile", name: String(p.name ?? p.id), allow });
+    state.hosted[id] = { version, hash: hashOf(portable(p)), told: [] };
     this.writeState(state);
     if (had === null) {
       this.deps.config.update((raw) => {
@@ -766,8 +786,8 @@ export class Sharing {
     const id = had ?? newId();
     const state = this.readState();
     const version = (state.hosted[id]?.version ?? 0) + 1;
-    await this.put({ op: "put", id, kind: "skill", name, allow, version });
-    state.hosted[id] = { version, hash: skillHash(files) };
+    await this.put({ op: "put", id, kind: "skill", name, allow });
+    state.hosted[id] = { version, hash: skillHash(files), told: [] };
     this.writeState(state);
     if (had === null) {
       this.deps.config.update((raw) => {
@@ -797,7 +817,7 @@ export class Sharing {
     }
     this.moving.add(id);
     try {
-      await this.deps.ask(to, { method: "share.take", id, profile: { ...portable(p), access: p.access }, email: this.emailOf(p), credentials, version: (this.readState().hosted[id]?.version ?? share.version) + 1 });
+      await this.deps.ask(to, { method: "share.take", id, profile: { ...portable(p), access: p.access }, email: this.emailOf(p), credentials, version: (this.readState().hosted[id]?.version ?? 0) + 1 });
       await this.put({ op: "move", id, host: to });
     } catch (e) {
       this.moving.delete(id);
@@ -811,7 +831,7 @@ export class Sharing {
     const state = this.readState();
     const was = state.hosted[id];
     delete state.hosted[id];
-    state.borrowed[id] = { version: (was?.version ?? 0) + 1, hash: "", kind: "profile", name: String(p.name ?? p.id) };
+    state.borrowed[id] = { version: (was?.version ?? 0) + 1, hash: "", kind: "profile", name: String(p.name ?? p.id), host: to };
     this.writeState(state);
     this.moving.delete(id);
     log.info("share", "a shared profile moved to another station", { profile: profileId, to });
@@ -847,7 +867,7 @@ export class Sharing {
     });
     const state = this.readState();
     delete state.borrowed[id];
-    state.hosted[id] = { version: Number(request.version ?? share.version + 1), hash: hashOf(portable(given)) };
+    state.hosted[id] = { version: Number(request.version ?? 1), hash: hashOf(portable(given)), told: [] };
     this.writeState(state);
     log.info("share", "a shared profile handed over to this station", { id, from: peer });
     return { taken: true };
