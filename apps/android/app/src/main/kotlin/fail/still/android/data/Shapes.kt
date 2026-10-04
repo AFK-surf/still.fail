@@ -1315,6 +1315,14 @@ data class StationUpdateNotice (
 	val text: String,
 	val detail: String? = null,
 	val label: String? = null,
+	/// The station's name as its workspace has it ("station" when it has none). Absent from older cores.
+	val station: String? = null,
+	/// The version it runs.
+	val from: String? = null,
+	/// The version it is going to, when known and not the one it runs.
+	val to: String? = null,
+	/// How far an update is, 0–100, when the station says.
+	val percent: Double? = null,
 	val version: String? = null,
 	val open: Boolean? = null,
 	val canUpdate: Boolean? = null,

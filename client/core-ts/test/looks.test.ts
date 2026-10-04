@@ -71,8 +71,9 @@ test("update_progress_and_pending_messages_survive_disconnect_and_clear_on_new_o
   assert.equal(stationUpdate(overview, chat, null, false, true).detail, "正在下载新版本…");
   chat.link.state = "reconnecting";
   chat.outbox = [{ id: "one", state: "sending" }];
-  const notice = stationUpdate(overview, chat, null, false, true);
-  assert.equal(notice.text, "station 正在更新");
+  const notice = stationUpdate(overview, chat, null, false, true, "Mac Studio");
+  assert.equal(notice.text, "「Mac Studio」正在更新");
+  assert.equal(notice.station, "Mac Studio");
   assert.ok(notice.detail.includes("消息仍在发送"));
   chat.outbox[0].state = "failed";
   assert.ok(!stationUpdate(overview, chat, null, false, true).detail.includes("消息仍在发送"));
@@ -96,6 +97,21 @@ test("dismissal_is_version_and_channel_scoped_and_never_hides_progress", () => {
   const progress = stationUpdate(overview, null, "stable:2", false, true);
   assert.equal(progress.label, "更新中");
   assert.equal(progress.dismissible, false);
+});
+
+test("update_says_which_station_and_versions", () => {
+  const overview: J = { updates: [{ id: "station", state: "updating", version: "0.1.10", latest: "0.1.12", percent: 140, progress: "正在下载新版本…" }] };
+  const chat: J = { link: { state: "online" }, outbox: [] };
+  const notice = stationUpdate(overview, chat, null, false, true, "studio");
+  assert.equal(notice.station, "studio");
+  assert.equal(notice.from, "0.1.10");
+  assert.equal(notice.to, "0.1.12");
+  assert.equal(notice.percent, 100);
+  chat.link.state = "reconnecting";
+  assert.equal(stationUpdate(overview, chat, null, false, true, "studio").percent, null);
+  overview.updates[0].latest = "0.1.10";
+  assert.equal(stationUpdate(overview, null, null, false, true).to, null);
+  assert.equal(stationUpdate(overview, null, null, false, true).station, "station");
 });
 
 test("availability_explains_deferral_only_when_automatic_updates_are_enabled", () => {

@@ -649,7 +649,7 @@ export class Views implements Owner {
     const role = get(workspace, "role");
     const manager = role === "owner" || role === "admin";
     const dismissed = get(get(prefs, "stationUpdatesDismissed"), station);
-    v.stationUpdate = looks.stationUpdate(overview, v, typeof dismissed === "string" ? dismissed : null, this.#updateNoticesOpen.has(station), manager);
+    v.stationUpdate = looks.stationUpdate(overview, v, typeof dismissed === "string" ? dismissed : null, this.#updateNoticesOpen.has(station), manager, this.stationName(station));
     return out;
   }
 

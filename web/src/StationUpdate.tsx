@@ -19,12 +19,25 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
       <Popover.Anchor asChild><span className={css.dot} /></Popover.Anchor>{notice.label ?? notice.text}
     </Popover.Trigger>
     <Popover.Portal>
-      <Popover.Content className={css.popover} side="bottom" align="end" alignOffset={-30} sideOffset={10} collisionPadding={12} arrowPadding={22} onOpenAutoFocus={(e) => e.preventDefault()}>
-        <div className={css.words}><span className={css.title}>{notice.text}</span>{notice.detail && <span className={css.detail}>{notice.detail}</span>}</div>
-        {notice.canUpdate && <button className={css.update} disabled={busy} onClick={() => act(api.updateSoftware("station"), "更新 station")}>
-          <DoingMark calls="software.update" on={{ station, id: "station" }} size={12} />{busy ? "更新中" : "现在更新"}
-        </button>}
-        <button className={css.dismiss} aria-label={notice.dismissible ? "不再提醒此版本" : "收起更新详情"} title={notice.dismissible ? "不再提醒此版本" : "收起更新详情"} onClick={() => control(notice.dismissible ? "dismiss" : "close")}><Close size={18} /></button>
+      <Popover.Content className={css.popover} data-tone={notice.tone} side="bottom" align="end" alignOffset={-30} sideOffset={10} collisionPadding={12} arrowPadding={22} onOpenAutoFocus={(e) => e.preventDefault()}>
+        <div className={css.head}>
+          <div className={css.words}>
+            {notice.station
+              ? <span className={css.title}><span className={css.name}>{notice.station}</span>{notice.label && <span className={css.state}>{notice.label}</span>}</span>
+              : <span className={css.name}>{notice.text}</span>}
+            {notice.detail && <span className={css.detail}>{notice.detail}</span>}
+          </div>
+          <button className={css.dismiss} aria-label={notice.dismissible ? "不再提醒此版本" : "收起更新详情"} title={notice.dismissible ? "不再提醒此版本" : "收起更新详情"} onClick={() => control(notice.dismissible ? "dismiss" : "close")}><Close size={14} /></button>
+        </div>
+        {notice.tone === "busy" && notice.station && <div className={css.bar}>
+          {notice.percent != null ? <span className={css.fill} style={{ width: `${notice.percent}%` }} /> : <span className={`${css.fill} ${css.sweeping}`} />}
+        </div>}
+        {(notice.from || notice.to || notice.canUpdate) && <div className={css.foot}>
+          {(notice.from || notice.to) && <span className={css.versions}>{[notice.from, notice.to].filter(Boolean).join(" → ")}</span>}
+          {notice.canUpdate && <button className={css.update} disabled={busy} onClick={() => act(api.updateSoftware("station"), "更新 station")}>
+            <DoingMark calls="software.update" on={{ station, id: "station" }} size={12} />{busy ? "更新中" : "现在更新"}
+          </button>}
+        </div>}
         <Popover.Arrow className={css.arrow} width={12} height={6} />
       </Popover.Content>
     </Popover.Portal>

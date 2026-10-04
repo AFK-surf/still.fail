@@ -108,25 +108,32 @@ export function answer(method: string, path: string, value: J): void {
 }
 
 /// Kept overview progress survives a handover's disconnected interval. No update is inferred from a disconnect.
-export function stationUpdate(overview: J, chat: J, dismissed: string | null, open: boolean, manager: boolean): J {
+/// `name` is the station's as its workspace has it, so people can tell which one it is.
+export function stationUpdate(overview: J, chat: J, dismissed: string | null, open: boolean, manager: boolean, name = ""): J {
   const update = arr(get(overview, "updates")).find((v) => get(v, "id") === "station");
   if (update === undefined) return null;
   const linkState = get(get(chat, "link"), "state");
   const offline = typeof linkState === "string" && linkState !== "online";
+  const station = name !== "" ? name : "station";
+  const from = typeof update.version === "string" ? update.version : null;
+  const to = typeof update.latest === "string" && update.latest !== from ? update.latest : null;
+  const said = { station, from, to };
   if (update.state === "updating") {
     const sending = arr(get(chat, "outbox")).some((e) => get(e, "state") === "sending" && (get(e, "seq") === undefined || get(e, "seq") === null));
-    const progress = offline ? "正在等待 station 重新连接" : typeof update.progress === "string" ? update.progress : "正在准备新版本";
-    const detail = sending ? `${progress}；消息仍在发送，连接恢复后自动继续` : progress;
-    return { tone: "busy", label: "更新中", text: "station 正在更新", detail, open, canUpdate: false, dismissible: false };
+    const progress = offline ? t("core-logic.looks.update.reconnecting") : typeof update.progress === "string" ? update.progress : t("core-logic.looks.update.preparing");
+    const detail = sending ? t("core-logic.looks.update.sending", { progress }) : progress;
+    const percent = !offline && typeof update.percent === "number" ? Math.max(0, Math.min(100, update.percent)) : null;
+    return { tone: "busy", label: t("core-logic.looks.update.updating"), text: t("core-logic.looks.update.updating.text", { name: station }), detail, ...said, percent, open, canUpdate: false, dismissible: false };
   }
   if (update.state === "failed") {
-    return { tone: "trouble", label: "更新失败", text: "station 更新失败", detail: typeof update.message === "string" ? update.message : "可重试更新", open, canUpdate: manager && !offline && update.updatable === true, dismissible: false };
+    const detail = typeof update.message === "string" ? update.message : t("core-logic.looks.update.retry");
+    return { tone: "trouble", label: t("core-logic.looks.update.failed"), text: t("core-logic.looks.update.failed.text", { name: station }), detail, ...said, open, canUpdate: manager && !offline && update.updatable === true, dismissible: false };
   }
   if (update.newer === true && update.updatable === true) {
     const version = typeof update.latest === "string" ? `${typeof update.channel === "string" ? update.channel : ""}:${update.latest}` : null;
     if (version !== null && version === dismissed) return null;
-    const detail = update.auto === true && update.idleOnly === true ? "空闲时自动更新" : manager ? "可立即更新" : "请管理员更新";
-    return { tone: "notice", label: "可更新", text: "station 有新版本", detail, version, open, canUpdate: manager && !offline, dismissible: version !== null };
+    const detail = update.auto === true && update.idleOnly === true ? t("core-logic.looks.update.idle") : manager ? t("core-logic.looks.update.now") : t("core-logic.looks.update.admin");
+    return { tone: "notice", label: t("core-logic.looks.update.newer"), text: t("core-logic.looks.update.newer.text", { name: station }), detail, ...said, version, open, canUpdate: manager && !offline, dismissible: version !== null };
   }
   return null;
 }

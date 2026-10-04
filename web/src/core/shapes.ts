@@ -1318,6 +1318,14 @@ export interface StationUpdateNotice {
 	text: string;
 	detail?: string;
 	label?: string;
+	/** The station's name as its workspace has it ("station" when it has none). Absent from older cores. */
+	station?: string;
+	/** The version it runs. */
+	from?: string;
+	/** The version it is going to, when known and not the one it runs. */
+	to?: string;
+	/** How far an update is, 0–100, when the station says. */
+	percent?: number;
 	version?: string;
 	open?: boolean;
 	canUpdate?: boolean;
