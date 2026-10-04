@@ -25,6 +25,9 @@ class FakeCore {
     private val subs = ConcurrentHashMap<Long, JsonObject>()
     @Volatile private var reply: ((String) -> Unit)? = null
 
+    /** How long (ms, on the system's clock) a topic's first value takes to come once subscribed, where not at once. */
+    val lags = ConcurrentHashMap<JsonObject, Long>()
+
     /** Each call the app made: its name and params. */
     val calls = CopyOnWriteArrayList<Pair<String, JsonObject>>()
 
@@ -39,7 +42,10 @@ class FakeCore {
         val id = m["id"]!!.jsonPrimitive.long
         m["subscribe"]?.let { topic ->
             subs[id] = topic.jsonObject
-            values[topic.jsonObject]?.let { reply(valueOf(id, it)) }
+            val value = values[topic.jsonObject] ?: return
+            // As long as the real core takes to answer it (reading the device's database), off this thread.
+            val lag = lags[topic.jsonObject]
+            if (lag == null) reply(valueOf(id, value)) else Thread { Thread.sleep(lag); if (subs[id] == topic.jsonObject) reply(valueOf(id, value)) }.start()
             return
         }
         if (m["unsubscribe"] != null) { subs.remove(id); return }
