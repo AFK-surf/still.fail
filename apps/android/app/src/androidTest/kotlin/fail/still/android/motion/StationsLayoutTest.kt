@@ -53,4 +53,20 @@ class StationsLayoutTest {
         }
         tops.drop(1).forEach { assertEquals(tops[0], it) }
     }
+
+    /** The looks to pick from, each with a station offline, one not read yet and one online. */
+    @Test fun looksLight() = looks(false)
+    @Test fun looksDark() = looks(true)
+
+    private fun looks(dark: Boolean) {
+        val h = Harness(rule)
+        h.launch(listOf(Screen.Stations), dark)
+        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(station("studio", true), station("mini", false), station("air", true, read = false))) }
+        listOf("A", "B", "C").forEach { look ->
+            rule.runOnUiThread { fail.still.android.screens.stationLook = look }
+            h.settle()
+            h.record("look-$look-${if (dark) "dark" else "light"}").end()
+        }
+        rule.runOnUiThread { fail.still.android.screens.stationLook = "A" }
+    }
 }
