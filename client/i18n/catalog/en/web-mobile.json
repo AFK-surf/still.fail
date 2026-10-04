@@ -644,5 +644,11 @@
     "one": "1 station",
     "other": "{n} stations"
   },
-  "web-mobile.workspaces.title": "Switch workspace"
+  "web-mobile.workspaces.title": "Switch workspace",
+  "web-mobile.home.search": "Search chats and messages",
+  "web-mobile.home.searchCancel": "Cancel",
+  "web-mobile.home.searchChats": "Chats",
+  "web-mobile.home.searchMessages": "Messages",
+  "web-mobile.home.searchNone": "No chats or messages found",
+  "web-mobile.home.searchUpdate": "Update to search"
 }

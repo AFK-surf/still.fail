@@ -188,3 +188,46 @@ export const mSwipeUnder = style({
 });
 globalStyle(`${mSwipeUnder} span`, { paddingLeft: "24px" });
 globalStyle(`${mDecisions} svg`, { flex: "none" });
+
+// The search (Home.tsx SearchPage): a field at the top of each list, there once it is scrolled to its top; tapped, the
+// list goes up and away, the bars with it, and the field comes up to the top, the chats and messages it finds under it.
+export const mSearchField = style({
+  display: "flex", alignItems: "center", gap: "8px", boxSizing: "border-box", width: "calc(100% - 32px)", height: "38px",
+  margin: "0 16px 6px", padding: "0 12px", border: "0", borderRadius: "19px", cursor: "text",
+  background: "color-mix(in srgb, var(--m-ink) 6%, transparent)", color: "var(--m-muted)", fontSize: "15px",
+});
+globalStyle(`${mSearchField} svg`, { flex: "none" });
+globalStyle(`${mHome}[data-searching] ${mHomePanes}`, { transform: "translateY(-56px)", opacity: "0", pointerEvents: "none" });
+globalStyle(`${mHomePanes}`, { transition: "transform 280ms var(--m-ease), opacity 200ms var(--m-standard)" });
+globalStyle(`${mHome}[data-searching] ${mHomeBar}, ${mHome}[data-searching] ${mHomeToolbar}`, { opacity: "0", pointerEvents: "none" });
+globalStyle(`${mHomeBar}, ${mHomeToolbar}`, { transition: "opacity 200ms var(--m-standard)" });
+export const mSearchPage = style({ position: "absolute", inset: "0", zIndex: "4", display: "flex", flexDirection: "column" });
+export const mSearchBar = style({
+  flex: "none", display: "flex", alignItems: "center", gap: "12px", padding: "calc(var(--m-top) + 8px) 16px 8px",
+});
+export const mSearchInput = style({
+  flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "8px", height: "38px", padding: "0 12px",
+  borderRadius: "19px", background: "color-mix(in srgb, var(--m-ink) 6%, transparent)", color: "var(--m-muted)",
+});
+globalStyle(`${mSearchInput} svg`, { flex: "none" });
+globalStyle(`${mSearchInput} input`, {
+  flex: "1", minWidth: "0", height: "100%", padding: "0", border: "0", outline: "none", background: "none",
+  color: "var(--m-ink)", font: "inherit", fontSize: "16px", WebkitAppearance: "none", appearance: "none",
+});
+globalStyle(`${mSearchInput} input::-webkit-search-cancel-button`, { display: "none" });
+export const mSearchCancel = style({
+  flex: "none", padding: "0", border: "0", background: "none", color: "var(--m-accent)", fontSize: "16px", cursor: "pointer",
+});
+export const mSearchResults = style({
+  flex: "1", minHeight: "0", overflowY: "auto", overscrollBehavior: "contain", paddingBottom: "calc(var(--m-foot) + 20px)",
+  animation: "none", transition: "opacity 200ms var(--m-standard)",
+  selectors: { [`${mSearchPage}[data-leaving] &`]: { opacity: "0" } },
+});
+globalStyle(`${mSearchPage}[data-leaving] ${mSearchCancel}`, { opacity: "0", transition: "opacity 150ms" });
+/** A found message's first line: its chat (as a row's title, not bold), who said it and when at its end. */
+export const mFoundChat = style({
+  flex: "1", minWidth: "0", fontSize: "15px", lineHeight: "22px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+export const mFoundMeta = style({ flex: "none", fontSize: "12px", color: "var(--m-muted)", whiteSpace: "nowrap" });
+/** The words found, in a found message's line: in ink, bold (the rest of the line muted). */
+export const mFoundHit = style({ background: "none", color: "var(--m-ink)", fontWeight: "600" });

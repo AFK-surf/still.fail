@@ -1,12 +1,15 @@
 // Home is the `chats` view as the Android app lists it (apps/android/…/screens/Home.kt): one kind of item, newest first
 // and grouped by day. A fixed head (settings · workspace · the filter · stations) and the new-chat button floating
 // at the bottom. The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with nothing to wait for.
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
 import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
-import { stationApi, useChats, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
+import { stationApi, useChats, useChatSearch, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
+import type { FoundMessage } from "../core/shapes.ts";
+import { jumpTo } from "../jumpTo.ts";
+import { Marked } from "../Marked.tsx";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Settings, Unplug, Zou } from "../icons.tsx";
+import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Search, Settings, Unplug, Zou } from "../icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
@@ -43,15 +46,17 @@ export function Home() {
   const decisions = marks?.workspaces[scope]?.decisions ?? 0;
   // No station yet: nothing of the workspace's lists works, so adding the first station is the page.
   const none = useStations(scope).value?.length === 0;
+  // Searching: where the field at the list's top was when it was tapped (the search's field comes from there).
+  const [searching, setSearching] = useState<DOMRect | null>(null);
   return (
-    <div className={css.mHome}>
+    <div className={css.mHome} data-searching={searching ? "" : undefined}>
       {none ? (
         <div className={css.mHomePanes}><div className={css.mHomePane} style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
       ) : (
         <div className={css.mHomePanes} data-filter={filter}>
-          <ChatPane chats={all} filter="all" />
-          <ChatPane chats={mine} filter="mine" />
-          <ChatPane chats={watching} filter="watching" />
+          <ChatPane chats={all} filter="all" onSearch={setSearching} />
+          <ChatPane chats={mine} filter="mine" onSearch={setSearching} />
+          <ChatPane chats={watching} filter="watching" onSearch={setSearching} />
         </div>
       )}
       {/* The lists run under both bars, which are frosted glass over them. */}
@@ -81,7 +86,103 @@ export function Home() {
           <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={44} /></button>
         </div>
       </div>}
+      {searching && <SearchPage from={searching} onClose={() => setSearching(null)} />}
     </div>
+  );
+}
+
+/** How many of the messages that have the words the search lists, under the chats. */
+const FOUND_MESSAGES = 50;
+
+/**
+ * At the top of each list (scrolled to its top to be seen, as a phone's mail): tapped, the search opens from it
+ * (`onOpen`, with where it is).
+ */
+function SearchField({ onOpen }: { onOpen: (at: DOMRect) => void }) {
+  return (
+    <button type="button" className={css.mSearchField} onClick={(e) => onOpen(e.currentTarget.getBoundingClientRect())}>
+      <Search size={17} /><span>{t("web-mobile.home.search")}</span>
+    </button>
+  );
+}
+
+/**
+ * The search, over the lists (the core's `chatSearch`, as ⌘K's on the wide screen): its field comes up from where it
+ * was in the list to the top as the list goes up and away (its place taken at once, the move drawn back to it: FLIP);
+ * under it the chats the words find, then the messages, newest first, each opening its chat at it. 取消 puts the field
+ * back in the list.
+ */
+function SearchPage({ from, onClose }: { from: DOMRect; onClose: () => void }) {
+  const app = useApp();
+  const [query, setQuery] = useState("");
+  const search = useChatSearch({ scope: app.entry.id, query, messages: FOUND_MESSAGES });
+  const view = search.value;
+  const words = query.trim() !== "";
+  const chats = words ? view?.items ?? [] : [];
+  const messages = words ? view?.messages ?? [] : [];
+  const field = useRef<HTMLDivElement>(null);
+  const page = useRef<HTMLDivElement>(null);
+  const leaving = useRef(false);
+  const offset = () => from.top - (field.current?.getBoundingClientRect().top ?? from.top);
+  useLayoutEffect(() => {
+    if (reducedMotion()) return;
+    field.current?.animate([{ transform: `translateY(${offset()}px)` }, { transform: "none" }], { duration: 280, easing: "cubic-bezier(.2, .8, .2, 1)" });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const close = () => {
+    if (leaving.current) return;
+    leaving.current = true;
+    if (reducedMotion()) return onClose();
+    page.current?.setAttribute("data-leaving", "");
+    field.current?.animate([{ transform: "none" }, { transform: `translateY(${offset()}px)` }], { duration: 240, easing: "cubic-bezier(.4, 0, .2, 1)", fill: "forwards" }).finished.then(onClose, onClose);
+  };
+  return (
+    <div ref={page} className={css.mSearchPage}>
+      <div className={css.mSearchBar}>
+        <div ref={field} className={css.mSearchInput}>
+          <Search size={17} />
+          <input autoFocus type="search" enterKeyHint="search" value={query} spellCheck={false} placeholder={t("web-mobile.home.search")} aria-label={t("web-mobile.home.search")}
+            onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") close(); }} />
+        </div>
+        <button type="button" className={css.mSearchCancel} onClick={close}>{t("web-mobile.home.searchCancel")}</button>
+      </div>
+      <div className={css.mSearchResults}>
+        {words && search.error && !view && <Note text={t("web-mobile.home.searchUpdate")} error />}
+        {words && view && !chats.length && !messages.length && <Note text={t("web-mobile.home.searchNone")} />}
+        {chats.length > 0 && (
+          <section>
+            <SectionHeader title={t("web-mobile.home.searchChats")} />
+            {chats.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead="agents" />)}
+          </section>
+        )}
+        {messages.length > 0 && (
+          <section>
+            <SectionHeader title={t("web-mobile.home.searchMessages")} />
+            {messages.map((m) => <FoundRow key={`${m.station}/${m.thread}/${m.seq}`} found={m} />)}
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A message the words found: its chat, who said it and when, over the line that has them (those drawn out); tapped,
+ *  its chat opens at it (../jumpTo.ts). */
+function FoundRow({ found }: { found: FoundMessage }) {
+  const app = useApp();
+  const item = found.chat;
+  return (
+    <button type="button" className={css.mChatRow}
+      onClick={() => { jumpTo({ station: found.station, thread: found.thread, seq: found.seq }); app.open(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`); }}>
+      <span className={css.mChatText}>
+        <span className={css.mChatLine1}>
+          <span className={css.mFoundChat}>{item.title}</span>
+          <span className={css.mFoundMeta}>{[found.by, found.time?.createdAt?.ago].filter(Boolean).join(" · ")}</span>
+        </span>
+        <span className={css.mChatLine2}>
+          <span className={css.mLastText}><Marked text={found.text} marks={found.marks} className={css.mFoundHit} /></span>
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -149,12 +250,14 @@ function StationButton({ view }: { view: ChatsView | undefined }) {
 }
 
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days. */
-function ChatPane({ chats, filter }: { chats: TopicState<ChatsView>; filter: ChatFilter }) {
+function ChatPane({ chats, filter, onSearch }: { chats: TopicState<ChatsView>; filter: ChatFilter; onSearch: (at: DOMRect) => void }) {
   const view = chats.value;
   const scope = useApp().entry.id;
   const lead = view?.leading ?? "agents";
   return (
     <div className={css.mHomePane}>
+      {/* The search, at the list's top: there once the list is scrolled to it. */}
+      {view && !view.note?.empty && <SearchField onOpen={onSearch} />}
       {/* What the last update brought (./Changelog.tsx), until it is seen: even while the list is being read. */}
       <ChangelogNews />
       {/* Not even the stations known yet: the rows to come, and what is wrong if the list cannot be read (./Loading.tsx). */}

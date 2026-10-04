@@ -1,10 +1,11 @@
 // The shortcuts that belong to no page (keymap.ts), and ⌘K's switcher: a chat found by typing part of its title, or a
 // message by its words (↑/↓ pick, ↩ opens, Esc closes, as everywhere; nothing says so).
 import { Dialog as RDialog } from "radix-ui";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useChatSearch, type ChatItem } from "./api.ts";
-import type { FoundMessage, TextMark } from "./core/shapes.ts";
+import type { FoundMessage } from "./core/shapes.ts";
+import { Marked } from "./Marked.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import { Mark } from "./brand.tsx";
 import { useShortcut } from "./keymap.ts";
@@ -117,7 +118,7 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
                   <Time stamp={message.time?.createdAt} fixed />
                 </span>
               </span>
-              <span className={css.saidText}><Marked text={message.text} marks={message.marks} /></span>
+              <span className={css.saidText}><Marked text={message.text} marks={message.marks} className={css.hit} /></span>
             </span>
           </div>
         ))}
@@ -132,18 +133,4 @@ function ChatPicture({ item }: { item: ChatItem }) {
       {item.agents[0] ? <ModelLogo maker={item.agents[0].maker} runtime={item.agents[0].runtime} size={18} /> : <Mark size={16} />}
     </span>
   );
-}
-
-/** A found message's line with the words looked for drawn out. */
-function Marked({ text, marks }: { text: string; marks: TextMark[] }) {
-  const parts: ReactNode[] = [];
-  let from = 0;
-  for (const m of marks) {
-    if (m.from < from || m.to > text.length) continue;
-    if (m.from > from) parts.push(text.slice(from, m.from));
-    parts.push(<mark key={m.from} className={css.hit}>{text.slice(m.from, m.to)}</mark>);
-    from = m.to;
-  }
-  parts.push(text.slice(from));
-  return <>{parts}</>;
 }

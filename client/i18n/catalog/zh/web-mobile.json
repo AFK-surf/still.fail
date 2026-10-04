@@ -611,5 +611,11 @@
   "web-mobile.workspaces.others": "其它 workspace",
   "web-mobile.workspaces.signIn": "登录",
   "web-mobile.workspaces.stations": "{n} 台 station",
-  "web-mobile.workspaces.title": "切换 workspace"
+  "web-mobile.workspaces.title": "切换 workspace",
+  "web-mobile.home.search": "搜索对话和消息",
+  "web-mobile.home.searchCancel": "取消",
+  "web-mobile.home.searchChats": "对话",
+  "web-mobile.home.searchMessages": "消息",
+  "web-mobile.home.searchNone": "没有找到对话或消息",
+  "web-mobile.home.searchUpdate": "更新后才能搜索"
 }
