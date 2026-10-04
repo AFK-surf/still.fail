@@ -68,7 +68,7 @@ export const resourceRings = style({
   },
 });
 export const sidePanel = style({
-  minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column", borderLeft: `1px solid ${vars.line}`,
+  minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column",
   background: vars.canvas,
   selectors: {
   },
@@ -87,8 +87,8 @@ export const sidePanel = style({
   },
 });
 export const sideTabList = style({
-  display: "flex", alignItems: "center", gap: "2px", height: "45px", padding: "0 8px",
-  borderBottom: `1px solid ${vars.line}`, flex: "none",
+  display: "flex", alignItems: "center", gap: "2px", height: "45px", padding: "0 8px 1px",
+  flex: "none",
 });
 export const sideTab = style({
   display: "inline-flex", alignItems: "center", height: "30px", padding: "0 12px", border: "0",
@@ -151,8 +151,8 @@ export const sideTabClose = style({
 });
 /** The side panel's bar: tabs on the left, the panel switch in the top-right corner. */
 export const sideBar = style({
-  display: "flex", alignItems: "center", gap: "8px", height: "45px", padding: "0 12px 0 8px",
-  borderBottom: `1px solid ${vars.line}`, flex: "none",
+  display: "flex", alignItems: "center", gap: "8px", height: "45px", padding: "0 12px 1px 8px",
+  flex: "none",
 });
 globalStyle(`${attentionQuota} ${quotaRing}`, { flex: "none" });
 globalStyle(`${attentionQuota} ${quotaRingNumber}`, { fontSize: "8px" });

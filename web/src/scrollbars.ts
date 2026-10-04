@@ -4,8 +4,8 @@ import * as css from "./scrollbars.css.ts";
 // scrolls, and can be dragged. Touch screens keep the system's own, which already float.
 // A thumb is put beside the pane it is for (in the pane's parent), so it is layered as the pane is: a menu, a popover
 // or a dialog over the pane is over its bar too.
-// A pane with something floating over its foot (a chat's composer) says so with `scroll-padding-bottom`, and its bar stays
-// clear of it.
+// A pane with something floating over its foot (a chat's composer) or its top (the sidebar's frosted bands) says so with
+// `scroll-padding-bottom` / `scroll-padding-top`, and its bar stays clear of it.
 
 type Axis = "y" | "x";
 
@@ -17,6 +17,10 @@ const SIZE = 3;
 /** How much of the pane's height, at its bottom, the vertical track leaves free: what floats over it there. */
 function endOf(el: Element): number {
   return el === document.scrollingElement ? 0 : parseFloat(getComputedStyle(el).scrollPaddingBottom) || 0;
+}
+/** How much of it, at its top, the vertical track leaves free. */
+function startOf(el: Element): number {
+  return el === document.scrollingElement ? 0 : parseFloat(getComputedStyle(el).scrollPaddingTop) || 0;
 }
 
 /** The innermost element at or above `from` that scrolls along some axis. */
@@ -98,10 +102,11 @@ export function startScrollbars(): void {
       const box = page ? { left: 0, top: 0 } : el.getBoundingClientRect();
       const left = box.left + (page ? 0 : el.clientLeft);
       const top = box.top + (page ? 0 : el.clientTop);
-      const track = axis === "y" ? Math.max(MIN_THUMB * 2, size - endOf(el)) : size;
+      const start = axis === "y" ? startOf(el) : 0;
+      const track = axis === "y" ? Math.max(MIN_THUMB * 2, size - start - endOf(el)) : size;
       const length = Math.max(MIN_THUMB, (track * size) / content) - INSET * 2;
       const scrolled = axis === "y" ? el.scrollTop : Math.abs(el.scrollLeft);
-      const at = INSET + (scrolled / (content - size)) * (track - INSET * 2 - length);
+      const at = start + INSET + (scrolled / (content - size)) * (track - INSET * 2 - length);
       place(thumb, el);
       if (axis === "y") {
         put(thumb, left + el.clientWidth - SIZE - INSET, top + at);
@@ -126,7 +131,7 @@ export function startScrollbars(): void {
     const start = axis === "y" ? el.scrollTop : el.scrollLeft;
     const size = axis === "y" ? el.clientHeight : el.clientWidth;
     const content = axis === "y" ? el.scrollHeight : el.scrollWidth;
-    const track = axis === "y" ? Math.max(MIN_THUMB * 2, size - endOf(el)) : size;
+    const track = axis === "y" ? Math.max(MIN_THUMB * 2, size - startOf(el) - endOf(el)) : size;
     const length = Math.max(MIN_THUMB, (track * size) / content) - INSET * 2;
     const ratio = (content - size) / Math.max(1, track - INSET * 2 - length);
     const move = (m: PointerEvent) => {

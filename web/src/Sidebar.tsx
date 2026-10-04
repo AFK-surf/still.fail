@@ -13,7 +13,7 @@ import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
 import { useShortcut } from "./keymap.ts";
 import { ChatMark, jumpFromLine, stateLine, WaitingText } from "./ChatMark.tsx";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename, useRenaming } from "./Rename.tsx";
 import { useDoing } from "./doing.ts";
@@ -37,7 +37,7 @@ import { t } from "./i18n.ts";
  * filter's menu beside it. With no station its empty state leads to `stationsPage` (the page itself, where stations are
  * added: nothing is appended to it).
  */
-export function ChatList({ scope, newChat, stationsPage, archive, decisions }: { scope: string; newChat: string; stationsPage: string; archive: string; decisions: string }) {
+export function ChatList({ scope, newChat, stationsPage, archive, decisions, top }: { scope: string; newChat: string; stationsPage: string; archive: string; decisions: string; top?: ReactNode }) {
   const [mode] = useSidebarMode();
   useShortcut("chat.prev", () => goToNeighbour(-1));
   useShortcut("chat.next", () => goToNeighbour(1));
@@ -57,8 +57,11 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions }: {
   useEffect(() => setGoing(null), [path]);
   return (
     <>
-      <SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`}
-        showFilter={!(all.value && !all.value.loading && all.value.stations.length === 0)} />
+      <div className={nav.navTop}>
+        {top}
+        <SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`}
+          showFilter={!(all.value && !all.value.loading && all.value.stations.length === 0)} />
+      </div>
       <div className={nav.navSlider}>
         <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined}>
           <ChatPane chats={all} scope={scope} filter="all" stationsPage={stationsPage} hidden={mode !== "all"} />
@@ -69,6 +72,33 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions }: {
       </div>
     </>
   );
+}
+
+/**
+ * For the sidebar (its ref): the heights of its frosted top and foot, which its lists scroll under, as `--nav-top` and
+ * `--nav-foot`, for the lists to start and end clear of them.
+ */
+export function useGlassBands(): (el: HTMLElement | null) => (() => void) | void {
+  return useCallback((el: HTMLElement | null) => {
+    if (!el) return;
+    const measure = () => {
+      for (const [name, cls] of [["--nav-top", nav.navTop], ["--nav-foot", nav.navFoot]] as const) {
+        const band = el.querySelector(`:scope > .${cls}`);
+        el.style.setProperty(name, `${band ? band.getBoundingClientRect().height : 0}px`);
+      }
+    };
+    const sizes = new ResizeObserver(measure);
+    const watch = () => {
+      sizes.disconnect();
+      for (const band of el.querySelectorAll(`:scope > :is(.${nav.navTop}, .${nav.navFoot})`)) sizes.observe(band);
+      measure();
+    };
+    // The bands come and go with the page (the settings' list has no top band).
+    const children = new MutationObserver(watch);
+    children.observe(el, { childList: true });
+    watch();
+    return () => { sizes.disconnect(); children.disconnect(); };
+  }, []);
 }
 
 /**

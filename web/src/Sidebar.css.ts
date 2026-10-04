@@ -12,22 +12,21 @@ const narrow = "(max-width: 700px)";
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
 
 export const sidebar = style({
-  background: vars.sidebar, display: "flex", flexDirection: "column", minHeight: 0, borderRight: `1px solid ${vars.line}`,
+  background: vars.sidebar, display: "flex", flexDirection: "column", minHeight: 0, position: "relative",
   // The sidebar is for going places, not for copying: nothing in it is selected (its fields still are) or dragged off.
   WebkitUserSelect: "none", userSelect: "none",
   "@media": {
     [wide]: {
-      position: "relative",
-      selectors: { '[data-sidebar="closed"] &': { overflow: "hidden", borderRightColor: "transparent" } },
+      selectors: { '[data-sidebar="closed"] &': { overflow: "hidden" } },
     },
     // On a narrow screen the sidebar is the page's list: it gives way to the page opened from it.
-    [narrow]: { borderRight: 0, selectors: { [`${shell}[data-detail="true"] &`]: { display: "none" } } },
+    [narrow]: { selectors: { [`${shell}[data-detail="true"] &`]: { display: "none" } } },
   },
 });
 globalStyle(`${sidebar} :is(input, textarea)`, { WebkitUserSelect: "text", userSelect: "text" });
 globalStyle(`${sidebar} :is(a, img, svg)`, { WebkitUserDrag: "none" });
 // Closing or opening, its contents keep their width and are cut, not laid out anew at every step.
-globalStyle(`${sidebar} > :not(${resizeHandle})`, { "@media": { [wide]: { minWidth: `calc(${fallbackVar(vars.sidebarW, "240px")} - 1px)` } } });
+globalStyle(`${sidebar} > :not(${resizeHandle})`, { "@media": { [wide]: { minWidth: fallbackVar(vars.sidebarW, "240px") } } });
 
 /** The buddy's drawing starts a little inside the lockup: 16 px puts it on the rows' icons below. */
 export const brand = style({
@@ -43,10 +42,24 @@ export const brand = style({
 /** 云端侧边栏：lockup 在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */
 export const brandCompact = style({ height: 48, padding: "0 16px" });
 
-// Positioned: the rows moving in it are placed by their offsets in it (listMotion.ts).
-export const navScroll = style({ position: "relative", flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 8px 12px" });
-/** 全部, 我参与的, 监控中 and 奏 side by side on one track; switching slides it from one to another. */
-export const navSlider = style({ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" });
+/** The sidebar's top and foot are frosted bands over the lists, which scroll on under them (glassBands in Sidebar.tsx
+ * sets their heights, `--nav-top` and `--nav-foot`, for the lists to start and end clear of them). */
+const band = {
+  position: "relative", zIndex: 1, flex: "none",
+  background: `color-mix(in srgb, ${vars.sidebar} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
+} as const;
+export const navTop = style(band);
+
+// Positioned: the rows moving in it are placed by their offsets in it (listMotion.ts). Scroll padding: going to a row
+// (keyboard, scrollIntoView) stops clear of the bands, and so does the floating scrollbar (scrollbars.ts).
+export const navScroll = style({
+  position: "relative", flex: 1, minHeight: 0, overflowY: "auto",
+  padding: "calc(var(--nav-top, 0px) + 4px) 8px calc(var(--nav-foot, 0px) + 12px)",
+  scrollPaddingTop: "var(--nav-top, 0px)", scrollPaddingBottom: "var(--nav-foot, 0px)",
+});
+/** 全部, 我参与的, 监控中 and 奏 side by side on one track; switching slides it from one to another. Under the bands: the
+ * whole sidebar's height. */
+export const navSlider = style({ position: "absolute", inset: 0, overflow: "hidden", display: "flex" });
 export const navTrack = style({
   flex: "none", width: "400%", display: "flex", transition: `transform 240ms ${vars.easeOut}`,
   selectors: {
@@ -62,7 +75,7 @@ export const navTrack = style({
 // row (the time shown on hover) lays out every row of all the lists again, a frame dropped per row passed while scrolling.
 globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "25%", contain: "strict" });
 
-export const navFoot = style({ padding: 8, borderTop: `1px solid ${vars.line}` });
+export const navFoot = style({ ...band, marginTop: "auto", padding: 8 });
 export const navFootRow = style({ display: "flex", alignItems: "center", gap: 4 });
 globalStyle(`${navFootRow} ${accountTrigger}`, { flex: 1, minWidth: 0 });
 globalStyle(`${navFootRow} > ${iconBtn}, ${navFootRow} > * > ${iconBtn}`, { flex: "none" });

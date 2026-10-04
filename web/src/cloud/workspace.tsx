@@ -14,7 +14,7 @@ import { useTopics } from "../core/react.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
-import { ChatList, DecisionsEntry, StationTrouble } from "../Sidebar.tsx";
+import { ChatList, DecisionsEntry, StationTrouble, useGlassBands } from "../Sidebar.tsx";
 import { DecisionDeskProvider, DecisionPage } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
 import { OpenJobs } from "../OpenJobs.tsx";
@@ -213,10 +213,9 @@ function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | und
 
 function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
-    <nav className={nav.sidebar} aria-label={t("web-pages.workspace.navigation")}>
+    <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.workspace.navigation")}>
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} />
-      <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
-      <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} decisions={`/w/${entry.id}/decisions`} />
+      <ChatList top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>} scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} decisions={`/w/${entry.id}/decisions`} />
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
   );

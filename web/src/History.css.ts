@@ -19,7 +19,7 @@ export const history = style({
 });
 export const historyHead = style({
   display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", height: "45px",
-  padding: "0 8px 0 16px", borderBottom: `1px solid ${vars.line}`,
+  padding: "0 8px 1px 16px",
 });
 export const historyIdentity = style({
   display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontSize: vars.textSm, color: vars.muted,
