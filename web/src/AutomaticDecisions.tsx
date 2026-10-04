@@ -125,7 +125,7 @@ function PolicyDialog({ station, edit, d, form, days, onClose }: { station: stri
   const nameId = `${o.key}-name`; const rubricId = `${o.key}-rubric`;
   const remove = () => { onClose(); void form.change({ remove: o.key }).then(() => form.save()).catch(() => {}); };
   return <Dialog open title={isNew ? t("web-pages.archivePolicy.newOption") : view!.name} onClose={cancel}
-    footer={foot(!isNew && <Button variant="danger" icon={Trash} onClick={remove}>{t("web-pages.archivePolicy.remove")}</Button>)}>
+    footer={foot(!isNew && <Button variant="ghost" icon={Trash} className={controlsCss.btnDanger} onClick={remove}>{t("web-pages.archivePolicy.remove")}</Button>)}>
     <Field label={t("web-pages.archivePolicy.name")} htmlFor={nameId}>
       <input id={nameId} className={controlsCss.input} autoFocus={isNew} value={o.name} onChange={(e) => form.edit({ option: o.key, name: e.target.value })} />
     </Field>
