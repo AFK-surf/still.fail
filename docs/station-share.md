@@ -14,8 +14,7 @@
 
 已定的规则（2026-10-04）：
 
-- 界面上只有一条规则：**Profile 和记忆属于 workspace**。每样东西有一个「可用的 station」名单，新加的默认全部，可以改成只勾几台。界面上不出现「分享」「host」这类词；只有订阅显示「登录在 X」，因为它离线时别处用不了。
-- **升级时已有的东西不变**：各台已有的 Profile 和 skills，「可用的 station」只勾原来那台（有些东西本来就只能在那台用），要给别处用的人自己去改。
+- **分享是一个开关**：每个 Profile、每个 skill 默认只在自己那台用（新加的和升级前已有的都一样，有些东西本来就有 station 限制）。打开「分享给其他 station」后，默认所有 station 都能用，可以再改成只勾几台。界面上不出现「host」；只有分享出去的订阅显示「登录在 X」，因为它离线时别处用不了。
 - 自动决策的设置不做分享：现在的自动决策页本来就能在一处改所有 station。
 - **订阅只能由 host 刷新**：refresh token 一刷就换，两处各刷一次就互相踢掉，所以只有 host 拿着它，使用方借短期 token，联系不上 host 就借不到。不留备用、不做接替；订阅换 host 只能在原 host 在线时由它交出去，host 那台机器没了就要重新登录。
 - 其余的（API key、设置、skills）没有这个问题：使用方各存一份，host 不在线照常用；host 不在了，owner/admin 可以把 host 换到任意一台（它手上就有完整的一份）。不会自动换。
@@ -136,17 +135,17 @@ agent 和 hub 的代码继续读 `config.json`。分享来的东西写成一条�
 core（`client/core-ts`）：
 
 - Profile 列表改成 workspace 级的 topic：cloud 的 `shares` 表，加上每台 station 的 overview（其中带 `share` 字段的 profile）。同一个分享项在各台上的占位只算一条；还没分享出去的 profile 按「可用的 station 只有这台」算，也是一条。哪台先到先显示哪台，其他的后补进来。
-- 具名调用（都走 `doing`）：`profile.allow {id, stations|"all"}`（改可用的 station；第一次从「只有这台」改宽时，背后就是登记分享项）、`profile.moveLogin {id, station}`（订阅换登录的 station）、`skill.allow {name, stations|"all"}`。
+- 具名调用（都走 `doing`）：`profile.share {id, on}`（打开时登记分享项，可用的 station 为全部；关掉时撤销）、`profile.allow {id, stations|"all"}`（改可用的 station）、`profile.moveLogin {id, station}`（订阅换登录的 station）、`skill.share {name, on}`、`skill.allow {name, stations|"all"}`。
 - overview 里每个 profile 加可选的 `share: {id, host, allow, state}`。旧 station 不给这个字段，就按「只在这台」显示。
 
 界面（web 的 `cloud/settings.tsx` 里的 `RuntimeSettings`、`pages/Accounts.tsx`、`ProfileCard.tsx`、记忆页、`mobile/Profiles.tsx`，安卓的 `screens/Profiles.kt`、`data/Accounts.kt`）：
 
-- **Profile 列表**：一条平的列表，不再按 station 分组。副标题：订阅写「登录在 ● studio」，可用范围不是全部时写「只给 studio、mac-mini」。只在出问题时上色：订阅登录的那台离线时，整行变淡，标红「macbook 离线」。
-- **详情页**多两行：
+- **Profile 列表**：一条平的列表，不再按 station 分组。副标题：没分享的写「只在 ● office-linux」；分享出去的订阅写「登录在 ● studio」；可用范围不是全部时写「只给 studio、mac-mini」。只在出问题时上色：订阅登录的那台离线时，整行变淡，标红「macbook 离线」。
+- **详情页**多一个开关「分享给其他 station」（关着时副标题「现在只在 office-linux 上用」）。打开后再出现两行：
   - 「登录在」（只有订阅才有）+「换」。那台离线时按钮不可用，并写明「macbook 上线后才能换」。点「换」弹出 station 列表，点一台就开始交接，那一行转圈，离线的灰掉。
   - 「可用的 station：全部 / studio、mac-mini」+「改」。弹出勾选列表；订阅登录的那台锁定勾着。下面一行小字说明以后新加的 station 会不会自动加进来。
-- **添加 Profile**：流程不变。订阅在哪台登录，就登录在哪台；key 不选 station。新加的东西默认可用的 station 是全部。
-- **记忆**：一个列表，跟 Profile 一样有「可用的 station」。两台同时改了同一个文件时，标黄「两台同时改了，agent 在合并」。
+- **添加 Profile**：流程不变，加好后只在那台用，要分享就去详情页打开开关。
+- **记忆**：一个列表，每个 skill 跟 Profile 一样有分享开关和「可用的 station」。两台同时改了同一个文件时，标黄「两台同时改了，agent 在合并」。
 
 ## 兼容和部署
 
