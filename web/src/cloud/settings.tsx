@@ -504,9 +504,8 @@ function Relays({ view, account, manager }: { view: WorkspaceView; account: Acco
   const add = () => { const url = adding.trim(); if (url) void set.run([...relays, url]); };
   if (!manager && relays.length === 0) return null;
   return (
-    <Section title={t("web-pages.settings.relays.title")}>
+    <Section title={t("web-pages.settings.relays.title")} description={t("web-pages.settings.relays.lead", { name: NAME })}>
       <div className={pagesCss.card}>
-        <p className={shellCss.muted}>{t("web-pages.settings.relays.lead", { name: NAME })}</p>
         {relays.length > 0 && (
           <ul className={pagesCss.list}>
             {relays.map((url) => (
