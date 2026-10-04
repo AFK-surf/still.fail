@@ -43,7 +43,7 @@ export const section = style({ marginBottom: "28px" });
 export const cardGround = `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`;
 export const cardLook = { borderRadius: `calc(22px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: cardGround } as const;
 export const card = style({
-  ...cardLook, padding: "20px 25px",
+  ...cardLook, padding: "18px 20px",
   display: "grid", gap: "14px",
   selectors: {
     "& + &": { marginTop: "10px" },

@@ -10,7 +10,7 @@ export const groupHead = style({});
 export const roleSelect = style({ width: "120px", flex: "none" });
 export const stationHeading = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 /** As the settings pages' cards (pages.css.ts card). */
-export const onboardingCard = style({ width: "100%", textAlign: "left", padding: "20px 25px", border: "0", ...cardLook });
+export const onboardingCard = style({ width: "100%", textAlign: "left", padding: "18px 20px", border: "0", ...cardLook });
 export const onboardingRow = style({ display: "flex", alignItems: "stretch", gap: "8px" });
 /** 「添加这台 Mac」 under the first station's form (the desktop app's). */
 export const firstThisMac = style({ marginTop: "12px" });

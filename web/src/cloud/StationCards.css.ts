@@ -19,7 +19,7 @@ globalStyle(`${menu} ${btn}`, { flex: "none" });
 
 export const cards = style({ display: "grid", gap: "10px" });
 export const card = style({
-  display: "grid", gap: "10px", padding: "20px 25px", ...cardLook,
+  display: "grid", gap: "10px", padding: "14px 16px", ...cardLook,
 });
 export const cardHead = style({ display: "flex", alignItems: "center", gap: "10px", minWidth: "0" });
 export const cardTitle = style({ flex: "1", display: "flex", alignItems: "baseline", gap: "10px", minWidth: "0" });
