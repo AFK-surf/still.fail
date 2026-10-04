@@ -43,6 +43,7 @@ import * as controlsCss from "../styles/controls.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./settings.css.ts";
+import * as accountsCss from "../pages/Accounts.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
 
 import { NAME } from "../channel.ts";
@@ -347,7 +348,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
       <Dialog open={choosing} onClose={() => setChoosing(false)} title={t("web-pages.settings.profiles.addWhere")} description={t("web-pages.settings.profiles.addWhereLead")}>
         <ul className={pagesCss.list}>
           {online.map((st) => (
-            <li key={st.id}><button type="button" className={pagesCss.listRow} onClick={() => { setChoosing(false); setAdding(st.station); }}>
+            <li key={st.id}><button type="button" className={`${pagesCss.listRow} ${accountsCss.pickRow}`} onClick={() => { setChoosing(false); setAdding(st.station); }}>
               <StatusDot state="online" /><span className={pagesCss.listRowTitle}>{st.name}</span>
             </button></li>
           ))}

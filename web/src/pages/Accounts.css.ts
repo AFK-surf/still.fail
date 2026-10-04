@@ -34,3 +34,10 @@ globalStyle(`${deviceCode} p`, { margin: "0", fontSize: vars.textSm });
 
 /** A value beside its name in the share card (a station, the stations): muted, the button after it. */
 export const shareValue = style({ display: "inline-flex", alignItems: "center", gap: "6px", color: vars.muted, fontSize: vars.textSm });
+/** A station to pick in a dialog: a list row that is a button (no button look of its own). */
+export const pickRow = style({
+  width: "100%", border: "0", background: "none", font: "inherit", color: "inherit", textAlign: "left", cursor: "pointer",
+  selectors: { "&:disabled": { cursor: "default", opacity: ".5" } },
+});
+/** The share card's rows, spaced as a card's rows are. */
+export const shareRows = style({ display: "grid", gap: "14px", marginTop: "10px" });

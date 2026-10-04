@@ -117,7 +117,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
           ) : (
             <h1 className={pagesCss.identityName}>{renamingTo ?? profile.name}
-              {renamingTo && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} />{!profile.machine && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
+              {renamingTo && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} />{!profile.machine && !copy && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
           )}
           <p className={`${pagesCss.identitySub} ${css.profileState}`}>
             {profile.checkTone !== "green" && <Pill tone={profile.checkTone}>{profile.checkText}</Pill>}
@@ -216,25 +216,25 @@ function ShareSection({ profile }: { profile: Profile }) {
     <Section title={t("web-pages.profiles.share.title")}>
       <SwitchRow title={t("web-pages.profiles.share.switch")} description={describe} checked={shared} busy={sharing} disabled={sharing}
         onChange={(next) => act(api.shareProfile(profile.id, next, null), t("web-pages.profiles.share.switch"), next ? t("web-pages.profiles.share.shared") : t("web-pages.profiles.share.unshared"))} />
-      {shared && subscription && !profile.machine && (
+      {shared && <div className={css.shareRows}>
+      {subscription && !profile.machine && (
         <div className={pagesCss.cardRow}>
           <span className={pagesCss.cardRowText}><b>{t("web-pages.profiles.share.signedIn")}</b></span>
           <span className={css.shareValue}><StatusDot state="online" />{station.name}</span>
           <Button variant="ghost" busy={moving} disabled={moving || targets.length === 0} onClick={() => setMoveOpen(true)}>{t("web-pages.profiles.share.move")}</Button>
         </div>
       )}
-      {shared && (
-        <div className={pagesCss.cardRow}>
-          <span className={pagesCss.cardRowText}><b>{t("web-pages.profiles.share.stations")}</b></span>
-          <span className={css.shareValue}>{names}</span>
-          <Button variant="ghost" disabled={sharing} onClick={() => setPicking(true)}>{t("web-pages.profiles.share.change")}</Button>
-        </div>
-      )}
+      <div className={pagesCss.cardRow}>
+        <span className={pagesCss.cardRowText}><b>{t("web-pages.profiles.share.stations")}</b></span>
+        <span className={css.shareValue}>{names}</span>
+        <Button variant="ghost" disabled={sharing} onClick={() => setPicking(true)}>{t("web-pages.profiles.share.change")}</Button>
+      </div>
+      </div>}
       <Dialog open={moveOpen} onClose={() => setMoveOpen(false)} title={t("web-pages.profiles.share.moveTitle")} description={t("web-pages.profiles.share.moveLead", { station: station.name })}>
         <ul className={pagesCss.list}>
           {targets.map((x) => (
             <li key={x.id}>
-              <button type="button" className={pagesCss.listRow} disabled={!x.online}
+              <button type="button" className={`${pagesCss.listRow} ${css.pickRow}`} disabled={!x.online}
                 onClick={() => { setMoveOpen(false); act(api.moveProfile(profile.id, x.id), t("web-pages.profiles.share.move"), t("web-pages.profiles.share.moved", { station: x.name })); }}>
                 <StatusDot state={x.online ? "online" : "offline"} /><span className={pagesCss.listRowTitle}>{x.name}</span>
                 {!x.online && <span className={shellCss.muted}>{t("web-pages.stations.offline")}</span>}
