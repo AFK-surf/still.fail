@@ -30,6 +30,8 @@ export type AdbEnv = {
   store: Store;
   mesh: () => Effect.Effect<Mesh, CoreError>;
   credentials: (workspace: string) => CredentialSource;
+  /// The relays a workspace has of its own (`Mesh.link`).
+  relays: (workspace: string) => string[];
 };
 
 function head(): RequestHead {
@@ -193,7 +195,7 @@ export class Adb {
     return Effect.gen({ self: this }, function* () {
       const addr = StationAddr.parse(station);
       const mesh = yield* this.#env.mesh();
-      const link = yield* mesh.link(addr.station, this.#env.credentials(addr.workspace));
+      const link = yield* mesh.link(addr.station, this.#env.credentials(addr.workspace), this.#env.relays(addr.workspace));
       return [mesh, link] as [Mesh, Link];
     });
   }

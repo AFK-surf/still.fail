@@ -195,6 +195,7 @@ export class Core {
         store: inner.store,
         mesh: () => inner.mesh(),
         credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, inner.meshNow()?.deviceId() ?? null),
+        relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
       });
       handlers.adb = (_i, call) => inner.adb.run((call as Extract<Call, { kind: "adb" }>).call);
       handlers.ask = (_i, call) => asks.run((call as Extract<Call, { kind: "ask" }>).ask, inner.accounts);

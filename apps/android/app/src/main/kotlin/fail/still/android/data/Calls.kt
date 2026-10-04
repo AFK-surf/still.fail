@@ -382,6 +382,8 @@ class Cloud(private val core: StillFailCore, private val account: String) {
     suspend fun declineInvitation(id: String) { ops.invitationDecline(id = id) }
 
     suspend fun renameWorkspace(workspace: String, name: String) { ops.workspaceRename(workspace = workspace) { this.name = name } }
+    /** The workspace's own relays, the whole list (cloud directory.ts setRelays). */
+    suspend fun setRelays(workspace: String, relays: List<String>) { ops.workspaceSetRelays(workspace = workspace) { this.relays = relays } }
     suspend fun deleteWorkspace(workspace: String) { ops.workspaceDelete(workspace = workspace) }
     /** Leaving a workspace is removing oneself. */
     suspend fun removeMember(workspace: String, member: String) { ops.workspaceRemoveMember(workspace = workspace, member = member) }

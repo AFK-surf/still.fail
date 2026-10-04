@@ -49,12 +49,13 @@ val ROLE_HINT get() = mapOf("owner" to t("android-misc.role.owner.hint"), "admin
 
 /**
  * The `workspace` topic: the viewer's role in it, its members (to name people by their email, and to manage them), its
- * stations' names, the emails added but not signed in yet, and the invitations not accepted yet.
+ * stations' names, the emails added but not signed in yet, the invitations not accepted yet, and its own relays (used
+ * besides still.fail's; none from a cloud from before them).
  */
 @Serializable data class WorkspaceView(
     val id: String, val name: String = "", val role: String = "member", val members: List<Member> = emptyList(),
     val stations: List<WorkspaceStation> = emptyList(), val invitations: List<Invitation> = emptyList(),
-    val added: List<Added> = emptyList(),
+    val added: List<Added> = emptyList(), val relays: List<String> = emptyList(),
 ) {
     val manager get() = role == "owner" || role == "admin"
 }

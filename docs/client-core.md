@@ -426,7 +426,7 @@ thread, else its session), `chats.archived`,
 `profile.check`, `profile.login`, `profile.cancelLogin`, `profile.loginCode`,
 `login.new`, `login.code`, `login.drop`, `job.get`, `job.log`, `job.stop`,
 `memory.get`, `software.update`, `software.check`, `software.channel`. still.fail cloud's take
-`account`: `workspace.create`, `workspace.rename`, `workspace.delete`,
+`account`: `workspace.create`, `workspace.rename`, `workspace.setRelays`, `workspace.delete`,
 `workspace.invite`, `workspace.addMembers`, `workspace.removeAdded`,
 `workspace.revokeInvitation`, `workspace.setRole`, `workspace.removeMember`,
 `workspace.enroll`, `workspace.renameStation`, `workspace.removeStation`,

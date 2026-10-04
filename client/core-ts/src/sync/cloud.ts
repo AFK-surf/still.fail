@@ -333,6 +333,16 @@ export class CloudSync {
     });
   }
 
+  /// A workspace's own relays, as its members' `/v1/me` name them: used besides still.fail's for its stations alone.
+  workspaceRelays(workspace: string): string[] {
+    for (const account of this.#core.accounts.list()) {
+      const me = this.#core.data.record("me", account.sub);
+      const found = (isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []).find((w) => isObject(w) && w.id === workspace);
+      if (isObject(found) && Array.isArray(found.relays)) return found.relays.filter((u): u is string => typeof u === "string");
+    }
+    return [];
+  }
+
   /// This device's member credential for a workspace, kept on the device: what gets it into the workspace's stations
   /// with no still.fail cloud on the way. Kept, it serves for a day; then, or when a station refused it (`fresh`), a
   /// new one is asked for — and if still.fail cloud cannot be reached, the kept one serves until it runs out. `main`:

@@ -116,6 +116,7 @@ export const PARAMS: Record<string, string> = {
   "software.auto": "on?:boolean",
   "workspace.create": "name?:string invite_code?:string",
   "workspace.rename": "workspace:string name?:string",
+  "workspace.setRelays": "workspace:string relays?:strings",
   "workspace.delete": "workspace:string",
   "workspace.invite": "workspace:string role?:string email?:string",
   "workspace.addMembers": "workspace:string role?:string emails?:strings",
@@ -382,6 +383,8 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("POST", () => "/v1/workspaces", p.pick(["name", "invite_code"]));
     case "workspace.rename":
       return op("PATCH", ws, p.pick(["name"]));
+    case "workspace.setRelays":
+      return op("PUT", () => `${ws()}/relays`, p.pick(["relays"]));
     case "workspace.delete":
       return op("DELETE", ws, null);
     case "workspace.invite":

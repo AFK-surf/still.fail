@@ -390,6 +390,8 @@ export class Mesh {
   readonly #measuring = new Set<string>();
   #probing = 0;
   readonly #measured = new Map<string, Measured>();
+  /// The relays a station's workspace has of its own, as the last `link` to it said.
+  readonly #theirs = new Map<string, string[]>();
   #days: Record<string, Day>;
   #daysChanged = false;
 
@@ -563,9 +565,19 @@ export class Mesh {
     });
   }
 
-  /// The link to a station, opening it (or opening again a closed one) with a credential from `credentials`.
-  link(stationId: string, credentials: CredentialSource): Effect.Effect<Link, CoreError> {
+  /// The relays a station is dialled and measured on: still.fail's, then its workspace's own. The endpoint stays bound
+  /// to still.fail's alone (one that does not answer there would leave it with no home); another relay is reached as
+  /// the station's, or on its own endpoint once measured quicker.
+  relaysFor(stationId: string): string[] {
+    const theirs = this.#theirs.get(stationId) ?? [];
+    return [...this.relays, ...theirs.filter((r) => !this.relays.some((o) => sameRelay(o, r)))];
+  }
+
+  /// The link to a station, opening it (or opening again a closed one) with a credential from `credentials`; `theirs`:
+  /// the relays its workspace has of its own.
+  link(stationId: string, credentials: CredentialSource, theirs?: readonly string[]): Effect.Effect<Link, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (theirs !== undefined) this.#theirs.set(stationId, [...theirs]);
       const existing = this.#links.get(stationId);
       let fresh = false;
       if (existing) {
@@ -591,7 +603,7 @@ export class Mesh {
       this.#links.set(stationId, opening);
       if (before?.result && "ok" in before.result) this.#count(stationId, before.result.ok);
       this.#notify();
-      const first = open(this.#env, endpoint, this.relays, stationId, credentials, fresh, null, span.context);
+      const first = open(this.#env, endpoint, this.relaysFor(stationId), stationId, credentials, fresh, null, span.context);
       const self = this;
       const run = Effect.gen(function* () {
         const raced = yield* Effect.raceFirst(
@@ -678,7 +690,7 @@ export class Mesh {
   }
 
   #measureSoon(stationId: string): void {
-    if (this.relays.length < 2 || this.#measuring.has(stationId)) return;
+    if (this.relaysFor(stationId).length < 2 || this.#measuring.has(stationId)) return;
     this.#measuring.add(stationId);
     this.#env.runner.fork(this.#measure(stationId));
   }
@@ -747,7 +759,7 @@ export class Mesh {
       this.#measured.set(stationId, entry);
       this.#probing++;
       const measured = yield* Effect.all(
-        this.relays.map((relay) => Effect.map(this.#probe(relay, stationId), (ms) => [relay, ms] as [string, number | null])),
+        this.relaysFor(stationId).map((relay) => Effect.map(this.#probe(relay, stationId), (ms) => [relay, ms] as [string, number | null])),
         { concurrency: "unbounded" },
       );
       this.#probing--;
@@ -850,7 +862,7 @@ export class Mesh {
       const span = this.#env.tracer.span("mesh.hedge", Kind.Internal);
       span.set("stillfail.station", id);
       span.set("stillfail.relay", relayStatus(endpoint));
-      const opened = yield* Effect.result(open(this.#env, endpoint, this.relays, id, credentials, false, null, span.context));
+      const opened = yield* Effect.result(open(this.#env, endpoint, this.relaysFor(id), id, credentials, false, null, span.context));
       if (opened._tag === "Failure") span.fail();
       span.end();
       const taken = Deferred.doneUnsafe(tx, opened._tag === "Success" ? Effect.succeed(opened.success) : Effect.fail(opened.failure));
@@ -863,7 +875,7 @@ export class Mesh {
     return Effect.gen({ self: this }, function* () {
       const span = this.#env.tracer.span("mesh.race", Kind.Internal);
       span.set("stillfail.station", id);
-      const fresh = Effect.result(open(this.#env, this.#endpoint, this.relays, id, old.credentials, false, null, span.context));
+      const fresh = Effect.result(open(this.#env, this.#endpoint, this.relaysFor(id), id, old.credentials, false, null, span.context));
       const freshFiber = yield* Effect.forkChild(fresh);
       const probeFiber = yield* Effect.forkChild(old.answers());
       const first = yield* Effect.raceFirst(
@@ -1016,6 +1028,8 @@ export type MeshWireEnv = {
   /// The mesh if it is up already.
   meshNow: () => Mesh | null;
   credentials: (workspace: string) => CredentialSource;
+  /// The relays a workspace has of its own (`Mesh.link`).
+  relays: (workspace: string) => string[];
   status: (workspace: string) => import("./status.ts").Status;
 };
 
@@ -1036,8 +1050,9 @@ export class MeshWire implements StationWire {
     return Effect.gen(function* () {
       const status = env.status(workspace);
       const credentials = env.credentials(workspace);
+      const theirs = env.relays(workspace);
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
-      const link = yield* waiting(status, address, t("station.core.connecting"), mesh.link(id, credentials));
+      const link = yield* waiting(status, address, t("station.core.connecting"), mesh.link(id, credentials, theirs));
       const repeats = mayRepeat(head, idempotent.has(id));
       const write = !["GET", "HEAD"].includes(head.method.toUpperCase());
       const ask = (l: Link) => Effect.map(l.request(head, body), (reply) => [l, reply] as [Link, Reply]);
@@ -1057,7 +1072,7 @@ export class MeshWire implements StationWire {
             let pause = 1_000;
             answered = yield* Effect.gen(function* () {
               for (;;) {
-                const again = yield* Effect.result(Effect.flatMap(mesh.link(id, credentials), ask));
+                const again = yield* Effect.result(Effect.flatMap(mesh.link(id, credentials, theirs), ask));
                 if (again._tag === "Success") return again.success;
                 if (again.failure.code !== "mesh") return yield* Effect.fail(again.failure);
                 if (mesh.now() - started >= RECHECK_MS) return yield* Effect.fail(unconfirmed(again.failure));
@@ -1066,12 +1081,12 @@ export class MeshWire implements StationWire {
               }
             }).pipe(Effect.ensuring(Effect.sync(() => w.end())));
           } else if (r.failure.code === "mesh") {
-            const l = yield* waiting(status, address, t("station.core.connecting"), mesh.link(id, credentials));
+            const l = yield* waiting(status, address, t("station.core.connecting"), mesh.link(id, credentials, theirs));
             answered = yield* ask(l);
           } else return yield* Effect.fail(r.failure);
         } else {
           // Replaced while under way: asked again on the new one at once, the first answer taken.
-          const again = Effect.flatMap(mesh.link(id, credentials), ask);
+          const again = Effect.flatMap(mesh.link(id, credentials, theirs), ask);
           answered = yield* firstAnswer(ask(link), again);
         }
       } else {
@@ -1118,7 +1133,7 @@ export class MeshWire implements StationWire {
     return Effect.gen(function* () {
       const status = env.status(station.workspace);
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
-      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.station, env.credentials(station.workspace)));
+      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.station, env.credentials(station.workspace), env.relays(station.workspace)));
       const [reply, send] = yield* link.socket(head);
       yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
       return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send };
@@ -1175,6 +1190,7 @@ export function meshWire(inner: Inner): StationWire {
     mesh: get,
     meshNow: () => up,
     credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, up?.deviceId() ?? null),
+    relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
     status: (workspace) => inner.workspaces.of(workspace).status,
   });
 }

@@ -51,6 +51,8 @@
   "core-misc.cloud.forbidden": "你在这个 workspace 里没有这个权限",
   "core-misc.cloud.invalid_email": "要填对方登录 {brand} 用的邮箱",
   "core-misc.cloud.invalid_name": "名字不能为空，最长 80 个字",
+  "core-misc.cloud.invalid_relay": "要填 iroh-relay 的 https 地址，例如 https://relay.example.com",
+  "core-misc.cloud.invalid_relays": "最多只能加 4 个中继",
   "core-misc.cloud.invalid_session": "登录已失效，请重新登录",
   "core-misc.cloud.invitation_for_other_email": "这个邀请是发给另一个邮箱的，请换对应的账号接受",
   "core-misc.cloud.invitation_not_found": "邀请链接无效或已过期",

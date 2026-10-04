@@ -194,6 +194,7 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
         </div>
       </Section>
       <Members view={view} account={account} manager={manager} />
+      <Relays view={view} account={account} manager={manager} />
       <Section title={t("web-pages.settings.workspace.leaveDelete")}>
         {/* One card, as the name's: leaving, and (the owner) deleting, each asked again before it is done. */}
         <div className={pagesCss.card}>
@@ -486,6 +487,47 @@ export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
       {enroll.error && <p className={controlsCss.fieldError} role="alert">{enroll.error.message}</p>}
       <JoinThisMac account={entry.account} workspace={entry.id} className={css.firstThisMac} />
     </div>
+  );
+}
+
+/** A relay's URL as shown: without its scheme. */
+const relayLabel = (url: string) => url.replace(/^https?:\/\//, "");
+
+/**
+ * The workspace's own relays, used besides still.fail's by its stations and its members' devices: owners and admins
+ * add and remove them, the rest see them.
+ */
+function Relays({ view, account, manager }: { view: WorkspaceView; account: Account; manager: boolean }) {
+  const relays = view.relays ?? [];
+  const [adding, setAdding] = useState("");
+  const set = useAction((next: string[]) => cloud.setRelays(account.sub, view.id, next), (_r, next) => { if (next.length > relays.length) setAdding(""); });
+  const add = () => { const url = adding.trim(); if (url) void set.run([...relays, url]); };
+  if (!manager && relays.length === 0) return null;
+  return (
+    <Section title={t("web-pages.settings.relays.title")}>
+      <div className={pagesCss.card}>
+        <p className={shellCss.muted}>{t("web-pages.settings.relays.lead", { name: NAME })}</p>
+        {relays.length > 0 && (
+          <ul className={pagesCss.list}>
+            {relays.map((url) => (
+              <li key={url} className={pagesCss.listRow}>
+                <span className={pagesCss.listRowText}><span className={pagesCss.listRowTitle}>{relayLabel(url)}</span></span>
+                {manager && <Button variant="ghost" busy={set.busy && !set.arg?.includes(url)} disabled={set.busy} onClick={() => set.run(relays.filter((u) => u !== url))}>{t("web-pages.settings.relays.remove")}</Button>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {manager && (
+          <Field label={t("web-pages.settings.relays.add")} htmlFor="ws-relay" hint={t("web-pages.settings.relays.hint")}>
+            <div className={additionsCss.inputRow}>
+              <input id="ws-relay" className={controlsCss.input} value={adding} placeholder="https://relay.example.com" inputMode="url" autoComplete="off" spellCheck={false}
+                onChange={(e) => setAdding(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") add(); }} />
+              <Button variant="primary" disabled={!adding.trim() || set.busy} busy={set.busy && (set.arg?.length ?? 0) > relays.length} onClick={add}>{t("web-pages.settings.relays.addAction")}</Button>
+            </div>
+          </Field>
+        )}
+      </div>
+    </Section>
   );
 }
 

@@ -18,7 +18,7 @@ import { header } from "./compat";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
 import { langOf, type Lang } from "./i18n.ts";
-import { relays } from "./relays";
+import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
 import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
@@ -119,6 +119,8 @@ export class Directory extends DurableObject<Env> {
     for (const column of ["fixed_in INTEGER", "fixed_parts TEXT", "told_at INTEGER"]) {
       if (!reported.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE feedback ADD COLUMN ${column}`);
     }
+    // Nor had workspaces relays of their own (a JSON array of URLs, null for none), before they could have.
+    if (!this.#rows("PRAGMA table_info(workspaces)").some((r) => r.name === "relays")) this.#run("ALTER TABLE workspaces ADD COLUMN relays TEXT");
     // Nor did push keep a device's language, before there were languages.
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "lang")) this.#run("ALTER TABLE push ADD COLUMN lang TEXT");
     this.migrateFreePlan();
@@ -287,8 +289,9 @@ export class Directory extends DurableObject<Env> {
     const workspaces = this.#rows(`
       SELECT w.id, w.name, m.role, w.created_at,
         (SELECT COUNT(*) FROM stations s WHERE s.workspace = w.id) AS stations,
-        (SELECT COUNT(*) FROM members x WHERE x.workspace = w.id) AS members
-      FROM members m JOIN workspaces w ON w.id = m.workspace WHERE m.sub = ? ORDER BY w.created_at`, sub) as unknown as WorkspaceSummary[];
+        (SELECT COUNT(*) FROM members x WHERE x.workspace = w.id) AS members, w.relays
+      FROM members m JOIN workspaces w ON w.id = m.workspace WHERE m.sub = ? ORDER BY w.created_at`, sub)
+      .map(({ relays, ...w }) => ({ ...w, relays: parseRelays(relays) })) as unknown as WorkspaceSummary[];
     return { user: user ?? null, workspaces };
   }
 
@@ -362,7 +365,7 @@ export class Directory extends DurableObject<Env> {
 
   workspace(sub: string, id: string): WorkspaceView {
     const role = this.#role(sub, id);
-    const w = this.#one("SELECT id, name, created_at FROM workspaces WHERE id = ?", id)!;
+    const w = this.#one("SELECT id, name, created_at, relays FROM workspaces WHERE id = ?", id)!;
     const members = this.#rows(`
       SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
       FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
@@ -373,7 +376,30 @@ export class Directory extends DurableObject<Env> {
     const added = MANAGERS.includes(role)
       ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
       : [];
-    return { id, name: w.name as string, role, created_at: w.created_at as number, members, stations, invitations, added };
+    return { id, name: w.name as string, role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays) };
+  }
+
+  /**
+   * The workspace's own relays, used besides still.fail's by its stations (told in their state) and by its members'
+   * devices (in `/v1/me`): https URLs (http too when the cloud itself is on http: a local setup), at most MAX_RELAYS,
+   * still.fail's own left out. Whether one answers is not asked here: the cloud may be where it cannot be reached from
+   * (one inside mainland China), and one that does not answer is passed over where it is measured.
+   */
+  setRelays(sub: string, id: string, input: unknown): WorkspaceView {
+    this.#role(sub, id, MANAGERS);
+    if (!Array.isArray(input) || input.length > MAX_RELAYS) fail(400, "invalid_relays");
+    const ours = relayUrls(this.env).map(sameUrl);
+    const insecure = this.env.PUBLIC_ORIGIN.startsWith("http:");
+    const list: string[] = [];
+    for (const raw of input as unknown[]) {
+      const url = typeof raw === "string" && URL.canParse(raw.trim()) ? new URL(raw.trim()) : null;
+      if (!url || !(url.protocol === "https:" || (insecure && url.protocol === "http:")) || url.username || url.password || url.search || url.hash) fail(400, "invalid_relay");
+      const clean = url!.href.replace(/\/+$/, "");
+      if (!ours.includes(sameUrl(clean)) && !list.some((u) => sameUrl(u) === sameUrl(clean))) list.push(clean);
+    }
+    this.#run("UPDATE workspaces SET relays = ? WHERE id = ?", list.length ? JSON.stringify(list) : null, id);
+    this.#changed(id, true);
+    return this.workspace(sub, id);
   }
 
   renameWorkspace(sub: string, id: string, name: string): WorkspaceView {
@@ -974,11 +1000,15 @@ export class Directory extends DurableObject<Env> {
   #sendState(station: string): void {
     const sockets = this.#presence(station);
     if (!sockets.length) return;
-    const row = this.#one("SELECT s.workspace, w.name AS workspace_name, s.name FROM stations s JOIN workspaces w ON w.id = s.workspace WHERE s.id = ?", station);
-    if (!row) return;
+    const found = this.#one("SELECT s.workspace, w.name AS workspace_name, s.name, w.relays FROM stations s JOIN workspaces w ON w.id = s.workspace WHERE s.id = ?", station);
+    if (!found) return;
+    const { relays: own, ...row } = found;
     const revocations = this.#rows("SELECT kind, id, at FROM revocations WHERE workspace = ? AND at >= ?", row.workspace as string, nowSeconds() - REVOCATION_DAYS * 86400);
     const peers = this.#rows("SELECT id, name, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", row.workspace as string);
-    const frame = JSON.stringify({ type: "state", peers, ...row, origin: this.env.PUBLIC_ORIGIN, ...relays(this.env), grant_keys: grantKeys(this.env), revocations });
+    // The workspace's own relays after still.fail's: a station from before them keeps one more relay as it keeps the rest.
+    const told = relays(this.env);
+    const relay_urls = [...told.relay_urls, ...parseRelays(own).filter((u) => !told.relay_urls.map(sameUrl).includes(sameUrl(u)))];
+    const frame = JSON.stringify({ type: "state", peers, ...row, origin: this.env.PUBLIC_ORIGIN, ...told, relay_urls, grant_keys: grantKeys(this.env), revocations });
     for (const ws of sockets) ws.send(frame);
   }
 

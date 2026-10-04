@@ -80,7 +80,13 @@ station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 
 - **局域网**：mDNS（服务名 `stillfail`，兼容期内也查旧名 `ember`；见 `station/native/mesh/src/lib.rs` 的 `MDNS_SERVICE`，只有 station 广播，设备只查询）。每块网卡都收发；路由器在子网之间转发的 mDNS 也认。
 - **公网**：station 把自己所在的 relay 发布到 Mainline DHT，设备查得到它换过的 relay。
-- 浏览器（wasm）只能走 still.fail 的 relay。
+- 浏览器（wasm）只能走 relay：still.fail 的，或下面说的 workspace 自己的。
+
+**workspace 自己的 relay**：owner 和管理员可以给 workspace 加最多 4 个自己部署的 iroh-relay（`PUT /v1/workspaces/:id/relays {relays: [url]}`，`workspace.setRelays`；https，云本身是 http 时也收 http；存在 `workspaces.relays`）。云不去探它通不通：云在海外，大陆的 relay 它多半连不上。它们只给这个 workspace 用：
+- station：state 帧的 `relay_urls` 在 still.fail 的后面接上它们（`relay_url` 不变），station 像对其他 relay 一样常驻、按远近选家；旧 station 只是多了一个 relay。
+- 设备：`/v1/me` 和 `/v1/workspaces/:id` 的 workspace 带 `relays`（新字段，旧客户端不认）。core 的设备 endpoint 仍只绑 still.fail 的 relay（绑上一个连不上的会没有家），连这个 workspace 的 station 时拨号和测速的 relay 表才加上它们（`Mesh.relaysFor`），测出更快就把连接搬到那个 relay 自己的 endpoint 上，和 still.fail 的几个 relay 之间一样。连不上的测不出数，不会被选。
+- 网页版要求 relay 用公开签发的证书（如 Let's Encrypt，iroh-relay 自带 ACME，也可以给裸 IP 签短期证书）。
+- 不做访问控制：relay 只转发端到端加密的 QUIC，看不到内容；谁能用它由部署者自己在 iroh-relay 里配。
 
 几处 iroh 相关库的修补（多网卡、mDNS 反射、macOS 回包源地址、晚到的地址立即补发握手包）在 `vendor/`，原因见 `vendor/README.md`。
 

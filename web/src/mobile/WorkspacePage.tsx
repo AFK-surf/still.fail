@@ -74,6 +74,7 @@ export function WorkspaceScreen() {
           </ListRow>
         ))}
       </ListCard>
+      <Relays view={view} manager={manager} />
       <div className={css.mGap} />
       <ListCard>
         <ListRow onClick={leave}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mRed}`}>{t("web-mobile.workspace.leave")}</span></ListRow>
@@ -81,6 +82,37 @@ export function WorkspaceScreen() {
       </ListCard>
       <div style={{ height: 30 }} />
     </div>
+  );
+}
+
+/**
+ * The workspace's own relays, used besides still.fail's by its stations and its members' devices: owners and admins add
+ * one from the last row (a sheet that says why one is refused) and take one out from its row.
+ */
+function Relays({ view, manager }: { view: WorkspaceView; manager: boolean }) {
+  const app = useApp();
+  const me = app.entry.account;
+  const relays = view.relays ?? [];
+  const doing = useDoingList();
+  const busy = doing.some((d) => !failed(d) && doingMatches(d, "workspace.setRelays", { account: me.sub, workspace: view.id }));
+  if (!manager && relays.length === 0) return null;
+  const add = () => ask(app, { title: t("web-mobile.workspace.relayAdd"), value: "", placeholder: "https://relay.example.com", action: t("web-mobile.workspace.relayAddAction"), hint: t("web-mobile.workspace.relayHint"),
+    run: (url) => cloud.setRelays(me.sub, view.id, [...relays, url]).then(() => app.toast(t("web-mobile.workspace.relayAdded"))) });
+  const remove = (url: string) => { cloud.setRelays(me.sub, view.id, relays.filter((u) => u !== url)).then(() => app.toast(t("web-mobile.workspace.relayRemoved")), (e: Error) => app.toast(t("web-mobile.workspace.removeFailed", { error: e.message }))); };
+  return (
+    <>
+      <SectionHeader title={t("web-mobile.workspace.relays")} start={24} />
+      <ListCard>
+        {relays.map((url) => (
+          <ListRow key={url}>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{url.replace(/^https?:\/\//, "")}</span></span>
+            {manager && <LinkButton label={t("web-mobile.workspace.remove")} enabled={!busy} onClick={() => remove(url)} />}
+          </ListRow>
+        ))}
+        {manager && <ListRow onClick={busy ? undefined : add}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mLink}`}>{busy ? t("web-mobile.workspace.relaySaving") : t("web-mobile.workspace.relayAdd")}</span></ListRow>}
+      </ListCard>
+      <p className={css.mLead}>{t("web-mobile.workspace.relayLead", { name: NAME })}</p>
+    </>
   );
 }
 

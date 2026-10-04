@@ -142,6 +142,8 @@ function message(code: string): string | null {
     invitation_for_other_email: "core-misc.cloud.invitation_for_other_email",
     forbidden: "core-misc.cloud.forbidden",
     invalid_name: "core-misc.cloud.invalid_name",
+    invalid_relay: "core-misc.cloud.invalid_relay",
+    invalid_relays: "core-misc.cloud.invalid_relays",
     already_member: "core-misc.cloud.already_member",
     last_owner: "core-misc.cloud.last_owner",
     too_many_workspaces: "core-misc.cloud.too_many_workspaces",

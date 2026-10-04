@@ -191,6 +191,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       return { ...made, url: `${env.PUBLIC_ORIGIN}/invite#${made.token}` };
     });
   }
+  if (kind === "relays" && !target && method === "PUT") return directory(() => dir.setRelays(sub, ws, input.relays));
   if (kind === "invitations" && target && method === "DELETE") return directory(() => dir.revokeInvitation(sub, ws, target));
   if (kind === "members" && !target && method === "POST") return directory(() => dir.addMembers(sub, ws, role(), input.emails));
   if (kind === "added" && target && method === "DELETE") return directory(() => dir.removeAdded(sub, ws, target));

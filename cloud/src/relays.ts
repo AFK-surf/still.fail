@@ -15,3 +15,20 @@ export function relays(env: RelayEnv): { relay_url: string; relay_urls: string[]
   const names = Object.fromEntries(all.flatMap((url) => (env.RELAY_NAMES?.[url] ? [[url, env.RELAY_NAMES[url]]] : [])));
   return { relay_url: all[0], relay_urls: all, relay_names: names };
 }
+
+/** At most this many relays of a workspace's own (directory.ts setRelays). */
+export const MAX_RELAYS = 4;
+
+/** A relay's URL as compared: its normal form without a trailing slash. */
+export const sameUrl = (url: string): string => (URL.canParse(url) ? new URL(url).href : url).replace(/\/+$/, "");
+
+/** A workspace's own relays as kept (a JSON array, or null for none). */
+export function parseRelays(kept: unknown): string[] {
+  if (typeof kept !== "string") return [];
+  try {
+    const list: unknown = JSON.parse(kept);
+    return Array.isArray(list) ? list.filter((u): u is string => typeof u === "string") : [];
+  } catch {
+    return [];
+  }
+}

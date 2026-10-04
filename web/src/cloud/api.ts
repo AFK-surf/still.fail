@@ -46,6 +46,8 @@ export const cloud = {
   /** `code`: an invite code, for an account not let in yet (still.fail is invite-only). */
   createWorkspace: (sub: string, name: string, code?: string) => operations(sub).workspaceCreate<WorkspaceView>(code ? { name, invite_code: code } : { name }),
   renameWorkspace: (sub: string, id: string, name: string) => operations(sub).workspaceRename<WorkspaceView>({ workspace: id, name }),
+  /** The workspace's own relays, the whole list (cloud directory.ts setRelays). */
+  setRelays: (sub: string, id: string, relays: string[]) => operations(sub).workspaceSetRelays<WorkspaceView>({ workspace: id, relays }),
   deleteWorkspace: (sub: string, id: string) => operations(sub).workspaceDelete<{ ok: true }>({ workspace: id }),
   invite: (sub: string, id: string, role: Role, email: string) =>
     operations(sub).workspaceInvite<{ token: string; url: string; expires_at: number }>({ workspace: id, role, email }),

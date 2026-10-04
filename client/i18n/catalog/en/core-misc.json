@@ -51,6 +51,8 @@
   "core-misc.cloud.forbidden": "You don't have permission for this",
   "core-misc.cloud.invalid_email": "Use the email they sign in to {brand} with",
   "core-misc.cloud.invalid_name": "Name must be 1–80 characters",
+  "core-misc.cloud.invalid_relay": "Enter an iroh-relay https address, such as https://relay.example.com",
+  "core-misc.cloud.invalid_relays": "A workspace can have at most 4 relays",
   "core-misc.cloud.invalid_session": "Session expired. Sign in again",
   "core-misc.cloud.invitation_for_other_email": "This invite is for another email. Accept it with that account",
   "core-misc.cloud.invitation_not_found": "Invite link invalid or expired",

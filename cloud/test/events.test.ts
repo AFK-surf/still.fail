@@ -252,3 +252,46 @@ test("station rosters stay workspace scoped and update when peers join or leave"
     socket.ws!.close(1000);
   } finally { await h.close(); }
 });
+
+test("a workspace's own relays: set by its managers, told to its stations and members after still.fail's, kept from others", { timeout: 20000 }, async () => {
+  const h = await harness();
+  try {
+    const tokens = { alice: await h.login("alice"), bob: await h.login("bob") };
+    const alice = h.as(tokens.alice), bob = h.as(tokens.bob);
+    const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
+    const other = ((await (await alice("POST", "/v1/workspaces", { name: "Lab" })).json()) as any).id as string;
+    await alice("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["bob@example.test"] });
+    const station = await enrollStation(h, alice, w, "studio");
+    const socket = await connectStation(h, station);
+    await socket.ping!();
+    const ours = socket.frames![0].relay_urls as string[];
+    assert.ok(ours.length > 0);
+    const on = { alice: await listen(h, tokens.alice.access_token), bob: await listen(h, tokens.bob.access_token) };
+
+    // Members may not; a manager may, the list cleaned (the same twice, still.fail's own, a trailing slash).
+    assert.equal((await bob("PUT", `/v1/workspaces/${w}/relays`, { relays: ["https://relay.home.test"] })).status, 403);
+    const set = await alice("PUT", `/v1/workspaces/${w}/relays`, { relays: ["https://relay.home.test/", " https://relay.home.test", ours[0], "https://cn.home.test/relay"] });
+    assert.equal(set.status, 200);
+    assert.deepEqual(((await set.json()) as any).relays, ["https://relay.home.test", "https://cn.home.test/relay"]);
+    await expect(on, { alice: [{ type: "workspaces" }, { type: "workspace", id: w }], bob: [{ type: "workspaces" }, { type: "workspace", id: w }] }, "set relays");
+    await socket.ping!();
+    assert.deepEqual(socket.frames!.at(-1).relay_urls, [...ours, "https://relay.home.test", "https://cn.home.test/relay"], "the station hears them after still.fail's");
+    assert.equal(socket.frames!.at(-1).relay_url, ours[0]);
+    const me = (await (await bob("GET", "/v1/me")).json()) as any;
+    assert.deepEqual(me.relay_urls, ours, "still.fail's alone for the account");
+    assert.deepEqual(me.workspaces.find((x: any) => x.id === w).relays, ["https://relay.home.test", "https://cn.home.test/relay"]);
+    assert.deepEqual(((await (await alice("GET", "/v1/me")).json()) as any).workspaces.find((x: any) => x.id === other).relays, [], "another workspace has none");
+    assert.deepEqual(((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).relays, ["https://relay.home.test", "https://cn.home.test/relay"]);
+
+    // What is no relay URL is refused, as is too many.
+    for (const relays of [["ftp://x.test"], ["not a url"], ["https://u:p@x.test"], ["https://x.test/?a=1"], "https://x.test", [1], ["https://1.test", "https://2.test", "https://3.test", "https://4.test", "https://5.test"]]) {
+      assert.equal((await alice("PUT", `/v1/workspaces/${w}/relays`, { relays })).status, 400, JSON.stringify(relays));
+    }
+    // None again: the station back on still.fail's alone.
+    assert.deepEqual(((await (await alice("PUT", `/v1/workspaces/${w}/relays`, { relays: [] })).json()) as any).relays, []);
+    await socket.ping!();
+    assert.deepEqual(socket.frames!.at(-1).relay_urls, ours);
+  } finally {
+    await h.close();
+  }
+});

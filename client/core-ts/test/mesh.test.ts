@@ -232,7 +232,7 @@ test("a_write_is_asked_again_only_of_a_station_that_does_it_once", { skip }, asy
   const wakes = new Wakes();
   const { mesh, station, runner, host } = await setup(undefined, new FakeHost(), wakes);
   const status = new Status(host, runner);
-  const wire = new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials: () => grants("ok", { n: 0 }), status: () => status });
+  const wire = new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials: () => grants("ok", { n: 0 }), relays: () => [], status: () => status });
   const addr = StationAddr.parse(`w/${station.id()}`);
   const post: RequestHead = { method: "POST", path: "/admin/api/x", headers: [["idempotency-key", "k1"]] };
   // Not said to keep writes to once: a write is asked once.
@@ -297,7 +297,7 @@ test("a_refused_renewal_makes_the_next_link_reopen", { skip }, async () => {
 /// A wire over `mesh` for the station `id`, as the core has one.
 function wireOf(mesh: Mesh, runner: Runner, host: FakeHost) {
   const status = new Status(host, runner);
-  return new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials: () => grants("ok", { n: 0 }), status: () => status });
+  return new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials: () => grants("ok", { n: 0 }), relays: () => [], status: () => status });
 }
 const within = <A>(ms: number, p: Promise<A>, what: string) => Promise.race([p, sleep(ms).then(() => Promise.reject(new Error(`${what}: not within ${ms} ms`)))]);
 
@@ -537,6 +537,36 @@ test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, 
   rb.kill();
 });
 
+/// A workspace's own relay (cloud directory.ts setRelays): its station is on that relay alone, the device's endpoint on
+/// still.fail's; told the workspace's relays, the device reaches the station through it, and measures it.
+test("reaches_a_station_through_its_workspaces_own_relay", { skip: noRelay }, async () => {
+  const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
+  const station = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
+  await station.endpoint.online();
+  const id = station.id();
+  const e = env(new FakeHost(), new Wakes());
+  const mesh = await e.runner.run(Mesh.make(e, [a]));
+  const runner = e.runner;
+  let link: Link | null = null;
+  for (let i = 0; i < 40 && link === null; i++) {
+    const tried = await runner.run(mesh.link(id, grants("ok", { n: 0 }), [b])).catch(() => null);
+    if (tried && (await request(runner, tried, head("/admin/api/overview")).then((r) => r.status === 200, () => false))) link = tried;
+    else await sleep(250);
+  }
+  assert.ok(link, "reached through the workspace's relay");
+  assert.ok(sameRelay(link.via(), b), `${link.via()}`);
+  assert.deepEqual(mesh.relaysFor(id), [a, b]);
+  // Its endpoint stays on still.fail's relay alone; a link asked for again without saying keeps the station's relays.
+  assert.deepEqual(mesh.relays, [a]);
+  assert.equal(await runner.run(mesh.link(id, grants("ok", { n: 0 }))), link);
+  assert.deepEqual(mesh.relaysFor(id), [a, b]);
+  await runner.run(mesh.close());
+  runner.shutdown();
+  void station.close();
+  ra.kill();
+  rb.kill();
+});
+
 // ── adb.rs ──
 
 import { createServer } from "node:net";
@@ -593,7 +623,7 @@ test("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", { skip }
   const mesh = await e.runner.run(Mesh.make(e, []));
   mesh.addAddr({ id: endpoint.id(), ips: [endpoint.sockets().find((a: string) => a.startsWith("127.0.0.1"))] });
   const store = new Store(host, e.runner);
-  const adb = new Adb({ host, runner: e.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential) });
+  const adb = new Adb({ host, runner: e.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [] });
   const station = `ws/${endpoint.id()}`;
   await e.runner.run(adb.run({ kind: "share", offer: { station, connect: port, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
   for (let i = 0; i < 200 && (seen.echoed === undefined || adb.value().tunnels !== 1 || adb.value().adb !== "connected"); i++) await sleep(20);

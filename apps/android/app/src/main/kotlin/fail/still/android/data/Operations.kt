@@ -455,6 +455,14 @@ class CloudOperations(private val call: suspend (String, JsonObject) -> JsonElem
         values["workspace"] = JsonPrimitive(workspace)
         return call("workspace.rename", JsonObject(values))
     }
+    class WorkspaceSetRelaysFields : OperationFields() {
+        var relays: List<String>? by field<List<String>>("relays") { JsonArray(it.map(::JsonPrimitive)) }
+    }
+    suspend fun workspaceSetRelays(workspace: String, fill: WorkspaceSetRelaysFields.() -> Unit = {}): JsonElement {
+        val values = WorkspaceSetRelaysFields().apply(fill).fields
+        values["workspace"] = JsonPrimitive(workspace)
+        return call("workspace.setRelays", JsonObject(values))
+    }
     suspend fun workspaceDelete(workspace: String): JsonElement {
         val values = mutableMapOf<String, JsonElement>()
         values["workspace"] = JsonPrimitive(workspace)

@@ -651,6 +651,12 @@
     "other": "Used by {n}"
   },
   "web-pages.settings.reading": "Loading…",
+  "web-pages.settings.relays.add": "Add a relay",
+  "web-pages.settings.relays.addAction": "Add",
+  "web-pages.settings.relays.hint": "An iroh-relay https address. The web app needs a publicly issued certificate (such as Let's Encrypt); a self-signed one won't do.",
+  "web-pages.settings.relays.lead": "This workspace's stations and its members' devices also connect through these relays, besides {name}'s, taking the quickest; one that can't be reached is passed over.",
+  "web-pages.settings.relays.remove": "Remove",
+  "web-pages.settings.relays.title": "Relays",
   "web-pages.settings.stations.add": "Add station",
   "web-pages.settings.stations.addLead": "Name it, then run a command on that machine.",
   "web-pages.settings.stations.count": {

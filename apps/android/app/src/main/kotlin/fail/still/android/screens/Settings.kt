@@ -211,6 +211,7 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
                 }
             }
         }
+        Relays(view, cloud)
         Spacer(Modifier.height(18.dp))
         ListCard {
             ListRow(onClick = {
@@ -228,6 +229,34 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
         }
         Spacer(Modifier.height(30.dp))
     }
+}
+
+/**
+ * The workspace's own relays, used besides still.fail's by its stations and its members' devices: owners and admins add
+ * one from the last row (a sheet that says why one is refused) and take one out from its row.
+ */
+@Composable
+private fun Relays(view: WorkspaceView, cloud: Cloud) {
+    val app = LocalApp.current
+    if (!view.manager && view.relays.isEmpty()) return
+    val busy = app.isDoing("workspace.setRelays", "workspace" to view.id)
+    SectionHeader(t("android-settings.relays.title"), start = 24.dp)
+    ListCard {
+        view.relays.forEach { url ->
+            ListRow {
+                Text(url.removePrefix("https://").removePrefix("http://"), fontSize = 15.sp, color = C.ink, maxLines = 1, modifier = Modifier.weight(1f))
+                if (view.manager) RowAction(t("android-settings.members.remove"), C.accent, busy) {
+                    app.act(t("android-settings.relays.removeWhat"), t("android-settings.relays.removed")) { cloud.setRelays(view.id, view.relays - url) }
+                }
+            }
+        }
+        if (view.manager) ListRow(onClick = if (busy) null else ({
+            ask(app, t("android-settings.relays.add"), "", "https://relay.example.com", t("android-settings.relays.addAction"), hint = t("android-settings.relays.hint")) {
+                cloud.setRelays(view.id, view.relays + it); app.toast = t("android-settings.relays.added")
+            }
+        })) { Text(t(if (busy) "android-settings.relays.saving" else "android-settings.relays.add"), fontSize = 15.sp, color = C.accent) }
+    }
+    Text(t("android-settings.relays.lead", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp))
 }
 
 /** A person of the workspace; the owner changes their role, a manager moves them out (an owner only by an owner). */
