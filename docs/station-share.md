@@ -15,23 +15,24 @@
 已定的规则（2026-10-04）：
 
 - 分享出去默认整个 workspace 都能用，也可以只选某几台。
-- **使用方联系不上 host，这样东西就用不了**：使用方不留副本，没有备用，不做接替。换 host 只能在原 host 在线时由它交出去；host 那台机器没了，它 host 的东西就跟着没了，要重新添加。
+- **订阅只能由 host 刷新**：refresh token 一刷就换，两处各刷一次就互相踢掉，所以只有 host 拿着它，使用方借短期 token，联系不上 host 就借不到。不留备用、不做接替；订阅换 host 只能在原 host 在线时由它交出去，host 那台机器没了就要重新登录。
+- 其余的（API key、设置、skills）没有这个问题：使用方各存一份，host 不在线照常用；host 不在了，owner/admin 可以把 host 换到任意一台（它手上就有完整的一份）。不会自动换。
 - Slack bot 先不做。
 
-不做：cloud 存配置、多个 workspace 之间共享、自动接替、Slack bot 分享和搬家。
+不做：cloud 存配置、多个 workspace 之间共享、自动换 host、Slack bot 分享和搬家。
 
 ## 概念
 
 - **分享项（share）**：一样分享出来的东西，有 workspace 内唯一的 id（`sh_<ULID>`）、种类、名字、可用的 station（空 = 整个 workspace）。
 - **host**：唯一拿着它的那台 station。订阅的 refresh token、API key、设置和 skills 的正本都只在 host 上。
-- **使用方**：别的 station。用的时候实时向 host 要，只放在内存里，不落盘。
+- **使用方**：别的 station。订阅向 host 借短期 token；其余的在本地存一份，host 有变化就推过来。
 
 | 种类 | 内容 | 使用方怎么用 | 联系不上 host 时 |
 |---|---|---|---|
 | `subscription` | Claude / Codex 订阅登录 | 向 host 借短期 access token 交给进程 | 不能开新轮次；手上那个 token 过期前，正在跑的那轮能跑完 |
-| `key` | API key 类 profile（Anthropic、OpenCode、各 provider） | 进程启动时向 host 要 key，只放在内存和进程的环境变量里 | 不能开新的进程 |
-| `settings` | 自动决策的规则和模型 | 跟随 host 的设置 | 用本台自己的设置 |
-| `skills` | `agent/skills/` 里选定的几个 skill，可以带上 `MEMORY.md` | 在 agent home 里出现、可读可写，写入实时发给 host | 从 agent home 里拿掉，agent 看不到 |
+| `key` | API key 类 profile（Anthropic、OpenCode、各 provider） | 完整的 profile 和 key 存在本地 `config.json` | 照常用，用最后一次拿到的 |
+| `settings` | 自动决策的规则和模型 | 跟随 host 的设置，本地存一份 | 照常用，用最后一次拿到的 |
+| `skills` | `agent/skills/` 里选定的几个 skill，可以带上 `MEMORY.md` | 镜像在本地，agent 可读可写，写入发给 host | 照常读写，修改攒着，重连后交给 host |
 
 ## cloud：只记 host
 
@@ -47,10 +48,10 @@ shares (workspace TEXT, id TEXT, kind TEXT, name TEXT, host TEXT, allow TEXT,
 - 接口：
   - `POST /v1/workspaces/:ws/shares {id, kind, name, allow}`：由 host station 用自己的密钥签名登记（签名方式同 enroll）。成员在客户端点「分享」时，是客户端通过 station 的管理接口让它去登记的。
   - `PATCH /v1/workspaces/:ws/shares/:id {allow}`：改可用名单（成员凭据，owner/admin）。
-  - `PATCH /v1/workspaces/:ws/shares/:id {host}`：只接受**当前 host** 签名的请求，也就是只能由原 host 交出去（见「换 host」）。
+  - `PATCH /v1/workspaces/:ws/shares/:id {host}`：`subscription` 只接受**当前 host** 签名的请求，也就是只能由原 host 交出去（见「换 host」）；其余种类 owner/admin 也可以直接改，原 host 不在线也行。
   - `DELETE /v1/workspaces/:ws/shares/:id`：host 签名，或者 owner/admin。后者用来清掉 host 已经不在的分享项。
   - `GET /v1/workspaces/:ws` 的答复加上 `shares`。
-- host 被移出 workspace，或者机器没了：这些分享项显示「host 不在」，只能删掉。
+- host 被移出 workspace，或者机器没了：订阅只能删掉、在别处重新登录；其余的由 owner/admin 换一台当 host。
 
 旧 cloud 不给 `shares`：分享功能整个关掉，station 照旧运行。部署顺序是先 cloud，再 station，再客户端。
 
@@ -69,7 +70,7 @@ shares (workspace TEXT, id TEXT, kind TEXT, name TEXT, host TEXT, allow TEXT,
 | `share.spent {id, until}` | 使用方 → host | 用这个订阅的某轮撞到额度了，host 去重读配额，再推给所有人 |
 | `share.handover {id}` | 原 host → 新 host | 换 host：把正本整个交过去（见下） |
 
-「联系得上」以 `share.watch` 的流是否连着为准：流断了就当联系不上，同时按退避重连，连上后先推当前值。
+「联系得上」以 `share.watch` 的流是否连着为准：流断了就按退避重连，连上后先推当前值。只有订阅在断开时不可用；其余的只是暂时收不到更新。
 
 ## 订阅：只有 host 刷新
 
@@ -83,7 +84,9 @@ Claude Code 已经有现成的路子。`machine` profile 就是靠 `CLAUDE_CODE_
 
 ## 换 host
 
-客户端的分享项页面有「换到…」，原 host 在线时才能点：
+客户端的分享项页面有「换到…」。
+
+**订阅**：原 host 在线时才能点，流程如下。
 
 1. 客户端请求原 host（station 的管理接口）把分享项交给 Y。
 2. 原 host 先停用：不再刷新、不再借出，正在跑的借用方继续用手上的 token。然后通过 `share.handover` 把正本发给 Y：订阅的完整登录、key、设置、skills 的文件和版本。
@@ -92,11 +95,13 @@ Claude Code 已经有现成的路子。`machine` profile 就是靠 `CLAUDE_CODE_
 
 任何一步失败都退回到第 1 步之前：原 host 恢复正常，Y 删掉收到的东西。第 3 步 cloud 改成了、但原 host 没收到答复：原 host 去读 cloud 状态，按 cloud 说的为准，继续或者回退。这样同一时刻只有一台拿着 refresh token，两台之间的这一次交接是唯一的空档，这期间谁都不刷新。
 
+**其余种类**：原 host 在线时走同一个流程（它先把还没推出去的东西交给新 host）。原 host 不在线时，owner/admin 直接改 cloud 里的 host，新 host 用自己本地那份当正本；原 host 回来后看到 host 不是自己了，就退成使用方，离线期间攒下的 skills 修改用 `share.put` 交给新 host，base 对不上按冲突处理。
+
 换 host 时，使用方的 `config.json` 不用改：它认的是 `share.id`。
 
 ## 使用方的 `config.json`
 
-agent 和 hub 的代码继续读 `config.json`。分享来的东西写成一条带 `share` 字段的 profile，**不带 key、不带登录**：
+agent 和 hub 的代码继续读 `config.json`。分享来的东西写成一条带 `share` 字段的 profile。`key` 类的 `access.key` 照常写进去（权限 600，跟本地 profile 一样），退回 Rust station 也能用；订阅的**不带登录**：
 
 ```json
 {"id": "sh_01J…", "name": "Claude Max（左）", "runtime": "claude",
@@ -104,21 +109,21 @@ agent 和 hub 的代码继续读 `config.json`。分享来的东西写成一条�
  "share": {"id": "sh_01J…"}}
 ```
 
-- 这条记录只是一个占位：有了它，chat 和 connect 的 `bind.profile` 能指着这个分享项，pool 也知道有这么个 profile。真正的凭据在启动进程时现取：`agents/profiles.ts` 的 `accessEnv` / `profileEnv` 对带 `share` 的 profile，从分享模块拿内存里的 key，或者借 token。
+- 订阅的这条记录是个占位：chat 和 connect 的 `bind.profile` 能指着它，pool 也知道有这么个 profile；token 在启动进程时向 host 借（见上）。home 里不放登录文件，免得 Claude Code / Codex 自己去刷新。
+- `key` 类：host 改了 key、模型等，通过 `share.watch` 推过来，使用方改写本地这条。
 - host 一侧原来的 profile 保留原 id（chat、connect 都还指着它），只是加上 `"share": {"id": …}`。换 host 后，新 host 建的那条用 share id 当 id。
 - 停止分享，或者这台不在 `allow` 里了：使用方删掉这条记录。正在用它的 chat 按现在「profile 不可用」的路子换到别的 profile。
 - `accounts/check.ts`（`parse_config` 的检查）要接受 `share` 字段、允许分享来的 profile 没有 key，并防止 share id 跟本地 profile 的 id 撞车。
-- 退回 Rust station 的话，这些占位 profile 用不了：显示要登录或者缺 key，不会用错别人的东西。
+- 退回 Rust station 的话：`key` 类照常能用；订阅的占位显示要登录，不会刷坏 host 的登录。
 
-`settings`：使用方选「跟随」某个设置分享项后，`config.json` 里只记 `"automaticDecisionsShare": "sh_…"`。生效的值来自 host 推来的内容，联系不上 host 时退回本台自己的 `automaticDecisions`。
+`settings`：使用方选「跟随」某个设置分享项后，`config.json` 里只记 `"automaticDecisionsShare": "sh_…"`。host 推来的值存进 `<data>/share/<id>/`，生效的就是它；本台可以覆盖某几项（记在 `automaticDecisionsShare` 旁边），页面上能「恢复跟随」。
 
 ## skills 和记忆
 
 现在所有 profile 共用 `agent/`（`sessions/agent-home.ts`），里面是 `MEMORY.md` 和 `skills/`，每个 profile 的 home 用链接指过去。
 
 - host 选 `agent/skills/` 下的几个 skill 目录分享，可以带上 `MEMORY.md`。
-- 使用方把分享来的内容放在 `<data>/share/<id>/`（只在跟 host 连着时有效），`agent-home.ts` 把这些 skill 目录链接进 agent home 的 `skills/`。分享来的 `MEMORY.md` 以「来自 X 的记忆」接在本台 `MEMORY.md` 后面，作为单独的一个文件链接进去。联系不上 host 时把这些链接拿掉，重新连上后先读到最新版本，再链接回来。
-  - 这里留了一份文件，因为 agent 只能读文件。但它只在连着 host 时才可见、可写，断开后拿掉；它是一份缓存，不算副本。
+- 使用方把分享来的内容镜像在 `<data>/share/<id>/`，`agent-home.ts` 把这些 skill 目录链接进 agent home 的 `skills/`。分享来的 `MEMORY.md` 作为单独的「来自 X 的记忆」文件链接进去，跟本台的 `MEMORY.md` 并排。
 - 写入：使用方的 station 盯着这些文件，agent 改了就立刻用 `share.put {base}` 发给 host。host 按顺序接收，加版本号，推给所有人。发的时候 host 不在线，就把这次修改留着，重连时再交；base 对不上就按冲突处理。
 - 冲突：host 不覆盖，而是把后到的那份存成 `SKILL.conflict-<station>.md`，通过 `session.message` 告诉写的那个 session 的 agent，让它去合并。
 - 内置 skills（`stillfail-*`）由各台 station 自己写，不参与分享。
@@ -154,9 +159,9 @@ core（`client/core-ts`）：
 | station 状态 | `station/src/cloud/state.ts`、`presence.ts` | 存 `shares`，变了就通知 |
 | station 新模块 | `station/src/share/`（新） | 登记、`share.*` 的服务端和调用端、`share.watch` 连接的管理、内存里的凭据、交接流程、`<data>/share/` 的存储、往 `config.json` 写占位 profile |
 | 站间传输 | `station/src/mesh/peer.ts`、`jobs/remote.ts` | `handle` 把 `share.*` 交给新模块；`share.watch` 要做成长流（现在一个请求一个 QUIC 流，`servePeer` 60 秒没新请求就断，要改成按流保活） |
-| 订阅和 key | `agents/claude.ts`、`agents/codex.ts`、`agents/profiles.ts`、`agents/machine-logins.ts`、`accounts/quota.ts` | 借来的 token、启动时现取的 key、配额由 host 推送 |
+| 订阅和 key | `agents/claude.ts`、`agents/codex.ts`、`agents/profiles.ts`、`agents/machine-logins.ts`、`accounts/quota.ts` | 借来的 token（只有订阅）、配额由 host 推送 |
 | 账号 | `accounts/index.ts`、`accounts/check.ts`、`accounts/profiles.ts`、`sessions/accounts.ts`、`sessions/config.ts`、`api/routes/accounts.ts`、`api/overview.ts` | profile 的 `share` 字段，分享/停止/改名单/交出的管理接口，overview 带分享状态，使用方的检查和额度，跟随设置 |
-| skills | `sessions/agent-home.ts`、`agents/migrations.ts` | 连着 host 时链接进来、断开时拿掉，盯文件变化，冲突文件，迁移说明 |
+| skills | `sessions/agent-home.ts`、`agents/migrations.ts` | 镜像链接进 agent home，盯文件变化，离线攒写入，冲突文件，迁移说明 |
 | core | `client/core-ts/src/ops.ts`、`station/sync.ts`、新 `shares.ts` | `shares` topic、具名调用、`doing` |
 | web | `cloud/settings.tsx`、`pages/Accounts.tsx`、`ProfileCard.tsx`、`mobile/Profiles.tsx`、`AutomaticDecisions.tsx` | workspace 账号列表、分享项详情、换 host、可用名单、跟随设置 |
 | 安卓 | `screens/Profiles.kt`、`data/Accounts.kt` | 同 web |
@@ -168,4 +173,4 @@ core（`client/core-ts`）：
 2. Claude 订阅的 access token 实际能用多久，决定多久借一次。
 3. 在现有传输上做 `share.watch` 长流：保活、断开的检测、重连。
 
-测试照 `docs/station-peers.md` 的做法：在 studio 上起本地控制面，加两三台临时 station，验证这些：分享、借 token 跑一轮、按名单拒绝、host 下线后使用方马上不能用、重新上线后恢复、换 host（包括中途失败回退）、skills 的写入、冲突。
+测试照 `docs/station-peers.md` 的做法：在 studio 上起本地控制面，加两三台临时 station，验证这些：分享、借 token 跑一轮、按名单拒绝、host 下线后订阅马上不能用而 key/设置/skills 照常、重新上线后恢复、非订阅项在原 host 离线时换 host 以及原 host 回来退成使用方、换 host（包括中途失败回退）、skills 的写入、冲突。
