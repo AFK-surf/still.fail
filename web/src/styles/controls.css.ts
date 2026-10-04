@@ -44,11 +44,16 @@ export const btnDangerSolid = style({
     "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${vars.red} 85%, black)` },
   },
 });
-/** In a settings card (its grey ground and no line round it), a button that is not solid is its words and icon alone, to its edge. */
+/**
+ * In a settings card (its grey ground and no line round it), a button that is not solid is its words and icon alone, its
+ * words where the card's other words end (its padding taken back by its margin); hovered, a pill of its colour behind them.
+ */
 globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid})`, {
-  borderColor: "transparent", background: "transparent", padding: "0", height: "auto", minHeight: "36px",
+  borderColor: "transparent", background: "transparent", padding: "0 12px", marginInline: "-12px",
 });
-globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid}):hover:not(:disabled)`, { background: "transparent", opacity: ".7" });
+globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid}):hover:not(:disabled)`, {
+  background: "color-mix(in oklab, currentColor 10%, transparent)",
+});
 export const textToggle = style({
   display: "inline-flex", alignItems: "center", gap: "2px", border: "0", background: "none", padding: "2px 4px",
   color: vars.muted, fontSize: vars.textXs, lineHeight: "18px", cursor: "pointer",
