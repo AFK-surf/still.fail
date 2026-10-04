@@ -42,12 +42,6 @@ export const section = style({ marginBottom: "28px" });
 export const card = style({
   borderRadius: `calc(22px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, padding: "20px 25px", background: `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`,
   display: "grid", gap: "14px",
-  // Out past the column by its padding: what is in it lines up with what is outside (the section's title, the rows and
-  // buttons between cards), on both sides. Not where the page's own padding is less than that.
-  marginInline: "-25px",
-  "@media": {
-    "(max-width: 700px)": { marginInline: "0" },
-  },
   selectors: {
     "& + &": { marginTop: "10px" },
   },
