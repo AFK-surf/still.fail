@@ -152,9 +152,10 @@ jobs:
           fi
           exit $status
 
-  # A branch: what main would deploy, built and bundled; nothing sent, no secrets.
+  # A branch: what main would deploy, built and bundled beside the check (not after it: the build is most of the run);
+  # nothing sent, no secrets.
   bundle:
-    needs: [plan, natives, check]
+    needs: [plan, natives]
     if: github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true')
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
@@ -168,7 +169,7 @@ jobs:
   # A branch: the apps main would release, built with the prebuilt native parts (unsigned, nothing sent): Android on
   # Linux, the desktop app and the TypeScript station's bundle on mini1.
   android-build:
-    needs: [plan, natives, check]
+    needs: [plan, natives]
     if: github.ref != 'refs/heads/main' && needs.plan.outputs.android == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 45
@@ -185,7 +186,7 @@ jobs:
           python3 apps/android/build.py --tasks :app:assembleDebug
 
   mac-build:
-    needs: [plan, natives, check]
+    needs: [plan, natives]
     if: github.ref != 'refs/heads/main' && (needs.plan.outputs.desktop == 'true' || needs.plan.outputs.station == 'true')
     runs-on: [self-hosted, mini1]
     timeout-minutes: 60

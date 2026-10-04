@@ -65,6 +65,13 @@ runs:
       uses: android-actions/setup-android@v3
       with:
         packages: platform-tools
+    # Gradle's own downloads and its build cache, kept between runs (main writes them, a branch reads; the build cache
+    # is on in apps/android/gradle.properties): a run without them spent ~2 min fetching and compiling what had not
+    # changed.
+    - if: inputs.android == 'true'
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        cache-read-only: false
     - if: inputs.android == 'true'
       shell: bash
       run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
