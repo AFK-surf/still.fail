@@ -30,6 +30,7 @@ import { shown } from "../../jobs/jobs.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
 import { roomOf } from "../../sessions/footprint.ts";
 import { dir as thumbsDir, keep } from "../../sessions/thumbs.ts";
+import { wall } from "../../ops/fibers.ts";
 
 const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
 const ok = (value: unknown, status = 200) => json(status, JSON.stringify(value));
@@ -89,7 +90,7 @@ const exists = (path: string) => statSync(path, { throwIfNoEntry: false }) !== u
 const fileName = (path: string) => path.split("/").filter((p) => p !== "").at(-1) ?? "";
 
 /// files.rs `sweep_staged`: drops uploads that waited a day without a message taking them.
-export function sweepStaged(dir: string, now = Date.now()) {
+export function sweepStaged(dir: string, now = wall.now()) {
   let names: string[];
   try {
     names = readdirSync(dir);
@@ -107,7 +108,7 @@ function saveUpload(body: Buffer, dir: string, name: string, lang: Request["lang
   const base = name.replace(/\\/g, "/").split("/").at(-1) ?? "";
   const safe = chars([...base].map((c) => (c.codePointAt(0)! < 0x20 ? "_" : c)).join("").replace(/^\.+/, ""), 120) || "file";
   mkdirSync(dir, { recursive: true });
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, "-");
+  const stamp = new Date(wall.now()).toISOString().slice(0, 19).replace(/[:.]/g, "-");
   const random = randomBytes(3).toString("hex");
   const path = join(dir, `${stamp}-${random}-${safe}`);
   if (body.length > MAX_UPLOAD) throw new Refused(413, tr(lang, "station.files.tooLarge"));

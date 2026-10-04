@@ -6,6 +6,7 @@ import { type Lang, tr as translate } from "../ops/i18n.ts";
 import { type EntryRow, type MessageRow, STILLFAIL_SURFACE, type Store, type TurnSummary } from "./store.ts";
 import * as store from "./store.ts";
 import { apiOf, authorNames, chatTitle, people, useNames } from "./views.ts";
+import { wall } from "../ops/fibers.ts";
 
 /// How long a notice's text is kept, in characters (still.fail cloud cuts it shorter).
 const TEXT = 400;
@@ -47,7 +48,7 @@ function notice(s: Store, thread: number, session: string, kind: string, by: str
   if (summary === undefined) return null;
   const to = emailsOf(s, summary.thread.createdBy, summary.people, summary.sessions.map((m) => m.session), except);
   if (to.length === 0) return null;
-  return { to, kind, session, thread, title: chatTitle(summary, null), by, text: [...text].slice(0, TEXT).join(""), at: Date.now() };
+  return { to, kind, session, thread, title: chatTitle(summary, null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
 }
 
 /// A session changed: its last turn, if it ended since `since` and is not `ended` (the end already told), told to its

@@ -6,6 +6,7 @@ import { existsSync, realpathSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
+import { wall } from "../ops/fibers.ts";
 
 /// The environment commands run in: the station's own (its PATH says where the runtimes are).
 export type Env = Record<string, string | undefined>;
@@ -196,18 +197,18 @@ function runBoth(program: string, args: string[], env: Env, timeoutMs: number, o
       );
     };
     const ends = Promise.all([take(child.stdout!, 0), take(child.stderr!, 1)]);
-    const timer = setTimeout(() => {
+    const timer = wall.after(timeoutMs, () => {
       try {
         process.kill(-child.pid!, "SIGKILL");
       } catch {}
       reject(new NotFinished(tr(lang, "station.updates.notFinished", { program })));
-    }, timeoutMs);
+    });
     child.on("error", (e) => {
-      clearTimeout(timer);
+      timer();
       reject(e);
     });
     child.on("close", (code) => {
-      clearTimeout(timer);
+      timer();
       void ends.then(() => resolve([code === 0, said, whole[0]!, whole[1]!]));
     });
   });

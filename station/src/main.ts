@@ -21,6 +21,7 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { version } from "./ops/version.ts";
 import { AdbShares, AdminApi, AdminHost, Cloud, Events, Key, MeshNative, Paths, Readers, Store, Up } from "./services.ts";
+import { wall } from "./ops/fibers.ts";
 
 const args = process.argv.slice(2);
 const data = dataDir(args);
@@ -110,10 +111,10 @@ function run() {
     log.info("station", "station up", { version: version(), data });
     // STILLFAIL_MEMLOG: where the memory goes, now and then (for measuring).
     if (process.env.STILLFAIL_MEMLOG) {
-      setInterval(() => {
+      wall.every(10_000, () => {
         const m = process.memoryUsage();
         log.info("memory", "now", Object.fromEntries(Object.entries(m).map(([k, v]) => [k, Math.round(v / 1048576)])));
-      }, 10_000).unref();
+      });
     }
     return yield* Effect.never;
   }).pipe(Effect.provide(station));

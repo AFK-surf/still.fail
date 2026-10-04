@@ -17,6 +17,7 @@ export type Params = [string, string][];
 export type FilePart = { bytes: Uint8Array; name: string; mime: string };
 
 /// Slack said no to a call of its app API: its error code, and the details it gave (a manifest's problems, say).
+import { wall } from "../ops/fibers.ts";
 export class SlackApiError extends Error {
   readonly method: string;
   readonly code: string;
@@ -33,7 +34,8 @@ export class SlackApiError extends Error {
 export const field = (v: unknown): string => (typeof v === "string" ? v : JSON.stringify(v));
 
 const RETRIES = 5;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/// Slack's rate limits are in its time: the machine's.
+const sleep = wall.sleep;
 
 export class SlackClient {
   readonly base: string;

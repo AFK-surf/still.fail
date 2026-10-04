@@ -38,6 +38,7 @@ import {
   withSocketMode,
   configTokens,
 } from "../../slack/index.ts";
+import { wall } from "../../ops/fibers.ts";
 
 type Json = any;
 type Input = Record<string, unknown>;
@@ -397,7 +398,7 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
     const iconError = icon !== undefined && icon !== "" ? await setIcon(by, app.appId, icon, lang) : null;
     // Kept here until a connect takes it: the pages show it, and it can be installed and finished any time later.
     const shownName = typeof manifest.display_information?.name === "string" ? manifest.display_information.name : name;
-    const made: SlackAppMade = { appId: app.appId, name: shownName, teamId: team, by, created: Date.now() };
+    const made: SlackAppMade = { appId: app.appId, name: shownName, teamId: team, by, created: wall.now() };
     if (redirect !== null && place !== null && app.clientId !== "" && app.clientSecret !== "") {
       // Which station it is for goes with it, so still.fail cloud's page knows where to hand the code.
       const state = `${place.workspace}/${place.station}~${randomBytes(16).toString("hex")}`;
@@ -462,7 +463,7 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
     if (edit.name !== undefined || edit.displayName !== undefined) {
       const refresh = () => slack.refreshIdentity(id).catch((e) => log.warn("slack", "slack identity refresh failed", { connect: id, error: (e as Error).message }));
       void refresh();
-      setTimeout(() => void refresh(), 8_000).unref();
+      wall.after(8_000, () => void refresh());
     }
     log.info("slack", "slack app updated from the admin page", { connect: id, app, permissionsUpdated, by });
     return ok({ permissionsUpdated, iconError, links: slackAppLinks(app, teamOf(id)) });

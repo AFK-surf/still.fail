@@ -7,6 +7,7 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { type SlackIdentity, verifySlackTokens } from "./surface.ts";
 import { type Params, SlackApiError, SlackClient } from "./web.ts";
+import { wall } from "../ops/fibers.ts";
 
 type Json = any;
 
@@ -500,7 +501,7 @@ export class SlackApps implements SlackService {
   /// A working access token of a person's workspace, rotating first when the current one is about to expire.
   private async token(by: string, team: string): Promise<string> {
     const current = () => this.load().find((t) => t.by === by && t.teamId === team);
-    const fresh = (t: ConfigToken) => t.expiresAt - Date.now() > 5 * 60_000;
+    const fresh = (t: ConfigToken) => t.expiresAt - wall.now() > 5 * 60_000;
     const token = current();
     if (!token) throw new SlackWords("station.slackApi.noTokenForTeam");
     if (fresh(token)) return token.accessToken;

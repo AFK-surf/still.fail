@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { iso } from "../read/transcript.ts";
+import { wall } from "./fibers.ts";
 
 /// The project key and build, written next to the admin page by its build (web/vite.config.ts).
 export type ProjectKey = { host: string; key: string; release: string };
@@ -82,7 +83,7 @@ export class ErrorReports {
     this.queue.push({
       event: "$exception",
       distinct_id: station !== null ? `station:${station}` : this.anonymous,
-      timestamp: iso(Date.now()),
+      timestamp: iso(wall.now()),
       properties: {
         $exception_list: [{ type: "Error", value: scrubMessage(error ?? log, this.home), mechanism: { handled: true, synthetic: false } }],
         log: scrubPaths(log, this.home),
@@ -110,7 +111,7 @@ export class ErrorReports {
         if (!response.ok) throw new Error(`answered ${response.status}`);
       } catch (error) {
         // Not through log.error: that would report itself.
-        process.stderr.write(`${new Date().toISOString()}  WARN telemetry: error reports not sent error=${(error as Error).message}\n`);
+        process.stderr.write(`${new Date(wall.now()).toISOString()}  WARN telemetry: error reports not sent error=${(error as Error).message}\n`);
       }
     }
   }

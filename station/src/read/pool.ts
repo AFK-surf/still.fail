@@ -7,11 +7,12 @@ import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import type { Answer, Ask } from "./worker.ts";
 import { HttpError } from "./views.ts";
+import { wall } from "../ops/fibers.ts";
 
 /// How long a reader with nothing to do is kept.
 const IDLE_MS = 60_000;
 
-type Slot = { worker: Worker; busy: number; held: Set<number>; idle?: ReturnType<typeof setTimeout> };
+type Slot = { worker: Worker; busy: number; held: Set<number>; idle?: () => void };
 
 export class Readers {
   private slots: Slot[] = [];
@@ -50,7 +51,7 @@ export class Readers {
     });
     worker.on("error", (error) => log.error("readers", "a reader failed", { error: error.message }));
     worker.on("exit", (code) => {
-      clearTimeout(slot.idle);
+      slot.idle?.();
       this.slots = this.slots.filter((s) => s !== slot);
       for (const id of slot.held) {
         this.waiting.get(id)?.reject(new HttpError(500, `the reader stopped (exit ${code})`));
@@ -62,11 +63,11 @@ export class Readers {
   }
 
   private letGoLater(slot: Slot) {
-    clearTimeout(slot.idle);
-    slot.idle = setTimeout(() => {
+    slot.idle?.();
+    // A thread's resources: the machine's time.
+    slot.idle = wall.after(IDLE_MS, () => {
       if (slot.busy === 0) void slot.worker.terminate();
-    }, IDLE_MS);
-    slot.idle.unref();
+    });
   }
 
   /// The answer, as JSON text.
@@ -74,7 +75,7 @@ export class Readers {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     const free = this.slots.find((s) => s.busy === 0);
     const slot = free ?? (this.slots.length < this.size ? this.start() : this.slots.reduce((a, b) => (b.busy < a.busy ? b : a)));
-    clearTimeout(slot.idle);
+    slot.idle?.();
     const id = this.next++;
     slot.busy++;
     slot.held.add(id);

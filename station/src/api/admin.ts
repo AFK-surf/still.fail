@@ -18,6 +18,8 @@ import type { Store } from "../store/store.ts";
 import type { Events } from "./events.ts";
 import { Host } from "./host.ts";
 import { previewTarget, proxyPreview } from "../jobs/preview.ts";
+import type { Clock } from "effect";
+import { liveClock } from "../ops/fibers.ts";
 
 export type Handler = (r: Request, args: string[]) => Promise<Answer>;
 export type Route = { method: string; pattern: RegExp; handle: Handler };
@@ -39,7 +41,7 @@ export type Tools = {
 };
 
 /// What the admin API answers with besides the readers: the write side, once there.
-export type AdminDeps = { events?: Events; store?: Store; host?: Host; agents?: AgentsParts };
+export type AdminDeps = { events?: Events; store?: Store; host?: Host; agents?: AgentsParts; clock?: Clock.Clock };
 
 /// The header a write's key comes in, and how long an answer is kept (once.rs).
 const ONCE_KEY = "idempotency-key";
@@ -111,7 +113,7 @@ export class Admin {
   /// `write`'s answer, or the answer the first write under `key` had (once.rs): while the first is under way the
   /// others wait for it; a 5xx is not kept (the write may not have happened: asked again, it is tried again).
   private async once(key: string, write: () => Promise<Answer>): Promise<Answer> {
-    const now = Date.now();
+    const now = (this.deps.clock ?? liveClock).currentTimeMillisUnsafe();
     for (const [k, slot] of this.slots) if (slot.at !== null && now - slot.at >= ONCE_KEEP_MS) this.slots.delete(k);
     for (;;) {
       const slot = this.slots.get(key);
@@ -137,7 +139,7 @@ export class Admin {
       throw e;
     }
     if (kept.status < 500) {
-      slot.at = Date.now();
+      slot.at = (this.deps.clock ?? liveClock).currentTimeMillisUnsafe();
       settle(kept);
     } else {
       settle(null);

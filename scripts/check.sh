@@ -233,6 +233,8 @@ if [ $full = 1 ]; then
   if part station && touches '^station/|^vendor/|^client/i18n/|^scripts/native\.ts$'; then
     prep station deps station
     step "typecheck: station" after station sh -c 'cd station && pnpm exec tsgo --noEmit'
+    # The station's time is its Clock's (docs/station-ts.md, 写法): the machine's only through ops/fibers.ts' wall.
+    step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts"'
     remembered "tests: station" "station client/i18n vendor scripts/native.ts" after station sh -c 'cd station && pnpm test'
   fi
   # The native parts' own tests, where their Rust changed (the mesh addon's: the vendored crates it patches in, too).

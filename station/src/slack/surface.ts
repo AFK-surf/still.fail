@@ -11,6 +11,7 @@ import { type ChatEvent, type ChatMessage, type ChatSurface, type Handler, type 
 import type { NameBook } from "./names.ts";
 import { ThreadStatus } from "./status.ts";
 import { type Params, SlackClient, field } from "./web.ts";
+import { wall } from "../ops/fibers.ts";
 
 type Json = any;
 
@@ -431,7 +432,7 @@ export class SlackSurface implements ChatSurface {
         first = await this.sharedTs(shared, uploaded[0]![0], thread.channel);
         if (first === null) {
           log.warn("slack", "slack: shared files without text, their message's ts did not show up");
-          first = (Date.now() / 1000).toFixed(6);
+          first = (wall.now() / 1000).toFixed(6);
         }
       }
     }
@@ -467,7 +468,7 @@ export class SlackSurface implements ChatSurface {
     const now = find(completed?.files?.[0]);
     if (now !== null) return now;
     for (let i = 0; i < 10; i++) {
-      await new Promise((r) => setTimeout(r, 500));
+      await wall.sleep(500);
       let info: Json;
       try {
         info = await this.client.api("files.info", [["file", file]], this.botToken);

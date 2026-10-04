@@ -12,13 +12,14 @@ import type { Store } from "../store/store.ts";
 import type { StationKey } from "./key.ts";
 import { signedPost } from "./signed.ts";
 import type { Cloud } from "./state.ts";
+import { liveClock } from "../ops/fibers.ts";
 
 /// Notices wait this long to go out together; at most this many in one post (the cloud takes no more).
 const GATHER_MS = 1_000;
 const MAX_BATCH = 50;
 
 export class Notifier {
-  private since = Date.now();
+  private since: number;
   /// Each session's last turn noticed (when it ended), so one turn is noticed once.
   private ended = new Map<string, number>();
   private waiting: Notice[] = [];
@@ -40,6 +41,7 @@ export class Notifier {
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
+    this.since = (options.clock ?? liveClock).currentTimeMillisUnsafe();
     this.store = store;
     this.readers = readers;
     this.cloud = cloud;

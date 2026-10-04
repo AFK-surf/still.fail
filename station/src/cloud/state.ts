@@ -4,6 +4,7 @@
 import { existsSync, readFileSync, watch } from "node:fs";
 import { join } from "node:path";
 import { writePrivate } from "../ops/files.ts";
+import { wall } from "../ops/fibers.ts";
 
 export type Revocation = { kind: string; id: string; at: number };
 
@@ -90,7 +91,8 @@ export class Cloud {
     try {
       writeState(this.data, this.state);
     } finally {
-      setTimeout(() => (this.writing = false), 100);
+      // Its own write, seen by the file's watch a moment later (the file system's time).
+      wall.after(100, () => (this.writing = false));
     }
     this.tell();
   }

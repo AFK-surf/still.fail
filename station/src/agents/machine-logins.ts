@@ -7,6 +7,7 @@
 import { execFile } from "node:child_process";
 import { lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { wall } from "../ops/fibers.ts";
 
 export type Env = Record<string, string | undefined>;
 
@@ -59,7 +60,7 @@ export async function readClaudeCredentials(env: Env): Promise<MachineToken | un
 export async function machineClaudeToken(env: Env): Promise<MachineToken> {
   const found = await readClaudeCredentials(env);
   if (!found) throw new Error("the machine's Claude Code login could not be read");
-  if (found.expiresAt !== 0 && found.expiresAt - Date.now() <= CLAUDE_TOKEN_MARGIN_MS) {
+  if (found.expiresAt !== 0 && found.expiresAt - wall.now() <= CLAUDE_TOKEN_MARGIN_MS) {
     throw new Error("the machine's Claude Code token runs out and is not renewed here");
   }
   return found;

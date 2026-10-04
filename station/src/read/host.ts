@@ -7,6 +7,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, statfsSync } from "node:fs";
 import { availableParallelism, cpus as cpuList, hostname as osHostname, loadavg, release, type as osType } from "node:os";
+import { wall } from "../ops/fibers.ts";
 
 const MACOS = process.platform === "darwin";
 
@@ -87,7 +88,7 @@ const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(
 /// moment. With the ticks seen now, for the next look.
 function cpuBusy(last: Seen): [busy: number | null, seen: Seen] {
   const share = ([b0, t0]: Ticks, [b1, t1]: Ticks) => (t1 > t0 ? Math.min(Math.max(Math.max(b1 - b0, 0) / (t1 - t0), 0), 1) : null);
-  const before = last !== null && Date.now() - last.at < 60_000 ? last.ticks : null;
+  const before = last !== null && wall.now() - last.at < 60_000 ? last.ticks : null;
   let now = cpuTicks();
   if (now === null) return [null, last];
   let busy = before === null ? null : share(before, now);
@@ -95,12 +96,12 @@ function cpuBusy(last: Seen): [busy: number | null, seen: Seen] {
     // macOS updates the ticks only now and then (seen unchanged after a real 505 ms, 2026-09-30), so it looks again,
     // up to 2 s, until they have moved.
     const then = now;
-    const start = Date.now();
+    const start = wall.now();
     sleep(500);
     let again: Ticks | null;
     for (;;) {
       again = cpuTicks();
-      if (again === null || again[1] > then[1] || Date.now() - start >= 2000) break;
+      if (again === null || again[1] > then[1] || wall.now() - start >= 2000) break;
       sleep(100);
     }
     if (again === null) return [null, last];
@@ -108,7 +109,7 @@ function cpuBusy(last: Seen): [busy: number | null, seen: Seen] {
     busy = share(then, now);
     if (busy === null) return [null, last];
   }
-  return [Math.round(busy * 100) / 100, { at: Date.now(), ticks: now }];
+  return [Math.round(busy * 100) / 100, { at: wall.now(), ticks: now }];
 }
 
 /// disk: the file system holding `path`: its size and what is free for the station.
@@ -174,7 +175,7 @@ function uptimeSec(): number {
     const text = output("sysctl", ["-n", "kern.boottime"]);
     const sec = text?.split("sec = ")[1]?.split(",")[0];
     const boot = sec === undefined ? null : /^[+-]?[0-9]+$/.test(trim(sec)) ? Number(trim(sec)) : null;
-    return boot === null ? 0 : Math.max(Math.trunc(Date.now() / 1000) - boot, 0);
+    return boot === null ? 0 : Math.max(Math.trunc(wall.now() / 1000) - boot, 0);
   }
   try {
     const s = parseF64(firstWord(readFileSync("/proc/uptime", "utf8")));
@@ -219,7 +220,7 @@ export function hostInfo(dataDir: string, last: Seen): { info: unknown; seen: Se
     memory: mem,
     disk: disk(dataDir),
     emberRssBytes: rss,
-    checkedAt: Date.now(),
+    checkedAt: wall.now(),
   };
   return { info, seen };
 }

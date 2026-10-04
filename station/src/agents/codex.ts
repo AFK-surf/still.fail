@@ -15,6 +15,7 @@ import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, run
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
 import { cleanEnv, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import type { RunnerInfo } from "./runner.ts";
+import { wall } from "../ops/fibers.ts";
 
 type Json = any;
 
@@ -186,11 +187,11 @@ class Host {
     const host = new Host(profile, signature, nextId, ready);
     if (recovered) host.recovered = recovered;
     host.orphans = new Map();
-    setTimeout(() => {
+    wall.after(ORPHANS_MS, () => {
       const dropped = [...(host.orphans?.values() ?? [])].reduce((n, l) => n + l.length, 0);
       if (dropped > 0) log.warn("agents::codex", "notifications for threads nobody took up, dropped", { profile, threads: host.orphans?.size, dropped });
       host.orphans = null;
-    }, ORPHANS_MS).unref();
+    });
     host.proc = AgentProcess.adopt(info, host.processOptions(`codex app-server ${profile}`));
     return host;
   }
@@ -416,7 +417,7 @@ export class CodexDriver implements AgentDriver {
     // Its signature is the profile's if it runs with what the profile says now (the arguments carry the overrides).
     const same = JSON.stringify(info.args) === JSON.stringify(hostArgs(profile));
     // Ids above any the previous station can have sent.
-    return Host.adopt(profile.id, info, same ? hostSignature(profile) : "unknown", Date.now(), true, recovered);
+    return Host.adopt(profile.id, info, same ? hostSignature(profile) : "unknown", wall.now(), true, recovered);
   }
 
   /// The account's rate-limit windows, as the profile's app-server reports them (ChatGPT subscriptions).

@@ -8,6 +8,7 @@ import { request as httpRequest } from "node:http";
 import { Readable } from "node:stream";
 import WebSocket from "ws";
 import { type Lang, tr } from "../ops/i18n.ts";
+import { wall } from "../ops/fibers.ts";
 
 /// The header a core names its person's language in (lang.rs HEADER).
 const LANG_HEADER = "stillfail-lang";
@@ -220,13 +221,13 @@ export function openSocket(headers: [string, string][], port: number, path: stri
     const fail = (refusal: SocketRefused) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      timer();
       ws.removeAllListeners();
       ws.on("error", () => {});
       ws.terminate();
       reject(refusal);
     };
-    const timer = setTimeout(() => fail(new SocketRefused(502, tr(lang, "station.preview.noAnswer", { port }))), OPEN_WITHIN_MS);
+    const timer = wall.after(OPEN_WITHIN_MS, () => fail(new SocketRefused(502, tr(lang, "station.preview.noAnswer", { port }))));
     ws.on("unexpected-response", (_req, answer) => {
       const status = answer.statusCode ?? 502;
       answer.resume();
@@ -236,7 +237,7 @@ export function openSocket(headers: [string, string][], port: number, path: stri
     ws.on("open", () => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      timer();
       ws.removeAllListeners();
       resolve(new ServiceSocket(ws));
     });
@@ -311,7 +312,7 @@ export async function pumpSocket(socket: ServiceSocket, fromClient: FrameReader,
   })();
   const first = await Promise.race([up.then(() => "up" as const), down.then(() => "down" as const)]);
   if (first === "up") {
-    await Promise.race([down, new Promise<void>((resolve) => setTimeout(resolve, CLOSE_ANSWER_MS).unref())]);
+    await Promise.race([down, wall.sleep(CLOSE_ANSWER_MS)]);
   }
   over = true;
   if (ws.readyState !== WebSocket.CLOSED) ws.terminate();

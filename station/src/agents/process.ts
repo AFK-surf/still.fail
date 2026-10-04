@@ -12,9 +12,10 @@ import { createConnection } from "node:net";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
 import { RunnerConnection, existingRunners, leave, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
+import { wall } from "../ops/fibers.ts";
 
-/// A wait that does not keep the station running (a grace raced against an exit).
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref());
+/// A wait on another process (a grace raced against its exit): the machine's time.
+const sleep = wall.sleep;
 
 /// Lines Rust logged at debug: only with STILLFAIL_AGENTS_DEBUG set.
 export const debug = (at: string, message: string, fields?: Record<string, unknown>) => {
@@ -229,7 +230,7 @@ export function ackedOffset(info: RunnerInfo, out: string): Promise<number> {
     const finish = (at: number) => {
       if (done) return;
       done = true;
-      clearTimeout(quiet);
+      quiet();
       socket.destroy();
       resolve(at);
     };
@@ -254,10 +255,10 @@ export function ackedOffset(info: RunnerInfo, out: string): Promise<number> {
     });
     // Nothing of stdout comes: all of it was acknowledged. What it had then is the place; output written just after
     // that look would come in the moment after, and says its own place.
-    let quiet = setTimeout(() => {
+    let quiet = wall.after(400, () => {
       const end = size();
-      quiet = setTimeout(() => finish(end), 150);
-    }, 400);
+      quiet = wall.after(150, () => finish(end));
+    });
   });
 }
 

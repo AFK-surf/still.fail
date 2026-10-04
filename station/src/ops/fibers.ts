@@ -1,13 +1,27 @@
 // Time and long-lived work for a part that is a class rather than an Effect itself (a service holds it: services.ts):
 // its `now` and its waits from the Clock it was given (a TestClock in its tests; the live one otherwise), each wait or
 // piece of background work a fiber in a scope of its own, all interrupted when it closes (docs/station-ts.md, 写法).
-// The station reads no Date.now and arms no Node timer of its own: a test moves its time, and nothing escapes it. (A
-// deadline on a real socket, AbortSignal.timeout on a fetch, is the network's time, not the station's.)
+// Outside `wall` below, the station reads no Date.now and arms no Node timer: a test moves its time, and nothing of the
+// station's own escapes it. (A deadline on a fetch, AbortSignal.timeout, is the network's time, as `wall` is.)
 import { Clock, Duration, Effect, Exit, Fiber, FiberSet, Scope } from "effect";
 import { log } from "./log.ts";
 
-/// The live Clock, for a part given none.
-export const liveClock: Clock.Clock = Effect.runSync(Clock.clockWith(Effect.succeed));
+/// The live Clock, for a part given none: Effect's, except that a wait on it does not keep the process up by itself
+/// (a part's timers ran on unref'd Node timers before, and its tests end without closing every part).
+const effects: Clock.Clock = Effect.runSync(Clock.clockWith(Effect.succeed));
+export const liveClock: Clock.Clock = {
+  currentTimeMillisUnsafe: () => effects.currentTimeMillisUnsafe(),
+  currentTimeMillis: effects.currentTimeMillis,
+  currentTimeNanosUnsafe: () => effects.currentTimeNanosUnsafe(),
+  currentTimeNanos: effects.currentTimeNanos,
+  monotonicTimeNanosUnsafe: () => effects.monotonicTimeNanosUnsafe(),
+  monotonicTimeNanos: effects.monotonicTimeNanos,
+  sleep: (duration: Duration.Duration) =>
+    Effect.callback<void>((resume) => {
+      const stop = wall.after(Duration.toMillis(duration), () => resume(Effect.void));
+      return Effect.sync(stop);
+    }),
+};
 
 export class Fibers {
   readonly clock: Clock.Clock;
@@ -98,20 +112,35 @@ export function within<A>(clock: Clock.Clock, ms: number, what: Promise<A>, why:
 
 /// The machine's own time, for what the station shares with other programs or waits on them for (a file's mtime they
 /// compare, a login's or a credential's expiry they read too, a lock's heartbeat; how long a child process, a socket or
-/// a peer is given to answer): on the live Clock whatever clock a part was given, as theirs is.
+/// a peer is given to answer): Node's own clock and timers, whatever clock a part was given, as theirs are. The one
+/// place the station arms a Node timer, and none of them keeps the process up by itself: each is a deadline on, a beat
+/// beside or a wait for something that does.
 export const wall = {
-  now: (): number => liveClock.currentTimeMillisUnsafe(),
-  sleep: (ms: number): Promise<void> => Effect.runPromise(liveClock.sleep(Duration.millis(Math.max(0, ms)))),
+  now: (): number => Date.now(),
+  sleep: (ms: number): Promise<void> => new Promise((resolve) => void wall.after(ms, resolve)),
   /// `f` once, `ms` from now; the returned function calls it off.
   after(ms: number, f: () => void): () => void {
-    const fiber = Effect.runFork(Effect.andThen(liveClock.sleep(Duration.millis(Math.max(0, ms))), Effect.sync(f)));
-    return () => void Effect.runFork(Fiber.interrupt(fiber));
+    let timer: ReturnType<typeof setTimeout>;
+    // A timer holds at most ~24.8 days (2^31-1 ms): one further off is armed again then.
+    const arm = (left: number) => {
+      timer = setTimeout(() => (left > MAX_TIMER ? arm(left - MAX_TIMER) : f()), Math.min(left, MAX_TIMER));
+      timer.unref();
+    };
+    arm(Math.max(0, ms));
+    return () => clearTimeout(timer);
   },
   /// `f` every `ms`; the returned function stops it.
   every(ms: number, f: () => void): () => void {
-    const fiber = Effect.runFork(Effect.forever(Effect.andThen(liveClock.sleep(Duration.millis(ms)), Effect.sync(f))));
-    return () => void Effect.runFork(Fiber.interrupt(fiber));
+    const timer = setInterval(f, ms);
+    timer.unref();
+    return () => clearInterval(timer);
   },
   /// `what`, failed with an Error saying `why` if it is not settled within `ms`.
-  within: <A>(ms: number, what: Promise<A>, why: string): Promise<A> => within(liveClock, ms, what, () => new Error(why)),
+  within<A>(ms: number, what: Promise<A>, why: string): Promise<A> {
+    let stop = () => {};
+    const late = new Promise<never>((_, reject) => (stop = wall.after(ms, () => reject(new Error(why)))));
+    return Promise.race([what, late]).finally(stop);
+  },
 };
+
+const MAX_TIMER = 2 ** 31 - 1;

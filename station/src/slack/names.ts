@@ -2,7 +2,8 @@
 // admin API never waits on Slack for a name: a name not known yet answers null at once, is fetched in the background,
 // and `onLearn` tells the pages to read again (once per burst). Failed lookups are not tried again for a while.
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { Effect, Exit, FiberSet, Scope } from "effect";
+import { Clock, Effect, Exit, FiberSet, Scope } from "effect";
+import { liveClock } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import type { Person } from "../sessions/chat.ts";
 
@@ -11,7 +12,7 @@ const RETRY_FAILED_MS = 10 * 60_000;
 /// A key's entry: a person, a channel's name (null: a direct message, known to have none), when it was learned.
 type Entry = { person?: Person; channel?: string | null; at: number };
 
-export type NameBookOptions = { saveAfterMs?: number; learnAfterMs?: number };
+export type NameBookOptions = { saveAfterMs?: number; learnAfterMs?: number; clock?: Clock.Clock };
 
 export class NameBook {
   readonly path: string;
@@ -26,6 +27,7 @@ export class NameBook {
   private scope: Scope.Closeable;
   private run: (effect: Effect.Effect<void>) => Promise<void>;
   private closed = false;
+  private clock: Clock.Clock;
 
   constructor(path: string, options: NameBookOptions = {}) {
     this.path = path;
@@ -44,8 +46,10 @@ export class NameBook {
         log.warn("slack", "slack names file unreadable; starting empty", { error: (error as Error).message });
       }
     }
+    this.clock = options.clock ?? liveClock;
     this.scope = Effect.runSync(Scope.make());
-    this.run = Effect.runSync(Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope));
+    const run = Effect.runSync(Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope));
+    this.run = (effect) => run(effect.pipe(Effect.provideService(Clock.Clock, this.clock)));
   }
 
   /// Called (once per burst) after names were learned, so pages read what shows them again.
@@ -57,7 +61,7 @@ export class NameBook {
     const known = this.entries.get(key)?.person ?? null;
     if (known === null) this.learn(key, async () => {
       const person = await fetch();
-      return person === null ? null : { person, at: Date.now() };
+      return person === null ? null : { person, at: this.clock.currentTimeMillisUnsafe() };
     });
     return known;
   }
@@ -65,7 +69,7 @@ export class NameBook {
   /// A channel's name; null for a direct message (known) or not known yet.
   channel(key: string, fetch: () => Promise<string | null>): string | null {
     const known = this.entries.get(key)?.channel;
-    if (known === undefined) this.learn(key, async () => ({ channel: await fetch(), at: Date.now() }));
+    if (known === undefined) this.learn(key, async () => ({ channel: await fetch(), at: this.clock.currentTimeMillisUnsafe() }));
     return known ?? null;
   }
 
@@ -78,14 +82,14 @@ export class NameBook {
   }
 
   private learn(key: string, fetch: () => Promise<Entry | null>) {
-    if (this.closed || this.pending.has(key) || (this.failed.get(key) ?? 0) > Date.now()) return;
+    if (this.closed || this.pending.has(key) || (this.failed.get(key) ?? 0) > this.clock.currentTimeMillisUnsafe()) return;
     this.pending.add(key);
     void fetch()
       .catch(() => null)
       .then((entry) => {
         this.pending.delete(key);
         if (entry === null) {
-          this.failed.set(key, Date.now() + RETRY_FAILED_MS);
+          this.failed.set(key, this.clock.currentTimeMillisUnsafe() + RETRY_FAILED_MS);
           return;
         }
         const merged = this.entries.get(key) ?? { at: 0 };

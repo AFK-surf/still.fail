@@ -19,6 +19,7 @@ import { fileCredentials, takeBack } from "./no-keychain.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { bothNames, expandRoute, isMachine, profileEnv, profileModel } from "./profiles.ts";
 import { cleanEnv, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { wall } from "../ops/fibers.ts";
 
 type Json = any;
 
@@ -215,7 +216,7 @@ export class ClaudeDriver implements AgentDriver {
       const sessionId = flag >= 0 ? info.args[flag + 1]! : (options.resume ?? "");
       log.info("agents::claude", "taking up a claude process after a crash", { session: sessionId, pgid: info.pgid, busy: turn.busy, from: at });
       // Its token is not known: as if about to run out, so its next turn starts it again with the machine's current one.
-      session = new ClaudeSession(this, sessionId, turn, isMachine(options.profile) ? Date.now() : null, live, events);
+      session = new ClaudeSession(this, sessionId, turn, isMachine(options.profile) ? wall.now() : null, live, events);
       // A turn is running that this station did not start.
       if (turn.busy) events({ type: "turnStarted" });
     }
@@ -295,7 +296,7 @@ export class ClaudeSession implements AgentSession {
     if (this.turn.closed) throw new Error("claude session is closed");
     if (this.turn.busy) throw new Error("a turn is already running");
     // Its token cannot refresh itself: about to run out, it is started again (resuming) with the machine's next one.
-    if (this.machineExpires !== null && this.machineExpires - Date.now() < CLAUDE_TOKEN_MARGIN_MS) throw new Error("the machine login's token runs out");
+    if (this.machineExpires !== null && this.machineExpires - wall.now() < CLAUDE_TOKEN_MARGIN_MS) throw new Error("the machine login's token runs out");
     this.turn.busy = true;
     this.proc.write(userMessage(text));
   }

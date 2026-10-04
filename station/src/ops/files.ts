@@ -2,6 +2,7 @@
 import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { wall } from "./fibers.ts";
 
 /// The data directory: `--data`, else $STILLFAIL_DATA, else $EMBER_DATA (before the rename), else ~/.stillfail.
 export function dataDir(args: string[]): string {
@@ -30,4 +31,5 @@ export function writePrivate(path: string, data: string | Uint8Array) {
   renameSync(tmp, path);
 }
 
-export const nowSecs = () => Math.floor(Date.now() / 1000);
+/// Seconds, as the cloud and the files say them: the machine's time.
+export const nowSecs = () => Math.floor(wall.now() / 1000);

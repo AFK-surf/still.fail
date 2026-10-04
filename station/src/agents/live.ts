@@ -2,6 +2,7 @@
 // grows by deltas and ends; the phase says where the turn stands with the model. What each keeps between frames is
 // plain data (`state`), so a station taking a session up goes on with the steps in flight.
 import type { LiveEvent } from "./runtime.ts";
+import { wall } from "../ops/fibers.ts";
 
 type Json = any;
 type Phase = "starting" | "requesting" | "responding" | "working";
@@ -61,7 +62,7 @@ export class LiveFromClaude {
       if (event === "message_stop" && parent === undefined) out.push({ kind: "phase", phase: "working" });
       const index = Number.isInteger(e?.index) ? (e.index as number) : -1;
       if (event === "message_start") {
-        this.message = str(e?.message?.id) ?? String(Date.now());
+        this.message = str(e?.message?.id) ?? String(wall.now());
         this.blocks.clear();
         if (parent === undefined) out.push({ kind: "phase", phase: "responding" });
       } else if (event === "content_block_start") {

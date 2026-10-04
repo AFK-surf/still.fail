@@ -5,6 +5,7 @@ import { type IncomingMessage, type Server, createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { log } from "../ops/log.ts";
 import type { McpEndpoint } from "./mcp.ts";
+import { wall } from "../ops/fibers.ts";
 
 /// What /jobs/notify does with a job's words: a status and a body (jobs.ts `notifyEndpoint`).
 export type Notified = (authorization: string | undefined, body: Buffer) => { status: number; body: unknown };
@@ -83,13 +84,13 @@ export function openAgentsDoor(at: { fd: number } | { port: number }, mcp: McpEn
             server.close();
             server.closeIdleConnections();
             if (busy === 0) return done();
-            const timer = setTimeout(() => {
+            // How long the agents' calls under way are given: their time, the machine's.
+            const timer = wall.after(graceMs, () => {
               server.closeAllConnections();
               done();
-            }, graceMs);
-            timer.unref();
+            });
             idle = () => {
-              clearTimeout(timer);
+              timer();
               server.closeAllConnections();
               done();
             };

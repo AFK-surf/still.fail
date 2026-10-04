@@ -4,7 +4,7 @@
 // again only now and then, or at once when enrolled anew meanwhile.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Effect, Stream, SubscriptionRef } from "effect";
+import { Clock, Effect, Stream, SubscriptionRef } from "effect";
 import WebSocket from "ws";
 import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
@@ -12,6 +12,7 @@ import { version } from "../ops/version.ts";
 import { Cloud, Key, Up } from "../services.ts";
 import type { Cloud as CloudState, Revocation } from "./state.ts";
 import type { StationKey } from "./key.ts";
+import { wall } from "../ops/fibers.ts";
 
 /// The cloud expects a "ping" this often and drops a station silent for three of them.
 const PING_MS = 30_000;
@@ -54,7 +55,7 @@ export const presence = Effect.gen(function* () {
       // Enrolled again meanwhile (the file changes): ask at once.
       yield* Effect.raceFirst(Effect.sleep(retry), cloud.changes.pipe(Stream.filter(() => !s.removed()), Stream.runHead));
     }
-    const started = Date.now();
+    const started = yield* Clock.currentTimeMillis;
     s.peersCurrent = false;
     // The socket, until it ends or the station stops answering (then it is closed: offline at the cloud).
     const ended = yield* Effect.result(Effect.raceFirst(connect(s, key), Effect.as(until(false), "station not answering; went offline at still.fail cloud")));
@@ -64,7 +65,7 @@ export const presence = Effect.gen(function* () {
     if (ended._tag === "Success") log.info("presence", why);
     else log.warn("presence", "no presence socket to still.fail cloud", { error: why });
     // A socket that held a while starts over quickly; failing again and again backs off to a minute.
-    if (Date.now() - started > 60_000) backoff = 1000;
+    if ((yield* Clock.currentTimeMillis) - started > 60_000) backoff = 1000;
     yield* Effect.sleep(backoff);
     backoff = Math.min(backoff * 2, 60_000);
   }
@@ -85,7 +86,7 @@ const connect = (s: CloudState, key: StationKey) =>
       headers[`x-${prefix}-version`] = version();
     }
     const socket = new WebSocket(`${state.origin.replace("http", "ws")}/v1/stations/connect`, { headers, handshakeTimeout: CONNECT_TIMEOUT_MS });
-    let ping: ReturnType<typeof setInterval> | undefined;
+    let ping: (() => void) | undefined;
     let answered = true;
     let failed: Error | null = null;
     socket.on("unexpected-response", (_, response) => {
@@ -102,7 +103,8 @@ const connect = (s: CloudState, key: StationKey) =>
       takenBack(s);
       writePresence(s.data, true, null);
       log.info("presence", "online at still.fail cloud");
-      ping = setInterval(() => {
+      // The cloud's answering is in the machine's time.
+      ping = wall.every(PING_MS, () => {
         // No pong since the last ping: gone even if the socket has not noticed.
         if (!answered) {
           failed = new Error("still.fail cloud stopped answering");
@@ -111,7 +113,7 @@ const connect = (s: CloudState, key: StationKey) =>
         }
         answered = false;
         socket.send("ping");
-      }, PING_MS);
+      });
     });
     socket.on("message", (data, binary) => {
       if (binary) return;
@@ -120,12 +122,12 @@ const connect = (s: CloudState, key: StationKey) =>
       else applyState(s, text);
     });
     socket.on("close", (code) => {
-      clearInterval(ping);
+      ping?.();
       if (code === CLOSE_REMOVED) removed(s, CLOSE_REMOVED);
       resume(failed ? Effect.fail(failed) : Effect.succeed("still.fail cloud closed the presence socket"));
     });
     return Effect.sync(() => {
-      clearInterval(ping);
+      ping?.();
       socket.close();
     });
   });

@@ -3,6 +3,7 @@
 import type { Lang } from "../ops/i18n.ts";
 import type { Seen } from "../read/host.ts";
 import type { Readers } from "../read/pool.ts";
+import { wall } from "../ops/fibers.ts";
 
 export class Host {
   private readers: Readers;
@@ -16,7 +17,7 @@ export class Host {
 
   /// At most ten seconds old; one read at a time however many ask.
   sample(lang: Lang = "zh"): Promise<any> {
-    if (this.cached !== null && Date.now() - this.cached.at < 10_000) return Promise.resolve(this.cached.info);
+    if (this.cached !== null && wall.now() - this.cached.at < 10_000) return Promise.resolve(this.cached.info);
     this.reading ??= this.readers
       .read("host", { seen: this.seen }, lang)
       .then((text) => {

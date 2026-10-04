@@ -13,6 +13,8 @@ import { log } from "../ops/log.ts";
 import type { Readers } from "../read/pool.ts";
 import type { StoreChange } from "../store/rows.ts";
 import type { Answer } from "./request.ts";
+import type { Clock } from "effect";
+import { Fibers } from "../ops/fibers.ts";
 
 const PING_MS = 25_000;
 const HOST_MS = 10_000;
@@ -20,6 +22,8 @@ const HOST_MS = 10_000;
 /// What the events need of the rest of the station.
 export type EventsDeps = {
   readers: Readers;
+  /// Its time (a TestClock in tests).
+  clock?: Clock.Clock;
   subscribe(listener: (change: StoreChange) => void): () => void;
   /// A host sample (GET /host's answer).
   host(): Promise<unknown>;
@@ -61,11 +65,13 @@ export class Events {
   /// The process state last told per session.
   private states = new Map<string, string>();
   private flushing: Promise<void> | null = null;
-  private timers: ReturnType<typeof setInterval>[] = [];
+  private time: Fibers;
+  private timers: (() => void)[] = [];
   private lastHost = "";
 
   constructor(deps: EventsDeps) {
     this.deps = deps;
+    this.time = new Fibers("events", deps.clock);
     deps.subscribe((change) => this.storeChanged(change));
   }
 
@@ -178,14 +184,14 @@ export class Events {
     };
     tell();
     let watcher: FSWatcher | null = null;
-    let pending: ReturnType<typeof setTimeout> | null = null;
+    let pending: (() => void) | null = null;
     const soon = () => {
       // A burst of writes is one event.
       if (pending) return;
-      pending = setTimeout(() => {
+      pending = this.time.after(200, () => {
         pending = null;
         tell();
-      }, 200);
+      });
     };
     const follow = () => {
       if (watcher) return;
@@ -201,22 +207,21 @@ export class Events {
     };
     follow();
     // A log that was not there yet, or was written anew (its watch then ends), is found again here.
-    const check = setInterval(() => {
+    const check = this.time.every(5_000, () => {
       follow();
       tell();
-    }, 5_000);
-    check.unref();
+    });
     return () => {
       watcher?.close();
-      clearInterval(check);
-      if (pending) clearTimeout(pending);
+      check();
+      pending?.();
     };
   }
 
   private startTimers() {
-    this.timers.push(setInterval(() => this.clients.forEach((c) => c.raw(": ping\n\n")), PING_MS));
+    this.timers.push(this.time.every(PING_MS, () => this.clients.forEach((c) => c.raw(": ping\n\n"))));
     this.timers.push(
-      setInterval(() => {
+      this.time.every(HOST_MS, () => {
         if (!this.clients.some((c) => c.host)) return;
         void this.deps.host().then((info: any) => {
           const { checkedAt: _a, uptimeSec: _b, ...shown } = info ?? {};
@@ -225,13 +230,12 @@ export class Events {
           this.lastHost = key;
           for (const c of this.clients) if (c.host) c.send("host", info);
         });
-      }, HOST_MS),
+      }),
     );
-    for (const t of this.timers) t.unref();
   }
 
   private stopTimers() {
-    this.timers.forEach(clearInterval);
+    for (const stop of this.timers) stop();
     this.timers = [];
     this.lastHost = "";
   }

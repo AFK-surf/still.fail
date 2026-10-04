@@ -36,6 +36,7 @@ launchd / 桌面 app
 - 纯计算（读视图的拼装、格式化、协议解析）保持普通函数，不进 Effect；热路径同理。
 - 回调式的 API（ws、子进程、原生插件的事件）用 `Effect.callback` 包一层，取消时要能清理。
 - 不用全局状态；需要什么，在服务里声明依赖。
+- 时间（2026-10-04 定）：station 自己的时间一律走 Effect 的 `Clock`。是 Effect 的代码用 `Clock.currentTimeMillis`、`Effect.sleep`；是类的部分（服务持有的 Hub、Accounts、Store、Events……）构造时拿一个 `clock`（测试给 `TestClock`），用 `ops/fibers.ts` 的 `Fibers` 取 now、排定时、跑后台工作，全在自己的 scope 里，`close` 时一起停。和别的程序共用的时间（文件的 mtime、登录和 credential 的到期、锁的心跳、给子进程/套接字/对端的期限）用 `wall`，那是机器的时间，也是 station 里唯一直接碰 Node 定时器和 `Date.now` 的地方。检查（`scripts/check.sh`）会拒绝在别处出现 `Date.now`、`new Date()`、`setTimeout`、`setInterval`。
 
 ## 模块划分（Node 进程内）
 
