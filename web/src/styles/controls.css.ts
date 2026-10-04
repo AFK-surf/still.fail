@@ -71,6 +71,8 @@ export const input = style({
     [`${inputRow} &`]: { flex: "1" },
   },
 });
+/** A one-line field is a pill, as the buttons beside it are; a textarea keeps --r-field (its lines in a pill would not sit right). */
+globalStyle(`input${input}`, { borderRadius: "999px", paddingLeft: "16px", paddingRight: "16px", cornerShape: "round" });
 export const popover = style({
   zIndex: "60", padding: "6px", border: `1px solid ${vars.line}`, borderRadius: vars.rMenu, background: vars.canvas,
   boxShadow: `0 12px 32px ${vars.shadow}`, transformOrigin: "var(--radix-popper-transform-origin, top)",

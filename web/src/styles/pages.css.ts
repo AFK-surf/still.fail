@@ -36,12 +36,13 @@ export const identitySub = style({
 });
 export const section = style({ marginBottom: "28px" });
 /**
- * A grey ground, no line round it: a line here and its buttons' lines a few px inside it never quite followed each
- * other round the corners (its buttons have none either: controls.css.ts).
+ * A grey ground, no line round it (its buttons have none either: controls.css.ts), and round corners concentric with the
+ * pills in them: a 32px button (16px ends) 20px from the side and, in a row of a title and a line under it (42px), from
+ * the top or bottom too (15px + 5px), so 16 + 20px.
  */
 export const card = style({
-  borderRadius: vars.rCard, padding: "18px 20px", background: `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`,
-  display: "grid", gap: "14px", cornerShape: vars.cornerShape,
+  borderRadius: "calc(16px + 20px)", padding: "15px 20px", background: `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`,
+  display: "grid", gap: "14px",
   selectors: {
     "& + &": { marginTop: "10px" },
   },
