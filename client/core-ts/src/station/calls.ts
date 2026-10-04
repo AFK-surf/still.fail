@@ -93,6 +93,14 @@ export function install(): void {
     const c = call as Extract<Call, { kind: "stationPoster" }>;
     return Effect.flatMap(parse(c.station), (addr) => Effect.map(inner.stations.requests.poster(addr, c.key, c.name, ctx), (bytes) => (bytes === null ? null : { type: "image/jpeg", bytes: base64(bytes) })));
   };
+  handlers.cacheUsage = (inner) => Effect.sync(() => ({ chats: inner.data.cacheUsage() }));
+  handlers.cacheClear = (inner, call) => {
+    const c = call as Extract<Call, { kind: "cacheClear" }>;
+    return Effect.sync(() => {
+      inner.data.forgetChat(c.station, c.thread);
+      return null;
+    });
+  };
   handlers.stationPreview = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationPreview" }>;
     return Effect.flatMap(parse(c.station), (addr) => {

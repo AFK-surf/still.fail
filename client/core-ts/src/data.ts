@@ -839,6 +839,16 @@ export class Data {
     this.of(station)?.forgetLog(table, station, id);
   }
 
+  /// What every account's database keeps of each chat (AccountDb.cacheUsage).
+  cacheUsage(): ReturnType<AccountDb["cacheUsage"]> {
+    return this.dbs().flatMap((db) => db.cacheUsage());
+  }
+
+  /// Forgets what is kept of a chat (AccountDb.forgetChat).
+  forgetChat(station: string, thread: number): void {
+    this.of(station)?.forgetChat(station, thread);
+  }
+
   /// What a host error is, as a note's detail.
   static detail(e: unknown): string {
     return e instanceof HostError || e instanceof Error ? e.message : String(e);

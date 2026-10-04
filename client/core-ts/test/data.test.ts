@@ -357,6 +357,25 @@ test("a_logs_items_are_written_once_and_read_by_range", async () => {
   runner.shutdown();
 });
 
+test("what_is_kept_of_each_chat_is_counted_and_forgotten", async () => {
+  const { data, open, runner } = fresh();
+  await open();
+  data.putThread("w/a", { id: 7, title: "大视频", sessions: [{ session: "k1" }] });
+  data.putItems("entry", "w/a", "7", [[1, { text: "x".repeat(100) }], [2, { text: "y" }]]);
+  data.putItems("transcript", "w/a", "k1", [[0, { a: "z".repeat(50) }]]);
+  data.putItems("entry", "w/a", "8", [[1, { text: "other" }]]);
+  await flush();
+  const usage = data.cacheUsage().sort((a, b) => a.thread - b.thread);
+  assert.deepEqual(usage.map((u) => [u.thread, u.title, u.sessions]), [[7, "大视频", ["k1"]], [8, null, []]]);
+  assert.ok(usage[0]!.bytes > 150, "its entries and its session's transcript");
+  data.forgetChat("w/a", 7);
+  await flush();
+  assert.equal(data.logSpan("entry", "w/a", "7"), null);
+  assert.equal(data.logSpan("transcript", "w/a", "k1"), null);
+  assert.deepEqual(data.cacheUsage().map((u) => u.thread), [8]);
+  runner.shutdown();
+});
+
 test("a_full_disk_is_said_and_what_was_done_here_is_kept", async () => {
   const { data, open, db, runner } = fresh();
   await open();

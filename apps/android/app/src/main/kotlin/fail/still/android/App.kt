@@ -140,6 +140,8 @@ sealed interface Screen {
     data object Appearance : Screen { override val id = "appearance" }
     /** Files opened in the app and kept on this device, to delete (screens/KeptFiles.kt). */
     data object KeptFiles : Screen { override val id = "kept-files" }
+    /** What is kept of a chat (null: files of no chat known), from KeptFiles. */
+    data class KeptChat(val station: String?, val thread: Long?) : Screen { override val id = "kept-files/${station ?: ""}/${thread ?: ""}" }
     /** What changed in still.fail (screens/Changelog.kt). */
     data object Changelog : Screen { override val id = "changelog" }
     /** Every station's connects, profiles and memory, from settings. */
@@ -724,6 +726,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Settings -> fail.still.android.screens.SettingsScreen(current)
                     Screen.Appearance -> fail.still.android.screens.AppearanceScreen()
                     Screen.KeptFiles -> fail.still.android.screens.KeptFilesScreen()
+                    is Screen.KeptChat -> fail.still.android.screens.KeptChatScreen(screen.station, screen.thread)
                     Screen.Changelog -> fail.still.android.screens.ChangelogScreen()
                     is Screen.Connects -> fail.still.android.screens.ConnectsScreen(current, screen.station)
                     is Screen.Profiles -> fail.still.android.screens.ProfilesScreen(current, screen.station)

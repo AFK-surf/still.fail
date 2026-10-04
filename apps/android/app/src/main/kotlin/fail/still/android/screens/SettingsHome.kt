@@ -137,13 +137,13 @@ fun SettingsScreen(current: WorkspaceEntry) {
     }
 }
 
-/** The files kept on this device, how much they take. */
+/** What this device keeps (its chats' messages and files, and the rest), how much it takes. */
 @Composable
 private fun KeptFilesRow() {
     val app = LocalApp.current
     val context = LocalContext.current
     var total by remember { mutableStateOf<Long?>(null) }
-    LaunchedEffect(Unit) { total = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { KeptFiles.list(context).sumOf { it.size } } }
+    LaunchedEffect(Unit) { total = KeptFiles.read(app, context).total }
     GoRow(t("android-settings.files.title"), total?.let { fileSize(it) }) { app.push(Screen.KeptFiles) }
 }
 

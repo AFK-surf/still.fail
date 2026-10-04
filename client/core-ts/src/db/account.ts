@@ -1433,6 +1433,47 @@ export class AccountDb {
     });
   }
 
+  /// What this database keeps of each chat (a thread): its entries and its sessions' transcripts, in characters of
+  /// their JSON (near enough their bytes), with its title and sessions; a session's transcript counted with its first
+  /// thread. For the device's page of what it keeps (`cache.usage`).
+  cacheUsage(): { station: string; thread: number; title: string | null; sessions: string[]; bytes: number }[] {
+    const out = new Map<string, { station: string; thread: number; title: string | null; sessions: string[]; bytes: number }>();
+    const of = (station: string, thread: number) => {
+      const k = `${station}\0${thread}`;
+      let row = out.get(k);
+      if (row === undefined) out.set(k, (row = { station, thread, title: null, sessions: [], bytes: 0 }));
+      return row;
+    };
+    for (const r of this.sql.all("SELECT station, thread, sum(length(json)) FROM entry GROUP BY station, thread")) of(r[0] as string, r[1] as number).bytes += Number(r[2] ?? 0);
+    const firstThread = new Map<string, number>();
+    for (const r of this.sql.all("SELECT station, session, thread FROM thread_member ORDER BY station, session, thread")) {
+      const [station, session, thread] = [r[0] as string, r[1] as string, r[2] as number];
+      of(station, thread).sessions.push(session);
+      if (!firstThread.has(`${station}\0${session}`)) firstThread.set(`${station}\0${session}`, thread);
+    }
+    for (const r of this.sql.all("SELECT station, session, sum(length(json)) FROM transcript GROUP BY station, session")) {
+      const thread = firstThread.get(`${r[0] as string}\0${r[1] as string}`);
+      if (thread !== undefined) of(r[0] as string, thread).bytes += Number(r[2] ?? 0);
+    }
+    for (const row of out.values()) {
+      const json = this.sql.all("SELECT json FROM thread WHERE station = ? AND id = ?", [row.station, row.thread])[0]?.[0];
+      const title = json === undefined ? undefined : (parse(json) as { title?: unknown })?.title;
+      if (typeof title === "string" && title.trim() !== "") row.title = title;
+    }
+    return [...out.values()].filter((r) => r.bytes > 0);
+  }
+
+  /// Forgets what is kept of a chat: its entries and its sessions' transcripts (read again from its station when it is
+  /// opened). What waits to be sent, drafts and the chat's row stay.
+  forgetChat(station: string, thread: number): void {
+    this.#write(() => {
+      const sessions = this.sql.all("SELECT session FROM thread_member WHERE station = ? AND thread = ?", [station, thread]).map((r) => r[0] as string);
+      this.#logCache.clear();
+      this.#forgetEntries(station, thread);
+      for (const session of sessions) if (this.sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", [station, session]) > 0) this.#tellLog("transcript", station, session);
+    });
+  }
+
   // ── what goes ──
 
   /// Every station this database holds anything of.

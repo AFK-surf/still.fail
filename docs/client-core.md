@@ -396,6 +396,8 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `station.file` | `station`, `key`, `name` | `{ type, bytes }` |
 | `station.file.part` | `station`, `key`, `name`, `offset`, `length` (at most 8 MB) | `{ type, total, bytes }`: a part of the file and its whole size, for a big one fetched onto the disk a part at a time; `unsupported` from a station before parts |
 | `station.poster` | `station`, `key`, `name` | `{ type, bytes }`, a video's first frame as a small JPEG the station makes; null when it has none |
+| `cache.usage` | — | `{ chats: [{ station, thread, title, sessions, bytes }] }`: what this device keeps of each chat (its messages, its sessions' transcripts), for a page of what it keeps |
+| `cache.clear` | `station`, `thread` | — ; forgets what is kept of the chat (its messages and transcripts, read again from the station when it is opened); its outbox, draft and row stay |
 | `station.preview` | `station`, `port`, `method`, `path`, `headers?`, `body?`, `stream?` | a request to a web service on the station's machine (`/preview/<port>`): `{ status, headers, body }`; with `stream`, values `{ head: { status, headers } }` then `{ chunk }` for each piece of the body as it comes, and the answer (null) at its end. Only waited on (`status`) until its head; cancelled, the station stops asking the service |
 | `preview.socket` | `station`, `port`, `path`, `headers?`, `socket` (a name the UI gives it) | a WebSocket of that service, over the mesh only: values `{ open: { protocol } }`, then `{ text }` or `{ binary }` for each message; the answer is its close, `{ code, reason }`. Cancelling the call drops it |
 | `preview.socket.send` | `socket`, one of `text`, `binary`, `close: [code, reason]` | — ; what the page sends on the socket it named so |

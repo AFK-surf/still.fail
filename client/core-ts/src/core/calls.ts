@@ -53,6 +53,8 @@ export type Call =
   | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean }
   | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number }
   | { kind: "stationPoster"; station: string; key: string; name: string }
+  | { kind: "cacheUsage" }
+  | { kind: "cacheClear"; station: string; thread: number }
   | { kind: "stationPreview"; station: string; port: number; method: string; path: string; headers: [string, string][]; body: Uint8Array; stream: boolean }
   | { kind: "previewSocket"; station: string; port: number; path: string; headers: [string, string][]; socket: string }
   | { kind: "previewSocketSend"; socket: string; frame: SocketFrame }
@@ -488,6 +490,15 @@ export function parseCall(name: string, params: unknown): Call {
         ["name", S, "req"],
       ]);
       return { kind: "stationPoster", station: p.station as string, key: p.key as string, name: p.name as string };
+    }
+    case "cache.usage":
+      return { kind: "cacheUsage" };
+    case "cache.clear": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+      ]);
+      return { kind: "cacheClear", station: p.station as string, thread: p.thread as number };
     }
     case "station.preview": {
       const p = read(params, [
