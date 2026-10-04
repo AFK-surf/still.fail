@@ -170,10 +170,17 @@ globalStyle(`${sidePanel} ${resizeHandle}`, {
   },
 });
 globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "auto", padding: "0", borderBottom: "0" });
-/** Beside the chat's title, shown while the title is pointed at: renames it (as double-clicking the title does). */
+/** The chat's title with its rename pen laid over its end, so the pen takes no room while it is not shown. */
+export const titleBox = style({ position: "relative", display: "flex", alignItems: "center", minWidth: "0" });
+/** Over the end of the chat's title, shown while the title is pointed at: renames it (as double-clicking the title does). */
 export const renameBtn = style({
-  width: "24px", height: "24px", marginLeft: "-4px", opacity: 0, color: vars.muted,
+  position: "absolute", right: "-6px", top: "50%", transform: "translateY(-50%)",
+  width: "24px", height: "24px", opacity: 0, color: vars.muted,
   selectors: {
     [`${pageBarTitle}:hover &, &:focus-visible`]: { opacity: 1 },
   },
+});
+// The title's end fades out under the pen while it shows.
+globalStyle(`${pageBarTitle}:hover ${titleBox} h1, ${titleBox}:has(${renameBtn}:focus-visible) h1`, {
+  maskImage: "linear-gradient(to right, #000 calc(100% - 30px), transparent calc(100% - 10px))",
 });

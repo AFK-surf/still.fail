@@ -327,7 +327,6 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           {renaming
             ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
             : <ChatTitle station={station.address} session={keeper} title={chat.title} onRename={renamable ? () => setRenaming(true) : undefined} />}
-          {renamable && !renaming && <IconButton label={t("web-pages.chat.rename")} icon={Edit} shortcut="chat.rename" className={css.renameBtn} onClick={() => setRenaming(true)} />}
           <StationUpdate station={station.address} notice={chat.stationUpdate} />
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a) => (
@@ -615,7 +614,10 @@ function ChatTitle({ station, session, title, onRename }: { station: string; ses
   const renameFailed = useDoingFailed("chat.rename", { station, session: session ?? "" });
   return (
     <>
-      <h1 onDoubleClick={onRename}>{renamingTo ?? title}</h1>
+      <span className={css.titleBox}>
+        <h1 onDoubleClick={onRename}>{renamingTo ?? title}</h1>
+        {onRename && <IconButton label={t("web-pages.chat.rename")} icon={Edit} shortcut="chat.rename" className={css.renameBtn} onClick={onRename} />}
+      </span>
       <DoingShown state={{ running: renamingTo !== undefined, error: session === null ? undefined : renameFailed }} className={controlsCss.iconSpinner} size={14} label={t("web-pages.settings.stations.renaming")} />
     </>
   );
