@@ -166,6 +166,11 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         val values = mutableMapOf<String, JsonElement>()
         return call("automaticDecisions.review", JsonObject(values))
     }
+    suspend fun automaticDecisionsPolicy(input: JsonElement): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["input"] = input
+        return call("automaticDecisions.policy", JsonObject(values))
+    }
     class ConnectCreateFields : OperationFields() {
         var input: JsonElement? by field<JsonElement>("input") { it }
         var id: String? by field<String>("id") { JsonPrimitive(it) }

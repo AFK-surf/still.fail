@@ -26,6 +26,7 @@ import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
+import type { ArchiveCheck } from "./core/shapes.ts";
 import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
 import { core } from "./core/react.ts";
@@ -167,6 +168,8 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
   // post, as a decision's options are (only at the chat's end, not in an older window).
   const last = chat.newer ? undefined : messages.findLast((m) => m.authorKind === "agent" && !m.system);
   const archiveAt = onArchive && chat.archivable && !chat.offline && last?.ending === "all_done" ? last.seq : null;
+  // What the archive check made of it, under the same post (in words: the option it picked and what came of it).
+  const checkAt = chat.archiveCheck && last?.ending === "all_done" ? last.seq : null;
   return (
     <>
       {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
@@ -185,7 +188,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
             {line}
             <MessageRow message={m} focus={chat.focusLast === true && m.seq === messages.at(-1)?.seq} enter={enter} emitted={emitted} caught={caught} thread={thread}
               agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory}
-              {...(archiveAt === m.seq ? { archive: onArchive } : {})} />
+              {...(archiveAt === m.seq ? { archive: onArchive } : {})} {...(checkAt === m.seq ? { check: chat.archiveCheck } : {})} />
           </Fragment>
         );
       })}
@@ -812,7 +815,7 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
  * One message of the chat. It is drawn again only when something it shows changes: an agent at work makes the chat
  * draw again many times a second (its activity), and every message's Markdown would be laid out anew each time.
  */
-const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true, archive, focus }: {
+const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true, archive, check, focus }: {
   focus?: boolean;
   message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined; agentHere: boolean;
   /** Its chat's thread, where a decision's options answer (Decisions.tsx); null while nothing can be sent there. */
@@ -824,6 +827,8 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
   /** Its chat is all done: 归档 under it (ArchiveOption). */
   archive?: (() => void) | undefined;
+  /** What the archive check made of its chat, under its all-done post. */
+  check?: ArchiveCheck | undefined;
 }) {
   if (m.mine) {
     return (
@@ -855,11 +860,12 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
       {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
+      {check && <p className={css.archiveCheck} data-failed={check.failed || undefined}>{check.text}</p>}
       {archive && <ArchiveOption thread={m.thread} onArchive={archive} />}
     </OthersMessage>
   );
 }, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && a.thread === b.thread
-  && a.options === b.options && a.archive === b.archive && a.focus === b.focus && sameMessage(a.message, b.message));
+  && a.options === b.options && a.archive === b.archive && a.check?.text === b.check?.text && a.check?.failed === b.check?.failed && a.focus === b.focus && sameMessage(a.message, b.message));
 
 /**
  * 归档这个 chat, under the agent's post that said it is all done, while nothing is left in the chat: as wide as the

@@ -405,6 +405,11 @@ internal class Here(val station: String, val of: ChatOf, val view: ChatView, val
         if (view.archivable != true || view.archived == true || view.pending == true) null
         else view.messages.lastOrNull { it.authorKind == "agent" && it.ending == "all_done" }?.seq
     }
+    /** The post what the archive check made of the chat goes under: the agents' latest, when it ended all done. */
+    val checkUnder: Long? by lazy {
+        if (view.archiveCheck == null) null
+        else view.messages.lastOrNull { it.authorKind == "agent" && !it.system }?.takeIf { it.ending == "all_done" }?.seq
+    }
     /** Files are kept in a session's workspace: the agent whose workspace holds it, else the first. */
     fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key ?: orOwner
 }
@@ -1063,6 +1068,8 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             if (m.authorKind == "person") Files(ctx, m.attachments)
             // A decision it asks (its options): them under it, a line saying how it went once it has.
             if (decide) DecisionUnder(ctx, m)
+            // What the archive check made of the chat (web Chat.tsx archiveCheck): a quiet line, red when it failed.
+            if (decide && ctx.checkUnder == m.seq) ctx.view.archiveCheck?.let { Text(it.text, fontSize = 12.sp, lineHeight = 18.sp, color = if (it.failed) C.red else C.muted, modifier = Modifier.padding(top = 6.dp)) }
             // Under its agent's latest 做完了 while nothing is left in the chat: archiving it, right there.
             // Keep the button alive until its exit finishes; the rest of the row closes the space with it.
             if (decide) AnimatedVisibility(

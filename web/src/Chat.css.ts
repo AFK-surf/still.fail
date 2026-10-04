@@ -594,3 +594,9 @@ globalStyle(`${msgVideo}[data-unavailable] .${msgVideoName}`, {
   background: "transparent", color: vars.text, textAlign: "center", padding: "8px 12px",
 });
 
+
+/** What the archive check made of the chat, under its agent's all-done post: a quiet line; red when the check failed. */
+export const archiveCheck = style({
+  margin: "6px 0 0", fontSize: vars.textXs, color: vars.muted, lineHeight: "18px",
+  selectors: { "&[data-failed]": { color: vars.red } },
+});

@@ -48,7 +48,6 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/connects" element={<ConnectsScreen />} />
       <Route path="settings/automatic-decisions" element={<AutomaticDecisionsScreen />} />
       <Route path="settings/automatic-decisions/completion" element={<AutomaticDecisionCompletionScreen />} />
-      <Route path="settings/automatic-decisions/completion/logs" element={<AutomaticDecisionCompletionScreen logs />} />
       <Route path="settings/profiles" element={<ProfilesScreen />} />
       <Route path="settings/profiles/account/:key" element={<ProfileAccountScreen />} />
       <Route path="settings/memory" element={<MemoriesScreen />} />

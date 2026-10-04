@@ -149,7 +149,6 @@ sealed interface Screen {
     data class ProfileAccount(val key: String) : Screen { override val id = "profile-account/$key" }
     data object AutomaticDecisions : Screen { override val id = "automatic-decisions" }
     data object AutomaticDecisionCompletion : Screen { override val id = "automatic-decisions/completion" }
-    data object AutomaticDecisionLogs : Screen { override val id = "automatic-decisions/completion/logs" }
     data object Memories : Screen { override val id = "memories" }
     /** What the agents spent (screens/Usage.kt). */
     data object Usage : Screen { override val id = "usage" }
@@ -728,7 +727,6 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.ProfileAccount -> fail.still.android.screens.ProfileAccountScreen(current, screen.key)
                     Screen.AutomaticDecisions -> fail.still.android.screens.AutomaticDecisionsScreen()
                     Screen.AutomaticDecisionCompletion -> fail.still.android.screens.AutomaticDecisionCompletionScreen(current)
-                    Screen.AutomaticDecisionLogs -> fail.still.android.screens.AutomaticDecisionCompletionScreen(current, logs = true)
                     Screen.Memories -> fail.still.android.screens.MemoriesScreen(current)
                     Screen.Usage -> fail.still.android.screens.UsageScreen(current)
                     is Screen.UsagePrices -> fail.still.android.screens.UsagePricesScreen(current, screen.days)

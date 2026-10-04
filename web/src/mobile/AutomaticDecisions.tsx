@@ -1,15 +1,14 @@
 import { t } from "../i18n.ts";
-import { Fragment } from "react";
-import { failed, useAutomaticDecisionForm } from "../AutomaticDecisions.tsx";
+import { Fragment, useState } from "react";
+import { useAutomaticDecisionForm, usePolicyForm } from "../AutomaticDecisions.tsx";
 import { useStations } from "../api.ts";
-import type { AutomaticDecisionView } from "../core/shapes.ts";
-import { ChevronRight, Read, Refresh } from "../icons.tsx";
+import type { ArchivePolicyView, AutomaticDecisionView } from "../core/shapes.ts";
+import { ChevronRight, Edit, Refresh } from "../icons.tsx";
 import { stationBase } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
-import { Button, FailedMark, LargeTitle, ListCard, ListRow, NavButton, SectionHeader, Spinner, TopBack } from "./parts.tsx";
+import { Button, FailedMark, Field, LargeTitle, LinkButton, ListCard, ListRow, NavButton, SectionHeader, Spinner, TopBack } from "./parts.tsx";
 import { ModelList } from "./History.tsx";
 import { GoRow } from "./Settings.tsx";
-import { Time } from "../ui.tsx";
 import * as css from "./AutomaticDecisions.css.ts";
 import * as pages from "./styles/pages.css.ts";
 import * as parts from "./styles/parts.css.ts";
@@ -28,37 +27,21 @@ export function AutomaticDecisionsScreen() {
     </ListRow></ListCard>
   </div>;
 }
-export function AutomaticDecisionCompletionScreen({logs=false}:{logs?:boolean}) {
+export function AutomaticDecisionCompletionScreen() {
   const app=useApp();
   const stations=useStations(app.entry.id);
   return <div className={`${pages.mScreen} ${pages.mScroll}`}>
-    <TopBack label={t(logs ? "web-pages.automaticDecisions.completion" : "web-pages.automaticDecisions.title")} onBack={app.pop}
-      trailing={logs ? undefined : <NavButton icon={Read} label={t("web-pages.automaticDecisions.logs")} onClick={()=>app.push(app.at("/settings/automatic-decisions/completion/logs"))} />} />
-    <LargeTitle small="" big={t(logs ? "web-pages.automaticDecisions.logsTitle" : "web-pages.automaticDecisions.completion")} />
+    <TopBack label={t("web-pages.automaticDecisions.title")} onBack={app.pop} />
+    <LargeTitle small="" big={t("web-pages.automaticDecisions.completion")} />
     {!stations.value && <p className={settings.mPageNote}>{stations.error?.message ?? t("web-pages.automaticDecisions.reading")}</p>}
     {stations.value?.length===0 && <p className={settings.mPageNote}>{t("web-pages.automaticDecisions.addStation")}</p>}
     {stations.value?.map(s => <Fragment key={s.station}>
       {s.online && s.overview?.automaticDecisions
-        ? logs ? <DecisionRecords station={s.station} name={s.name} view={s.overview.automaticDecisions} /> : <DecisionPanel station={s.station} name={s.name} view={s.overview.automaticDecisions} />
+        ? <DecisionPanel station={s.station} name={s.name} view={s.overview.automaticDecisions} />
         : <><SectionHeader title={s.name} start={24} /><p className={settings.mPageNote}>{!s.online ? t("web-pages.automaticDecisions.offlineNote") : !s.overview ? t("web-pages.automaticDecisions.connecting") : t("web-pages.automaticDecisions.upgrade")}</p></>}
     </Fragment>)}
     <div style={{height:30}} />
   </div>;
-}
-function DecisionRecords({station,name,view}:{station:string;name:string;view:AutomaticDecisionView}) {
-  const app=useApp();
-  return <><SectionHeader title={name} start={24} />
-    {!view.canEdit ? <p className={settings.mPageNote}>{t("web-pages.automaticDecisions.adminOnly")}</p> : <ListCard>
-      {!view.recent.length && <ListRow><span className={parts.mMuted}>{t("web-pages.automaticDecisions.noRecords")}</span></ListRow>}
-      {view.recent.map(row=><ListRow key={row.id} onClick={()=>app.push(`${stationBase(station)}/chats/${encodeURIComponent(row.session)}`)}>
-        <span className={`${parts.mGrow} ${lists.mRowText}`}>
-          <span className={css.rowHead}><span className={`${parts.mGrow} ${lists.mRowTitle}`}>{row.title}</span><Time stamp={row.stamp} className={css.time} /></span>
-          <span className={css.meta}><span className={failed(row) ? parts.mRed : undefined}>{row.label}</span></span>
-          {row.error && <span className={`${lists.mRowNote} ${parts.mRed}`}>{row.error}</span>}
-        </span>
-      </ListRow>)}
-    </ListCard>}
-  </>;
 }
 function DecisionPanel({station,name,view}:{station:string;name:string;view:AutomaticDecisionView}) {
   const app=useApp();
@@ -86,6 +69,58 @@ function DecisionPanel({station,name,view}:{station:string;name:string;view:Auto
       </ListRow>}
     </ListCard>
     {d.dirty && <div className={settings.mProfileTools}><Button label={t("web-pages.automaticDecisions.save")} primary busy={saving} enabled={!busy} onClick={save} />{saveFailed && <FailedMark error={saveFailed} size={14} />}</div>}
+    {view.policy && <PolicySection station={station} policy={view.policy} />}
 
+  </>;
+}
+
+
+/** The station's archive policy: its words and its options in their two groups, each with the chats the checks put there. */
+function PolicySection({station,policy}:{station:string;policy:ArchivePolicyView}) {
+  const app=useApp();
+  const form=usePolicyForm(station);
+  const [editing,setEditing]=useState(false);
+  const [open,setOpen]=useState<string|null>(null);
+  const d=form.d;
+  const group=(archive:boolean)=>t(archive ? "web-pages.archivePolicy.archive" : "web-pages.archivePolicy.keep");
+  if (editing && d) return <>
+    <SectionHeader title={t("web-pages.archivePolicy.title")} start={24} />
+    <div className={css.policyPad}><textarea className={`${lists.mField} ${css.policyText}`} rows={5} value={d.policy} disabled={d.pending} aria-label={t("web-pages.archivePolicy.title")} onChange={e=>form.edit({policy:e.target.value})} /></div>
+    {[true,false].map(archive=><Fragment key={String(archive)}>
+      <SectionHeader title={group(archive)} start={24} />
+      <div className={css.policyPad}>
+        {d.options.filter(o=>o.archive===archive).map(o=><div key={o.key} className={css.optionEdit}>
+          <Field value={o.name} placeholder={t("web-pages.archivePolicy.name")} onChange={name=>form.edit({option:o.key,name})} />
+          <textarea className={lists.mField} rows={2} value={o.rubric} placeholder={t("web-pages.archivePolicy.rubric")} aria-label={t("web-pages.archivePolicy.rubric")} onChange={e=>form.edit({option:o.key,rubric:e.target.value})} />
+          <div className={css.optionTools}>
+            <LinkButton label={t(o.archive ? "web-pages.archivePolicy.toKeep" : "web-pages.archivePolicy.toArchive")} enabled={!d.pending} onClick={()=>form.edit({option:o.key,archive:!o.archive})} />
+            <LinkButton label={t("web-pages.archivePolicy.remove")} className={parts.mRed} enabled={!d.pending} onClick={()=>form.edit({remove:o.key})} />
+          </div>
+        </div>)}
+        <LinkButton label={t("web-pages.archivePolicy.add")} enabled={!d.pending} onClick={()=>form.edit({add:archive})} />
+      </div>
+    </Fragment>)}
+    {form.saveFailed && <p className={`${settings.mPageNote} ${parts.mRed}`}>{form.saveFailed}</p>}
+    <div className={settings.mProfileTools}>
+      <Button label={t("web-pages.archivePolicy.cancel")} primary={false} enabled={!d.pending} onClick={()=>{form.edit({reset:true});setEditing(false);}} />
+      <Button label={t("web-pages.archivePolicy.save")} primary busy={form.saving} enabled={d.dirty && !d.pending} onClick={()=>{form.save().then(()=>setEditing(false),()=>{});}} />
+    </div>
+  </>;
+  return <>
+    <div className={css.stationHead}><div className={css.stationName}><SectionHeader title={t("web-pages.archivePolicy.title")} start={24} /></div>{d && <NavButton icon={Edit} label={t("web-pages.archivePolicy.edit")} onClick={()=>setEditing(true)} />}</div>
+    <p className={`${settings.mPageNote} ${css.policyWords}`}>{policy.text}</p>
+    {[true,false].map(archive=><Fragment key={String(archive)}>
+      <SectionHeader title={group(archive)} start={24} />
+      <ListCard>{policy.options.filter(o=>o.archive===archive).map(o=><Fragment key={o.id}>
+        <ListRow onClick={o.count ? ()=>setOpen(open===o.id ? null : o.id) : undefined}>
+          <span className={`${parts.mGrow} ${lists.mRowText}`}><span className={lists.mRowTitle}>{o.name}</span><span className={`${lists.mRowNote} ${settings.mWrap}`}>{o.rubric}</span></span>
+          <span className={css.count}>{o.count}</span>
+        </ListRow>
+        {open===o.id && o.chats.map(c=><ListRow key={c.session} onClick={()=>app.push(`${stationBase(station)}/chats/${encodeURIComponent(c.session)}`)}>
+          <span className={`${parts.mGrow} ${css.chat}`}>{c.title}</span><ChevronRight size={14} className={parts.mSubtle} />
+        </ListRow>)}
+      </Fragment>)}</ListCard>
+    </Fragment>)}
+    <p className={settings.mPageNote}>{policy.changeText ? `${policy.changeText} · ` : ""}<span className={policy.failed ? parts.mRed : undefined}>{policy.summaryText}</span></p>
   </>;
 }

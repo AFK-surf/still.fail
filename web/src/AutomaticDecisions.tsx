@@ -1,15 +1,16 @@
 import { t } from "./i18n.ts";
-import { useEffect, useId } from "react";
+import { useEffect, useId, useState } from "react";
 import { Link } from "react-router";
 import { useStations } from "./api.ts";
 import { useCall, useTopic } from "./core/react.ts";
-import type { AutomaticDecisionCheck, AutomaticDecisionDraft, AutomaticDecisionView } from "./core/shapes.ts";
-import { useAct } from "./toast.tsx";
+import type { ArchiveOptionDraft, ArchiveOptionView, ArchivePolicyDraft, ArchivePolicyView, AutomaticDecisionDraft, AutomaticDecisionView } from "./core/shapes.ts";
+import { useAct, useToast } from "./toast.tsx";
 import { useDoing, useDoingFailed } from "./doing.ts";
-import { Button, Section, StatusDot, Switch, Time } from "./ui.tsx";
+import { Button, IconButton, StatusDot, Switch } from "./ui.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import type { Picking } from "./pick.ts";
-import { ChevronRight } from "./icons.tsx";
+import { ArrowDown, ArrowUp, ChevronRight, Edit, Plus, Trash } from "./icons.tsx";
+import * as controlsCss from "./styles/controls.css.ts";
 import { stationBase } from "./station.tsx";
 import * as pages from "./styles/pages.css.ts";
 import * as css from "./AutomaticDecisions.css.ts";
@@ -38,35 +39,6 @@ export function AutomaticDecisionCompletion({ workspace }: { workspace: string }
   </div>;
 }
 
-/** Check history has its own page, separate from the decision point's settings. */
-export function AutomaticDecisionLogs({ workspace }: { workspace: string }) {
-  const stations = useStations(workspace);
-  return <div className={css.content}>
-    {!stations.value && <p className={css.note}>{stations.error?.message ?? t("web-pages.automaticDecisions.reading")}</p>}
-    {stations.value?.map(s => <Section key={s.station} title={s.name}>
-      {!s.online ? <p className={css.note}>{t("web-pages.automaticDecisions.offline")}</p>
-        : !s.overview ? <p className={css.note}>{t("web-pages.automaticDecisions.connecting")}</p>
-        : !s.overview.automaticDecisions ? <p className={css.note}>{t("web-pages.automaticDecisions.upgrade")}</p>
-        : !s.overview.automaticDecisions.canEdit ? <p className={css.note}>{t("web-pages.automaticDecisions.adminOnly")}</p>
-        : <DecisionRecords station={s.station} view={s.overview.automaticDecisions} />}
-    </Section>)}
-  </div>;
-}
-/** Red only where the check itself failed; a station from before `outcome` knew only whether it was suggested. */
-export const failed = (row: AutomaticDecisionCheck) => row.outcome ? row.outcome === "failed" : !row.accepted;
-function DecisionRecords({station,view}:{station:string;view:AutomaticDecisionView}) {
-  return !view.recent.length ? <p className={css.note}>{t("web-pages.automaticDecisions.empty")}</p> : <ul className={pages.list}>
-    {view.recent.map(row => <li key={row.id}>
-      <Link className={pages.listRow} to={`${stationBase(station)}/chats/${encodeURIComponent(row.session)}`}>
-        <span className={pages.listRowText}>
-          <span className={css.recordHead}><span className={pages.listRowTitle}>{row.title}</span><Time stamp={row.stamp} className={css.time} /></span>
-          <span className={css.meta}><span className={failed(row) ? css.bad : undefined}>{row.label}</span></span>
-          {row.error && <span className={css.error}>{row.error}</span>}
-        </span>
-      </Link>
-    </li>)}
-  </ul>;
-}
 function AutomaticDecisionPanel({ station, name, view }: { station: string; name: string; view: AutomaticDecisionView }) {
   const {d, state, saving, saveFailed, reviewing, reviewFailed, canReview, edit, save, review} = useAutomaticDecisionForm(station, view);
   const status = (text: string) => <li className={pages.listRow}><StatusDot state="online" /><span className={pages.listRowText}><span className={pages.listRowTitle}>{name}</span><span className={css.note}>{text}</span></span></li>;
@@ -94,7 +66,84 @@ function AutomaticDecisionPanel({ station, name, view }: { station: string; name
     </div>
     {saveFailed && <p className={css.error} role="alert">{saveFailed}</p>}
     {reviewFailed && <p className={css.error} role="alert">{reviewFailed}</p>}
+    {view.policy && <ArchivePolicy station={station} policy={view.policy} />}
   </li>;
+}
+
+/** The archive policy: its words, then its options in their two groups, each with the chats the checks put there. */
+function ArchivePolicy({ station, policy }: { station: string; policy: ArchivePolicyView }) {
+  const form = usePolicyForm(station);
+  const [editing, setEditing] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
+  const d = form.d;
+  if (editing && d) return <div className={css.policy}>
+    <div className={css.policyHead}><span className={css.policyTitle}>{t("web-pages.archivePolicy.title")}</span></div>
+    <textarea className={`${controlsCss.input} ${css.policyText}`} rows={4} value={d.policy} disabled={d.pending} aria-label={t("web-pages.archivePolicy.title")}
+      onChange={(e) => form.edit({ policy: e.target.value })} />
+    {[true, false].map((archive) => <div key={String(archive)} className={css.policyGroup}>
+      <span className={css.policyGroupName}>{t(archive ? "web-pages.archivePolicy.archive" : "web-pages.archivePolicy.keep")}</span>
+      {d.options.filter((o) => o.archive === archive).map((o) => <OptionEditor key={o.key} option={o} pending={d.pending} edit={form.edit} />)}
+      <Button variant="ghost" icon={Plus} disabled={d.pending} onClick={() => form.edit({ add: archive })}>{t("web-pages.archivePolicy.add")}</Button>
+    </div>)}
+    {form.saveFailed && <p className={css.error} role="alert">{form.saveFailed}</p>}
+    <div className={css.policyFoot}>
+      <Button variant="ghost" disabled={d.pending} onClick={() => { form.edit({ reset: true }); setEditing(false); }}>{t("web-pages.archivePolicy.cancel")}</Button>
+      <Button variant="primary" busy={form.saving} disabled={!d.dirty || d.pending} onClick={() => form.save().then(() => setEditing(false), () => {})}>{t("web-pages.archivePolicy.save")}</Button>
+    </div>
+  </div>;
+  return <div className={css.policy}>
+    <div className={css.policyHead}>
+      <span className={css.policyTitle}>{t("web-pages.archivePolicy.title")}</span>
+      <Button variant="ghost" icon={Edit} disabled={!d} onClick={() => setEditing(true)}>{t("web-pages.archivePolicy.edit")}</Button>
+    </div>
+    <p className={css.policyWords}>{policy.text}</p>
+    {[true, false].map((archive) => <div key={String(archive)} className={css.policyGroup}>
+      <span className={css.policyGroupName}>{t(archive ? "web-pages.archivePolicy.archive" : "web-pages.archivePolicy.keep")}</span>
+      {policy.options.filter((o) => o.archive === archive).map((o) => <OptionRow key={o.id} station={station} option={o} open={open === o.id} toggle={() => setOpen(open === o.id ? null : o.id)} />)}
+    </div>)}
+    <p className={css.note}>{policy.changeText ? `${policy.changeText} · ` : ""}<span className={policy.failed ? css.bad : undefined}>{policy.summaryText}</span></p>
+  </div>;
+}
+
+function OptionRow({ station, option, open, toggle }: { station: string; option: ArchiveOptionView; open: boolean; toggle: () => void }) {
+  return <>
+    <button type="button" className={css.option} aria-expanded={option.count ? open : undefined} disabled={!option.count} onClick={toggle}>
+      <span className={css.optionName}>{option.name}</span>
+      <span className={css.optionRubric}>{option.rubric}</span>
+      <span className={css.optionCount}>{option.count}</span>
+    </button>
+    {open && <div className={css.optionChats}>{option.chats.map((c) =>
+      <Link key={c.session} to={`${stationBase(station)}/chats/${encodeURIComponent(c.session)}`} className={css.optionChat}>{c.title}</Link>)}
+      {option.count > option.chats.length && <span className={css.note}>{t("web-pages.archivePolicy.more", { n: option.count - option.chats.length })}</span>}
+    </div>}
+  </>;
+}
+
+function OptionEditor({ option, pending, edit }: { option: ArchiveOptionDraft; pending: boolean; edit: (patch: Record<string, unknown>) => void }) {
+  return <div className={css.optionEdit}>
+    <input className={`${controlsCss.input} ${css.optionNameInput}`} value={option.name} disabled={pending} placeholder={t("web-pages.archivePolicy.name")} aria-label={t("web-pages.archivePolicy.name")}
+      onChange={(e) => edit({ option: option.key, name: e.target.value })} />
+    <input className={controlsCss.input} value={option.rubric} disabled={pending} placeholder={t("web-pages.archivePolicy.rubric")} aria-label={t("web-pages.archivePolicy.rubric")}
+      onChange={(e) => edit({ option: option.key, rubric: e.target.value })} />
+    <IconButton icon={option.archive ? ArrowDown : ArrowUp} disabled={pending} label={t(option.archive ? "web-pages.archivePolicy.toKeep" : "web-pages.archivePolicy.toArchive")}
+      onClick={() => edit({ option: option.key, archive: !option.archive })} />
+    <IconButton icon={Trash} disabled={pending} label={t("web-pages.archivePolicy.remove")} onClick={() => edit({ remove: option.key })} />
+  </div>;
+}
+
+/** The core's draft of a station's archive policy, for both layouts. */
+export function usePolicyForm(station: string) {
+  const form = useId(); const call = useCall(); const act = useAct(); const toast = useToast();
+  const state = useTopic<ArchivePolicyDraft | null>({ topic: "policyForm", station, form });
+  const saving = useDoing("automaticDecisions.policy.save", { station, form });
+  const saveFailed = useDoingFailed("automaticDecisions.policy.save", { station, form });
+  useEffect(() => {
+    act(call("automaticDecisions.policy.open", { station, form }), t("web-pages.archivePolicy.readAction"));
+    return () => { act(call("automaticDecisions.policy.drop", { station, form }), t("web-pages.archivePolicy.closeAction")); };
+  }, [call, station, form, act]);
+  const edit = (input: Record<string, unknown>) => act(call("automaticDecisions.policy.edit", { station, form, input }), t("web-pages.archivePolicy.editAction"));
+  const save = () => call("automaticDecisions.policy.save", { station, form }).then(() => toast(t("web-pages.archivePolicy.saved")));
+  return { d: state.value, saving, saveFailed, edit, save };
 }
 
 /** Both layouts render the same core-owned draft and named actions. */
