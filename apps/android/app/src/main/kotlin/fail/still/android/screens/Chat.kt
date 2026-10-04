@@ -608,12 +608,15 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val asked = remember { mutableStateOf<Long?>(null) }
     // Opened at a message (a row's state line: what it is about), once the list is in place: there, flashing; the
     // pages before brought in until it is loaded (none left, or it is gone: where the chat opened).
+    // Whether the unread line was gone to (or is not to be: the chat opened at a message asked for, below).
+    val lineShown = remember { mutableStateOf(false) }
     LaunchedEffect(follow.placed, first, reveal.revealing) {
         val target = host.goTo ?: return@LaunchedEffect
         if (!follow.placed || reveal.revealing) return@LaunchedEffect
         val m = rows.firstNotNullOfOrNull { (it as? Entry.Said)?.m?.takeIf { m -> m.seq == target } }
         when {
-            m != null -> { host.goTo = null; jumpTo(m.ts, "") }
+            // There it stays: the unread line showing after it does not take the chat away from it.
+            m != null -> { host.goTo = null; lineShown.value = true; jumpTo(m.ts, "") }
             view.more && thread != null && first != null && first > target -> {
                 asked.value = first
                 try { api.older(thread.id) } catch (_: CoreException) { host.goTo = null }
@@ -623,7 +626,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     }
     // Put in place once: at the unread line (even coming back: something unread goes over where the chat was left),
     // else back where the chat was left, else where the core opened it (`at`), else at the newest.
-    val lineShown = remember { mutableStateOf(false) }
     LaunchedEffect(above, messages.isNotEmpty()) {
         if (follow.placed || above) return@LaunchedEffect
         val saved = place
