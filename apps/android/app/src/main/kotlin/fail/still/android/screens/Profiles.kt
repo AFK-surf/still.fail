@@ -167,7 +167,7 @@ private fun WorkspaceList(scope: String) {
         if (view.items.isEmpty()) ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) }
         view.items.forEach { e ->
             val p = e.profile
-            ListRow(onClick = { app.push(if (e.members.orEmpty().size > 1) Screen.ProfileAccount(e.key) else Screen.Profile(e.station, p.id)) }) {
+            ListRow(onClick = { app.push(if (e.members.orEmpty().count { it.role != "user" } > 1) Screen.ProfileAccount(e.key) else Screen.Profile(e.station, p.id)) }) {
                 Column(Modifier.weight(1f).then(if (e.usable) Modifier else Modifier.alpha(0.55f))) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         PresenceDot(if (e.usable) toneDot(p.checkTone) else "error")
@@ -217,7 +217,8 @@ fun ProfileAccountScreen(current: WorkspaceEntry, key: String) {
             QuotaSection(e.station, p)
             SectionHeader(t("web-pages.profiles.account.each"), start = 24.dp)
             ListCard {
-                e.members.orEmpty().forEach { m ->
+                // The stations it is signed in on: one borrowing it has nothing of its own to set.
+                e.members.orEmpty().filter { it.role != "user" }.forEach { m ->
                     ListRow(onClick = { app.push(Screen.Profile(m.station, m.profileId)) }) {
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

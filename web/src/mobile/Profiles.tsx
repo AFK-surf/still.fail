@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAction, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
 import type { MachineLogin, ProfileFlowView, WorkspaceProfile } from "../core/shapes.ts";
+import { hosts } from "../cloud/settings.tsx";
 import { ACCESS, KEYED } from "../format.ts";
 import { Check, ChevronRight, More, Plus } from "../icons.tsx";
 import type { Choice } from "../pages/Accounts.tsx";
@@ -92,7 +93,7 @@ function WorkspaceList({ scope }: { scope: string }) {
     <ListCard>
       {view.items.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow>}
       {view.items.map((e: WorkspaceProfile) => (
-        <ListRow key={e.key} onClick={() => app.push(app.at((e.members?.length ?? 0) > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
+        <ListRow key={e.key} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
           <span className={`${partsCss.mGrow} ${listsCss.mRowText}`} style={e.usable ? undefined : { opacity: 0.55 }}>
             <span className={listsCss.mRowTitle}><Presence state={e.usable ? toneDot(e.profile.checkTone) : "error"} /> {e.profile.name}</span>
             <span className={listsCss.mRowNote}>{e.usable ? e.where || `${e.profile.checkText} · ${e.profile.usesText || accessLabel(e.profile)}` : t("web-pages.settings.profiles.hostAway", { station: e.hostName })}</span>
@@ -131,7 +132,7 @@ export function ProfileAccountScreen() {
         </ListCard>
         <SectionHeader title={t("web-pages.profiles.account.each")} start={24} />
         <ListCard>
-          {(e.members ?? []).map((m) => (
+          {hosts(e).map((m) => (
             <ListRow key={`${m.station}/${m.profileId}`} onClick={() => app.push(app.at(`/s/${m.stationId}/settings/accounts/${encodeURIComponent(m.profileId)}`))}>
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
                 <span className={listsCss.mRowTitle}><Presence state={!m.online ? "offline" : !m.usable ? "error" : toneDot(m.checkTone)} /> {m.stationName}</span>

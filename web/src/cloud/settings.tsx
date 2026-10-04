@@ -358,6 +358,9 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
+/** The stations an account is signed in on (or a key kept): one borrowing it has nothing of its own to set. */
+export const hosts = (e: WorkspaceProfile) => (e.members ?? []).filter((m) => m.role !== "user");
+
 /** An account's page, where it is on several stations. */
 export const accountPath = (workspace: string, key: string) => `/w/${workspace}/settings/profiles/account/${encodeURIComponent(key)}`;
 
@@ -387,7 +390,7 @@ export function ProfileAccountSettings({ entry }: { entry: WorkspaceEntry }) {
       </section>
       <Section title={t("web-pages.profiles.account.each")}>
         <ul className={pagesCss.list}>
-          {(found.members ?? []).map((m) => (
+          {hosts(found).map((m) => (
             <li key={`${m.station}/${m.profileId}`}>
               <Link className={pagesCss.listRow} to={`${stationBase(m.station)}/settings/accounts/${encodeURIComponent(m.profileId)}`}>
                 <StatusDot state={m.online ? "online" : "offline"} />
@@ -412,7 +415,7 @@ function WorkspaceProfileRow({ entry, workspace }: { entry: WorkspaceProfile; wo
   const state = useDoingState(["profile.delete", "profile.share", "profile.move"], { station: entry.station, id: entry.profile.id });
   const uses = [entry.where, entry.profile.usedBy.length ? t("web-pages.settings.profiles.usedBy", { n: entry.profile.usedBy.length }) : ""].filter(Boolean).join(" · ");
   // On several stations: its own page, what they share and what each has; on one: that station's page.
-  const to = (entry.members?.length ?? 0) > 1 ? accountPath(workspace, entry.key) : `${stationBase(entry.station)}/settings/accounts/${encodeURIComponent(entry.profile.id)}`;
+  const to = hosts(entry).length > 1 ? accountPath(workspace, entry.key) : `${stationBase(entry.station)}/settings/accounts/${encodeURIComponent(entry.profile.id)}`;
   return (
     <div className={entry.usable ? undefined : css.profileAway}>
       <ProfileCard profile={entry.profile} to={to} uses={uses}
