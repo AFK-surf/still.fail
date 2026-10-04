@@ -40,7 +40,7 @@ export function workspaceProfiles(stations: J[]): J {
     const share = p.share;
     const host = byId.get(String(share.host));
     // Away: so still.fail cloud says, or (its word coming later) a station borrowing it found it not answering.
-    const hostOnline = host?.online === true && !(at.host === undefined && at.copies.some(([, c]) => c.share?.reachable === false));
+    const hostOnline = host?.online === true && !at.copies.some(([, c]) => c.share?.reachable === false);
     const subscription = p.access?.kind === "subscription";
     const allow: string[] | null = Array.isArray(share.allow) ? share.allow : null;
     const parts: string[] = [];
