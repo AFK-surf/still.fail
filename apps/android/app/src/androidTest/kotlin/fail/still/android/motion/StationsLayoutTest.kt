@@ -73,4 +73,22 @@ class StationsLayoutTest {
         h.settle()
         h.record("page-reconnecting-${if (dark) "dark" else "light"}").end()
     }
+
+    /** A station's page keeps its parts where they are as its figures come, go and fade. */
+    @Test fun page() {
+        val h = Harness(rule)
+        h.launch(listOf(Screen.Stations, Screen.Station("${Fixtures.WS}/studio")))
+        val shown = listOf(
+            "page-read" to station("studio", true),
+            "page-unread" to station("studio", true, read = false),
+            "page-reconnecting" to station("studio", true, reconnecting = true),
+        )
+        val tops = shown.map { (name, st) ->
+            rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(st)) }
+            h.settle()
+            h.record(name).end()
+            listOf("在这台上").map { rule.onNodeWithText(it).getBoundsInRoot().top }.also { Log.i("motion", "$name: $it") }
+        }
+        tops.drop(1).forEach { assertEquals(tops[0], it) }
+    }
 }
