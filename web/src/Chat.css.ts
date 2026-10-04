@@ -211,7 +211,11 @@ export const msgMain = style({
     },
   },
 });
-export const msgAvatarAgent = style({ background: vars.neutralBg });
+export const msgAvatarAgent = style({
+  background: vars.neutralBg,
+  // Slack's mark on its corner (msgAvatarSlack) is out past its round.
+  selectors: { "&[data-slack]": { overflow: "visible" } },
+});
 /** Slack's mark on the corner of an agent's avatar, over what it sent to Slack (Chat.tsx SentElsewhere). */
 export const msgAvatarSlack = style({
   position: "absolute", right: "-6px", bottom: "-6px", width: "14px", height: "14px", display: "grid", placeItems: "center",

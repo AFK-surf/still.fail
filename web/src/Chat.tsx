@@ -1027,7 +1027,7 @@ export function OthersMessage({ avatar, name, time, children, ...data }: Data & 
 /** An agent's picture in a chat: its model's maker, in the agents' ground. */
 export function AgentAvatar({ maker, runtime, slack }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean }) {
   return (
-    <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}>
+    <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`} data-slack={slack || undefined}>
       {runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
       {/* What it said went to Slack, not here: Slack's mark on its corner. */}
       {slack && <span className={css.msgAvatarSlack}><SlackLogo size={9} /></span>}
