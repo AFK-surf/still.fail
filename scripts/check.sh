@@ -109,14 +109,15 @@ deps() { (cd "$1" && pnpm install --frozen-lockfile --prefer-offline); }
 # side would otherwise wait on its lock, and two workspaces' builds of the vendored crates in one target can mix.
 cargo_test() { (cd "$1" && shift && if [ -n "${CARGO_TARGET_DIR:-}" ]; then CARGO_TARGET_DIR="$CARGO_TARGET_DIR/$(printf '%s' "$PWD" | cksum | cut -d' ' -f1)"; fi && cargo test "$@"); }
 
-# Rust's tests remembered by what goes into them: where every input is committed (none changed in the worktree), the
-# key is their git trees, the toolchains and the machine's kind, and a step that passed at a key on this machine passes
-# there again without building (a run of every part, CI's when .github/ changed, built each crate's tests for a minute
-# to run them for a second). Nothing changed in Rust is the usual case; its tests run once per change.
+# Tests remembered by what goes into them: where every input is committed (none changed in the worktree), the key is
+# their git trees, this script, the toolchains and the machine's kind, and a step that passed at a key on this machine
+# passes there again without running (a run of every part, CI's when .github/ changed, built each Rust crate's tests
+# for a minute to run them for a second, and ran every suite again). A step's inputs are all it reads: its own
+# directory and what it imports or runs from outside it (the native parts, by their sources: scripts/native.ts).
 passed_dir=${XDG_CACHE_HOME:-$HOME/.cache}/stillfail-check/passed
 inputs_key() {
-  [ -z "$(git status --porcelain -- "$@")" ] || return 1
-  { git ls-tree HEAD -- "$@"; rustc -V; node -v; uname -sm; } 2>/dev/null | cksum | tr ' ' -
+  [ -z "$(git status --porcelain -- "$@" scripts/check.sh)" ] || return 1
+  { git ls-tree HEAD -- "$@" scripts/check.sh; rustc -V; node -v; uname -sm; } 2>/dev/null | cksum | tr ' ' -
 }
 # remember <key> <command…>: runs it, and marks the key passed when it does.
 remember() {
@@ -125,16 +126,20 @@ remember() {
   [ -n "$key" ] && mkdir -p "$passed_dir" && : > "$passed_dir/$key"
   return 0
 }
-# rust_step <name> <inputs> <cargo_test args…>: the step, or that it passed before at these inputs.
-rust_step() {
+# remembered <name> <inputs> [after <prep>…] [heavy] <command…>: the step, or that it passed before at these inputs.
+remembered() {
   name=$1; inputs=$2; shift 2
   # shellcheck disable=SC2086 # the inputs are paths, split on purpose
   key=$(inputs_key $inputs) && key="$(printf '%s' "$name" | cksum | cut -d' ' -f1)-$key" || key=""
   if [ -n "$key" ] && [ -e "$passed_dir/$key" ]; then
     step "$name (passed before, same inputs)" true
-  else
-    step "$name" heavy remember "$key" cargo_test "$@"
+    return
   fi
+  opts=""
+  while [ "$1" = after ]; do opts="$opts after $2"; shift 2; done
+  [ "$1" = heavy ] && { opts="$opts heavy"; shift; }
+  # shellcheck disable=SC2086 # the options are words, split on purpose
+  step "$name" $opts remember "$key" "$@"
 }
 
 # Cloudflare's types for the worker (cloud/worker-configuration.d.ts, not committed), once its dependencies are there:
@@ -221,26 +226,26 @@ if [ $full = 1 ]; then
     if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root pnpm test; fi
   fi
   # The TypeScript core's own tests; its mesh tests use the station's addon and n0's relay, prebuilt (its package.json).
-  if part ts && touches "$ts_core|^station/native/mesh/|^vendor/"; then prep core deps client/core-ts; step "tests: core-ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
-  if part ts && touches "$ts_cloud"; then step "tests: cloud" after cloud sh -c 'cd cloud && pnpm test'; fi
+  if part ts && touches "$ts_core|^station/native/mesh/|^vendor/"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
+  if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility
   # tests): its tests run whenever it, one of them or the words it says changed.
   if part station && touches '^station/|^vendor/|^client/i18n/|^scripts/native\.ts$'; then
     prep station deps station
     step "typecheck: station" after station sh -c 'cd station && pnpm exec tsgo --noEmit'
-    step "tests: station" after station sh -c 'cd station && pnpm test'
+    remembered "tests: station" "station client/i18n vendor scripts/native.ts" after station sh -c 'cd station && pnpm test'
   fi
   # The native parts' own tests, where their Rust changed (the mesh addon's: the vendored crates it patches in, too).
   for crate in launcher runner mesh; do
     also='^$'; [ $crate = mesh ] && also='^vendor/'
     if part station && { touches "^station/native/$crate/" || touches "$also"; }; then
       inputs="station/native/$crate"; [ $crate = mesh ] && inputs="$inputs vendor"
-      if has cargo; then rust_step "Rust: station/native/$crate" "$inputs" "station/native/$crate" --locked -q; else later "Rust: station/native/$crate"; fi
+      if has cargo; then remembered "Rust: station/native/$crate" "$inputs" heavy cargo_test "station/native/$crate" --locked -q; else later "Rust: station/native/$crate"; fi
     fi
   done
   # The core's native shells (client/shell for Android, client/iroh-wasm for the web).
   if part core && touches '^client/(shell|iroh-wasm)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
-    if has cargo; then rust_step "Rust: client" "client vendor" client --workspace -q; else later "Rust: client"; fi
+    if has cargo; then remembered "Rust: client" "client vendor" heavy cargo_test client --workspace -q; else later "Rust: client"; fi
   fi
   # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed.
   if part android && touches '^(apps/android|client)/'; then
