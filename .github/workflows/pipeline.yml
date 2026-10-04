@@ -483,3 +483,17 @@ jobs:
           cat "$RUNNER_TEMP/timing.txt"
           { echo '```'; cat "$RUNNER_TEMP/timing.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           if [ $rc = 3 ]; then echo "::warning::$(head -1 "$RUNNER_TEMP/timing.txt")"; elif [ $rc != 0 ]; then exit $rc; fi
+      # main: every part the plan said changed went out, or this run fails (a job skipped where it should have run went
+      # unnoticed for a day: the API, 2026-10-04 to 05). Skipped is right only for a part the plan left alone, or when a
+      # check before it failed (the run has failed then anyway).
+      - if: github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success'
+        run: |
+          missed=""
+          planned() { [ "$1" = true ] && [ "$2" = skipped ] && missed="$missed $3"; return 0; }
+          planned '${{ needs.plan.outputs.api }}' '${{ needs.api.result }}' api
+          planned '${{ needs.plan.outputs.static }}' '${{ needs.static.result }}' static
+          planned '${{ needs.plan.outputs.station }}' '${{ needs.station.result }}' station
+          planned '${{ needs.plan.outputs.android }}' '${{ needs.android.result }}' android
+          planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop.result }}' desktop
+          if [ -n "$missed" ]; then echo "::error::changed, planned, and not released:$missed"; exit 1; fi
+          echo "every planned part went out"
