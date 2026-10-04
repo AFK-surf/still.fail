@@ -127,7 +127,7 @@ private fun ArchivePolicySection(station: String, policy: ArchivePolicyView) {
     val app = LocalApp.current
     val form = remember(station) { java.util.UUID.randomUUID().toString() }
     val topic by rememberTopic<ArchivePolicyDraft>(app.core, buildJsonObject { put("topic", "policyForm"); put("station", station); put("form", form) })
-    fun call(action: String, input: JsonObject = buildJsonObject {}) = app.core.call("automaticDecisions.policy.$action", buildJsonObject { put("station", station); put("form", form); put("input", input) })
+    suspend fun call(action: String, input: JsonObject = buildJsonObject {}) = app.core.call("automaticDecisions.policy.$action", buildJsonObject { put("station", station); put("form", form); put("input", input) })
     fun edit(input: JsonObject) = app.act(t("web-pages.archivePolicy.editAction")) { call("edit", input) }
     LaunchedEffect(station, form) { app.act(t("web-pages.archivePolicy.readAction")) { call("open") } }
     DisposableEffect(station, form) { onDispose { app.act(t("web-pages.archivePolicy.closeAction")) { call("drop") } } }
@@ -173,7 +173,7 @@ private fun ArchivePolicySection(station: String, policy: ArchivePolicyView) {
         SectionHeader(group(archive), start = 24.dp)
         ListCard {
             policy.options.filter { it.archive == archive }.forEach { o -> key(o.id) {
-                ListRow(onClick = if (o.count > 0) ({ open = if (open == o.id) null else o.id }) else null) {
+                ListRow(onClick = if (o.count > 0u) ({ open = if (open == o.id) null else o.id }) else null) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(o.name, color = C.ink, fontSize = 15.sp)
                         Text(o.rubric, fontSize = 13.sp, color = C.muted)
@@ -189,8 +189,8 @@ private fun ArchivePolicySection(station: String, policy: ArchivePolicyView) {
             } }
         }
     }
-    val line = listOfNotNull(policy.changeText, policy.summaryText.ifEmpty { null }).joinToString(" · ")
-    Text(line, fontSize = 13.sp, color = if (policy.failed > 0) C.red else C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 10.dp))
+    val line = listOfNotNull(policy.changeText, policy.summaryText?.ifEmpty { null }).joinToString(" · ")
+    Text(line, fontSize = 13.sp, color = if (policy.failed > 0u) C.red else C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 10.dp))
 }
 
 /** A word that does something (no frame), as the web's LinkButton. */
