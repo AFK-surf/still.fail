@@ -107,13 +107,15 @@ for platform in $platforms; do
       sh "$root/scripts/station-bundle.sh" "$out/$platform" "$platform"
       # Under the new name only: the old name (ember-station-*.tar.gz) keeps the last release from before the rename,
       # for the cloud's installer from before it, which would not know this layout (cloud/src/install.ts).
+      # Packed and put beside the next platform's bundling (each ~20 s, one after another before 2026-10-04).
       file="stillfail-station-$platform.tar.gz"
-      tar -czf "$out/$file" -C "$out/$platform" stillfail
-      put "$out/$file" "${beta:+beta/}$file" application/gzip
+      (tar -czf "$out/$file" -C "$out/$platform" stillfail && put "$out/$file" "${beta:+beta/}$file" application/gzip) &
+      putting="${putting:-} $!"
       station=yes
       ;;
   esac
 done
+for pid in ${putting:-}; do wait "$pid" || { echo "a station release was not put" >&2; exit 1; }; done
 # What stations read to say a newer release is out (station/src/updates/updates.ts), once its files are there.
 if [ -n "${station:-}" ]; then
   printf '{"version":"0.1.%s","build":%s,"commit":"%s"}\n' "$build" "$build" "$(git -C "$root" rev-parse HEAD)" > "$out/station.json"

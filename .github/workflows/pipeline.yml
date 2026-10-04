@@ -167,6 +167,8 @@ jobs:
     timeout-minutes: 45
     env:
       STILLFAIL_CHECK_PART: ts android
+      # A branch: the debug app made in the check's Gradle run (main releases its own: android).
+      STILLFAIL_CHECK_APK: ${{ github.ref != 'refs/heads/main' && '1' || '' }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
@@ -201,23 +203,6 @@ jobs:
 
   # A branch: the apps main would release, built with the prebuilt native parts (unsigned, nothing sent): Android on
   # Linux, the desktop app and the TypeScript station's bundle on mini1.
-  android-build:
-    needs: [plan, natives]
-    if: github.ref != 'refs/heads/main' && needs.plan.outputs.android == 'true'
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v5
-        with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup
-        with:
-          android: 'true'
-      - uses: ./.github/actions/natives
-      - name: build.py (debug app)
-        run: |
-          pnpm install --frozen-lockfile --prefer-offline > /dev/null
-          python3 apps/android/build.py --tasks :app:assembleDebug
-
   mac-build:
     needs: [plan, natives]
     if: github.ref != 'refs/heads/main' && (needs.plan.outputs.desktop == 'true' || needs.plan.outputs.station == 'true')
@@ -423,7 +408,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, bundle, android-build, mac-build, api, static, station, station-update, android, android-put, desktop, changelog, done]
+    needs: [plan, natives, check, check-linux, bundle, mac-build, api, static, station, station-update, android, android-put, desktop, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
