@@ -210,6 +210,7 @@
   "android-misc.updates.installFailed": "安装失败",
   "android-misc.updates.installing": "正在安装",
   "android-misc.updates.latest": "已是最新",
+  "android-misc.updates.retrying": "网络断了，正在接着下载",
   "android-misc.usage.collapse": "收起",
   "android-misc.usage.days": "{n} 天",
   "android-misc.usage.loadFailed": "读不到用量：{error}",

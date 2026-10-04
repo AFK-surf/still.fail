@@ -219,6 +219,7 @@
   "android-misc.updates.installFailed": "Install failed",
   "android-misc.updates.installing": "Installing",
   "android-misc.updates.latest": "Up to date",
+  "android-misc.updates.retrying": "Connection dropped, resuming",
   "android-misc.usage.collapse": "Show less",
   "android-misc.usage.days": {
     "one": "1 day",
