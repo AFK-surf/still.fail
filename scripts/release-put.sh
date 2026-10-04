@@ -1,9 +1,12 @@
 #!/bin/sh
-# Puts releases made into a directory (scripts/release.sh with RELEASE_DIR) in the cloud's releases bucket, under the
-# same names: the files first, then the feeds that say they are out (station*.json, android/…/latest.json,
-# desktop/*-mac.yml), so nothing points at a file not there yet. CI builds the Android app beside the check and puts it
-# once the check passed (.github/workflows/pipeline.yml: android, android-put).
-#   release-put.sh <dir>…
+# Puts releases made into a directory (scripts/release.sh or .github/release-desktop.py with RELEASE_DIR) in the
+# cloud's releases bucket, under the same names: the files first, side by side, then the feeds that say they are out
+# (station*.json, android/…/latest.json, desktop/*-mac.yml), so nothing points at a file not there yet.
+# CI builds the releases beside the check: an app's files, named by their version, are put by its own job at once
+# (nothing points at them yet: --files); the station's, named the same each time, and every feed, once the check
+# passed (.github/workflows/pipeline.yml, put). --files takes each file it put out of the directory, leaving the feeds
+# for the put after.
+#   release-put.sh [--files | --feeds] <dir>…
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 
@@ -28,14 +31,18 @@ type_of() {
 }
 feed() { case $1 in station*.json | */latest.json | desktop/*-mac.yml) return 0 ;; *) return 1 ;; esac; }
 
+passes="files feeds"
+case "${1:-}" in --files) passes=files; shift ;; --feeds) passes=feeds; shift ;; esac
 for dir in "$@"; do
   [ -d "$dir" ] || { echo "no releases in $dir" >&2; exit 1; }
   names=$(cd "$dir" && find . -type f | sed 's|^\./||' | sort)
-  [ -n "$names" ] || { echo "no releases in $dir" >&2; exit 1; }
-  for pass in files feeds; do
+  for pass in $passes; do
+    pids=""
     for name in $names; do
       if feed "$name"; then [ $pass = feeds ] || continue; else [ $pass = files ] || continue; fi
-      put "$name" "$dir/$name" "$(type_of "$name")"
+      { put "$name" "$dir/$name" "$(type_of "$name")" && if [ "$passes" = files ]; then rm "$dir/$name"; fi; } &
+      pids="$pids $!"
     done
+    for pid in $pids; do wait "$pid" || { echo "not all of $dir was put" >&2; exit 1; }; done
   done
 done

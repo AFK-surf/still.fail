@@ -310,8 +310,9 @@ jobs:
         with: { name: "cloud-web-${{ github.sha }}", path: dist/cloud-web, include-hidden-files: true, retention-days: 90 }
 
   # The test channel's releases are built beside the check (the builds are most of a release: before 2026-10-04 they
-  # waited for the check and the API), each kept as this run's artifact, and put in the bucket together by `put` once
-  # the check passed and the API is out (scripts/release-put.sh: the files, then the feeds that point at them).
+  # waited for the check and the API). The apps' files, named by their version, go in the bucket at once (nothing points
+  # at them yet); the station's (named the same each time: what installs get) and every feed are kept as this run's
+  # artifact and put by `put` once the check passed and the API is out (scripts/release-put.sh).
 
   # The station's (darwin-arm64, linux-x64, linux-arm64): what a station on the test channel updates to.
   station:
@@ -351,6 +352,12 @@ jobs:
           ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh android
+      - name: Put its files (named by its version, nothing points at them until put writes the feed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@v4
         with: { name: "release-android-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
@@ -372,6 +379,12 @@ jobs:
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
         run: python3 .github/release-desktop.py --out "$RUNNER_TEMP/release"
+      - name: Put its files (named by its version, nothing points at them until put writes the feed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@v4
         with: { name: "release-desktop-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
