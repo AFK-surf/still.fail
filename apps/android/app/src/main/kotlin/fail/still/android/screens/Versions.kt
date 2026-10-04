@@ -7,7 +7,6 @@ import fail.still.android.ui.t
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -127,41 +126,44 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
     }
     ListRow {
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(v.name, fontSize = 15.sp, color = C.ink, maxLines = 1)
-                Text(shown, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (v.channel == "beta") {
-                    Text(t("android-misc.versions.beta"), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = C.accentInk, maxLines = 1,
-                        modifier = Modifier.clip(RoundedCornerShape(50)).background(C.accentBg).padding(horizontal = 6.dp, vertical = 1.dp))
+            // The name's line, with what is out and what may be done at its end: all its words on one baseline.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f).alignByBaseline(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(v.name, fontSize = 15.sp, color = C.ink, maxLines = 1, modifier = Modifier.alignByBaseline())
+                    Text(shown, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.alignByBaseline())
+                    if (v.channel == "beta") {
+                        Text(t("android-misc.versions.beta"), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = C.accentInk, maxLines = 1,
+                            modifier = Modifier.alignByBaseline().clip(RoundedCornerShape(50)).background(C.accentBg).padding(horizontal = 6.dp, vertical = 1.dp))
+                    }
+                }
+                Row(Modifier.alignByBaseline().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    when {
+                        v.state == "updating" -> {
+                            val percent = v.percent
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (percent != null) DownloadChip(percent) else Spinner(12.dp)
+                                // Where it is, as the station says (one older than that: nothing more than 正在更新).
+                                Text(v.progress ?: if (v.installed) t("android-misc.versions.updating") else t("android-misc.versions.installing"), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
+                            }
+                        }
+                        v.state == "failed" -> {
+                            Text(if (v.installed) t("android-misc.versions.updateFailed") else t("android-misc.versions.installFailed"), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.red)
+                            action(t("common.retry"))
+                        }
+                        !v.installed -> action(t("android-misc.versions.install"))
+                        v.newer && v.latest != null -> {
+                            Latest(v.latest)
+                            action(t("android-misc.versions.update"))
+                        }
+                        v.downgrade == true && v.latest != null -> {
+                            Latest(v.latest)
+                            action(t("android-misc.versions.backToStable"))
+                        }
+                    }
                 }
             }
             // Its line kept while there is nothing to say: the rows stay put as checks and updates come and go.
             Text(note.ifEmpty { " " }, fontSize = 13.sp, color = if (v.state == "failed") C.red else C.muted)
-        }
-        // On the name's line, not halfway down to its note: as tall as that line (an unseen 15sp line), centered in it.
-        Box(Modifier.align(Alignment.Top), contentAlignment = Alignment.CenterEnd) {
-            Text(" ", fontSize = 15.sp)
-            when {
-                v.state == "updating" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val percent = v.percent
-                    if (percent != null) DownloadChip(percent) else Spinner(12.dp)
-                    // Where it is, as the station says (one older than that: nothing more than 正在更新).
-                    Text(v.progress ?: if (v.installed) t("android-misc.versions.updating") else t("android-misc.versions.installing"), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
-                }
-                v.state == "failed" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (v.installed) t("android-misc.versions.updateFailed") else t("android-misc.versions.installFailed"), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.red)
-                    action(t("common.retry"))
-                }
-                !v.installed -> action(t("android-misc.versions.install"))
-                v.newer && v.latest != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Latest(v.latest)
-                    action(t("android-misc.versions.update"))
-                }
-                v.downgrade == true && v.latest != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Latest(v.latest)
-                    action(t("android-misc.versions.backToStable"))
-                }
-            }
         }
     }
 }
