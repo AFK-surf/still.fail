@@ -269,7 +269,9 @@ jobs:
 
   api:
     needs: [plan, check, check-linux, check-android]
-    if: github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true'
+    # Not on the implicit success(): a skipped job before it (natives, when nothing native changed; check-android) would
+    # skip it too (2026-10-04 to 05: the API was not deployed for a day). The checks it needs passed or were not needed.
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 30
