@@ -41,3 +41,12 @@ export const title = style({
 });
 export const meta = style({ flex: "none", display: "flex", gap: 8, fontSize: vars.textXs, color: vars.muted });
 export const none = style({ margin: "14px 12px", fontSize: vars.textSm, color: vars.muted });
+// The messages found, under the chats: a few words over them, then each as its chat and who said it when, over the
+// line that has the words, those drawn out (the text's colour and weight, the rest muted).
+export const section = style({ margin: "10px 12px 4px", fontSize: vars.textXs, color: vars.muted });
+export const said = style({ alignItems: "flex-start" });
+export const saidBody = style({ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 });
+export const saidHead = style({ display: "flex", alignItems: "center", gap: 10, minWidth: 0 });
+export const saidChat = style({ flex: 1, ...ellipsis });
+export const saidText = style({ ...ellipsis, color: vars.muted });
+export const hit = style({ background: "none", color: vars.text, fontWeight: 600 });

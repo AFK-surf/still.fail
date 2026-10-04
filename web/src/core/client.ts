@@ -37,7 +37,7 @@ export type Topic =
   | { topic: "loginSessions"; account: string }
   // `feedback`: bug reports about still.fail (a cloud from before has none: an error).
   | { topic: "admin"; account: string; list: "users" | "workspaces" | "invite-codes" | "feedback" }
-  | { topic: "adminList"; account: string; list: "users" | "workspaces" | "invite-codes" | "feedback"; query: string; filter?: string; sort?: string; limit?: number }
+  | { topic: "adminList"; account: string; list: "users" | "workspaces" | "invite-codes" | "feedback"; query: string; filter?: string; sort?: string; limit?: number; messages?: number }
   | { topic: "adminItem"; account: string; list: "users" | "workspaces" | "feedback"; id: string }
   | { topic: "adminOverview"; account: string }
   // Views: put together by the core from the topics above.
@@ -63,7 +63,7 @@ export type Topic =
   | { topic: "notify"; workspace?: string }
   // The chats of a scope a few words find, titles first (only `station`'s, not `exclude`, `limit` at most): the
   // composer's `@` menu and the switcher. A core from before it answers an error.
-  | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number }
+  | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number; messages?: number }
   // The archived chats of a scope's stations online, newest first by day (client/core-ts/src/views/archive.ts).
   | { topic: "archive"; scope: string }
   // A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here.

@@ -1,9 +1,11 @@
-// The shortcuts that belong to no page (keymap.ts), and ⌘K's switcher: a chat found by typing part of its title (↑/↓
-// pick, ↩ opens, Esc closes, as everywhere; nothing says so).
+// The shortcuts that belong to no page (keymap.ts), and ⌘K's switcher: a chat found by typing part of its title, or a
+// message by its words (↑/↓ pick, ↩ opens, Esc closes, as everywhere; nothing says so).
 import { Dialog as RDialog } from "radix-ui";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useChatSearch, type ChatItem } from "./api.ts";
+import type { FoundMessage, TextMark } from "./core/shapes.ts";
+import { jumpTo } from "./jumpTo.ts";
 import { Mark } from "./brand.tsx";
 import { useShortcut } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
@@ -46,24 +48,40 @@ function ChatSwitcher({ scope, open, onClose }: { scope: string; open: boolean; 
   );
 }
 
-/** Its chats as the sidebar lists them, newest first; typing narrows them to those whose title (or else where they are, or what was said last) has it (the core's `chatSearch`). */
+/** How many of the messages that have the words the switcher lists, under the chats. */
+const MESSAGES = 30;
+
+type Found = { chat: ChatItem; message?: undefined } | { chat: ChatItem; message: FoundMessage };
+
+/**
+ * Its chats as the sidebar lists them, newest first; typing narrows them to those whose title (or else where they are,
+ * or what was said last) has it, and lists under them the messages that have it, newest first (the core's `chatSearch`):
+ * one picked opens its chat at it.
+ */
 function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const search = useChatSearch({ scope, query });
+  const search = useChatSearch({ scope, query, messages: MESSAGES });
   const view = search.value;
-  const found = view?.items ?? [];
+  const chats: Found[] = (view?.items ?? []).map((chat) => ({ chat }));
+  const messages: Found[] = query.trim() ? (view?.messages ?? []).map((message) => ({ chat: message.chat, message })) : [];
+  const found = [...chats, ...messages];
   const [at, setAt] = useState(0);
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => setAt(0), [query]);
   useEffect(() => {
     list.current?.querySelector(`[data-at="${at}"]`)?.scrollIntoView({ block: "nearest" });
   }, [at]);
-  const go = (item: ChatItem | undefined) => {
-    if (!item) return;
+  const go = (pick: Found | undefined) => {
+    if (!pick) return;
     onClose();
-    navigate(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`);
+    if (pick.message) jumpTo({ station: pick.message.station, thread: pick.message.thread, seq: pick.message.seq });
+    navigate(`${stationBase(pick.chat.station)}/chats/${encodeURIComponent(pick.chat.id)}`);
   };
+  const option = (i: number) => ({
+    role: "option", "aria-selected": i === at, "data-at": i,
+    onMouseMove: () => { if (i !== at) setAt(i); }, onClick: () => go(found[i]),
+  });
   return (
     <>
       <input className={css.search} autoFocus placeholder={t("web-main.switcher.search")} aria-label={t("web-main.switcher.search")} value={query} spellCheck={false}
@@ -77,12 +95,9 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
       <div className={css.results} ref={list} role="listbox" aria-label={t("web-main.chat.label")}>
         {search.error && !view && <p className={css.none}>{t("web-main.switcher.update", { app: NAME })}</p>}
         {view && found.length === 0 && <p className={css.none}>{query ? t("web-main.switcher.noMatch") : t("web-main.switcher.none")}</p>}
-        {found.map((item, i) => (
-          <div key={`${item.station}/${item.id}`} className={css.row} role="option" aria-selected={i === at} data-at={i}
-            onMouseMove={() => { if (i !== at) setAt(i); }} onClick={() => go(item)}>
-            <span className={css.picture} aria-hidden="true">
-              {item.agents[0] ? <ModelLogo maker={item.agents[0].maker} runtime={item.agents[0].runtime} size={18} /> : <Mark size={16} />}
-            </span>
+        {chats.map(({ chat: item }, i) => (
+          <div key={`${item.station}/${item.id}`} className={css.row} {...option(i)}>
+            <ChatPicture item={item} />
             <span className={css.title} data-unread={item.unread || undefined}>{item.title}</span>
             <span className={css.meta}>
               <span>{item.stationName}</span>
@@ -90,7 +105,45 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
             </span>
           </div>
         ))}
+        {messages.length > 0 && <div className={css.section} role="presentation">{t("web-main.switcher.messages")}</div>}
+        {messages.map(({ chat: item, message }, j) => message && (
+          <div key={`${message.station}/${message.thread}/${message.seq}`} className={`${css.row} ${css.said}`} {...option(chats.length + j)}>
+            <ChatPicture item={item} />
+            <span className={css.saidBody}>
+              <span className={css.saidHead}>
+                <span className={css.saidChat}>{item.title}</span>
+                <span className={css.meta}>
+                  {message.by && <span>{message.by}</span>}
+                  <Time stamp={message.time?.createdAt} fixed />
+                </span>
+              </span>
+              <span className={css.saidText}><Marked text={message.text} marks={message.marks} /></span>
+            </span>
+          </div>
+        ))}
       </div>
     </>
   );
+}
+
+function ChatPicture({ item }: { item: ChatItem }) {
+  return (
+    <span className={css.picture} aria-hidden="true">
+      {item.agents[0] ? <ModelLogo maker={item.agents[0].maker} runtime={item.agents[0].runtime} size={18} /> : <Mark size={16} />}
+    </span>
+  );
+}
+
+/** A found message's line with the words looked for drawn out. */
+function Marked({ text, marks }: { text: string; marks: TextMark[] }) {
+  const parts: ReactNode[] = [];
+  let from = 0;
+  for (const m of marks) {
+    if (m.from < from || m.to > text.length) continue;
+    if (m.from > from) parts.push(text.slice(from, m.from));
+    parts.push(<mark key={m.from} className={css.hit}>{text.slice(m.from, m.to)}</mark>);
+    from = m.to;
+  }
+  parts.push(text.slice(from));
+  return <>{parts}</>;
 }
