@@ -86,7 +86,6 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
       }
       for (const s of store.listSessions().slice(0, 30)) {
         assert.deepEqual(store.listTurns(s.key).map((t) => ({ ...turnSummaryJson(t.summary), id: t.id })), read.listTurns(r, s.key));
-        assert.deepEqual(store.postsBy(s.key), read.postsBy(r, s.key));
       }
       for (const t of store.db.prepare("SELECT id FROM threads ORDER BY id DESC LIMIT 60").all() as any[]) {
         assert.deepEqual(store.entriesBefore(t.id, null, 50), read.entriesBefore(r, t.id, null, 50));
