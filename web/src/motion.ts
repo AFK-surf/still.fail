@@ -2,7 +2,7 @@
 // wherever it is when where it goes changes: it starts from the value and the speed it has, instead of a CSS
 // transition's fixed run from a fixed start, which lags a goal that moves and jumps when cut off. CSS transitions stay
 // for a thing's own look (hover, colour, opacity, a bar's fill).
-import { animate, motionValue, type AnimationPlaybackControls, type MotionValue } from "motion";
+import { animate, frame, motionValue, type AnimationPlaybackControls, type MotionValue } from "motion";
 
 export { animate, type AnimationPlaybackControls };
 
@@ -53,6 +53,16 @@ export function follower(start: number, draw: (value: number) => void): Follower
 }
 
 const changing = new WeakMap<HTMLElement, AnimationPlaybackControls>();
+/**
+ * Lets go of the values a motion held on `el`, now and again once Motion has drawn its frame: it draws a motion's last
+ * value (its own end, or where a stopped one was) in the frame after it says it is done, over the rules again, and that
+ * stayed: a line unfolded kept the width it had then, and the words it grew to after were cut to their first letter.
+ */
+function letGo(el: HTMLElement, props: Iterable<string>): void {
+  const all = [...props];
+  for (const p of all) el.style.removeProperty(p);
+  frame.postRender(() => { if (!changing.has(el)) for (const p of all) el.style.removeProperty(p); });
+}
 /** A computed value as the motion takes it: a bare number (opacity) as a number, which it would otherwise end at once. */
 const asValue = (v: string): string | number => (/^-?(\d+\.?\d*|\.\d+)$/.test(v.trim()) ? Number(v) : v);
 /**
@@ -94,12 +104,15 @@ export function moveState(moves: [HTMLElement, string[]][], change: () => void, 
     for (const p of props) el.style.removeProperty(p);
   }
   change();
-  if (reducedMotion()) return;
+  if (reducedMotion()) {
+    for (const [el, props] of moves) letGo(el, props);
+    return;
+  }
   moves.forEach(([el, props], i) => {
     const style = getComputedStyle(el);
     const frames: Record<string, [string, string]> = {};
     props.forEach((p, j) => { const to = style.getPropertyValue(p); if (to !== from[i]![j]) frames[p] = [from[i]![j]!, to]; });
-    if (!Object.keys(frames).length) return;
+    if (!Object.keys(frames).length) return letGo(el, props);
     // Held where it was until the motion takes it (from the next frame): the change is never seen at once.
     for (const [p, [start]] of Object.entries(frames)) el.style.setProperty(p, start);
     const run = animate(el, keyframes(frames), transition);
@@ -107,7 +120,7 @@ export function moveState(moves: [HTMLElement, string[]][], change: () => void, 
     void run.finished.then(() => {
       if (changing.get(el) !== run) return;
       changing.delete(el);
-      for (const p of props) el.style.removeProperty(p);
+      letGo(el, props);
     }, () => {});
   });
   for (const [pane, top] of panes) if (pane.scrollTop !== top) pane.scrollTop = top;
@@ -133,7 +146,7 @@ export function arrive(moves: [HTMLElement, Record<string, string>][], transitio
     void run.finished.then(() => {
       if (changing.get(el) !== run) return;
       changing.delete(el);
-      for (const p of Object.keys(from)) el.style.removeProperty(p);
+      letGo(el, Object.keys(from));
     }, () => {});
   }
 }
