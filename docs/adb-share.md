@@ -21,8 +21,11 @@ agent ─ adb ─ 127.0.0.1:<port> on the station ─ stream on the phone's link
   (`_adb-tls-connect._tcp`, `_adb-tls-pairing._tcp` while the pairing dialog is
   open) and gives them to the core (`adb.share`).
 - **Pairing**, once per station: the person opens 使用配对码配对设备 and types
-  the six digits into the app's notification (the dialog closes if Settings is
-  left); the station runs `adb pair` through the pairing port (`adb.pair`).
+  the six digits into the notification that pops up over it (heads-up, channel
+  `adb-pair`, posted while the pairing port is announced): Settings closes the
+  dialog as soon as it is paused, so the code can't be typed in the app unless
+  the screen is split. The station runs `adb pair` through the pairing port
+  (`adb.pair`).
 - **While it is shared** a foreground service holds the app up and says so in a
   notification, with 停止. Sharing ends after an hour, when it is stopped, or when
   the app goes; nothing is kept for a next run.

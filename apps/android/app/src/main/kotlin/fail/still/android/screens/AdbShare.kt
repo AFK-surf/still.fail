@@ -196,14 +196,14 @@ private fun Pairing(view: AdbShareView) {
     val busy = app.isDoing("adb.pair")
     SectionHeader(t("android-misc.adb.pair.title"), start = 24.dp)
     ListCard {
-        ListRow(onClick = { AdbShare.openWireless(context) }) {
+        ListRow(onClick = { AdbShare.openWireless(context, beside = true) }) {
             Column(Modifier.weight(1f)) {
                 Text(t("android-misc.adb.pair.open"), fontSize = 15.sp, color = C.ink)
                 Text(t("android-misc.adb.pair.open.note"), fontSize = 13.sp, color = C.muted)
             }
             Text(t("android-misc.adb.pair.go"), fontSize = 14.sp, color = C.accent)
         }
-        // Split screen: the code typed here instead.
+        // Split screen: the code typed here instead (in full screen, coming back here closes the dialog).
         ListRow(onClick = if (view.pairPort == null || busy) null else ({
             ask(app, t("android-misc.adb.pair.ask"), "", t("android-misc.adb.code"), t("android-misc.adb.pair.action"), hint = t("android-misc.adb.pair.hint")) { code ->
                 app.core.call("adb.pair", buildJsonObject { put("code", code.filter(Char::isDigit)) })
