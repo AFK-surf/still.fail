@@ -178,7 +178,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
   return (
     <>
       {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
-      {messages.length === 0 && chat.outbox.length === 0 && (
+      {messages.length === 0 && chat.outbox.length === 0 && !chat.elsewhere?.length && (
         <div className={css.chatEmpty}>
           <p>{t("web-main.chat.empty")}</p>
         </div>
