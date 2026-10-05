@@ -11,7 +11,14 @@ export function publicOf(hex: string): KeyObject {
   return createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: Buffer.from(hex, "hex").toString("base64url") }, format: "jwk" });
 }
 
-export const checks = (station: string, message: string, signature: string) => verify(null, Buffer.from(message), publicOf(station), Buffer.from(signature, "hex"));
+export const checks = (station: string, message: string, signature: string) => {
+  try {
+    return verify(null, Buffer.from(message), publicOf(station), Buffer.from(signature, "hex"));
+  } catch {
+    // No station, or not a key.
+    return false;
+  }
+};
 
 const sha256hex = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 
@@ -112,8 +119,12 @@ export class FakeControlPlane {
     await new Promise((resolve) => this.server.close(resolve));
   }
 
+  /// The release the station is offered (`<base>/releases/station.json`).
+  release = { version: "0.1.9999" };
+
   private answer(a: Asked): [number, unknown] {
     const comma = this.provider === "comma";
+    if (a.method === "GET" && a.path.split("?")[0] === (comma ? "/stations/releases/station.json" : "/releases/station.json")) return [200, this.release];
     if (a.path === (comma ? "/v1/comma/stations/enroll" : "/v1/stations/enroll")) {
       const { token, station, signature } = JSON.parse(a.body.toString());
       const tag = comma ? "comma" : "stillfail";
