@@ -560,8 +560,10 @@ test("a_relay_far_from_the_device_is_measured_by_its_round_trips", { skip: noRel
   assert.ok(link, "reached");
   await runner.run(mesh.remeasure(id));
   const [[, ms]] = mesh.measured(id)!.relays;
-  // A round trip is 160 ms; an acknowledgement may wait up to 25 ms besides.
-  assert.ok(ms !== null && ms >= 150 && ms < 220, `${ms}`);
+  // A round trip is 160 ms; an acknowledgement may wait up to 25 ms besides, and a busy machine adds its own (Linux CI
+  // measured 227 and 229 ms, 2026-10-05). QUIC's smoothed estimate, what this replaced, carried the getting onto the
+  // relay several times over: well past 300 ms.
+  assert.ok(ms !== null && ms >= 150 && ms < 300, `${ms}`);
   await runner.run(mesh.close());
   runner.shutdown();
   void station.close();
