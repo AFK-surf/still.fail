@@ -37,6 +37,19 @@ test("a_reached_station_is_linked_read_as_its_stream_opens_and_its_topics_read_o
   core.close();
 });
 
+test("a_chat_at_its_end_stays_there_while_its_summary_is_ahead_of_what_is_held", async () => {
+  // A message just said: the station's summary already counts it, its entry not on the device yet.
+  const { host, core } = await started({ ...base(), "GET /threads": [threadView(7, 4)] });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "thread", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).entries.map((e: { n: number }) => e.n), [1, 2, 3]);
+  assert.equal(v(values, 1).end, true, "not a window short of its end: no page after it to load");
+  core.close();
+});
+
 test("events_keep_the_records_current", async () => {
   const { host, core, push } = await started();
   const ui = core.connect();

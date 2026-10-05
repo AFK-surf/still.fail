@@ -366,9 +366,10 @@ export class StationTopics implements Owner {
       caught = n;
     }
     window.caught = Math.max(window.caught, caught);
-    const end = window.last === null && last >= latest;
     const row = data.chatOfThread(station, id);
-    const value: Record<string, unknown> = { first: window.first, last, caught: Math.min(window.caught, last), entries, thread: summary, title: row === undefined ? null : (get(row, "title") ?? null), end: window.last === null ? end || last >= latest : false };
+    // A window kept to the chat's end is at its end even while the summary is ahead of what is held (a message just
+    // said, its entry on its way): what comes joins it as it does, not a page to load after it.
+    const value: Record<string, unknown> = { first: window.first, last, caught: Math.min(window.caught, last), entries, thread: summary, title: row === undefined ? null : (get(row, "title") ?? null), end: window.last === null };
     if (window.at !== null) value.at = window.at;
     if (window.atOffset !== null) value.atOffset = window.atOffset;
     return { ok: value };
