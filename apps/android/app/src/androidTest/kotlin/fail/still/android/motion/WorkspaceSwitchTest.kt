@@ -44,9 +44,6 @@ class WorkspaceSwitchTest {
 
     @Test fun switched() {
         val h = Harness(rule)
-        h.fake.put(Topics.workspaces, listOf(AccountWorkspaces(Fixtures.account, listOf(
-            WorkspaceSummary(Fixtures.WS, "Dev", "owner", 1, 1), WorkspaceSummary(other, "Other", "owner", 1, 1),
-        ), loaded = true)))
         for (mine in listOf(false, true)) {
             h.fake.put(Topics.chats(Fixtures.WS, mine), view(Fixtures.WS, "a"))
             h.fake.put(Topics.chats(other, mine), view(other, "b"))
@@ -56,6 +53,11 @@ class WorkspaceSwitchTest {
         // As long as the real core takes to read a workspace's list from the device the first time.
         for (topic in listOf(Topics.chats(other, false), Topics.chats(other, true), Topics.chats(other, false, watching = true))) h.fake.lags[topic] = 50
         h.launch(listOf(Screen.Home))
+        // Two workspaces (launch puts Fixtures' one).
+        h.fake.put(Topics.workspaces, listOf(AccountWorkspaces(Fixtures.account, listOf(
+            WorkspaceSummary(Fixtures.WS, "Dev", "owner", 1, 1), WorkspaceSummary(other, "Other", "owner", 1, 1),
+        ), loaded = true)))
+        h.settle()
         check(rows() == "a") { "start: ${rows()}" }
         val r = h.record("workspace-switch")
         val seen = ArrayList<String>()
