@@ -546,8 +546,8 @@ test("a_relay_far_from_the_device_is_measured_by_its_round_trips", { skip: noRel
   const station = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
   await station.endpoint.online();
   const id = station.id();
-  // The device reaches the relay 80 ms away each way (getting onto it as well), the station reaches it at once.
-  const far = await slowed(b, 80);
+  // The device reaches the relay 150 ms away each way (getting onto it as well), the station reaches it at once.
+  const far = await slowed(b, 150);
   const e = env(new FakeHost(), new Wakes(), quickClock(new Map()));
   const mesh = await e.runner.run(Mesh.make(e, [far]));
   const runner = e.runner;
@@ -560,10 +560,11 @@ test("a_relay_far_from_the_device_is_measured_by_its_round_trips", { skip: noRel
   assert.ok(link, "reached");
   await runner.run(mesh.remeasure(id));
   const [[, ms]] = mesh.measured(id)!.relays;
-  // A round trip is 160 ms; an acknowledgement may wait up to 25 ms besides, and a busy machine adds its own (Linux CI
-  // measured 227 and 229 ms, 2026-10-05). QUIC's smoothed estimate, what this replaced, carried the getting onto the
-  // relay several times over: well past 300 ms.
-  assert.ok(ms !== null && ms >= 150 && ms < 300, `${ms}`);
+  // A round trip is 300 ms (a Mac measures 303–306); an acknowledgement may wait besides, and a busy machine adds its
+  // own (Linux CI some 70 ms more, 2026-10-05): up to half more is allowed. QUIC's smoothed estimate, what this
+  // replaced, carried the getting onto the relay several times over: 515–580 ms. (At 80 ms each way the two came too
+  // close: the old way measured 264–296, under a bound with room for Linux.)
+  assert.ok(ms !== null && ms >= 290 && ms < 450, `${ms}`);
   await runner.run(mesh.close());
   runner.shutdown();
   void station.close();
