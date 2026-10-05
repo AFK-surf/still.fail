@@ -5,12 +5,11 @@ import { Effect } from "effect";
 import * as brand from "../brand.ts";
 import type { Inner, Progress } from "../core.ts";
 import { CoreError, asCoreError } from "../error.ts";
-import { t } from "../i18n.ts";
 import * as prefs from "../prefs.ts";
 import type { ClientId, RequestId } from "../protocol.ts";
 import type { SpanContext } from "../trace.ts";
 import { Kind } from "../trace.ts";
-import { isObject, parseJson } from "../util.ts";
+import { isObject } from "../util.ts";
 import { Wake } from "../wake.ts";
 import type { Call } from "./calls.ts";
 
@@ -60,20 +59,14 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       case "signOut":
         return Effect.as(inner.accounts.signOut(call.account), null);
       case "pushKey":
-        return Effect.gen(function* () {
-          const response = yield* Effect.mapError(inner.host.fetch({ method: "GET", url: `${inner.host.cloudOrigin()}/v1/push/key`, headers: [], body: null }), asCoreError);
-          const data = parseJson(response.body);
-          const vapid = isObject(data) ? data.vapid : undefined;
-          if (typeof vapid === "string" && response.status === 200) return { vapid };
-          return yield* Effect.fail(new CoreError("push_unavailable", t("core-misc.call.push_unavailable", { brand: brand.name() })));
-        });
+        return inner.provider.pushKey();
       case "op":
         if ("cloud" in call.op.target) {
           const op = call.op;
           const sub = call.op.target.cloud;
           return Effect.gen(function* () {
             const made = op.method === "POST" && op.path === "/v1/workspaces";
-            const result = yield* inner.cloud.request(sub, op.method, op.path, op.body, ctx);
+            const result = yield* inner.provider.request(sub, op.method, op.path, op.body, ctx);
             // A workspace made: the invite code kept through signing in is done with.
             if (made) prefs.inviteUsed(inner.data);
             // A write may rename, join or leave a workspace: what the account's topics show is read again first.

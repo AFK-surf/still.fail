@@ -1,5 +1,5 @@
-// What the core keeps in sync with still.fail cloud, by itself, whatever the UI shows (docs/core-ts.md, rule 6): each
-// signed-in account's `/v1/events` socket, held for as long as the account is signed in; its `/v1/me` (whom it
+// What the core keeps in sync with still.fail cloud (or the account provider in its place: account-provider.ts), by
+// itself, whatever the UI shows (docs/core-ts.md, rule 6): each signed-in account's `/v1/events` socket, held for as long as the account is signed in; its `/v1/me` (whom it
 // reaches), each workspace it reaches, its signed-in devices, and an operator's lists. The topics that show them only
 // read the records (data.ts). Every time a socket opens, the account is read again (nothing is replayed); its events
 // say what changed. A write to still.fail cloud answers once what it changed is read again.
@@ -23,8 +23,7 @@ export const SOCKET_RETRY_MS = 1_000;
 export const SOCKET_RETRY_MAX_MS = 60_000;
 /// An events socket that answered a ping before and then heard nothing this long is opened again.
 export const SOCKET_IDLE_MS = 2 * 25_000 + 10_000;
-/// The subprotocol still.fail cloud's `/v1/events` answers with; the token travels as a second one.
-export const EVENTS_PROTOCOL = "stillfail-events";
+export { EVENTS_PROTOCOL } from "../account-provider.ts";
 /// still.fail cloud's operator lists.
 export const ADMIN_LISTS = ["users", "workspaces", "invite-codes", "feedback"];
 
@@ -120,8 +119,9 @@ export class CloudSync {
       const ids = (isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []).flatMap((w) => (isObject(w) && typeof w.id === "string" ? [w.id] : []));
       const scheduler = this.#core.scheduler;
       for (const id of ids) if (this.#core.workspaces.owner(id) === sub) scheduler.enqueue("cloud", `workspace/${id}`, Priority.background, this.#workspace(id));
-      scheduler.enqueue("cloud", `sessions/${sub}`, Priority.background, this.#loginSessions(sub));
-      scheduler.enqueue("cloud", `admin/${sub}`, Priority.background, this.#admin(sub));
+      // What only some providers have: login sessions, an operator's lists.
+      if (this.#core.provider.supports("loginSessions")) scheduler.enqueue("cloud", `sessions/${sub}`, Priority.background, this.#loginSessions(sub));
+      if (this.#core.provider.supports("admin")) scheduler.enqueue("cloud", `admin/${sub}`, Priority.background, this.#admin(sub));
     });
   }
 
@@ -142,7 +142,7 @@ export class CloudSync {
       const me = this.#core.data.record("me", sub);
       const ids = (isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []).flatMap((w) => (isObject(w) && typeof w.id === "string" ? [w.id] : []));
       const reads = ids.filter((id) => this.#core.workspaces.owner(id) === sub).map((id) => Effect.ignore(scheduler.ask("cloud", `workspace/${id}`, Priority.asked, this.#workspace(id))));
-      reads.push(Effect.ignore(scheduler.ask("cloud", `sessions/${sub}`, Priority.asked, this.#loginSessions(sub))));
+      if (this.#core.provider.supports("loginSessions")) reads.push(Effect.ignore(scheduler.ask("cloud", `sessions/${sub}`, Priority.asked, this.#loginSessions(sub))));
       if (this.#admins.has(sub)) reads.push(Effect.ignore(scheduler.ask("cloud", `admin/${sub}`, Priority.asked, this.#admin(sub))));
       yield* Effect.all(reads, { concurrency: "unbounded" });
     });
@@ -152,7 +152,7 @@ export class CloudSync {
     return Effect.gen({ self: this }, function* () {
       const core = this.#core;
       if (!core.accounts.list().some((a) => a.sub === sub)) return;
-      const answer = yield* Effect.result(core.cloud.me(sub));
+      const answer = yield* Effect.result(core.provider.me(sub));
       if (!core.accounts.list().some((a) => a.sub === sub)) return;
       if (answer._tag === "Success") {
         const relays = relaysOf(answer.success);
@@ -180,7 +180,7 @@ export class CloudSync {
       const sub = core.workspaces.owner(id);
       if (sub === null) return;
       const topic: Topic = { topic: "workspace", workspace: id };
-      const answer = yield* Effect.result(core.cloud.request(sub, "GET", `/v1/workspaces/${encode(id)}`, null));
+      const answer = yield* Effect.result(core.provider.request(sub, "GET", `/v1/workspaces/${encode(id)}`, null));
       if (answer._tag === "Success") {
         this.errors.delete(id);
         this.forgetGoneStations(id, answer.success);
@@ -202,7 +202,7 @@ export class CloudSync {
     return Effect.gen({ self: this }, function* () {
       const core = this.#core;
       const topic: Topic = { topic: "loginSessions", account: sub };
-      const answer = yield* Effect.result(core.cloud.request(sub, "GET", "/v1/auth/sessions", null));
+      const answer = yield* Effect.result(core.provider.request(sub, "GET", "/v1/auth/sessions", null));
       if (answer._tag === "Success") {
         const sessions = isObject(answer.success) ? answer.success.sessions : undefined;
         this.errors.delete(topicKey(topic));
@@ -218,7 +218,7 @@ export class CloudSync {
   #admin(sub: string): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const core = this.#core;
-      const me = yield* Effect.result(core.cloud.request(sub, "GET", "/v1/admin/me", null));
+      const me = yield* Effect.result(core.provider.request(sub, "GET", "/v1/admin/me", null));
       if (me._tag === "Failure") {
         this.#admins.delete(sub);
         return;
@@ -228,7 +228,7 @@ export class CloudSync {
         ADMIN_LISTS.map((list) =>
           Effect.gen({ self: this }, function* () {
             const topic: Topic = { topic: "admin", account: sub, list };
-            const answer = yield* Effect.result(core.cloud.request(sub, "GET", `/v1/admin/${list}`, null));
+            const answer = yield* Effect.result(core.provider.request(sub, "GET", `/v1/admin/${list}`, null));
             if (answer._tag === "Success") {
               this.errors.delete(topicKey(topic));
               core.data.set(topic, answer.success);
@@ -372,7 +372,7 @@ export class CloudSync {
       }
       const kept: Credential | null = keptOne && keptOne.expires_at > now + 60 && !fresh ? strip(keptOne) : null;
       if (kept && now - kept.issued_at < CREDENTIAL_FOR_S) return kept;
-      const asked = yield* Effect.result(core.cloud.credential(sub, workspace, device));
+      const asked = yield* Effect.result(core.provider.credential(sub, workspace, device));
       if (asked._tag === "Failure") {
         if (kept) return kept;
         return yield* Effect.fail(asked.failure);
@@ -391,6 +391,8 @@ export class CloudSync {
   pushRegistered(): Effect.Effect<null, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const core = this.#core;
+      // A provider that delivers pushes its own way (Comma: its app's) is given none.
+      if (!core.provider.supports("push")) return null;
       const raw = parseJson(yield* Effect.orElseSucceed(core.host.storageGet(PUSH_KEY), () => null));
       if (!isObject(raw) || !("registration" in raw)) return null;
       const accounts = core.accounts.list();
@@ -405,7 +407,7 @@ export class CloudSync {
       if (isObject(registration)) registration.lang = code;
       let failed: CoreError | null = null;
       for (const account of accounts.filter((a) => !withSubs.includes(a.sub))) {
-        const sent = yield* Effect.result(core.cloud.request(account.sub, "POST", "/v1/push", registration));
+        const sent = yield* Effect.result(core.provider.request(account.sub, "POST", "/v1/push", registration));
         if (sent._tag === "Success") withSubs.push(account.sub);
         else failed = sent.failure;
       }
@@ -449,15 +451,9 @@ export class CloudSync {
     for (const sub of wanted) if (!this.#sockets.has(sub)) this.#sockets.set(sub, core.runner.fork(this.#follow(sub)));
   }
 
-  /// Opens an account's events socket with a token good now, in the caller's scope.
+  /// Opens an account's events (still.fail cloud's socket, with a token good now), in the caller's scope.
   #open(sub: string) {
-    const core = this.#core;
-    return Effect.gen(function* () {
-      const token = yield* core.accounts.accessToken(sub);
-      const origin = core.host.cloudOrigin();
-      const url = origin.startsWith("https://") ? `wss://${origin.slice(8)}/v1/events` : `ws://${origin.startsWith("http://") ? origin.slice(7) : origin}/v1/events`;
-      return yield* Effect.mapError(core.host.websocket(url, [EVENTS_PROTOCOL, `stillfail-token.${token}`]), asCoreError);
-    });
+    return this.#core.provider.events(sub);
   }
 
   #onEvent(sub: string, text: string): void {

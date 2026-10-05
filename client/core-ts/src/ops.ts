@@ -50,6 +50,8 @@ const CLOUD_SERVICES = ["workspace", "invitation", "loginSession", "admin"];
 /// params (test/ops.test.ts checks it), besides `station` and `account`.
 export const PARAMS: Record<string, string> = {
   "session.stop": "key:string",
+  "tools.access": "",
+  "tools.setAccess": "access:string",
   "session.warm": "key:string",
   "session.evict": "key:string",
   "session.delete": "key:string",
@@ -221,6 +223,12 @@ function stationOp(name: string, params: unknown): Request | null {
     return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null;
   };
   switch (name) {
+    // How far the control plane's gateway may go on the station (its device tools: off | read | full); set by the
+    // workspace's owners and admins.
+    case "tools.access":
+      return op("GET", () => "/tools/access", null, NONE);
+    case "tools.setAccess":
+      return op("PUT", () => "/tools/access", p.pick(["access"]), OVERVIEW);
     case "session.stop":
       return op("POST", () => `/sessions/${p.at("key")}/stop`, null, session("key"));
     case "session.warm":

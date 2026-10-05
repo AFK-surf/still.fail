@@ -49,6 +49,8 @@
   "core-misc.cloud.already_member": "They're already in the workspace",
   "core-misc.cloud.bad_response": "Couldn't read {brand} cloud's reply: {error}",
   "core-misc.cloud.forbidden": "You don't have permission for this",
+  "core-misc.comma.unsupported": "{what} is not available with Comma accounts",
+  "core-misc.comma.sign_in": "Sign in from the Comma app",
   "core-misc.cloud.invalid_email": "Use the email they sign in to {brand} with",
   "core-misc.cloud.invalid_name": "Name must be 1–80 characters",
   "core-misc.cloud.invalid_relay": "Enter an iroh-relay https address, such as https://relay.example.com",
