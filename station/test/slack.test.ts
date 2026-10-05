@@ -59,6 +59,27 @@ describe("slack", { concurrency: true }, () => {
     assert.equal(toEvent({ type: "message", subtype: "bot_message", channel: "C1", bot_id: "BBOT", ts: "4.3" }, "UBOT", "BBOT"), null);
   });
 
+  test("tables in blocks and attachments are read with the text, as Markdown tables", () => {
+    const link = (url: string, label: string) => ({ type: "rich_text", elements: [{ type: "rich_text_section", elements: [{ type: "link", url, text: label }] }] });
+    const table = {
+      type: "table",
+      rows: [
+        [link("https://github.com/o/r/pull/1", "o/r#1 · fix(chat): keep it"), { type: "raw_text", text: "Router 复用老 Task" }],
+        [{ type: "raw_text", text: "a | b" }, { type: "rich_text", elements: [{ type: "rich_text_section", elements: [{ type: "user", user_id: "U9" }, { type: "text", text: " line\nnext" }] }] }],
+      ],
+    };
+    const table_md = "| <https://github.com/o/r/pull/1|o/r#1 · fix(chat): keep it> | Router 复用老 Task |\n| --- | --- |\n| a \\| b | <@U9> line next |";
+    // As Slack's composer sends one: the table in an attachment, the text without it.
+    const composed = toEvent({ type: "app_mention", channel: "C1", user: "U1", ts: "5.1", text: "<@UBOT> review & merge", attachments: [{ blocks: [table] }] }, "UBOT", "BBOT");
+    assert.ok(composed?.type === "message");
+    assert.equal(composed.message.text, `<@UBOT> review & merge\n\n${table_md}`);
+    // As an app posts one: in the blocks, beside the rich text the text already says.
+    const posted = toEvent({ type: "message", channel: "C1", user: "U1", ts: "5.2", text: "see", blocks: [{ type: "rich_text", elements: [] }, table] }, "UBOT", "BBOT");
+    assert.ok(posted?.type === "message" && posted.message.text === `see\n\n${table_md}`);
+    const edited = toEvent({ type: "message", subtype: "message_changed", channel: "C1", message: { ts: "5.1", text: "", blocks: [table] } }, "UBOT", "BBOT");
+    assert.ok(edited?.type === "changed" && edited.text === table_md);
+  });
+
   test("tokens must be of their kind", () => {
     assert.throws(() => new SlackSurface({ appToken: "xoxb-1", botToken: "xoxb-1" }), /app-level token/);
     assert.throws(() => new SlackSurface({ appToken: "xapp-1", botToken: "xapp-1" }), /bot token/);
@@ -218,7 +239,7 @@ describe("slack", { concurrency: true }, () => {
     bot(fake);
     fake.answer("conversations.replies", (s) =>
       s.params.cursor === undefined
-        ? { ok: true, messages: [{ ts: "1.1", user: "U1", text: "a" }, { ts: "1.2", bot_id: "B9", text: "b" }], response_metadata: { next_cursor: "c2" } }
+        ? { ok: true, messages: [{ ts: "1.1", user: "U1", text: "a" }, { ts: "1.2", bot_id: "B9", text: "b", attachments: [{ blocks: [{ type: "table", rows: [[{ type: "raw_text", text: "k" }], [{ type: "raw_text", text: "v" }]] }] }] }], response_metadata: { next_cursor: "c2" } }
         : { ok: true, messages: [{ ts: "1.3", user: "UBOT", text: "c" }, { ts: "1.4", user: "U2", text: "d" }] },
     );
     fake.answer("conversations.info", (s) => (s.params.channel === "D1" ? { ok: true, channel: { id: "D1", is_im: true } } : { ok: true, channel: { id: "C1", name: "general" } }));
@@ -227,7 +248,7 @@ describe("slack", { concurrency: true }, () => {
       await surface.start(quiet);
       const earlier = await surface.history({ channel: "C1", threadTs: "1.1" }, "1.4", 2);
       assert.deepEqual(earlier, [
-        { ts: "1.2", user: "B9", text: "b", fromBot: true },
+        { ts: "1.2", user: "B9", text: "b\n\n| k |\n| --- |\n| v |", fromBot: true },
         { ts: "1.3", user: "UBOT", text: "c", fromBot: true },
       ]);
       assert.deepEqual(fake.calls("conversations.replies").map((c) => c.params.cursor ?? null), [null, "c2"]);
