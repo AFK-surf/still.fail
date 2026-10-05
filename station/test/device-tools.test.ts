@@ -1,7 +1,7 @@
 // The device tools (src/device/tools.ts, contract v1 §8): what each access level lets through, and each op family —
 // exec, files, processes, the runtimes here, the station's chats — on a temporary home.
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -187,6 +187,13 @@ test("the station's data and the machine's logins are refused at every level, al
     await refused("fs.list", { path: ".stillfail" }, access);
     await refused("fs.stat", { path: "innocent" }, access);
     await refused("fs.read", { path: ".codex/auth.json" }, access);
+  }
+  // Spelled in another case, as a case-insensitive file system (macOS's) takes it.
+  if (existsSync(join(home, ".STILLFAIL"))) {
+    await refused("fs.read", { path: ".STILLFAIL/MESH/secret.key" }, "read");
+    await refused("fs.read", { path: join(home, ".StillFail", "mesh", "SECRET.KEY") }, "full");
+    await refused("fs.write", { path: ".STILLFAIL/new/thing", content_base64: "" }, "full");
+    await refused("fs.read", { path: ".CODEX/AUTH.JSON" }, "read");
   }
   await refused("fs.write", { path: "innocent/mesh/secret.key", content_base64: "" }, "full");
   await refused("fs.write", { path: ".stillfail/new-file", content_base64: "" }, "full");

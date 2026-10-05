@@ -27,7 +27,8 @@ export function accessOf(raw: any): Access {
   return ACCESS.includes(said) ? said : DEFAULT_ACCESS;
 }
 
-/// What `read` lets through; `full` lets everything through, `off` nothing.
+/// What `read` lets through — every file this user can read except the station's own data (and the machine's logins),
+/// processes, runtimes and chat states; `full` lets everything through, `off` nothing.
 export const READ_OPS: readonly string[] = ["fs.read", "fs.list", "fs.stat", "runtime.probe", "process.list", "process.tail", "session.status"];
 
 export const OPS: readonly string[] = [
@@ -106,11 +107,11 @@ const io = <A>(f: () => Promise<A>) =>
 
 const kindOf = (s: { isFile(): boolean; isDirectory(): boolean; isSymbolicLink(): boolean }) => (s.isFile() ? "file" : s.isDirectory() ? "dir" : s.isSymbolicLink() ? "symlink" : "other");
 
-/// A path as the file system has it: its links followed, as far as it exists (what is not there yet is under its
-/// nearest parent that is).
+/// A path as the file system has it: its links followed and each name as it is on disk (a case-insensitive file system
+/// takes `DATA` for `data`), as far as it exists (what is not there yet is under its nearest parent that is).
 function real(path: string): string {
   try {
-    return realpathSync(path);
+    return realpathSync.native(path);
   } catch {
     const parent = dirname(path);
     return parent === path ? path : resolve(real(parent), basename(path));

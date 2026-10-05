@@ -10,7 +10,14 @@ export type ToolsDeps = { config: ConfigFile; changed?: () => void };
 
 const manages = (r: Request) => r.viewer.role === "owner" || r.viewer.role === "admin";
 
-const view = (access: Access) => ({ access, levels: ACCESS, read_ops: READ_OPS });
+/// What each level means, for the pages that set it.
+export const ABOUT: Record<Access, string> = {
+  off: "The control plane's agents cannot use this machine.",
+  read: "Agents can read every file this machine's user can read, except the station's own data, and see processes, runtimes and chat states.",
+  full: "Agents can also run commands, write files, manage processes and start chats as this machine's user.",
+};
+
+const view = (access: Access) => ({ access, levels: ACCESS, read_ops: READ_OPS, about: ABOUT });
 
 export const routes = ({ config, changed }: ToolsDeps): Route[] => [
   { method: "GET", pattern: /^\/tools\/access$/, handle: async () => json(200, JSON.stringify(view(accessOf(config.raw())))) },

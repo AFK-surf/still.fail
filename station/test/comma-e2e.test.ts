@@ -20,6 +20,7 @@ import { Jobs } from "../src/jobs/jobs.ts";
 import { loadMesh, type Connection, type Stream as MeshStream } from "../src/mesh/native.ts";
 import { ALPN, Reader, serve } from "../src/mesh/serve.ts";
 import { TOOLS_ALPN, adminSessions, serveTools } from "../src/mesh/tools.ts";
+import { ABOUT } from "../src/api/routes/tools.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { checkConfig } from "../src/accounts/check.ts";
 import { Readers } from "../src/read/pool.ts";
@@ -131,7 +132,7 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
     comma.grant.credential({ typ: "comma-member+jwt" }, { iss: "comma", sub: `usr_${role}`, email: `${role}@x`, name: role, ws: "ws1", role, device, sid: `s_${role}`, iat: now, exp: now + 3600 });
   const owner = await client.connect(addr, ALPN);
   assert.deepEqual(await member(owner, credential(client.id(), "owner")), { ok: true, station: "studio", expires_at: now + 3600 });
-  assert.deepEqual(await ask(owner, "GET", "/admin/api/tools/access"), [200, { access: "off", levels: ["off", "read", "full"], read_ops: ["fs.read", "fs.list", "fs.stat", "runtime.probe", "process.list", "process.tail", "session.status"] }]);
+  assert.deepEqual(await ask(owner, "GET", "/admin/api/tools/access"), [200, { access: "off", levels: ["off", "read", "full"], read_ops: ["fs.read", "fs.list", "fs.stat", "runtime.probe", "process.list", "process.tail", "session.status"], about: ABOUT }]);
 
   // still.fail cloud's credential is no member's here.
   const other = await stranger.connect(addr, ALPN);
