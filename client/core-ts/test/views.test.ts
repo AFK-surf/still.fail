@@ -1423,3 +1423,25 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
     [2, "补一句", true],
   ]);
 });
+
+test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, agentPage("ws/a", "k"));
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(rows("ws/a"), [{ id: "k", session: "k", thread: null, title: "看看项目", agents: [] }]);
+  const call = (tool: string, args: J, at: string, callId: string) => ({ at, kind: "tool_call", tool, text: JSON.stringify(args), callId });
+  t.data.putItems("transcript", "ws/a", "k", [
+    [0, { at: "1970-01-01T00:00:01Z", kind: "user", text: '<message via="slack" thread="C0OPS/1.5" from="Mia (U9)" ts="1.5">看看项目</message>' }],
+    [1, call("mcp__stillfail__chat_post", { to: "C0OPS/1.5", text: "*看了*" }, "1970-01-01T00:00:03Z", "c1")],
+    [2, { at: "1970-01-01T00:00:03Z", kind: "tool_result", text: "posted", ok: true, callId: "c1" }],
+  ]);
+  await t.read(u, 1);
+  const v = u.value;
+  assert.equal(v.thread ?? null, null);
+  assert.deepEqual(v.messages, []);
+  assert.deepEqual(v.elsewhere.map((s: J) => [s.after, s.text, s.place.name, s.received ?? false, s.by.name]), [
+    [0, "看看项目", "#C0OPS", true, "Mia"],
+    [0, "**看了**", "#C0OPS", false, v.elsewhere[1].by.name],
+  ]);
+});

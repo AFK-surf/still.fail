@@ -1222,9 +1222,10 @@ export class Views implements Owner {
 
   /// What a chat's agents said in Slack and were given from it (not this chat's own thread), each after the message it
   /// followed. Only what falls in the window of messages shown (`more`/`newer`: the chat goes on before/after it): the
-  /// rest comes with its page. A Slack message given to several of its agents shows once.
+  /// rest comes with its page. A Slack message given to several of its agents shows once. With no chat (`thread`
+  /// null), all of it, each before any message.
   #sentElsewhere(station: string, thread: J, agents: J[], messages: J[], more: boolean, newer: boolean, people: { members: J[]; bots: [string, string][] }): J[] {
-    const own = `${str(get(thread, "channel")) ?? ""}/${str(get(thread, "threadTs")) ?? ""}`;
+    const own = thread === null ? null : `${str(get(thread, "channel")) ?? ""}/${str(get(thread, "threadTs")) ?? ""}`;
     const first = u64(messages[0]?.createdAt);
     const last = u64(messages.at(-1)?.createdAt);
     if ((more || newer) && (first === null || last === null)) return [];
@@ -1379,6 +1380,10 @@ export class Views implements Owner {
       if ("err" in threads) return threads;
     }
     const archived = this.local.archivedChanging(station, null, key) ?? (get(agent.session, "archivedAt") !== undefined && get(agent.session, "archivedAt") !== null);
+    // An agent that has only been in Slack: what was said there is all it has to show.
+    const members_ = arr(get(this.ok({ topic: "workspace", workspace: ofAddress(station) }), "members"));
+    const bot = agent.connect !== undefined ? present.botOf(agent.connect) : null;
+    const elsewhere = this.#sentElsewhere(station, null, [agent], [], false, false, { members: members_, bots: bot === null ? [] : [bot] });
     return {
       ok: {
         me: this.me(ofAddress(station)),
@@ -1388,6 +1393,7 @@ export class Views implements Owner {
         archived,
         agents: [agent],
         messages: [],
+        elsewhere,
         more: false,
         outbox: [],
         link: this.link(station),

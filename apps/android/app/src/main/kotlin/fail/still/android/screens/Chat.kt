@@ -514,7 +514,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val short = view.newer == true
     val all = buildList {
         if (view.more) add(Entry.Older)
-        if (messages.isEmpty() && view.outbox.isEmpty()) add(Entry.Empty)
+        if (messages.isEmpty() && view.outbox.isEmpty() && view.elsewhere.isNullOrEmpty()) add(Entry.Empty)
         // What its agents sent to Slack meanwhile, each after the message it followed (0: before the first).
         val elsewhere = view.elsewhere.orEmpty().groupBy { it.after }
         elsewhere[0L]?.forEach { add(Entry.Sent(it)) }
