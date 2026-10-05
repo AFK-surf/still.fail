@@ -496,7 +496,11 @@ impl Inner {
                 }
                 halves.finished.store(true, Ordering::Relaxed);
                 // A stream one way (a measurement) is let go once `stopped` answers; one both ways once read to its end.
-                self.istream_done(id, &halves);
+                // (Let go here, a measurement's `stopped` found no stream and every relay measured on Android came to
+                // nothing, 2026-10-05.)
+                if halves.recv.lock().await.is_some() {
+                    self.istream_done(id, &halves);
+                }
                 Ok(Answer::json(json!({})))
             }
             "istream.stopped" => {
@@ -507,7 +511,11 @@ impl Inner {
                     Some(send) => send.stopped(),
                     None => return Ok(Answer::json(json!({ "code": null }))),
                 };
-                let code = stopped.await.map_err(err)?;
+                let code = stopped.await;
+                if halves.recv.lock().await.is_none() && halves.finished.load(Ordering::Relaxed) {
+                    self.drop_handle(id);
+                }
+                let code = code.map_err(err)?;
                 Ok(Answer::json(json!({ "code": code.map(|c| c.into_inner()) })))
             }
             "istream.reset" => {
