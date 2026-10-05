@@ -537,6 +537,37 @@ test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, 
   rb.kill();
 });
 
+/// A relay far from the device and near the station is measured by its round trips, not by the probe's getting onto
+/// it: QUIC's smoothed estimate began at the handshake, held while the probe's endpoint got onto the relay, so it
+/// carried the device's distance to the relay several times over (2026-10-05: bft in Tokyo, the device in China, never
+/// measured quickest through Cloudflare or Hong Kong).
+test("a_relay_far_from_the_device_is_measured_by_its_round_trips", { skip: noRelay }, async () => {
+  const [b, rb] = await relay();
+  const station = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
+  await station.endpoint.online();
+  const id = station.id();
+  // The device reaches the relay 80 ms away each way (getting onto it as well), the station reaches it at once.
+  const far = await slowed(b, 80);
+  const e = env(new FakeHost(), new Wakes(), quickClock(new Map()));
+  const mesh = await e.runner.run(Mesh.make(e, [far]));
+  const runner = e.runner;
+  let link: Link | null = null;
+  for (let i = 0; i < 40 && link === null; i++) {
+    const tried = await runner.run(mesh.link(id, grants("ok", { n: 0 }))).catch(() => null);
+    if (tried && (await request(runner, tried, head("/admin/api/overview")).then((r) => r.status === 200, () => false))) link = tried;
+    else await sleep(250);
+  }
+  assert.ok(link, "reached");
+  await runner.run(mesh.remeasure(id));
+  const [[, ms]] = mesh.measured(id)!.relays;
+  // A round trip is 160 ms; an acknowledgement may wait up to 25 ms besides.
+  assert.ok(ms !== null && ms >= 150 && ms < 220, `${ms}`);
+  await runner.run(mesh.close());
+  runner.shutdown();
+  void station.close();
+  rb.kill();
+});
+
 /// A workspace's own relay (cloud directory.ts setRelays): its station is on that relay alone, the device's endpoint on
 /// still.fail's; told the workspace's relays, the device reaches the station through it, and measures it.
 test("reaches_a_station_through_its_workspaces_own_relay", { skip: noRelay }, async () => {

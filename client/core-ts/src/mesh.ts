@@ -919,11 +919,16 @@ function relayStatus(endpoint: IrohEndpoint): string {
   return status.map((s) => `${s.url} ${s.connected ? "up" : "down"}`).join(", ");
 }
 
-/// Sends a byte on a one-way stream and waits for its acknowledgement, then reads QUIC's round trip estimate.
+/// Sends a byte on a one-way stream and times how long its acknowledgement takes, after MEASURE_WARMUP of them: the
+/// median of MEASURE_SAMPLES. Not QUIC's round trip estimate: that is smoothed from the handshake on, and a probe's
+/// handshake waits on its new endpoint getting onto the relay (connections there, TLS), so it carried the device's
+/// distance to the relay: one far from the device but near the station (Cloudflare, Hong Kong for bft in Tokyo) measured
+/// slow and was never chosen (2026-10-05). Wall time, not the core's clock (a test's moves by itself).
 export function sampleRelayRtt(conn: IrohConnection, relay: string): Effect.Effect<number | null> {
   return Effect.gen(function* () {
     const samples: number[] = [];
     for (let i = 0; i < MEASURE_WARMUP + MEASURE_SAMPLES; i++) {
+      const started = Date.now();
       const sent = yield* Effect.result(
         Effect.gen(function* () {
           const s = yield* conn.openUni();
@@ -932,10 +937,11 @@ export function sampleRelayRtt(conn: IrohConnection, relay: string): Effect.Effe
           return yield* s.stopped();
         }),
       );
+      const took = Date.now() - started;
       if (sent._tag === "Failure" || sent.success !== null) return null;
       const path = conn.paths().find((p) => p.selected);
       if (path === undefined || !sameRelay(path.relay, relay)) return null;
-      if (i >= MEASURE_WARMUP) samples.push(path.rttMs);
+      if (i >= MEASURE_WARMUP) samples.push(took);
     }
     samples.sort((a, b) => a - b);
     return samples[Math.floor(MEASURE_SAMPLES / 2)];
