@@ -17,7 +17,7 @@ import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
-import { postEntries, readTimeline, transcriptPath, weave } from "./transcript.ts";
+import { readTimeline, transcriptPath } from "./transcript.ts";
 import { HttpError, messageView } from "./views.ts";
 import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../sessions/thumbs.ts";
 import { parseUsize } from "./jobs.ts";
@@ -255,7 +255,7 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   const runtime = row.runtime === "claude" || row.runtime === "codex" ? row.runtime : null;
   const path = profile && runtime && row.runtimeSessionId !== null ? transcriptPath(runtime, profile.home, row.runtimeSessionId) : null;
   if (path === null || runtime === null) return { start: 0, entries: [] };
-  const entries = weave(readTimeline(runtime, path), postEntries(store.postsBy(s, key)));
+  const entries = readTimeline(runtime, path);
   const end = Math.min(before, entries.length);
   const start = Math.max(0, end - limit);
   return { start, entries: entries.slice(start, end) };

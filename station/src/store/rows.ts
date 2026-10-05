@@ -107,12 +107,6 @@ export type ProfileStatus = { check: Json | null; quota: Json | null };
 
 export type ProcessRow = { pgid: number; startedAt: number; runtime: string; label: string };
 
-/// A message an agent posted, for its session's execution history.
-export type Post = {
-  thread: number; n: number; channel: string; threadTs: string; text: string; attachments: Attachment[];
-  declared: string | null; at: number;
-};
-
 /// A message being recorded (NewMessage::new's defaults may be left out).
 export type NewMessage = {
   thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[];
@@ -333,13 +327,6 @@ export function toJob(r: Json): JobRow {
     id: r.id, sessionKey: r.session_key, name: r.name, command: r.command, cwd: r.cwd, port: r.port, token: r.token,
     state: r.state, pgid: r.pgid, exitCode: r.exit_code, startedAt: r.started_at, endedAt: r.ended_at,
     restarts: r.restarts, log: r.log, watch: r.watch !== 0,
-  };
-}
-
-export function toPost(r: Json): Post {
-  return {
-    thread: r.thread, n: r.n, channel: r.channel, threadTs: r.thread_ts, text: r.text ?? "",
-    attachments: fromJsonList(r.attachments, attachment), declared: r.declared, at: r.at,
   };
 }
 

@@ -20,11 +20,11 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { archiveText, readArchive, threadFile, writeCompressed } from "./archive.ts";
 import {
   type Attachment, type AutoTitle, type CardAnswer, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
-  type MessageRow, type NewMessage, type NewSession, type PendingMessage, type Post, type ProcessRow, type ProfileStatus,
+  type MessageRow, type NewMessage, type NewSession, type PendingMessage, type ProcessRow, type ProfileStatus,
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
-  toMessage, toPost, toSession, toSessionThread, toThread, toTurnSummary,
+  toMessage, toSession, toSessionThread, toThread, toTurnSummary,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addWatchColumn } from "./schema.ts";
 import * as usage from "./usage.ts";
@@ -219,15 +219,6 @@ export class Store {
       );
       changes.push({ type: "session", key: s.key });
     });
-  }
-
-  /// The messages a session's agent posted, in every thread, oldest first: its execution history's record of them.
-  postsBy(key: string): Post[] {
-    return this.#all(
-      `SELECT e.thread, e.n, t.channel, t.thread_ts, e.text, e.attachments, e.declared, e.at FROM entries e JOIN threads t ON t.id = e.thread
-       WHERE e.kind = 'message' AND e.author_kind = 'agent' AND e.author = ? ORDER BY e.at, e.thread, e.n`,
-      key,
-    ).map(toPost);
   }
 
   /// Moves a session to another profile (its transcripts are shared by its runtime's profiles); `pinned` keeps it there.

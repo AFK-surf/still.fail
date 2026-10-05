@@ -10,7 +10,7 @@ import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from
 import { join } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 import { tr } from "./spoken.ts";
-import type { Json, Post } from "./store.ts";
+import type { Json } from "./store.ts";
 
 /// TimelineEntry as serde writes it: `tool`, `ok`, `callId`, `subagent` left out when none.
 export type TimelineEntry = { at: string | null; kind: string; text: string; tool?: string; ok?: boolean; callId?: string; subagent?: boolean };
@@ -102,11 +102,11 @@ function toText(v: Json): string {
   return pretty(v);
 }
 
-/// is_posting: the station keeps what an agent posted, so a transcript's copies of the calls are left out.
+/// A post: shown whole in the history, where the agent made it (its words are what people read, not a call to cut).
 export const isPosting = (tool: string) => tool === "mcp__stillfail__chat_post" || tool === "mcp__ember__chat_post";
 
-/// What reading keeps between lines: the calls left out (their results follow later), and calls taken out of a script.
-export type ReadState = { skip: Set<string>; inner: Map<string, number> };
+/// What reading keeps between lines: calls taken out of a script.
+export type ReadState = { inner: Map<string, number> };
 
 /// A record's timeline entries, read on from `state` (what TranscriptTail keeps between reads): for a reader that takes
 /// a transcript a piece at a time as it grows (src/sessions/live.ts).
@@ -158,16 +158,12 @@ function claudeTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
       case "tool_use": {
         const name = stringOf(get(block, "name")) ?? "";
         const id = stringOf(get(block, "id"));
-        if (isPosting(name)) {
-          if (id !== undefined) state.skip.add(id);
-          continue;
-        }
-        out.push(withFields(entry("tool_call", clip(pretty(get(block, "input") ?? null))), { tool: name, callId: id }));
+        const input = pretty(get(block, "input") ?? null);
+        out.push(withFields(entry("tool_call", isPosting(name) ? input : clip(input)), { tool: name, callId: id }));
         break;
       }
       case "tool_result": {
         const id = stringOf(get(block, "tool_use_id"));
-        if (id !== undefined && state.skip.has(id)) continue;
         const isError = get(block, "is_error");
         const failed = typeof isError === "boolean" ? isError : false;
         out.push(withFields(entry("tool_result", clip(toText(get(block, "content") ?? null))), { ok: !failed, callId: id }));
@@ -257,30 +253,21 @@ function codexTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     }
   }
   if (kind === "custom_tool_call" && name === "exec") {
-    // Codex's code mode: the calls in the script are the steps (posts are the station's own record); the script
-    // itself is one only when it does more than call them.
+    // Codex's code mode: the calls in the script are the steps; the script itself is one only when it does more than
+    // call them.
     const script = stringOf(get(p, "input")) ?? "";
     const [calls, only] = scriptCalls(script);
-    const others = calls.filter(([tool]) => !isPosting(tool));
-    if (only && others.length === 0) {
-      if (callId !== undefined) state.skip.add(callId);
-      return;
-    }
     if (!only) out.push(call("exec", callId, clip(script)));
-    others.forEach(([tool, args], i) => {
+    calls.forEach(([tool, args], i) => {
       // The script's output answers its first call when the script is nothing but calls.
       const id = callId === undefined ? undefined : only && i === 0 ? callId : `${callId}#${i}`;
-      out.push(call(tool, id, clip(pretty(args))));
+      out.push(call(tool, id, isPosting(tool) ? pretty(args) : clip(pretty(args))));
     });
     // Calls taken out of a script that does more: they are done when the script is.
-    if (!only && callId !== undefined && others.length > 0) state.inner.set(callId, others.length);
+    if (!only && callId !== undefined && calls.length > 0) state.inner.set(callId, calls.length);
     return;
   }
   if (kind === "function_call" || kind === "custom_tool_call") {
-    if (isPosting(name)) {
-      if (callId !== undefined) state.skip.add(callId);
-      return;
-    }
     const given = get(p, "arguments") ?? get(p, "input");
     const raw = given === undefined ? "" : isStr(given) ? given : JSON.stringify(given);
     // Not JSON (custom tools take free text): shown as is.
@@ -290,11 +277,10 @@ function codexTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     } catch {
       args = raw;
     }
-    out.push(call(name, callId, clip(args)));
+    out.push(call(name, callId, isPosting(name) ? args : clip(args)));
     return;
   }
   if (kind === "function_call_output" || kind === "custom_tool_call_output") {
-    if (callId !== undefined && state.skip.has(callId)) return;
     const text = toText(get(p, "output") ?? null);
     const said = text.indexOf("Process exited with code ");
     const failed = said >= 0 && /^[1-9]/.test(text.slice(said + 25));
@@ -608,7 +594,7 @@ export function readTimeline(runtime: "claude" | "codex", path: string): Timelin
   const source = transcriptBytes(path);
   if (source === null) return [];
   const out: TimelineEntry[] = [];
-  const state: ReadState = { skip: new Set(), inner: new Map() };
+  const state: ReadState = { inner: new Map() };
   const line = (bytes: Buffer) => {
     // str::lines: a line's \r before its \n goes; from_utf8_lossy.
     const text = new TextDecoder("utf-8").decode(bytes.at(-1) === 0x0d ? bytes.subarray(0, -1) : bytes);
@@ -650,41 +636,4 @@ export function readTimeline(runtime: "claude" | "codex", path: string): Timelin
     closeSync(source.file);
   }
   return out;
-}
-
-/// TranscriptTail::weave: the station's record of its own calls woven into what was read, by time.
-export function weave(read: TimelineEntry[], entries: TimelineEntry[]): TimelineEntry[] {
-  if (entries.length === 0) return read;
-  const time = (e: TimelineEntry) => (e.at === null ? null : parseIso(e.at));
-  const merged: TimelineEntry[] = [];
-  let next = 0;
-  for (const e of read) {
-    const t = time(e);
-    if (t !== null) {
-      for (; next < entries.length; next++) {
-        const x = time(entries[next]!);
-        if (x === null || x > t) break;
-        merged.push(entries[next]!);
-      }
-    }
-    merged.push(e);
-  }
-  merged.push(...entries.slice(next));
-  return merged;
-}
-
-/// hub.rs `post_entries`: what an agent posted, as its execution history shows a post: the call and that it went out.
-export function postEntries(posts: Post[]): TimelineEntry[] {
-  return posts.flatMap((p) => {
-    const at = iso(p.at);
-    const callId = `post:${p.thread}:${p.n}`;
-    const to = `${p.channel}/${p.threadTs}`;
-    const args: Json = { to, text: p.text };
-    if (p.declared !== null) args.kind = p.declared;
-    if (p.attachments.length > 0) args.files = p.attachments.map((a: Json) => a.name);
-    return [
-      { at, kind: "tool_call", text: pretty(args), tool: "mcp__stillfail__chat_post", callId },
-      { at, kind: "tool_result", text: `Posted to ${to}.`, ok: true, callId },
-    ];
-  });
 }

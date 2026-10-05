@@ -10,7 +10,7 @@ import { closeSync, existsSync, type FSWatcher, openSync, readFileSync, readSync
 import { zstdDecompressSync } from "node:zlib";
 import type { LiveEvent } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
-import { parseIso, type ReadState, type TimelineEntry, timelineOf } from "../read/transcript.ts";
+import { type ReadState, type TimelineEntry, timelineOf } from "../read/transcript.ts";
 
 type Json = any;
 type Phase = Extract<LiveEvent, { kind: "phase" }>["phase"];
@@ -51,7 +51,7 @@ export class TranscriptTail {
   entries: TimelineEntry[] = [];
   usage: TranscriptUsage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null };
   private seen = new Set<string>();
-  private state: ReadState = { skip: new Set(), inner: new Map() };
+  private state: ReadState = { inner: new Map() };
 
   constructor(runtime: "claude" | "codex", path: string) {
     this.runtime = runtime;
@@ -129,35 +129,6 @@ export class TranscriptTail {
     return [start, entries];
   }
 
-  /// Weaves entries from elsewhere (the station's record of its own tool calls) into what was read, by time. For a
-  /// tail nobody has been told of yet: it reorders what is there.
-  weave(entries: TimelineEntry[]) {
-    if (entries.length === 0) return;
-    const time = (e: TimelineEntry) => (e.at === null ? null : parseIso(e.at));
-    const merged: TimelineEntry[] = [];
-    let next = 0;
-    for (const e of this.entries) {
-      const t = time(e);
-      if (t !== null) {
-        for (; next < entries.length; next++) {
-          const x = time(entries[next]!);
-          if (x === null || x > t) break;
-          merged.push(entries[next]!);
-        }
-      }
-      merged.push(e);
-    }
-    merged.push(...entries.slice(next));
-    this.entries = merged;
-  }
-
-  /// Entries from elsewhere that happen now: after all that was read. Where they start.
-  append(entries: TimelineEntry[]): number {
-    const start = this.entries.length;
-    this.entries.push(...entries);
-    return start;
-  }
-
   private addUsage(records: Json[]) {
     const n = (v: Json) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : 0);
     for (const r of records) {
@@ -191,7 +162,6 @@ type Rate = { buckets: [number, number][]; toldAt: number; told: number };
 type Watched = { tail: TranscriptTail; watcher: FSWatcher | null; reading: boolean };
 
 export type Locate = (key: string) => { runtime: "claude" | "codex"; path: string } | null;
-export type Posts = (key: string) => TimelineEntry[];
 
 export class LiveHub {
   private steps = new Map<string, LiveStep[]>();
@@ -204,12 +174,9 @@ export class LiveHub {
   private nextId = 0;
   /// Where a session's transcript is, once its runtime has started one.
   private locate: Locate;
-  /// What a session's agent posted, as timeline entries: woven into its transcript's (which leaves its posts out).
-  private posts: Posts;
 
-  constructor(locate: Locate, posts: Posts, clock?: Clock.Clock) {
+  constructor(locate: Locate, clock?: Clock.Clock) {
     this.locate = locate;
-    this.posts = posts;
     this.time = new Fibers("live", clock);
   }
 
@@ -271,14 +238,6 @@ export class LiveHub {
     }
   }
 
-  /// The agent posted: its history shows it now, after what was read.
-  posted(key: string, entries: TimelineEntry[]) {
-    const watched = this.watched.get(key);
-    if (!watched) return;
-    const start = watched.tail.append(entries);
-    this.emit(key, { type: "timeline", start, entries, usage: { ...watched.tail.usage } });
-  }
-
   /// The turn is over: whatever was in flight is in the transcript now, or never will be.
   turnEnded(key: string) {
     this.steps.delete(key);
@@ -320,7 +279,6 @@ export class LiveHub {
     if (!at) return null;
     const tail = new TranscriptTail(at.runtime, at.path);
     tail.read();
-    tail.weave(this.posts(key));
     return slice(tail.entries);
   }
 
@@ -381,7 +339,6 @@ export class LiveHub {
     if (!at) return false;
     const tail = new TranscriptTail(at.runtime, at.path);
     tail.read(); // what is already there counts as known; subscribers ask for what they lack
-    tail.weave(this.posts(key));
     const watched: Watched = { tail, watcher: null, reading: false };
     // The transcript is its file, or its `.zst` while packed (sessions/cold.ts): packed or restored, it is another file,
     // watched from then on (live.rs looks at whichever is there).

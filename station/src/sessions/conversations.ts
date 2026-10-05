@@ -5,7 +5,7 @@ import { copyFileSync, mkdirSync, statSync } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
-import { iso, postEntries } from "../read/transcript.ts";
+import { iso } from "../read/transcript.ts";
 import { type Attachment, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
 import type { DeclaredState } from "./actor.ts";
 import {
@@ -161,8 +161,6 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   const offered = card !== null ? cardSaid(card) : "";
   const [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card });
   hub.shared(thread.thread.id, n, key, text);
-  const post = store.postsBy(key).pop();
-  if (post) hub.live.posted(key, postEntries([post]));
   const actor = actorOf(hub, key);
   if (need !== null) await actor?.need(need);
   if (kind !== null) {

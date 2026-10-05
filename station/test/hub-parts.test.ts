@@ -5,7 +5,7 @@ import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFile
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { postEntries } from "../src/read/transcript.ts";
+import { readTimeline } from "../src/read/transcript.ts";
 import { linkAgentHome, linkTranscripts, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
 import { isSlackMethod, isStopCommand, slackWithFiles } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
@@ -93,10 +93,23 @@ test("files an app cannot upload stay in still.fail, and the post links there", 
   assert.deepEqual(slackWithFiles("", [file("a b.pdf")], "L"), ["<L?file=a%20b.pdf|在 still.fail 里查看附件>", ""]);
 });
 
-test("posts show in the history as chat_post calls", () => {
-  const entries = postEntries([{ thread: 3, n: 7, channel: "C1", threadTs: "1.1", text: "done", attachments: [], declared: "final", at: 0 }]);
-  assert.equal(entries[0]!.text, '{\n  "to": "C1/1.1",\n  "text": "done",\n  "kind": "final"\n}');
-  assert.deepEqual([entries[0]!.at, entries[1]!.text, entries[1]!.callId], ["1970-01-01T00:00:00.000Z", "Posted to C1/1.1.", "post:3:7"]);
+test("posts show in the history where the agent made them, whole", () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const long = "长".repeat(5000);
+  const record = (content: unknown[]) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-05T00:00:00Z", message: { content } })}\n`;
+  const result = (id: string, text: string) => `${JSON.stringify({ type: "user", timestamp: "2026-10-05T00:00:01Z", message: { content: [{ type: "tool_result", tool_use_id: id, content: text }] } })}\n`;
+  writeFileSync(
+    path,
+    record([{ type: "thinking", thinking: "plan" }, { type: "tool_use", id: "p", name: "mcp__stillfail__chat_post", input: { to: "C1/1.1", text: long, kind: "all_done" } }]) +
+      result("p", "Posted to C1/1.1.") +
+      record([{ type: "text", text: "after" }]),
+  );
+  const entries = readTimeline("claude", path);
+  assert.deepEqual(entries.map((e) => e.kind), ["thinking", "tool_call", "tool_result", "assistant"]);
+  assert.equal(JSON.parse(entries[1]!.text).text, long);
+  assert.deepEqual([entries[1]!.callId, entries[2]!.callId, entries[2]!.ok], ["p", "p", true]);
+  rmSync(dir, { recursive: true });
 });
 
 test("references name sessions in every link form", () => {
@@ -124,7 +137,7 @@ test("a watcher gets what it lacks, the steps in flight, then new entries as the
   const dir = temp();
   const path = join(dir, "t.jsonl");
   writeFileSync(path, line("one", "m1") + line("two", "m2"));
-  const hub = new LiveHub(() => ({ runtime: "claude", path }), () => []);
+  const hub = new LiveHub(() => ({ runtime: "claude", path }));
   hub.event("s", { kind: "start", id: "x", step: "text" });
   hub.event("s", { kind: "delta", id: "x", field: "text", text: "wri" });
   const got: LiveMessage[] = [];
@@ -154,7 +167,7 @@ test("a watcher can take only the latest entries, and ask for those before", () 
   const dir = temp();
   const path = join(dir, "t.jsonl");
   writeFileSync(path, line("one", "m1") + line("two", "m2") + line("three", "m3"));
-  const hub = new LiveHub(() => ({ runtime: "claude", path }), () => []);
+  const hub = new LiveHub(() => ({ runtime: "claude", path }));
   const texts = (r: [number, { text: string }[]] | null) => r && [r[0], r[1].map((e) => e.text)];
   // Not watched yet: read for the asking.
   assert.deepEqual(texts(hub.before("s", 2, 1)), [1, ["two"]]);
@@ -170,7 +183,7 @@ test("a watcher can take only the latest entries, and ask for those before", () 
 
 test("how fast the model writes is told once half a second of it has come", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
-  const hub = new LiveHub(() => null, () => []);
+  const hub = new LiveHub(() => null);
   const got: LiveMessage[] = [];
   hub.subscribe("s", 0, null, (m) => void got.push(m));
   hub.event("s", { kind: "start", id: "x", step: "text" });

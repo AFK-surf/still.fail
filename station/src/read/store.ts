@@ -786,22 +786,6 @@ export function getJob(s: Store, id: string): JobRow | null {
   return r ? toJob(r) : null;
 }
 
-/// A message an agent posted (Store::posts_by's Post).
-export type Post = { thread: number; n: number; channel: string; threadTs: string; text: string; attachments: Json[]; declared: string | null; at: number };
-
-/// Store::posts_by: the messages a session's agent posted, in every thread, oldest first.
-export function postsBy(s: Store, key: string): Post[] {
-  return all(
-    s,
-    `SELECT e.thread, e.n, t.channel, t.thread_ts, e.text, e.attachments, e.declared, e.at FROM entries e JOIN threads t ON t.id = e.thread
-     WHERE e.kind = 'message' AND e.author_kind = 'agent' AND e.author = ? ORDER BY e.at, e.thread, e.n`,
-    key,
-  ).map((r) => ({
-    thread: r.thread, n: r.n, channel: r.channel, threadTs: r.thread_ts, text: r.text ?? "", attachments: fromJsonList(r.attachments, attachment),
-    declared: r.declared, at: r.at,
-  }));
-}
-
 /// Store::widget_state: what a widget in one of the session's messages holds, as kept (JSON text).
 export function widgetState(s: Store, session: string, path: string): string | null {
   const r = one(s, "SELECT state FROM widget_states WHERE session = ? AND path = ?", session, path);

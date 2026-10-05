@@ -29,7 +29,7 @@ import { runnerId } from "../agents/process.ts";
 import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
-import { postEntries, transcriptPath } from "../read/transcript.ts";
+import { transcriptPath } from "../read/transcript.ts";
 import { type SessionRow, type Store, STILLFAIL_SURFACE, slackSurface, type ThreadRow } from "../store/store.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
@@ -157,7 +157,6 @@ export class Hub {
         const path = transcriptPath(runtime, profile.home, row.runtimeSessionId);
         return path === null ? null : { runtime, path };
       },
-      (key) => postEntries(this.store.postsBy(key)),
       this.clock,
     );
     this.deps = this.sessionDeps();
