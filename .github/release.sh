@@ -21,10 +21,10 @@ case "${1:?usage: release.sh station|android}" in
     # The station in TypeScript, bundled for each platform (scripts/station-bundle.sh) with its native parts prebuilt:
     # the natives job before this one built and published those of this commit (all three platforms).
     (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-    # The launcher signed with the desktop app's certificate (.github/sign-launcher.sh): macOS keeps its Local Network
-    # grant across releases. Without the certificate, a warning and an ad hoc launcher.
-    if [ -n "${MACOS_SIGNING_CERTIFICATE_B64:-}" ] && [ -n "${MACOS_SIGNING_CERTIFICATE_PASSWORD:-}" ]; then export STILLFAIL_SIGN_LAUNCHER=1
-    else echo "::warning::no signing certificate: the launcher is ad hoc, and macOS asks for the local network again after an update"; fi
+    # The native parts signed with the desktop app's certificate (.github/sign-station.sh): macOS keeps the launcher's
+    # Local Network grant across releases. Without the certificate, a warning and ad hoc parts.
+    if [ -n "${MACOS_SIGNING_CERTIFICATE_B64:-}" ] && [ -n "${MACOS_SIGNING_CERTIFICATE_PASSWORD:-}" ]; then export STILLFAIL_SIGN_STATION=1
+    else echo "::warning::no signing certificate: the station's native parts are ad hoc, and macOS asks for the local network again after an update"; fi
     sh scripts/release.sh ${beta:+$beta}
     ;;
   android)

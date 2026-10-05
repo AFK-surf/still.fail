@@ -1,13 +1,13 @@
 #!/bin/sh
-# Signs the station's launcher (scripts/station-bundle.sh, in the station release job) with the desktop app's
-# certificate under one identifier, so macOS keeps its Local Network grant across releases (an ad hoc launcher's grant
-# was its hash's: each new one asked again). The certificate from MACOS_SIGNING_CERTIFICATE_B64/_PASSWORD goes in a
+# Signs the station's native parts (scripts/station-bundle.sh, in the station release job: the launcher, the runner and
+# the mesh addon) with the desktop app's certificate, each under one identifier, so macOS keeps what it granted them
+# across releases (the launcher's Local Network grant: an ad hoc one's was its hash's, each new one asked again). The certificate from MACOS_SIGNING_CERTIFICATE_B64/_PASSWORD goes in a
 # keychain of its own, in the user's search list only while signing: under the lock .github/release-desktop.py holds
 # while its own is there, for the jobs beside each other on mini1 share the one search list (setting it under the
 # other job left electron-builder without the identity and this codesign with errSecInternalComponent, 86b06866).
-#   sign-launcher.sh FILE
+#   sign-station.sh FILE IDENTIFIER [FILE IDENTIFIER]…
 set -eu
-file=${1:?usage: sign-launcher.sh FILE}
+[ $# -ge 2 ] && [ $(($# % 2)) = 0 ] || { echo "usage: sign-station.sh FILE IDENTIFIER [FILE IDENTIFIER]…" >&2; exit 2; }
 root=$(cd "$(dirname "$0")/.." && pwd)
 : "${MACOS_SIGNING_CERTIFICATE_B64:?}" "${MACOS_SIGNING_CERTIFICATE_PASSWORD:?}"
 if [ -z "${STILLFAIL_SIGNING_LOCKED:-}" ]; then
@@ -27,5 +27,8 @@ security import "$dir/certificate.p12" -k "$keychain" -P "$MACOS_SIGNING_CERTIFI
 security set-key-partition-list -S apple-tool:,apple: -k "$keypass" "$keychain" > /dev/null
 rm "$dir/certificate.p12"
 security list-keychains -d user -s "$keychain" $previous
-codesign --force --timestamp=none --sign "$identity" --keychain "$keychain" --identifier fail.still.station "$file"
-codesign --verify --strict "$file"
+while [ $# -gt 0 ]; do
+  codesign --force --timestamp=none --sign "$identity" --keychain "$keychain" --identifier "$2" "$1"
+  codesign --verify --strict "$1"
+  shift 2
+done

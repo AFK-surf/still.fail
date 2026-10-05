@@ -27,7 +27,7 @@ def run(args, **kwargs):
         raise SystemExit('Desktop release step failed: ' + args[0])
     return result
 
-# The user's keychain search list is the one mini1's jobs share: the station release job's .github/sign-launcher.sh
+# The user's keychain search list is the one mini1's jobs share: the station release job's .github/sign-station.sh
 # sets it too, under this lock, held until this one's keychain is gone (the process's end).
 lock = open(Path.home() / '.stillfail-mac-signing.lock', 'a')
 fcntl.flock(lock, fcntl.LOCK_EX)
