@@ -143,7 +143,7 @@ test("runtime.probe: the runtimes on PATH, their versions, whether this machine 
   ]);
 });
 
-test("sessions: started, said to and asked about as the requester, only under full access", async () => {
+test("sessions: started and said to as the requester under full access, asked about under read", async () => {
   const calls: unknown[] = [];
   const sessions: Sessions = {
     start: async (a) => (calls.push(["start", a]), { session: "ember:1", thread: "7" }),
@@ -158,7 +158,9 @@ test("sessions: started, said to and asked about as the requester, only under fu
   assert.deepEqual(await run(t, "session.status", { thread: "7" }), { ok: true, result: { state: "all_done", summary: "done" } });
   const unknown = await run(t, "session.status", { thread: "8" });
   assert.equal(!unknown.ok && unknown.code, "not_found");
-  const read = await run(t, "session.status", { thread: "7" }, "read");
+  // Status is a read; starting and saying are not.
+  assert.ok((await run(t, "session.status", { thread: "7" }, "read")).ok);
+  const read = await run(t, "session.say", { thread: "7", text: "x", requester_email: "b@x" }, "read");
   assert.equal(!read.ok && read.code, "forbidden");
   const noPrompt = await run(t, "session.start", { requester_email: "b@x" });
   assert.equal(!noPrompt.ok && noPrompt.code, "invalid_request");
@@ -193,4 +195,23 @@ test("the station's data and the machine's logins are refused at every level, al
   // What is beside them is not.
   assert.ok((await run(t, "fs.read", { path: ".codex/config.toml" }, "read")).ok);
   assert.ok((await run(t, "fs.list", { path: "." }, "read")).ok);
+});
+
+test("a device tools request line may be long; the admin API's heads stay short", async () => {
+  const { Reader } = await import("../src/mesh/serve.ts");
+  const { MAX_TOOLS_LINE } = await import("../src/mesh/tools.ts");
+  // A stream giving `bytes` in 64 KiB pieces.
+  const stream = (bytes: Buffer) => {
+    let at = 0;
+    return { read: async () => (at >= bytes.length ? null : bytes.subarray(at, (at += 65536))) } as any;
+  };
+  const long = Buffer.from(JSON.stringify({ op: "fs.write", args: { content_base64: "A".repeat(6 * 1024 * 1024) } }) + "\nrest");
+  const tools = new Reader(stream(long), MAX_TOOLS_LINE);
+  assert.equal((await tools.line()).args.content_base64.length, 6 * 1024 * 1024);
+  assert.equal(tools.carry.toString(), "rest");
+  await assert.rejects(new Reader(stream(long)).line(), /head too large/);
+  await assert.rejects(new Reader(stream(Buffer.from("A".repeat(MAX_TOOLS_LINE + 2) + "\n")), MAX_TOOLS_LINE).line(), /head too large/);
+  // Lines one after another, from one piece.
+  const two = new Reader(stream(Buffer.from('{"a":1}\n{"b":2}\n')));
+  assert.deepEqual([await two.line(), await two.line(), await two.line()], [{ a: 1 }, { b: 2 }, null]);
 });

@@ -4,7 +4,7 @@
 // exec refused under the default `read`, done once an owner sets `full`, a chat started and driven — while another
 // iroh id is turned away.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -131,7 +131,7 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
     comma.grant.credential({ typ: "comma-member+jwt" }, { iss: "comma", sub: `usr_${role}`, email: `${role}@x`, name: role, ws: "ws1", role, device, sid: `s_${role}`, iat: now, exp: now + 3600 });
   const owner = await client.connect(addr, ALPN);
   assert.deepEqual(await member(owner, credential(client.id(), "owner")), { ok: true, station: "studio", expires_at: now + 3600 });
-  assert.deepEqual(await ask(owner, "GET", "/admin/api/tools/access"), [200, { access: "off", levels: ["off", "read", "full"], read_ops: ["fs.read", "fs.list", "fs.stat", "runtime.probe"] }]);
+  assert.deepEqual(await ask(owner, "GET", "/admin/api/tools/access"), [200, { access: "off", levels: ["off", "read", "full"], read_ops: ["fs.read", "fs.list", "fs.stat", "runtime.probe", "process.list", "process.tail", "session.status"] }]);
 
   // still.fail cloud's credential is no member's here.
   const other = await stranger.connect(addr, ALPN);
@@ -165,6 +165,10 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
 
   // An owner gives it full access: exec runs.
   assert.equal((await ask(owner, "PUT", "/admin/api/tools/access", { access: "full" }))[0], 200);
+  // A large write: its content rides in the request's line (up to 12 MiB), well past the admin API's 16 KiB heads.
+  const big = Buffer.alloc(5 * 1024 * 1024, 7);
+  assert.deepEqual(await tool(tools, "fs.write", { path: join(work, "big.bin"), content_base64: big.toString("base64") }), { ok: true, result: { size: big.length } });
+  assert.ok(readFileSync(join(work, "big.bin")).equals(big));
   const ran = await tool(tools, "exec", { command: "echo hi" });
   assert.deepEqual(ran, { ok: true, result: { exit_code: 0, stdout: "hi\n", stderr: "", truncated: false } });
 

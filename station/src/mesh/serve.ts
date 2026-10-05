@@ -30,26 +30,37 @@ const HOP = ["connection", "keep-alive", "proxy-connection", "transfer-encoding"
 export class Reader {
   carry: Buffer = Buffer.alloc(0);
   stream: Stream;
-  constructor(stream: Stream) {
+  /// How long a line may be: the admin API's heads are small; the device tools' carry their bodies in it.
+  private maxLine: number;
+  constructor(stream: Stream, maxLine = MAX_HEAD) {
     this.stream = stream;
+    this.maxLine = maxLine;
   }
 
   async line(): Promise<any | null> {
-    for (;;) {
-      const at = this.carry.indexOf(10);
-      if (at >= 0) {
-        const line = this.carry.subarray(0, at);
-        this.carry = this.carry.subarray(at + 1);
-        return JSON.parse(line.toString());
+    // A long line (the device tools') comes in many pieces: kept as they come, each looked through once.
+    let at = this.carry.indexOf(10);
+    if (at < 0) {
+      const parts = [this.carry];
+      let size = this.carry.length;
+      while (at < 0) {
+        if (size > this.maxLine) throw new Error("head too large");
+        const more = await this.stream.read();
+        if (more === null) {
+          if (size === 0) return null;
+          throw new Error("stream ended mid-line");
+        }
+        const found = more.indexOf(10);
+        if (found >= 0) at = size + found;
+        parts.push(more);
+        size += more.length;
       }
-      if (this.carry.length > MAX_HEAD) throw new Error("head too large");
-      const more = await this.stream.read();
-      if (more === null) {
-        if (this.carry.length === 0) return null;
-        throw new Error("stream ended mid-line");
-      }
-      this.carry = Buffer.concat([this.carry, more]);
+      this.carry = Buffer.concat(parts, size);
     }
+    if (at > this.maxLine) throw new Error("head too large");
+    const line = this.carry.subarray(0, at);
+    this.carry = this.carry.subarray(at + 1);
+    return JSON.parse(line.toString());
   }
 
   async rest(): Promise<Buffer> {

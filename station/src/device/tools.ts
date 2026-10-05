@@ -28,7 +28,7 @@ export function accessOf(raw: any): Access {
 }
 
 /// What `read` lets through; `full` lets everything through, `off` nothing.
-export const READ_OPS: readonly string[] = ["fs.read", "fs.list", "fs.stat", "runtime.probe"];
+export const READ_OPS: readonly string[] = ["fs.read", "fs.list", "fs.stat", "runtime.probe", "process.list", "process.tail", "session.status"];
 
 export const OPS: readonly string[] = [
   "exec", "fs.read", "fs.write", "fs.list", "fs.stat",

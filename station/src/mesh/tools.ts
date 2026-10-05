@@ -16,6 +16,8 @@ import type { Connection } from "./native.ts";
 import { Reader, writeLine } from "./serve.ts";
 
 export const TOOLS_ALPN = Buffer.from("comma/tools/1");
+/// A request's line holds its arguments (an fs.write's content, a long prompt): up to 12 MiB (contract §8).
+export const MAX_TOOLS_LINE = 12 * 1024 * 1024;
 
 export type ToolsDeps = {
   cloud: Cloud;
@@ -44,10 +46,10 @@ export async function serveTools(d: ToolsDeps, conn: Connection) {
   }
   for (let stream = await conn.acceptBi(); stream; stream = await conn.acceptBi()) {
     void (async () => {
-      const reader = new Reader(stream);
+      const reader = new Reader(stream, MAX_TOOLS_LINE);
       let answer: unknown;
       try {
-        const head = await wall.within(30_000, reader.line(), "tools request timed out");
+        const head = await wall.within(120_000, reader.line(), "tools request timed out");
         const still = refusal(d, peer);
         if (still !== null) throw new ToolError({ code: "forbidden", message: still });
         if (head === null || typeof head !== "object" || typeof head.op !== "string") throw new ToolError({ code: "invalid_request", message: "a request names its op" });
