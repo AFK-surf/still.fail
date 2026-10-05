@@ -29,11 +29,13 @@ env:
   # Linux check's mesh addon is built on a branch that changed it).
   BRANCH_NATIVES: mesh:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64
 jobs:
+  # Every job runs on Blacksmith's machines or mini1, not on GitHub's own: when GitHub's runners were short (Actions
+  # degraded, 2026-10-05), a job waiting for one held each run 15 minutes and was cancelled, nothing released.
   plan:
     # Trusted repository pushes only. Never add pull_request or pull_request_target here:
     # deployment jobs use production secrets; local signing stays isolated.
     if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       range: ${{ steps.plan.outputs.range }}
       parts: ${{ steps.plan.outputs.parts }}
@@ -272,7 +274,7 @@ jobs:
     # Not on the implicit success(): a skipped job before it (natives, when nothing native changed; check-android) would
     # skip it too (2026-10-04 to 05: the API was not deployed for a day). The checks it needs passed or were not needed.
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) }}
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     environment: production
     timeout-minutes: 30
     steps:
@@ -397,7 +399,7 @@ jobs:
   put:
     needs: [plan, check, check-linux, check-android, api, static, station, android, desktop]
     if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success')
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     environment: production
     timeout-minutes: 20
     steps:
@@ -431,7 +433,7 @@ jobs:
   changelog:
     needs: [plan, check, check-linux, check-android, api, static, put]
     if: always() && github.ref == 'refs/heads/main' && needs.put.result == 'skipped' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     environment: production
     timeout-minutes: 10
     steps:
@@ -467,7 +469,7 @@ jobs:
   timing:
     needs: [plan, natives, check, check-linux, check-android, bundle, mac-build, api, static, station, station-update, android, desktop, put, changelog, done]
     if: always()
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     permissions:
       contents: read
