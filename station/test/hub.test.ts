@@ -1139,7 +1139,10 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   assert.equal(r.session(key).profile, second.options.profile.id);
   assert.ok(!r.session(key).profilePinned);
   assert.ok(r.chat.texts().every((t) => !t.includes("额度")), "it just goes on, saying nothing");
-  assert.deepEqual(second.prompts, [GO_ON_AFTER_SPENT]);
+  // In a new runtime session of its own (sessions/afresh.ts).
+  assert.equal(second.options.resume, undefined);
+  assert.equal(second.prompts.length, 1);
+  assert.ok(matches(second.prompts[0]!, ["You go on in a new conversation", GO_ON_AFTER_SPENT]), second.prompts[0]);
   // That one runs out too: none left, so it says so and waits.
   second.end(spent("usage limit reached"));
   await settle();
@@ -1151,7 +1154,8 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   const third = r.claude.last();
   assert.equal(r.claude.count(), 3);
   assert.equal(third.options.profile.id, on);
-  assert.deepEqual(third.prompts, [GO_ON_AFTER_SPENT]);
+  assert.equal(third.prompts.length, 1);
+  assert.ok(matches(third.prompts[0]!, ["You go on in a new conversation", GO_ON_AFTER_SPENT]), third.prompts[0]);
   // A change after a turn that ended well starts nothing.
   await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
   third.complete();
