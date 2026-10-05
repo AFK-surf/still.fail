@@ -249,6 +249,7 @@ function PlaceMark({ station, chat, place }: { station: string; chat: string; pl
 
 function Group({ g }: { g: HistoryGroup }) {
   const [open, setOpen] = useState(false);
+  const calls = g.rows.some((row) => row.kind === "step");
   return (
     <div className="m-h-group">
       <button type="button" className={css.mHGroupHead} onClick={() => setOpen(!open)}>
@@ -259,10 +260,11 @@ function Group({ g }: { g: HistoryGroup }) {
       </button>
       {open && (
         <div className={css.mHGroupBody}>
-          {g.thinking.map((th, i) => g.steps.length === 0
-            ? <p key={i} className={css.mHThought}>{th.text}</p>
-            : <Folding key={i} name={t("web-mobile.history.thinking")} hint={th.first} meta={null} failed={false}><p className={css.mHThought}>{th.text}</p></Folding>)}
-          {g.steps.map((step, i) => <StepRow key={i} step={step} />)}
+          {g.rows.map((row, i) => row.kind === "step"
+            ? <StepRow key={i} step={row.content} />
+            : calls
+              ? <Folding key={i} name={t("web-mobile.history.thinking")} hint={row.content.first} meta={null} failed={false}><p className={css.mHThought}>{row.content.text}</p></Folding>
+              : <p key={i} className={css.mHThought}>{row.content.text}</p>)}
         </div>
       )}
     </div>

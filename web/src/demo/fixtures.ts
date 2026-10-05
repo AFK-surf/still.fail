@@ -93,7 +93,7 @@ export function step(name: string, hint: string, call: object, result?: string, 
 }
 
 export function groupOf(steps: HistoryStep[], pending: number): HistoryItem["body"] {
-  const content: HistoryGroup = { summary: steps.at(-1)!.hint, title: "", failures: steps.filter((s) => s.failed).length, pending, thinking: [], steps };
+  const content: HistoryGroup = { summary: steps.at(-1)!.hint, title: "", failures: steps.filter((s) => s.failed).length, pending, rows: steps.map((content) => ({ kind: "step", content })) };
   return { kind: "group", content };
 }
 

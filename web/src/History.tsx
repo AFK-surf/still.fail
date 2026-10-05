@@ -8,7 +8,7 @@ import { DropdownMenu } from "radix-ui";
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
-import { useApi, useHistory, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryView, type Place } from "./api.ts";
+import { useApi, useHistory, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryStep, type HistoryView, type Place } from "./api.ts";
 import { ICON, Pill, SlackLogo, Tip } from "./ui.tsx";
 import { useLink, useStation } from "./station.tsx";
 import { Link } from "react-router";
@@ -194,7 +194,8 @@ function Received({ from, text, place }: { from: ReactNode; text: string; place?
 
 function Group({ group }: { group: HistoryGroup }) {
   const [open, setOpen] = useState(false);
-  const { steps, thinking, failures, pending } = group;
+  const { rows, failures, pending } = group;
+  const calls = rows.some((row) => row.kind === "step");
   return (
     <div className={css.hGroup} data-failed={failures > 0}>
       <Tip label={group.title || undefined}><button type="button" className={css.hGroupHead} aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -205,29 +206,34 @@ function Group({ group }: { group: HistoryGroup }) {
       </button></Tip>
       {open && (
         <div className={css.hSteps}>
-          {thinking.map((thought, i) => steps.length ? (
-            <details key={`t${i}`} className={css.hStep}>
-              <summary><span className={css.hStepName}>{t("web-main.history.thinking")}</span><span className={css.hStepHint}>{thought.first}</span></summary>
-              <div className={`${css.hStepBody} ${shellCss.muted}`}>{thought.text}</div>
+          {rows.map((row, i) => row.kind === "thought" ? (calls ? (
+            <details key={i} className={css.hStep}>
+              <summary><span className={css.hStepName}>{t("web-main.history.thinking")}</span><span className={css.hStepHint}>{row.content.first}</span></summary>
+              <div className={`${css.hStepBody} ${shellCss.muted}`}>{row.content.text}</div>
             </details>
-          ) : <div key={`t${i}`} className={css.hThinking}>{thought.text}</div>)}
-          {steps.map((step, i) => (
-            <details key={i} className={css.hStep} data-failed={step.failed}>
-              <summary>
-                {step.said
-                  ? <span className={css.hStepSaid}>{step.said}</span>
-                  : <><span className={css.hStepName}>{step.name}</span><span className={css.hStepHint}>{step.hint}</span></>}
-                <span className={css.hStepMeta}>{step.meta}</span>
-              </summary>
-              <div className={toolCss.body}>
-                <div className={toolCss.section}><ToolCall name={step.name} call={step.call} said={step.said !== undefined} /></div>
-                {step.result !== undefined && <ToolResult name={step.name} call={step.call} result={step.result} failed={step.failed} />}
-              </div>
-            </details>
+          ) : <div key={i} className={css.hThinking}>{row.content.text}</div>) : (
+            <Step key={i} step={row.content} />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function Step({ step }: { step: HistoryStep }) {
+  return (
+    <details className={css.hStep} data-failed={step.failed}>
+      <summary>
+        {step.said
+          ? <span className={css.hStepSaid}>{step.said}</span>
+          : <><span className={css.hStepName}>{step.name}</span><span className={css.hStepHint}>{step.hint}</span></>}
+        <span className={css.hStepMeta}>{step.meta}</span>
+      </summary>
+      <div className={toolCss.body}>
+        <div className={toolCss.section}><ToolCall name={step.name} call={step.call} said={step.said !== undefined} /></div>
+        {step.result !== undefined && <ToolResult name={step.name} call={step.call} result={step.result} failed={step.failed} />}
+      </div>
+    </details>
   );
 }
 

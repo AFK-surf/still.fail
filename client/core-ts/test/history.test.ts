@@ -79,9 +79,10 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.equal(g.summary, "看看目录 · 共 3 项");
   assert.equal(g.title, "读取 1 个文件、运行 1 条命令");
   assert.deepEqual([g.failures, g.pending], [1, 1]);
-  assert.equal(g.steps[0].meta, "2 秒");
-  assert.equal(g.steps[1].meta, "进行中");
-  assert.equal(g.thinking[0].first, "plan it");
+  assert.deepEqual(g.rows.map((r: J) => r.kind), ["thought", "step", "step", "step"]);
+  assert.equal(g.rows[0].content.first, "plan it");
+  assert.equal(g.rows[1].content.meta, "2 秒");
+  assert.equal(g.rows[2].content.meta, "进行中");
   assert.deepEqual(items[1].entries, [1, 6]);
   assert.deepEqual([items[2].body.content.block, items[2].body.content.place.name], [true, "#ops"]);
   assert.equal(items[3].body.content.text, "标记为做完了");
@@ -124,4 +125,30 @@ test("a_timeline_loaded_from_further_on_counts_entries_from_the_transcripts_star
   assert.deepEqual([h.items[0].key, h.items[1].entries], ["e400", [401, 402]]);
   assert.deepEqual([h.more, h.edge, h.empty], [true, "正在读取更早的执行历史…", false]);
   assert.equal(presentHistory({ loaded: true, first: 400, timeline: [] }, cx([], [], [])).more, true);
+});
+
+test("a_groups_thinking_and_calls_keep_the_order_they_came_in", () => {
+  const timeline = [
+    { kind: "thinking", text: "first" },
+    { kind: "tool_call", tool: "Read", text: '{"file_path":"/a.ts"}', callId: "a" },
+    { kind: "tool_result", callId: "a", ok: true, text: "x" },
+    { kind: "thinking", text: "second" },
+    { kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', callId: "b" },
+    { kind: "tool_result", callId: "b", ok: true, text: "y" },
+    { kind: "thinking", text: "third" },
+  ];
+  const g = presentHistory({ loaded: true, timeline }, cx([], [], [])).items[0].body.content;
+  assert.deepEqual(g.rows.map((r: J) => (r.kind === "thought" ? r.content.text : r.content.name)), ["first", "Read", "second", "Bash", "third"]);
+});
+
+test("a_post_read_from_the_transcript_stands_where_it_was_made", () => {
+  const timeline = [
+    { kind: "thinking", text: "plan" },
+    { kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"C1/1.0","text":"done"}', callId: "p" },
+    { kind: "tool_result", callId: "p", ok: true, text: "Posted to C1/1.0." },
+    { kind: "assistant", text: "after" },
+  ];
+  const items = presentHistory({ loaded: true, timeline }, cx([], [], [])).items;
+  assert.deepEqual(items.map((i: J) => i.body.kind), ["group", "post", "text"]);
+  assert.equal(items[1].body.content.text, "done");
 });

@@ -2061,33 +2061,28 @@ data class HistoryFrom (
 	val bound: Boolean
 )
 
+/// A line of a group: a thought or a call.
+@OptIn(ExperimentalSerializationApi::class)
+@JsonClassDiscriminator("kind")
 @Serializable
-data class HistoryThought (
-	val text: String,
-	val first: String
-)
+sealed class HistoryRow {
+	@Serializable
+	@SerialName("thought")
+	data class Thought(val content: HistoryThought): HistoryRow()
+	@Serializable
+	@SerialName("step")
+	data class Step(val content: HistoryStep): HistoryRow()
+}
 
-@Serializable
-data class HistoryStep (
-	val said: String? = null,
-	val name: String,
-	val hint: String,
-	val meta: String,
-	val failed: Boolean,
-	val call: String,
-	val result: String? = null
-)
-
-/// Tool calls and thinking between two boundaries: named by its latest call, what it did by kind (`title`), how many
-/// failed and are running.
+/// Tool calls and thinking between two boundaries, in the order they came (`rows`): named by its latest call, what it
+/// did by kind (`title`), how many failed and are running.
 @Serializable
 data class HistoryGroup (
 	val summary: String,
 	val title: String,
 	val failures: Long,
 	val pending: Long,
-	val thinking: List<HistoryThought>,
-	val steps: List<HistoryStep>
+	val rows: List<HistoryRow>
 )
 
 /// What an item of the history is.
@@ -2173,11 +2168,28 @@ data class HistoryReceived (
 	val messages: List<HistoryMessage>
 )
 
+@Serializable
+data class HistoryStep (
+	val said: String? = null,
+	val name: String,
+	val hint: String,
+	val meta: String,
+	val failed: Boolean,
+	val call: String,
+	val result: String? = null
+)
+
 /// The agent's own words; `subagent`: a sub-agent's.
 @Serializable
 data class HistoryText (
 	val text: String,
 	val subagent: Boolean
+)
+
+@Serializable
+data class HistoryThought (
+	val text: String,
+	val first: String
 )
 
 @Serializable

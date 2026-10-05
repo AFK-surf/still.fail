@@ -1625,9 +1625,9 @@ export const SHAPES: Record<string, Shape> = {
     ["title", "String"],
     ["failures", "i64", { client: "I54" }],
     ["pending", "i64", { client: "I54" }],
-    ["thinking", vec("HistoryThought")],
-    ["steps", vec("HistoryStep")],
-  ], { doc: "Tool calls and thinking between two boundaries: named by its latest call, what it did by kind (`title`), how many\nfailed and are running.", keepNone: true }),
+    ["rows", vec("HistoryRow")],
+  ], { doc: "Tool calls and thinking between two boundaries, in the order they came (`rows`): named by its latest call, what it\ndid by kind (`title`), how many failed and are running.", keepNone: true }),
+  HistoryRow: tagged("kind", "content", [["thought", "Thought", "HistoryThought"], ["step", "Step", "HistoryStep"]], { doc: "A line of a group: a thought or a call." }),
   HistoryBody: tagged("kind", "content", [["received", "Received", "HistoryReceived"], ["text", "Text", "HistoryText"], ["post", "Post", "HistoryPost"], ["mark", "Mark", "HistoryMark"], ["group", "Group", "HistoryGroup"]], { doc: "What an item of the history is." }),
   HistoryItem: struct([
     ["key", "String"],

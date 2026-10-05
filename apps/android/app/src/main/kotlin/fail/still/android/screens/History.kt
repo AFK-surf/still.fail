@@ -77,6 +77,7 @@ import fail.still.android.data.HistoryGroup
 import fail.still.android.data.HistoryLive
 import fail.still.android.data.HistoryPhase
 import fail.still.android.data.HistoryStep
+import fail.still.android.data.HistoryRow
 import fail.still.android.data.HistoryView
 import fail.still.android.data.ModelOption
 import fail.still.android.data.PickView
@@ -433,11 +434,15 @@ private fun Group(g: HistoryGroup) {
             if (g.pending > 0) Pill(t("android-chat.history.group.pending", "n" to g.pending), C.accentInk)
         }
         if (open) Column(Modifier.padding(start = 19.dp, top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            g.thinking.forEach { th ->
-                if (g.steps.isEmpty()) Text(th.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted)
-                else Folding(t("android-chat.history.thinking"), th.first, null, false) { Text(th.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
+            val calls = g.rows.any { it is HistoryRow.Step }
+            g.rows.forEach { row ->
+                when (row) {
+                    is HistoryRow.Step -> StepRow(row.content)
+                    is HistoryRow.Thought ->
+                        if (!calls) Text(row.content.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted)
+                        else Folding(t("android-chat.history.thinking"), row.content.first, null, false) { Text(row.content.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
+                }
             }
-            g.steps.forEach { StepRow(it) }
         }
     }
 }

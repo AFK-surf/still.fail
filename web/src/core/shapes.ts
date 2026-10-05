@@ -2058,32 +2058,21 @@ export interface HistoryFrom {
 	bound: boolean;
 }
 
-export interface HistoryThought {
-	text: string;
-	first: string;
-}
-
-export interface HistoryStep {
-	said?: string;
-	name: string;
-	hint: string;
-	meta: string;
-	failed: boolean;
-	call: string;
-	result?: string;
-}
+/** A line of a group: a thought or a call. */
+export type HistoryRow = 
+	| { kind: "thought", content: HistoryThought }
+	| { kind: "step", content: HistoryStep };
 
 /**
- * Tool calls and thinking between two boundaries: named by its latest call, what it did by kind (`title`), how many
- * failed and are running.
+ * Tool calls and thinking between two boundaries, in the order they came (`rows`): named by its latest call, what it
+ * did by kind (`title`), how many failed and are running.
  */
 export interface HistoryGroup {
 	summary: string;
 	title: string;
 	failures: number;
 	pending: number;
-	thinking: HistoryThought[];
-	steps: HistoryStep[];
+	rows: HistoryRow[];
 }
 
 /** What an item of the history is. */
@@ -2149,10 +2138,25 @@ export interface HistoryReceived {
 	messages: HistoryMessage[];
 }
 
+export interface HistoryStep {
+	said?: string;
+	name: string;
+	hint: string;
+	meta: string;
+	failed: boolean;
+	call: string;
+	result?: string;
+}
+
 /** The agent's own words; `subagent`: a sub-agent's. */
 export interface HistoryText {
 	text: string;
 	subagent: boolean;
+}
+
+export interface HistoryThought {
+	text: string;
+	first: string;
 }
 
 export interface UsageLine {

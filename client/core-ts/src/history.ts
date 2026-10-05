@@ -213,7 +213,9 @@ type Item =
   | { kind: "text"; i: number }
   | { kind: "post"; step: number }
   | { kind: "mark"; mark: string; seconds: number | null }
-  | { kind: "group"; members: number[]; thinking: number[] };
+  | { kind: "group"; rows: Row[] };
+/// A group's thinking and calls, in the order they came: a thought by its timeline index, a call by its step.
+type Row = { thought: number } | { step: number };
 
 export function presentHistory(live: J, cx: Context): J {
   const timeline: J[] = Array.isArray(live?.timeline) ? live.timeline : [];
@@ -255,23 +257,23 @@ export function presentHistory(live: J, cx: Context): J {
         grouping = false;
       } else {
         if (!grouping) {
-          items.push([{ kind: "group", members: [], thinking: [] }, i, i]);
+          items.push([{ kind: "group", rows: [] }, i, i]);
           grouping = true;
         }
         const last = items[items.length - 1];
         if (last[0].kind === "group") {
-          last[0].members.push(step);
+          last[0].rows.push({ step });
           last[2] = i;
         }
       }
     } else if (kind === "thinking") {
       if (!grouping) {
-        items.push([{ kind: "group", members: [], thinking: [] }, i, i]);
+        items.push([{ kind: "group", rows: [] }, i, i]);
         grouping = true;
       }
       const last = items[items.length - 1];
       if (last[0].kind === "group") {
-        last[0].thinking.push(i);
+        last[0].rows.push({ thought: i });
         last[2] = i;
       }
     } else {
@@ -361,7 +363,7 @@ export function presentHistory(live: J, cx: Context): J {
         }
         break;
       case "group":
-        v = group(timeline, steps, item.members, item.thinking);
+        v = group(timeline, steps, item.rows);
         break;
     }
     const kind = v.kind ?? null;
@@ -425,7 +427,9 @@ export function presentHistory(live: J, cx: Context): J {
   return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0 };
 }
 
-function group(timeline: J[], steps: Step[], members: number[], thinking: number[]): J {
+function group(timeline: J[], steps: Step[], rows: Row[]): J {
+  const members = rows.flatMap((r) => ("step" in r ? [r.step] : []));
+  const thinking = rows.flatMap((r) => ("thought" in r ? [r.thought] : []));
   const text = (i: number): string => (typeof timeline[i]?.text === "string" ? timeline[i].text : "");
   const tool = (i: number): string => (typeof timeline[i]?.tool === "string" ? timeline[i].tool : "");
   const failedOf = (st: Step) => st.result !== null && timeline[st.result]?.ok === false;
@@ -465,7 +469,7 @@ function group(timeline: J[], steps: Step[], members: number[], thinking: number
       })();
     summary = members.length === 1 ? doing : t("core-logic.history.steps", { doing, n: members.length });
   }
-  const shownSteps = members.map((m) => {
+  const step = (m: number) => {
     const st = steps[m];
     const call = timeline[st.call];
     const result = st.result !== null ? timeline[st.result] : null;
@@ -483,15 +487,14 @@ function group(timeline: J[], steps: Step[], members: number[], thinking: number
       call: text(st.call),
       result: result === null ? null : (result.text ?? ""),
     };
-  });
+  };
   return {
     kind: "group",
     summary,
     title,
     failures: failed,
     pending,
-    thinking: thinking.map((i) => ({ text: text(i), first: firstLine(text(i)) })),
-    steps: shownSteps,
+    rows: rows.map((r) => ("thought" in r ? { kind: "thought", content: { text: text(r.thought), first: firstLine(text(r.thought)) } } : { kind: "step", content: step(r.step) })),
   };
 }
 
