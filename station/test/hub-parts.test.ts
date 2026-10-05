@@ -137,7 +137,7 @@ test("a watcher gets what it lacks, the steps in flight, then new entries as the
   const dir = temp();
   const path = join(dir, "t.jsonl");
   writeFileSync(path, line("one", "m1") + line("two", "m2"));
-  const hub = new LiveHub(() => ({ runtime: "claude", path }));
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }));
   hub.event("s", { kind: "start", id: "x", step: "text" });
   hub.event("s", { kind: "delta", id: "x", field: "text", text: "wri" });
   const got: LiveMessage[] = [];
@@ -167,7 +167,7 @@ test("a watcher can take only the latest entries, and ask for those before", () 
   const dir = temp();
   const path = join(dir, "t.jsonl");
   writeFileSync(path, line("one", "m1") + line("two", "m2") + line("three", "m3"));
-  const hub = new LiveHub(() => ({ runtime: "claude", path }));
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }));
   const texts = (r: [number, { text: string }[]] | null) => r && [r[0], r[1].map((e) => e.text)];
   // Not watched yet: read for the asking.
   assert.deepEqual(texts(hub.before("s", 2, 1)), [1, ["two"]]);
@@ -177,6 +177,31 @@ test("a watcher can take only the latest entries, and ask for those before", () 
   // Watched: from what is held.
   assert.deepEqual(texts(hub.before("s", 2, 5)), [0, ["one", "two"]]);
   assert.deepEqual(texts(hub.before("s", 0, 5)), [0, []]);
+  hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a session gone on in a new runtime session: its history reads on from the transcript it left into the new one", async () => {
+  const dir = temp();
+  const left = join(dir, "a.jsonl");
+  const now = join(dir, "b.jsonl");
+  writeFileSync(left, line("one", "m1"));
+  let paths = [left];
+  const hub = new LiveHub(() => ({ runtime: "claude", paths }));
+  const got: LiveMessage[] = [];
+  hub.subscribe("s", 0, null, (m) => void got.push(m));
+  // The one left gets its last words, then the session moves on.
+  appendFileSync(left, line("two", "m2"));
+  writeFileSync(now, line("three", "m3"));
+  paths = [left, now];
+  hub.moved("s");
+  appendFileSync(now, line("four", "m4"));
+  const told = () => got.flatMap((m) => (m.type === "timeline" ? m.entries.map((e, i) => `${m.start + i}:${e.text}`) : []));
+  for (let i = 0; i < 100 && !told().includes("3:four"); i++) await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(told(), ["0:one", "1:two", "2:three", "3:four"]);
+  const last = got.filter((m): m is Extract<LiveMessage, { type: "timeline" }> => m.type === "timeline").at(-1)!;
+  assert.equal(last.usage.modelCalls, 4, "the usage of both");
+  assert.deepEqual(hub.before("s", 10, 10)![1].map((e) => e.text), ["one", "two", "three", "four"]);
   hub.close();
   rmSync(dir, { recursive: true, force: true });
 });
