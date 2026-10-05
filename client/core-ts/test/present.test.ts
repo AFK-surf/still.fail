@@ -132,6 +132,8 @@ test("a_session_stands_where_its_process_and_last_turn_say", () => {
   assert.equal(st({ process: "warm", lastTurn: { declared: "waiting", ending: "waiting", outcome: "completed" } }), "running");
   assert.equal(st({ process: "warm", lastTurn: { declared: "waiting", outcome: "completed" } }), "running");
   assert.equal(st({ lastTurn: { outcome: "completed" } }), "unexpected");
+  // A turn just begun, read before the station's process states caught up: running, not stopped.
+  assert.equal(st({ process: "cold", lastTurn: { outcome: null, declared: null, startedAt: 1, endedAt: null } }), "running");
   const waits = { process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitSeconds: 600 } };
   assert.deepEqual(p.waiting(waits), { since: 5, seconds: 600, text: "等待中" });
   assert.deepEqual(p.waiting({ process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5 } }), { since: 5, seconds: null, text: "等待中" });

@@ -48,15 +48,18 @@ export function Home() {
   const none = useStations(scope).value?.length === 0;
   // Searching: where the field at the list's top was when it was tapped (the search's field comes from there).
   const [searching, setSearching] = useState<DOMRect | null>(null);
+  // The lists away while it is open; back as it starts to close, with its field.
+  const [away, setAway] = useState(false);
+  const search = (at: DOMRect) => { setSearching(at); setAway(true); };
   return (
-    <div className={css.mHome} data-searching={searching ? "" : undefined}>
+    <div className={css.mHome} data-searching={searching ? "" : undefined} data-away={away ? "" : undefined}>
       {none ? (
         <div className={css.mHomePanes}><div className={css.mHomePane} style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
       ) : (
         <div className={css.mHomePanes} data-filter={filter}>
-          <ChatPane chats={all} filter="all" onSearch={setSearching} />
-          <ChatPane chats={mine} filter="mine" onSearch={setSearching} />
-          <ChatPane chats={watching} filter="watching" onSearch={setSearching} />
+          <ChatPane chats={all} filter="all" onSearch={search} />
+          <ChatPane chats={mine} filter="mine" onSearch={search} />
+          <ChatPane chats={watching} filter="watching" onSearch={search} />
         </div>
       )}
       {/* The lists run under both bars, which are frosted glass over them. */}
@@ -86,7 +89,7 @@ export function Home() {
           <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={44} /></button>
         </div>
       </div>}
-      {searching && <SearchPage from={searching} onClose={() => setSearching(null)} />}
+      {searching && <SearchPage from={searching} onLeave={() => setAway(false)} onClose={() => setSearching(null)} />}
     </div>
   );
 }
@@ -112,7 +115,7 @@ function SearchField({ onOpen }: { onOpen: (at: DOMRect) => void }) {
  * under it the chats the words find, then the messages, newest first, each opening its chat at it. 取消 puts the field
  * back in the list.
  */
-function SearchPage({ from, onClose }: { from: DOMRect; onClose: () => void }) {
+function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => void; onClose: () => void }) {
   const app = useApp();
   const [query, setQuery] = useState("");
   const search = useChatSearch({ scope: app.entry.id, query, messages: FOUND_MESSAGES });
@@ -131,6 +134,7 @@ function SearchPage({ from, onClose }: { from: DOMRect; onClose: () => void }) {
   const close = () => {
     if (leaving.current) return;
     leaving.current = true;
+    onLeave();
     if (reducedMotion()) return onClose();
     page.current?.setAttribute("data-leaving", "");
     field.current?.animate([{ transform: "none" }, { transform: `translateY(${offset()}px)` }], { duration: 240, easing: "cubic-bezier(.4, 0, .2, 1)", fill: "forwards" }).finished.then(onClose, onClose);

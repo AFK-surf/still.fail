@@ -96,11 +96,11 @@ internal fun SearchField(onOpen: (Float) -> Unit, hidden: Boolean) {
 }
 
 /**
- * The search over the home lists, its field come up from `from` (its top in the list, px) to the bar; `onClose` once
- * it is back there. The words typed stay while a chat opened from it is read.
+ * The search over the home lists, its field come up from `from` (its top in the list, px) to the bar; `onLeave` as it
+ * starts going back, `onClose` once it is back there. The words typed stay while a chat opened from it is read.
  */
 @Composable
-internal fun SearchPage(scope: String, from: Float, onClose: () -> Unit) {
+internal fun SearchPage(scope: String, from: Float, onLeave: () -> Unit = {}, onClose: () -> Unit) {
     val app = LocalApp.current
     val density = LocalDensity.current
     var query by rememberSaveable { mutableStateOf("") }
@@ -128,6 +128,7 @@ internal fun SearchPage(scope: String, from: Float, onClose: () -> Unit) {
         if (!leaving) {
             leaving = true
             keyboard?.hide()
+            onLeave()
             coroutines.launch {
                 if (!still) up.animateTo(0f, tween(240, easing = Ease.Standard))
                 onClose()

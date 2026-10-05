@@ -197,9 +197,12 @@ export const mSearchField = style({
   background: "color-mix(in srgb, var(--m-ink) 6%, transparent)", color: "var(--m-muted)", fontSize: "15px",
 });
 globalStyle(`${mSearchField} svg`, { flex: "none" });
-globalStyle(`${mHome}[data-searching] ${mHomePanes}`, { transform: "translateY(-56px)", opacity: "0", pointerEvents: "none" });
-globalStyle(`${mHomePanes}`, { transition: "transform 280ms var(--m-ease), opacity 200ms var(--m-standard)" });
-globalStyle(`${mHome}[data-searching] ${mHomeBar}, ${mHome}[data-searching] ${mHomeToolbar}`, { opacity: "0", pointerEvents: "none" });
+// Away while the search is open (`data-away`); as it closes they come back in the same 240 ms as its field goes back,
+// so the field lands where the list's is, together.
+globalStyle(`${mHome}[data-away] ${mHomePanes}`, { transform: "translateY(-56px)", opacity: "0", pointerEvents: "none" });
+globalStyle(`${mHomePanes}`, { transition: "transform 240ms var(--m-standard), opacity 200ms var(--m-standard)" });
+globalStyle(`${mHome}[data-away] ${mHomePanes}`, { transition: "transform 280ms var(--m-ease), opacity 200ms var(--m-standard)" });
+globalStyle(`${mHome}[data-away] ${mHomeBar}, ${mHome}[data-away] ${mHomeToolbar}`, { opacity: "0", pointerEvents: "none" });
 globalStyle(`${mHomeBar}, ${mHomeToolbar}`, { transition: "opacity 200ms var(--m-standard)" });
 export const mSearchPage = style({ position: "absolute", inset: "0", zIndex: "4", display: "flex", flexDirection: "column" });
 export const mSearchBar = style({

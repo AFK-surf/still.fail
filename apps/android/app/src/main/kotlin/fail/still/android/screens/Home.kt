@@ -165,12 +165,15 @@ fun HomeScreen(current: WorkspaceEntry) {
     val padding = with(density) { PaddingValues(top = topBar.toDp() + 8.dp, bottom = bottomBar.toDp() + 8.dp) }
     // Searching (Search.kt): where the field at the list's top was when tapped. The lists go up and away, the bars fade.
     var searchFrom by rememberSaveable { mutableStateOf<Float?>(null) }
-    val away by animateFloatAsState(if (searchFrom != null) 1f else 0f, tween(if (searchFrom != null) 280 else 240, easing = if (searchFrom != null) Ease.Arrive else Ease.Standard), label = "search")
+    // Away while the search is open; as it closes the lists come back in the same 240 ms as its field goes back, so
+    // the field lands where the list's is, together (not the field first, then the list coming down a second time).
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    val away by animateFloatAsState(if (searchOpen) 1f else 0f, tween(if (searchOpen) 280 else 240, easing = if (searchOpen) Ease.Arrive else Ease.Standard), label = "search")
     val awayBy = with(density) { 56.dp.toPx() }
     Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze).graphicsLayer { translationY = -awayBy * away; alpha = 1f - away }) {
             val width = constraints.maxWidth
-            val onSearch = { at: Float -> searchFrom = at }
+            val onSearch = { at: Float -> searchFrom = at; searchOpen = true }
             val searching = searchFrom != null
             ChatPane(current, all, "all", allList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
             ChatPane(current, mine, "mine", mineList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
@@ -235,7 +238,7 @@ fun HomeScreen(current: WorkspaceEntry) {
         }
         // Wide (Wide.kt), the new-chat button is at the screen's corner instead, not the column's.
         if (!LocalWide.current) Toolbar(app, decisionsWaiting(current), haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.graphicsLayer { alpha = 1f - away })
-        searchFrom?.let { from -> SearchPage(scope, from) { searchFrom = null } }
+        searchFrom?.let { from -> SearchPage(scope, from, onLeave = { searchOpen = false }) { searchFrom = null } }
     }
 }
 
