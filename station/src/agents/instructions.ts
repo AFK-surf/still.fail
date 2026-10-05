@@ -81,12 +81,8 @@ export const GO_ON_AFTER_SPENT = `Your last turn was cut off: the account it ran
 
 export const RESUME_LOST = `Your earlier conversation could not be restored. Read the relevant threads with chat_history to catch up before answering.`;
 
-/// It goes on in a new runtime session, with nothing of its conversation given again: `why` it was not taken up whole.
-/// What it had is on record; it reads back what it needs.
-export const afresh = (why: string, tokens: number | null, key: string, threads: string[], last: string | null) => `You go on in a new conversation, with nothing of your earlier one in it: ${why}, and taking that one up${tokens === null ? "" : ` (about ${Math.round(tokens / 1000)}k tokens)`} would have the model read all of it again. What it held is on record. Before you act on what comes below, read back what you need for it (not everything):
-- What was said: chat_history for ${threads.length === 0 ? "your conversations" : threads.join(", ")}.
-- What you did, thought and found: session_history with chat ${key}, the latest entries first (older ones with before).
-- Where the work stands: the files and git state in your workspace, and your jobs (job_list).${last === null ? "" : `\nYour last turn ended ${last}.`}`;
+/// It goes on in a new runtime session: the earlier one is not taken up; it reads back what it needs from it.
+export const afresh = (key: string, threads: string[]) => `This is a new conversation: your earlier one in this session is no longer used. Before you act on what comes below, read back from it what you need: session_history with chat ${key} (the latest entries first; older ones with before)${threads.length === 0 ? "" : `, and chat_history for ${threads.join(", ")}`}.`;
 
 /// The agent said it would wait this long, and nothing has brought it back.
 export const waitOver = (seconds: number) => `You said you were waiting on work you started (${seconds} seconds), and nothing has brought you back yet. Check on it.

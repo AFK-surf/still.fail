@@ -1142,7 +1142,7 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   // In a new runtime session of its own (sessions/afresh.ts).
   assert.equal(second.options.resume, undefined);
   assert.equal(second.prompts.length, 1);
-  assert.ok(matches(second.prompts[0]!, ["You go on in a new conversation", GO_ON_AFTER_SPENT]), second.prompts[0]);
+  assert.ok(matches(second.prompts[0]!, ["This is a new conversation", GO_ON_AFTER_SPENT]), second.prompts[0]);
   // That one runs out too: none left, so it says so and waits.
   second.end(spent("usage limit reached"));
   await settle();
@@ -1155,7 +1155,7 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   assert.equal(r.claude.count(), 3);
   assert.equal(third.options.profile.id, on);
   assert.equal(third.prompts.length, 1);
-  assert.ok(matches(third.prompts[0]!, ["You go on in a new conversation", GO_ON_AFTER_SPENT]), third.prompts[0]);
+  assert.ok(matches(third.prompts[0]!, ["This is a new conversation", GO_ON_AFTER_SPENT]), third.prompts[0]);
   // A change after a turn that ended well starts nothing.
   await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
   third.complete();
@@ -1195,7 +1195,7 @@ test("on another account a conversation goes on in a new runtime session, its hi
   assert.equal(second.options.resume, undefined);
   assert.notEqual(second.id(), first.id());
   assert.equal(second.prompts.length, 1);
-  assert.ok(matches(second.prompts[0]!, ["You go on in a new conversation", "about 200k tokens", `C1/${m.threadTs}`, `session_history with chat ${key}`, GO_ON_AFTER_SPENT]), second.prompts[0]);
+  assert.ok(matches(second.prompts[0]!, ["This is a new conversation", `session_history with chat ${key}`, `C1/${m.threadTs}`, GO_ON_AFTER_SPENT]), second.prompts[0]);
   assert.deepEqual(r.store.runtimeSessions(key), [first.id(), second.id()]);
   assert.equal(r.store.ranOn(key, second.id()), second.options.profile.id);
   // Its history goes on from the first's.
@@ -1210,7 +1210,7 @@ test("on another account a conversation goes on in a new runtime session, its hi
   await settle();
   const third = r.claude.last();
   assert.equal(third.options.resume, second.id());
-  assert.ok(!third.prompts[0]!.includes("You go on in a new conversation"));
+  assert.ok(!third.prompts[0]!.includes("This is a new conversation"));
   // Back on the first account, however short the conversation: afresh again.
   third.end(spent);
   await settle();
@@ -1218,7 +1218,7 @@ test("on another account a conversation goes on in a new runtime session, its hi
   await settle();
   const fourth = r.claude.last();
   assert.equal(fourth.options.resume, undefined);
-  assert.ok(matches(fourth.prompts[0]!, ["You go on in a new conversation", "about 1k tokens", GO_ON_AFTER_SPENT]), fourth.prompts[0]);
+  assert.ok(matches(fourth.prompts[0]!, ["This is a new conversation", GO_ON_AFTER_SPENT]), fourth.prompts[0]);
   assert.deepEqual(r.store.runtimeSessions(key), [first.id(), second.id(), fourth.id()]);
   await r.close();
 });
