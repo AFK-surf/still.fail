@@ -1,7 +1,7 @@
 // The device tools (contract v1 §8, `comma/tools/1`): what a control plane's gateway may do on this machine for its
 // agents — run a command, read and write files, keep processes, see which runtimes are here, and start and drive the
 // station's own chats. Each op is an Effect; what it refuses is a ToolError with a stable code. How far the gateway
-// may go is the station's own setting, `tools.access` in config.json (off | read | full, read when unset), changed by the
+// may go is the station's own setting, `tools.access` in config.json (off | read | full, off when unset), changed by the
 // workspace's owners and admins (src/api/routes/tools.ts), off until one turns it on. Under every level the station's
 // own data (its key, cloud.json, config, the profiles' homes) and the machine's runtime logins are refused to the file
 // ops and as a working directory (`protect`); `exec` and `process.*` under `full` run as the station's user and can
