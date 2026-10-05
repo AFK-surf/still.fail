@@ -2,22 +2,26 @@
 // agents — run a command, read and write files, keep processes, see which runtimes are here, and start and drive the
 // station's own chats. Each op is an Effect; what it refuses is a ToolError with a stable code. How far the gateway
 // may go is the station's own setting, `tools.access` in config.json (off | read | full, read when unset), changed by the
-// workspace's owners and admins (src/api/routes/tools.ts).
+// workspace's owners and admins (src/api/routes/tools.ts), off until one turns it on. Under every level the station's
+// own data (its key, cloud.json, config, the profiles' homes) and the machine's runtime logins are refused to the file
+// ops and as a working directory (`protect`); `exec` and `process.*` under `full` run as the station's user and can
+// reach what that user can, which is why they need `full`.
 import { type ChildProcess, execFile, spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { appendFile, lstat, mkdir, open, readdir, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
 import { Data, Effect } from "effect";
 import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
 import { findCommand } from "../updates/runtimes.ts";
 import { versionIn } from "../updates/versions.ts";
+import { wall } from "../ops/fibers.ts";
 
 export type Access = "off" | "read" | "full";
 export const ACCESS: readonly Access[] = ["off", "read", "full"];
-export const DEFAULT_ACCESS: Access = "read";
+export const DEFAULT_ACCESS: Access = "off";
 
-/// The access config.json gives (`tools.access`); read when it names none it knows.
+/// The access config.json gives (`tools.access`); off when it names none it knows.
 export function accessOf(raw: any): Access {
   const said = raw?.tools?.access;
   return ACCESS.includes(said) ? said : DEFAULT_ACCESS;
@@ -102,9 +106,25 @@ const io = <A>(f: () => Promise<A>) =>
 
 const kindOf = (s: { isFile(): boolean; isDirectory(): boolean; isSymbolicLink(): boolean }) => (s.isFile() ? "file" : s.isDirectory() ? "dir" : s.isSymbolicLink() ? "symlink" : "other");
 
+/// A path as the file system has it: its links followed, as far as it exists (what is not there yet is under its
+/// nearest parent that is).
+function real(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    const parent = dirname(path);
+    return parent === path ? path : resolve(real(parent), basename(path));
+  }
+}
+
+const within = (path: string, root: string) => path === root || path.startsWith(root.endsWith(sep) ? root : root + sep);
+
 export type DeviceToolsOptions = {
   /// Where relative paths and commands start: the station's user's home by default.
   home?: string;
+  /// What no op may touch, at any level: the station's data directory, its config, the machine's runtime logins
+  /// (asked anew at each op: a profile's home may be added meanwhile).
+  protect?: () => string[];
   env?: Record<string, string | undefined>;
   sessions?: Sessions;
   now?: () => number;
@@ -115,6 +135,7 @@ export class DeviceTools {
   private env: Record<string, string | undefined>;
   private sessions: Sessions | undefined;
   private now: () => number;
+  private protect: () => string[];
   private processes = new Map<string, Kept>();
   private next = 1;
 
@@ -122,7 +143,29 @@ export class DeviceTools {
     this.home = options.home ?? homedir();
     this.env = options.env ?? process.env;
     this.sessions = options.sessions;
-    this.now = options.now ?? Date.now;
+    this.now = options.now ?? wall.now;
+    this.protect = options.protect ?? (() => []);
+  }
+
+  /// `path` as an op may use it: absolute (from the home when relative), and none of what is protected, by its own
+  /// name or through a link.
+  private allowed(path: string): Effect.Effect<string, ToolError> {
+    const asked = pathOf(this.home, path);
+    const found = real(asked);
+    for (const root of this.protect()) {
+      const r = real(root);
+      if (within(asked, root) || within(found, r) || within(asked, r) || within(found, root)) return fail("forbidden", "the station's own data and the machine's logins are not reachable through device tools");
+    }
+    return Effect.succeed(asked);
+  }
+
+  private path(a: Args, k: string) {
+    return Effect.flatMap(need(a, k), (p) => this.allowed(p));
+  }
+
+  /// A working directory: the home, or one asked for that is allowed.
+  private cwd(a: Args) {
+    return this.allowed(str(a, "cwd") ?? this.home);
   }
 
   /// Every kept process stopped (the station stops).
@@ -173,7 +216,7 @@ export class DeviceTools {
       const env = envOf(a);
       if (env === null) return yield* fail("invalid_request", "env must be a map of strings");
       const timeout = Math.min(int(a, "timeout_ms") ?? EXEC_TIMEOUT_MS, EXEC_TIMEOUT_MAX_MS);
-      const cwd = pathOf(self.home, str(a, "cwd") ?? self.home);
+      const cwd = yield* self.cwd(a);
       return yield* Effect.callback<{ exit_code: number | null; stdout: string; stderr: string; truncated: boolean; timed_out?: boolean }, ToolError>((resume) => {
         let child: ChildProcess;
         try {
@@ -185,22 +228,23 @@ export class DeviceTools {
         const out = capture(child.stdout!);
         const err = capture(child.stderr!);
         let timedOut = false;
-        const timer = setTimeout(() => {
+        // How long a command is given is the machine's time (ops/fibers.ts `wall`).
+        const cancel = wall.after(timeout, () => {
           timedOut = true;
           killGroup(child, "SIGKILL");
-        }, timeout);
+        });
         child.on("error", (e) => {
-          clearTimeout(timer);
+          cancel();
           resume(fail("failed", e.message));
         });
         child.on("close", (code) => {
-          clearTimeout(timer);
+          cancel();
           const result = { exit_code: code, stdout: out.text(), stderr: err.text(), truncated: out.truncated() || err.truncated() };
           resume(timedOut ? Effect.succeed({ ...result, timed_out: true }) : Effect.succeed(result));
         });
         // Interrupted (the gateway went): the command goes too.
         return Effect.sync(() => {
-          clearTimeout(timer);
+          cancel();
           killGroup(child, "SIGKILL");
         });
       });
@@ -212,7 +256,7 @@ export class DeviceTools {
   private read(a: Args) {
     const self = this;
     return Effect.gen(function* () {
-      const path = pathOf(self.home, yield* need(a, "path"));
+      const path = yield* self.path(a, "path");
       const offset = int(a, "offset") ?? 0;
       const length = Math.min(int(a, "length") ?? READ_CAP, READ_CAP);
       return yield* io(async () => {
@@ -233,7 +277,7 @@ export class DeviceTools {
   private write(a: Args) {
     const self = this;
     return Effect.gen(function* () {
-      const path = pathOf(self.home, yield* need(a, "path"));
+      const path = yield* self.path(a, "path");
       const content = str(a, "content_base64");
       if (content === null) return yield* fail("invalid_request", "content_base64 is required");
       const bytes = Buffer.from(content, "base64");
@@ -249,7 +293,7 @@ export class DeviceTools {
   private list(a: Args) {
     const self = this;
     return Effect.gen(function* () {
-      const path = pathOf(self.home, yield* need(a, "path"));
+      const path = yield* self.path(a, "path");
       return yield* io(async () => {
         const names = (await readdir(path)).sort();
         const entries = [];
@@ -269,7 +313,7 @@ export class DeviceTools {
   private stat(a: Args) {
     const self = this;
     return Effect.gen(function* () {
-      const path = pathOf(self.home, yield* need(a, "path"));
+      const path = yield* self.path(a, "path");
       return yield* io(async () => {
         const s = await lstat(path);
         return { path, type: kindOf(s), size: s.size, mtime_ms: Math.floor(s.mtimeMs), mode: s.mode & 0o7777 };
@@ -290,7 +334,7 @@ export class DeviceTools {
         for (const [id, p] of self.processes) if (p.exited && self.processes.size >= MAX_PROCESSES) self.processes.delete(id);
         if (self.processes.size >= MAX_PROCESSES) return yield* fail("too_many_processes", `at most ${MAX_PROCESSES} processes are kept; stop one first`);
       }
-      const cwd = pathOf(self.home, str(a, "cwd") ?? self.home);
+      const cwd = yield* self.cwd(a);
       const id = `p${self.next++}`;
       const child = yield* Effect.try({
         try: () => spawn("/bin/sh", ["-c", command], { cwd, env: { ...self.env, ...env }, stdio: ["pipe", "pipe", "pipe"], detached: true }),

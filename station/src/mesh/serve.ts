@@ -251,7 +251,11 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     return answerAdb(m.shares, conn, viewer, head, stream, reader);
   }
   // A preview page's WebSocket (`"socket": true`): no body to wait for, the stream carries its messages both ways.
-  if (head.socket === true) return socket(m, stream, reader, head, path);
+  if (head.socket === true) {
+    // A preview's socket carries whatever its page sends: no viewer's.
+    if (readOnly(viewer)) return answer(403, { error: "read-only members cannot change this station" });
+    return socket(m, stream, reader, head, path);
+  }
   const body = await reader.rest();
   // The caller's headers go on, but not those of the hop, nor any of the station's own: who is asking is only what
   // the credential says.

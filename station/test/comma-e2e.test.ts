@@ -59,9 +59,9 @@ async function ask(conn: Connection, method: string, path: string, body?: unknow
 }
 
 /// One device tool on its own stream.
-async function tool(conn: Connection, op: string, args: Record<string, unknown>) {
+async function tool(conn: Connection, op: string, args: Record<string, unknown>, workspace = "ws1") {
   const stream = await conn.openBi();
-  await line(stream, { op, id: randomBytes(4).toString("hex"), context: { workspace: "ws1", user_email: "owner@x", agent: "salix" }, args });
+  await line(stream, { op, id: randomBytes(4).toString("hex"), context: { workspace, user_email: "owner@x", agent: "salix" }, args });
   await stream.finish();
   return new Reader(stream).line();
 }
@@ -98,7 +98,8 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
   readers.processes = () => hub.processes();
   const admin = new Admin(readers, { store, agents: { hub, jobs, config } as any });
   const station = await mesh.bind({ secretKey: key.seed, alpns: [ALPN, TOOLS_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
-  const device = new DeviceTools({ home: data, sessions: adminSessions(() => admin, () => store, () => ["claude"], () => "ws1", gateway.id()) });
+  const work = mkdtempSync(join(tmpdir(), "comma-work-"));
+  const device = new DeviceTools({ home: work, protect: () => [data], sessions: adminSessions(() => admin, () => store, () => ["claude"], () => "ws1", gateway.id()) });
   const members = { cloud: state, admin, up: () => true, shares: {} as any, accepted: plane.credential };
   const gateways = { cloud: state, tools: device, access: () => accessOf(config.raw()), enabled: () => plane.spec().tools };
   void (async () => {
@@ -119,6 +120,7 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
     state.close();
     await comma.close();
     rmSync(data, { recursive: true, force: true });
+    rmSync(work, { recursive: true, force: true });
   });
   assert.equal(station.id(), key.id);
   const addr = { id: station.id(), ips: [`127.0.0.1:${station.sockets()[0]!.split(":").at(-1)}`] };
@@ -129,7 +131,7 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
     comma.grant.credential({ typ: "comma-member+jwt" }, { iss: "comma", sub: `usr_${role}`, email: `${role}@x`, name: role, ws: "ws1", role, device, sid: `s_${role}`, iat: now, exp: now + 3600 });
   const owner = await client.connect(addr, ALPN);
   assert.deepEqual(await member(owner, credential(client.id(), "owner")), { ok: true, station: "studio", expires_at: now + 3600 });
-  assert.deepEqual(await ask(owner, "GET", "/admin/api/tools/access"), [200, { access: "read", levels: ["off", "read", "full"], read_ops: ["fs.read", "fs.list", "fs.stat", "runtime.probe"] }]);
+  assert.deepEqual(await ask(owner, "GET", "/admin/api/tools/access"), [200, { access: "off", levels: ["off", "read", "full"], read_ops: ["fs.read", "fs.list", "fs.stat", "runtime.probe"] }]);
 
   // still.fail cloud's credential is no member's here.
   const other = await stranger.connect(addr, ALPN);
@@ -142,13 +144,24 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
   assert.equal((await ask(viewer, "GET", "/admin/api/tools/access"))[0], 200);
   assert.deepEqual(await ask(viewer, "POST", "/admin/api/sessions", { runtime: "claude" }), [403, { error: "read-only members cannot change this station" }]);
   assert.deepEqual(await ask(viewer, "PUT", "/admin/api/tools/access", { access: "full" }), [403, { error: "read-only members cannot change this station" }]);
+  // Nor through a preview's socket, whose page may send anything.
+  const socket = await viewerDevice.connect(addr, ALPN).then(async (c) => (await member(c, credential(viewerDevice.id(), "viewer")), c));
+  const ws = await socket.openBi();
+  await line(ws, { method: "GET", path: "/admin/api/preview/5180/ws", headers: {}, socket: true });
+  const wsHead = await new Reader(ws).line();
+  assert.equal(wsHead.status, 403);
 
-  // The gateway: reads under the default access, exec refused.
+  // The gateway: off until an owner turns it on.
   const tools = await gateway.connect(addr, TOOLS_ALPN);
-  const stat = await tool(tools, "fs.stat", { path: data });
+  assert.deepEqual(await tool(tools, "fs.stat", { path: work }), { ok: false, error: { code: "forbidden", message: "device tools are turned off on this station" } });
+  assert.equal((await ask(owner, "PUT", "/admin/api/tools/access", { access: "read" }))[0], 200);
+  const stat = await tool(tools, "fs.stat", { path: work });
   assert.equal(stat.ok, true);
   assert.equal(stat.result.type, "dir");
   assert.deepEqual(await tool(tools, "exec", { command: "echo hi" }), { ok: false, error: { code: "forbidden", message: "exec needs full access; this station allows read" } });
+  // Never the station's own data, nor for another workspace.
+  assert.equal((await tool(tools, "fs.read", { path: join(data, "mesh", "secret.key") })).error.code, "forbidden");
+  assert.deepEqual(await tool(tools, "fs.stat", { path: work }, "ws2"), { ok: false, error: { code: "forbidden", message: "the request is for another workspace than this station's" } });
 
   // An owner gives it full access: exec runs.
   assert.equal((await ask(owner, "PUT", "/admin/api/tools/access", { access: "full" }))[0], 200);
@@ -171,11 +184,11 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
 
   // Another iroh id is no gateway.
   const intruder = await stranger.connect(addr, TOOLS_ALPN);
-  await assert.rejects(tool(intruder, "fs.stat", { path: data }));
+  await assert.rejects(tool(intruder, "fs.stat", { path: work }));
 
   // Comma takes the gateway back: its next request is refused.
   comma.gateways = [];
   comma.push(station.id());
   await until(() => (state.state!.gateway_keys ?? []).length === 0);
-  assert.deepEqual(await tool(tools, "fs.stat", { path: data }), { ok: false, error: { code: "forbidden", message: "not a gateway of this station's control plane" } });
+  assert.deepEqual(await tool(tools, "fs.stat", { path: work }), { ok: false, error: { code: "forbidden", message: "not a gateway of this station's control plane" } });
 });

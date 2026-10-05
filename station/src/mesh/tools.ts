@@ -53,6 +53,8 @@ export async function serveTools(d: ToolsDeps, conn: Connection) {
         if (head === null || typeof head !== "object" || typeof head.op !== "string") throw new ToolError({ code: "invalid_request", message: "a request names its op" });
         const args = head.args !== null && typeof head.args === "object" && !Array.isArray(head.args) ? head.args : {};
         const context = head.context !== null && typeof head.context === "object" ? head.context : {};
+        // For this station's workspace only (contract §8): another's, or none said, is refused.
+        if (context.workspace !== d.cloud.state?.workspace) throw new ToolError({ code: "forbidden", message: "the request is for another workspace than this station's" });
         const result = await Effect.runPromise(Effect.result(d.tools.run(head.op, args, context, d.access())));
         answer = result._tag === "Success" ? { ok: true, result: result.success } : { ok: false, error: { code: result.failure.code, message: result.failure.message } };
         log.info("tools", "device tool", { op: head.op, id: typeof head.id === "string" ? head.id : null, ok: result._tag === "Success", agent: context.agent ?? null });

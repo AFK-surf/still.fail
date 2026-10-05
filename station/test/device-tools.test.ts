@@ -1,7 +1,7 @@
 // The device tools (src/device/tools.ts, contract v1 §8): what each access level lets through, and each op family —
 // exec, files, processes, the runtimes here, the station's chats — on a temporary home.
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -20,10 +20,10 @@ function tools(sessions?: Sessions) {
   return { home, t };
 }
 
-test("access: off refuses everything, read only the reads, full everything; unset is read", async () => {
-  assert.equal(accessOf({}), "read");
+test("access: off refuses everything, read only the reads, full everything; unset is off", async () => {
+  assert.equal(accessOf({}), "off");
   assert.equal(accessOf({ tools: { access: "full" } }), "full");
-  assert.equal(accessOf({ tools: { access: "bogus" } }), "read");
+  assert.equal(accessOf({ tools: { access: "bogus" } }), "off");
   for (const op of OPS) {
     assert.equal(permitted("off", op), false);
     assert.equal(permitted("read", op), READ_OPS.includes(op), op);
@@ -162,4 +162,35 @@ test("sessions: started, said to and asked about as the requester, only under fu
   assert.equal(!read.ok && read.code, "forbidden");
   const noPrompt = await run(t, "session.start", { requester_email: "b@x" });
   assert.equal(!noPrompt.ok && noPrompt.code, "invalid_request");
+});
+
+test("the station's data and the machine's logins are refused at every level, also through a link or as a cwd", async () => {
+  const home = mkdtempSync(join(tmpdir(), "guard-"));
+  const data = join(home, ".stillfail");
+  mkdirSync(join(data, "mesh"), { recursive: true });
+  writeFileSync(join(data, "mesh", "secret.key"), "k");
+  mkdirSync(join(home, ".codex"));
+  writeFileSync(join(home, ".codex", "auth.json"), "{}");
+  writeFileSync(join(home, ".codex", "config.toml"), "");
+  symlinkSync(data, join(home, "innocent"));
+  const t = new DeviceTools({ home, env: { PATH: process.env.PATH, HOME: home }, protect: () => [data, join(home, ".codex", "auth.json")] });
+  const refused = async (op: string, args: Record<string, unknown>, access: Access) => {
+    const r = await run(t, op, args, access);
+    assert.equal(!r.ok && r.code, "forbidden", `${op} ${JSON.stringify(args)} under ${access}`);
+  };
+  for (const access of ["read", "full"] as Access[]) {
+    await refused("fs.read", { path: ".stillfail/mesh/secret.key" }, access);
+    await refused("fs.read", { path: join(data, "mesh", "secret.key") }, access);
+    await refused("fs.read", { path: "innocent/mesh/secret.key" }, access);
+    await refused("fs.list", { path: ".stillfail" }, access);
+    await refused("fs.stat", { path: "innocent" }, access);
+    await refused("fs.read", { path: ".codex/auth.json" }, access);
+  }
+  await refused("fs.write", { path: "innocent/mesh/secret.key", content_base64: "" }, "full");
+  await refused("fs.write", { path: ".stillfail/new-file", content_base64: "" }, "full");
+  await refused("exec", { command: "pwd", cwd: ".stillfail" }, "full");
+  await refused("process.start", { command: "cat", cwd: "innocent" }, "full");
+  // What is beside them is not.
+  assert.ok((await run(t, "fs.read", { path: ".codex/config.toml" }, "read")).ok);
+  assert.ok((await run(t, "fs.list", { path: "." }, "read")).ok);
 });
