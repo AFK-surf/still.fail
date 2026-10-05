@@ -12,6 +12,8 @@
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 out=${1:?usage: core-bundle.sh DIR [PLATFORM]}
+# DIR as the caller named it, from where they are: the steps below run elsewhere.
+case "$out" in /*) ;; *) out="$(pwd)/$out" ;; esac
 platform=${2:-darwin-arm64}
 case "$platform" in
   darwin-arm64|linux-x64|linux-arm64) ;;
