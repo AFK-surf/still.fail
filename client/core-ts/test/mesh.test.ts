@@ -537,19 +537,21 @@ test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, 
   rb.kill();
 });
 
-/// A relay far from the device and near the station is measured by its round trips, not by the probe's getting onto
-/// it: QUIC's smoothed estimate began at the handshake, held while the probe's endpoint got onto the relay, so it
-/// carried the device's distance to the relay several times over (2026-10-05: bft in Tokyo, the device in China, never
-/// measured quickest through Cloudflare or Hong Kong).
-test("a_relay_far_from_the_device_is_measured_by_its_round_trips", { skip: noRelay }, async () => {
-  const [b, rb] = await relay();
-  const station = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
-  await station.endpoint.online();
+/// The choice judged by what it chooses: of two relays, one next to the device but far from the station, one far from the
+/// device but next to the station, the link ends up on the one its requests are answered quicker through. Measured with
+/// QUIC's smoothed estimate, the probe's getting onto the far relay counted (several times the device's distance to it),
+/// and the link stayed on the near one (2026-10-05: bft in Tokyo, the device in China, kept on Beijing's relay, never
+/// on Cloudflare's or Hong Kong's). What a machine adds to each round trip is the same on both ways: the outcome is
+/// not a number with room for a slow machine.
+test("a_link_moves_to_the_relay_its_requests_go_quicker_through_far_from_the_device_or_not", { skip: noRelay }, async () => {
+  const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
+  // a: the device at once, the station 100 ms each way (200 ms a round trip); b: the device 60 ms each way (getting
+  // onto it as well), the station at once (120 ms).
+  const station = await Station.on(b, await slowed(a, 100, 1));
   const id = station.id();
-  // The device reaches the relay 150 ms away each way (getting onto it as well), the station reaches it at once.
-  const far = await slowed(b, 150);
+  const farB = await slowed(b, 60);
   const e = env(new FakeHost(), new Wakes(), quickClock(new Map()));
-  const mesh = await e.runner.run(Mesh.make(e, [far]));
+  const mesh = await e.runner.run(Mesh.make(e, [a]));
   const runner = e.runner;
   let link: Link | null = null;
   for (let i = 0; i < 40 && link === null; i++) {
@@ -557,17 +559,29 @@ test("a_relay_far_from_the_device_is_measured_by_its_round_trips", { skip: noRel
     if (tried && (await request(runner, tried, head("/admin/api/overview")).then((r) => r.status === 200, () => false))) link = tried;
     else await sleep(250);
   }
-  assert.ok(link, "reached");
+  assert.ok(link, "reached through a");
+  assert.ok(sameRelay(link.via(), a), `${link.via()}`);
+  // How long requests take on a link: the median of five.
+  const took = async (l: Link) => {
+    const times: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const started = Date.now();
+      assert.equal((await request(runner, l, head("/admin/api/overview"))).status, 200);
+      times.push(Date.now() - started);
+    }
+    return times.sort((x, y) => x - y)[2];
+  };
+  const throughA = await took(link);
+  (mesh.relays as string[]).push(farB);
   await runner.run(mesh.remeasure(id));
-  const [[, ms]] = mesh.measured(id)!.relays;
-  // A round trip is 300 ms (a Mac measures 303–306); an acknowledgement may wait besides, and a busy machine adds its
-  // own (Linux CI some 70 ms more, 2026-10-05): up to half more is allowed. QUIC's smoothed estimate, what this
-  // replaced, carried the getting onto the relay several times over: 515–580 ms. (At 80 ms each way the two came too
-  // close: the old way measured 264–296, under a bound with room for Linux.)
-  assert.ok(ms !== null && ms >= 290 && ms < 450, `${ms}`);
+  const now = mesh.current(id)!;
+  assert.ok(sameRelay(now.via(), farB), `still through ${now.via()}: ${JSON.stringify(mesh.measured(id))}`);
+  const throughB = await took(now);
+  assert.ok(throughB < throughA, `requests through b ${throughB} ms, through a ${throughA} ms`);
   await runner.run(mesh.close());
   runner.shutdown();
   void station.close();
+  ra.kill();
   rb.kill();
 });
 
