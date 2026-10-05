@@ -552,7 +552,11 @@ private fun AppContent(app: AppState) {
                 var shown by remember { mutableStateOf<String?>(null) }
                 LaunchedEffect(target?.workspace?.id) {
                     val id = target?.workspace?.id
-                    if (id != null && shown != null && id != shown) fail.still.android.data.preread(app.scope, app.core, homeTopics(id), LOCAL_MS, PRIME_MS)
+                    if (id != null && shown != null && id != shown) {
+                        // What is by the list (its marks, status, what is left up) read ahead too, but only the list waited for.
+                        fail.still.android.data.preread(app.scope, app.core, homeExtras(id), 0, PRIME_MS)
+                        fail.still.android.data.preread(app.scope, app.core, homeLists(id), LOCAL_MS, PRIME_MS)
+                    }
                     shown = id
                 }
                 val current = if (target == null) null else entries?.firstOrNull { it.workspace.id == shown } ?: target
@@ -597,11 +601,15 @@ private const val LOCAL_MS = 100L
 /** How long a chat read ahead of its page (`AppState.prime`) is kept for it. */
 private const val PRIME_MS = 3_000L
 
-/** What the list of a workspace shows (screens/Home.kt, OpenJobs.kt), as they follow it: read ahead of switching to it. */
-private fun homeTopics(workspace: String): List<Pair<JsonObject, kotlinx.serialization.KSerializer<*>>> = listOf(
+/** A workspace's lists (screens/Home.kt), as it follows them: read ahead of switching to it. */
+private fun homeLists(workspace: String): List<Pair<JsonObject, kotlinx.serialization.KSerializer<*>>> = listOf(
     Topics.chats(workspace, false) to fail.still.android.data.ChatsView.serializer(),
     Topics.chats(workspace, true) to fail.still.android.data.ChatsView.serializer(),
     Topics.chats(workspace, false, watching = true) to fail.still.android.data.ChatsView.serializer(),
+)
+
+/** What is shown by a workspace's lists (screens/Home.kt, OpenJobs.kt), as they follow it. */
+private fun homeExtras(workspace: String): List<Pair<JsonObject, kotlinx.serialization.KSerializer<*>>> = listOf(
     Topics.workspaceMarks(workspace) to fail.still.android.data.WorkspaceMarksView.serializer(),
     Topics.status(workspace) to fail.still.android.data.StatusView.serializer(),
     Topics.longJobs(workspace) to fail.still.android.data.LongJobsView.serializer(),
