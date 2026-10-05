@@ -21,28 +21,10 @@ case "${1:?usage: release.sh station|android}" in
     # The station in TypeScript, bundled for each platform (scripts/station-bundle.sh) with its native parts prebuilt:
     # the natives job before this one built and published those of this commit (all three platforms).
     (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-    # The launcher signed with the desktop app's certificate (station-bundle.sh): macOS keeps its Local Network grant
-    # across releases. Its keychain as .github/release-desktop.py's: the secret's in a keychain of its own, else the
-    # login keychain unlocked.
-    identity=$(node -p 'require("./apps/desktop/package.json").build.mac.identity')
-    if [ -n "${MACOS_SIGNING_CERTIFICATE_B64:-}" ] && [ -n "${MACOS_SIGNING_CERTIFICATE_PASSWORD:-}" ]; then
-      keychain="$dir/signing.keychain-db"
-      keypass=$(openssl rand -hex 32)
-      previous=$(security list-keychains -d user | tr -d '"')
-      trap 'security list-keychains -d user -s $previous; security delete-keychain "$keychain" 2>/dev/null; rm -rf "$dir"' EXIT
-      (umask 077 && printf '%s' "$MACOS_SIGNING_CERTIFICATE_B64" | base64 -d > "$dir/certificate.p12")
-      security create-keychain -p "$keypass" "$keychain"
-      security set-keychain-settings -lut 21600 "$keychain"
-      security unlock-keychain -p "$keypass" "$keychain"
-      security import "$dir/certificate.p12" -k "$keychain" -P "$MACOS_SIGNING_CERTIFICATE_PASSWORD" -T /usr/bin/codesign > /dev/null
-      security set-key-partition-list -S apple-tool:,apple: -k "$keypass" "$keychain" > /dev/null
-      security list-keychains -d user -s "$keychain" $previous
-      rm "$dir/certificate.p12"
-    elif [ -n "${KEYCHAIN_PASSWORD_AFK:-}" ]; then
-      security unlock-keychain -p "$KEYCHAIN_PASSWORD_AFK" "$HOME/Library/Keychains/login.keychain-db"
-    fi
-    if security find-identity -v -p codesigning | grep -Fq "$identity"; then export STILLFAIL_SIGN_IDENTITY="$identity"
-    else echo "::warning::$identity is not in the keychain: the launcher is ad hoc, and macOS asks for the local network again after an update"; fi
+    # The launcher signed with the desktop app's certificate (.github/sign-launcher.sh): macOS keeps its Local Network
+    # grant across releases. Without the certificate, a warning and an ad hoc launcher.
+    if [ -n "${MACOS_SIGNING_CERTIFICATE_B64:-}" ] && [ -n "${MACOS_SIGNING_CERTIFICATE_PASSWORD:-}" ]; then export STILLFAIL_SIGN_LAUNCHER=1
+    else echo "::warning::no signing certificate: the launcher is ad hoc, and macOS asks for the local network again after an update"; fi
     sh scripts/release.sh ${beta:+$beta}
     ;;
   android)

@@ -330,7 +330,6 @@ jobs:
       - name: Build the station's release (darwin-arm64, linux-x64, linux-arm64)
         env:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
-          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
           RELEASE_DIR: ${{ runner.temp }}/release

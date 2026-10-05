@@ -2,6 +2,7 @@
 """Build and sign on the organization's Mac runner; never publish an unsigned update."""
 import argparse
 import base64
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -26,6 +27,10 @@ def run(args, **kwargs):
         raise SystemExit('Desktop release step failed: ' + args[0])
     return result
 
+# The user's keychain search list is the one mini1's jobs share: the station release job's .github/sign-launcher.sh
+# sets it too, under this lock, held until this one's keychain is gone (the process's end).
+lock = open(Path.home() / '.stillfail-mac-signing.lock', 'a')
+fcntl.flock(lock, fcntl.LOCK_EX)
 previous = shlex.split(subprocess.check_output(['security', 'list-keychains', '-d', 'user'], text=True))
 with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get('RUNNER_TEMP')) as directory:
     keychain = str(Path(directory) / 'signing.keychain-db')

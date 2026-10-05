@@ -14,7 +14,7 @@
 #                                                          $STILLFAIL_POSTHOG names one: scripts/posthog-key.ts; the
 #                                                          station finds its release as dist/admin's parent's parent)
 #   stillfail/VERSION, BUILD                              (the commit; the commits in its history: version 0.1.<BUILD>)
-# On darwin-arm64 the launcher is signed with $STILLFAIL_SIGN_IDENTITY when it is set.
+# On darwin-arm64 the launcher is signed when $STILLFAIL_SIGN_LAUNCHER is set (the station release job).
 # Its Node is the station's own: the agents' PATH never has it (a runtime installed with it would land there).
 #   station-bundle.sh DIR [darwin-arm64|linux-x64|linux-arm64]
 set -eu
@@ -41,10 +41,11 @@ cp -R "$root/dist/admin" "$app/dist/admin"
 cp "$launcher" "$app/mesh/target/release/stillfail-station"
 # macOS asks "find devices on local networks?" (the mesh's mDNS) for the launcher: Node and everything it starts are
 # its. Ad hoc, the grant was its hash's: each new launcher asked again, and every Node it started while unanswered put
-# up one more. Signed with $STILLFAIL_SIGN_IDENTITY (.github/release.sh: the desktop app's certificate) under one
-# identifier, a grant stays across releases.
-if [ "$platform" = darwin-arm64 ] && [ -n "${STILLFAIL_SIGN_IDENTITY:-}" ]; then
-  codesign --force --timestamp=none --sign "$STILLFAIL_SIGN_IDENTITY" --identifier fail.still.station "$app/mesh/target/release/stillfail-station" >&2
+# up one more. The station release job signs it ($STILLFAIL_SIGN_LAUNCHER: .github/sign-launcher.sh), so a grant stays.
+if [ "$platform" = darwin-arm64 ] && [ -n "${STILLFAIL_SIGN_LAUNCHER:-}" ]; then
+  # Not signed is a warning, not a release missed: the launcher left as it was (ad hoc) still works.
+  sh "$root/.github/sign-launcher.sh" "$app/mesh/target/release/stillfail-station" >&2 ||
+    { echo "::warning::the launcher was not signed (.github/sign-launcher.sh): ad hoc" >&2; cp "$launcher" "$app/mesh/target/release/stillfail-station"; }
 fi
 ln -s stillfail-station "$app/mesh/target/release/ember-station"
 cp "$root/station/dist/main.js" "$app/station/"
