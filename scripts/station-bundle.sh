@@ -14,6 +14,7 @@
 #                                                          $STILLFAIL_POSTHOG names one: scripts/posthog-key.ts; the
 #                                                          station finds its release as dist/admin's parent's parent)
 #   stillfail/VERSION, BUILD                              (the commit; the commits in its history: version 0.1.<BUILD>)
+# On darwin-arm64 the launcher is signed with $STILLFAIL_SIGN_IDENTITY when it is set.
 # Its Node is the station's own: the agents' PATH never has it (a runtime installed with it would land there).
 #   station-bundle.sh DIR [darwin-arm64|linux-x64|linux-arm64]
 set -eu
@@ -38,6 +39,13 @@ cp "$root/bin/stillfail" "$app/bin/"
 ln -s stillfail "$app/bin/ember"
 cp -R "$root/dist/admin" "$app/dist/admin"
 cp "$launcher" "$app/mesh/target/release/stillfail-station"
+# macOS asks "find devices on local networks?" (the mesh's mDNS) for the launcher: Node and everything it starts are
+# its. Ad hoc, the grant was its hash's: each new launcher asked again, and every Node it started while unanswered put
+# up one more. Signed with $STILLFAIL_SIGN_IDENTITY (.github/release.sh: the desktop app's certificate) under one
+# identifier, a grant stays across releases.
+if [ "$platform" = darwin-arm64 ] && [ -n "${STILLFAIL_SIGN_IDENTITY:-}" ]; then
+  codesign --force --timestamp=none --sign "$STILLFAIL_SIGN_IDENTITY" --identifier fail.still.station "$app/mesh/target/release/stillfail-station" >&2
+fi
 ln -s stillfail-station "$app/mesh/target/release/ember-station"
 cp "$root/station/dist/main.js" "$app/station/"
 cp "$root/station/dist/read/worker.js" "$app/station/read/"
