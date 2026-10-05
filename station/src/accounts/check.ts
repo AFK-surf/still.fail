@@ -39,6 +39,11 @@ const optional = (v: unknown, type: "string" | "boolean" | "number", what: strin
 /// Throws what parse_config refuses in `raw` (config.json as written); `data` is the data directory homes are under.
 export function checkConfig(raw: any, _data: string): void {
   if (!isObject(raw)) throw new Error(`invalid type: ${describe(raw)}, expected struct RawConfig`);
+  // The device tools' access (src/device/tools.ts).
+  if (raw.tools !== undefined && raw.tools !== null) {
+    if (!isObject(raw.tools)) throw new Error(`invalid type: ${describe(raw.tools)}, expected struct RawTools`);
+    if (raw.tools.access !== undefined && !["off", "read", "full"].includes(raw.tools.access)) throw new Error("tools.access: one of off, read, full");
+  }
   const profiles = raw.profiles ?? [];
   if (!Array.isArray(profiles)) throw new Error(`invalid type: ${describe(profiles)}, expected a sequence`);
   const profileIds: string[] = [];

@@ -9,7 +9,8 @@ import type { Cloud } from "../cloud/state.ts";
 import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
 import { nowSecs } from "../ops/files.ts";
-import { type Admitted, revoked, verifyMember } from "./credential.ts";
+import type { Accepted } from "../cloud/provider.ts";
+import { type Admitted, readOnly, revoked, verifyMember } from "./credential.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerAdb, type Shares } from "./adb.ts";
 import { Traces, parseParent, route } from "./traces.ts";
@@ -74,6 +75,8 @@ export type Members = {
   shares: Shares;
   /// The mesh's spans, when traces are on.
   traces?: Traces;
+  /// Which member credentials the control plane signs (still.fail cloud's when not said).
+  accepted?: () => Accepted;
 };
 
 /// One member's connection: the credential first, nothing served before it checks out; then a request a stream.
@@ -87,7 +90,7 @@ export async function serve(m: Members, conn: Connection) {
   if (!first) return;
   const credentials = new Reader(first);
   const state = () => m.cloud.state!;
-  const check = (line: any) => verifyMember(typeof line?.credential === "string" ? line.credential : "", state().grant_keys, state().workspace, device, state().revocations);
+  const check = (line: any) => verifyMember(typeof line?.credential === "string" ? line.credential : "", state().grant_keys, state().workspace, device, state().revocations, m.accepted?.());
   const hello = await credentials.line();
   if (hello === null) throw new Error("no credential");
   let current: Admitted;
@@ -242,7 +245,11 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     return answer(404, '{"error":"only the admin API is reachable over the mesh"}');
   }
   // A phone lent to the agents, or asked about (adb.ts): its send side came finished, what it hears goes down the stream.
-  if (head.adb !== null && typeof head.adb === "object" && !Array.isArray(head.adb)) return answerAdb(m.shares, conn, viewer, head, stream, reader);
+  if (head.adb !== null && typeof head.adb === "object" && !Array.isArray(head.adb)) {
+    // Lending a phone is a change a read-only member does not make.
+    if (readOnly(viewer)) return answer(403, { error: "read-only members cannot lend or use phones" });
+    return answerAdb(m.shares, conn, viewer, head, stream, reader);
+  }
   // A preview page's WebSocket (`"socket": true`): no body to wait for, the stream carries its messages both ways.
   if (head.socket === true) return socket(m, stream, reader, head, path);
   const body = await reader.rest();

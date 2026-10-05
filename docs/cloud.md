@@ -58,6 +58,18 @@ Google OAuth（`openid email profile`），access token 5 分钟，refresh token
 
 station 端由 station 自己负责（station/src/mesh/serve.ts，iroh 1.0.3 在它的 Node 插件 station/native/mesh 里）：把 mesh 上来的请求交给 station 的管理 API，带上已验证的用户身份；station 据此记录「谁」做了操作、在管理页对话里说了话。
 
+## Control planes (still.fail cloud, Comma)
+
+A station and the client core talk to "the control plane" through one interface, so the same station and core can be enrolled in still.fail cloud or, experimentally, in Comma (AFK-surf/Cue). still.fail cloud stays the default; nothing changes for a station or client that does not choose Comma.
+
+- **Station** (`station/src/cloud/plane.ts`, the `ControlPlane` service in `station/src/services.ts`): cloud.json, the presence socket, notices, traces, where releases are, and which member credentials are accepted. `cloud/provider.ts` holds what differs per provider: paths, signing tags, header names, credential `iss`/`typ`. `cloud.json` has `provider` (absent means `"stillfail"`, and a still.fail station's file is unchanged); the service reads it at each use, so a station enrolled elsewhere follows without a restart. Feedback (`/v1/feedback`) and session page links stay still.fail-only.
+- **Enrolling in Comma**: `stillfail station enroll <origin> <token> --provider comma` posts to `/v1/comma/stations/enroll` (`comma-station-enroll-v1` proof). Presence is `/v1/comma/stations/connect` (`comma-station-connect-v1`, `x-stillfail-*` headers only); its `state` frames also carry `gateway_keys`, kept in cloud.json. Notices go to `/v1/comma/stations/notify` (`comma-station-notify-v1`). Comma takes no traces yet. Releases and the installer are under `<origin>/stations` (`releases/station.json`, `install.sh`); `stillfail update` follows cloud.json's provider.
+- **Credentials**: Comma's are `typ: comma-member+jwt`, `iss: comma`, checked exactly like still.fail's. Role `viewer` is read-only on every station: reads (GET/HEAD) and the viewer's own read/dismissed marks only; other requests and phone sharing answer 403.
+- **Device tools** (`comma/tools/1`, `station/src/mesh/tools.ts`, `station/src/device/tools.ts`): an iroh ALPN on the station's existing endpoint, admitted only for ids in `gateway_keys` (rechecked per request). One request per stream: a JSON line `{op, id, context, args}`, answered by `{ok, result}` or `{ok: false, error: {code, message}}`. The station's `tools.access` (config.json, `off` | `read` | `full`, default `read`; `GET/PUT /tools/access` on the admin API, PUT for owners and admins) decides what runs: `read` allows `fs.read`, `fs.list`, `fs.stat`, `runtime.probe`; `full` also `exec`, `fs.write`, `process.*` and `session.*`. `session.start`/`session.say` create and drive normal station chats through the admin API as the requester (`requester_email`).
+- **Client core**: see [core-ts.md](core-ts.md), "Account providers and embedding".
+
+The wire contract shared with Comma is "Station ↔ Comma control-plane contract (v1)"; deviations are listed in the pull request that introduced this section.
+
 ## 网页版
 
 从 still.fail cloud 打开，先登录。以前的**本机模式**（station 上的 `http://127.0.0.1:4760/admin`，不登录）已经去掉：station 不再提供页面和本机管理 API，那个端口只把旧链接 302 到这里的同一页；每台 station 都必须加入一个 workspace 才干活。

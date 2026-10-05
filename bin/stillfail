@@ -11,7 +11,8 @@
 #                                                       channel (stable, or the test channel's); --beta/--stable puts
 #                                                       it on that channel first (back to the stable release even when
 #                                                       that is older than the beta it runs)
-#   stillfail station enroll <cloud-origin> <token>     joins a workspace in still.fail cloud
+#   stillfail station enroll <cloud-origin> <token> [--provider comma]
+#                                                       joins a workspace in still.fail cloud (or in Comma)
 #   stillfail station id
 # The data is in $STILLFAIL_DATA (else $EMBER_DATA), default ~/.stillfail; ~/.ember is the old default, which the
 # station moves there on its first start (the Rust station's former.rs).
@@ -31,6 +32,8 @@ case "${1:-} ${2:-}" in
     [ -f "$cloud" ] || cloud="$HOME/.ember/mesh/cloud.json"
     origin=$(sed -n 's/.*"origin": *"\([^"]*\)".*/\1/p' "$cloud" 2>/dev/null | head -1)
     [ -n "$origin" ] || { echo "这台 station 还没有加入 workspace，无从更新" >&2; exit 1; }
+    # Comma keeps its station releases and installer under /stations (cloud.json's provider).
+    grep -q '"provider": *"comma"' "$cloud" 2>/dev/null && origin="$origin/stations"
     # Its channel, set first when named (the station's last line says it); a station that cannot say (a clone not
     # built) takes the stable one.
     case "${2:-}" in
@@ -48,5 +51,5 @@ case "${1:-} ${2:-}" in
   "station enroll") shift 2; exec "$station" enroll "$@" --data "$data" ;;
   "status "*|"station status") exec "$station" status --data "$data" ;;
   "station id") exec "$station" id --data "$data" ;;
-  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> | stillfail station id" >&2; exit 2 ;;
+  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] | stillfail station id" >&2; exit 2 ;;
 esac

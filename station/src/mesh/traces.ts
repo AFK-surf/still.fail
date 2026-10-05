@@ -1,14 +1,11 @@
 // The station's traces (the Rust station's telemetry.rs): the mesh's own spans (a request stream from accepted to fully
 // answered; an event stream's to its head), under the caller's trace when it records one. Batched, sent at most every
-// 3 s to still.fail cloud's `/v1/telemetry/traces` signed with the station's key; the cloud forwards them to Axiom. A
-// batch that cannot be sent is dropped. Off unless the config turns traces on (telemetry.traces), read at start.
+// 3 s to the control plane (still.fail cloud's `/v1/telemetry/traces`, signed with the station's key; the cloud forwards
+// them to Axiom; ControlPlane.traces). A batch that cannot be sent is dropped. Off unless the config turns traces on (telemetry.traces), read at start.
 import { randomBytes } from "node:crypto";
 import { Clock, Effect, Exit, FiberSet, Scope } from "effect";
 import { wall } from "../ops/fibers.ts";
-import { nowSecs } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
-import { type StationKey, sha256hex } from "../cloud/key.ts";
-import type { Cloud } from "../cloud/state.ts";
 
 const EXPORT_MS = 3_000;
 const MAX_BUFFER = 2_000;
@@ -129,29 +126,20 @@ export class Traces {
     }
   }
 
-  /// Sends batches to still.fail cloud, signed under both names' tags.
-  exportTo(cloud: Cloud, key: StationKey) {
-    this.sink = async (spans) => {
-      const s = cloud.state;
-      if (s === null) return;
-      const body = JSON.stringify({
-        resourceSpans: [
-          {
-            resource: { attributes: [attribute("service.name", "stillfail-mesh"), attribute("stillfail.station", s.station)] },
-            scopeSpans: [{ scope: { name: "stillfail-mesh" }, spans }],
-          },
-        ],
-      });
-      const ts = nowSecs();
-      const digest = sha256hex(body);
-      const headers: Record<string, string> = { "content-type": "application/json" };
-      for (const prefix of ["stillfail", "ember"]) {
-        headers[`x-${prefix}-station`] = s.station;
-        headers[`x-${prefix}-ts`] = String(ts);
-        headers[`x-${prefix}-signature`] = key.sign(`${prefix}-station-telemetry-v1:${s.origin}:${s.station}:${ts}:${digest}`);
-      }
-      const response = await fetch(`${s.origin}/v1/telemetry/traces`, { method: "POST", headers, body, signal: AbortSignal.timeout(30_000) });
-      if (!response.ok) throw new Error(`still.fail cloud answered ${response.status}`);
-    };
+  /// Sends batches to `sink` (the control plane's).
+  exportTo(sink: (spans: unknown[]) => Promise<void>) {
+    this.sink = sink;
   }
+}
+
+/// A batch of the mesh's spans as OTLP JSON, of `station`.
+export function otlpBody(station: string, spans: unknown[]): string {
+  return JSON.stringify({
+    resourceSpans: [
+      {
+        resource: { attributes: [attribute("service.name", "stillfail-mesh"), attribute("stillfail.station", station)] },
+        scopeSpans: [{ scope: { name: "stillfail-mesh" }, spans }],
+      },
+    ],
+  });
 }

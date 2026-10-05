@@ -3,7 +3,7 @@
 // interrupting it: every part's scope closes, and with it what it opened. Commands as the Rust station takes them:
 //
 //   run --app DIR [--port N] [--data DIR] [--with-parent] [--launcher-fds a,b,c]
-//   enroll <cloud> <token> [--data DIR]   status [--data DIR]   id [--data DIR]
+//   enroll <cloud> <token> [--provider stillfail|comma] [--data DIR]   status [--data DIR]   id [--data DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -20,7 +20,8 @@ import { ConfigFile } from "./ops/config.ts";
 import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { version } from "./ops/version.ts";
-import { AdbShares, AdminApi, AdminHost, Cloud, Events, Key, MeshNative, Paths, Readers, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Key, MeshNative, Paths, Readers, Store, Up } from "./services.ts";
+import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
 
 // Run by the desktop app on its own Electron as Node (apps/desktop/src/station.ts): what this starts (agents, jobs,
@@ -30,6 +31,8 @@ delete process.env.ELECTRON_RUN_AS_NODE;
 const args = process.argv.slice(2);
 const data = dataDir(args);
 const command = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && args[i - 1] !== "--with-parent"));
+/// Flags that take a value: what follows them is no command's argument.
+const VALUED = ["--data", "--provider"];
 
 // What it says on this machine is in the station's language (config.json `language`).
 try {
@@ -38,7 +41,7 @@ try {
 } catch {}
 
 function usage(): never {
-  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> | status | id");
+  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] | status | id");
   process.exit(2);
 }
 
@@ -48,7 +51,7 @@ const Loopback = (control: Control) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const up = yield* Up;
-      const cloud = yield* Cloud;
+      const cloud = yield* ControlPlane;
       yield* Effect.acquireRelease(
         Effect.sync(() => {
           const server = createServer((req, res) => {
@@ -100,7 +103,8 @@ function run() {
   });
   hearErrors((line, error) => reports.report(line, error));
   const paths = Layer.succeed(Paths)({ data, app });
-  const parts = Layer.mergeAll(Cloud.layer, Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer).pipe(Layer.provideMerge(paths));
+  const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer).pipe(Layer.provideMerge(paths));
+  const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
   const station = Layer.mergeAll(MeshLive, Loopback(control)).pipe(
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
@@ -146,9 +150,10 @@ switch (command) {
     run();
     break;
   case "enroll": {
-    const [, origin, token] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1] === "--data"));
-    if (!origin || !token) usage();
-    await enroll(data, origin.replace(/\/+$/, ""), token);
+    const [, origin, token] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
+    const provider = (flag(args, "--provider") ?? "stillfail") as Provider;
+    if (!origin || !token || !PROVIDERS.includes(provider)) usage();
+    await enroll(data, origin.replace(/\/+$/, ""), token, provider);
     break;
   }
   case "status":

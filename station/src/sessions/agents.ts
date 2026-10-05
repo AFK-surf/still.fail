@@ -16,7 +16,7 @@ import { Remote } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
-import { AdbShares, Cloud, Events, Key, Paths, Readers, Store } from "../services.ts";
+import { AdbShares, ControlPlane, Events, Key, Paths, Readers, Store } from "../services.ts";
 import { Notifier } from "../cloud/notify.ts";
 import { adbTools } from "../tools/adb.ts";
 import { archiveTools } from "../tools/archive.ts";
@@ -66,7 +66,7 @@ export type AgentsParts = {
   /// What this station shares with the workspace's other stations, and uses of theirs.
   sharing: Sharing;
   slack: SlackParts;
-  /// Where the station is in still.fail cloud while in a workspace.
+  /// Where the station is in its control plane while in a workspace.
   place(): { origin: string; workspace: string; station: string } | null;
   /// GET /overview as `viewer` sees it.
   overview(viewer: Viewer, lang: Lang): Promise<unknown>;
@@ -107,7 +107,8 @@ export const AgentsLive = (control: Control) =>
     Effect.gen(function* () {
       const { data, app } = yield* Paths;
       const store = yield* Store;
-      const cloud = (yield* Cloud).state;
+      const plane = yield* ControlPlane;
+      const cloud = plane.state;
       const readers = yield* Readers;
       const events = yield* Events;
       const key = yield* Key;
@@ -121,9 +122,10 @@ export const AgentsLive = (control: Control) =>
         return s && s.workspace && !cloud.removed() ? s : null;
       };
       const bound = () => place() !== null;
+      // Session pages are still.fail cloud's (`<origin>/o/…`); other control planes have none to link to.
       const pageOf = (key: string) => {
         const s = place();
-        return s ? `${s.origin}/o/${s.workspace}/${s.station}/${encode(key)}` : undefined;
+        return s && plane.spec().pages ? `${s.origin}/o/${s.workspace}/${s.station}/${encode(key)}` : undefined;
       };
 
       const settings = () => hubConfig(config.raw(), data);
@@ -178,7 +180,7 @@ export const AgentsLive = (control: Control) =>
         ...remoteTools(remote),
         ...adbTools(() => shares.list(), () => {
           const s = place();
-          return s ? `${s.origin}/w/${s.workspace}/s/${s.station}/adb` : null;
+          return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}/adb` : null;
         }),
         ...jobTools(jobs, (key) => store.getSession(key)?.workspace ?? null),
       ];
@@ -188,7 +190,8 @@ export const AgentsLive = (control: Control) =>
         app,
         data,
         config,
-        origin: () => cloud.state?.origin ?? null,
+        // Where its releases are: still.fail cloud's origin, Comma's `/stations` (ControlPlane.releaseBase).
+        origin: () => plane.releaseBase(),
         running: () => hub.running(),
         inUse: () => events.inUse(),
       });
@@ -196,8 +199,9 @@ export const AgentsLive = (control: Control) =>
       // `stillfail update --beta|--stable` asks a running station by SIGHUP (run/channel-ask).
       control.on("hup", () => updates.answerChannelAsk());
 
-      // Bug reports to the still.fail team, from stations on the stable channel (updates.rs `channel_of`).
-      const stable = updates.channel() === "stable";
+      // Bug reports to the still.fail team, from stations on the stable channel (updates.rs `channel_of`), in still.fail
+      // cloud only: feedback is no part of the control plane (another provider's stations send none).
+      const stable = updates.channel() === "stable" && plane.spec().feedback;
       const sendReport = async (report: any) => {
         if (cloud.removed()) throw new Error("this station was removed from its workspace");
         report.context = { ...(report.context ?? {}), version: version() };
@@ -316,7 +320,7 @@ export const AgentsLive = (control: Control) =>
           await jobs.stopAll(why);
         }
       };
-      yield* (yield* Cloud).changes.pipe(
+      yield* plane.changes.pipe(
         Stream.runForEach(() => Effect.promise(follow)),
         Effect.forkScoped,
       );
@@ -359,8 +363,8 @@ export const AgentsLive = (control: Control) =>
       const usage = new UsageCounter({ store, config: () => ({ dataDir: data, profiles: settings().profiles }), clock: hub.clock });
       usage.start();
 
-      // What the chats' people hear about while no client of theirs runs: pushed by still.fail cloud.
-      const notifier = new Notifier(store, readers, cloud, key);
+      // What the chats' people hear about while no client of theirs runs: pushed by the control plane.
+      const notifier = new Notifier(store, readers, cloud, (notices) => Effect.runPromise(plane.notify(notices)));
 
       // The bug reports its agents sent that are fixed and out: each session told, a few minutes after the start and
       // every hour (the cloud has no way to say so as it happens).

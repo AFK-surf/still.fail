@@ -11,6 +11,8 @@ import { outputAt, tail } from "./read/jobs.ts";
 import { Store as StationStore } from "./store/store.ts";
 import { type StationKey, loadKey } from "./cloud/key.ts";
 import { Cloud as CloudState } from "./cloud/state.ts";
+import { type ControlPlaneShape, makeControlPlane } from "./cloud/plane.ts";
+import type { Provider } from "./cloud/provider.ts";
 import { type Mesh, loadMesh } from "./mesh/native.ts";
 import { Readers as ReaderPool } from "./read/pool.ts";
 import { Agents } from "./sessions/agents.ts";
@@ -18,22 +20,33 @@ import { Agents } from "./sessions/agents.ts";
 /// Where the station keeps its data, and the release it runs from.
 export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string }>()("stillfail/Paths") {}
 
-/// still.fail cloud's state for this station (cloud.json), and its changes as they happen.
-export class Cloud extends Context.Service<Cloud, { readonly state: CloudState; readonly changes: Stream.Stream<void> }>()("stillfail/Cloud") {
-  static readonly layer = Layer.effect(
-    Cloud,
-    Effect.gen(function* () {
-      const { data } = yield* Paths;
-      const state = yield* Effect.acquireRelease(Effect.sync(() => new CloudState(data)), (s) => Effect.sync(() => s.close()));
-      const changes = Stream.callback<void>((queue) =>
-        Effect.acquireRelease(
-          Effect.sync(() => state.listen(() => void Queue.offerUnsafe(queue, undefined))),
-          (unlisten) => Effect.sync(unlisten),
-        ),
-      );
-      return Cloud.of({ state, changes });
-    }),
-  );
+/// The control plane this station is enrolled in (cloud/plane.ts): cloud.json and its changes, the presence socket,
+/// notices, traces, releases and which credentials it takes. `layer` follows cloud.json's provider (still.fail cloud
+/// when it names none); `layerFor` keeps to one (tests).
+export class ControlPlane extends Context.Service<ControlPlane, ControlPlaneShape>()("stillfail/ControlPlane") {
+  static readonly layer = ControlPlane.make();
+  static layerFor(provider: Provider) {
+    return ControlPlane.make(provider);
+  }
+
+  private static make(provider?: Provider) {
+    return Layer.effect(
+      ControlPlane,
+      Effect.gen(function* () {
+        const { data } = yield* Paths;
+        const key = yield* Key;
+        const up = yield* Up;
+        const state = yield* Effect.acquireRelease(Effect.sync(() => new CloudState(data)), (s) => Effect.sync(() => s.close()));
+        const changes = Stream.callback<void>((queue) =>
+          Effect.acquireRelease(
+            Effect.sync(() => state.listen(() => void Queue.offerUnsafe(queue, undefined))),
+            (unlisten) => Effect.sync(unlisten),
+          ),
+        );
+        return ControlPlane.of(makeControlPlane({ state, changes, key, up, provider }));
+      }),
+    );
+  }
 }
 
 /// The station's key.
@@ -122,7 +135,7 @@ export class AdbShares extends Context.Service<AdbShares, Shares>()("stillfail/A
   static readonly layer = Layer.effect(
     AdbShares,
     Effect.gen(function* () {
-      const cloud = (yield* Cloud).state;
+      const cloud = (yield* ControlPlane).state;
       return yield* Effect.acquireRelease(Effect.sync(() => new Shares({ cloud })), (s) => Effect.promise(() => s.close()));
     }),
   );

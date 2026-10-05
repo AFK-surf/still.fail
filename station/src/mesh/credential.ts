@@ -1,11 +1,10 @@
-// A member's credential, checked offline as the Rust station's main.rs `verify_member` does: an EdDSA JWT still.fail
-// cloud signed with one of the workspace's grant keys, for this workspace and the device at the other end, unexpired
-// and not revoked.
+// A member's credential, checked offline as the Rust station's main.rs `verify_member` does: an EdDSA JWT the control
+// plane signed with one of the workspace's grant keys, for this workspace and the device at the other end, unexpired
+// and not revoked. Which issuer and type it bears is the provider's (cloud/provider.ts): still.fail cloud's unless
+// told otherwise.
 import { createPublicKey, verify } from "node:crypto";
+import { type Accepted, STILLFAIL } from "../cloud/provider.ts";
 import { wall } from "../ops/fibers.ts";
-
-const MEMBER_TYPES = ["stillfail-member+jwt", "ember-member+jwt"];
-const ISSUERS = ["stillfail-cloud", "ember-cloud"];
 
 export type Viewer = { sub: string; email: string; name: string; role: string; workspace: string; device: string };
 export type Admitted = { viewer: Viewer; exp: number; iat: number; sid: string };
@@ -15,12 +14,12 @@ const b64 = (s: string) => Buffer.from(s, "base64url");
 /// Credentials' times are the cloud's, in the machine's time.
 const now = () => Math.floor(wall.now() / 1000);
 
-export function verifyMember(credential: string, keys: any, workspace: string, device: string, revocations: Revocation[]): Admitted {
+export function verifyMember(credential: string, keys: any, workspace: string, device: string, revocations: Revocation[], accepted: Accepted = STILLFAIL.credential): Admitted {
   const parts = credential.split(".");
   if (parts.length !== 3) throw new Error("malformed credential");
   const [head, body, sig] = parts;
   const header = JSON.parse(b64(head).toString());
-  if (header.alg !== "EdDSA" || !MEMBER_TYPES.includes(header.typ ?? "")) throw new Error("not a member's credential");
+  if (header.alg !== "EdDSA" || !accepted.types.includes(header.typ ?? "")) throw new Error("not a member's credential");
   const kid: string | undefined = typeof header.kid === "string" ? header.kid : undefined;
   const jwk = (Array.isArray(keys?.keys) ? keys.keys : []).find((k: any) => kid === undefined || k.kid === kid);
   if (!jwk) throw new Error("unknown credential key");
@@ -28,7 +27,7 @@ export function verifyMember(credential: string, keys: any, workspace: string, d
   if (!verify(null, Buffer.from(`${head}.${body}`), key, b64(sig))) throw new Error("credential signature invalid");
   const claims = JSON.parse(b64(body).toString());
   const text = (k: string) => (typeof claims[k] === "string" ? claims[k] : "");
-  if (!ISSUERS.includes(text("iss"))) throw new Error("credential not issued by still.fail cloud");
+  if (!accepted.issuers.includes(text("iss"))) throw new Error(accepted === STILLFAIL.credential ? "credential not issued by still.fail cloud" : "credential not issued by the control plane");
   if (text("ws") !== workspace) throw new Error("credential is for another workspace");
   if (text("device") !== device) throw new Error("credential is for another device");
   const exp = Number.isInteger(claims.exp) && claims.exp >= 0 ? claims.exp : 0;
@@ -42,6 +41,11 @@ export function verifyMember(credential: string, keys: any, workspace: string, d
   if (revoked(admitted, revocations)) throw new Error("credential revoked");
   return admitted;
 }
+
+/// Roles that may read but not write: no messages sent, nothing changed (contract §4).
+export const READ_ONLY_ROLES = ["viewer"];
+
+export const readOnly = (viewer: { role: string }) => READ_ONLY_ROLES.includes(viewer.role);
 
 /// Taken back: its account's (`sub`) or session's (`sid`) credentials issued up to `at`.
 export function revoked(admitted: Admitted, revocations: Revocation[]): boolean {

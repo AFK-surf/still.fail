@@ -1,7 +1,8 @@
-// The presence socket to still.fail cloud (the Rust station's main.rs `presence`, `connect`, `apply_state`): open while
+// The presence socket to the control plane (the Rust station's main.rs `presence`, `connect`, `apply_state`): open while
 // the station answers is the station online; the cloud pushes on it where the station is, its relays and roster, and
 // what it takes back. Signed at connect like enrollment. Reconnects with backoff; once removed from its workspace, asks
-// again only now and then, or at once when enrolled anew meanwhile.
+// again only now and then, or at once when enrolled anew meanwhile. Which control plane, and how it is spoken to, is
+// the provider's (provider.ts), read anew at every connect.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Clock, Effect, Stream, SubscriptionRef } from "effect";
@@ -9,9 +10,9 @@ import WebSocket from "ws";
 import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { version } from "../ops/version.ts";
-import { Cloud, Key, Up } from "../services.ts";
 import type { Cloud as CloudState, Revocation } from "./state.ts";
 import type { StationKey } from "./key.ts";
+import { type ProviderSpec, signedHeaders } from "./provider.ts";
 import { wall } from "../ops/fibers.ts";
 
 /// The cloud expects a "ping" this often and drops a station silent for three of them.
@@ -34,11 +35,17 @@ function writePresence(data: string, online: boolean, error: string | null) {
   writeFileSync(join(data, "run", "presence.json"), JSON.stringify({ online, at: nowSecs(), error }) + "\n");
 }
 
+/// What the presence socket is given: cloud.json and its changes, the key, whether the station answers, and the
+/// provider it is enrolled with.
+export type PresenceParts = {
+  cloud: { state: CloudState; changes: Stream.Stream<void> };
+  key: StationKey;
+  up: SubscriptionRef.SubscriptionRef<boolean>;
+  spec: () => ProviderSpec;
+};
+
 /// Keeps the socket for good (until interrupted): open while the station is up.
-export const presence = Effect.gen(function* () {
-  const cloud = yield* Cloud;
-  const key = yield* Key;
-  const up = yield* Up;
+export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(function* () {
   const until = (wanted: boolean) => SubscriptionRef.changes(up).pipe(Stream.filter((now) => now === wanted), Stream.runHead);
   let backoff = 1000;
   for (;;) {
@@ -57,13 +64,14 @@ export const presence = Effect.gen(function* () {
     }
     const started = yield* Clock.currentTimeMillis;
     s.peersCurrent = false;
+    const plane = spec();
     // The socket, until it ends or the station stops answering (then it is closed: offline at the cloud).
-    const ended = yield* Effect.result(Effect.raceFirst(connect(s, key), Effect.as(until(false), "station not answering; went offline at still.fail cloud")));
+    const ended = yield* Effect.result(Effect.raceFirst(connect(s, key, plane), Effect.as(until(false), `station not answering; went offline at ${plane.name}`)));
     s.peersCurrent = false;
     const why = ended._tag === "Success" ? ended.success : ended.failure.message;
     writePresence(s.data, false, why);
     if (ended._tag === "Success") log.info("presence", why);
-    else log.warn("presence", "no presence socket to still.fail cloud", { error: why });
+    else log.warn("presence", `no presence socket to ${plane.name}`, { error: why });
     // A socket that held a while starts over quickly; failing again and again backs off to a minute.
     if ((yield* Clock.currentTimeMillis) - started > 60_000) backoff = 1000;
     yield* Effect.sleep(backoff);
@@ -73,19 +81,13 @@ export const presence = Effect.gen(function* () {
 
 /// One socket, signed at connect like enrollment: succeeds with why it ended when the cloud closes it, fails when it
 /// can't be had or breaks; closed when interrupted.
-const connect = (s: CloudState, key: StationKey) =>
+const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
   Effect.callback<string, Error>((resume) => {
     const state = s.state!;
     const ts = nowSecs();
-    const headers: Record<string, string> = {};
     // New clouds read the canonical proof; old clouds their original one.
-    for (const prefix of ["stillfail", "ember"]) {
-      headers[`x-${prefix}-station`] = state.station;
-      headers[`x-${prefix}-ts`] = String(ts);
-      headers[`x-${prefix}-signature`] = key.sign(`${prefix}-station-connect-v1:${state.origin}:${state.station}:${ts}`);
-      headers[`x-${prefix}-version`] = version();
-    }
-    const socket = new WebSocket(`${state.origin.replace("http", "ws")}/v1/stations/connect`, { headers, handshakeTimeout: CONNECT_TIMEOUT_MS });
+    const headers = signedHeaders(plane.connectPrefixes, state.station, ts, (prefix) => key.sign(`${prefix}-station-connect-v1:${state.origin}:${state.station}:${ts}`), { version: version() });
+    const socket = new WebSocket(`${state.origin.replace("http", "ws")}${plane.connectPath}`, { headers, handshakeTimeout: CONNECT_TIMEOUT_MS });
     let ping: (() => void) | undefined;
     let answered = true;
     let failed: Error | null = null;
@@ -94,20 +96,20 @@ const connect = (s: CloudState, key: StationKey) =>
         removed(s, 404);
         failed = new Error("station removed");
       } else {
-        failed = new Error(`still.fail cloud answered ${response.statusCode}`);
+        failed = new Error(`${plane.name} answered ${response.statusCode}`);
       }
       socket.terminate();
     });
     socket.on("error", (error) => (failed ??= error));
     socket.on("open", () => {
-      takenBack(s);
+      takenBack(s, plane);
       writePresence(s.data, true, null);
-      log.info("presence", "online at still.fail cloud");
+      log.info("presence", `online at ${plane.name}`);
       // The cloud's answering is in the machine's time.
       ping = wall.every(PING_MS, () => {
         // No pong since the last ping: gone even if the socket has not noticed.
         if (!answered) {
-          failed = new Error("still.fail cloud stopped answering");
+          failed = new Error(`${plane.name} stopped answering`);
           socket.terminate();
           return;
         }
@@ -124,7 +126,7 @@ const connect = (s: CloudState, key: StationKey) =>
     socket.on("close", (code) => {
       ping?.();
       if (code === CLOSE_REMOVED) removed(s, CLOSE_REMOVED);
-      resume(failed ? Effect.fail(failed) : Effect.succeed("still.fail cloud closed the presence socket"));
+      resume(failed ? Effect.fail(failed) : Effect.succeed(`${plane.name} closed the presence socket`));
     });
     return Effect.sync(() => {
       ping?.();
@@ -143,9 +145,9 @@ function removed(s: CloudState, code: number) {
 }
 
 /// The cloud took the socket: a station it had removed is in its workspace again.
-function takenBack(s: CloudState) {
+function takenBack(s: CloudState, plane: ProviderSpec) {
   if (!s.removed()) return;
-  log.info("presence", "still.fail cloud takes this station again; back to work");
+  log.info("presence", `${plane.name} takes this station again; back to work`);
   s.update((st) => {
     delete st.removed_at;
     delete st.removed_code;
@@ -154,7 +156,7 @@ function takenBack(s: CloudState) {
 
 /// What the cloud pushes: where the station is and what it is called, its relays, roster and grant keys, what it
 /// takes back.
-function applyState(s: CloudState, text: string) {
+export function applyState(s: CloudState, text: string) {
   let body: any;
   try {
     body = JSON.parse(text);
@@ -173,6 +175,8 @@ function applyState(s: CloudState, text: string) {
       if (Array.isArray(body.relay_urls)) st.relay_urls = body.relay_urls.filter((u: unknown) => typeof u === "string");
       if (body.grant_keys && typeof body.grant_keys === "object" && !Array.isArray(body.grant_keys)) st.grant_keys = body.grant_keys;
       if (Array.isArray(body.revocations) && body.revocations.every(isRevocation)) st.revocations = body.revocations;
+      // Who may call the device tools (Comma's gateways): only from a control plane that names them.
+      if (Array.isArray(body.gateway_keys)) st.gateway_keys = body.gateway_keys.filter((k: unknown): k is string => typeof k === "string");
     });
   } else if (body?.type === "revoke" && isRevocation(body)) {
     s.update((st) => {
