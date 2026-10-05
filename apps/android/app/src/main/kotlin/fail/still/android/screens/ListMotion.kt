@@ -11,6 +11,7 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.VectorizedFiniteAnimationSpec
 import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateListOf
@@ -60,6 +61,8 @@ internal class ListMotion {
     /** Rows swiped off to be archived (Home.kt SwipeToArchive): already gone from sight, they leave no copy behind. */
     val swiped = HashSet<String>()
     private var closeUntil = 0L
+    /** When the rows last changed (one in, one out, one ahead of others): only then do they move to their new places. */
+    private var changedAt = Long.MIN_VALUE
 
     /**
      * The list as drawn now, in order: sets what moves from what was drawn last. `visible` are the keys on screen (only
@@ -80,6 +83,7 @@ internal class ListMotion {
         // Nothing to move from (the list's first rows), or no motion wanted: only where they are is kept.
         if (before.isNullOrEmpty() || still) return
         val t = SystemClock.uptimeMillis()
+        changedAt = t
         val oldSet = before.toHashSet()
         val newSet = keys.toHashSet()
         val gone = before.filter { it !in newSet }
@@ -114,9 +118,25 @@ internal class ListMotion {
     /** When the row went ahead of others, if that was just now (its ground lasts 480 ms). */
     fun liftedAt(key: String): Long? = lifted[key]?.takeIf { SystemClock.uptimeMillis() - it < 480 }
 
-    /** A row's placement: the web's MOVE spring, after `delayFor` (asked when the move starts). */
-    fun placement(key: String): FiniteAnimationSpec<IntOffset> =
-        Delayed(spring(dampingRatio = 1f, stiffness = MOVE_STIFFNESS, visibilityThreshold = IntOffset.VisibilityThreshold)) { delayFor(key) }
+    /**
+     * A row's placement: the web's MOVE spring, after `delayFor` (asked when the move starts); taken at once when the
+     * rows did not just change, as the move is then the list's own layout (something over the rows growing or going,
+     * its width), not a row going elsewhere.
+     */
+    fun placement(key: String): FiniteAnimationSpec<IntOffset> {
+        val move = Delayed(spring(dampingRatio = 1f, stiffness = MOVE_STIFFNESS, visibilityThreshold = IntOffset.VisibilityThreshold)) { delayFor(key) }
+        val now = snap<IntOffset>()
+        return Either({ SystemClock.uptimeMillis() - changedAt < CHANGED_MS }, move, now)
+    }
+}
+
+/** How long after the rows change their moves count as theirs (the move starts at the next layout, a frame or two later). */
+private const val CHANGED_MS = 150L
+
+/** `yes` or `no`, as `pick()` says when a move starts. */
+private class Either<T>(private val pick: () -> Boolean, private val yes: FiniteAnimationSpec<T>, private val no: FiniteAnimationSpec<T>) : FiniteAnimationSpec<T> {
+    override fun <V : AnimationVector> vectorize(converter: TwoWayConverter<T, V>): VectorizedFiniteAnimationSpec<V> =
+        (if (pick()) yes else no).vectorize(converter)
 }
 
 /** `inner`, begun `delay()` ms late (read as it starts); held at its start meanwhile. */

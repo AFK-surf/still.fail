@@ -19,7 +19,9 @@ function List() {
   const ref = useRef<HTMLDivElement>(null);
   useListMotion(ref);
   Object.assign(window, { remove: () => flushSync(() => setRows(r => r.filter(n => n !== 2))),
-    refresh: () => flushSync(() => setTick(t => t + 1)) });
+    refresh: () => flushSync(() => setTick(t => t + 1)),
+    // The glass band measured into the list's padding after the rows were first placed (Sidebar.tsx useGlassBands).
+    shift: () => { ref.current!.style.paddingTop = '60px'; flushSync(() => setTick(t => t + 1)); } });
   return <div className={nav.sidebar} style={{ width: 280, height: 340 }}>
     <div className={nav.navSlider}><div className={nav.navTrack}>
     <div className={nav.navScroll} ref={ref} data-tick={tick}>
@@ -91,6 +93,24 @@ createRoot(document.getElementById('root')!).render(<List />);
     }
     assert(startY - frames.at(-1).y > 40, 'the archived row closes completely');
     console.log('PASS', reducedMotion, { refresh });
+    await context.close();
+  }
+  // The same rows in the same order, moved by the list's own layout (its padding, its width): no motion, they are there.
+  {
+    const context = await browser.newContext({ viewport: { width: 360, height: 400 } });
+    const page = await context.newPage();
+    await page.goto(new URL('/list-motion-check.html', process.env.WEB_URL || 'http://127.0.0.1:5187').href);
+    await page.waitForFunction(() => typeof window.shift === 'function');
+    await page.waitForTimeout(300);
+    const { before, after } = await page.evaluate(async () => {
+      const row = document.querySelector('[data-flip="3"]');
+      const before = row.getBoundingClientRect().top;
+      window.shift();
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return { before, after: row.getBoundingClientRect().top };
+    });
+    assert(Math.abs(after - before - 60) < 0.5, `a layout shift is taken at once (moved ${after - before}px of 60 two frames later)`);
+    console.log('PASS layout shift');
     await context.close();
   }
 } finally {

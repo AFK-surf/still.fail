@@ -30,6 +30,9 @@ export function useListMotion(list: RefObject<HTMLElement | null>): void {
     // Which of the rows there before and now went ahead of others: they pass over the rest.
     const kept = els.map((el) => el.dataset.flip!).filter((key) => was.has(key));
     const before = [...was.keys()].filter((key) => kept.includes(key));
+    // Only a change of the rows (one in, one out, one ahead of others) moves them: with the same rows in the same order,
+    // a new place is the list's own layout changing (the glass bands measured into its padding, its width), taken at once.
+    const same = gone.length === 0 && els.length === was.size && kept.every((key, i) => key === before[i]);
     for (const el of els) {
       const key = el.dataset.flip!;
       const p = was.get(key);
@@ -47,8 +50,9 @@ export function useListMotion(list: RefObject<HTMLElement | null>): void {
       }
       // A new snapshot with the same layout must not restart an in-flight spring.
       // Archive acknowledgements and pointer changes can arrive halfway through the move.
-      if (!still && p.el === el && p.top === at.top) {
+      if (!still && p.el === el && (p.top === at.top || same)) {
         now.set(key, p);
+        p.top = at.top;
         p.left = at.left;
         p.width = at.width;
         continue;
