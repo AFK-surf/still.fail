@@ -253,9 +253,10 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   const limit = Math.min(Math.max(parseUsize(limitParam) ?? 200, 1), 1000);
   const profile = configOf(s).profiles.find((p) => p.id === row.profile);
   const runtime = row.runtime === "claude" || row.runtime === "codex" ? row.runtime : null;
-  const path = profile && runtime && row.runtimeSessionId !== null ? transcriptPath(runtime, profile.home, row.runtimeSessionId) : null;
-  if (path === null || runtime === null) return { start: 0, entries: [] };
-  const entries = readTimeline(runtime, path);
+  if (!profile || runtime === null || row.runtimeSessionId === null) return { start: 0, entries: [] };
+  // Those of the runtime sessions it ran in before come first (sessions/afresh.ts).
+  const paths = store.runtimeSessions(s, key).flatMap((id) => transcriptPath(runtime, profile.home, id) ?? []);
+  const entries = paths.flatMap((path) => readTimeline(runtime, path));
   const end = Math.min(before, entries.length);
   const start = Math.max(0, end - limit);
   return { start, entries: entries.slice(start, end) };

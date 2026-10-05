@@ -83,8 +83,13 @@ export type SessionDeps = {
   memoryPath(): string;
   maxNudges(): number;
   backgroundOnMessage(key: string): boolean;
-  /// Where the runtime's live steps go, for whoever watches the session.
-  live?: { event(key: string, event: LiveEvent): void; turnEnded(key: string): void };
+  /// Where the runtime's live steps go, for whoever watches the session (and that it went on in a new runtime session).
+  live?: { event(key: string, event: LiveEvent): void; turnEnded(key: string): void; moved?(key: string): void };
+  /// What it is told when it goes on on `to` in a new runtime session rather than take up `id` (last run on `was`, when
+  /// the store does not know); null: it takes it up (sessions/afresh.ts).
+  startsAfresh?(key: string, id: string, to: Profile, was: string | null): string | null;
+  /// The runtime session it runs in, on `profile` (null: not known).
+  ranIn?(key: string, id: string, profile: string | null): void;
   idle(key: string): void;
   archiveIsCold(key: string): boolean;
   restoreArchive(key: string): void | Promise<void>;
@@ -139,6 +144,8 @@ export class SessionActor {
   private nudges = 0;
   private stopRequested = false;
   private resumeLost = false;
+  /// Started afresh: what it is told of it with its next prompt.
+  private afresh: string | null = null;
   private idleSince: number;
   private workingFor: Working[] = [];
   private tools: [string, string][] = [];
@@ -567,6 +574,9 @@ export class SessionActor {
       const lost = this.resumeLost;
       this.resumeLost = false;
       let prompt = lost ? `${RESUME_LOST}\n\n${text}` : text;
+      const afresh = this.afresh;
+      this.afresh = null;
+      if (afresh !== null) prompt = `${afresh}\n\n${prompt}`;
       if (continued !== null) prompt = `${continued}\n\n${prompt}`;
       // What changed in how it works since it was last told (migrations): once, before what it is handed.
       const told = store.toldNotes(this.key) ?? latestNote();
@@ -628,7 +638,14 @@ export class SessionActor {
     const base = openOptions(row, profile, this.deps);
     const generation = this.nextGeneration();
     let agent: AgentSession;
-    if (row.runtimeSessionId) {
+    // Recorded before it may be left, so the history reads on from it.
+    if (row.runtimeSessionId) this.deps.ranIn?.(this.key, row.runtimeSessionId, null);
+    const afresh = row.runtimeSessionId ? (this.deps.startsAfresh?.(this.key, row.runtimeSessionId, profile, this.profile) ?? null) : null;
+    if (afresh !== null) {
+      log.info("session", "going on in a new runtime session on another account", { session: this.key, left: row.runtimeSessionId, profile: profile.id });
+      agent = await driver.open(base, this.listener(generation));
+      this.afresh = afresh;
+    } else if (row.runtimeSessionId) {
       try {
         agent = await driver.open({ ...base, resume: row.runtimeSessionId }, this.listener(generation));
       } catch (error) {
@@ -639,7 +656,11 @@ export class SessionActor {
     } else {
       agent = await driver.open(base, this.listener(generation));
     }
-    if (row.runtimeSessionId !== agent.id()) store.setRuntimeSessionId(this.key, agent.id());
+    if (row.runtimeSessionId !== agent.id()) {
+      store.setRuntimeSessionId(this.key, agent.id());
+      if (row.runtimeSessionId) this.deps.live?.moved?.(this.key);
+    }
+    this.deps.ranIn?.(this.key, agent.id(), profile.id);
     this.agent = { generation, session: agent };
     this.profile = profile.id;
     return agent;

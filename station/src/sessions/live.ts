@@ -158,10 +158,68 @@ export class TranscriptTail {
   }
 }
 
-type Rate = { buckets: [number, number][]; toldAt: number; told: number };
-type Watched = { tail: TranscriptTail; watcher: FSWatcher | null; reading: boolean };
+/// A session's transcripts read as one: those of the runtime sessions it ran in before (done, read whole) and then the
+/// one it runs in now, their entries one after another, so its history goes on across a new runtime session.
+export class ChainTail {
+  readonly runtime: "claude" | "codex";
+  private tails: TranscriptTail[];
 
-export type Locate = (key: string) => { runtime: "claude" | "codex"; path: string } | null;
+  constructor(runtime: "claude" | "codex", paths: string[]) {
+    this.runtime = runtime;
+    this.tails = paths.map((path) => new TranscriptTail(runtime, path));
+  }
+
+  /// The transcript written to now.
+  get path(): string {
+    return this.tails.at(-1)!.path;
+  }
+
+  get entries(): TimelineEntry[] {
+    return this.tails.length === 1 ? this.tails[0]!.entries : this.tails.flatMap((t) => t.entries);
+  }
+
+  get usage(): TranscriptUsage {
+    const usage: TranscriptUsage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null };
+    for (const t of this.tails) {
+      usage.modelCalls += t.usage.modelCalls;
+      usage.inputTokens += t.usage.inputTokens;
+      usage.cachedTokens += t.usage.cachedTokens;
+      usage.outputTokens += t.usage.outputTokens;
+      usage.model = t.usage.model ?? usage.model;
+    }
+    return usage;
+  }
+
+  /// Goes on with the transcripts given (those it has, then new ones): the new ones are read after what it has.
+  extend(paths: string[]) {
+    if (paths.length < this.tails.length || this.tails.some((t, i) => t.path !== paths[i])) {
+      this.tails = paths.map((path) => new TranscriptTail(this.runtime, path));
+      return;
+    }
+    for (const path of paths.slice(this.tails.length)) this.tails.push(new TranscriptTail(this.runtime, path));
+  }
+
+  /// New entries since the last read, with the index of the first (all from the first that changed when an earlier
+  /// transcript gained some, or was written anew).
+  read(): [number, TimelineEntry[]] {
+    let offset = 0;
+    let from: number | null = null;
+    for (const tail of this.tails) {
+      const had = tail.entries.length;
+      const [start, entries] = tail.read();
+      if (from === null && (entries.length > 0 || start < had)) from = offset + start;
+      offset += tail.entries.length;
+    }
+    if (from === null) return [offset, []];
+    return [from, this.entries.slice(from)];
+  }
+}
+
+type Rate = { buckets: [number, number][]; toldAt: number; told: number };
+type Watched = { tail: ChainTail; watcher: FSWatcher | null; reading: boolean; arm(): void };
+
+/// Where a session's transcripts are: of the runtime sessions it ran in, the first first, ending with its current one.
+export type Locate = (key: string) => { runtime: "claude" | "codex"; paths: string[] } | null;
 
 export class LiveHub {
   private steps = new Map<string, LiveStep[]>();
@@ -258,7 +316,7 @@ export class LiveHub {
       // A watcher that has more than the transcript (it was written anew) is told where it ends.
       const len = tail.entries.length;
       const start = Math.max(Math.min(from, len), last === null ? 0 : Math.max(0, len - last));
-      listener({ type: "timeline", start, entries: tail.entries.slice(start), usage: { ...tail.usage } });
+      listener({ type: "timeline", start, entries: tail.entries.slice(start), usage: tail.usage });
     }
     const phase = this.phase.get(key);
     listener({ type: "steps", steps: [...(this.steps.get(key) ?? [])], phase: phase ? { phase: phase[0], elapsedMs: this.time.now() - phase[1] } : null });
@@ -277,9 +335,23 @@ export class LiveHub {
     if (watched) return slice(watched.tail.entries);
     const at = this.locate(key);
     if (!at) return null;
-    const tail = new TranscriptTail(at.runtime, at.path);
+    const tail = new ChainTail(at.runtime, at.paths);
     tail.read();
     return slice(tail.entries);
+  }
+
+  /// The session went on in a new runtime session: a watched history reads on in its transcript.
+  moved(key: string) {
+    const watched = this.watched.get(key);
+    if (!watched) return;
+    const at = this.locate(key);
+    if (!at) return;
+    // What the transcript left has is read first: its entries come before the new one's.
+    const [start, entries] = watched.tail.read();
+    if (entries.length > 0) this.emit(key, { type: "timeline", start, entries, usage: watched.tail.usage });
+    watched.tail.extend(at.paths);
+    watched.arm();
+    this.soon(key);
   }
 
   unsubscribe(key: string, id: number) {
@@ -337,17 +409,17 @@ export class LiveHub {
     if (!this.listeners.has(key)) return false;
     const at = this.locate(key);
     if (!at) return false;
-    const tail = new TranscriptTail(at.runtime, at.path);
+    const tail = new ChainTail(at.runtime, at.paths);
     tail.read(); // what is already there counts as known; subscribers ask for what they lack
-    const watched: Watched = { tail, watcher: null, reading: false };
-    // The transcript is its file, or its `.zst` while packed (sessions/cold.ts): packed or restored, it is another file,
-    // watched from then on (live.rs looks at whichever is there).
+    // The transcript written to now is watched: its file, or its `.zst` while packed (sessions/cold.ts): packed or
+    // restored, it is another file, watched from then on (live.rs looks at whichever is there).
     const arm = () => {
       watched.watcher?.close();
       watched.watcher = null;
       if (this.watched.get(key) !== watched) return;
+      const path = tail.path;
       try {
-        const watcher: FSWatcher = watch(existsSync(at.path) ? at.path : `${at.path}.zst`, { persistent: false }, (event) => {
+        const watcher: FSWatcher = watch(existsSync(path) ? path : `${path}.zst`, { persistent: false }, (event) => {
           if (event === "rename") arm();
           this.soon(key);
         });
@@ -355,6 +427,7 @@ export class LiveHub {
         watched.watcher = watcher;
       } catch {}
     };
+    const watched: Watched = { tail, watcher: null, reading: false, arm };
     this.watched.set(key, watched);
     arm();
     return true;
@@ -379,7 +452,7 @@ export class LiveHub {
       if (!now) return;
       now.reading = false;
       const [start, entries] = now.tail.read();
-      if (entries.length > 0 || fresh) this.emit(key, { type: "timeline", start, entries, usage: { ...now.tail.usage } });
+      if (entries.length > 0 || fresh) this.emit(key, { type: "timeline", start, entries, usage: now.tail.usage });
     });
   }
 }

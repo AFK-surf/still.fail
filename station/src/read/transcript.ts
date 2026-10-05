@@ -637,3 +637,55 @@ export function readTimeline(runtime: "claude" | "codex", path: string): Timelin
   }
   return out;
 }
+
+/// How far back from its end `lastContext` looks for the last request.
+const CONTEXT_LOOKBACK = 16 * 1024 * 1024;
+
+/// The tokens the last model request of a transcript was given (its whole context: what was cached and what was not),
+/// as the runtime recorded it; null when none is found near its end.
+export function lastContext(runtime: "claude" | "codex", path: string): number | null {
+  const source = transcriptBytes(path);
+  if (source === null) return null;
+  let bytes: Buffer;
+  if ("bytes" in source) bytes = source.bytes.subarray(Math.max(0, source.bytes.length - CONTEXT_LOOKBACK));
+  else {
+    try {
+      const from = Math.max(0, source.size - CONTEXT_LOOKBACK);
+      bytes = Buffer.alloc(source.size - from);
+      let at = 0;
+      while (at < bytes.length) {
+        const n = readSync(source.file, bytes, at, bytes.length - at, from + at);
+        if (n === 0) break;
+        at += n;
+      }
+      bytes = bytes.subarray(0, at);
+    } finally {
+      closeSync(source.file);
+    }
+  }
+  const n = (v: Json | undefined) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+  for (let end = bytes.length; end > 0; ) {
+    const start = bytes.lastIndexOf(0x0a, end - 1) + 1;
+    const line = bytes.subarray(start, end);
+    end = start - 1;
+    // Only lines that can hold a request's usage are parsed.
+    if (!line.includes(runtime === "claude" ? '"usage"' : '"last_token_usage"')) continue;
+    let r: Json;
+    try {
+      r = JSON.parse(new TextDecoder("utf-8").decode(line));
+    } catch {
+      continue;
+    }
+    if (runtime === "claude") {
+      const u = get(r, "type") === "assistant" ? get(get(r, "message") ?? null, "usage") : undefined;
+      if (u === undefined || !isObj(u)) continue;
+      const total = n(get(u, "input_tokens")) + n(get(u, "cache_read_input_tokens")) + n(get(u, "cache_creation_input_tokens"));
+      if (total > 0) return total;
+    } else {
+      const p = get(r, "payload");
+      const last = get(r, "type") === "event_msg" && get(p ?? null, "type") === "token_count" ? get(get(get(p ?? null, "info") ?? null, "last_token_usage") ?? null, "input_tokens") : undefined;
+      if (n(last) > 0) return n(last);
+    }
+  }
+  return null;
+}

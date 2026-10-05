@@ -298,7 +298,8 @@ function copyTranscript(roots: Roots, session: MachineSession, shared: string): 
 export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSession, createdBy: string, lang: Lang = stationLang()): [string, ThreadRow] {
   const { store } = hub;
   const runtime = found.runtime;
-  const going = store.listSessions().find((r) => r.runtime === runtime && r.runtimeSessionId === found.id);
+  // One it went on in (a runtime session left for a new one included).
+  const going = store.listSessions().find((r) => r.runtime === runtime && store.runtimeSessions(r.key).includes(found.id));
   if (going) {
     const thread = store.homeChat(going.key);
     if (thread) {

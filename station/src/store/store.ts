@@ -248,6 +248,27 @@ export class Store {
     this.#updateSession(key, "UPDATE sessions SET runtime_session_id = ?1 WHERE key = ?2", id, key);
   }
 
+  /// A runtime session the session runs in, on `profile` (null: not known, a profile it had is kept).
+  ranIn(key: string, id: string, profile: string | null): void {
+    this.#run(
+      `INSERT INTO runtime_sessions (session_key, id, profile, at) VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT (session_key, id) DO UPDATE SET profile = COALESCE(excluded.profile, profile)`,
+      key, id, profile, this.now(),
+    );
+  }
+
+  /// The profile a runtime session of the session last ran on, if known.
+  ranOn(key: string, id: string): string | null {
+    return this.#one("SELECT profile FROM runtime_sessions WHERE session_key = ? AND id = ?", key, id)?.profile ?? null;
+  }
+
+  /// The runtime sessions the session has run in, the first first, ending with the one it runs in now.
+  runtimeSessions(key: string): string[] {
+    const current = this.getSession(key)?.runtimeSessionId ?? null;
+    const ids: string[] = this.#all("SELECT id FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key).map((r) => r.id);
+    return current === null ? ids : [...ids.filter((id) => id !== current), current];
+  }
+
   setRunning(key: string, running: boolean): void {
     this.#updateSession(key, "UPDATE sessions SET running = ?1, last_active_at = ?2 WHERE key = ?3", flag(running), this.now(), key);
   }
@@ -332,6 +353,7 @@ export class Store {
         this.#run("DELETE FROM thread_sessions WHERE session = ?", key);
         this.#run("DELETE FROM deliveries WHERE session = ?", key);
         this.#run("DELETE FROM turns WHERE session_key = ?", key);
+        this.#run("DELETE FROM runtime_sessions WHERE session_key = ?", key);
         this.#run("DELETE FROM bindings WHERE session_key = ?", key);
         this.#run("DELETE FROM job_notices WHERE job_id IN (SELECT id FROM jobs WHERE session_key = ?)", key);
         this.#run("DELETE FROM jobs WHERE session_key = ?", key);

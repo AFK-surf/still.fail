@@ -41,6 +41,7 @@ import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths } from "./agent-home.ts";
+import { startsAfresh } from "./afresh.ts";
 import { serves } from "./pool.ts";
 
 type Json = any;
@@ -154,8 +155,8 @@ export class Hub {
         const profile = row && this.config().profiles.find((p) => p.id === row.profile);
         const runtime = row && runtimeNamed(row.runtime);
         if (!row || !profile || !runtime || !row.runtimeSessionId) return null;
-        const path = transcriptPath(runtime, profile.home, row.runtimeSessionId);
-        return path === null ? null : { runtime, path };
+        const paths = this.store.runtimeSessions(key).flatMap((id) => transcriptPath(runtime, profile.home, id) ?? []);
+        return paths.length === 0 ? null : { runtime, paths };
       },
       this.clock,
     );
@@ -741,6 +742,8 @@ export class Hub {
         return this.config().profiles.find((p) => p.id === row.profile)?.backgroundOnMessage ?? true;
       },
       live: this.live,
+      startsAfresh: (key, id, to, was) => startsAfresh(this, key, id, to, was),
+      ranIn: (key, id, profile) => this.store.ranIn(key, id, profile),
       idle: (key) => this.idleNow(key),
       archiveIsCold: (key) => this.cold.isCold(key),
       restoreArchive: (key) => this.cold.restore(key),

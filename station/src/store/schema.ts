@@ -255,6 +255,16 @@ CREATE TABLE IF NOT EXISTS usage (
   output INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS usage_at ON usage (at);
+-- The runtime sessions a session has run in, the first first, each with the profile it last ran on. The latest is
+-- sessions.runtime_session_id; one before it was left for a new one (its account changed), and its history goes on
+-- from theirs.
+CREATE TABLE IF NOT EXISTS runtime_sessions (
+  session_key TEXT NOT NULL,
+  id TEXT NOT NULL,
+  profile TEXT,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (session_key, id)
+);
 -- How far each transcript has been read for it.
 CREATE TABLE IF NOT EXISTS usage_files (
   path TEXT PRIMARY KEY,

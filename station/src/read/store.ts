@@ -310,6 +310,16 @@ export function listSessions(s: Store): SessionRow[] {
   return all(s, "SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
 }
 
+/// Store::runtimeSessions: the runtime sessions a session has run in, the first first, ending with its current one.
+export function runtimeSessions(s: Store, key: string): string[] {
+  const current = getSession(s, key)?.runtimeSessionId ?? null;
+  let ids: string[] = [];
+  try {
+    ids = all(s, "SELECT id FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key).map((r) => r.id);
+  } catch {} // a database no station of this version has opened yet
+  return current === null ? ids : [...ids.filter((id) => id !== current), current];
+}
+
 // ── threads ──
 
 export function getThread(s: Store, id: number): ThreadRow | null {

@@ -1162,6 +1162,53 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   await r.close();
 });
 
+test("on another account a long conversation goes on in a new runtime session, its history read on; a short one is taken up", async () => {
+  const r = new Rig();
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "second" });
+  });
+  const spent = { kind: "failed" as const, reason: classifyResult("usage limit reached"), message: "usage limit reached" };
+  // The profiles share a home here, so their transcripts.
+  const transcript = (id: string, said: string, context: number) => {
+    const path = join(r.config.profiles[0]!.home, "projects", "-w", `${id}.jsonl`);
+    mkdirSync(dirname(path), { recursive: true });
+    const usage = { input_tokens: 3, cache_read_input_tokens: context - 1003, cache_creation_input_tokens: 1000 };
+    writeFileSync(path, [{ type: "user", message: { role: "user", content: said } }, { type: "assistant", message: { id: `m-${id}`, role: "assistant", content: [{ type: "text", text: "ok" }], usage } }].map((l) => JSON.stringify(l)).join("\n") + "\n");
+  };
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const first = r.claude.last();
+  const key = first.options.route;
+  const on = r.session(key).profile;
+  transcript(first.id(), "first", 200_000);
+  first.end(spent);
+  await settle();
+  // Moved to the other account: not taken up there, but started afresh, told where its past is.
+  const second = r.claude.last();
+  assert.notEqual(second.options.profile.id, on);
+  assert.equal(second.options.resume, undefined);
+  assert.notEqual(second.id(), first.id());
+  assert.equal(second.prompts.length, 1);
+  assert.ok(matches(second.prompts[0]!, ["You go on in a new conversation", "about 200k tokens", `C1/${m.threadTs}`, `session_history with chat ${key}`, GO_ON_AFTER_SPENT]), second.prompts[0]);
+  assert.deepEqual(r.store.runtimeSessions(key), [first.id(), second.id()]);
+  assert.equal(r.store.ranOn(key, second.id()), second.options.profile.id);
+  // Its history goes on from the first's.
+  transcript(second.id(), "second", 1_000);
+  assert.deepEqual(r.hub.live.before(key, 100, 100)![1].filter((e) => e.kind === "user").map((e) => e.text), ["first", "second"]);
+  // Back on the first account, a short conversation is taken up as before.
+  second.end(spent);
+  await settle();
+  await configure(r.hub, key, { profile: on });
+  await settle();
+  const third = r.claude.last();
+  assert.equal(third.options.resume, second.id());
+  assert.deepEqual(third.prompts, [GO_ON_AFTER_SPENT]);
+  assert.deepEqual(r.store.runtimeSessions(key), [first.id(), second.id()]);
+  await r.close();
+});
+
 test("codex model efforts validate new chats, changes and pinned accounts", async () => {
   const r = new Rig();
   r.edit((raw) => {

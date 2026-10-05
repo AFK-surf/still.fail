@@ -8,7 +8,7 @@
 import { type Dirent, closeSync, opendirSync, openSync, readSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, type Store, listSessions } from "./store.ts";
+import { type Json, type Store, listSessions, runtimeSessions } from "./store.ts";
 import { HttpError } from "./views.ts";
 
 type Runtime = "claude" | "codex";
@@ -513,7 +513,7 @@ export function machineSessions(s: Store): Json {
   const found = list(roots(), 100);
   // A HashMap collected from every session: of two going on with one, the last listed (least recently active) stands.
   const going = new Map<string, string>();
-  for (const r of listSessions(s)) if (r.runtimeSessionId !== null) going.set(`${r.runtime}\0${r.runtimeSessionId}`, r.key);
+  for (const r of listSessions(s)) for (const id of runtimeSessions(s, r.key)) going.set(`${r.runtime}\0${id}`, r.key);
   for (const m of found) m.session = going.get(`${m.runtime}\0${m.id}`) ?? null;
   return { sessions: found.map(shown) };
 }
@@ -528,7 +528,7 @@ export function machineSession(s: Store, lang: Lang, runtime: string, id: string
   const found = find(roots(), runtime, id);
   if (found === null) throw new HttpError(404, tr(lang, "station.admin.noLocalSession", { id }));
   const said = conversation(runtime, found.path);
-  found.session = listSessions(s).find((r) => r.runtime === runtime && r.runtimeSessionId === found.id)?.key ?? null;
+  found.session = listSessions(s).find((r) => r.runtime === runtime && runtimeSessions(s, r.key).includes(found.id))?.key ?? null;
   const total = said.length;
   return { session: shown(found), total, said: said.slice(Math.max(0, total - limit)) };
 }
