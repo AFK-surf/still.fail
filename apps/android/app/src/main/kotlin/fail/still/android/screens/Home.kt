@@ -146,10 +146,12 @@ fun HomeScreen(current: WorkspaceEntry) {
     val all by rememberTopic<ChatsView>(app.core, Topics.chats(scope, false))
     val mine by rememberTopic<ChatsView>(app.core, Topics.chats(scope, true))
     val watching by rememberTopic<ChatsView>(app.core, Topics.chats(scope, false, watching = true))
-    // Each workspace's lists start at their top: not where the one switched from was scrolled to.
-    val allList = rememberSaveable(scope, saver = LazyListState.Saver) { LazyListState() }
-    val mineList = rememberSaveable(scope, saver = LazyListState.Saver) { LazyListState() }
-    val watchingList = rememberSaveable(scope, saver = LazyListState.Saver) { LazyListState() }
+    // Each workspace's lists start at their top, not where the one switched from was scrolled to: their first row, with
+    // the search above it there once scrolled to (as the list first read, which the search comes in over).
+    fun top(chats: Topic<ChatsView>) = LazyListState(if (chats.value != null && chats.value?.note?.empty != true) 1 else 0)
+    val allList = rememberSaveable(scope, saver = LazyListState.Saver) { top(all) }
+    val mineList = rememberSaveable(scope, saver = LazyListState.Saver) { top(mine) }
+    val watchingList = rememberSaveable(scope, saver = LazyListState.Saver) { top(watching) }
     val filter = app.chatFilter
     val shift by animateFloatAsState(when (filter) { "mine" -> 1f; "watching" -> 2f; else -> 0f }, tween(240, easing = FastOutSlowInEasing), label = "filter")
     // The lists run under both bars, which are frosted glass over them.
