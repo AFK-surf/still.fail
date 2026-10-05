@@ -89,6 +89,60 @@ export async function verifySlackTokens(client: SlackClient, appToken: string, b
   return [identity, errors];
 }
 
+/// A rich_text element as Slack's own text writes it (links <url|label>, mentions <@U…>), so it reads like the rest.
+function richText(el: Json): string {
+  const kind = text(el?.type);
+  if (Array.isArray(el?.elements)) {
+    const inner = el.elements.map(richText);
+    if (kind === "rich_text_list") return inner.map((s: string) => `• ${s}`).join("\n");
+    return inner.join(kind === "rich_text" ? "\n" : "");
+  }
+  switch (kind) {
+    case "text":
+      return text(el.text);
+    case "link":
+      return el.text ? `<${text(el.url)}|${text(el.text)}>` : `<${text(el.url)}>`;
+    case "user":
+      return `<@${text(el.user_id)}>`;
+    case "usergroup":
+      return `<!subteam^${text(el.usergroup_id)}>`;
+    case "channel":
+      return `<#${text(el.channel_id)}>`;
+    case "broadcast":
+      return `<!${text(el.range)}>`;
+    case "emoji":
+      return `:${text(el.name)}:`;
+    case "date":
+      return text(el.fallback);
+    default:
+      return text(el?.text);
+  }
+}
+
+/// A table cell's content on one line, its pipes kept from closing the cell (those inside <url|label> stay as Slack's).
+function cellText(cell: Json): string {
+  const kind = text(cell?.type);
+  const raw = kind === "rich_text" ? richText(cell) : kind === "raw_number" ? String(cell?.number ?? cell?.text ?? "") : text(cell?.text);
+  return raw.replace(/\s*\n\s*/g, " ").replace(/(<[^<>]*>)|\|/g, (m, slack) => slack ?? "\\|").trim();
+}
+
+/// A table block as a Markdown table, its first row the header (as Slack shows it).
+function tableText(block: Json): string {
+  const rows: string[][] = (Array.isArray(block?.rows) ? block.rows : []).map((row: Json) => (Array.isArray(row) ? row.map(cellText) : []));
+  if (rows.length === 0) return "";
+  const width = Math.max(...rows.map((r) => r.length));
+  const line = (r: string[]) => `| ${Array.from({ length: width }, (_, i) => r[i] ?? "").join(" | ")} |`;
+  return [line(rows[0]), line(Array(width).fill("---")), ...rows.slice(1).map(line)].join("\n");
+}
+
+/// What a message says: its text, and the tables in its blocks and attachments, which Slack leaves out of the text
+/// (a table drawn in Slack's composer arrives as a table block in an attachment).
+export function messageText(m: Json): string {
+  const blocks = [...(Array.isArray(m?.blocks) ? m.blocks : []), ...(Array.isArray(m?.attachments) ? m.attachments : []).flatMap((a: Json) => (Array.isArray(a?.blocks) ? a.blocks : []))];
+  const tables = blocks.filter((b: Json) => b?.type === "table").map(tableText).filter((t: string) => t !== "");
+  return [text(m?.text), ...tables].filter((t) => t !== "").join("\n\n");
+}
+
 /// A Slack event as the station takes it: someone's message (a person, or another app's bot: agents work together in
 /// threads), an edit, or nothing it keeps (its own messages, deletes). `botId`: this app's bot id (B…).
 export function toEvent(event: Json, botUserId: string, botId: string): ChatEvent | null {
@@ -105,7 +159,7 @@ export function toEvent(event: Json, botUserId: string, botId: string): ChatEven
     if (ts === "" || own(changed)) return null;
     // A message outside any thread is the root of its own.
     const threadTs = typeof changed?.thread_ts === "string" ? changed.thread_ts : ts;
-    return { type: "changed", channel: text(event.channel), threadTs, ts, text: text(changed?.text) };
+    return { type: "changed", channel: text(event.channel), threadTs, ts, text: messageText(changed) };
   }
   // The station has no retraction: a deleted message stays as it was said.
   if (kind === "message" && subtype === "message_deleted") return null;
@@ -116,7 +170,7 @@ export function toEvent(event: Json, botUserId: string, botId: string): ChatEven
   const by = event.user !== undefined && event.user !== null ? event.user : event.bot_id;
   const user = text(by);
   if (user === "") return null;
-  const body = text(event.text);
+  const body = messageText(event);
   const ts = text(event.ts);
   return {
     type: "message",
@@ -552,7 +606,7 @@ export class SlackSurface implements ChatSurface {
           const by = m?.user !== undefined && m?.user !== null ? m.user : m?.bot_id;
           const user = typeof by === "string" ? by : "unknown";
           const fromBot = (m?.bot_id !== undefined && m?.bot_id !== null) || user === bot;
-          all.push({ ts: text(m?.ts), user, text: text(m?.text), fromBot });
+          all.push({ ts: text(m?.ts), user, text: messageText(m), fromBot });
         }
         const next = page?.response_metadata?.next_cursor;
         cursor = typeof next === "string" && next !== "" ? next : null;
