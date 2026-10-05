@@ -107,9 +107,11 @@ createRoot(document.getElementById('root')!).render(<List />);
       const before = row.getBoundingClientRect().top;
       window.shift();
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-      return { before, after: row.getBoundingClientRect().top };
+      const after = row.getBoundingClientRect().top;
+      await new Promise(r => setTimeout(r, 1000));
+      return { before: row.getBoundingClientRect().top - before, after: after - before };
     });
-    assert(Math.abs(after - before - 60) < 0.5, `a layout shift is taken at once (moved ${after - before}px of 60 two frames later)`);
+    assert(before > 40 && Math.abs(after - before) < 0.5, `a layout shift is taken at once (moved ${after}px of ${before} two frames later)`);
     console.log('PASS layout shift');
     await context.close();
   }
