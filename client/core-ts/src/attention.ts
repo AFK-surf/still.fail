@@ -155,7 +155,7 @@ export class Attention implements Owner {
         if (isObject(kept) && isObject(kept.registration)) {
           const gone: J = {};
           for (const k of ["endpoint", "token"]) if ((kept.registration as J)[k] !== undefined) gone[k] = (kept.registration as J)[k];
-          for (const account of core.accounts.list()) yield* Effect.ignore(core.cloud.request(account.sub, "DELETE", "/v1/push", gone));
+          for (const account of core.accounts.list()) yield* Effect.ignore(core.provider.request(account.sub, "DELETE", "/v1/push", gone));
         }
         return null;
       });

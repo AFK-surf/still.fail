@@ -4,39 +4,48 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadKey } from "./cloud/key.ts";
 import { readState, writeState, type CloudState } from "./cloud/state.ts";
+import { type Provider, specOf } from "./cloud/provider.ts";
 import { stationLang, tr } from "./ops/i18n.ts";
 import { version } from "./ops/version.ts";
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((s): s is string => typeof s === "string") : []);
 
-/// Joins a workspace with a one-time token: proves this station holds its key, writes cloud.json.
-export async function enroll(data: string, origin: string, token: string) {
+/// Joins a workspace with a one-time token: proves this station holds its key, writes cloud.json. `provider`: whose
+/// control plane it is (still.fail cloud unless told; cloud/provider.ts).
+export async function enroll(data: string, origin: string, token: string, provider: Provider = "stillfail") {
+  const plane = specOf(provider);
   const key = loadKey(data);
   let response: Response | undefined;
   // The new proof first; the old spelling only when a pre-rename cloud explicitly refuses the signature.
-  for (const prefix of ["stillfail", "ember"]) {
+  for (const prefix of plane.enrollPrefixes) {
     const signature = key.sign(`${prefix}-station-enroll-v1:${origin}:${token}:${key.id}`);
-    response = await fetch(`${origin}/v1/stations/enroll`, {
+    response = await fetch(`${origin}${plane.enrollPath}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ token, station: key.id, signature, version: version() }),
       signal: AbortSignal.timeout(20_000),
     });
-    if (prefix !== "stillfail" || response.status !== 401) break;
+    if (prefix === plane.enrollPrefixes.at(-1) || response.status !== 401) break;
     const text = await response.text();
     let error: unknown;
     try {
       error = JSON.parse(text).error;
     } catch {}
-    if (error !== "invalid_signature") throw new Error(`still.fail cloud answered ${response.status}: ${text}`);
+    if (error !== "invalid_signature") throw new Error(`${plane.name} answered ${response.status}: ${text}`);
   }
-  if (!response!.ok) throw new Error(`still.fail cloud answered ${response!.status}: ${await response!.text()}`);
+  if (!response!.ok) throw new Error(`${plane.name} answered ${response!.status}: ${await response!.text()}`);
   const body: any = await response!.json();
   const text = (k: string) => (typeof body[k] === "string" ? body[k] : "");
+  const relays = strings(body.relay_urls);
   const state: CloudState = {
     origin, station: key.id, workspace: text("workspace"), workspace_name: text("workspace_name"), name: text("name"),
-    relay_url: text("relay_url"), relay_urls: strings(body.relay_urls), grant_keys: body.grant_keys ?? null, peers: [], revocations: [],
+    // Comma names no relay of its own apart from the list: its first is the station's home.
+    relay_url: text("relay_url") || (provider === "comma" ? (relays[0] ?? "") : ""), relay_urls: relays, grant_keys: body.grant_keys ?? null, peers: [], revocations: [],
   };
+  if (provider !== "stillfail") {
+    state.provider = provider;
+    state.gateway_keys = strings(body.gateway_keys);
+  }
   writeState(data, state);
   console.log(tr(stationLang(), "station.cli.joined", { workspace: state.workspace_name, name: state.name, id: key.id.slice(0, 12) }));
 }

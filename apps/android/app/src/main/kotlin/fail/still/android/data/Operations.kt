@@ -6,7 +6,7 @@ import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
 /** A field is absent until assigned; assigning null sends JSON null (reset to default). */
-val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "job.get", "job.log", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "widget.setState", "widget.state")
+val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "job.get", "job.log", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state")
 
 open class OperationFields {
     internal val fields = mutableMapOf<String, JsonElement>()
@@ -24,6 +24,15 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         val values = mutableMapOf<String, JsonElement>()
         values["key"] = JsonPrimitive(key)
         return call("session.stop", JsonObject(values))
+    }
+    suspend fun toolsAccess(): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        return call("tools.access", JsonObject(values))
+    }
+    suspend fun toolsSetAccess(access: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["access"] = JsonPrimitive(access)
+        return call("tools.setAccess", JsonObject(values))
     }
     suspend fun sessionWarm(key: String): JsonElement {
         val values = mutableMapOf<String, JsonElement>()

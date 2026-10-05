@@ -2,9 +2,9 @@
 // protocol). Construction opens the signed-in accounts' databases (data.ts), wires the modules together and starts the
 // sync (sync/), which keeps everything the core holds current by itself; subscriptions only read what is held.
 import { Cause, Effect, type Clock, type Fiber } from "effect";
-import { Accounts, type AccountView } from "./accounts.ts";
+import type { AccountView } from "./accounts.ts";
+import { type AccountProvider, type AccountProviderFactory, type AccountSessions, stillfailAccountProvider } from "./account-provider.ts";
 import * as brand from "./brand.ts";
-import { Cloud } from "./cloud.ts";
 import { parseCall, cancellable, callStation, counts, type Call } from "./core/calls.ts";
 import { execute, handlers, hooks } from "./core/execute.ts";
 import { Router } from "./core/routing.ts";
@@ -66,6 +66,9 @@ export type Options = {
   clock?: Clock.Clock;
   /// The iroh this host has (iroh.ts); none: stations are not reached over the mesh.
   iroh?: Iroh | null;
+  /// Who the accounts are with (account-provider.ts): still.fail cloud unless the embedding app gives another
+  /// (`commaAccountProvider`, comma.ts).
+  account?: AccountProviderFactory;
 };
 
 /// What the core holds: every module.
@@ -75,8 +78,9 @@ export class Inner {
   tracer!: Tracer;
   /// Client errors recorded lately, by source and message, and when.
   reported = new Map<string, number>();
-  accounts!: Accounts;
-  cloud!: Cloud;
+  /// The control plane the accounts are with, and the accounts.
+  provider!: AccountProvider;
+  accounts!: AccountSessions;
   store!: Store;
   data!: Data;
   workspaces!: Workspaces;
@@ -129,10 +133,9 @@ export class Core {
       inner.host = new WakingHost(host, inner.wakes);
       brand.setTestChannel(inner.host.testChannel());
       inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
-      inner.accounts = yield* Accounts.load(inner.host);
-      inner.accounts.setTracer(inner.tracer);
       inner.status = new Status(inner.host, inner.runner);
-      inner.cloud = new Cloud(inner.host, inner.accounts, inner.tracer, inner.status);
+      inner.provider = yield* (options.account ?? stillfailAccountProvider)({ host: inner.host, tracer: inner.tracer, status: inner.status });
+      inner.accounts = inner.provider.accounts;
       inner.workspaces = new Workspaces(inner.host, inner.runner);
       inner.store = new Store(inner.host, inner.runner);
       const store = inner.store;
@@ -219,13 +222,14 @@ export class Core {
       inner.shownAccounts = inner.accounts.list();
       inner.tracer.setExport((body) => {
         const account = inner.accounts.list()[0];
-        return account ? Effect.ignore(inner.cloud.traces(account.sub, body)) : Effect.void;
+        return account ? Effect.ignore(inner.provider.traces(account.sub, body)) : Effect.void;
       });
       // An account signed in has its database opened; one signed out, removed (before what it reached is let go).
       inner.accounts.onChange(() => {
         inner.runner.fork(Effect.andThen(inner.data.accounts(inner.accounts.list().map((a) => a.sub)), Effect.sync(() => inner.cloudSync.accountsChanged())));
       });
       // From now on the core keeps what it holds current, whatever the UI shows.
+      inner.provider.start();
       inner.cloudSync.start();
       inner.stations.reconcile();
       // What was on its way when the core last stopped goes on.

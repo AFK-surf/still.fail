@@ -13,6 +13,7 @@ import { routes as updates } from "./routes/updates.ts";
 import { routes as accounts } from "./routes/accounts.ts";
 import { routes as slack } from "./routes/slack.ts";
 import { routes as hub } from "./routes/hub.ts";
+import { routes as deviceTools } from "./routes/tools.ts";
 import type { AgentsParts } from "../sessions/agents.ts";
 import type { Store } from "../store/store.ts";
 import type { Events } from "./events.ts";
@@ -20,6 +21,16 @@ import { Host } from "./host.ts";
 import { previewTarget, proxyPreview } from "../jobs/preview.ts";
 import type { Clock } from "effect";
 import { liveClock } from "../ops/fibers.ts";
+import { readOnly } from "../mesh/credential.ts";
+
+/// What a read-only member (a viewer, contract §4) may still ask besides reads: marks of their own (read, kept,
+/// dismissed), which change nothing anyone else sees.
+const OWN_MARKS = /^\/*threads\/+[^/]+\/+(read|dismissed|closed-card)(?:\/.*)?$/;
+
+/// Whether `r` is one a read-only member may make: reads (GET, HEAD), and their own marks.
+export function readOnlyMay(r: { method: string; path: string }): boolean {
+  return r.method === "GET" || r.method === "HEAD" || (r.method === "PUT" && OWN_MARKS.test(r.path));
+}
 
 export type Handler = (r: Request, args: string[]) => Promise<Answer>;
 export type Route = { method: string; pattern: RegExp; handle: Handler };
@@ -90,6 +101,7 @@ export class Admin {
             overviewChanged: () => deps.events?.overviewChanged(),
           })
         : []),
+      ...(deps.agents?.config ? deviceTools({ config: deps.agents.config, changed: () => deps.events?.overviewChanged() }) : []),
       ...(deps.agents?.accounts ? accounts({ accounts: deps.agents.accounts, sharing: deps.agents.sharing, overview: (r) => deps.agents!.overview(r.viewer, r.lang) }) : []),
       // The station as its settings pages show it.
       ...(deps.agents?.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await deps.agents!.overview(r.viewer, r.lang))) }] : []),
@@ -149,6 +161,8 @@ export class Admin {
   }
 
   private async answer(r: Request): Promise<Answer> {
+    // A viewer reads: no message sent, nothing changed (previews included).
+    if (readOnly(r.viewer) && !readOnlyMay(r)) return error(403, "read-only members cannot change this station");
     // A web service on this machine, through its preview's path: any method, its answer as it comes.
     const preview = previewTarget(r.path);
     if (preview !== null) {

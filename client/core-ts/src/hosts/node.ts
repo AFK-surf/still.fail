@@ -13,6 +13,10 @@ import { Effect, Queue, Scope } from "effect";
 import WebSocket from "ws";
 import { connect as tcpConnect } from "node:net";
 import { Core } from "../core.ts";
+import type { AccountProviderFactory } from "../account-provider.ts";
+// What an app embedding this bundle gives `start` (one bundle: one copy of the core's classes).
+export { commaAccountProvider, type CommaOptions } from "../comma.ts";
+export { stillfailAccountProvider, type AccountProvider, type AccountProviderFactory } from "../account-provider.ts";
 import { nodeIroh } from "./node-iroh.ts";
 import { NodeSql } from "./node-sql.ts";
 import { HostWire } from "../station/wire.ts";
@@ -292,8 +296,9 @@ export class NodeHost implements Host {
 /// A bug that ends a fiber ends the core as a panic ended the Rust core: each client is told `{"fatal": …}` and the host
 /// starts another (apps/desktop/src/core.ts).
 /// `hostWire`: its stations answer at the cloud's origin over plain HTTP, not on the mesh (the side-by-side run,
-/// harness/run.ts).
-export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean } = {}) {
+/// harness/run.ts). `account`: who the accounts are with, when not still.fail cloud (an app embedding the core gives
+/// `commaAccountProvider({origin, bearer})`; docs/core-ts.md, "Account providers and embedding").
+export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory } = {}) {
   service.name = "stillfail-native";
   service.os = process.platform === "darwin" ? "macos" : process.platform;
   const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener);
@@ -313,7 +318,7 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
     void ready.then((core) => core.close(), () => {});
   };
   // Messages that arrive while the core starts wait, in order (as the Rust core's queue did).
-  const ready = Core.create(host, options.hostWire ? { iroh: null, wire: () => new HostWire(host) } : { iroh: nodeIroh() }).then((core) => {
+  const ready = Core.create(host, { ...(options.hostWire ? { iroh: null, wire: () => new HostWire(host) } : { iroh: nodeIroh() }), account: options.account }).then((core) => {
     running = core;
     core.inner.runner.onDefect = fatal;
     core.keepTime();

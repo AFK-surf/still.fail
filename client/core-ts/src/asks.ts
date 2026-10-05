@@ -2,7 +2,8 @@
 // app is out, a picture (fetched once), the buddies a Slack app can wear, a dev cloud's sign-in.
 import { Deferred, Effect } from "effect";
 import buddiesList from "../../../web/public/avatars/index.json" with { type: "json" };
-import { encodeComponent, type Accounts } from "./accounts.ts";
+import { encodeComponent } from "./accounts.ts";
+import type { AccountSessions } from "./account-provider.ts";
 import type { Ask } from "./asks-parse.ts";
 import { conform } from "./conform.ts";
 import { CoreError } from "./error.ts";
@@ -28,7 +29,7 @@ export class Asks {
     this.#host = host;
   }
 
-  run(ask: Ask, accounts: Accounts): Effect.Effect<unknown, CoreError> {
+  run(ask: Ask, accounts: AccountSessions): Effect.Effect<unknown, CoreError> {
     switch (ask.kind) {
       case "linkParse":
         return Effect.succeed(linkTarget(ask.url, this.#host.cloudOrigin()));

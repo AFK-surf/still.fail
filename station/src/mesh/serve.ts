@@ -9,7 +9,8 @@ import type { Cloud } from "../cloud/state.ts";
 import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
 import { nowSecs } from "../ops/files.ts";
-import { type Admitted, revoked, verifyMember } from "./credential.ts";
+import type { Accepted } from "../cloud/provider.ts";
+import { type Admitted, readOnly, revoked, verifyMember } from "./credential.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerAdb, type Shares } from "./adb.ts";
 import { Traces, parseParent, route } from "./traces.ts";
@@ -29,26 +30,37 @@ const HOP = ["connection", "keep-alive", "proxy-connection", "transfer-encoding"
 export class Reader {
   carry: Buffer = Buffer.alloc(0);
   stream: Stream;
-  constructor(stream: Stream) {
+  /// How long a line may be: the admin API's heads are small; the device tools' carry their bodies in it.
+  private maxLine: number;
+  constructor(stream: Stream, maxLine = MAX_HEAD) {
     this.stream = stream;
+    this.maxLine = maxLine;
   }
 
   async line(): Promise<any | null> {
-    for (;;) {
-      const at = this.carry.indexOf(10);
-      if (at >= 0) {
-        const line = this.carry.subarray(0, at);
-        this.carry = this.carry.subarray(at + 1);
-        return JSON.parse(line.toString());
+    // A long line (the device tools') comes in many pieces: kept as they come, each looked through once.
+    let at = this.carry.indexOf(10);
+    if (at < 0) {
+      const parts = [this.carry];
+      let size = this.carry.length;
+      while (at < 0) {
+        if (size > this.maxLine) throw new Error("head too large");
+        const more = await this.stream.read();
+        if (more === null) {
+          if (size === 0) return null;
+          throw new Error("stream ended mid-line");
+        }
+        const found = more.indexOf(10);
+        if (found >= 0) at = size + found;
+        parts.push(more);
+        size += more.length;
       }
-      if (this.carry.length > MAX_HEAD) throw new Error("head too large");
-      const more = await this.stream.read();
-      if (more === null) {
-        if (this.carry.length === 0) return null;
-        throw new Error("stream ended mid-line");
-      }
-      this.carry = Buffer.concat([this.carry, more]);
+      this.carry = Buffer.concat(parts, size);
     }
+    if (at > this.maxLine) throw new Error("head too large");
+    const line = this.carry.subarray(0, at);
+    this.carry = this.carry.subarray(at + 1);
+    return JSON.parse(line.toString());
   }
 
   async rest(): Promise<Buffer> {
@@ -74,6 +86,8 @@ export type Members = {
   shares: Shares;
   /// The mesh's spans, when traces are on.
   traces?: Traces;
+  /// Which member credentials the control plane signs (still.fail cloud's when not said).
+  accepted?: () => Accepted;
 };
 
 /// One member's connection: the credential first, nothing served before it checks out; then a request a stream.
@@ -87,7 +101,7 @@ export async function serve(m: Members, conn: Connection) {
   if (!first) return;
   const credentials = new Reader(first);
   const state = () => m.cloud.state!;
-  const check = (line: any) => verifyMember(typeof line?.credential === "string" ? line.credential : "", state().grant_keys, state().workspace, device, state().revocations);
+  const check = (line: any) => verifyMember(typeof line?.credential === "string" ? line.credential : "", state().grant_keys, state().workspace, device, state().revocations, m.accepted?.());
   const hello = await credentials.line();
   if (hello === null) throw new Error("no credential");
   let current: Admitted;
@@ -242,9 +256,17 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     return answer(404, '{"error":"only the admin API is reachable over the mesh"}');
   }
   // A phone lent to the agents, or asked about (adb.ts): its send side came finished, what it hears goes down the stream.
-  if (head.adb !== null && typeof head.adb === "object" && !Array.isArray(head.adb)) return answerAdb(m.shares, conn, viewer, head, stream, reader);
+  if (head.adb !== null && typeof head.adb === "object" && !Array.isArray(head.adb)) {
+    // Lending a phone is a change a read-only member does not make.
+    if (readOnly(viewer)) return answer(403, { error: "read-only members cannot lend or use phones" });
+    return answerAdb(m.shares, conn, viewer, head, stream, reader);
+  }
   // A preview page's WebSocket (`"socket": true`): no body to wait for, the stream carries its messages both ways.
-  if (head.socket === true) return socket(m, stream, reader, head, path);
+  if (head.socket === true) {
+    // A preview's socket carries whatever its page sends: no viewer's.
+    if (readOnly(viewer)) return answer(403, { error: "read-only members cannot change this station" });
+    return socket(m, stream, reader, head, path);
+  }
   const body = await reader.rest();
   // The caller's headers go on, but not those of the hop, nor any of the station's own: who is asking is only what
   // the credential says.

@@ -24,6 +24,28 @@
 - `Host`：照搬 `client/core/src/host.rs` 的 trait——`fetch`/`fetchStream`/`websocket`、`storage*`、`dbRead/dbWrite`、`nowMs`/`monotonicMs`/`utcOffsetMin`、`sleep`、`woken`、`resetConnections`、`randomBytes`、`emit`。异步一律 Effect（docs/station-ts.md「写法：Effect」），定时器走 Effect 的 Clock，测试用 TestClock；不在逻辑里直接用 setTimeout。
 - `Mesh`：iroh 的最小面——建 endpoint、连某个 station（地址 + relay）、开双向流、读写、关；和 station 的 `mesh.node` 同一套形状，三端各自实现。凭证、续期、请求行格式这些协议逻辑在 TS 里（照 `client/core/src/mesh.rs`、`station/transport.rs`）。
 
+## Account providers and embedding
+
+The core reaches its accounts' control plane through an `AccountProvider` (`client/core-ts/src/account-provider.ts`): the accounts on this device, `/v1/me`, a workspace's stations, member credentials, account events, push and the workspace operations. Whatever the provider is, the core keeps everything in still.fail cloud's shapes, so topics, UIs and the mesh do not change.
+
+- **still.fail cloud** (`stillfailAccountProvider`, the default): what the core always did — Google PKCE sign-in, rotating refresh tokens, `/v1/me`, `/v1/workspaces/:ws/credential`, the `/v1/events` WebSocket, Web Push, invitations, login sessions and operator lists.
+- **Comma** (`commaAccountProvider({origin, bearer})`, `client/core-ts/src/comma.ts`; contract v1 §4–5): the host app owns the Comma session and gives `bearer(): Promise<string>`; the core has no sign-in (`auth.begin` answers `unsupported`). The account is the session's user (`GET /v1/comma/stations/me`, kept under the storage key `comma/account` so the core starts with it while Comma is away); a 401 for the session removes it. Workspaces' stations come from `GET /v1/comma/workspaces/:id/stations`; each workspace's SSE (`/stations/events`) is followed as `/v1/events` would be (`station` updates in place, `stations` reads the list again, heartbeats keep it alive). Member credentials come from `POST /v1/comma/workspaces/:id/station-credential` and are kept exactly like still.fail cloud's: reused for a day, then asked for again, and the kept one serves until it expires when Comma cannot be reached. `workspace.enroll`, `workspace.renameStation` and `workspace.removeStation` go to Comma's enrollment and station routes; invitations, members, relays, login sessions and the operator's lists fail with `unsupported`. Pushes are Comma's own (APNs through its app), so the core registers none; traces are not sent.
+- The station's device tools access (`tools.access`, docs/cloud.md "Control planes") is a station operation for any provider: `tools.access` reads it, `tools.setAccess {access}` sets it (owners and admins; it is `off` until set).
+
+**Embedding on Node** (an Electron main process, which is where Comma keeps its session token): `sh scripts/core-bundle.sh DIR [darwin-arm64|linux-x64|linux-arm64]` lays out `DIR/stillfail-core` — `core-ts.js` (the Node host, one CommonJS bundle, as the desktop app bundles it), `core-ts.d.ts`, the platform's `mesh.node`, `package.json`, `VERSION`/`BUILD`. It publishes nothing. The app then does:
+
+```js
+process.env.STILLFAIL_MESH_NATIVE = path.join(coreDir, "mesh.node"); // a CommonJS bundle cannot find it by itself
+const { start, commaAccountProvider } = require(path.join(coreDir, "core-ts.js"));
+const core = start(dataDir, "https://app.still.fail", (client, json) => sendToRenderer(client, json), undefined, {
+  account: commaAccountProvider({ origin: "https://api.cue.surf", bearer: () => credentialLease.token() }),
+});
+const ui = core.connect();               // one per renderer; messages are the core protocol (docs/client-core.md)
+core.receive(ui, JSON.stringify({ id: 1, subscribe: { topic: "workspaces" } }));
+```
+
+Take `commaAccountProvider` from the same bundle as `start` (one copy of the core's classes). `dataDir` is the core's own (accounts, device key, databases); `cloudOrigin` is still read for the changelog and app updates.
+
 ## 类型
 
 `client/shapes`（typeshare）现在从 Rust 生成 UI 用的 TS 和 Kotlin 类型。第一步不动它：TS core 直接 import 生成的 TS 类型，UI 那边什么都不变。等 Rust core 删掉后，再把类型的源头挪到 TS（从 TS 生成 Kotlin）。

@@ -5,10 +5,13 @@ import { existsSync, readFileSync, watch } from "node:fs";
 import { join } from "node:path";
 import { writePrivate } from "../ops/files.ts";
 import { wall } from "../ops/fibers.ts";
+import { type Provider, providerOf } from "./provider.ts";
 
 export type Revocation = { kind: string; id: string; at: number };
 
 export type CloudState = {
+  /// The control plane it is enrolled in (cloud/provider.ts): absent is still.fail cloud, as files from before say.
+  provider?: Provider;
   origin: string;
   station: string;
   workspace: string;
@@ -21,6 +24,8 @@ export type CloudState = {
   /// The workspace's stations this one may call (peer RPC); none from old clouds.
   peers: any[];
   revocations: Revocation[];
+  /// The iroh ids that may call the device tools (Comma's gateways); absent from still.fail cloud.
+  gateway_keys?: string[];
   /// When the cloud said the station was removed from its workspace (unix seconds), and how (4004 / 404).
   removed_at?: number;
   removed_code?: number;
@@ -33,15 +38,20 @@ const statePath = (data: string) => join(meshDir(data), "cloud.json");
 export function readState(data: string): CloudState | null {
   if (!existsSync(statePath(data))) return null;
   const raw = JSON.parse(readFileSync(statePath(data), "utf8"));
-  return { ...raw, relay_urls: raw.relay_urls ?? [], peers: raw.peers ?? [], revocations: raw.revocations ?? [] };
+  const state: CloudState = { ...raw, relay_urls: raw.relay_urls ?? [], peers: raw.peers ?? [], revocations: raw.revocations ?? [] };
+  if (raw.provider !== undefined) state.provider = providerOf(raw.provider);
+  return state;
 }
 
-/// Pretty JSON, field order as the Rust struct's, the removal only while there is one.
+/// Pretty JSON, field order as the Rust struct's, the removal only while there is one; the provider and the gateways
+/// only when there are (a still.fail station's file is as it always was).
 export function writeState(data: string, s: CloudState) {
   const out: Record<string, unknown> = {
+    ...(s.provider !== undefined ? { provider: s.provider } : {}),
     origin: s.origin, station: s.station, workspace: s.workspace, workspace_name: s.workspace_name, name: s.name,
     relay_url: s.relay_url, relay_urls: s.relay_urls, grant_keys: s.grant_keys, peers: s.peers, revocations: s.revocations,
   };
+  if (s.gateway_keys !== undefined) out.gateway_keys = s.gateway_keys;
   if (s.removed_at !== undefined) out.removed_at = s.removed_at;
   if (s.removed_code !== undefined) out.removed_code = s.removed_code;
   writePrivate(statePath(data), JSON.stringify(out, null, 2));
@@ -95,6 +105,11 @@ export class Cloud {
       wall.after(100, () => (this.writing = false));
     }
     this.tell();
+  }
+
+  /// The control plane it is enrolled in.
+  provider(): Provider {
+    return providerOf(this.state?.provider);
   }
 
   removed(): boolean {

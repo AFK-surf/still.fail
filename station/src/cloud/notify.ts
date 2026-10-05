@@ -1,7 +1,8 @@
 // What the chats' people hear about while no client of theirs runs (admin/notify.rs and the station process's
 // notify.rs, docs/notifications.md): noticed from the store's changes as they come, worked out by the readers
-// (src/read/notices.ts), gathered over a second and posted to still.fail cloud's `/v1/stations/notify`, signed with the
-// station's key, which pushes them to people's devices. Only what happens from now on is noticed. A batch that cannot be
+// (src/read/notices.ts), gathered over a second and posted to the control plane (still.fail cloud's
+// `/v1/stations/notify`, Comma's `/v1/comma/stations/notify`: ControlPlane.notify), signed with the station's key, which
+// pushes them to people's devices. Only what happens from now on is noticed. A batch that cannot be
 // sent is dropped; an older cloud (404) has no pushes.
 import { Clock, Effect, Exit, FiberSet, Scope } from "effect";
 import { stationLang } from "../ops/i18n.ts";
@@ -9,8 +10,6 @@ import { log } from "../ops/log.ts";
 import type { Readers } from "../read/pool.ts";
 import type { Notice } from "../read/notices.ts";
 import type { Store } from "../store/store.ts";
-import type { StationKey } from "./key.ts";
-import { signedPost } from "./signed.ts";
 import type { Cloud } from "./state.ts";
 import { liveClock } from "../ops/fibers.ts";
 
@@ -32,12 +31,11 @@ export class Notifier {
   private readers: Readers;
   private store: Store;
   private cloud: Cloud;
-  private key: StationKey;
-  /// Where a batch goes (tests give their own); still.fail cloud's by default.
+  /// Where a batch goes (tests give their own); the control plane's by default (`send`).
   post: (notices: Notice[]) => Promise<void>;
 
-  /// `clock`: the clock a batch gathers on (a TestClock in tests).
-  constructor(store: Store, readers: Readers, cloud: Cloud, key: StationKey, options: { clock?: Clock.Clock } = {}) {
+  /// `send`: a batch to the control plane; `clock`: the clock a batch gathers on (a TestClock in tests).
+  constructor(store: Store, readers: Readers, cloud: Cloud, send: (notices: Notice[]) => Promise<void>, options: { clock?: Clock.Clock } = {}) {
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
@@ -45,8 +43,7 @@ export class Notifier {
     this.store = store;
     this.readers = readers;
     this.cloud = cloud;
-    this.key = key;
-    this.post = (notices) => this.send(notices);
+    this.post = send;
     this.stop = store.subscribe((change) => {
       if (change.type === "session") this.sessionChanged(change.key);
       else if (change.type === "thread") this.said(change.id, change.entries);
@@ -99,11 +96,5 @@ export class Notifier {
       () => log.info("notify", "notices sent", { n: batch.length }),
       (error) => log.warn("notify", "notices dropped", { n: batch.length, error: (error as Error).message }),
     );
-  }
-
-  /// One batch, signed over "ember-station-notify-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>", its headers
-  /// under both names.
-  private async send(notices: Notice[]) {
-    await signedPost(this.cloud, this.key, "/v1/stations/notify", "ember-station-notify-v1", { notices }, true);
   }
 }

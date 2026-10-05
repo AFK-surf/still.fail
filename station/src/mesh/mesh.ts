@@ -1,10 +1,12 @@
 // The station on the mesh, once it is in a workspace (cloud.json there): its endpoint, its relays, its presence at
-// still.fail cloud, and members' connections. Everything here lives in the layer's scope: stopping the station closes
+// its control plane, members' connections, and the control plane's gateways' (the device tools, mesh/tools.ts). Everything here lives in the layer's scope: stopping the station closes
 // the endpoint and every connection and loop it started.
 import { Effect, FiberSet, Layer, Option, Stream } from "effect";
-import { presence } from "../cloud/presence.ts";
 import { log } from "../ops/log.ts";
-import { AdbShares, AdminApi, Cloud, Key, MeshNative, Up } from "../services.ts";
+import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Store, Up } from "../services.ts";
+import { DeviceTools, accessOf } from "../device/tools.ts";
+import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
+import { TOOLS_ALPN, adminSessions, serveTools } from "./tools.ts";
 import { Agents } from "../sessions/agents.ts";
 import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
 import { Traces } from "./traces.ts";
@@ -14,7 +16,9 @@ import { ALPN, FORMER_ALPN, serve } from "./serve.ts";
 
 export const MeshLive = Layer.effectDiscard(
   Effect.gen(function* () {
-    const cloud = yield* Cloud;
+    const plane = yield* ControlPlane;
+    const cloud = plane;
+    const store = yield* Store;
     const key = yield* Key;
     const native = yield* MeshNative;
     const admin = yield* AdminApi;
@@ -25,7 +29,7 @@ export const MeshLive = Layer.effectDiscard(
       // Not in a workspace yet: on the mesh once `enroll` writes cloud.json.
       if (!cloud.state.state) yield* cloud.changes.pipe(Stream.filter(() => cloud.state.state !== null), Stream.runHead);
       const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => native.bind({ secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
+        Effect.promise(() => native.bind({ secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_ALPN, TOOLS_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
@@ -35,8 +39,8 @@ export const MeshLive = Layer.effectDiscard(
       // Online at the cloud only once a relay can reach the station: a device that saw "online" and connected before
       // the relay link was up had its first packets dropped (~3 s of retransmits).
       const online = yield* Effect.timeoutOption(Effect.promise(() => endpoint.online()), "15 seconds");
-      if (Option.isNone(online)) log.warn("mesh", "no relay link after 15 s; going online at still.fail cloud anyway");
-      yield* Effect.forkScoped(presence);
+      if (Option.isNone(online)) log.warn("mesh", `no relay link after 15 s; going online at ${plane.spec().name} anyway`);
+      yield* Effect.forkScoped(plane.presence);
       // The workspace's other stations: asked through this endpoint, their tasks stopped once they are not in it.
       agents.remote.attach(peerCall(endpoint, cloud.state));
       yield* Effect.acquireRelease(
@@ -49,14 +53,43 @@ export const MeshLive = Layer.effectDiscard(
         Effect.sync(() => new Traces(agents.config.raw()?.telemetry?.traces === true)),
         (traces) => Effect.promise(() => traces.close()),
       );
-      if (traces.enabled) traces.exportTo(cloud.state, key);
-      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), shares, traces };
+      if (traces.enabled) traces.exportTo((spans) => Effect.runPromise(plane.traces(spans)));
+      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), shares, traces, accepted: plane.credential };
+      // The control plane's gateways: the device tools, as far as the station's own setting lets them.
+      const device = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          new DeviceTools({
+            // Never reachable: the station's data (its key, cloud.json, the profiles' homes), its config, the machine's
+            // runtime logins.
+            protect: () => [
+              cloud.state.data,
+              agents.config.path,
+              ...agents.hub.config().profiles.map((p) => p.home),
+              claudeCredentialsFile(process.env),
+              codexAuthFile(process.env),
+            ],
+            sessions: adminSessions(
+              () => admin,
+              () => store,
+              () => agents.hub.config().profiles.flatMap((p) => p.runtimes),
+              () => cloud.state.state?.workspace ?? "",
+              endpoint.id(),
+            ),
+          }),
+        ),
+        (tools) => Effect.sync(() => tools.close()),
+      );
+      const gateways = { cloud: cloud.state, tools: device, access: () => accessOf(agents.config.raw()), enabled: () => plane.spec().tools };
       for (;;) {
         const conn = yield* Effect.promise(() => endpoint.accept());
         if (!conn) return;
         yield* FiberSet.run(
           connections,
-          Effect.tryPromise(() => (conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, agents.remote) : serve(members, conn))).pipe(
+          Effect.tryPromise(() =>
+            conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, agents.remote)
+            : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
+            : serve(members, conn),
+          ).pipe(
             Effect.catch((e) => Effect.sync(() => log.info("mesh", "connection ended", { error: String((e as Error).cause ?? e) }))),
             Effect.ensuring(Effect.sync(() => conn.close(0, "station stopping"))),
           ),

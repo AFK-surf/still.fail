@@ -1,13 +1,13 @@
-// What the station posts to still.fail cloud signed with its key (the Rust station's feedback.rs `send`, notify.rs):
+// What the station posts to its control plane signed with its key (the Rust station's feedback.rs `send`, notify.rs):
 // the body's sha256 under "<tag>:<origin>:<station>:<ts>:<digest>", in the x-stillfail-* headers (and x-ember-* where
-// the Rust sends those too).
+// the Rust sends those too). Comma reads the same headers (contract §1).
 import { nowSecs } from "../ops/files.ts";
 import { type StationKey, sha256hex } from "./key.ts";
 import type { Cloud } from "./state.ts";
 
-export async function signedPost(cloud: Cloud, key: StationKey, path: string, tag: string, value: unknown, former = false): Promise<any> {
+export async function signedPost(cloud: Cloud, key: StationKey, path: string, tag: string, value: unknown, former = false, name = "still.fail cloud"): Promise<any> {
   const s = cloud.state;
-  if (s === null) throw new Error("this station is not in still.fail cloud");
+  if (s === null) throw new Error(`this station is not in ${name}`);
   const body = JSON.stringify(value);
   const ts = nowSecs();
   const signature = key.sign(`${tag}:${s.origin}:${s.station}:${ts}:${sha256hex(body)}`);
@@ -18,7 +18,7 @@ export async function signedPost(cloud: Cloud, key: StationKey, path: string, ta
     headers[`x-${prefix}-signature`] = signature;
   }
   const response = await fetch(`${s.origin}${path}`, { method: "POST", headers, body, signal: AbortSignal.timeout(30_000) });
-  if (!response.ok) throw new Error(`still.fail cloud answered ${response.status}: ${await response.text().catch(() => "")}`);
+  if (!response.ok) throw new Error(`${name} answered ${response.status}: ${await response.text().catch(() => "")}`);
   const text = await response.text();
   return text === "" ? null : JSON.parse(text);
 }

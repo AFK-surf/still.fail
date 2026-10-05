@@ -49,6 +49,8 @@
   "core-misc.cloud.already_member": "这个邮箱的主人已经在 workspace 里了",
   "core-misc.cloud.bad_response": "{brand} cloud 的回复无法解析：{error}",
   "core-misc.cloud.forbidden": "你在这个 workspace 里没有这个权限",
+  "core-misc.comma.unsupported": "Comma 账号不支持{what}",
+  "core-misc.comma.sign_in": "请在 Comma 应用里登录",
   "core-misc.cloud.invalid_email": "要填对方登录 {brand} 用的邮箱",
   "core-misc.cloud.invalid_name": "名字不能为空，最长 80 个字",
   "core-misc.cloud.invalid_relay": "要填 iroh-relay 的 https 地址，例如 https://relay.example.com",

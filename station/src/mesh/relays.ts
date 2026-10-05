@@ -5,7 +5,7 @@
 // where), and go once one does again (else iroh may home on a public relay, where browsers can't follow).
 import { Effect, Schedule, Stream } from "effect";
 import { log } from "../ops/log.ts";
-import { Cloud } from "../services.ts";
+import { ControlPlane } from "../services.ts";
 import type { Endpoint } from "./native.ts";
 
 /// Asking our relays whether they answer is asking an outside system: the one timer here.
@@ -14,7 +14,7 @@ const RELAY_CHECK = "30 seconds";
 /// Runs for good (until interrupted).
 export const keepRelays = (endpoint: Endpoint) =>
   Effect.gen(function* () {
-    const cloud = yield* Cloud;
+    const cloud = yield* ControlPlane;
     let ours = cloud.state.relays();
     endpoint.keep(ours);
     let added = false;
