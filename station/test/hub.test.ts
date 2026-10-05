@@ -1162,7 +1162,7 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   await r.close();
 });
 
-test("on another account a long conversation goes on in a new runtime session, its history read on; a short one is taken up", async () => {
+test("on another account a conversation goes on in a new runtime session, its history read on; on its own it is taken up", async () => {
   const r = new Rig();
   r.edit((raw) => {
     raw.profiles[0].models = ["opus"];
@@ -1197,15 +1197,25 @@ test("on another account a long conversation goes on in a new runtime session, i
   // Its history goes on from the first's.
   transcript(second.id(), "second", 1_000);
   assert.deepEqual(r.hub.live.before(key, 100, 100)![1].filter((e) => e.kind === "user").map((e) => e.text), ["first", "second"]);
-  // Back on the first account, a short conversation is taken up as before.
-  second.end(spent);
+  // Its process gone, on the same account: taken up as before.
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  second.complete();
   await settle();
-  await configure(r.hub, key, { profile: on });
+  await r.hub.evict(key);
+  await r.accept({ ...message(), threadTs: m.threadTs });
   await settle();
   const third = r.claude.last();
   assert.equal(third.options.resume, second.id());
-  assert.deepEqual(third.prompts, [GO_ON_AFTER_SPENT]);
-  assert.deepEqual(r.store.runtimeSessions(key), [first.id(), second.id()]);
+  assert.ok(!third.prompts[0]!.includes("You go on in a new conversation"));
+  // Back on the first account, however short the conversation: afresh again.
+  third.end(spent);
+  await settle();
+  await configure(r.hub, key, { profile: on });
+  await settle();
+  const fourth = r.claude.last();
+  assert.equal(fourth.options.resume, undefined);
+  assert.ok(matches(fourth.prompts[0]!, ["You go on in a new conversation", "about 1k tokens", GO_ON_AFTER_SPENT]), fourth.prompts[0]);
+  assert.deepEqual(r.store.runtimeSessions(key), [first.id(), second.id(), fourth.id()]);
   await r.close();
 });
 
