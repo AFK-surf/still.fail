@@ -46,6 +46,13 @@ export const NET_DAY_KEY = "net-day";
 export const TALLY_EVERY_MS = 60_000;
 const QUICKER_MS = 30;
 const QUICKER_SHARE = 0.2;
+export const SPEED_KEY = "relay-speed";
+/// A reply this long or longer tells how fast a way is; a shorter one is mostly its round trip.
+export const SPEED_MIN_BYTES = 512 * 1024;
+/// What a way's speed is weighed with its round trip by: the time a larger reply (a page of history, an image) takes.
+export const TYPICAL_BYTES = 256 * 1024;
+/// How long the speed seen on a way counts; then it is found out again, from the replies that come through it.
+export const SPEED_KEPT_MS = 6 * 3600_000;
 /// A reply head is a line of JSON; anything longer is not a station talking.
 const MAX_HEAD = 64 * 1024;
 /// How long a write gone unanswered is asked again with its key (station.rs RECHECK_MS).
@@ -61,6 +68,17 @@ export type CredentialSource = (device: string, fresh: boolean) => Effect.Effect
 export type Measured = { measuring: boolean; relays: [string, number | null][]; moved: string | null };
 
 type Day = { day: number; rx: number; tx: number };
+/// The fastest a way to a station was seen bringing a reply (bytes a second), and when that was first seen.
+type Speed = { bps: number; at: number };
+
+/// A relay as a key: its URL as written out again, so `https://r` and `https://r/` are one.
+function relayKey(relay: string): string {
+  try {
+    return new URL(relay).href;
+  } catch {
+    return relay;
+  }
+}
 
 function relayHost(relay: string): string {
   try {
@@ -90,16 +108,27 @@ export function pinnedKey(secret: Uint8Array, relay: string): Uint8Array {
   return sha256(all);
 }
 
-/// The relay to move a link to, of those measured: the quickest, if the link is not already through it and it is
-/// quicker than the link's round trip by both QUICKER_MS and QUICKER_SHARE.
-export function quicker(rttMs: number | null, via: string | null, measured: [string, number | null][]): string | null {
+/// What a way costs, in ms: its round trip, and what a TYPICAL_BYTES reply takes to come through it at the speed it was
+/// seen at (nothing while that is not known: it is found out once a link goes that way).
+export function cost(ms: number, bps: number | null): number {
+  return bps !== null && bps > 0 ? ms + (TYPICAL_BYTES / bps) * 1000 : ms;
+}
+
+/// The relay to move a link to, of those measured: the cheapest (`cost`), if the link is not already through it and it
+/// costs less than the link's way by both QUICKER_MS and QUICKER_SHARE. `speed`: how fast each way was seen, if it was.
+export function quicker(rttMs: number | null, via: string | null, measured: [string, number | null][], speed: (relay: string) => number | null = () => null): string | null {
   let best: [string, number] | null = null;
-  for (const [relay, ms] of measured) if (ms !== null && (best === null || ms < best[1])) best = [relay, ms];
+  for (const [relay, ms] of measured) {
+    if (ms === null) continue;
+    const c = cost(ms, speed(relay));
+    if (best === null || c < best[1]) best = [relay, c];
+  }
   if (best === null) return null;
   if (via !== null && sameRelay(via, best[0])) return null;
   const fresh = measured.find(([relay]) => sameRelay(via, relay))?.[1] ?? null;
-  const now = fresh ?? rttMs;
-  if (now === null) return null;
+  const ms = fresh ?? rttMs;
+  if (ms === null) return null;
+  const now = cost(ms, via !== null ? speed(via) : null);
   return best[1] + QUICKER_MS <= now && best[1] <= now * (1 - QUICKER_SHARE) ? best[0] : null;
 }
 
@@ -394,13 +423,16 @@ export class Mesh {
   readonly #theirs = new Map<string, string[]>();
   #days: Record<string, Day>;
   #daysChanged = false;
+  /// By station, then relay (`relayKey`): how fast replies came that way.
+  readonly #speeds: Record<string, Record<string, Speed>>;
 
-  private constructor(env: MeshEnv, relays: string[], endpoint: IrohEndpoint, secret: Uint8Array, days: Record<string, Day>) {
+  private constructor(env: MeshEnv, relays: string[], endpoint: IrohEndpoint, secret: Uint8Array, days: Record<string, Day>, speeds: Record<string, Record<string, Speed>>) {
     this.#env = env;
     this.relays = relays;
     this.#endpoint = endpoint;
     this.#secret = secret;
     this.#days = days;
+    this.#speeds = speeds;
   }
 
   /// Binds the endpoint with the stored device key (made and stored the first time). No relays binds without one.
@@ -417,8 +449,10 @@ export class Mesh {
       }
       const daysRaw = parseJson(yield* Effect.orElseSucceed(host.storageGet(NET_DAY_KEY), () => null)) as J;
       const days: Record<string, Day> = daysRaw !== null && typeof daysRaw === "object" && !Array.isArray(daysRaw) ? daysRaw : {};
+      const speedsRaw = parseJson(yield* Effect.orElseSucceed(host.storageGet(SPEED_KEY), () => null)) as J;
+      const speeds: Record<string, Record<string, Speed>> = speedsRaw !== null && typeof speedsRaw === "object" && !Array.isArray(speedsRaw) ? speedsRaw : {};
       const endpoint = yield* Mesh.#bind(env.iroh, secret, relays);
-      const mesh = new Mesh(env, relays, endpoint, secret, days);
+      const mesh = new Mesh(env, relays, endpoint, secret, days, speeds);
       env.runner.fork(mesh.#watch());
       env.runner.fork(mesh.#tally());
       return mesh;
@@ -469,6 +503,45 @@ export class Mesh {
     const today = this.#localDay();
     for (const [id, d] of Object.entries(this.#days)) if (d.day !== today) delete this.#days[id];
     this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(NET_DAY_KEY, toJsonBytes(this.#days))));
+  }
+
+  /// How fast replies from a station came through a relay lately (bytes a second); null if none long enough did.
+  speed(stationId: string, relay: string): number | null {
+    const s = this.#speeds[stationId]?.[relayKey(relay)];
+    return s !== undefined && this.#env.host.nowMs() - s.at < SPEED_KEPT_MS ? s.bps : null;
+  }
+
+  /// A reply of `bytes` from a station came through `relay` in `ms` (from its first bytes to its end). The fastest seen
+  /// counts: a reply also comes slower than its way could bring it (others at once, the station reading slowly).
+  noteSpeed(stationId: string, relay: string, bytes: number, ms: number): void {
+    if (bytes < SPEED_MIN_BYTES || ms <= 0) return;
+    const bps = (bytes / ms) * 1000;
+    const now = this.#env.host.nowMs();
+    const of = (this.#speeds[stationId] ??= {});
+    const key = relayKey(relay);
+    const was = of[key];
+    if (was !== undefined && now - was.at < SPEED_KEPT_MS && was.bps >= bps) return;
+    of[key] = { bps, at: was !== undefined && now - was.at < SPEED_KEPT_MS ? was.at : now };
+    for (const [id, relays] of Object.entries(this.#speeds)) {
+      for (const [r, s] of Object.entries(relays)) if (now - s.at >= SPEED_KEPT_MS) delete relays[r];
+      if (Object.keys(relays).length === 0) delete this.#speeds[id];
+    }
+    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds))));
+  }
+
+  /// A reply's body, timed as it is read: when it ends, how fast it came is noted for the relay it came through.
+  timed(stationId: string, relay: string, body: Pull<Uint8Array>): Pull<Uint8Array> {
+    let first: number | null = null;
+    let bytes = 0;
+    return {
+      take: Effect.map(body.take, (chunk) => {
+        if (chunk === null) {
+          if (first !== null) this.noteSpeed(stationId, relay, bytes, Date.now() - first);
+        } else if (first === null) first = Date.now();
+        else bytes += chunk.length;
+        return chunk;
+      }),
+    };
   }
 
   #localDay(): number {
@@ -764,8 +837,13 @@ export class Mesh {
       );
       this.#probing--;
       const shown: Measured = { measuring: false, relays: measured.map(([r, ms]) => [relayHost(r), ms]), moved: null };
-      for (const [relay, ms] of measured) span.set(`stillfail.rtt.${relayHost(relay)}`, ms !== null ? Math.round(ms) : "none");
-      const relay = link.path() === "relay" && this.#isCurrent(stationId, link) ? quicker(net.rttMs, via, measured) : null;
+      const speed = (relay: string) => this.speed(stationId, relay);
+      for (const [relay, ms] of measured) {
+        span.set(`stillfail.rtt.${relayHost(relay)}`, ms !== null ? Math.round(ms) : "none");
+        const bps = speed(relay);
+        if (bps !== null) span.set(`stillfail.kbps.${relayHost(relay)}`, Math.round(bps / 1024));
+      }
+      const relay = link.path() === "relay" && this.#isCurrent(stationId, link) ? quicker(net.rttMs, via, measured, speed) : null;
       if (relay !== null) {
         const endpoint = yield* this.#pinnedEndpoint(relay);
         if (endpoint !== null) {
@@ -1104,7 +1182,11 @@ export class MeshWire implements StationWire {
       // Its stream goes with the scope it was asked in.
       yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
       if (reply.headers.some(([k]) => k.toLowerCase() === IDEMPOTENT)) idempotent.add(id);
-      return { status: reply.status, headers: reply.headers, body: reply.body, via: l.path() };
+      const relay = l.path() === "relay" ? l.via() : null;
+      // How fast it comes tells how fast that way is; not an event stream's, which comes as things happen.
+      const streams = head.headers.some(([k, v]) => k.toLowerCase() === "accept" && v.includes("text/event-stream"));
+      const timed = relay !== null && !streams ? mesh.timed(id, relay, reply.body) : reply.body;
+      return { status: reply.status, headers: reply.headers, body: timed, via: l.path(), relay: relay !== null ? relayHost(relay) : null };
     });
   }
 

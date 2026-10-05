@@ -8,7 +8,7 @@ import type { Credential } from "../src/cloud.ts";
 import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ALPN, CONNECT_TIMEOUT_MS, DEVICE_KEY, FORMER_ALPN, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, quicker, sampleRelayRtt, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, CONNECT_TIMEOUT_MS, cost, DEVICE_KEY, FORMER_ALPN, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, quicker, sampleRelayRtt, SPEED_MIN_BYTES, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -257,6 +257,21 @@ test("moves_only_to_a_clearly_quicker_relay", () => {
   assert.equal(quicker(1000, a, [[a, 11_000], [b, 82]]), b, "fresh measurements of the same round win over the link's estimate");
 });
 
+/// A way's speed is weighed with its round trip: a relay with the shorter round trip but a slow line (Hong Kong's back
+/// to the mainland, some 0.5 MB/s, against Beijing's 30) is not moved to, and a link on one is moved off it.
+test("weighs_each_relays_speed_with_its_round_trip", () => {
+  const a = "https://a.relay.test/";
+  const b = "https://b.relay.test/";
+  const MB = 1024 * 1024;
+  const speeds = (sa: number | null, sb: number | null) => (r: string) => (r === a ? sa : r === b ? sb : null);
+  assert.equal(quicker(200, a, [[a, 200], [b, 120]], speeds(30 * MB, 0.5 * MB)), null, "b answers sooner, but a reply takes half a second more");
+  assert.equal(quicker(200, a, [[a, 200], [b, 120]], speeds(30 * MB, null)), b, "b's speed not known yet: it is tried");
+  assert.equal(quicker(120, b, [[a, 200], [b, 120]], speeds(30 * MB, 0.5 * MB)), a, "found slow, the link goes back");
+  assert.equal(quicker(200, a, [[a, 200], [b, 120]], speeds(30 * MB, 20 * MB)), b, "both fast: the round trip decides");
+  assert.equal(cost(100, null), 100);
+  assert.equal(Math.round(cost(100, MB)), 100 + 250);
+});
+
 const close = async (station: Station, runner: Runner, mesh: Mesh) => {
   await station.close();
   await runner.run(mesh.close());
@@ -419,16 +434,23 @@ async function relay(): Promise<[string, ChildProcess]> {
 /// The relay at `url` reached through a proxy that holds what goes through it, either way, `delay` ms (a delay line:
 /// what comes meanwhile is held as long, behind it, as a far away relay is): its url for those who should find it slow.
 /// The first `quick` relay connections through it (asking to upgrade to the relay's protocol) are not held.
-async function slowed(url: string, delay: number, quick = 0): Promise<string> {
+async function slowed(url: string, delay: number, quick = 0, bytesPerSecond = 0): Promise<string> {
   const upstream = new URL(url);
   type Way = { held: number | null };
   const pump = (from: import("node:net").Socket, to: import("node:net").Socket, way: Way) => {
-    const pass = (f: () => void) => (way.held === 0 ? f() : setTimeout(f, way.held!));
+    // With a speed, each way a line of its own: a chunk goes on once the ones before it have, at that speed.
+    let free = 0;
+    const pass = (f: () => void, size: number) => {
+      if (bytesPerSecond === 0 || way.held === 0) return way.held === 0 ? f() : setTimeout(f, way.held!);
+      const now = Date.now();
+      free = Math.max(free, now + way.held!) + (size / bytesPerSecond) * 1000;
+      setTimeout(f, free - now);
+    };
     from.on("data", (chunk: Buffer) => {
       if (way.held === null) way.held = quick > 0 && /^upgrade:/im.test(chunk.toString("latin1")) && quick-- > 0 ? 0 : delay;
-      pass(() => to.write(chunk));
+      pass(() => to.write(chunk), chunk.length);
     });
-    from.on("close", () => (way.held === null ? to.destroy() : pass(() => to.destroy())));
+    from.on("close", () => (way.held === null ? to.destroy() : pass(() => to.destroy(), 0)));
   };
   const server = tcpServer((down) => {
     const up = tcpConnect(Number(upstream.port), upstream.hostname);
@@ -578,6 +600,50 @@ test("a_link_moves_to_the_relay_its_requests_go_quicker_through_far_from_the_dev
   assert.ok(sameRelay(now.via(), farB), `still through ${now.via()}: ${JSON.stringify(mesh.measured(id))}`);
   const throughB = await took(now);
   assert.ok(throughB < throughA, `requests through b ${throughB} ms, through a ${throughA} ms`);
+  await runner.run(mesh.close());
+  runner.shutdown();
+  void station.close();
+  ra.kill();
+  rb.kill();
+});
+
+/// Judged by what it chooses, again: b answers sooner than a but brings a reply slowly (the device 60 ms away each way
+/// on a 256 KiB/s line, as Hong Kong's back to the mainland). Its speed not known, the link goes there; a large reply
+/// through it shows how slow it is, and the link goes back to a, where the same reply comes sooner.
+test("a_link_leaves_a_relay_found_slow_for_one_that_brings_replies_sooner", { skip: noRelay }, async () => {
+  const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
+  const station = await Station.on(b, await slowed(a, 100, 1));
+  const id = station.id();
+  const slowB = await slowed(b, 60, 0, 256 * 1024);
+  const e = env(new FakeHost(), new Wakes(), quickClock(new Map()));
+  const mesh = await e.runner.run(Mesh.make(e, [a]));
+  const runner = e.runner;
+  let link: Link | null = null;
+  for (let i = 0; i < 40 && link === null; i++) {
+    const tried = await runner.run(mesh.link(id, grants("ok", { n: 0 }))).catch(() => null);
+    if (tried && (await request(runner, tried, head("/admin/api/overview")).then((r) => r.status === 200, () => false))) link = tried;
+    else await sleep(250);
+  }
+  assert.ok(link, "reached through a");
+  const status = new Status(e.host, runner);
+  const wire = new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials: () => grants("ok", { n: 0 }), relays: () => [], status: () => status });
+  const addr = StationAddr.parse(`w/${id}`);
+  // A large reply, as the core reads one: how long it takes.
+  const big = async () => {
+    const started = Date.now();
+    const bytes = await runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, head("/admin/api/big"), new Uint8Array()), (r) => readAll(r.body))));
+    assert.ok(bytes.length >= SPEED_MIN_BYTES, `${bytes.length}`);
+    return Date.now() - started;
+  };
+  (mesh.relays as string[]).push(slowB);
+  await runner.run(mesh.remeasure(id));
+  assert.ok(sameRelay(mesh.current(id)!.via(), slowB), `${mesh.current(id)!.via()}`);
+  const throughB = await big();
+  assert.ok(mesh.speed(id, slowB) !== null, "how fast b is, seen");
+  await runner.run(mesh.remeasure(id));
+  assert.ok(sameRelay(mesh.current(id)!.via(), a), `still through ${mesh.current(id)!.via()}: ${JSON.stringify(mesh.measured(id))}`);
+  const throughA = await big();
+  assert.ok(throughA < throughB, `the reply through a ${throughA} ms, through b ${throughB} ms`);
   await runner.run(mesh.close());
   runner.shutdown();
   void station.close();

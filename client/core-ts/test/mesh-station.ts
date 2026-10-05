@@ -119,6 +119,12 @@ export class Station {
         const headers: J = { "content-type": "text/event-stream", "x-method": parsed.method };
         if (once) headers["stillfail-idempotent"] = "1";
         await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers })}\n`));
+        // A large reply: how fast a way brings one.
+        if (parsed.path === "/admin/api/big") {
+          await stream.write(Buffer.alloc(1024 * 1024, 7)).catch(() => {});
+          await stream.finish().catch(() => {});
+          return;
+        }
         await stream.write(Buffer.from(`${head}|${body.toString()}`));
         for (const part of ["|one", "|two", "|three"]) {
           await sleep(100);

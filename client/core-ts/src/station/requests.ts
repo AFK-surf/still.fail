@@ -34,6 +34,7 @@ export function failed(span: Span, error: CoreError): void {
 export function answered(span: Span, reply: WireReply): void {
   span.set("http.response.status_code", reply.status);
   if (reply.via) span.set("stillfail.path", reply.via);
+  if (reply.relay) span.set("stillfail.via", reply.relay);
   if (reply.status >= 500) span.fail();
 }
 
