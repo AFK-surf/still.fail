@@ -543,9 +543,19 @@ private fun AppContent(app: AppState) {
                 // The one last open, or one just joined, may not be in what was kept yet: until the accounts answer (or
                 // fail), it is waited for rather than another put in its place.
                 val answered = all != null && all.all { it.loaded || it.error != null }
-                val current = entries?.firstOrNull { it.workspace.id == app.workspace }
+                val target = entries?.firstOrNull { it.workspace.id == app.workspace }
                     ?: entries?.firstOrNull()?.takeIf { app.workspace == null || answered }
-                LaunchedEffect(current?.workspace?.id) { current?.let { if (it.workspace.id != app.workspace) app.pickWorkspace(it.workspace.id) } }
+                LaunchedEffect(target?.workspace?.id) { target?.let { if (it.workspace.id != app.workspace) app.pickWorkspace(it.workspace.id) } }
+                // Switched to another workspace, the one shown stays until the core has given what its list shows, from
+                // what is on the device (LOCAL_MS at most, as a page opening): not its list swapped for the loading look
+                // and placeholders, then the rows a few frames later (a flash, under the switcher closing).
+                var shown by remember { mutableStateOf<String?>(null) }
+                LaunchedEffect(target?.workspace?.id) {
+                    val id = target?.workspace?.id
+                    if (id != null && shown != null && id != shown) fail.still.android.data.preread(app.scope, app.core, homeTopics(id), LOCAL_MS, PRIME_MS)
+                    shown = id
+                }
+                val current = if (target == null) null else entries?.firstOrNull { it.workspace.id == shown } ?: target
                 // The beta app, and an account not let into the beta (the core says so): said, with a way out.
                 val blocked = all?.firstOrNull { it.blocked != null }
                 if (current == null && blocked != null) fail.still.android.screens.Blocked(blocked)
@@ -586,6 +596,16 @@ private fun AppContent(app: AppState) {
 private const val LOCAL_MS = 100L
 /** How long a chat read ahead of its page (`AppState.prime`) is kept for it. */
 private const val PRIME_MS = 3_000L
+
+/** What the list of a workspace shows (screens/Home.kt, OpenJobs.kt), as they follow it: read ahead of switching to it. */
+private fun homeTopics(workspace: String): List<Pair<JsonObject, kotlinx.serialization.KSerializer<*>>> = listOf(
+    Topics.chats(workspace, false) to fail.still.android.data.ChatsView.serializer(),
+    Topics.chats(workspace, true) to fail.still.android.data.ChatsView.serializer(),
+    Topics.chats(workspace, false, watching = true) to fail.still.android.data.ChatsView.serializer(),
+    Topics.workspaceMarks(workspace) to fail.still.android.data.WorkspaceMarksView.serializer(),
+    Topics.status(workspace) to fail.still.android.data.StatusView.serializer(),
+    Topics.longJobs(workspace) to fail.still.android.data.LongJobsView.serializer(),
+)
 
 /** What a page shows first, which it waits for as it opens (Pages): its main topics, as its screen follows them. */
 private fun opening(screen: Screen, workspace: String): List<Pair<JsonObject, kotlinx.serialization.KSerializer<*>>> = when (screen) {

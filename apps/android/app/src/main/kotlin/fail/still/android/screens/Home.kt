@@ -86,7 +86,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -147,9 +146,10 @@ fun HomeScreen(current: WorkspaceEntry) {
     val all by rememberTopic<ChatsView>(app.core, Topics.chats(scope, false))
     val mine by rememberTopic<ChatsView>(app.core, Topics.chats(scope, true))
     val watching by rememberTopic<ChatsView>(app.core, Topics.chats(scope, false, watching = true))
-    val allList = rememberLazyListState()
-    val mineList = rememberLazyListState()
-    val watchingList = rememberLazyListState()
+    // Each workspace's lists start at their top: not where the one switched from was scrolled to.
+    val allList = rememberSaveable(scope, saver = LazyListState.Saver) { LazyListState() }
+    val mineList = rememberSaveable(scope, saver = LazyListState.Saver) { LazyListState() }
+    val watchingList = rememberSaveable(scope, saver = LazyListState.Saver) { LazyListState() }
     val filter = app.chatFilter
     val shift by animateFloatAsState(when (filter) { "mine" -> 1f; "watching" -> 2f; else -> 0f }, tween(240, easing = FastOutSlowInEasing), label = "filter")
     // The lists run under both bars, which are frosted glass over them.

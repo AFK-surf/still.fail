@@ -14,6 +14,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import fail.still.core.TopicState
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,6 +23,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -108,6 +110,24 @@ private suspend fun <T> followShown(core: StillFailCore, topic: JsonObject, seri
     } finally {
         if (--entry.followers == 0 && latest[key] === entry) latest.remove(key)
     }
+}
+
+/**
+ * Reads topics ahead of the page that shows them (a workspace switched to, App.kt): each followed in `scope` for
+ * `keepMs`, so the page following them then starts from what they were decoded to (`latest`) rather than from nothing.
+ * Returns once each has a value or an error, or after `waitMs`.
+ */
+suspend fun preread(scope: CoroutineScope, core: StillFailCore, topics: List<Pair<JsonObject, KSerializer<*>>>, waitMs: Long, keepMs: Long) {
+    val ready = topics.map { CompletableDeferred<Unit>() }
+    topics.forEachIndexed { i, (topic, serializer) ->
+        @Suppress("UNCHECKED_CAST") val shape = serializer as KSerializer<Any?>
+        val start = latestOf(topic, shape)
+        if (start.value != null || start.error != null) ready[i].complete(Unit)
+        scope.launch {
+            withTimeoutOrNull(keepMs) { followShown(core, topic, shape, start) { if (it.value != null || it.error != null) ready[i].complete(Unit) } }
+        }
+    }
+    withTimeoutOrNull(waitMs) { ready.forEach { it.await() } }
 }
 
 /**
