@@ -23,6 +23,7 @@ Object.assign(window, {
   fold: (folded: boolean) => moveState([[tail, ['width', 'opacity']]], () => row.toggleAttribute('data-folded', folded), { duration: 0.17, ease: EASE_OUT }),
   say: (now: string, elapsed: string) => { document.getElementById('now')!.textContent = now; document.getElementById('elapsed')!.textContent = elapsed; },
   held: () => tail.getAttribute('style') ?? '',
+  frames: (n: number) => new Promise<void>((done) => { const next = () => (n-- > 0 ? requestAnimationFrame(next) : done()); next(); }),
   shown: () => { const now = document.getElementById('now')!; return { width: now.clientWidth, needs: now.scrollWidth }; },
 });
 `, { flag: 'wx' });
@@ -31,14 +32,18 @@ Object.assign(window, {
   const page = await browser.newPage({ viewport: { width: 700, height: 200 } });
   await page.goto(new URL('/activity-fold-check.html', process.env.WEB_URL || 'http://127.0.0.1:5187').href);
   await page.waitForFunction(() => typeof window.fold === 'function');
-  // Motion's last frame comes at a time of its own: repeated, a write after the line let go shows at least once.
+  // Motion's last frame comes at a time of its own: repeated, a write after the line let go shows at least once. Each
+  // motion is waited out (a slow machine draws 170ms late), and the line looked at again a few frames after.
+  const settled = async (what) => {
+    await page.waitForFunction(() => window.held() === '', null, { timeout: 3000 }).catch(() => {});
+    await page.evaluate(() => window.frames(3));
+    assert.equal(await page.evaluate(() => window.held()), '', what);
+  };
   for (let i = 0; i < 20; i++) {
     await page.evaluate(() => { window.say('思考中', '5s'); window.fold(true); });
-    await page.waitForTimeout(400);
-    assert.equal(await page.evaluate(() => window.held()), '', `fold ${i}: nothing held once folded`);
+    await settled(`fold ${i}: nothing held once folded`);
     await page.evaluate(() => window.fold(false));
-    await page.waitForTimeout(400);
-    assert.equal(await page.evaluate(() => window.held()), '', `unfold ${i}: nothing held once unfolded`);
+    await settled(`unfold ${i}: nothing held once unfolded`);
     await page.evaluate(() => window.say('读取 Chat.tsx and what it says about the activity line', '1m 45s'));
     const shown = await page.evaluate(() => window.shown());
     assert.equal(shown.width, shown.needs, `unfold ${i}: the words that grew after are shown whole`);
