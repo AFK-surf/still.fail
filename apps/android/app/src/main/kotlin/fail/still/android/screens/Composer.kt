@@ -492,6 +492,7 @@ fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: Corout
     scope.launch {
         try {
             p.done = api(station).upload(picked.name, picked.size, picked.source(), picked.width?.toLong(), picked.height?.toLong()) { p.sent = it }
+            p.done?.let { a -> picked.preview?.let { FileData.keepSent(station, a.path, it) } }
             draft.save()
         } catch (e: CoreException) {
             p.error = e.message
@@ -549,10 +550,11 @@ fun openAttach(app: AppState, launchers: Triple<() -> Unit, () -> Unit, () -> Un
 
 /**
  * What waits to go with the message, as the web's composer shows it (ComposerExtras): the quotes, each a card with a
- * line for a comment (the one just added takes the focus; its Enter goes back to the text), then the files.
+ * line for a comment (the one just added takes the focus; its Enter goes back to the text), then the files (each kept
+ * for `host`'s flight to take it from where it is, ChatHost.kt).
  */
 @Composable
-fun DraftExtras(draft: Draft) {
+fun DraftExtras(draft: Draft, host: Host? = null) {
     if (draft.quotes.isNotEmpty()) Column(Modifier.fillMaxWidth().heightIn(max = 176.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         draft.quotes.forEach { q ->
             // In the composer's capsule: corners concentric with it.
@@ -586,7 +588,7 @@ fun DraftExtras(draft: Draft) {
     if (draft.files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         draft.files.forEach { f ->
             val remove = { draft.files.remove(f); Unit }
-            if (f.preview != null) Box(Modifier.size(56.dp).clip(InComposer).background(C.chip)) {
+            if (f.preview != null) Box(Modifier.sendTile(host, f.id).size(56.dp).clip(InComposer).background(C.chip)) {
                 Image(f.preview, f.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 if (f.done == null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (f.error != null) 0.5f else 0.25f)), contentAlignment = Alignment.Center) {
                     if (f.error != null) Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp) else CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 1.5.dp)
@@ -594,7 +596,9 @@ fun DraftExtras(draft: Draft) {
                 Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
                     IconIn(Icons.Close, 12.dp, Color.White)
                 }
-            } else FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
+            } else Box(Modifier.sendTile(host, f.id)) {
+                FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
+            }
         }
     }
 }
@@ -841,7 +845,7 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
                 // Its words stay where they were typed until its row is in the list, then go there. Not from a window short
                 // of the chat's end: its row is past the window until the station has the message (at no time known); it
                 // comes in as rows do.
-                if (view.newer != true) host.sending(draft.text.trim(), carried = false)
+                if (view.newer != true) host.sending(draft.text.trim(), carried = false, files = draft.files.toList())
                 val taken = draft.take()
                 // Refused by the core before it reached the outbox (`invalid_params`: no such chat, a bad address): the words
                 // come back if nothing was written since, and why is said. A station's failure is in the outbox (未发送, 重试).

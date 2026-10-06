@@ -10,7 +10,9 @@
 // place in the bubble, so a message of many lines leaves the field as it was, its lines neither spreading nor rewrapping
 // at once. Both now share the field's typography and wrapping width. A new
 // chat's scene leaves first (up out of view, its choices fading where they are), and the chat's list comes up after the
-// words, out of the composer's top edge. Nothing is crossfaded over anything.
+// words, out of the composer's top edge. Nothing is crossfaded over anything. The files sent with them go the same way,
+// each from its tile in the composer to its place in the message (a picture's crop opening out to its own proportions);
+// files sent with no words fly on their own, their row coming in where it is.
 package fail.still.android.screens
 
 import androidx.compose.animation.core.Animatable
@@ -59,6 +61,14 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.GraphicsContext
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.platform.LocalGraphicsContext
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.drawText
@@ -106,6 +116,8 @@ class Flight internal constructor(
     val carried: Boolean, internal val before: Set<String>,
     /** The field's words as laid out when sent (`text` starting at `lead` in them: what is sent is trimmed). */
     internal val typed: TextLayoutResult? = null, internal val lead: Int = 0,
+    /** The files sent with them, from their tiles in the composer. */
+    internal val files: List<FlyingFile> = emptyList(),
 ) {
     /** How far the field had scrolled its words: to their end (the caret's, as it sends), when they are taller than it. */
     internal val scroll: Float = ((typed?.size?.height ?: 0) - fieldHeight).coerceAtLeast(0).toFloat()
@@ -197,6 +209,21 @@ class Flight internal constructor(
 /** A piece of the words: `clip`, its room in the bubble's words; `at`, where it starts there (its baseline); `from`, the same in the field's. */
 internal class Piece(val clip: Rect, val at: Offset, val from: Offset, val shown: Boolean)
 
+/**
+ * A file sent with the words (`path`, the station's): `from`, its tile in the composer (in the host), drawn as `tile`
+ * until its place in the message is laid out (`to`, drawn there into `layer` instead of in the row).
+ */
+internal class FlyingFile(val path: String, val from: Rect, val tile: GraphicsLayer) {
+    var to: LayoutCoordinates? = null
+    var layer: GraphicsLayer? = null
+}
+
+/** A file's tile in the composer: where it is and how it is drawn (`taken` by a flight, which lets its layer go). */
+internal class Tile(val layer: GraphicsLayer) {
+    var at: LayoutCoordinates? = null
+    var taken = false
+}
+
 /** The page's composer and what moves around it. */
 @Stable
 class Host {
@@ -223,6 +250,9 @@ class Host {
     internal var capsule: LayoutCoordinates? = null
     internal var overlay: LayoutCoordinates? = null
     internal var layer: GraphicsLayer? = null
+    internal var graphics: GraphicsContext? = null
+    /** The composer's file tiles, by the draft's id for each. */
+    internal val tiles = mutableMapOf<Long, Tile>()
     /** Shows the chat's message `seq` (in the list, at its top, flashing), if it is loaded: set by the list. */
     internal var showSaid: ((Long) -> Unit)? = null
     /** A message (seq) to show once the chat's list is in place (Screen.Chat.at), the pages before it brought in. */
@@ -246,16 +276,25 @@ class Host {
     /**
      * `text` is sent from the composer (before the draft is emptied): its words stay where they are until their row is in
      * the list, the first outgoing one not among `before` (the outbox's as it was sent: it is this device's own, so what
-     * comes into it is what was just sent from here).
+     * comes into it is what was just sent from here). `files`, the draft's as it is sent: those up go from their tiles.
      */
-    fun sending(text: String, carried: Boolean, before: Set<String> = rows) {
+    fun sending(text: String, carried: Boolean, files: List<Pending> = emptyList(), before: Set<String> = rows) {
         sends++
+        let(flight)
         flight = null
         hold = null
         val field = field?.takeIf { it.isAttached }
         val overlay = overlay?.takeIf { it.isAttached }
         val capsule = capsule?.takeIf { it.isAttached }
-        if (still || text.isEmpty() || field == null || overlay == null || capsule == null) return
+        if (still || field == null || overlay == null || capsule == null) return
+        val taken = files.mapNotNull { p ->
+            val path = p.done?.path ?: return@mapNotNull null
+            val tile = tiles[p.id] ?: return@mapNotNull null
+            val at = tile.at?.takeIf { it.isAttached } ?: return@mapNotNull null
+            tile to FlyingFile(path, overlay.localBoundingBoxOf(at, clipBounds = false), tile.layer)
+        }
+        if (text.isEmpty() && taken.isEmpty()) return
+        taken.forEach { (tile, _) -> tile.taken = true }
         val at = overlay.localPositionOf(field, Offset.Zero)
         val d = density ?: return
         // The field and bubble share the same line metrics.
@@ -264,16 +303,20 @@ class Host {
         if (!carried) hold = contentHeight
         flight = Flight(
             text, from, with(d) { SendTextStyle.fontSize.toPx() }, at, field.size.width, field.size.height, overlay.localPositionOf(capsule, Offset.Zero).y,
-            carried, before, typed, typed?.layoutInput?.text?.text?.indexOf(text) ?: -1,
+            carried, before, typed, typed?.layoutInput?.text?.text?.indexOf(text) ?: -1, taken.map { it.second },
         )
         flight?.beforePositions = rowPositions.toMap()
-        hintAway = true
+        // Only words pass over the hint; files alone leave it where it is.
+        hintAway = text.isNotEmpty()
     }
 
     /** What was sent did not go (or its row never came): the composer is as it was. */
     fun notSent() {
-        if (flight?.placed != true) { flight = null; hintAway = false; hold = null }
+        if (flight?.placed != true) { let(flight); flight = null; hintAway = false; hold = null }
     }
+
+    /** A flight over: the tiles it took from the composer are drawn no more. */
+    private fun let(f: Flight?) { f?.files?.forEach { graphics?.releaseGraphicsLayer(it.tile) } }
 
     /** A new chat becomes its chat: its scene leaves. */
     fun madeChat() { leaving = true }
@@ -307,7 +350,7 @@ class Host {
         return c?.takeIf { it.isAttached }?.let { o.localPositionOf(it, Offset.Zero).y }
     }
 
-    internal fun landed(f: Flight) { if (flight === f) { flight = null; hintAway = false; hold = null } }
+    internal fun landed(f: Flight) { if (flight === f) { let(f); flight = null; hintAway = false; hold = null } }
     internal var density: androidx.compose.ui.unit.Density? = null
 }
 
@@ -323,6 +366,40 @@ fun Modifier.flying(host: Host, f: Flight?): Modifier = if (f == null) this else
         val layer = host.layer
         if (host.flight === f && layer != null) layer.record { this@drawWithContent.drawContent() } else drawContent()
     }
+
+/** A file's tile in the composer, kept drawn (and where) for the flight that may take it from there. */
+@Composable
+internal fun Modifier.sendTile(host: Host?, id: Long): Modifier {
+    if (host == null) return this
+    val graphics = LocalGraphicsContext.current
+    val tile = remember(id) { Tile(graphics.createGraphicsLayer()).also { host.tiles[id] = it } }
+    DisposableEffect(id) {
+        onDispose {
+            if (host.tiles[id] === tile) host.tiles.remove(id)
+            if (!tile.taken) graphics.releaseGraphicsLayer(tile.layer)
+        }
+    }
+    return onGloballyPositioned { tile.at = it }.drawWithContent {
+        tile.layer.record { this@drawWithContent.drawContent() }
+        drawLayer(tile.layer)
+    }
+}
+
+/** A file in a message flown into: drawn by the host from its tile in the composer to here, instead of here. */
+@Composable
+internal fun Modifier.landingFile(path: String): Modifier {
+    val f = LocalFlight.current
+    val host = LocalFlightHost.current
+    val file = f?.files?.firstOrNull { it.path == path }
+    val layer = rememberGraphicsLayer()
+    if (f == null || host == null || file == null) return this
+    file.layer = layer
+    return onGloballyPositioned {
+        file.to = it
+        // Sent with no words: the list rises (a new chat's) from where the first file was.
+        if (f.text.isEmpty() && f.rise == null) host.overlay?.takeIf { o -> o.isAttached }?.let { o -> f.rise = file.from.top - o.localPositionOf(it, Offset.Zero).y }
+    }.drawWithContent { if (host.flight === f) layer.record { this@drawWithContent.drawContent() } else drawContent() }
+}
 
 /** Existing rows also use FLIP: lay out once at their destination, undo that displacement in drawing. */
 @Composable
@@ -354,6 +431,7 @@ fun ChatHost(current: WorkspaceEntry, screen: Screen) {
     val host = remember { Host() }
     host.still = reducedMotion()
     host.density = LocalDensity.current
+    host.graphics = LocalGraphicsContext.current
     val chat = screen as? Screen.Chat
     // Where to go, once each time the chat or its place changes (not on every recomposition: the page clears it once there).
     remember(chat?.id, chat?.at, chat?.words) { host.goTo = chat?.at; host.goToWords = chat?.words.orEmpty(); chat?.at }
@@ -411,7 +489,7 @@ internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean =
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 spec.notices(this)
-                DraftExtras(draft)
+                DraftExtras(draft, host)
                 ComposerBar(
                     draft, spec.placeholder, onPlus = spec.onPlus, onType = spec.onType, onSend = spec.onSend,
                     hint = { if (host.hintAway) 0f else hint.value }, morph = morph, onField = { host.field = it }, onFieldText = { host.fieldText = it },
@@ -438,12 +516,22 @@ private fun FlightLayer(host: Host) {
         val bubble = flight.bubble?.takeIf { it.isAttached }
         val overlay = host.overlay?.takeIf { it.isAttached }
         val layer = host.layer
-        if ((!flight.carried && !flight.ready) || row == null || bubble == null || overlay == null || layer == null) {
+        val wordless = flight.text.isEmpty()
+        if ((!flight.carried && !flight.ready) || row == null || (bubble == null && !wordless) || overlay == null || layer == null) {
             // Until their row is drawn in the list, the words stay as they were typed, as the field showed them
-            // (scrolled to its last lines when there were more than it holds); they go in the frame it is.
-            val typed = flight.typed ?: return@drawWithContent
+            // (scrolled to its last lines when there were more than it holds), and the files as their tiles were; they
+            // go in the frame it is.
+            for (ff in flight.files) translate(ff.from.left, ff.from.top) { drawLayer(ff.tile) }
+            val typed = flight.typed?.takeIf { !wordless } ?: return@drawWithContent
             val at = flight.field
             clipRect(at.x, at.y, at.x + flight.fieldWidth, at.y + flight.fieldHeight) { drawText(typed, topLeft = at - Offset(0f, flight.scroll)) }
+            return@drawWithContent
+        }
+        if (wordless || bubble == null) {
+            // Files alone: the row comes in where it is (its time with it), the files flying into it.
+            val r = overlay.localPositionOf(row, Offset.Zero) - Offset(0f, flight.shift())
+            translate(r.x, r.y) { drawLayer(layer) }
+            files(flight, overlay)
             return@drawWithContent
         }
         val across = flight.across()
@@ -514,6 +602,7 @@ private fun FlightLayer(host: Host) {
                 }
             }
         }
+        files(flight, overlay)
         // Out of the composer (its top edge as it is now, changing shape as they go): its hint comes back.
         val top = host.capsule?.takeIf { it.isAttached }?.let { overlay.localPositionOf(it, Offset.Zero).y } ?: flight.top
         if (host.hintAway && at.y + (row.size.height - inRow.y) * s <= top) host.hintAway = false
@@ -549,6 +638,41 @@ private fun FlightLayer(host: Host) {
         if (!f.carried) launch { snapshotFlow { f.progress.value }.first { it >= SETTLE }; if (host.flight === f) host.hold = null }
         f.progress.animateTo(1f, tween(if (f.carried) ARRIVE_MS else FLIGHT_MS, delayMillis = if (f.carried) 90 else 0, easing = LinearEasing))
         host.landed(f)
+    }
+}
+
+/**
+ * The files of a flight, each from its tile in the composer to its place in the message: across and up as the words go
+ * (on a curve in an open chat), its box growing from the tile's to its own, what is in it cropped to the box as it is
+ * (a picture opening out from the tile's square crop), corners from the composer's to its own.
+ */
+private fun DrawScope.files(flight: Flight, overlay: LayoutCoordinates) {
+    if (flight.files.isEmpty()) return
+    val across = flight.across()
+    val up = flight.up()
+    val fromCorner = (ComposerCorner - ComposerInset).toPx()
+    val toCorner = 10.dp.toPx()
+    for (ff in flight.files) {
+        val to = ff.to?.takeIf { it.isAttached }
+        val drawn = ff.layer?.takeIf { !it.isReleased }
+        if (to == null || drawn == null || to.size.width == 0 || to.size.height == 0) {
+            translate(ff.from.left, ff.from.top) { drawLayer(ff.tile) }
+            continue
+        }
+        val end = overlay.localBoundingBoxOf(to, clipBounds = false).translate(0f, -flight.shift())
+        val a = ff.from
+        val left = a.left + (end.left - a.left) * across
+        val top = a.top + (end.top - a.top) * up
+        val w = a.width + (end.width - a.width) * up
+        val h = a.height + (end.height - a.height) * up
+        val c = maxOf(w / end.width, h / end.height)
+        val corner = fromCorner + (toCorner - fromCorner) * up
+        val box = Path().apply { addRoundRect(RoundRect(left, top, left + w, top + h, CornerRadius(corner))) }
+        clipPath(box) {
+            translate(left + (w - end.width * c) / 2, top + (h - end.height * c) / 2) {
+                scale(c, c, pivot = Offset.Zero) { drawLayer(drawn) }
+            }
+        }
     }
 }
 

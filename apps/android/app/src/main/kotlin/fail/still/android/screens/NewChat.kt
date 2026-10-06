@@ -226,7 +226,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
         onPlus = { openAttach(app, launchers) },
         onSend = {
             // Its words stay where they were in the composer until the chat's page takes them (ChatHost.kt).
-            host.sending(draft.text.trim(), carried = true)
+            host.sending(draft.text.trim(), carried = true, files = draft.files.toList())
             val taken = draft.take()
             draft.starting = true
             scope.launch {

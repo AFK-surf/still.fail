@@ -189,6 +189,11 @@ internal object FileData {
     }
 
     fun keptPicture(id: String, longest: Int): ImageBitmap? = pictures.get("$id@$longest")
+
+    /** Pictures sent from here as they were picked (by station and file name), until the station's own are read. */
+    private val sent = LruCache<String, ImageBitmap>(32)
+    fun keepSent(station: String, path: String, picture: ImageBitmap) { sent.put("$station\n${path.substringAfterLast('/')}", picture) }
+    fun sentPicture(station: String, path: String): ImageBitmap? = sent.get("$station\n${path.substringAfterLast('/')}")
     fun keepPicture(id: String, longest: Int, picture: ImageBitmap) { pictures.put("$id@$longest", picture) }
 
     private val comingToDisk = HashMap<String, Deferred<File>>()
@@ -272,7 +277,8 @@ internal fun Files(ctx: Here, list: List<Attachment>, mine: Boolean = false) {
     if (list.isEmpty()) return
     var open by remember { mutableStateOf<Attachment?>(null) }
     Wrap(6.dp, end = mine) {
-        list.forEach { f -> FileItem(ctx.station, ctx.owner(f), f) { open = f } }
+        // Each flown into from its tile in the composer, when it was just sent from there (ChatHost.kt).
+        list.forEach { f -> Box(Modifier.landingFile(f.path)) { FileItem(ctx.station, ctx.owner(f), f) { open = f } } }
     }
     val shown = open
     val key = shown?.let { ctx.owner(it) }
@@ -361,24 +367,26 @@ private fun ChatImage(station: String, key: String, file: Attachment, size: Modi
     val app = LocalApp.current
     val id = FileData.id(station, key, file, thumb = true)
     val longest = with(LocalDensity.current) { 360.dp.roundToPx() }
-    var image by remember(id) { mutableStateOf(FileData.keptPicture(id, longest)) }
+    // One sent from here shows the picture it had in the composer until the station's comes (it flies in from there).
+    val sent = remember(id) { FileData.sentPicture(station, file.path) }
+    var image by remember(id) { mutableStateOf(FileData.keptPicture(id, longest) ?: sent) }
     var failed by remember(id) { mutableStateOf(false) }
     val instant = remember(id) { image != null || id in revealed }
     val born = remember(id) { System.currentTimeMillis() }
     var reveal by remember(id) { mutableStateOf(false) }
     LaunchedEffect(id) {
-        if (image != null) return@LaunchedEffect
+        if (FileData.keptPicture(id, longest) != null) return@LaunchedEffect
         try {
             val bytes = FileData.fetch(app, station, key, file, thumb = true).await()
             val got = FileData.picture(id, bytes, longest)
-            if (got == null) failed = true
+            if (got == null) failed = sent == null
             else {
                 reveal = !instant && System.currentTimeMillis() - born >= 150
                 image = got
                 revealed += id
             }
         } catch (_: CoreException) {
-            failed = true
+            failed = sent == null
         }
     }
     // What the viewer grows out of and shrinks back into (FilePreview.kt).
