@@ -4,7 +4,7 @@
 // the page is served from app://ember, the core runs in Node (client/core-ts,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
-import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, MessageChannelMain, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
 import { autoUpdater } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -16,6 +16,7 @@ import { pathToFileURL } from "node:url";
 import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
 import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
 import { LocalStation, type Place } from "./station";
+import { contextMenu, type Action } from "./context-menu.mts";
 import { moveUserData } from "./moves.mts";
 import { exportOriginStorage, importOriginStorage, type OriginSnapshot } from "./origin-storage";
 import zhWords from "../../../client/i18n/catalog/zh/desktop.json" with { type: "json" };
@@ -650,6 +651,25 @@ function external(url: string): void {
 }
 
 /**
+ * A right-click's menu (context-menu.mts: what it offers for what was clicked), in the app's words. Its items act on
+ * the page right-clicked: the image under the pointer, the field or the selection in its focused frame.
+ */
+function showContextMenu(window: BrowserWindow, params: Electron.ContextMenuParams): void {
+  const items = contextMenu(params, { app: APP_ORIGIN, cloud: CLOUD_ORIGIN });
+  if (items.length === 0) return;
+  const page = window.webContents;
+  const act = (action: Action) => {
+    if (action.do === "edit") page[action.command]();
+    else if (action.do === "copyImage") page.copyImageAt(params.x, params.y);
+    else if (action.do === "copyText") void clipboard.writeText(action.text).catch((error: Error) => console.warn("copying to the clipboard failed", error.message));
+    else external(action.url);
+  };
+  Menu.buildFromTemplate(items.map((item) => item ? { label: t(item.key), enabled: item.enabled, click: () => act(item.action) } : { type: "separator" }))
+    // The frame right-clicked, for what macOS adds to a field's menu (Writing Tools).
+    .popup({ window, ...(params.frame ? { frame: params.frame } : {}) });
+}
+
+/**
  * A window of the app at `path`. The app's own window has no title bar: its buttons sit in the page's top row (44 px,
  * web/src/styles), centred on it. A page of the app opened in a new window (a web service's page of its own) has one:
  * its page has no row for them.
@@ -682,6 +702,8 @@ function open(path = "/", titled = false): BrowserWindow {
     event.preventDefault();
     external(url);
   });
+  // A right-click gets a menu, as in a browser (showContextMenu).
+  window.webContents.on("context-menu", (_event, params) => showContextMenu(window, params));
   void window.loadURL(`${APP_ORIGIN}${path}`);
   return window;
 }
