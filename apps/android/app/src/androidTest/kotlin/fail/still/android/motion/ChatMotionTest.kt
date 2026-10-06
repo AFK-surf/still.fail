@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.asImageBitmap
 import org.junit.Assert.assertTrue
 import kotlin.math.abs
 import androidx.compose.ui.test.hasContentDescription
@@ -375,4 +376,84 @@ class ChatMotionTest {
         back.frames(20)
         back.end()
     }
+
+    // ── files sent with the words ──
+
+    private val agentKey = "ember:c-1"
+
+    /** A chat whose agent keeps its files (so an image shows as one, not as a card). */
+    private fun withAgent(view: fail.still.android.data.ChatView) = view.copy(agents = listOf(fail.still.android.data.ChatAgent(
+        session = fail.still.android.data.Session(
+            key = agentKey, runtime = "claude", process = "idle", pending = 0, statusText = "空闲", tone = "muted", titleText = "修一下登录",
+            agentText = "Claude", maker = Fixtures.anthropic, runtimeText = "Claude Code", efforts = listOf("high"),
+        ),
+        status = "idle", profiles = emptyList(), choices = emptyList(), attention = emptyList(), turns = emptyList(), threads = emptyList(), jobs = emptyList(),
+    )))
+
+    /** A photo-like picture, wider than tall (its crop in the composer is square). */
+    private fun picture(w: Int = 1200, hgt: Int = 800): android.graphics.Bitmap {
+        val b = android.graphics.Bitmap.createBitmap(w, hgt, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(b)
+        val p = android.graphics.Paint()
+        p.shader = android.graphics.LinearGradient(0f, 0f, w.toFloat(), hgt.toFloat(), 0xFF2E7DD7.toInt(), 0xFFF2A65A.toInt(), android.graphics.Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w.toFloat(), hgt.toFloat(), p)
+        p.shader = null; p.color = 0xFFFFFFFF.toInt()
+        c.drawCircle(w * 0.3f, hgt * 0.45f, hgt * 0.22f, p)
+        p.color = 0xFF1B1B1B.toInt(); p.textSize = hgt * 0.12f; p.isAntiAlias = true
+        c.drawText("Safari 登录页", w * 0.45f, hgt * 0.75f, p)
+        return b
+    }
+
+    /**
+     * Sends `text` with `files` already up in the composer (an image as it was picked, `true`: its preview), the station
+     * answering for its thumbnail; the outbox has it at once, the chat's message a moment later.
+     */
+    private fun sentWithFiles(name: String, text: String, files: List<Pair<fail.still.android.data.Attachment, Boolean>>) {
+        val h = Harness(rule)
+        val big = picture()
+        val preview = android.graphics.Bitmap.createScaledBitmap(big, 240, 160, true).asImageBitmap()
+        val png = java.io.ByteArrayOutputStream().also { big.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        val atts = files.map { it.first }
+        val out = Fixtures.outgoing("out-1", text).copy(attachments = atts)
+        h.fake.put(topic, withAgent(Fixtures.chat(talk)))
+        h.fake.answer = { call, _ ->
+            when (call) {
+                "chat.send" -> { h.fake.put(topic, withAgent(Fixtures.chat(talk, listOf(out)))); JsonNull }
+                "station.file" -> buildJsonObject { put("type", "image/png"); put("bytes", android.util.Base64.encodeToString(png, android.util.Base64.NO_WRAP)) }
+                else -> JsonNull
+            }
+        }
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        rule.runOnUiThread {
+            val draft = fail.still.android.screens.Drafts.of(rule.activity, h.fake.core, "${Fixtures.STATION}:thread:${Fixtures.THREAD}")
+            files.forEachIndexed { i, (a, image) ->
+                draft.files.add(fail.still.android.screens.Pending(900L + i, a.name, a.size, if (image) preview else null).apply { done = a })
+                if (image) fail.still.android.screens.FileData.keepSent(Fixtures.STATION, a.path, preview)
+            }
+        }
+        if (text.isNotEmpty()) h.type(text)
+        h.keyboard()
+        val r = h.record(name)
+        r.frame { h.send() }
+        r.frames(3)
+        h.fake.put(topic, withAgent(Fixtures.chat(talk + Fixtures.mine(5, text, said = true).copy(outgoing = "out-1", attachments = atts))))
+        r.frames(52)
+        val jump = r.end()
+        assertTrue("$name snapped into place (changed fraction $jump)", jump < 0.025f)
+    }
+
+    private val photo = fail.still.android.data.Attachment("safari.png", "uploads/safari.png", 48_213, width = 1200, height = 800)
+    private val notes = fail.still.android.data.Attachment("登录日志.txt", "uploads/login.txt", 3_412)
+
+    /** Words and a picture: the picture from its square tile in the composer to its place under the bubble, opening out. */
+    @Test
+    fun sentWithAPicture() = sentWithFiles("sent-with-picture", "Safari 上是这样的，帮我看一下", listOf(photo to true))
+
+    /** A picture with no words: it flies on its own; the row comes in where it is. */
+    @Test
+    fun sentPictureAlone() = sentWithFiles("sent-picture-alone", "", listOf(photo to true))
+
+    /** Words and a file: the card from the composer to its place under the bubble. */
+    @Test
+    fun sentWithAFile() = sentWithFiles("sent-with-file", "日志在这里", listOf(notes to false))
 }
