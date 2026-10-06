@@ -1,6 +1,6 @@
 {
   "name": "@stillfail/core-kernel",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "The domain-free base of a client core: Effect runner, keyed topics and deltas, sync scheduler, doing, protocol, single-writer SQLite, the UI's client and the web worker relay",
   "license": "MIT",

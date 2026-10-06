@@ -152,6 +152,8 @@ export class Store {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry) return;
     entry.subscribers = entry.subscribers.filter(([c, i]) => !(c === client && i === id));
+    // What was sent last is held by no one now: the next subscriber is sent the value as it is then, not that.
+    if (entry.subscribers.length === 0) entry.sent = undefined;
     this.#release(topic);
   }
 

@@ -38,6 +38,23 @@ test("a computed topic sends its whole value first, then only keyed changes, coa
   assert.deepEqual(sent.splice(0), [[ui, { id: 1, delta: [{ path: ["items"], key: ["id"], patch: "a", ops: [{ path: ["n"], set: 3 }] }] }]]);
 });
 
+test("a subscriber that comes back within the grace is sent the value as it is now, not as it was last sent", async () => {
+  const { time, sent, kernel } = setup();
+  let items = [{ id: "a", n: 1 }];
+  kernel.source("rows", { start() {}, stop() {}, compute: () => ({ ok: { items } }) });
+  const ui = kernel.connect();
+  kernel.receive(ui, { id: 1, subscribe: { topic: "rows" }, keyed: true });
+  await time.pass(0);
+  kernel.receive(ui, { id: 1, unsubscribe: true });
+  items = [{ id: "a", n: 2 }];
+  kernel.store.invalidateAll((topic) => topic.topic === "rows");
+  await time.pass(60);
+  sent.splice(0);
+  kernel.receive(ui, { id: 2, subscribe: { topic: "rows" }, keyed: true });
+  await time.pass(0);
+  assert.deepEqual(sent.splice(0), [[ui, { id: 2, value: { items: [{ id: "a", n: 2 }] } }]]);
+});
+
 test("a topic nobody watches stops a minute after its last subscriber leaves", async () => {
   const { time, kernel } = setup();
   const events: string[] = [];
