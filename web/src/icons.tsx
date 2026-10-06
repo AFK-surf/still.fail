@@ -149,10 +149,6 @@ export function Filter(props: IconProps) {
   return <Svg {...props}><path d="M4 6H20 M7 12H17 M10 18H14" /></Svg>;
 }
 
-export function Hourglass(props: IconProps) {
-  return <Svg {...props}><path d="M5.5 3H18.5 M5.5 21H18.5 M7 3V6.5Q7 9.5 12 12Q17 14.5 17 17.5V21 M17 3V6.5Q17 9.5 12 12Q7 14.5 7 17.5V21" /></Svg>;
-}
-
 export function ImageUpload(props: IconProps) {
   return <Svg {...props}><path d="M11.5 3.5H7Q3.5 3.5 3.5 7V17Q3.5 20.5 7 20.5H17Q20.5 20.5 20.5 17V13 M4 17L9 12L15 18 M17.5 11V3.5 M14 7L17.5 3.5L21 7" /></Svg>;
 }
@@ -381,6 +377,10 @@ export function Users(props: IconProps) {
   return <Svg {...props}><path d="M12 8Q12 11.5 8.5 11.5Q5 11.5 5 8Q5 4.5 8.5 4.5Q12 4.5 12 8Z M3 20V18.5Q3 15 8.5 15Q14 15 14 18.5V20 M15 4.5Q19 4.5 19 8Q19 11.5 15 11.5 M17 15Q21 15.5 21 18.5V20" /></Svg>;
 }
 
+export function Wait(props: IconProps) {
+  return <Svg {...props}><path d="M18 7.5A7.5 7.5 0 1 0 18 16.5" /><path d="M11.5 12h.01 M15.5 12h.01 M19.5 12h.01" /></Svg>;
+}
+
 export function Web(props: IconProps) {
   return <Svg {...props}><path d="M20.5 12C20.5 17.5 17.5 20.5 12 20.5C6.5 20.5 3.5 17.5 3.5 12C3.5 6.5 6.5 3.5 12 3.5C17.5 3.5 20.5 6.5 20.5 12Z M12 3.5C7.5 8 7.5 16 12 20.5C16.5 16 16.5 8 12 3.5Z M4 12H20" /></Svg>;
 }
@@ -425,7 +425,6 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "external": External,
   "file": File,
   "filter": Filter,
-  "hourglass": Hourglass,
   "image-upload": ImageUpload,
   "info": Info,
   "key": Key,
@@ -483,6 +482,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "user-plus": UserPlus,
   "user": User,
   "users": Users,
+  "wait": Wait,
   "web": Web,
   "zou": Zou,
 };

@@ -3,7 +3,7 @@
 // thinking between them fold into one group. Here it is only drawn.
 import { failure, useToast } from "./toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
-import { ChevronDown, ChevronRight, Hourglass, Received as ReceivedIcon, Send } from "./icons.tsx";
+import { ChevronDown, ChevronRight, Wait, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
@@ -152,7 +152,7 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
     case "mark":
       // A wait: how long it waited, said by the core once it is over; still waiting, it counts on here.
       return body.content.wait
-        ? <div className={css.hLabel}><Hourglass {...ICON} size={14} />{body.content.wait.until == null ? <span>{body.content.wait.what != null && <>{body.content.wait.what} · </>}{t("web-main.activity.waiting")} <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}</div>
+        ? <div className={css.hLabel}><Wait {...ICON} size={14} />{body.content.wait.until == null ? <span>{body.content.wait.what != null && <>{body.content.wait.what} · </>}{t("web-main.activity.waiting")} <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}</div>
         : <div className={css.hMark}>{body.content.text}</div>;
     case "group":
       return <Group group={body.content} />;

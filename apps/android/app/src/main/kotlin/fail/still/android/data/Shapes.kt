@@ -2132,7 +2132,7 @@ data class HistoryWait (
 	val what: String? = null
 )
 
-/// A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with an hourglass).
+/// A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with its waiting mark).
 @Serializable
 data class HistoryMark (
 	val text: String,

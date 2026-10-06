@@ -21,7 +21,7 @@ val doneLead = Regex("^(?:做完了(?:：|$)|Done(?:: |$))")
 /** The core's waiting lead in either language (present.ts: 等待中, 在等：<what>; Waiting, Waiting: <what>). */
 val waitLead = Regex("^(?:在等：|等待中$|Waiting(?:: |$))")
 
-/** Same compact completed/waiting label as web StatusText (a check, an hourglass); the explanation and accessible name stay intact. */
+/** Same compact completed/waiting label as web StatusText (a check, an open arc and dots); the explanation and accessible name stay intact. */
 @Composable
 fun StatusText(
     text: String,
@@ -46,6 +46,6 @@ fun StatusText(
         maxLines = maxLines, overflow = overflow, style = style,
         inlineContent = if (lead != null) mapOf("lead" to InlineTextContent(
             Placeholder(14.sp, 14.sp, PlaceholderVerticalAlign.TextCenter),
-        ) { IconIn(if (done != null) Icons.Check else Icons.Hourglass, size = 14.dp, tint = color) }) else emptyMap(),
+        ) { IconIn(if (done != null) Icons.Check else Icons.Wait, size = 14.dp, tint = color) }) else emptyMap(),
     )
 }

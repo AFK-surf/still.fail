@@ -1615,7 +1615,7 @@ export const SHAPES: Record<string, Shape> = {
   HistoryMark: struct([
     ["text", "String"],
     ["wait", opt("HistoryWait")],
-  ], { doc: "A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with an hourglass)." }),
+  ], { doc: "A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with its waiting mark)." }),
   HistoryWait: struct([
     ["since", "i64", { client: "I54" }],
     ["until", opt("i64"), { client: opt("I54") }],

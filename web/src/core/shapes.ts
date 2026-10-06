@@ -2107,7 +2107,7 @@ export interface HistoryWait {
 	what?: string;
 }
 
-/** A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with an hourglass). */
+/** A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with its waiting mark). */
 export interface HistoryMark {
 	text: string;
 	wait?: HistoryWait;

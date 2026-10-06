@@ -8,7 +8,7 @@ import { LOCAL_MS } from "../motion.ts";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useChat, useHistory, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
-import { ArrowRight, Check, ChevronDown, ChevronRight, Hourglass, Received, Send, Stop, Unplug } from "../icons.tsx";
+import { ArrowRight, Check, ChevronDown, ChevronRight, Wait, Received, Send, Stop, Unplug } from "../icons.tsx";
 import { optionOf } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
 import { Prose } from "../Prose.tsx";
@@ -189,7 +189,7 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
     case "mark":
       return (
         <p className={css.mHMark}>
-          {body.content.wait && <Hourglass size={14} />}
+          {body.content.wait && <Wait size={14} />}
           {body.content.wait && body.content.wait.until == null ? <span>{body.content.wait.what != null && <>{body.content.wait.what} · </>}{t("web-mobile.history.waiting")} <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}
         </p>
       );

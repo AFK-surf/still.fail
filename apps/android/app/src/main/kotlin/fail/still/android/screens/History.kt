@@ -306,7 +306,7 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
         }
         is HistoryBody.Mark -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             val wait = body.content.wait
-            if (wait != null) IconIn(Icons.Hourglass, 14.dp, C.muted)
+            if (wait != null) IconIn(Icons.Wait, 14.dp, C.muted)
             // A wait: how long it waited, said by the core once it is over; still waiting, it counts on here.
             if (wait != null && wait.until == null) {
                 var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
