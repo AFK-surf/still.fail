@@ -4,3 +4,8 @@
 -keep class com.facebook.jni.** { *; }
 -keep class com.facebook.hermes.** { *; }
 -dontwarn com.facebook.**
+
+# Crash reports (Crashes.kt) carry the stack as it is: names and lines kept, so PostHog can group and show them without
+# a mapping file.
+-dontobfuscate
+-keepattributes SourceFile,LineNumberTable

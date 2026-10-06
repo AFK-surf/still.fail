@@ -45,6 +45,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: sh .github/release.sh --stable android
 
   desktop:

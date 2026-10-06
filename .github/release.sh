@@ -1,7 +1,7 @@
 #!/bin/sh
 # scripts/release.sh --beta in CI (.github/workflows/pipeline.yml): the test channel's station release (its three
 # platforms) or test app (android), uploaded to the releases bucket. What it needs comes from the environment's secrets
-# and is removed after: POSTHOG_JSON (the key the station reports errors with), ANDROID_DEBUG_KEYSTORE_B64 (the key
+# and is removed after: POSTHOG_JSON (the key the station and the Android app report errors with), ANDROID_DEBUG_KEYSTORE_B64 (the key
 # every Android release is signed with: studio's ~/.android/debug.keystore; another would stop installed apps updating),
 # CLOUDFLARE_API_TOKEN (the bucket; without it, the machine's own `wrangler login`).
 #   sh .github/release.sh [--stable] station|android
