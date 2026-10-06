@@ -139,7 +139,7 @@ fun StationsScreen(current: WorkspaceEntry) {
 private val noNet = StationNet(path = "直连", rtt = NetFigure("0 ms", "ok"), rttHistory = emptyList(), down = " ", up = " ", total = "")
 
 /**
- * Under a station's name in the list: its load as rings and its network, in the same room whatever state it is in —
+ * Under a station's name in the list: what of its load runs low (as the web's cards: none while all is well) and its network, in the same room whatever state it is in —
  * online, offline, or not yet read — so no card grows, shrinks or pushes the ones below it as states change.
  * Offline, a small picture of it asleep and a line saying so are there; not read yet, grey bars where the figures go.
  */
@@ -150,7 +150,7 @@ private fun StationBody(s: StationView) {
     Box(Modifier.fillMaxWidth().padding(top = 10.dp)) {
         // Reconnecting: the figures as last heard, faded.
         Column(Modifier.fillMaxWidth().alpha(if (s.reconnecting == true) 0.45f else 1f)) {
-            Box(Modifier.height(20.dp).alpha(if (host != null) 1f else 0f)) { MeterChips(host?.meters.orEmpty()) }
+            Box(Modifier.height(20.dp).alpha(if (host != null) 1f else 0f)) { MeterChips(host?.meters.orEmpty(), alerts = true) }
             NetLine(net ?: noNet, Modifier.padding(top = 10.dp).alpha(if (net != null) 1f else 0f))
         }
         if (!s.online) {

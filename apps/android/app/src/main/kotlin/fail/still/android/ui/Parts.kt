@@ -280,11 +280,14 @@ fun QuotaChips(quota: fail.still.android.data.Quota?, small: Boolean = false) {
     }
 }
 
-/** A machine's CPU, memory and disk as an allowance's boxes are drawn (QuotaChips): each its name and how full, its edge drawn as far as that. */
+/**
+ * A machine's CPU, memory and disk as an allowance's boxes are drawn (QuotaChips): each its name and how full, its edge
+ * drawn as far as that. `alerts`: only the ones running low, each saying what is left, as the web's station cards do.
+ */
 @Composable
-fun MeterChips(meters: List<fail.still.android.data.Meter>, modifier: Modifier = Modifier) {
+fun MeterChips(meters: List<fail.still.android.data.Meter>, modifier: Modifier = Modifier, alerts: Boolean = false) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        meters.forEach { m -> EdgeChip(m.percent, m.level, m.short) }
+        meters.filter { !alerts || it.level != "ok" }.forEach { m -> EdgeChip(m.percent, m.level, m.short, text = if (alerts) m.remaining else null) }
     }
 }
 
@@ -293,13 +296,13 @@ fun MeterChips(meters: List<fail.still.android.data.Meter>, modifier: Modifier =
 fun DownloadChip(percent: Long) = EdgeChip(percent, "progress", null)
 
 /**
- * A rounded box with a figure in it (its mark before it, when given) and its edge drawn as far as `fill` (0–100),
+ * A rounded box with a figure in it (`text`, or how full; its mark before it, when given) and its edge drawn as far as `fill` (0–100),
  * clockwise from the top left, in the colour of the core's level; the figure grey while it is ok, in that colour once
  * it is not. Level `progress`: a download's share, in the accent, its edge moving smoothly to each new one. As the
  * web's EdgeChip (components.tsx).
  */
 @Composable
-private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = false) {
+private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = false, text: String? = null) {
     val c = C
     val tone = levelColor(c, level)
     val low = level == "amber" || level == "red"
@@ -335,7 +338,7 @@ private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = 
             val fs = if (small) 10.sp else 11.sp
             // On one baseline: a mark in Chinese (内存) sits lower in its line than figures do.
             if (mark != null) Text(mark, Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = C.muted)
-            Text("$fill%", Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = if (low) tone else C.muted)
+            Text(text ?: "$fill%", Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = if (low) tone else C.muted)
         }
     }
 }

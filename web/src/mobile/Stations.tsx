@@ -109,7 +109,7 @@ function Reconnecting() {
 }
 
 /**
- * Under a station's name in the list: its load as rings and its network, in the same room whatever state it is in —
+ * Under a station's name in the list: what of its load runs low (as the desktop's cards: none while all is well) and its network, in the same room whatever state it is in —
  * online, offline, or not yet read — so no card grows, shrinks or pushes the ones below it as states change.
  * Offline, a small picture of it asleep and a line saying so are there; not read yet, grey bars where the figures go.
  */
@@ -119,7 +119,7 @@ function StationBody({ s }: { s: StationView }) {
   return (
     <span className={css.mStationBody}>
       <span className={css.mStationLoad} data-stale={s.reconnecting || undefined}>
-        <span className={css.mStationRings} data-hidden={!host || undefined}><MeterChips meters={host?.meters ?? []} bare /></span>
+        <span className={css.mStationRings} data-hidden={!host || undefined}><MeterChips meters={host?.meters ?? []} bare alerts /></span>
         <span className={css.mStationNet} data-hidden={!net || undefined}><Net net={net ?? noNet} stacked /></span>
       </span>
       {!s.online ? (
