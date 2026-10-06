@@ -49,6 +49,12 @@ android {
         buildConfigField("String", "FCM_API_KEY", "\"${fcm("fcmApiKey")}\"")
         buildConfigField("String", "FCM_SENDER_ID", "\"${fcm("fcmSenderId")}\"")
         buildConfigField("boolean", "BETA", "$beta")
+        // PostHog's project (docs/telemetry.md), where the app's crashes go (Crashes.kt): the file $STILLFAIL_POSTHOG
+        // names ({host, key}; CI writes it from POSTHOG_JSON), as the web's build reads it. Without one, none are sent.
+        val posthog = providers.environmentVariable("STILLFAIL_POSTHOG").orNull?.let { file(it) }?.takeIf { it.exists() }
+            ?.let { groovy.json.JsonSlurper().parse(it) as? Map<*, *> }
+        buildConfigField("String", "POSTHOG_HOST", "\"${posthog?.get("host") as? String ?: ""}\"")
+        buildConfigField("String", "POSTHOG_KEY", "\"${posthog?.get("key") as? String ?: ""}\"")
         // The name the app goes by: its label, and every text in it that names the product (BuildConfig.APP_NAME).
         val appName = if (beta) "youdid.wtf" else "still.fail"
         buildConfigField("String", "APP_NAME", "\"$appName\"")

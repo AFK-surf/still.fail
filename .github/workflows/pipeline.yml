@@ -356,6 +356,7 @@ jobs:
       - name: Build and sign the beta Android app
         env:
           ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh android
       - name: Put its files (named by its version, nothing points at them until put writes the feed)

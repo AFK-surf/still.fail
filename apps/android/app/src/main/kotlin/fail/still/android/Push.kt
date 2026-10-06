@@ -76,6 +76,7 @@ object Push {
 /** FCM's side: a new token is registered; a notice is shown while the app is not in front (in front, local ones are). */
 class PushService : FirebaseMessagingService() {
     override fun onCreate() {
+        Crashes.install(applicationContext)
         Push.init(this)
         super.onCreate()
     }

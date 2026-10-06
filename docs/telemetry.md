@@ -35,6 +35,15 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 打开后（改配置立即生效，关掉也立即停）上报：error 级别的每一条日志。每条带 station 的 id（有 mesh 登记时）和 `release`。日志的字段一律不发（可能带着人写的东西），只发那句话和其中的错误信息；错误信息里家目录下的路径换成 `~`，引号括起来的内容换成 `"…"`（比如 JSON 解析错误会把输入引出来）。
 
+## 安卓
+
+`apps/android/.../Crashes.kt`（`Tombstone.kt`），只报闪退，和网页版的错误进同一个项目（`$exception`，`app: android`，`release` 是版本号 `0.1.<n>`，`distinct_id` 是登录账号的 id，和网页版标识的人一样）。
+
+- Kotlin 层未捕获的异常：崩溃时把异常（PostHog 的 `$exception_list` 格式，带 java 帧）写到 app 目录 `files/crashes/<ms>.json`，系统自己不留。
+- 每次启动、有账号登录后：读系统的进程退出记录（ApplicationExitInfo，Android 11 起），从上次报到的地方（`crashes.since`；第一次往回看 7 天）起，把闪退、native 崩溃（Hermes、JNI 的 abort）和 ANR 一批发到 `/batch/`。native 崩溃带系统给的 tombstone 解成的文字（崩溃线程的堆栈、abort message、进程最后 50 条 warning/error 日志），ANR 带线程 dump，都放在 `trace` 属性里；这两种没有 PostHog 认的帧，用 `$exception_fingerprint`（信号或 ANR 加栈顶几帧）归 issue。每条的 `uuid` 由时间和 pid 定，重发不会重复。
+- release 包关了 R8 的混淆（`proguard-rules.pro` 的 `-dontobfuscate`，保留行号），堆栈里是原名，不用上传 mapping。
+- 构建时由 `STILLFAIL_POSTHOG` 指向的文件给 key（`app/build.gradle.kts` → `BuildConfig.POSTHOG_KEY`）；CI 的安卓发布从 `POSTHOG_JSON` 写这个文件（`.github/release.sh`）。没有 key 的构建（本地、开发）什么都不发。
+
 ## key 从哪来
 
 项目 key 是 PostHog 的公开 key（`phc_…`），本来就会出现在网页里，但和别的部署输入一样不进仓库：放在部署目录（`STILLFAIL_DEPLOY_DIR`，默认 `~/stillfail-deploy`）的 `posthog.json`，内容 `{ "host": "https://us.i.posthog.com", "key": "phc_…" }`。

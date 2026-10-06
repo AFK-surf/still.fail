@@ -20,14 +20,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.lifecycleScope
+import fail.still.android.data.Account
 import fail.still.android.data.Auth
 import fail.still.android.data.Prefs
+import fail.still.android.data.Topics
+import fail.still.android.data.decode
 import fail.still.android.ui.StillFailTheme
 import fail.still.android.ui.Loading
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -105,6 +111,7 @@ class MainActivity : ComponentActivity() {
         // composition is laid out inside the system bars and moves when they are taken away.
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        Crashes.install(applicationContext)
         fail.still.android.ui.I18n.load(applicationContext)
         lifecycleScope.launch {
             val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA)
@@ -138,6 +145,11 @@ class MainActivity : ComponentActivity() {
             }.also { it.start() }
             launch { Push.sync(applicationContext, core) }
             app?.checkUpdates()
+            // What crashed before this start, to PostHog as the account signed in, once one is (Crashes.kt).
+            launch {
+                val signedIn = core.topic(Topics.accounts).first { (it.value as? JsonArray)?.isNotEmpty() == true }.value!!
+                decode(ListSerializer(Account.serializer()), signedIn).firstOrNull()?.let { Crashes.report(applicationContext, it.sub) }
+            }
         }
         setContent {
             val current = app
