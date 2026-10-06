@@ -9,7 +9,10 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.unit.dp
 import fail.still.android.Screen
 import fail.still.android.data.ChatDay
@@ -47,8 +50,11 @@ class SearchMotionTest {
         h.fake.put(Topics.chats(Fixtures.WS, true), view(12))
         h.fake.put(Topics.chats(Fixtures.WS, false, watching = true), view(0))
         h.launch(listOf(Screen.Home), dark)
+        // The list first shows from its first row, the search above it: scrolled up to it.
+        rule.onRoot().performTouchInput { swipeDown(startY = bottom * 0.3f, endY = bottom * 0.7f) }
+        h.settle()
         val theme = if (dark) "dark" else "light"
-        // The shown list's field (at its top as it first shows; each list has one, the others off the screen): its text
+        // The shown list's field (each list has one, the others off the screen): its text
         // field would be as wide as it, less its padding, icon and gap (Search.kt).
         val fields = rule.onAllNodesWithText("搜索对话和消息")
         val at = fields.fetchSemanticsNodes().indexOfFirst { it.boundsInRoot.left >= 0f && it.boundsInRoot.left < 100f }
