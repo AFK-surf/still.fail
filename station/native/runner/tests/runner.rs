@@ -1,4 +1,5 @@
-//! Runs the runner around small /bin/sh agents and talks to it as a station would.
+//! Runs the runner around small /bin/sh agents and talks to it as a station would. What these tests decide is the
+//! code's, not the machine's speed's: they wait for what the processes do (a line, an exit), with no limit of time.
 
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
@@ -7,7 +8,7 @@ use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
@@ -26,12 +27,34 @@ fn alive(pid: i64) -> bool {
     unsafe { libc::kill(pid as i32, 0) == 0 }
 }
 
-fn wait_until(what: &str, mut ok: impl FnMut() -> bool) {
-    let until = Instant::now() + Duration::from_secs(5);
-    while !ok() {
-        assert!(Instant::now() < until, "timed out waiting for {what}");
-        std::thread::sleep(Duration::from_millis(20));
+/// Waits for `pid`, not this test's child, to end (kqueue says when); one gone already is not found.
+fn ends(pid: i64) {
+    // SAFETY: a kqueue of this function's, a change and an event in live structs, the kqueue closed after.
+    unsafe {
+        let kq = libc::kqueue();
+        assert!(kq >= 0, "kqueue: {}", std::io::Error::last_os_error());
+        let mut change: libc::kevent = std::mem::zeroed();
+        change.ident = pid as usize;
+        change.filter = libc::EVFILT_PROC;
+        change.flags = libc::EV_ADD | libc::EV_ONESHOT;
+        change.fflags = libc::NOTE_EXIT;
+        let mut got: libc::kevent = std::mem::zeroed();
+        let n = loop {
+            let n = libc::kevent(kq, &change, 1, &mut got, 1, std::ptr::null());
+            if n >= 0 || std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
+                break n;
+            }
+        };
+        libc::close(kq);
+        assert_eq!(n, 1, "kevent: {}", std::io::Error::last_os_error());
+        let (flags, fflags, data) = (got.flags, got.fflags, got.data);
+        let gone = flags & libc::EV_ERROR != 0 && data == libc::ESRCH as isize;
+        assert!(gone || fflags & libc::NOTE_EXIT != 0, "{pid}: flags {flags:#x}, data {data}");
     }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
 }
 
 struct Runner {
@@ -65,7 +88,6 @@ impl Runner {
 
     fn connect(&self) -> Client {
         let stream = UnixStream::connect(self.info["socket"].as_str().unwrap()).unwrap();
-        stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
         Client { reader: BufReader::new(stream.try_clone().unwrap()), writer: stream }
     }
 
@@ -77,15 +99,7 @@ impl Runner {
 
     /// Waits for a runner this test started to exit, with its code.
     fn exited(&mut self) -> i32 {
-        let child = self.child.as_mut().unwrap();
-        let until = Instant::now() + Duration::from_secs(5);
-        loop {
-            if let Some(status) = child.try_wait().unwrap() {
-                return status.code().unwrap_or(-1);
-            }
-            assert!(Instant::now() < until, "the runner did not exit");
-            std::thread::sleep(Duration::from_millis(20));
-        }
+        self.child.as_mut().unwrap().wait().unwrap().code().unwrap_or(-1)
     }
 }
 
@@ -183,19 +197,20 @@ impl Client {
         }
     }
 
-    /// That nothing comes for a while.
-    fn quiet(&mut self) {
-        self.reader.get_ref().set_read_timeout(Some(Duration::from_millis(300))).unwrap();
-        let mut line = String::new();
-        let read = self.reader.read_line(&mut line);
-        assert!(read.is_err(), "expected nothing, got {line:?}");
-        self.reader.get_ref().set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    /// Sends what the runner refuses and reads up to the refusal: the runner is there and has handled everything sent
+    /// before (a connection's messages are handled in order), and sent nothing meanwhile.
+    fn handled(&mut self) {
+        self.send(json!({"op": "nothing"}));
+        let said = self.recv().expect("connection ended");
+        assert_eq!(said["error"], "unknown op \"nothing\"", "{said}");
     }
 }
 
 #[test]
 fn the_ready_line_says_where_everything_is() {
+    let before = now_ms();
     let runner = Runner::start("ready", "read x");
+    let after = now_ms();
     let info = &runner.info;
     let dir = runner.dir.to_str().unwrap();
     assert_eq!(info["id"], "a");
@@ -209,8 +224,7 @@ fn the_ready_line_says_where_everything_is() {
     assert_ne!(info["pid"], info["runner"]);
     assert_eq!(unsafe { libc::getpgid(runner.pid("pid") as i32) } as i64, runner.pid("pid"));
     let started = info["startedAt"].as_u64().unwrap();
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
-    assert!(started <= now && now - started < 10_000);
+    assert!(before <= started && started <= after, "{before} <= {started} <= {after}");
     // The json on disk is the ready line without "ready".
     let mut on_disk: Value = serde_json::from_str(&fs::read_to_string(runner.dir.join("a.json")).unwrap()).unwrap();
     on_disk["ready"] = json!(true);
@@ -245,12 +259,25 @@ fn output_comes_with_its_offsets_then_the_exit_and_again_on_the_next_attach() {
 
 #[test]
 fn the_exit_comes_after_all_output_even_what_a_child_writes_late() {
-    let runner = Runner::start("all", "head -c 300000 /dev/zero | tr '\\0' x; (sleep 0.3; printf late) & exit 0");
+    // The child writes once the agent has exited (the agent's end of a fifo closed), holding the output open till then.
+    // The output may take as long as it takes to end: what comes first is the code's, not the machine's speed's.
+    let dir = tmpdir("all");
+    let script = "head -c 300000 /dev/zero | tr '\\0' x; mkfifo late; (read x <late; printf late) & exec 3>late; exit 0";
+    let runner = Runner::start_with("all", &["--settle-ms", "86400000", "--cwd", dir.to_str().unwrap()], script);
     let mut client = runner.connect();
     client.send(json!({"op": "attach"}));
     let ([out, _], exit) = client.until_exit([0, 0]);
     assert_eq!(out.len(), 300_004);
     assert!(out.ends_with(b"xlate"));
+    assert_eq!(exit["code"], 0);
+}
+
+#[test]
+fn the_exit_comes_once_the_output_had_its_time_though_a_child_holds_it_open() {
+    let runner = Runner::start_with("held", &["--settle-ms", "0"], "sleep 600 & exit 0");
+    let mut client = runner.connect();
+    client.send(json!({"op": "attach"}));
+    let (_, exit) = client.until_exit([0, 0]);
     assert_eq!(exit["code"], 0);
 }
 
@@ -277,7 +304,8 @@ fn a_second_connection_attaching_resumes_from_the_ack() {
 
     let mut third = runner.connect();
     third.send(json!({"op": "attach"}));
-    third.quiet();
+    // All acknowledged: nothing to send.
+    third.handled();
     third.write(b"go\n");
     let ([out, _], exit) = third.until_exit([4, 0]);
     assert_eq!(out, b"two\n");
@@ -324,7 +352,7 @@ fn signal_to_the_group_takes_the_grandchild_too() {
     let (_, exit) = client.until_exit([0, 0]);
     // The output was had already; nothing more comes before the exit.
     assert_eq!(exit, json!({"op": "exit", "code": null, "signal": "TERM"}));
-    wait_until("the grandchild to die", || !alive(grandchild));
+    ends(grandchild);
     client.send(json!({"op": "signal", "signal": "TERM"}));
     assert_eq!(client.recv().unwrap()["error"], "signal: the agent has exited");
     client.send(json!({"op": "signal", "signal": "STOP"}));
@@ -332,16 +360,17 @@ fn signal_to_the_group_takes_the_grandchild_too() {
 }
 
 #[test]
+#[ignore = "side: that a process was not signalled shows only as it living on for a while (main.rs's test has whom a signal goes to)"]
 fn signal_to_the_agent_alone_leaves_the_grandchild() {
     let (runner, mut client, grandchild) = agent_with_grandchild("alone");
     client.send(json!({"op": "signal", "signal": "TERM", "group": false}));
     let (_, exit) = client.until_exit([0, 0]);
     assert_eq!(exit["signal"], "TERM");
-    std::thread::sleep(Duration::from_millis(100));
+    std::thread::sleep(std::time::Duration::from_millis(100));
     assert!(alive(grandchild), "only the agent was signalled");
     // The group outlives its leader: it can still be ended by pgid.
     client.send(json!({"op": "signal", "signal": "KILL", "group": true}));
-    wait_until("the grandchild to die", || !alive(grandchild));
+    ends(grandchild);
     drop(runner);
 }
 
@@ -364,7 +393,7 @@ fn done_while_running_ends_nothing_and_cleans_up_once_the_agent_exits() {
     let mut client = runner.connect();
     client.send(json!({"op": "attach"}));
     client.send(json!({"op": "done"}));
-    client.quiet();
+    client.handled();
     assert!(alive(runner.pid("pid")));
     assert_eq!(runner.files().len(), 4);
     client.write(b"x\n");
@@ -393,21 +422,20 @@ fn after_the_exit_without_done_it_cleans_up_by_itself() {
     assert!(runner.files().is_empty(), "{:?}", runner.files());
 }
 
-/// Starts the runner from a shell, which writes the ready line to a file; returns the shell and the ready line.
+/// Starts the runner from a shell; returns the shell and the ready line (on the stdout the runner has of the shell).
 fn start_from_shell(dir: &Path, after: &str, own_group: bool) -> (Child, Value) {
-    fs::create_dir_all(dir).unwrap();
-    let ready = dir.join("ready");
     let mut command = Command::new("/bin/sh");
     command
-        .args(["-c", &format!("\"$@\" > \"$READY\" & {after}"), "sh", BIN, "--dir", dir.to_str().unwrap(), "--id", "a", "--", "/bin/sh", "-c", "read x; echo got $x"])
-        .env("READY", &ready)
-        .stdin(Stdio::null());
+        .args(["-c", &format!("\"$@\" & {after}"), "sh", BIN, "--dir", dir.to_str().unwrap(), "--id", "a", "--", "/bin/sh", "-c", "read x; echo got $x"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped());
     if own_group {
         command.process_group(0);
     }
-    let shell = command.spawn().unwrap();
-    wait_until("the ready line", || fs::read_to_string(&ready).is_ok_and(|s| s.ends_with('\n')));
-    let info = serde_json::from_str(&fs::read_to_string(&ready).unwrap()).unwrap();
+    let mut shell = command.spawn().unwrap();
+    let mut line = String::new();
+    BufReader::new(shell.stdout.take().unwrap()).read_line(&mut line).unwrap();
+    let info = serde_json::from_str(&line).unwrap_or_else(|e| panic!("ready line {line:?}: {e}"));
     (shell, info)
 }
 
@@ -443,7 +471,7 @@ fn the_agent_survives_its_starter_killed_with_its_whole_group() {
     assert_ne!(unsafe { libc::getpgid(runner.pid("runner") as i32) }, shell.id() as i32);
     unsafe { libc::kill(-(shell.id() as i32), libc::SIGKILL) };
     shell.wait().unwrap();
-    std::thread::sleep(Duration::from_millis(100));
+    // Not of the group by then: a kill to it would have ended the runner before it could answer.
     still_works(&runner);
 }
 

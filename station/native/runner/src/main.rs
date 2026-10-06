@@ -39,6 +39,7 @@ struct Args {
     id: String,
     cwd: Option<PathBuf>,
     linger: Duration,
+    settle: Duration,
     program: String,
     args: Vec<String>,
 }
@@ -69,6 +70,7 @@ struct Shared {
     files: [File; 2],
     stdin: Sender<Option<Vec<u8>>>,
     linger: Duration,
+    settle: Duration,
 }
 
 #[derive(Default)]
@@ -119,7 +121,7 @@ fn main() {
 }
 
 fn parse_args(raw: Vec<String>) -> Result<Args, String> {
-    let (mut dir, mut id, mut cwd, mut linger) = (None, None, None, LINGER);
+    let (mut dir, mut id, mut cwd, mut linger, mut settle) = (None, None, None, LINGER, SETTLE);
     let mut it = raw.into_iter();
     let mut command = Vec::new();
     while let Some(arg) = it.next() {
@@ -130,6 +132,8 @@ fn parse_args(raw: Vec<String>) -> Result<Args, String> {
             "--cwd" => cwd = Some(PathBuf::from(value()?)),
             // Not for the station: lets tests see the cleanup without waiting a day.
             "--linger-ms" => linger = Duration::from_millis(value()?.parse().map_err(|_| "--linger-ms needs a number of ms")?),
+            // Not for the station either: lets tests wait for the output's end however late it comes.
+            "--settle-ms" => settle = Duration::from_millis(value()?.parse().map_err(|_| "--settle-ms needs a number of ms")?),
             "--" => {
                 command = it.collect();
                 break;
@@ -147,7 +151,7 @@ fn parse_args(raw: Vec<String>) -> Result<Args, String> {
     }
     let program = command.remove(0);
     let dir = std::path::absolute(&dir).map_err(|e| format!("bad --dir: {e}"))?;
-    Ok(Args { dir, id, cwd, linger, program, args: command })
+    Ok(Args { dir, id, cwd, linger, settle, program, args: command })
 }
 
 /// Leaves the starter's session and process group, so that ending those (launchd ending the station, a terminal
@@ -252,6 +256,7 @@ fn start(args: &Args) -> Result<(Arc<Shared>, UnixListener), String> {
             files,
             stdin: stdin_tx,
             linger: args.linger,
+            settle: args.settle,
         });
         let stdin = child.stdin.take();
         std::thread::spawn(move || feed(stdin, stdin_rx));
@@ -411,7 +416,7 @@ fn wait_agent(shared: &Shared) {
 
     let mut st = shared.lock();
     st.exit = Some(exit);
-    let settle_by = Instant::now() + SETTLE;
+    let settle_by = Instant::now() + shared.settle;
     while !(st.eof[0] && st.eof[1]) {
         let left = settle_by.saturating_duration_since(Instant::now());
         if left.is_zero() {
@@ -557,13 +562,7 @@ fn handle(shared: &Shared, line: &[u8]) -> Result<(), String> {
             let group = message["group"].as_bool().unwrap_or(false);
             // Held across kill: the agent is not reaped meanwhile (see wait_agent).
             let st = shared.lock();
-            let target = if group {
-                -shared.pid
-            } else if st.exiting {
-                return Err("signal: the agent has exited".into());
-            } else {
-                shared.pid
-            };
+            let target = target(shared.pid, group, st.exiting)?;
             // SAFETY: kill on the agent or its group.
             if unsafe { libc::kill(target, signal) } != 0 {
                 return Err(format!("signal: {}", io::Error::last_os_error()));
@@ -579,6 +578,17 @@ fn handle(shared: &Shared, line: &[u8]) -> Result<(), String> {
         other => return Err(format!("unknown op {other:?}")),
     }
     Ok(())
+}
+
+/// Whom a `signal` goes to: the agent's group (which outlives the agent), else the agent alone while it runs.
+fn target(pid: i32, group: bool, exiting: bool) -> Result<i32, String> {
+    if group {
+        Ok(-pid)
+    } else if exiting {
+        Err("signal: the agent has exited".into())
+    } else {
+        Ok(pid)
+    }
 }
 
 /// Sends the attached connection what it has not had: each stream from its cursor, in order, then the exit.
@@ -637,4 +647,18 @@ fn send(writer: &Mutex<UnixStream>, message: &Value) -> io::Result<()> {
     let mut line = message.to_string();
     line.push('\n');
     writer.lock().unwrap_or_else(|e| e.into_inner()).write_all(line.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_signal_goes_to_the_agent_alone_unless_to_its_group() {
+        assert_eq!(target(42, false, false), Ok(42));
+        assert_eq!(target(42, true, false), Ok(-42));
+        // Its group still: what it started may run on.
+        assert_eq!(target(42, true, true), Ok(-42));
+        assert_eq!(target(42, false, true), Err("signal: the agent has exited".into()));
+    }
 }
