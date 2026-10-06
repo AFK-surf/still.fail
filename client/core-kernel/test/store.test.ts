@@ -68,6 +68,26 @@ test("a topic nobody watches stops a minute after its last subscriber leaves", a
   assert.deepEqual(events, ["start x", "stop x"]);
 });
 
+test("a source whose work ends with its last view stops after its own short grace", async () => {
+  const { time, kernel } = setup();
+  const events: string[] = [];
+  kernel.source("count", {
+    evictAfterMs: 1_000,
+    start: (t) => events.push(`start ${t.of}`),
+    stop: (t) => events.push(`stop ${t.of}`),
+  });
+  const ui = kernel.connect();
+  kernel.receive(ui, { id: 1, subscribe: { topic: "count", of: "x" } });
+  kernel.receive(ui, { id: 1, unsubscribe: true });
+  await time.pass(500);
+  kernel.receive(ui, { id: 2, subscribe: { topic: "count", of: "x" } });
+  await time.pass(1_000);
+  assert.deepEqual(events, ["start x"]);
+  kernel.receive(ui, { id: 2, unsubscribe: true });
+  await time.pass(1_100, 100);
+  assert.deepEqual(events, ["start x", "stop x"]);
+});
+
 test("a call that changes something is under way in doing until it answers; a failure stays six seconds", async () => {
   const { time, sent, kernel } = setup();
   kernel.calls({

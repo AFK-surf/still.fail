@@ -36,6 +36,9 @@ export interface Source {
   /// The topic's value now, from what the core keeps; undefined while it has none. Called when its emission goes out
   /// after it was started or invalidated.
   compute?(topic: Topic): Value | undefined;
+  /// How long the topic stays after its last subscriber leaves before `stop` (default the store's, a minute). A source
+  /// whose work should end soon after its last view, such as an open stream, sets a short one.
+  readonly evictAfterMs?: number;
 }
 
 /// Keeps a watched topic alive; `drop` lets it go as a UI unsubscribing does.
@@ -180,7 +183,8 @@ export class Store {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry || entry.subscribers.length > 0 || entry.watchers.length > 0) return;
     entry.idle = idle;
-    this.#options.runner.fork(Effect.sleep(this.#evictAfterMs).pipe(Effect.andThen(Effect.sync(() => this.#evict(topic, idle)))));
+    const after = this.#options.sourceOf(topic)?.evictAfterMs ?? this.#evictAfterMs;
+    this.#options.runner.fork(Effect.sleep(after).pipe(Effect.andThen(Effect.sync(() => this.#evict(topic, idle)))));
   }
 
   /// A UI went away: drops all its subscriptions.
