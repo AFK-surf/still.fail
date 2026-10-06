@@ -833,27 +833,28 @@ pub extern "C" fn sf_utc_offset_min(at_ms: f64) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex as StdMutex;
+    use std::sync::{Condvar, Mutex as StdMutex};
 
     static ANSWERS: StdMutex<Vec<(u64, String, String, Option<Vec<u8>>)>> = StdMutex::new(Vec::new());
+    static ANSWERED: Condvar = Condvar::new();
 
     extern "C" fn complete(_: *mut c_void, id: u64, json: *const u8, jl: usize, e: *const u8, el: usize, b: *const u8, bl: usize, has: u8) {
         let s = |p: *const u8, l: usize| if l == 0 { String::new() } else { String::from_utf8_lossy(unsafe { std::slice::from_raw_parts(p, l) }).into_owned() };
         let bytes = (has != 0).then(|| if bl == 0 { Vec::new() } else { unsafe { std::slice::from_raw_parts(b, bl) }.to_vec() });
         ANSWERS.lock().unwrap().push((id, s(json, jl), s(e, el), bytes));
+        ANSWERED.notify_all();
     }
 
+    /// The answer to `id`, once it comes (however long that takes).
     fn answer(id: u64) -> (String, String, Option<Vec<u8>>) {
-        for _ in 0..500 {
-            let mut answers = ANSWERS.lock().unwrap();
+        let mut answers = ANSWERS.lock().unwrap();
+        loop {
             if let Some(i) = answers.iter().position(|a| a.0 == id) {
                 let (_, j, e, b) = answers.remove(i);
                 return (j, e, b);
             }
-            drop(answers);
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            answers = ANSWERED.wait(answers).unwrap();
         }
-        panic!("no answer to {id}");
     }
 
     #[test]
