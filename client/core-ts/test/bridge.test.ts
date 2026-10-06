@@ -24,7 +24,6 @@ import { run } from "./run.ts";
 holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const bytes = (s: string) => new TextEncoder().encode(s);
 const text = (b: Uint8Array | null) => (b === null ? null : new TextDecoder().decode(b));
 
@@ -86,25 +85,23 @@ test("a_core_on_the_bridge_signs_in_and_hears_the_cloud", async () => {
       else if ("ok" in m || "error" in m) answers.set(m.id, m.ok ?? m.error);
     }
   };
-  const quiet = async (until: () => boolean) => {
-    for (let i = 0; i < 200 && !until(); i++) {
-      await sleep(25);
-      read();
-    }
+  // What the core emits, read as it comes until it says so: no deadline, only the test's own timeout for a hang.
+  const until = async (done: () => boolean) => {
+    for (read(); !done(); read()) await native.heard();
   };
   core.receive(client, JSON.stringify({ id: 1, subscribe: { topic: "accounts" } }));
   core.receive(client, JSON.stringify({ id: 50, call: "auth.begin", params: { redirect_uri: "stillfail://auth/callback", return_to: "/" } }));
-  await quiet(() => answers.has(50));
+  await until(() => answers.has(50));
   const state = new URL(String(answers.get(50).url)).searchParams.get("state");
   core.receive(client, JSON.stringify({ id: 51, call: "auth.complete", params: { query: `?code=code-alice&state=${state}` } }));
   core.receive(client, JSON.stringify({ id: 2, subscribe: { topic: "workspace", workspace: "ws1" } }));
-  await quiet(() => (states.get(2) as J)?.name === "研发");
+  await until(() => (states.get(2) as J)?.name === "研发");
   assert.deepEqual((states.get(1) as J[]).map((a) => a.email), ["alice@x.test"]);
   // The events socket is open through the bridge: a rename the cloud tells of comes in.
-  await quiet(() => cloud.sockets.size > 0);
+  await cloud.socketOpen();
   cloud.workspaces.get("ws1")!.name = "研发部";
   cloud.push({ type: "workspace", id: "ws1" });
-  await quiet(() => (states.get(2) as J)?.name === "研发部");
+  await until(() => (states.get(2) as J)?.name === "研发部");
   assert.equal((states.get(2) as J).name, "研发部");
   assert.deepEqual(fatal, []);
   for (const op of ["storage.get", "db.read", "fetch", "ws.open", "ws.next"]) assert.ok(native.calls.includes(op), op);

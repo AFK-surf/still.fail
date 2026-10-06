@@ -5,7 +5,7 @@
 // admin's console has its own, `adminApi`, which only the console's host
 // routes to (index.ts).
 import { isAdmin } from "./admin";
-import { bearerToken, denied, readJson, reply, verifyToken, type Claims } from "./auth";
+import { bearerToken, clock, denied, readJson, reply, verifyToken, type Claims } from "./auth";
 import { header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
@@ -102,7 +102,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     const station = header(request, "station");
     const signature = header(request, "signature") ?? "";
     const ts = Number(header(request, "ts"));
-    if (!validKeyHex(station) || !Number.isSafeInteger(ts) || Math.abs(ts - Date.now() / 1000) > 300) return reply({ error: "invalid_request" }, 400);
+    if (!validKeyHex(station) || !Number.isSafeInteger(ts) || Math.abs(ts - clock.now() / 1000) > 300) return reply({ error: "invalid_request" }, 400);
     if (!(await verifyAnySignature(station, signature, signedMessages("station-connect-v1", publicOrigins(env), `${station}:${ts}`)))) return reply({ error: "invalid_signature" }, 401);
     const headers = new Headers({ upgrade: "websocket", "x-stillfail-station": station });
     const version = header(request, "version");

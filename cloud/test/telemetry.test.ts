@@ -14,15 +14,30 @@ async function key() {
   return { id, sign };
 }
 
-/** Axiom as the tests see it: every request it got. */
+/** Axiom as the tests see it: every request it got, and `until` one it got is so (what a Worker sends once its answer is out). */
 function fakeAxiom(status = 200) {
   const got: { headers: Record<string, string>; body: any }[] = [];
+  const waiting = new Set<() => void>();
   const answer = async (request: Request) => {
     got.push({ headers: Object.fromEntries(request.headers), body: JSON.parse(await request.text()) });
+    for (const wake of waiting) wake();
     return new Response("{}", { status });
   };
-  return { got, answer };
+  const until = async <T>(find: (g: typeof got) => T | undefined): Promise<T> => {
+    for (;;) {
+      const found = find(got);
+      if (found !== undefined) return found;
+      await new Promise<void>((resolve) => {
+        const wake = () => (waiting.delete(wake), resolve());
+        waiting.add(wake);
+      });
+    }
+  };
+  return { got, answer, until };
 }
+
+/** The spans' trace ids, in the order Axiom got them. */
+const traces = (got: { body: any }[]) => got.map((g) => g.body.resourceSpans[0].scopeSpans[0].spans[0].traceId);
 
 const batch = (name = "chat.open", spans = 1) => JSON.stringify({
   resourceSpans: [{
@@ -49,7 +64,7 @@ async function enrolled(h: Harness) {
 }
 
 /** A station's signed headers for `body`. */
-async function signed(h: Harness, station: Awaited<ReturnType<typeof key>>, body: string, ts = Math.floor(Date.now() / 1000)) {
+async function signed(h: Harness, station: Awaited<ReturnType<typeof key>>, body: string, ts = h.now()) {
   const digest = createHash("sha256").update(body).digest("hex");
   return { "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-telemetry-v1:${h.origin}:${station.id}:${ts}:${digest}`) };
 }
@@ -89,7 +104,7 @@ test("a station's spans are signed with its key, over the body", async () => {
     assert.equal(axiom.got.length, 1);
     // Another body under the same signature, an old signature, or a key that is not enrolled: refused.
     assert.equal((await post(h, batch("forged"), await signed(h, station, body))).status, 401);
-    assert.equal((await post(h, body, await signed(h, station, body, Math.floor(Date.now() / 1000) - 600))).status, 401);
+    assert.equal((await post(h, body, await signed(h, station, body, h.now() - 600))).status, 401);
     const stranger = await key();
     assert.equal((await post(h, body, await signed(h, stranger, body))).status, 401);
     assert.equal(axiom.got.length, 1);
@@ -144,7 +159,7 @@ test("a call in a recorded trace is a span of still.fail cloud's, without ids", 
     const trace = "4bf92f3577b34da6a3ce929d0e0e4736";
     const call = (traceparent?: string) => h.fetch(`/v1/workspaces/${workspace}`, { headers: { authorization: `Bearer ${alice.access_token}`, ...(traceparent ? { traceparent } : {}) } });
     assert.equal((await call(`00-${trace}-00f067aa0ba902b7-01`)).status, 200);
-    for (let i = 0; i < 100 && axiom.got.length === 0; i++) await new Promise((r) => setTimeout(r, 10));
+    await axiom.until((got) => got[0]);
     assert.equal(axiom.got.length, 1);
     const resource = axiom.got[0]!.body.resourceSpans[0];
     assert.deepEqual(resource.resource.attributes, [{ key: "service.name", value: { stringValue: "stillfail-cloud" } }]);
@@ -156,11 +171,13 @@ test("a call in a recorded trace is a span of still.fail cloud's, without ids", 
     assert.deepEqual(span.attributes.find((a: any) => a.key === "http.response.status_code"), { key: "http.response.status_code", value: { intValue: "200" } });
     assert.ok(!JSON.stringify(span).includes(workspace));
 
-    // Not recorded by the caller, or no trace: no span.
+    // Not recorded by the caller, or no trace: no span. (One more recorded call after them: its span is the next.)
     await call(`00-${trace}-00f067aa0ba902b7-00`);
     await call();
-    await new Promise((r) => setTimeout(r, 200));
-    assert.equal(axiom.got.length, 1);
+    const next = "5ce0e9a56015fec5aadfa328ae398115";
+    assert.equal((await call(`00-${next}-00f067aa0ba902b7-01`)).status, 200);
+    await axiom.until((got) => traces(got).find((t) => t === next));
+    assert.deepEqual(traces(axiom.got), [trace, next]);
   } finally {
     await h.close();
   }
@@ -181,12 +198,7 @@ test("a traced refresh's span says what became of the session, and the answer ca
       });
       assert.equal(response.headers.get("x-stillfail-span"), null);
       const body = (await response.json()) as any;
-      let span: any;
-      for (let i = 0; i < 200 && !span; i++) {
-        span = axiom.got.map((g) => g.body.resourceSpans[0].scopeSpans[0].spans[0]).find((s: any) => s.traceId === trace);
-        if (!span) await new Promise((r) => setTimeout(r, 10));
-      }
-      assert.ok(span, "a span for the refresh");
+      const span = await axiom.until((got) => got.map((g) => g.body.resourceSpans[0].scopeSpans[0].spans[0]).find((s: any) => s.traceId === trace));
       const notes = Object.fromEntries(span.attributes.map((a: any) => [a.key, a.value.stringValue ?? Number(a.value.intValue)]));
       return { status: response.status, body, notes };
     };

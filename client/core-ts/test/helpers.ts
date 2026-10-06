@@ -9,7 +9,8 @@ import { FakeHost, jsonResponse } from "../src/testing.ts";
 
 holdLanguage();
 
-export const nowS = () => Date.now() / 1000;
+/// The core's time (its host's clock), in seconds: what fixtures' expiries are counted from.
+export const nowS = (host: FakeHost) => host.nowMs() / 1000;
 
 export function account(sub: string, email: string, name: string, access: string, refresh: string, expires: number): StoredAccount {
   return { sub, email, name, picture: "", access, refresh, access_expires: expires };
@@ -19,7 +20,7 @@ export function account(sub: string, email: string, name: string, access: string
 /// workspace and token refreshes.
 export async function cloudCore(): Promise<{ host: FakeHost; core: Core }> {
   const host = new FakeHost();
-  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "stale", "r0", nowS() + 30)]);
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "stale", "r0", nowS(host) + 30)]);
   let refreshes = 0;
   host.onFetch((req) => {
     const path = req.url.replace("https://stillfail.test", "");
@@ -34,7 +35,7 @@ export async function cloudCore(): Promise<{ host: FakeHost; core: Core }> {
         return jsonResponse(200, { ok: true });
       case "/v1/auth/refresh":
         refreshes++;
-        return jsonResponse(200, { access_token: `fresh-${refreshes}`, refresh_token: "r", subject: "s1", email: "a@x.com", expires_at: nowS() + 30 });
+        return jsonResponse(200, { access_token: `fresh-${refreshes}`, refresh_token: "r", subject: "s1", email: "a@x.com", expires_at: nowS(host) + 30 });
       default:
         return jsonResponse(404, { error: "not_found" });
     }
@@ -45,7 +46,7 @@ export async function cloudCore(): Promise<{ host: FakeHost; core: Core }> {
 
 /// Signs `host` in as one account, whose workspace `ws` has one station, `st`.
 export function signIn(host: FakeHost): void {
-  host.store(STORAGE_KEY, [account("s1", "a@x.com", "", "tok", "r0", nowS() + 3600)]);
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "", "tok", "r0", nowS(host) + 3600)]);
 }
 
 /// Answers still.fail cloud as `signIn` has it, and the station's admin API (the rest) with `station`.

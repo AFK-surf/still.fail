@@ -8,13 +8,24 @@ import { createRequire } from "node:module";
 // workerd keeps a WebSocket's TCP connection open some ten seconds after a close the Worker began (Cloudflare does
 // not), and the ws client miniflare hands sockets through says "close" only once it ends: a test waiting on a close
 // code waited those ten seconds (events.test.ts, 30 of the cloud tests' 35). The client ends it itself once both
-// close frames have passed.
+// close frames have passed: ws then ends its side, and once that is written (not after a guess at how long that
+// takes, which under load dropped its close frame), the connection goes.
 const WS = createRequire(createRequire(import.meta.url).resolve("miniflare"))("ws");
 const wsClose = WS.prototype.close;
 WS.prototype.close = function (this: any, ...args: unknown[]) {
   wsClose.apply(this, args);
-  if (this._closeFrameReceived) setTimeout(() => this._socket?.destroy(), 20);
+  const socket = this._socket;
+  if (!this._closeFrameReceived || !socket) return;
+  if (socket.writableFinished) socket.destroy();
+  else socket.once("finish", () => socket.destroy());
 };
+
+/**
+ * still.fail cloud's time in the tests (src/auth.ts `clock`), in ms: one fixed moment, so what a test sees never
+ * depends on the hour it runs at (a minute's budget turning over halfway, say). Ahead of any real one, so the alarms
+ * set from it (a login limit's day, a session's end) never go off during a test.
+ */
+export const NOW_MS = Date.UTC(2030, 0, 1, 12, 0, 30);
 
 /** A request the Worker made to somewhere outside (a push service, say), as a stand-in sees it. */
 export interface OutboundRequest {
@@ -51,6 +62,8 @@ export async function harness(
     /** Push notifications: the VAPID key (base64url point and scalar), the FCM service account's JSON. */
     vapid?: { publicKey: string; privateKey: string };
     fcm?: string;
+    /** "real": the machine's time instead of NOW_MS (dev.ts, which real stations sign in to). */
+    clock?: "real";
     /** Push services, FCM and its token endpoint: a stand-in answering every other outbound request. */
     push?: (request: OutboundRequest) => Promise<{ status: number; body?: string }> | { status: number; body?: string };
   } = {},
@@ -62,6 +75,8 @@ export async function harness(
   const oldOrigin = options.oldOrigin ?? "https://old.relay.example";
   const oldAdminOrigin = options.oldAdminOrigin ?? "https://admin.old.relay.example";
   const oldPreviewOrigin = options.oldPreviewOrigin ?? "https://preview.old.relay.example";
+  /** still.fail cloud's time, in seconds: what a station signs with, say. */
+  const now = () => Math.floor((options.clock === "real" ? Date.now() : NOW_MS) / 1000);
   const signingKey = options.signingKey ?? randomSecret(),
     adminToken = randomSecret();
   const { publicKey, privateKey } = await generateKeyPair("RS256");
@@ -85,6 +100,7 @@ export async function harness(
       js: 'import { createRequire } from "node:module"; const require = createRequire("file:///worker.js");',
     },
     external: ["cloudflare:workers", "cloudflare:sockets", "node:*"],
+    define: { TEST_NOW_MS: options.clock === "real" ? "null" : String(NOW_MS) },
     conditions: ["workerd", "worker", "browser"],
   })).outputFiles[0].text;
   // still.fail cloud's Workers as Cloudflare runs them: the static sites on their hosts, and routes (which take
@@ -155,8 +171,8 @@ export async function harness(
             picture: "https://example.test/p.png",
           })
             .setProtectedHeader({ alg: "RS256", kid: "test-google" })
-            .setIssuedAt()
-            .setExpirationTime("5m")
+            .setIssuedAt(now())
+            .setExpirationTime(now() + 300)
             .setIssuer("https://accounts.google.com")
             .setAudience(code.invalid === "aud" ? "wrong" : "test-google-client")
             .sign(privateKey);
@@ -261,6 +277,7 @@ export async function harness(
     });
   return {
     mf,
+    now,
     origin,
     adminOrigin,
     betaOrigin,

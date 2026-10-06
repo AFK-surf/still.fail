@@ -41,6 +41,12 @@ async function listen(h: Harness, token: string) {
 
 type Listener = Awaited<ReturnType<typeof listen>>;
 
+/** The Directory object (test/worker.ts): its presence sweep, and when a station's socket closing has been handled. */
+async function directory(h: Harness): Promise<{ sweepAt(ms: number): Promise<boolean>; left(station: string): Promise<void> }> {
+  const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
+  return directories.get(directories.idFromName("primary"));
+}
+
 /** Each listener got exactly these events (in any order); the rest got none. */
 async function expect(listeners: Record<string, Listener>, expected: Record<string, AccountEvent[]>, what: string) {
   for (const [name, listener] of Object.entries(listeners)) {
@@ -49,7 +55,7 @@ async function expect(listeners: Record<string, Listener>, expected: Record<stri
 }
 
 async function connectStation(h: Harness, station: Awaited<ReturnType<typeof key>>, options: { ts?: number; signer?: Awaited<ReturnType<typeof key>> } = {}) {
-  const ts = options.ts ?? Math.floor(Date.now() / 1000);
+  const ts = options.ts ?? h.now();
   const signature = await (options.signer ?? station).sign(`stillfail-station-connect-v1:${h.origin}:${station.id}:${ts}`);
   const response = await h.fetch("/v1/stations/connect", {
     headers: { upgrade: "websocket", "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": signature, "x-stillfail-version": "0.2.0" },
@@ -135,10 +141,10 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     assert.equal(first.frames!.at(-1).name, "big studio", "the station learns its new name");
 
     first.ws!.close(1000);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await (await directory(h)).left(station.id);
     await expect(on, {}, "nor does leaving");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
-    assert.ok(seen.last_seen >= Math.floor(Date.now() / 1000) - 5, "last here at");
+    assert.equal(seen.last_seen, h.now(), "last here at");
 
     // A leaver and a removed member hear of it too.
     assert.equal((await bob("DELETE", `/v1/workspaces/${w}/members/${bobSub}`)).status, 200);
@@ -184,17 +190,19 @@ test("a reconnect replaces the old station socket; a silent one is dropped", { t
     const first = await connectStation(h, station);
     const second = await connectStation(h, station);
     assert.equal(await first.closed, 4000);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    const objects = await directory(h);
+    await objects.left(station.id);
     assert.deepEqual(await events.take(), [], "a station's socket tells no one");
 
-    const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
-    const directory = directories.get(directories.idFromName("primary"));
+    // The runtime answers a ping itself and notes when, on the machine's clock (as the sockets' times are): after
+    // `pinged`, and before the ping's answer is back.
+    const pinged = Date.now();
     await second.ping!();
-    assert.equal(await directory.sweepAt(Date.now() + SILENT_MS - 5000), true, "answered pings keep it");
-    assert.equal(await directory.sweepAt(Date.now() + SILENT_MS + 5000), false);
+    assert.equal(await objects.sweepAt(pinged + SILENT_MS), true, "answered pings keep it");
+    assert.equal(await objects.sweepAt(Date.now() + SILENT_MS + 1), false);
     assert.equal(await second.closed, 4008);
     assert.deepEqual(await events.take(), []);
-    assert.ok(((await (await alice("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0].last_seen >= Math.floor(Date.now() / 1000) - 5);
+    assert.equal(((await (await alice("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0].last_seen, h.now());
   } finally {
     await h.close();
   }
@@ -219,7 +227,7 @@ test("sockets refuse bad credentials", { timeout: 20000 }, async () => {
     const station = await enrollStation(h, alice, w, "studio");
     const forged = await key();
     assert.equal((await connectStation(h, station, { signer: forged })).status, 401);
-    assert.equal((await connectStation(h, station, { ts: Math.floor(Date.now() / 1000) - 600 })).status, 400);
+    assert.equal((await connectStation(h, station, { ts: h.now() - 600 })).status, 400);
     assert.equal((await connectStation(h, forged)).status, 404, "not enrolled");
     assert.equal((await h.fetch("/v1/stations/connect")).status, 426);
     assert.equal((await h.fetch("/v1/stations/heartbeat", { method: "POST" })).status, 404, "gone");

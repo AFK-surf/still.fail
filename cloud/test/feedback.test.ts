@@ -33,7 +33,7 @@ async function workspace(h: Harness) {
 /** Sends a report as the station, signed (with another tag, or as the test channel, when a test says). */
 async function send(h: Harness, station: Station, report: unknown, options: { tag?: string; channel?: string; path?: string } = {}) {
   const body = JSON.stringify(report);
-  const ts = Math.floor(Date.now() / 1000);
+  const ts = h.now();
   const digest = createHash("sha256").update(body).digest("hex");
   const headers: Record<string, string> = {
     "content-type": "application/json",

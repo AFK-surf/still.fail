@@ -1,13 +1,31 @@
 // Only the test bundler imports this entry. Production exports no fixture routes.
 import worker, { Account as ProductionAccount, Directory as ProductionDirectory, LoginAttempt, LoginLimiter, TelemetryLimiter } from "../src/index";
-import { signToken, nowSeconds, reply, readJson } from "../src/auth";
+import { clock, signToken, nowSeconds, reply, readJson } from "../src/auth";
 import type { Env } from "../src/env";
 export { LoginAttempt, LoginLimiter, TelemetryLimiter };
+
+// The moment the tests run at (harness.ts NOW_MS), unless they run on the machine's time (dev.ts). The Worker and its
+// objects share this isolate, and so the clock.
+declare const TEST_NOW_MS: number | null;
+if (TEST_NOW_MS !== null) clock.now = () => TEST_NOW_MS;
 
 export class Directory extends ProductionDirectory {
   /** The presence alarm's check, as if it ran at `ms`. */
   sweepAt(ms: number) {
     return this.sweep(ms);
+  }
+  #leaving = new Map<string, () => void>();
+  override async webSocketClose(ws: WebSocket, code: number): Promise<void> {
+    await super.webSocketClose(ws, code);
+    const { station } = ws.deserializeAttachment() as { station?: string };
+    if (!station) return;
+    this.ctx.storage.kv.put(`left:${station}`, true);
+    this.#leaving.get(station)?.();
+  }
+  /** Once a socket of the station has closed and its close been handled (since the last time this said so). */
+  async left(station: string) {
+    if (!this.ctx.storage.kv.get(`left:${station}`)) await new Promise<void>((resolve) => this.#leaving.set(station, resolve));
+    this.ctx.storage.kv.delete(`left:${station}`);
   }
   /** A code whose time is up. */
   expireInviteCode(code: string) {

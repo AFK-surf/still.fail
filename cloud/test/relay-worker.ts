@@ -2,8 +2,11 @@
 // process (an echo, or TEST_RELAY, counting like iroh-relay's metrics) and ways to look into its budget.
 import { DurableObject } from "cloudflare:workers";
 import worker, { RelayBudget as ProductionRelayBudget } from "../src/relay-worker";
-import { nowSeconds } from "../src/auth";
+import { clock, nowSeconds } from "../src/auth";
 export default worker;
+
+declare const TEST_NOW_MS: number | null;
+if (TEST_NOW_MS !== null) clock.now = () => TEST_NOW_MS;
 
 export class RelayBudget extends ProductionRelayBudget {
   exhaustBudget(kind: "bytes" | "frames" = "bytes") {

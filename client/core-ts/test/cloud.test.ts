@@ -20,7 +20,7 @@ import { parseJson } from "../src/util.ts";
 holdLanguage();
 
 async function cloud(host: FakeHost) {
-  host.store(STORAGE_KEY, [{ sub: "s", email: "s@x.com", name: "", picture: "", access: "tok", refresh: "ref", access_expires: Date.now() / 1000 + 3600 }]);
+  host.store(STORAGE_KEY, [{ sub: "s", email: "s@x.com", name: "", picture: "", access: "tok", refresh: "ref", access_expires: host.nowMs() / 1000 + 3600 }]);
   const runner = new Runner(host.time.clock);
   return new Cloud(host, await run(Accounts.load(host)), new Tracer(host, runner, 1), new Status(host, runner));
 }

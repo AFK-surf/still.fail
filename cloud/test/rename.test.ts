@@ -104,7 +104,7 @@ test("new tokens use stillfail while tokens issued for the old origin stay good"
     const tokens = await h.login("alice");
     assert.equal(decodeJwt(tokens.access_token).iss, "stillfail-cloud");
     assert.equal((await h.fetch("/v1/me", { headers: { authorization: `Bearer ${tokens.access_token}` } })).status, 200);
-    const now = Math.floor(Date.now() / 1000);
+    const now = h.now();
     const old = await new SignJWT({ sub: tokens.subject, sid: tokens.session_id, email: tokens.email, type: "access" })
       .setProtectedHeader({ alg: "HS256", typ: "JWT" }).setIssuer("ember-cloud").setAudience(h.oldOrigin).setIssuedAt(now - 1).setExpirationTime(now + 240)
       .sign(new TextEncoder().encode(h.signingKey));
@@ -147,7 +147,7 @@ test("stations from before the rename: old host, old headers, old signed message
     assert.equal((await enroll(h, old, "https://elsewhere.example", "ember")).status, 401, "another cloud's");
 
     // Its presence socket with the x-ember-* headers and message.
-    const ts = Math.floor(Date.now() / 1000);
+    const ts = h.now();
     const connect = async (signer: Awaited<ReturnType<typeof key>>) => old("/v1/stations/connect", {
       headers: { upgrade: "websocket", "x-ember-station": station.id, "x-ember-ts": String(ts), "x-ember-signature": await signer.sign(`ember-station-connect-v1:${h.oldOrigin}:${station.id}:${ts}`), "x-ember-version": "0.1.900" },
     });
@@ -183,7 +183,7 @@ test("a station's traces with the old headers and message", async () => {
     const { station } = await enroll(h, h.fetch, h.origin, "stillfail");
     const body = JSON.stringify({ resourceSpans: [{ scopeSpans: [{ spans: [{ name: "x" }] }] }] });
     const digest = createHash("sha256").update(body).digest("hex");
-    const ts = Math.floor(Date.now() / 1000);
+    const ts = h.now();
     const post = async (headers: Record<string, string>) => h.fetchOld("main", "/v1/telemetry/traces", { method: "POST", headers: { ...json, ...headers }, body });
     assert.equal((await post({ "x-ember-station": station.id, "x-ember-ts": String(ts), "x-ember-signature": await station.sign(`ember-station-telemetry-v1:${h.oldOrigin}:${station.id}:${ts}:${digest}`) })).status, 202);
     assert.equal((await post({ "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-telemetry-v1:${h.origin}:${station.id}:${ts}:${digest}`) })).status, 202);

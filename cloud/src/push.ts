@@ -4,7 +4,7 @@
 // to the devices of those people who are members of the station's workspace, each device once. A device its push
 // service says is gone is dropped (with every account); any other failure is logged and forgotten (the person hears of
 // it the next time a client runs).
-import { readJson, readText, reply } from "./auth";
+import { clock, readJson, readText, reply } from "./auth";
 import type { PushDevice, PushRegistration } from "./directory";
 import type { Env } from "./env";
 import { fcmPush, serviceAccount } from "./fcm";
@@ -96,7 +96,7 @@ function notice(value: unknown): Notice | null {
   if (!to.length || typeof n.kind !== "string" || !/^[a-z_]{1,32}$/.test(n.kind)) return null;
   if (typeof n.session !== "string" || !n.session || n.session.length > 512) return null;
   if (typeof n.text !== "string" || (n.title !== undefined && typeof n.title !== "string") || (n.by !== undefined && n.by !== null && typeof n.by !== "string")) return null;
-  const at = typeof n.at === "number" && Number.isFinite(n.at) ? Math.floor(n.at) : Date.now();
+  const at = typeof n.at === "number" && Number.isFinite(n.at) ? Math.floor(n.at) : clock.now();
   return { to, kind: n.kind, session: n.session, title: (n.title as string | undefined) ?? "", by: (n.by as string | null | undefined) || undefined, text: n.text, at };
 }
 

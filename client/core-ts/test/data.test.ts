@@ -700,7 +700,7 @@ test("a_core_answers_its_first_view_from_the_database_before_any_network", async
   const { STORAGE_KEY } = await import("../src/accounts.ts");
   const { account, nowS, subscribe } = await import("./helpers.ts");
   const host = new FakeHost();
-  host.store(STORAGE_KEY, [account("s1", "a@x.com", "", "tok", "r0", nowS() + 3600)]);
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "", "tok", "r0", nowS(host) + 3600)]);
   // What an earlier run kept: the account's workspace and a station's chats.
   const sql = new NodeSql(new DatabaseSync(":memory:"), true);
   host.sqls.set(dbName("s1"), sql);

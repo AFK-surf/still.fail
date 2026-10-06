@@ -4,7 +4,7 @@
 // the /v1/* calls that carry a recorded W3C traceparent, sent straight to
 // Axiom once the answer is out.
 import { DurableObject } from "cloudflare:workers";
-import { readText, reply } from "./auth";
+import { clock, nowSeconds, readText, reply } from "./auth";
 import { header, publicOrigins, signedMessages } from "./compat";
 import type { Env } from "./env";
 import { validKeyHex, verifyAnySignature } from "./grants";
@@ -68,7 +68,7 @@ export function unverifiedNotes(token: string | null): SpanNotes {
     if (typeof payload.sub === "string") notes["stillfail.account"] = payload.sub.slice(0, 128);
     if (typeof payload.sid === "string") notes["stillfail.session"] = payload.sid.slice(0, 32);
     if (Number.isSafeInteger(payload.gen)) notes["stillfail.auth.presented_generation"] = payload.gen as number;
-    if (Number.isSafeInteger(payload.exp)) notes["stillfail.auth.expired_ago"] = Math.floor(Date.now() / 1000) - (payload.exp as number);
+    if (Number.isSafeInteger(payload.exp)) notes["stillfail.auth.expired_ago"] = nowSeconds() - (payload.exp as number);
     return notes;
   } catch {
     return {};
@@ -94,7 +94,7 @@ export class TelemetryLimiter extends DurableObject<Env> {
   #minute = 0;
   #count = 0;
   consume(): boolean {
-    const minute = Math.floor(Date.now() / 60_000);
+    const minute = Math.floor(clock.now() / 60_000);
     if (minute !== this.#minute) {
       this.#minute = minute;
       this.#count = 0;
@@ -127,7 +127,7 @@ const hex = (bytes: ArrayBuffer | Uint8Array) => [...new Uint8Array(bytes)].map(
 export async function stationSender(request: Request, env: Env, body: string, tag = "station-telemetry-v1"): Promise<string | null> {
   const station = header(request, "station");
   const ts = Number(header(request, "ts"));
-  if (!validKeyHex(station) || !Number.isSafeInteger(ts) || Math.abs(ts - Date.now() / 1000) > 300) return null;
+  if (!validKeyHex(station) || !Number.isSafeInteger(ts) || Math.abs(ts - clock.now() / 1000) > 300) return null;
   const digest = hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)));
   const messages = signedMessages(tag, publicOrigins(env), `${station}:${ts}:${digest}`);
   if (!(await verifyAnySignature(station, header(request, "signature") ?? "", messages))) return null;

@@ -62,15 +62,22 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
     assert.deepEqual(enrolled.relay_urls, [h.origin], "every relay, still.fail's first");
     assert.equal((await enroll(enrollment.token, forged.id, await forged.sign(message(forged.id)))).status, 404, "one use");
 
-    const ts = Math.floor(Date.now() / 1000);
+    const ts = h.now();
     const connect = async () => h.fetch("/v1/stations/connect", {
       headers: { upgrade: "websocket", "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-connect-v1:${h.origin}:${station.id}:${ts}`) },
     });
+    // A station's socket and what it was told; a ping's pong comes after everything sent before it.
+    const listen = (socket: NonNullable<Awaited<ReturnType<typeof h.fetch>>["webSocket"]>) => {
+      const frames: any[] = [];
+      let pong = () => {};
+      socket.addEventListener("message", (event) => (event.data === "pong" ? pong() : frames.push(JSON.parse(event.data as string))));
+      socket.accept();
+      const told = () => new Promise<any[]>((resolve) => { pong = () => resolve(frames); socket.send("ping"); });
+      return told;
+    };
     const presence = await connect();
     assert.equal(presence.status, 101);
-    presence.webSocket!.accept();
-    const told: any[] = [];
-    presence.webSocket!.addEventListener("message", (event) => told.push(JSON.parse(event.data as string)));
+    const told = listen(presence.webSocket!);
 
     // A mstill.fail's credential names who, where, with what role, from which device and session; stations verify it
     // offline, for 30 days, whichever of the workspace's stations it is shown to.
@@ -78,7 +85,7 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
     const issued = await (await bob("POST", `/v1/workspaces/${home.id}/credential`, { device: device.id })).json() as any;
     const keys = await (await h.fetch("/.well-known/stillfail-grant-keys")).json() as any;
     assert.equal(keys.keys[0].d, undefined, "no private half");
-    const { payload, protectedHeader } = await jwtVerify(issued.credential, await importJWK(keys.keys[0], "EdDSA"), { issuer: "stillfail-cloud" });
+    const { payload, protectedHeader } = await jwtVerify(issued.credential, await importJWK(keys.keys[0], "EdDSA"), { issuer: "stillfail-cloud", currentDate: new Date(h.now() * 1000) });
     assert.deepEqual([payload.ws, payload.role, payload.device, payload.email, payload.name], [home.id, "admin", device.id, "bob@example.test", "Name of bob"]);
     assert.deepEqual([protectedHeader.typ, payload.exp! - payload.iat!, typeof payload.sid, issued.expires_at - issued.issued_at], ["stillfail-member+jwt", 30 * 86400, "string", 30 * 86400]);
     assert.equal((await carol("POST", `/v1/workspaces/${home.id}/credential`, { device: device.id })).status, 404);
@@ -86,16 +93,11 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
     // Removing a member: no new credential, and the stations are told to refuse the ones it holds.
     assert.equal((await alice("DELETE", `/v1/workspaces/${home.id}/members/${bobSub}`)).status, 200);
     assert.equal((await bob("POST", `/v1/workspaces/${home.id}/credential`, { device: device.id })).status, 404);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const revoke = told.find((frame) => frame.type === "revoke");
+    const revoke = (await told()).find((frame) => frame.type === "revoke");
     assert.deepEqual([revoke?.kind, revoke?.id, typeof revoke?.at], ["sub", bobSub, "number"]);
     // A station connecting later hears it with its state.
-    const again = await connect();
-    again.webSocket!.accept();
-    const later: any[] = [];
-    again.webSocket!.addEventListener("message", (event) => later.push(JSON.parse(event.data as string)));
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    assert.deepEqual(later.find((frame) => frame.type === "state")?.revocations.map((r: any) => [r.kind, r.id]), [["sub", bobSub]]);
+    const later = listen((await connect()).webSocket!);
+    assert.deepEqual((await later()).find((frame) => frame.type === "state")?.revocations.map((r: any) => [r.kind, r.id]), [["sub", bobSub]]);
     assert.equal((await alice("DELETE", `/v1/workspaces/${home.id}/stations/${station.id}`)).status, 200);
     assert.equal((await connect()).status, 404);
   } finally {

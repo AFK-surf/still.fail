@@ -96,7 +96,7 @@ async function vapidClaims(authorization: string, publicKey: string) {
 
 test("the VAPID token is ES256 for the endpoint's origin, for at most 12 hours", async () => {
   const keys = await vapidKeys();
-  const now = Math.floor(Date.now() / 1000);
+  const now = 1_790_000_000;
   const claims = await vapidClaims(await vapidAuthorization({ ...keys, subject: "mailto:ops@example.test" }, "https://push.example:8443/send/abc?x=1", now), keys.publicKey);
   assert.equal(claims.aud, "https://push.example:8443");
   assert.equal(claims.sub, "mailto:ops@example.test");
@@ -149,7 +149,7 @@ async function workspace(h: Harness) {
 /** Sends notices as the station, signed (with another tag or prefix, or over another body, when a test says). */
 async function notify(h: Harness, station: Station, notices: unknown[], sign: { tag?: string; body?: string } = {}) {
   const body = JSON.stringify({ notices });
-  const ts = Math.floor(Date.now() / 1000);
+  const ts = h.now();
   const digest = createHash("sha256").update(sign.body ?? body).digest("hex");
   const headers = { "content-type": "application/json", "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`${sign.tag ?? "stillfail-station-notify-v1"}:${h.origin}:${station.id}:${ts}:${digest}`) };
   return h.fetch("/v1/stations/notify", { method: "POST", headers, body });

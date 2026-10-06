@@ -332,7 +332,7 @@ test("a refresh answered after its retry window: the same credentials while the 
       assert.equal(late.status, 200, "not taken for reuse");
       const again = (await late.json()) as Tokens;
       assert.equal(again.refresh_token, next.refresh_token, "the credential it never got");
-      assert.ok(again.expires_at > Date.now() / 1000, "an access credential that works");
+      assert.ok(again.expires_at > h.now(), "an access credential that works");
       assert.equal((await h.fetch("/v1/auth/session", { headers: auth(again.access_token) })).status, 200);
     }
     // Once the new credential is used, the old one is reuse again: the family is revoked.

@@ -131,7 +131,7 @@ test("migrate_takes_accounts_and_a_32_byte_device_key", () => {
 
 test("a_kept_credential_reaches_the_stations_without_ember_cloud", async () => {
   const host = new FakeHost();
-  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "a", "r", nowS() + 3600)]);
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "a", "r", nowS(host) + 3600)]);
   let up = true;
   let asked = 0;
   host.onFetch((req) => {
@@ -140,7 +140,7 @@ test("a_kept_credential_reaches_the_stations_without_ember_cloud", async () => {
     if (path === "/v1/me") return jsonResponse(200, { workspaces: [{ id: "ws", name: "W" }], invitations: [], relay_url: "https://relay.test" });
     if (path === "/v1/workspaces/ws/credential") {
       asked++;
-      return jsonResponse(200, { credential: `c${asked}`, issued_at: nowS(), expires_at: nowS() + 30 * 86400, relay_url: "https://relay.test" });
+      return jsonResponse(200, { credential: `c${asked}`, issued_at: nowS(host), expires_at: nowS(host) + 30 * 86400, relay_url: "https://relay.test" });
     }
     return jsonResponse(404, { error: "not_found" });
   });
@@ -152,12 +152,12 @@ test("a_kept_credential_reaches_the_stations_without_ember_cloud", async () => {
   assert.equal((await credential(false)).credential, "c1");
   assert.equal(asked, 1);
   assert.equal((await credential(true)).credential, "c2");
-  const old = { credential: "old", issued_at: nowS() - 2 * 86400, expires_at: nowS() + 28 * 86400, relay_url: "https://relay.test" };
+  const old = { credential: "old", issued_at: nowS(host) - 2 * 86400, expires_at: nowS(host) + 28 * 86400, relay_url: "https://relay.test" };
   host.store(`${CREDENTIAL_KEY}/s1/ws`, kept(old));
   up = false;
   assert.equal((await credential(false)).credential, "old");
   await assert.rejects(credential(true));
-  host.store(`${CREDENTIAL_KEY}/s1/ws`, kept({ ...old, expires_at: nowS() - 1 }));
+  host.store(`${CREDENTIAL_KEY}/s1/ws`, kept({ ...old, expires_at: nowS(host) - 1 }));
   await assert.rejects(credential(false));
   host.store(`${CREDENTIAL_KEY}/s1/ws`, kept(old));
   up = true;

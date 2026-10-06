@@ -29,6 +29,7 @@ export class FakeCloud {
   #server: Server | null = null;
   #wss: WebSocketServer | null = null;
   #next = 1;
+  #opening: (() => void)[] = [];
   /// Answer pings with pong (a cloud from before them does not).
   pongs = true;
   /// Every station of every workspace, answering at this origin (harness/station.ts).
@@ -230,6 +231,7 @@ export class FakeCloud {
       this.#wss!.handleUpgrade(req, socket, head, (ws) => {
         const entry = { sub, ws };
         this.sockets.add(entry);
+        for (const wake of this.#opening.splice(0)) wake();
         ws.on("message", (data) => {
           if (data.toString() === "ping" && this.pongs) ws.send("pong");
         });
@@ -237,6 +239,11 @@ export class FakeCloud {
       });
     });
     return new Promise((resolve) => this.#server!.listen(port, "127.0.0.1", () => resolve()));
+  }
+
+  /// Once an events socket is open: now, or when the next one opens.
+  socketOpen(): Promise<void> {
+    return this.sockets.size ? Promise.resolve() : new Promise((resolve) => this.#opening.push(resolve));
   }
 
   /// The port it listens on (`listen(0)`: one the system chose).

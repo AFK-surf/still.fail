@@ -15,7 +15,8 @@ import type { HttpRequest } from "../src/host.ts";
 holdLanguage();
 
 const tokens = (access: string, refresh: string, expires_at: number) => ({ access_token: access, refresh_token: refresh, subject: "sub1", email: "a@x.com", name: "阿一", expires_at });
-const now = () => Date.now() / 1000;
+/// The core's time (its host's clock), in seconds: what a stored credential's expiry is counted from.
+const now = (host: FakeHost) => host.nowMs() / 1000;
 const account = (sub: string, access_expires: number): StoredAccount => ({ sub, email: `${sub}@x.com`, name: "旧名", picture: "p.png", access: "old-access", refresh: "old-refresh", access_expires });
 const body = (r: HttpRequest) => parseJson(r.body!) as Record<string, unknown>;
 const header = (r: HttpRequest, name: string) => r.headers.find(([k]) => k === name)?.[1];
@@ -57,7 +58,7 @@ test("begin_sign_in_stores_pkce_and_builds_url", async () => {
 
 test("sign_in_happy_path", async () => {
   const host = new FakeHost();
-  const expires = now() + 3600;
+  const expires = now(host) + 3600;
   host.onFetch((req) => {
     if (req.url === "https://stillfail.test/v1/auth/token") return jsonResponse(200, tokens("acc", "ref", expires));
     if (req.url === "https://stillfail.test/v1/me") return jsonResponse(200, { user: { picture: "https://pic/1" } });
@@ -87,7 +88,7 @@ test("sign_in_happy_path", async () => {
 test("sign_in_survives_a_failed_profile_and_sanitises_return_to", async () => {
   for (const [returnTo, expected] of [["/auth/callback", "/"], ["", "/"]]) {
     const host = new FakeHost();
-    const expires = now() + 3600;
+    const expires = now(host) + 3600;
     host.onFetch((req) => {
       if (req.url.endsWith("/v1/me")) throw new HostError("offline");
       return jsonResponse(200, tokens("acc", "ref", expires));
@@ -131,7 +132,7 @@ test("sign_in_failures", async () => {
 test("refresh_is_single_flight", async () => {
   const host = new FakeHost();
   let refreshes = 0;
-  const expires = now() + 3600;
+  const expires = now(host) + 3600;
   host.onFetch(async (req) => {
     assert.ok(req.url.endsWith("/v1/auth/refresh"));
     refreshes++;
@@ -139,7 +140,7 @@ test("refresh_is_single_flight", async () => {
     await flush(3);
     return jsonResponse(200, { access_token: "new-access", refresh_token: "new-refresh", subject: "s", email: "s@x.com", expires_at: expires });
   });
-  host.store(STORAGE_KEY, [account("s", now() + 30)]);
+  host.store(STORAGE_KEY, [account("s", now(host) + 30)]);
   const accounts = await run(Accounts.load(host));
   const [a, b] = await Promise.all([run(accounts.accessToken("s")), run(accounts.accessToken("s"))]);
   assert.equal(a, "new-access");
@@ -162,9 +163,9 @@ test("another_core_on_the_same_storage_refreshed_first_so_its_credentials_are_ta
   host.onFetch((req) => {
     throw new Error(`no refresh expected, got ${req.url}`);
   });
-  host.store(STORAGE_KEY, [account("s", now() + 30)]);
+  host.store(STORAGE_KEY, [account("s", now(host) + 30)]);
   const accounts = await run(Accounts.load(host));
-  const theirs = { ...account("s", 0), access: "their-access", refresh: "their-refresh", access_expires: now() + 3600 };
+  const theirs = { ...account("s", 0), access: "their-access", refresh: "their-refresh", access_expires: now(host) + 3600 };
   host.store(STORAGE_KEY, [theirs]);
   assert.equal(await run(accounts.accessToken("s")), "their-access");
   assert.equal(accounts.stored("s")!.refresh, "their-refresh");
@@ -173,7 +174,7 @@ test("another_core_on_the_same_storage_refreshed_first_so_its_credentials_are_ta
 test("refused_refresh_forgets_the_account", async () => {
   const host = new FakeHost();
   host.onFetch(() => jsonResponse(401, { error: "invalid_session" }));
-  const accounts = await withStored(host, [account("s", 0), account("t", now() + 3600)]);
+  const accounts = await withStored(host, [account("s", 0), account("t", now(host) + 3600)]);
   await assert.rejects(run(accounts.accessToken("s")), (e: { code: string; message: string }) => e.code === "signed_out" && e.message === "s@x.com 的登录已过期，请重新登录");
   assert.deepEqual(accounts.list().map((a) => a.sub), ["t"]);
   assert.equal((stored(host, STORAGE_KEY) as StoredAccount[]).length, 1);
@@ -222,7 +223,7 @@ test("failed_refresh_keeps_the_account", async () => {
 
 test("persistence_round_trips", async () => {
   const host = new FakeHost();
-  const list = [account("s", now() + 3600), account("t", now() + 3600)];
+  const list = [account("s", now(host) + 3600), account("t", now(host) + 3600)];
   const accounts = await withStored(host, list);
   assert.deepEqual(accounts.list(), list.map(view));
   await run(accounts.signOut("s")).catch(() => undefined);
@@ -236,7 +237,7 @@ test("sign_out_posts_logout_and_forgets_even_offline", async () => {
   host.onFetch(() => {
     throw new HostError("offline");
   });
-  const accounts = await withStored(host, [account("s", now() + 3600)]);
+  const accounts = await withStored(host, [account("s", now(host) + 3600)]);
   let changes = 0;
   accounts.onChange(() => changes++);
   await run(accounts.signOut("s"));

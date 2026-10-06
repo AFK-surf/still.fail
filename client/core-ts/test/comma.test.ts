@@ -34,7 +34,7 @@ async function rig(): Promise<Rig> {
         return jsonResponse(200, { stations: [{ id: "st", name: "studio", version: "0.1.9", online: false, enrolled_at: 1, enrolled_by: "usr_1" }] });
       case "POST /v1/comma/workspaces/ws1/station-credential":
         r.asked++;
-        return jsonResponse(200, { credential: `c${r.asked}`, issued_at: Math.floor(nowS()), expires_at: Math.floor(nowS()) + 30 * 86400, relay_urls: ["https://relay.comma.test"] });
+        return jsonResponse(200, { credential: `c${r.asked}`, issued_at: Math.floor(nowS(host)), expires_at: Math.floor(nowS(host)) + 30 * 86400, relay_urls: ["https://relay.comma.test"] });
       case "POST /v1/comma/workspaces/ws1/stations/enrollments":
         return jsonResponse(200, { token: "t", command: `curl -fsSL ${ORIGIN}/stations/install.sh | sh -s -- t`, expires_at: 1 });
       case "PATCH /v1/comma/workspaces/ws1/stations/st":
@@ -129,11 +129,11 @@ test("member credentials: asked with the session, kept a day, the kept one servi
   assert.equal((await credential(false)).credential, "c1");
   assert.equal(r.asked, 1);
   // A day on, with Comma away: the kept one, until it runs out.
-  const old = { device: "dev", credential: "old", issued_at: Math.floor(nowS()) - 2 * 86400, expires_at: Math.floor(nowS()) + 86400, relay_url: "" };
+  const old = { device: "dev", credential: "old", issued_at: Math.floor(nowS(host)) - 2 * 86400, expires_at: Math.floor(nowS(host)) + 86400, relay_url: "" };
   host.store(`${CREDENTIAL_KEY}/usr_1/ws1`, toJsonBytes(old));
   r.up.on = false;
   assert.equal((await credential(false)).credential, "old");
-  host.store(`${CREDENTIAL_KEY}/usr_1/ws1`, toJsonBytes({ ...old, expires_at: Math.floor(nowS()) - 1 }));
+  host.store(`${CREDENTIAL_KEY}/usr_1/ws1`, toJsonBytes({ ...old, expires_at: Math.floor(nowS(host)) - 1 }));
   await assert.rejects(credential(false));
   r.up.on = true;
   assert.equal((await credential(false)).credential, "c2");

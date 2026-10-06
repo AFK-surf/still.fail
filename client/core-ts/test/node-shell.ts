@@ -229,8 +229,14 @@ export class NodeShell implements Native {
   }
 
   emitted: [number, string][] = [];
+  #hearing: (() => void)[] = [];
   emit(client: number, json: string): void {
     this.emitted.push([client, json]);
+    for (const wake of this.#hearing.splice(0)) wake();
+  }
+  /// Once the core emits again.
+  heard(): Promise<void> {
+    return new Promise((resolve) => this.#hearing.push(resolve));
   }
   now(): number {
     return Date.now();

@@ -30,7 +30,10 @@ export type Tokens = {
   refresh_expires_at: number;
 };
 
-export const nowSeconds = () => Math.floor(Date.now() / 1000);
+/** still.fail cloud's time, in ms: the machine's, but in the tests one fixed moment (test/worker.ts), so a run is the
+ * same at any hour. Station sockets' presence and alarms' scheduling keep the machine's: the runtime's ping times are. */
+export const clock = { now: () => Date.now() };
+export const nowSeconds = () => Math.floor(clock.now() / 1000);
 export const randomSecret = () => b64url(crypto.getRandomValues(new Uint8Array(32)));
 export const b64url = (value: Uint8Array) =>
   btoa(String.fromCharCode(...value))
@@ -128,6 +131,7 @@ export async function verifyToken(env: Env, token: string, type: "access" | "ref
       // Tokens signed before the move name the old origin.
       audience: publicOrigins(env),
       requiredClaims: ["sub", "sid", "iat", "exp", "type"],
+      currentDate: new Date(clock.now()),
     });
     if (
       payload.type !== type ||
@@ -166,6 +170,7 @@ export async function unseal(env: Env, value: string): Promise<Tokens> {
   const { payload } = await jwtDecrypt(value, await encryptionKey(env), {
     keyManagementAlgorithms: ["dir"],
     contentEncryptionAlgorithms: ["A256GCM"],
+    currentDate: new Date(clock.now()),
   });
   return payload.value as Tokens;
 }
@@ -194,6 +199,7 @@ export async function googleIdentity(env: Env, code: string, verifier: string, n
     issuer: ["https://accounts.google.com", "accounts.google.com"],
     audience: env.GOOGLE_CLIENT_ID,
     requiredClaims: ["sub", "exp", "iat", "nonce", "email", "email_verified"],
+    currentDate: new Date(clock.now()),
   });
   if (
     payload.nonce !== nonce ||

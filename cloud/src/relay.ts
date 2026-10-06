@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { RelayEnv as Env } from "./relay-worker";
-import { nowSeconds } from "./auth";
+import { clock, nowSeconds } from "./auth";
 
 // A bounded shared service budget, never a Mesh membership authority.
 import { LIMITS } from "./limits";
@@ -83,7 +83,7 @@ export class RelayBudget extends DurableObject<Env> {
   async admit(): Promise<boolean> {
     const counters = await this.read();
     const q = this.load();
-    const now = Date.now();
+    const now = clock.now();
     this.pending = this.pending.filter((p) => now - p.at < DIAL_MS);
     const accepts = counters?.accepts ?? 0;
     const open = counters ? Math.max(0, counters.accepts - counters.disconnects) : 0;
@@ -94,7 +94,7 @@ export class RelayBudget extends DurableObject<Env> {
       this.pending.push({ at: now, accepts });
     }
     this.ctx.storage.kv.put("quota", q);
-    if (admitted && (await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(now + POLL_MS);
+    if (admitted && (await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + POLL_MS);
     return admitted;
   }
 

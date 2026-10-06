@@ -32,7 +32,7 @@ type J = any;
 
 test("two_workspaces_are_kept_apart", async () => {
   const host = new FakeHost();
-  host.store(STORAGE_KEY, [account("s1", "s1@x.com", "s1", "a1", "r", nowS() + 3600), account("s2", "s2@x.com", "s2", "a2", "r", nowS() + 3600)]);
+  host.store(STORAGE_KEY, [account("s1", "s1@x.com", "s1", "a1", "r", nowS(host) + 3600), account("s2", "s2@x.com", "s2", "a2", "r", nowS(host) + 3600)]);
   let w1Stations = true;
   host.onFetch((req) => {
     const path = req.url.replace("https://stillfail.test", "");
@@ -127,7 +127,7 @@ test("a_chats_connection_says_only_what_is_of_its_workspace", async () => {
 test("a_beta_app_says_so_and_an_account_not_let_in_is_blocked", async () => {
   const host = new FakeHost();
   host.isBeta = true;
-  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "a", "r", nowS() + 3600)]);
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "a", "r", nowS(host) + 3600)]);
   let letIn = false;
   host.onFetch((req) => {
     const release = (code: number) => ({ versionCode: code, versionName: `0.1.${code}`, file: `android/stillfail-${code}.apk`, sha256: "ab", size: 9 });

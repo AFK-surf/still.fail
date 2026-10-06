@@ -69,6 +69,8 @@ class StillFailCoreTest {
         throw AssertionError()
     }
 
+    // Real threads, as the engine's are; every wait is for what has to happen, never for a while (no deadlines: the run
+    // passes or fails by the code alone, however slow the machine).
     @Test
     fun restartDoesNotDisposeAnEngineInsideAnOutgoingFfiCall() {
         val entered = java.util.concurrent.CountDownLatch(1)
@@ -82,7 +84,7 @@ class StillFailCoreTest {
                 init { if (first) fatal = { callback(this, """{"fatal":"restart during receive"}""") } }
                 override fun connect() = 1L
                 override fun receive(client: Long, json: String) {
-                    if (first) { entered.countDown(); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS)) }
+                    if (first) { entered.countDown(); release.await() }
                 }
                 override fun close() { if (first) closed.countDown() }
             }
@@ -92,12 +94,12 @@ class StillFailCoreTest {
                 try { core.call("pending"); "unexpected success" } catch (e: CoreException) { e.code }
             }
             try {
-                assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                entered.await()
                 fatal()
-                assertEquals("core_restarted", kotlinx.coroutines.withTimeout(2000) { failed.await() })
+                assertEquals("core_restarted", failed.await())
                 assertEquals("engine disposed during receive", 1L, closed.count)
             } finally { release.countDown() }
-            assertTrue(closed.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            closed.await()
         }
     }
 
@@ -122,18 +124,20 @@ class StillFailCoreTest {
         val release = java.util.concurrent.CountDownLatch(1)
         val update = java.util.concurrent.CountDownLatch(1)
         val sent = java.util.concurrent.CopyOnWriteArrayList<JsonObject>()
+        /** A permit for each message sent to the engine. */
+        val posted = java.util.concurrent.Semaphore(0)
         lateinit var deliver: (String) -> Unit
         val core = StillFailCore({ callback ->
             object : Engine {
                 init { deliver = { callback(this, it) } }
                 override fun connect() = 1L
-                override fun receive(client: Long, json: String) { sent += obj(json) }
+                override fun receive(client: Long, json: String) { sent += obj(json); posted.release() }
                 override fun close() {}
             }
         }, parseMessage = { raw ->
             if (raw.contains("slow-response")) {
                 parsing.countDown()
-                check(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                release.await()
             }
             obj(raw)
         }).also { it.open() }
@@ -143,15 +147,16 @@ class StillFailCoreTest {
             }
             val call = async(kotlinx.coroutines.Dispatchers.Default) { core.call("slow") }
             try {
-                kotlinx.coroutines.withTimeout(5000) { while (sent.size < 2) kotlinx.coroutines.delay(5) }
+                posted.acquire(2)
                 val callId = sent.first { it["call"] != null }.getValue("id")
                 val topicId = sent.first { it["subscribe"] != null }.getValue("id")
                 deliver("""{"id":$callId,"ok":"slow-response"}""")
-                assertTrue(parsing.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                parsing.await()
+                // The reply's parser holds until the end: the update and the call get past it, or this never ends.
                 deliver("""{"id":$topicId,"value":[]}""")
-                assertTrue("topic held behind API parsing", update.await(2, java.util.concurrent.TimeUnit.SECONDS))
+                update.await()
                 core.focus(obj("""{"visible":true}"""))
-                kotlinx.coroutines.withTimeout(2000) { while (sent.size < 3) kotlinx.coroutines.delay(5) }
+                posted.acquire(1)
             } finally {
                 release.countDown()
                 subscription.cancel()
