@@ -18,7 +18,7 @@ import { prepare } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
 import { availableEfforts, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
 import { spelling } from "../src/sessions/config.ts";
-import { settle } from "./hub-fakes.ts";
+import { settle, testClock } from "./hub-fakes.ts";
 
 const temp = () => mkdtempSync(join(tmpdir(), "hub-parts-"));
 
@@ -133,11 +133,15 @@ test("steps are numbered and cut", () => {
 
 const line = (text: string, id: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-09-26T00:00:00Z", message: { id, content: [{ type: "text", text }], usage: { input_tokens: 10, output_tokens: 2 } } })}\n`;
 
+/// What a LiveHub's watch on a transcript does when the file changes.
+const watched = (hub: LiveHub, key: string) => (hub as any).soon(key);
+
 test("a watcher gets what it lacks, the steps in flight, then new entries as the file grows", async () => {
   const dir = temp();
   const path = join(dir, "t.jsonl");
   writeFileSync(path, line("one", "m1") + line("two", "m2"));
-  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
   hub.event("s", { kind: "start", id: "x", step: "text" });
   hub.event("s", { kind: "delta", id: "x", field: "text", text: "wri" });
   const got: LiveMessage[] = [];
@@ -152,8 +156,11 @@ test("a watcher gets what it lacks, the steps in flight, then new entries as the
   assert.equal(got.length, 0, "a delta sends nothing");
   hub.event("s", { kind: "end", id: "x" });
   appendFileSync(path, line("writing", "m3"));
-  // Told by the file's change, not looked at on a clock.
-  for (let i = 0; i < 100 && !got.some((m) => m.type === "timeline" && m.entries.length > 0); i++) await new Promise((r) => setTimeout(r, 20));
+  // What its watch does on the file's change (that it comes is side/hub-parts.test.ts's): read once the burst is over.
+  watched(hub, "s");
+  await settle();
+  await time.adjust(40);
+  await settle();
   const timeline = got.filter((m): m is Extract<LiveMessage, { type: "timeline" }> => m.type === "timeline").at(-1)!;
   assert.deepEqual([timeline.start, timeline.entries.map((e) => e.text)], [2, ["writing"]]);
   hub.turnEnded("s");
@@ -187,7 +194,8 @@ test("a session gone on in a new runtime session: its history reads on from the 
   const now = join(dir, "b.jsonl");
   writeFileSync(left, line("one", "m1"));
   let paths = [left];
-  const hub = new LiveHub(() => ({ runtime: "claude", paths }));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths }), time.clock);
   const got: LiveMessage[] = [];
   hub.subscribe("s", 0, null, (m) => void got.push(m));
   // The one left gets its last words, then the session moves on.
@@ -196,8 +204,11 @@ test("a session gone on in a new runtime session: its history reads on from the 
   paths = [left, now];
   hub.moved("s");
   appendFileSync(now, line("four", "m4"));
+  watched(hub, "s");
+  await settle();
+  await time.adjust(40);
+  await settle();
   const told = () => got.flatMap((m) => (m.type === "timeline" ? m.entries.map((e, i) => `${m.start + i}:${e.text}`) : []));
-  for (let i = 0; i < 100 && !told().includes("3:four"); i++) await new Promise((r) => setTimeout(r, 20));
   assert.deepEqual(told(), ["0:one", "1:two", "2:three", "3:four"]);
   const last = got.filter((m): m is Extract<LiveMessage, { type: "timeline" }> => m.type === "timeline").at(-1)!;
   assert.equal(last.usage.modelCalls, 4, "the usage of both");

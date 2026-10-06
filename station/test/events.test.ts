@@ -1,5 +1,6 @@
 // GET /events as admin/events.rs has it: sidebar rows told by what changed, one `session` event per burst, `read`
 // only to its viewer, job logs as they grow; and each event with its sequence number.
+import type { Clock } from "effect";
 import assert from "node:assert/strict";
 import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,10 +8,11 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Events } from "../src/api/events.ts";
 import type { StoreChange } from "../src/store/rows.ts";
+import { settle, testClock } from "./hub-fakes.ts";
 
 const viewer = (email: string) => ({ sub: email, email, name: email, role: "member", workspace: "w", device: "d" });
 
-function setup() {
+function setup(clock?: Clock.Clock) {
   let listener: (c: StoreChange) => void = () => {};
   const rows: Record<string, any[]> = { "a@x": [{ id: "1", title: "one" }], "b@x": [] };
   const reads: string[] = [];
@@ -32,6 +34,7 @@ function setup() {
     tail: (path) => require("node:fs").readFileSync(path, "utf8"),
     outputAt: () => 7,
     sessionExists: (key) => key !== "gone",
+    clock,
   });
   return { events, rows, reads, change: (c: StoreChange) => listener(c), dir };
 }
@@ -54,12 +57,11 @@ function reader(body: AsyncIterable<Buffer>) {
   more();
   return { got, close: () => it.return?.() };
 }
-const settle = () => new Promise((r) => setTimeout(r, 30));
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
 test("changes are told as events, rows by what changed, read only to its viewer", async () => {
-  const { events, rows, change, reads } = setup();
+  const { events, rows, change, reads } = setup(testClock().clock);
   const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
   const b = reader((await events.open(viewer("b@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
   await settle();
@@ -93,16 +95,16 @@ test("changes are told as events, rows by what changed, read only to its viewer"
 });
 
 test("a job's log is told now and as it grows", async () => {
-  const { events, dir } = setup();
+  const time = testClock();
+  const { events, dir } = setup(time.clock);
   writeFileSync(join(dir, "j.log"), "one\n");
   const s = reader((await events.open(viewer("a@x"), "zh", false, [], [["j", 50], ["nothing", 5]])).body as AsyncIterable<Buffer>);
   await settle();
   appendFileSync(join(dir, "j.log"), "two\n");
-  // Its watch tells of the growth.
-  const told = () => s.got.filter((e) => e.event === "job-log").map((e) => e.data);
-  for (let t = 0; told().length < 2 && t < 5000; t += 20) await new Promise((r) => setTimeout(r, 20));
+  // Looked at again within 5 s, its watch or not (what the watch tells is side/events.test.ts's), once.
+  await time.adjust(5_000);
   await settle();
-  const logs = told();
+  const logs = s.got.filter((e) => e.event === "job-log").map((e) => e.data);
   assert.deepEqual(logs, [
     { id: "j", lines: 50, text: "one\n", outputAt: 7 },
     { id: "j", lines: 50, text: "one\ntwo\n", outputAt: 7 },
