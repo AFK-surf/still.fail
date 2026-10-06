@@ -24,6 +24,9 @@ const viewer: Viewer = { sub: "u1", email: "pat@example.com", name: "Pat", role:
 // tests at once on this machine would otherwise share, each one's adb and tunnels reaching the other's.
 const PHONE = randomBytes(32).toString("hex");
 
+/// The fake adb always answers: it is given as long as it takes, so what it says never turns on the machine's speed.
+const UNLIMITED = { quick: null, long: null };
+
 /// A fresh FAKE_ADB_DIR: what the fake adb was asked, and what it says; `path`, an adb of its own for a `Shares`. Not
 /// the process's environment: an adb a test before still runs (its background `connect` after a pairing, say) would
 /// then ask this one's.
@@ -121,11 +124,13 @@ test("takes only plain package names", () => {
 });
 
 test("gives a phone its usual port while it is free", async () => {
-  const first = await bind("ab12");
+  // A phone of this run's own (another run at once would hold the same usual port).
+  const phone = randomBytes(8).toString("hex");
+  const first = await bind(phone);
   const port = (first.address() as net.AddressInfo).port;
   assert.ok(port >= PORTS.start && port < PORTS.end);
   await new Promise((r) => first.close(r));
-  const again = await bind("ab12");
+  const again = await bind(phone);
   assert.equal((again.address() as net.AddressInfo).port, port);
   again.close();
 });
@@ -166,7 +171,7 @@ test("without adb the offer says missing; a phone the station cannot reach says 
 
   // Its tunnel refused (here: no stream on the connection), adb not getting in is put down to that.
   const adb = fakeAdb();
-  const shares = new Shares({ adb: () => adb.path, clock: time.clock });
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
   const failing = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE }), failing as unknown as Stream);
   // Not in yet after `connect`: its state looked at again after 500 ms, and once SETTLE is over taken as it is.
@@ -187,7 +192,7 @@ test("without adb the offer says missing; a phone the station cannot reach says 
 test("Wireless debugging off: adb is not left trying, and the offer says so", async () => {
   const adb = fakeAdb();
   const time = testClock();
-  const shares = new Shares({ adb: () => adb.path, clock: time.clock });
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
   const stream = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE, adbd: false }, { "stillfail-lang": "en-US" }), stream as unknown as Stream);
   const off = await until(() => stream.lines().find((l) => l.adb === "off"));
@@ -239,7 +244,7 @@ test("the station removed from its workspace ends offers at once", async () => {
   let removed = false;
   const listeners = new Set<() => void>();
   const time = testClock();
-  const shares = new Shares({ adb: () => adb.path, clock: time.clock, cloud: { removed: () => removed, listen: (f) => (listeners.add(f), () => listeners.delete(f)) } });
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock, cloud: { removed: () => removed, listen: (f) => (listeners.add(f), () => listeners.delete(f)) } });
   const stream = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE }), stream as unknown as Stream);
   await time.asleep(500);
@@ -411,7 +416,7 @@ function through(port: number, line: string): Promise<string> {
 test("a phone offered over the mesh: adb connects through its tunnel, asks reach it, and it goes after GRACE", async () => {
   const adb = fakeAdb();
   const time = testClock();
-  const shares = new Shares({ adb: () => adb.path, clock: time.clock });
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
   const mesh = await link(shares);
   try {
     const offer = { op: "share", phone: PHONE, device: "Pixel\n8", android: "14", package: "fail.still.android", adbd: true, pair: true };
@@ -473,7 +478,7 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
 test("over the mesh: a phone adb is not paired with, or whose adbd turned the tunnel down", async () => {
   const adb = fakeAdb({ "on-connect": "offline" });
   const time = testClock();
-  const shares = new Shares({ adb: () => adb.path, clock: time.clock });
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
   const mesh = await link(shares);
   try {
     const { stream, reader } = await mesh.ask({ op: "share", phone: PHONE }, { "stillfail-lang": "en" });

@@ -49,6 +49,9 @@ export type SharesOptions = {
   adb?: () => string | null;
   /// The clock GRACE and SETTLE are waited out on (a TestClock in tests).
   clock?: Clock.Clock;
+  /// How long adb is given, on the machine's time: to answer (`quick`), to connect or pair (`long`). Null: as long as
+  /// it takes (a test's fake adb, which always answers, so what it says never turns on how fast the machine is).
+  limits?: { quick: number | null; long: number | null };
 };
 
 let nextOffer = 1;
@@ -119,6 +122,7 @@ export class Share {
 export class Shares {
   readonly byKey = new Map<string, Share>();
   readonly options: SharesOptions;
+  readonly limits: { quick: number | null; long: number | null };
   private stopping = false;
   private stopWaiters: (() => void)[] = [];
   /// Its waits, on its clock; they end as it closes.
@@ -127,6 +131,7 @@ export class Shares {
 
   constructor(options: SharesOptions = {}) {
     this.options = options;
+    this.limits = options.limits ?? { quick: ADB_QUICK, long: ADB_TIMEOUT };
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, any, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
@@ -284,7 +289,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     share.server.close();
     log.info("adb", "phone no longer offered for adb", { email: viewer.email, port: share.port, ended });
     const adb = shares.adb();
-    if (adb) await run(adb, ["disconnect", share.serial()], ADB_QUICK).catch(() => {});
+    if (adb) await run(adb, ["disconnect", share.serial()], shares.limits.quick).catch(() => {});
   }
   await stream.finish().catch(() => {});
 }
@@ -393,18 +398,18 @@ async function connect(shares: Shares, share: Share) {
   const serial = share.serial();
   // Nothing to reach: adb is not left trying to (it would, a few times a second).
   if (share.info.adbd === false) {
-    await run(adb, ["disconnect", serial], ADB_QUICK).catch(() => {});
+    await run(adb, ["disconnect", serial], shares.limits.quick).catch(() => {});
     return share.set("off", tr(speaks, "station.adb.wirelessOff"));
   }
-  const state = () => run(adb, ["-s", serial, "get-state"], ADB_QUICK).catch(() => "");
+  const state = () => run(adb, ["-s", serial, "get-state"], shares.limits.quick).catch(() => "");
   // Held already (another offer: the pairing port opened, a new link): it stays so.
   if ((await state()) === "device") return share.set("connected");
   share.set("connecting");
   share.refused = null;
   // What adb kept of a tunnel gone (the phone's adbd on another port now) goes first.
-  await run(adb, ["disconnect", serial], ADB_QUICK).catch(() => {});
+  await run(adb, ["disconnect", serial], shares.limits.quick).catch(() => {});
   try {
-    await run(adb, ["connect", serial], ADB_TIMEOUT);
+    await run(adb, ["connect", serial], shares.limits.long);
   } catch (error) {
     return share.set("failed", (error as Error).message);
   }
@@ -440,7 +445,7 @@ async function pair(shares: Shares, share: Share, typed: string, lang: Lang): Pr
   const port = (server.address() as net.AddressInfo).port;
   const conn = share.conn;
   const done = new AbortController();
-  const timer = wall.after(ADB_TIMEOUT, () => server.close());
+  const timer = shares.limits.long === null ? () => {} : wall.after(shares.limits.long, () => server.close());
   server.once("connection", (socket) => {
     timer();
     server.close();
@@ -448,7 +453,7 @@ async function pair(shares: Shares, share: Share, typed: string, lang: Lang): Pr
   });
   let said: string;
   try {
-    said = await run(adb, ["pair", `127.0.0.1:${port}`, code], ADB_TIMEOUT);
+    said = await run(adb, ["pair", `127.0.0.1:${port}`, code], shares.limits.long);
   } finally {
     timer();
     server.close();
@@ -465,7 +470,7 @@ async function grant(shares: Shares, share: Share, lang: Lang): Promise<string> 
   if (!pkg) throw new Error(tr(lang, "station.adb.noPackage"));
   const adb = shares.adb();
   if (adb === null) throw new Error(tr(lang, "station.adb.noAdb"));
-  const said = await run(adb, ["-s", share.serial(), "shell", "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"], ADB_TIMEOUT);
+  const said = await run(adb, ["-s", share.serial(), "shell", "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"], shares.limits.long);
   // Quiet is granted; a refusal says why (MIUI and ColorOS want 「USB 调试（安全设置）」 on).
   if (said !== "") throw new Error(tr(lang, "station.adb.grantFailed", { said }));
   return tr(lang, "station.adb.granted");
@@ -489,17 +494,20 @@ export function adbPath(): string | null {
 
 /// What adb says to `args` (out, then err), within `timeout`. Said whatever its exit; fails only if it could not be
 /// started or did not answer in time.
-export function run(adb: string, args: string[], timeout: number): Promise<string> {
+export function run(adb: string, args: string[], timeout: number | null): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(adb, args, { stdio: ["ignore", "pipe", "pipe"] });
     const out: Buffer[] = [];
     const err: Buffer[] = [];
     child.stdout.on("data", (b) => out.push(b));
     child.stderr.on("data", (b) => err.push(b));
-    const timer = wall.after(timeout, () => {
-      child.kill("SIGKILL");
-      reject(new Error("adb did not answer in time"));
-    });
+    const timer =
+      timeout === null
+        ? () => {}
+        : wall.after(timeout, () => {
+            child.kill("SIGKILL");
+            reject(new Error("adb did not answer in time"));
+          });
     child.on("error", (error) => {
       timer();
       reject(error);
