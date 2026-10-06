@@ -640,7 +640,9 @@ test("a_link_leaves_a_relay_found_slow_for_one_that_brings_replies_sooner", { sk
   assert.ok(sameRelay(mesh.current(id)!.via(), slowB), `${mesh.current(id)!.via()}`);
   const throughB = await big();
   assert.ok(mesh.speed(id, slowB) !== null, "how fast b is, seen");
-  await runner.run(mesh.remeasure(id));
+  // Measured again, as the core does every few minutes: a move whose link through a did not open in time (a busy
+  // machine: Linux CI, 2026-10-06) is made at the next measuring.
+  for (let i = 0; i < 3 && !sameRelay(mesh.current(id)!.via(), a); i++) await runner.run(mesh.remeasure(id));
   assert.ok(sameRelay(mesh.current(id)!.via(), a), `still through ${mesh.current(id)!.via()}: ${JSON.stringify(mesh.measured(id))}`);
   const throughA = await big();
   assert.ok(throughA < throughB, `the reply through a ${throughA} ms, through b ${throughB} ms`);
