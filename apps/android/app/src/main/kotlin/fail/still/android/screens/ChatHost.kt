@@ -391,8 +391,9 @@ internal fun Modifier.landingFile(path: String): Modifier {
     val f = LocalFlight.current
     val host = LocalFlightHost.current
     val file = f?.files?.firstOrNull { it.path == path }
-    val layer = rememberGraphicsLayer()
     if (f == null || host == null || file == null) return this
+    // Only while flown into: the chat's other files have no layer of their own.
+    val layer = rememberGraphicsLayer()
     file.layer = layer
     return onGloballyPositioned {
         file.to = it
