@@ -41,6 +41,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 - Kotlin 层未捕获的异常：崩溃时把异常（PostHog 的 `$exception_list` 格式，带 java 帧）写到 app 目录 `files/crashes/<ms>.json`，系统自己不留。
 - 每次启动、有账号登录后：读系统的进程退出记录（ApplicationExitInfo，Android 11 起），从上次报到的地方（`crashes.since`；第一次往回看 7 天）起，把闪退、native 崩溃（Hermes、JNI 的 abort）和 ANR 一批发到 `/batch/`。native 崩溃带系统给的 tombstone 解成的文字（崩溃线程的堆栈、abort message、进程最后 50 条 warning/error 日志），ANR 带线程 dump，都放在 `trace` 属性里；这两种没有 PostHog 认的帧，用 `$exception_fingerprint`（信号或 ANR 加栈顶几帧）归 issue。每条的 `uuid` 由时间和 pid 定，重发不会重复。
+- 核心死掉重启（`StillFailCore.onFailed`）也当场报一条 `CoreFailed`（`$exception_level: error`，`reason: core_failed`，值是核心给的原因），和网页版的 CoreFailed 一样；用的是最近一次上报时的账号，还没有就是 `android-anonymous`。
 - release 包关了 R8 的混淆（`proguard-rules.pro` 的 `-dontobfuscate`，保留行号），堆栈里是原名，不用上传 mapping。
 - 构建时由 `STILLFAIL_POSTHOG` 指向的文件给 key（`app/build.gradle.kts` → `BuildConfig.POSTHOG_KEY`）；CI 的安卓发布从 `POSTHOG_JSON` 写这个文件（`.github/release.sh`）。没有 key 的构建（本地、开发）什么都不发。
 

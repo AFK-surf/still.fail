@@ -58,6 +58,9 @@ class StillFailCore internal constructor(
         private val started = Mutex()
         private var instance: StillFailCore? = null
 
+        /** Told why each time the core dies and is started again (the app reports it: Crashes.kt), from the core's lane. */
+        @Volatile var onFailed: ((String) -> Unit)? = null
+
         /**
          * One per process. `cloudOrigin` e.g. "https://app.still.fail" (the emulator reaches a dev cloud at
          * http://10.0.2.2:8787); `beta`: the beta app's core (client/core-ts Host.beta).
@@ -256,6 +259,7 @@ class StillFailCore internal constructor(
 
     private fun restart(reason: String) {
         android.util.Log.e("StillFailCore", "the core failed: $reason")
+        try { onFailed?.invoke(reason) } catch (_: Exception) { }
         // Outgoing FFI calls may still hold this engine. Dispose on that same FIFO lane, after those calls,
         // rather than racing a native receive with freeing its pointer on the state lane.
         engine?.let { previous -> scope.launch(outgoing) { previous.close() } }

@@ -73,6 +73,16 @@ std::string quote(const std::string& s) {
 
 class Engine;
 
+/// What the shell answers through. Stopping the shell (sf_shell_stop, tokio's shutdown_background) does not wait for
+/// what it is doing: a task already running, or a disk read on its blocking threads, still answers after the engine is
+/// gone (a crash on a destroyed mutex after a core restart, 2026-10). So the shell holds this rather than the engine:
+/// stopping takes the engine out of it, and an answer after that is dropped. It outlives the shell's threads, which
+/// nothing waits for, so it is never freed: a few bytes per restart.
+struct Gate {
+  std::mutex mutex;
+  Engine* engine;
+};
+
 /// Bytes the runtime keeps as its script.
 class Bytes : public jsi::Buffer {
  public:
@@ -121,6 +131,11 @@ class Engine {
     }
     wake_.notify_all();
     pthread_join(thread_, nullptr);
+    {
+      // An answer under way finishes posting first; none reaches this engine after.
+      std::lock_guard<std::mutex> lock(gate_->mutex);
+      gate_->engine = nullptr;
+    }
     if (shell_) sf_shell_stop(shell_);
     JNIEnv* env = nullptr;
     if (vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK && env) env->DeleteGlobalRef(listener_);
@@ -253,14 +268,17 @@ class Engine {
   }
 
   static void onComplete(void* ctx, uint64_t id, const uint8_t* json, size_t jl, const uint8_t* error, size_t el, const uint8_t* bytes, size_t bl, uint8_t has) {
-    auto* self = static_cast<Engine*>(ctx);
+    auto* gate = static_cast<Gate*>(ctx);
+    std::lock_guard<std::mutex> lock(gate->mutex);
+    Engine* self = gate->engine;
+    if (!self) return;
     self->completed(id, std::string(reinterpret_cast<const char*>(json), jl), std::string(reinterpret_cast<const char*>(error), el),
                     has ? std::string(reinterpret_cast<const char*>(bytes), bl) : std::string(), has != 0);
   }
 
   void run() {
     env();
-    shell_ = sf_shell_start(dataDir_.c_str(), &Engine::onComplete, this);
+    shell_ = sf_shell_start(dataDir_.c_str(), &Engine::onComplete, gate_);
     if (!shell_) {
       fatal("the core's files cannot be kept: " + dataDir_);
       return;
@@ -332,6 +350,7 @@ class Engine {
   std::string script_, url_, dataDir_, cloudOrigin_;
   bool beta_;
   void* shell_ = nullptr;
+  Gate* gate_ = new Gate{{}, this};
   pthread_t thread_{};
   std::mutex mutex_;
   std::condition_variable wake_;
