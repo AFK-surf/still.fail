@@ -359,8 +359,9 @@ export async function tunnel(conn: Connection, kind: string, socket: net.Socket,
     const [a, b] = await Promise.allSettled([up, down]);
     for (const r of [a, b]) if (r.status === "rejected") throw r.reason;
   } catch (error) {
+    // Why is known (to its offer) before adb hears the socket end: its stream's reset is not waited for.
     socket.destroy();
-    await stream?.reset(0).catch(() => {});
+    void stream?.reset(0).catch(() => {});
     throw error;
   } finally {
     signal?.removeEventListener("abort", abort);

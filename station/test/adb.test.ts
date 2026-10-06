@@ -1,5 +1,5 @@
 // Phones lent to the station's agents (mesh/adb.ts, from the Rust station's adb.rs): the Rust tests, the offer's states
-// and asks over in-memory streams, and an offer from a fake phone over a real mesh connection, its tunnels reaching
+// and asks over in-memory streams, and an offer from a fake phone over a connection in memory, its tunnels reaching
 // the phone, with a fake adb (test/fake/adb) — never a real device.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
@@ -13,7 +13,7 @@ import { Clock, Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { GRACE, PORTS, SETTLE, Shares, answerAdb, bind, isPackage, text } from "../src/mesh/adb.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
-import { loadMesh, type Connection, type Stream } from "../src/mesh/native.ts";
+import type { Connection, Stream } from "../src/mesh/native.ts";
 import { Reader, writeLine } from "../src/mesh/serve.ts";
 import { script } from "./accounts-fakes.ts";
 
@@ -254,20 +254,95 @@ test("the station removed from its workspace ends offers at once", async () => {
   await time.close();
 });
 
-// ---- Over a real mesh connection.
+// ---- Over a connection in memory, as the mesh carries one: streams opened by either end, each a pair of ordered byte
+// streams. (A real QUIC connection on 127.0.0.1 can be lost when the machine is loaded; what is tested here is the
+// offer, its tunnels and asks, not the transport, which the mesh's own tests cover.)
 
-const ALPN = Buffer.from("stillfail/admin/1");
+/// One end of a stream in memory; what it writes, its `peer` reads.
+class End implements Stream {
+  peer!: End;
+  private queue: (Buffer | null)[] = [];
+  private waiting: ((b: Buffer | null) => void) | null = null;
+  private broken = false;
+  private stop!: () => void;
+  private stopping = new Promise<void>((r) => (this.stop = r));
+  take(b: Buffer | null) {
+    const w = this.waiting;
+    this.waiting = null;
+    if (w) w(b);
+    else this.queue.push(b);
+  }
+  async read() {
+    if (this.queue.length > 0) return this.queue.shift()!;
+    if (this.broken) return null;
+    return new Promise<Buffer | null>((r) => (this.waiting = r));
+  }
+  async write(bytes: Buffer) {
+    if (this.broken) throw new Error("stream reset");
+    this.peer.take(Buffer.from(bytes));
+  }
+  async finish() {
+    this.peer.take(null);
+  }
+  stopped() {
+    return this.stopping;
+  }
+  /// Stops reading (and sending): the other end's writes fail from then, and it hears so.
+  async reset() {
+    for (const end of [this, this.peer]) {
+      end.broken = true;
+      end.take(null);
+    }
+    this.peer.stop();
+  }
+}
 
-/// A station and a phone on the mesh addon, on 127.0.0.1, relays off; the station's side answering `adb` requests,
-/// the phone's taking tunnels to an "adbd" that answers each line `phone:<line>` (or turning them down).
+/// Two ends of a connection: what one opens, the other accepts.
+function connected(stationId: string, phoneId: string): [Connection, Connection] {
+  const make = (id: string) => {
+    const incoming: (Stream | null)[] = [];
+    let waiting: ((s: Stream | null) => void) | null = null;
+    let closed = false;
+    const conn = {
+      other: null as any,
+      give(s: Stream | null) {
+        const w = waiting;
+        waiting = null;
+        if (w) w(s);
+        else incoming.push(s);
+      },
+      remoteId: () => id,
+      alpn: () => Buffer.from("stillfail/admin/1"),
+      via: () => null,
+      acceptBi: async () => (incoming.length > 0 ? incoming.shift()! : closed ? null : new Promise<Stream | null>((r) => (waiting = r))),
+      openBi: async () => {
+        if (closed) throw new Error("connection lost");
+        const [mine, theirs] = [new End(), new End()];
+        mine.peer = theirs;
+        theirs.peer = mine;
+        conn.other.give(theirs);
+        return mine;
+      },
+      close: () => {
+        closed = true;
+        conn.give(null);
+      },
+      isClosed: () => closed,
+      closed: () => new Promise<string>(() => {}),
+    };
+    return conn;
+  };
+  // Each end's remoteId is the other's.
+  const [atStation, toStation] = [make(phoneId), make(stationId)];
+  atStation.other = toStation;
+  toStation.other = atStation;
+  return [atStation as unknown as Connection, toStation as unknown as Connection];
+}
+
+/// A station and a phone over a connection in memory: the station's side answering `adb` requests, the phone's taking
+/// tunnels to an "adbd" that answers each line `phone:<line>` (or turning them down).
 async function link(shares: Shares) {
-  const mesh = loadMesh();
-  const bindOne = () => mesh.bind({ secretKey: randomBytes(32), alpns: [ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
-  const [station, phone] = await Promise.all([bindOne(), bindOne()]);
-  const port = station.sockets()[0]!.split(":").at(-1);
-  const accepted = station.accept();
-  const toStation = await phone.connect({ id: station.id(), ips: [`127.0.0.1:${port}`] }, ALPN);
-  const atStation = (await accepted)!;
+  const [atStation, toStation] = connected("ab".repeat(32), "cd".repeat(32));
   void (async () => {
     for (let s = await atStation.acceptBi(); s; s = await atStation.acceptBi()) {
       const stream = s;
@@ -315,7 +390,7 @@ async function link(shares: Shares) {
     const head = await reader.line();
     return { head, body: JSON.parse((await reader.rest()).toString()) };
   };
-  return { ask, answer, tunnels, phoneSide, close: () => Promise.all([station.close(), phone.close()]) };
+  return { ask, answer, tunnels, phoneSide, close: async () => [atStation, toStation].forEach((c) => c.close(0, "")) };
 }
 
 /// The bytes a TCP connection to `port` hears back to `line`, and whether it then ends.
@@ -364,6 +439,10 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
     assert.ok(adb.dialed().includes("phone:PAIR 123456"));
     assert.ok(mesh.tunnels.includes("pair"));
     assert.ok(adb.calls().some((c) => c[0] === "pair" && c[2] === "123456"));
+    // Paired, it connects anew in the background: its offer says so once that is over (before the phone goes, which
+    // would otherwise find it under way).
+    do state = await reader.line();
+    while (state.adb !== "connected");
     const wrong = await mesh.answer({ op: "pair", code: "12345", phone: PHONE }, { "stillfail-lang": "en" });
     assert.deepEqual(wrong, { head: { status: 422, headers: { "content-type": "application/json" } }, body: { message: "The pairing code is 6 digits" } });
     const granted = await mesh.answer({ op: "grant", phone: PHONE });

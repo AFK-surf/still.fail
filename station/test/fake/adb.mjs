@@ -21,12 +21,11 @@ function dial(target, line) {
   return new Promise((resolve) => {
     const socket = net.connect({ host, port });
     let got = "";
+    // No time limit of its own: it answers once the other end did, or closed (the station's limit is its own).
     const done = (answer) => {
-      clearTimeout(timer);
       socket.destroy();
       resolve(answer);
     };
-    const timer = setTimeout(() => done(null), 3000);
     socket.on("connect", () => socket.write(line + "\n"));
     socket.on("data", (b) => {
       got += b;
