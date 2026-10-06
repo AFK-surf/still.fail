@@ -640,10 +640,11 @@ test("a_link_leaves_a_relay_found_slow_for_one_that_brings_replies_sooner", { sk
   assert.ok(sameRelay(mesh.current(id)!.via(), slowB), `${mesh.current(id)!.via()}`);
   const throughB = await big();
   assert.ok(mesh.speed(id, slowB) !== null, "how fast b is, seen");
-  // Measured again, as the core does every few minutes: a move whose link through a did not open in time (a busy
-  // machine: Linux CI, 2026-10-06) is made at the next measuring.
+  // Measured again, as the core does every few minutes. Once on Linux CI (2026-10-06) it stayed on b after one
+  // measuring: either b's speed was taken for faster than it is (then measuring again changes nothing: the fastest
+  // seen counts) or the link through a did not open in time (then it does). What failing says tells which.
   for (let i = 0; i < 3 && !sameRelay(mesh.current(id)!.via(), a); i++) await runner.run(mesh.remeasure(id));
-  assert.ok(sameRelay(mesh.current(id)!.via(), a), `still through ${mesh.current(id)!.via()}: ${JSON.stringify(mesh.measured(id))}`);
+  assert.ok(sameRelay(mesh.current(id)!.via(), a), `still through ${mesh.current(id)!.via()}: ${JSON.stringify({ ...mesh.measured(id), speedB: mesh.speed(id, slowB), throughB })}`);
   const throughA = await big();
   assert.ok(throughA < throughB, `the reply through a ${throughA} ms, through b ${throughB} ms`);
   await runner.run(mesh.close());
