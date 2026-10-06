@@ -18,18 +18,24 @@ test("the page's background has nothing to offer: no menu", () => {
   assert.deepEqual(menu({}), []);
 });
 
-test("a chat's image is copied; its address, the page's own, is not offered", () => {
+test("a chat's image is copied, the whole of it its thumbnail stands in for; its address, the page's own, is not offered", () => {
   const items = menu({ mediaType: "image", srcURL: "blob:app://stillfail/1f0e", hasImageContents: true });
-  assert.deepEqual(items, [{ key: "desktop.contextMenu.copyImage", action: { do: "copyImage" }, enabled: true }]);
+  assert.deepEqual(items, [{ key: "desktop.contextMenu.copyImage", action: { do: "copyImage", whole: true }, enabled: true }]);
   // Not loaded yet, or failed to: nothing to copy.
   assert.equal(menu({ mediaType: "image", srcURL: "blob:app://stillfail/1f0e" })[0]?.enabled, false);
+  // Run from a dev server (dev.sh HMR=1), the page's pictures are blob:http://….
+  const dev = { app: "http://192.168.1.5:5173", cloud: "https://app.still.fail" };
+  assert.deepEqual(menu({ mediaType: "image", srcURL: "blob:http://192.168.1.5:5173/1f0e", hasImageContents: true }, dev)[0]?.action, { do: "copyImage", whole: true });
 });
 
-test("an image on the web is copied, or its address", () => {
+test("an image on the web is copied as shown, or its address", () => {
   const src = "https://lh3.googleusercontent.com/a/photo";
   const items = menu({ mediaType: "image", srcURL: src, hasImageContents: true });
   assert.deepEqual(names(items), ["copyImage", "copyImageAddress"]);
+  assert.deepEqual(items[0]?.action, { do: "copyImage", whole: false });
   assert.deepEqual(items[1]?.action, { do: "copyText", text: src });
+  // A picture of a page in a preview (a station's web service) is that page's, not one of the app's.
+  assert.deepEqual(menu({ mediaType: "image", srcURL: "blob:stillfail-preview://p3000-0123456789ab/77aa", hasImageContents: true })[0]?.action, { do: "copyImage", whole: false });
 });
 
 test("a link on the web opens in the browser or is copied; the word macOS selects under the pointer is copied", () => {

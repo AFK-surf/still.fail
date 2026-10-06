@@ -522,6 +522,12 @@ export interface StillFailDesktop {
   onResume?(listener: (away: number) => void): () => void;
   /** The computer's network became another; the returned function stops listening. An app from before this has none. */
   onNetwork?(listener: () => void): () => void;
+  /**
+   * The app asks for the image a picture right-clicked stands in for (a chat's thumbnail), to copy it whole
+   * (web/src/wholeImages.ts): `answer` gives it as a PNG, or null to copy the picture as shown. The returned function
+   * stops answering. An app from before this has none.
+   */
+  onImageWanted?(answer: (src: string) => Promise<Uint8Array | null>): () => void;
   /** Says which language the page speaks, for the app's menus and dialogs. An app from before languages has none. */
   language?(lang: "zh" | "en"): void;
 }

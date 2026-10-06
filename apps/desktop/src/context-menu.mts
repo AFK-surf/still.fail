@@ -18,7 +18,8 @@ export interface Clicked {
 /** What an item does: an edit of the page's, the image under the pointer copied, words to the clipboard, a page in the system browser. */
 export type Action =
   | { do: "edit"; command: "cut" | "copy" | "paste" | "selectAll" }
-  | { do: "copyImage" }
+  /** `whole`: the picture may stand in for an image the page has whole (a chat's thumbnail), which is copied instead. */
+  | { do: "copyImage"; whole: boolean }
   | { do: "copyText"; text: string }
   | { do: "open"; url: string };
 
@@ -43,8 +44,9 @@ export function contextMenu(clicked: Clicked, { app, cloud }: { app: string; clo
   else if (web(link)) groups.push([item("desktop.contextMenu.openLink", { do: "open", url: link }), item("desktop.contextMenu.copyLink", { do: "copyText", text: link })]);
   if (clicked.mediaType === "image") {
     groups.push([
-      // One that has not loaded (or failed to) has nothing to copy yet.
-      item("desktop.contextMenu.copyImage", { do: "copyImage" }, clicked.hasImageContents),
+      // One that has not loaded (or failed to) has nothing to copy yet. One of the page's own (blob:) may be a chat's
+      // thumbnail (web/src/wholeImages.ts).
+      item("desktop.contextMenu.copyImage", { do: "copyImage", whole: clicked.srcURL.startsWith(`blob:${app}/`) }, clicked.hasImageContents),
       // A chat's images are the page's own (blob:), an address nothing outside it can read.
       ...(web(clicked.srcURL) ? [item("desktop.contextMenu.copyImageAddress", { do: "copyText", text: clicked.srcURL })] : []),
     ]);
