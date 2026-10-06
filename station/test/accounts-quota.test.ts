@@ -37,8 +37,8 @@ describe("allowances and renewing", { concurrency: true }, () => {
     const p = await provider(() => ({ status: 200, body }));
     const quota = await codexUsage(file, { ...URLS, chatgpt: p.base });
     assert.deepEqual(quota!.windows, [
-      { label: "5 小时", usedPercent: 30, resetsAt: 1_900_000_000_000 },
-      { label: "每周", usedPercent: 80, resetsAt: 1_900_500_000_000 },
+      { label: "5 小时", usedPercent: 30, resetsAt: 1_900_000_000_000, minutes: 300 },
+      { label: "每周", usedPercent: 80, resetsAt: 1_900_500_000_000, minutes: 10080 },
     ]);
     assert.equal(p.asked[0]!.headers.authorization, "Bearer at");
     assert.equal(p.asked[0]!.headers["chatgpt-account-id"], "acc");
@@ -65,7 +65,7 @@ describe("allowances and renewing", { concurrency: true }, () => {
 
   test("codex app-server limits and window names", () => {
     const limits = { rateLimits: { primary: { usedPercent: 12.4, windowDurationMins: 300, resetsAt: 1_900_000_000 }, secondary: null } };
-    assert.deepEqual(codexWindows(limits), [{ label: "5 小时", usedPercent: 12, resetsAt: 1_900_000_000_000 }]);
+    assert.deepEqual(codexWindows(limits), [{ label: "5 小时", usedPercent: 12, resetsAt: 1_900_000_000_000, minutes: 300 }]);
     assert.equal(windowLabel(10080, "x"), "每周");
     assert.equal(windowLabel(43200, "x"), "每月");
     assert.equal(windowLabel(2880, "x"), "2 天");

@@ -59,7 +59,7 @@ export class Accounts {
   /// Chooses the profile a session runs on (pool.ts).
   pick(candidates: Profile[], model: string | null | undefined, strict: boolean): Profile {
     const running = this.deps.running();
-    const profile = pickProfile(candidates, model, { health: (id) => this.healthOf(id), load: (id) => running.filter((p) => p === id).length, lastPicked: (id) => this.picked.get(id) ?? 0 }, strict);
+    const profile = pickProfile(candidates, model, { health: (id) => this.healthOf(id), load: (id) => running.filter((p) => p === id).length, lastPicked: (id) => this.picked.get(id) ?? 0, now: () => this.deps.clock.currentTimeMillisUnsafe() }, strict);
     this.picked.set(profile.id, this.deps.clock.currentTimeMillisUnsafe());
     return profile;
   }

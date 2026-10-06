@@ -27,7 +27,8 @@ export type ProfileCheck = {
   checkedAt: number;
 };
 
-export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null };
+/// `minutes`: how long the window is, where known (the pool weighs what is left by how soon it is lost).
+export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null; minutes?: number | null };
 export type QuotaCredits = { hasCredits: boolean; unlimited: boolean; balance: string | null };
 
 /// How much of a profile's allowance is used, where the provider says (profiles.rs ProfileQuota).

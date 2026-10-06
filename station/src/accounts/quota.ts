@@ -47,6 +47,9 @@ function percent(value: unknown): number {
   return Math.min(100, Math.max(0, rounded));
 }
 
+const DAY_MINUTES = 24 * 60;
+const WEEK_MINUTES = 7 * DAY_MINUTES;
+
 const roundHalfAway = (n: number) => Math.sign(n) * Math.round(Math.abs(n));
 
 /// A window's label. Labels are not translated: cores read them (client/core-ts/src/format.ts `window_mark`).
@@ -102,10 +105,11 @@ async function opencode(urls: Urls, key: string, lang: Lang): Promise<ProfileQuo
   const body: Json = await response.json();
   const usage = body?.usage;
   const labels: Record<string, string> = { rolling: "5 小时", weekly: "每周", monthly: "每月" };
+  const lengths: Record<string, number> = { rolling: 300, weekly: WEEK_MINUTES, monthly: 30 * DAY_MINUTES };
   // In the order the provider gave them (serde_json keeps it).
   const windows: QuotaWindow[] =
     usage !== null && typeof usage === "object" && !Array.isArray(usage)
-      ? Object.keys(usage).map((k) => ({ label: labels[k] ?? k, usedPercent: percent(usage[k]?.percent), resetsAt: at(usage[k]?.resetsAt) }))
+      ? Object.keys(usage).map((k) => ({ label: labels[k] ?? k, usedPercent: percent(usage[k]?.percent), resetsAt: at(usage[k]?.resetsAt), minutes: lengths[k] ?? null }))
       : [];
   return quota("ok", windows, null);
 }
@@ -134,7 +138,7 @@ async function claudeUsageResponse(base: string, token: string, lang: Lang): Pro
     body !== null && typeof body === "object" && !Array.isArray(body)
       ? Object.keys(body)
           .filter((k) => body[k] !== null && typeof body[k] === "object" && !Array.isArray(body[k]) && labels[k] !== undefined)
-          .map((k) => ({ label: labels[k]!, usedPercent: percent(body[k].utilization), resetsAt: at(body[k].resets_at) }))
+          .map((k) => ({ label: labels[k]!, usedPercent: percent(body[k].utilization), resetsAt: at(body[k].resets_at), minutes: k === "five_hour" ? 300 : WEEK_MINUTES }))
       : [];
   return [quota("ok", windows, null), false];
 }
@@ -152,7 +156,8 @@ export function codexWindows(result: Json): QuotaWindow[] {
   ).flatMap(([key, fallback]) => {
     const w = limits?.[key];
     if (!isObject(w)) return [];
-    return [{ label: windowLabel(typeof w.windowDurationMins === "number" ? w.windowDurationMins : null, fallback), usedPercent: percent(w.usedPercent), resetsAt: at(w.resetsAt) }];
+    const minutes = typeof w.windowDurationMins === "number" && w.windowDurationMins > 0 ? w.windowDurationMins : key === "primary" ? 300 : WEEK_MINUTES;
+    return [{ label: windowLabel(minutes, fallback), usedPercent: percent(w.usedPercent), resetsAt: at(w.resetsAt), minutes }];
   });
 }
 
@@ -226,8 +231,9 @@ export async function codexUsage(authFile: string, urls: Urls = URLS, lang: Lang
   ).flatMap(([key, fallback]) => {
     const w = body?.rate_limit?.[key];
     if (!isObject(w)) return [];
-    const seconds = typeof w.limit_window_seconds === "number" ? w.limit_window_seconds : null;
-    return [{ label: windowLabel(seconds === null ? null : seconds / 60, fallback), usedPercent: percent(w.used_percent), resetsAt: at(w.reset_at) }];
+    const seconds = typeof w.limit_window_seconds === "number" && w.limit_window_seconds > 0 ? w.limit_window_seconds : null;
+    const minutes = seconds !== null ? seconds / 60 : key === "primary_window" ? 300 : WEEK_MINUTES;
+    return [{ label: windowLabel(minutes, fallback), usedPercent: percent(w.used_percent), resetsAt: at(w.reset_at), minutes }];
   });
   return withCodexCredits(okOrUnavailable(windows, tr(lang, "station.quota.chatgptNoWindows")), body, body?.rate_limit_reset_credits);
 }

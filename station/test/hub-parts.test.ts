@@ -16,7 +16,7 @@ import { nextTsAt } from "../src/sessions/internal.ts";
 import { type LiveMessage, LiveHub } from "../src/sessions/live.ts";
 import { prepare } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
-import { availableEfforts, commonEfforts, pickProfile, serves } from "../src/sessions/pool.ts";
+import { availableEfforts, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
 import { spelling } from "../src/sessions/config.ts";
 import { settle } from "./hub-fakes.ts";
 
@@ -306,7 +306,7 @@ const quota = (used: number) => ({ state: "ok", windows: [{ label: "5 小时", u
 test("the pool skips broken, spent and unfit profiles, then prefers headroom, then fewer sessions", () => {
   const [a, b, c, d] = [profile("a", ["m1"]), profile("b", ["m1"]), profile("c", ["m1", "m2"]), profile("d", ["m2"])];
   const health: Record<string, any> = { a: { check: ok("failed"), quota: quota(0) }, b: { check: ok("ok"), quota: quota(100) }, c: { check: ok("ok"), quota: quota(60) }, d: { check: ok("ok"), quota: quota(20) } };
-  const signals = (load: Record<string, number> = {}, picked: Record<string, number> = {}) => ({ health: (id: string) => health[id], load: (id: string) => load[id] ?? 0, lastPicked: (id: string) => picked[id] ?? 0 });
+  const signals = (load: Record<string, number> = {}, picked: Record<string, number> = {}) => ({ health: (id: string) => health[id], load: (id: string) => load[id] ?? 0, lastPicked: (id: string) => picked[id] ?? 0, now: () => 0 });
   const all = [a, b, c, d];
   assert.equal(pickProfile(all, "m1", signals(), true).id, "c", "a failed, b spent, d lacks m1");
   assert.equal(pickProfile(all, "m2", signals(), true).id, "d", "most headroom");
@@ -319,10 +319,64 @@ test("the pool skips broken, spent and unfit profiles, then prefers headroom, th
   assert.equal(pickProfile([a, c], "m9", signals(), false).id, "c", "a connect's binding still runs on its healthy profiles");
 });
 
+test("the pool spends first what would be lost: a week refilling within a day, then the fastest to spend", () => {
+  const now = 1_791_270_331_000;
+  const hours = (h: number) => now + h * 3_600_000;
+  const windows = (five: [number, number], week: [number, number]) => ({
+    state: "ok",
+    windows: [
+      { label: "5 小时", usedPercent: five[0], resetsAt: hours(five[1]), minutes: 300 },
+      { label: "每周", usedPercent: week[0], resetsAt: hours(week[1]), minutes: 7 * 24 * 60 },
+    ],
+    detail: null,
+    checkedAt: 0,
+  });
+  // As the station's accounts were on 2026-10-06: cuesurf3 and cuesurf4 tied on their tightest window (2%), so they
+  // took turns, though cuesurf4's week, nearly all left, refilled within a day.
+  const health: Record<string, any> = {
+    machine: { check: ok("ok"), quota: windows([48, 1.1], [38, 100.9]) },
+    s2: { check: ok("ok"), quota: windows([17, 1.1], [41, 127.9]) },
+    s3: { check: ok("ok"), quota: windows([2, 1.7], [0, 39.6]) },
+    s4: { check: ok("ok"), quota: windows([2, 2.4], [1, 22.9]) },
+  };
+  const all = ["machine", "s2", "s3", "s4"].map((id) => profile(id, ["m"]));
+  const signals = (load: Record<string, number> = {}, picked: Record<string, number> = {}) => ({ health: (id: string) => health[id], load: (id: string) => load[id] ?? 0, lastPicked: (id: string) => picked[id] ?? 0, now: () => now });
+  const order = (s = signals()) => {
+    const left = [...all];
+    const out: string[] = [];
+    while (left.length > 0) {
+      const p = pickProfile(left, "m", s, true);
+      out.push(p.id);
+      left.splice(left.indexOf(p), 1);
+    }
+    return out;
+  };
+  assert.deepEqual(order(), ["s4", "s3", "machine", "s2"], "s4's week refills within a day; then left × length ÷ time to refill");
+  assert.equal(pickProfile(all, "m", signals({ s4: 3 }, { s4: now }), true).id, "s4", "more sessions or picked last does not take it off");
+  const s4 = urgency(health.s4.quota, now);
+  assert.deepEqual([s4.crowded, s4.soon], [false, true]);
+  assert.ok(Math.abs(s4.pace - (0.99 * 168) / 22.9) < 1e-9, "left × length ÷ time to refill");
+  // The soon one is preferred even over a faster pace: what is left of it is lost tomorrow.
+  health.s3 = { check: ok("ok"), quota: windows([2, 1.7], [0, 25]) };
+  health.s4 = { check: ok("ok"), quota: windows([2, 2.4], [90, 20]) };
+  assert.ok(urgency(health.s3.quota, now).pace > urgency(health.s4.quota, now).pace);
+  assert.equal(pickProfile(all, "m", signals(), true).id, "s4");
+  // Nearly full five hours: last, whatever its week.
+  health.s4 = { check: ok("ok"), quota: windows([85, 2.4], [1, 22.9]) };
+  assert.deepEqual(order(), ["s3", "machine", "s2", "s4"]);
+  // Used up this week, refilling soon: nothing left to lose, so not soon.
+  health.s4 = { check: ok("ok"), quota: windows([2, 2.4], [100, 22.9]) };
+  assert.equal(urgency(health.s4.quota, now).soon, false);
+  // Equal allowances: fewer sessions, then the one picked least recently.
+  for (const id of ["s3", "s4"]) health[id] = { check: ok("ok"), quota: windows([2, 2], [0, 30]) };
+  assert.equal(pickProfile([all[2]!, all[3]!], "m", signals({ s3: 1 }), true).id, "s4");
+  assert.equal(pickProfile([all[2]!, all[3]!], "m", signals({}, { s3: 1, s4: 2 }), true).id, "s3");
+});
+
 test("a model is served however a profile spells it", () => {
   const [direct, router] = [profile("direct", ["gpt-6-astra"]), profile("router", ["openai/gpt-6-astra"])];
   const health: Record<string, any> = { direct: { check: ok("ok"), quota: quota(100) }, router: { check: ok("ok"), quota: quota(10) } };
-  const picked = pickProfile([direct, router], "gpt-6-astra", { health: (id) => health[id], load: () => 0, lastPicked: () => 0 }, true);
+  const picked = pickProfile([direct, router], "gpt-6-astra", { health: (id) => health[id], load: () => 0, lastPicked: () => 0, now: () => 0 }, true);
   assert.equal(picked.id, "router", "the direct account is spent; the router's spelling is the same model");
   assert.equal(spelling(picked, "gpt-6-astra"), "openai/gpt-6-astra", "and it runs as the router spells it");
   assert.equal(spelling(direct, "openai/gpt-6-astra"), "gpt-6-astra");
