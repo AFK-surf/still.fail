@@ -2668,6 +2668,10 @@ data class OpenChat (
 	val key: String
 )
 
+/// What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide
+/// screen the decisions waiting for the viewer (奏) in place of the chats.
+typealias ListFilter = String
+
 /// How the pages look: as the system does (the default), or always light, or always dark.
 typealias Appearance = String
 
@@ -2685,6 +2689,9 @@ data class PrefsView (
 	/// The wide screen's sidebar shows the decisions waiting for the viewer (奏) in place of the chats; never with
 	/// `only_mine` or `only_watching`.
 	val onlyDecisions: Boolean? = null,
+	/// The list filter chosen in each workspace, by workspace; one not there goes by `only_mine`, `only_watching` and
+	/// `only_decisions` (one filter for all, as devices kept it before).
+	val listFilter: Map<String, ListFilter>? = null,
 	val appearance: Appearance? = null,
 	val rowPicture: RowPictureSetting? = null,
 	/// Times are shown as dates rather than "3 分钟前".

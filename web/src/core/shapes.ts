@@ -2640,6 +2640,12 @@ export interface OpenChat {
 	key: string;
 }
 
+/**
+ * What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide
+ * screen the decisions waiting for the viewer (奏) in place of the chats.
+ */
+export type ListFilter = "all" | "mine" | "watching" | "decisions";
+
 /** How the pages look: as the system does (the default), or always light, or always dark. */
 export type Appearance = "system" | "light" | "dark";
 
@@ -2660,6 +2666,11 @@ export interface PrefsView {
 	 * `only_mine` or `only_watching`.
 	 */
 	onlyDecisions?: boolean;
+	/**
+	 * The list filter chosen in each workspace, by workspace; one not there goes by `only_mine`, `only_watching` and
+	 * `only_decisions` (one filter for all, as devices kept it before).
+	 */
+	listFilter?: Record<string, ListFilter>;
 	appearance?: Appearance;
 	rowPicture?: RowPictureSetting;
 	/** Times are shown as dates rather than "3 分钟前". */

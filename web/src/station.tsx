@@ -2,6 +2,7 @@
 // one page shows them together. Components read the station from context: its
 // address (how the client core names it) and its base path (which prefixes links).
 import { createContext, useContext } from "react";
+import { useParams } from "react-router";
 import { setPrefs, usePrefs } from "./prefs.ts";
 
 export interface Station {
@@ -50,9 +51,16 @@ export function useLink(): (path: string) => string {
 /** Who is looking: the account's email. */
 export interface Me { id: string; email: string | null }
 
-/** The "only mine" filter, kept on this device (prefs.ts). */
+/** The workspace the page is in, from its path (/w/<workspace>/…). */
+function useWorkspaceId(): string {
+  return useParams().ws ?? "";
+}
+
+/** The "only mine" filter of the workspace in view, kept on this device (prefs.ts). */
 export function useOnlyMine(): [boolean, (value: boolean) => void] {
-  return [usePrefs().onlyMine, (onlyMine) => setPrefs({ onlyMine })];
+  const [mode, setMode] = useSidebarMode();
+  // Off while another filter is on leaves that one.
+  return [mode === "mine", (value) => { if (value) setMode("mine"); else if (mode === "mine") setMode("all"); }];
 }
 
 /** What the chat list shows: all, the viewer's (我参与的) or the watching ones (监控中), kept on this device (prefs.ts). */
@@ -66,10 +74,15 @@ export function useChatFilter(): [ChatFilter, (value: ChatFilter) => void] {
 /** What the wide screen's sidebar shows: one of the chat lists, or the decisions waiting for the viewer (奏). */
 export type SidebarMode = ChatFilter | "decisions";
 
+/**
+ * The sidebar's mode in the workspace in view: each workspace keeps its own (`listFilter`); one never chosen in goes by
+ * the one filter devices kept for all before.
+ */
 export function useSidebarMode(): [SidebarMode, (value: SidebarMode) => void] {
   const prefs = usePrefs();
-  const mode: SidebarMode = prefs.onlyDecisions ? "decisions" : prefs.onlyWatching ? "watching" : prefs.onlyMine ? "mine" : "all";
-  return [mode, (value) => setPrefs({ onlyMine: value === "mine", onlyWatching: value === "watching", onlyDecisions: value === "decisions" })];
+  const workspace = useWorkspaceId();
+  const mode: SidebarMode = prefs.listFilter[workspace] ?? (prefs.onlyDecisions ? "decisions" : prefs.onlyWatching ? "watching" : prefs.onlyMine ? "mine" : "all");
+  return [mode, (value) => setPrefs({ listFilter: { [workspace]: value } })];
 }
 
 /** People by email, from still.fail cloud's member list. */

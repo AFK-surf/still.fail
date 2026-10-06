@@ -859,6 +859,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "What is being written to a chat on this device (the `draft` topic, `draft.put`): its text as typed, the passages\nit quotes with what is said about them, and the files already up (the station keeps them in no chat until a\nmessage takes them). Files still going up are the page's own.", keepNone: true }),
   Appearance: words(["system","light","dark"], { doc: "How the pages look: as the system does (the default), or always light, or always dark.", default: "system" }),
   RowPictureSetting: words(["auto","agents","people"], { doc: "Whose pictures lead a chat's row: by how many people the scope has (the default), or always the agents', or the\npeople's.", default: "auto" }),
+  ListFilter: words(["all","mine","watching","decisions"], { doc: "What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide\nscreen the decisions waiting for the viewer (奏) in place of the chats.", default: "all" }),
   Lead: words(["agents","people"], { doc: "Whose pictures lead the rows of a list (`ChatsView::leading`)." }),
   KeptTabs: struct([
     ["tabs", vec("String")],
@@ -922,6 +923,7 @@ export const SHAPES: Record<string, Shape> = {
     ["onlyMine", "bool", { default: true, doc: "The lists show only the chats and connects the viewer takes part in." }],
     ["onlyWatching", "bool", { default: true, doc: "The chat list shows only the watching chats (监控中); never with `only_mine`." }],
     ["onlyDecisions", "bool", { default: true, doc: "The wide screen's sidebar shows the decisions waiting for the viewer (奏) in place of the chats; never with\n`only_mine` or `only_watching`." }],
+    ["listFilter", map("ListFilter"), { default: true, doc: "The list filter chosen in each workspace, by workspace; one not there goes by `only_mine`, `only_watching` and\n`only_decisions` (one filter for all, as devices kept it before)." }],
     ["appearance", "Appearance", { default: true }],
     ["rowPicture", "RowPictureSetting", { default: true }],
     ["absoluteTime", "bool", { default: true, doc: "Times are shown as dates rather than \"3 分钟前\"." }],

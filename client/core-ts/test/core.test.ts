@@ -377,6 +377,16 @@ test("prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over", asyn
   set(24, { onlyMine: true });
   await host.settle();
   apply(host, values);
+  // Each workspace keeps its own filter; the one-for-all fields stay as they were for the workspaces not chosen in.
+  set(25, { listFilter: { w1: "watching", w2: "decisions" } });
+  set(26, { listFilter: { w2: "all" } });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).listFilter, { w1: "watching", w2: "all" });
+  assert.equal(v(values, 1).onlyMine, true);
+  set(27, { listFilter: { w1: "everything" } });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 27).length, 1);
   set(3, { lastChat: { ws: null } });
   set(4, { fill: true, appearance: "light", rowPicture: "people", lastChat: { w1: "/w/w1/s/st/chats/old", other: "/w/other/new" } });
   await host.settle();

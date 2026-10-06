@@ -284,13 +284,18 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
         setPrefs(shown, buildJsonObject { put("language", value) })
     }
 
-    val onlyMine: Boolean get() = kept.onlyMine ?: false
-
-    /** What the chat list shows: "all", "mine" (我参与的) or "watching" (监控中); the core keeps the last two apart. */
-    val chatFilter: String get() = if (kept.onlyWatching == true) "watching" else if (onlyMine) "mine" else "all"
-    fun showChats(filter: String) = setPrefs(
-        kept.copy(onlyMine = filter == "mine", onlyWatching = filter == "watching"),
-        buildJsonObject { put("onlyMine", filter == "mine"); put("onlyWatching", filter == "watching") },
+    /**
+     * What `workspace`'s chat list shows: "all", "mine" (我参与的) or "watching" (监控中). Each workspace keeps its own;
+     * one never chosen in goes by the one filter kept for all before (奏 in the wide screen's sidebar: all here).
+     */
+    fun chatFilter(workspace: String): String {
+        val mode = kept.listFilter?.get(workspace)
+            ?: if (kept.onlyDecisions == true) "decisions" else if (kept.onlyWatching == true) "watching" else if (kept.onlyMine == true) "mine" else "all"
+        return if (mode == "mine" || mode == "watching") mode else "all"
+    }
+    fun showChats(workspace: String, filter: String) = setPrefs(
+        kept.copy(listFilter = kept.listFilter.orEmpty() + (workspace to filter)),
+        buildJsonObject { put("listFilter", buildJsonObject { put(workspace, filter) }) },
     )
 
     /** A Slack app made for a new connect on `station`, to go on with (screens/Connects.kt); null lets it go. */

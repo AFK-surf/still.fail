@@ -152,7 +152,7 @@ fun HomeScreen(current: WorkspaceEntry) {
     val allList = rememberSaveable(scope, saver = LazyListState.Saver) { top(all) }
     val mineList = rememberSaveable(scope, saver = LazyListState.Saver) { top(mine) }
     val watchingList = rememberSaveable(scope, saver = LazyListState.Saver) { top(watching) }
-    val filter = app.chatFilter
+    val filter = app.chatFilter(scope)
     val shift by animateFloatAsState(when (filter) { "mine" -> 1f; "watching" -> 2f; else -> 0f }, tween(240, easing = FastOutSlowInEasing), label = "filter")
     // The lists run under both bars, which are frosted glass over them.
     val haze = remember { HazeState() }
@@ -220,9 +220,9 @@ fun HomeScreen(current: WorkspaceEntry) {
                         // The menu is 180 wide (Sheet.kt MenuHost): its right edge under the button's.
                         val left = at.right - with(density) { 180.dp.toPx() }
                         app.menu = MenuSpec(Rect(left, at.top, left, at.bottom), listOf(
-                            MenuItem(t("android-chat.home.filter.all"), if (filter == "all") Icons.Check else null) { app.showChats("all") },
-                            MenuItem(t("android-chat.home.filter.mine"), if (filter == "mine") Icons.Check else null) { app.showChats("mine") },
-                            MenuItem(t("android-chat.home.filter.watching"), if (filter == "watching") Icons.Check else null) { app.showChats("watching") },
+                            MenuItem(t("android-chat.home.filter.all"), if (filter == "all") Icons.Check else null) { app.showChats(scope, "all") },
+                            MenuItem(t("android-chat.home.filter.mine"), if (filter == "mine") Icons.Check else null) { app.showChats(scope, "mine") },
+                            MenuItem(t("android-chat.home.filter.watching"), if (filter == "watching") Icons.Check else null) { app.showChats(scope, "watching") },
                             MenuItem(t("android-chat.home.filter.archived"), Icons.Archive) { app.push(Screen.Archive) },
                         ))
                     }.semantics { contentDescription = t("android-chat.home.filter.label", "filter" to when (filter) { "mine" -> t("android-chat.home.filter.mine"); "watching" -> t("android-chat.home.filter.watching"); else -> t("android-chat.home.filter.all") }) },

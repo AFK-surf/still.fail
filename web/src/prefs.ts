@@ -20,7 +20,7 @@ export type Prefs = Required<Omit<PrefsView, "workspace" | "invite" | "device" |
 export type PrefsPatch = { [K in keyof Omit<Prefs, "device">]?: NonNullable<Prefs[K]> extends Record<string, infer V> ? Record<string, V | null> : Prefs[K] | null };
 
 const DEFAULTS: Prefs = {
-  onlyMine: false, onlyWatching: false, onlyDecisions: false, appearance: "system", rowPicture: "auto", absoluteTime: false, keys: {}, lastChat: {}, openChat: {}, chatTabs: {}, resume: {}, stationUpdatesDismissed: {},
+  onlyMine: false, onlyWatching: false, onlyDecisions: false, listFilter: {}, appearance: "system", rowPicture: "auto", absoluteTime: false, keys: {}, lastChat: {}, openChat: {}, chatTabs: {}, resume: {}, stationUpdatesDismissed: {},
   device: { app: "", phone: false, handoff: false },
 };
 
