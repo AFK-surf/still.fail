@@ -9,6 +9,7 @@ import fail.still.android.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.WindowInsets
@@ -462,8 +463,9 @@ private fun Folding(name: String, hint: String?, meta: String?, failed: Boolean,
     val follow = LocalFollow.current
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth().clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(name, fontSize = 13.sp, color = if (failed) C.red else C.ink, fontWeight = if (hint != null) FontWeight.Medium else null, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = hint == null))
-            if (hint != null) Text(hint, fontSize = 12.sp, style = Mono, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(name, fontSize = 13.sp, color = if (failed) C.red else C.ink, fontWeight = if (hint != null) FontWeight.Medium else null, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = if (hint == null) Modifier.weight(1f) else Modifier.widthIn(max = 160.dp))
+            // The hint takes all the width the name and meta leave: two weights would cut it at half the row.
+            if (hint != null) Text(hint, fontSize = 12.sp, style = Mono, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             if (!meta.isNullOrEmpty()) Text(meta, fontSize = 11.sp, color = if (failed) C.red else C.subtle)
         }
         if (open) body()
