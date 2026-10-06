@@ -650,7 +650,9 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         val dp = window.toDp()
         if (dp >= fail.still.android.screens.WideAt) fail.still.android.screens.columnWidth(dp).toPx() else window.toFloat()
     }
-    PredictiveBackHandler(enabled = app.stack.size > 1 && app.sheet == null && app.menu == null && !fail.still.android.screens.FileViewers.open) { progress ->
+    // What is over the pages takes back first: its own handlers were added before this one (they are there from the
+    // splash; the pages only once the workspaces are read), and the last added is asked first, so this one steps aside.
+    PredictiveBackHandler(enabled = app.stack.size > 1 && app.sheet == null && app.menu == null && app.reader == null && !fail.still.android.screens.FileViewers.open) { progress ->
         val under = app.stack.getOrNull(app.stack.size - 2)
         var start: Float? = null
         var following = false

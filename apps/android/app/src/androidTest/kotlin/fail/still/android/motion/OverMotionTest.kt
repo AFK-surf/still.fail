@@ -46,6 +46,7 @@ import fail.still.android.screens.ViewerHost
 import fail.still.android.ui.C
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
+import fail.still.android.ui.ReaderSpec
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.StillFailTheme
 import java.io.ByteArrayOutputStream
@@ -160,6 +161,27 @@ class OverMotionTest {
         go.frame { rule.runOnUiThread { d.onBackPressed() } }
         go.frames(24)
         go.end()
+    }
+
+    /**
+     * Back with a history entry open in full (the reader, over everything) closes it, not the page under it: the
+     * pages' handler is added after the reader's (once the workspaces are read), so it must step aside.
+     */
+    @Test
+    fun backClosesReaderFirst() {
+        val h = Harness(rule)
+        h.fake.put(Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD)), Fixtures.chat(Fixtures.talk))
+        h.launch(listOf(Screen.Home, chat, Screen.Appearance))
+        rule.runOnUiThread { h.app.reader = ReaderSpec({ Text("记录") }) { Text("全文") } }
+        h.settle()
+        val d = rule.activity.onBackPressedDispatcher
+        rule.runOnUiThread { d.onBackPressed() }
+        h.settle()
+        assertTrue("reader closed", h.app.reader == null)
+        assertTrue("page kept: ${h.app.stack}", h.app.stack == listOf(Screen.Home, chat, Screen.Appearance))
+        rule.runOnUiThread { d.onBackPressed() }
+        h.settle()
+        assertTrue("page popped: ${h.app.stack}", h.app.stack == listOf(Screen.Home, chat))
     }
 
     private fun Harness.sheet(draggable: Boolean, height: Float) {
