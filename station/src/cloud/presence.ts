@@ -121,7 +121,7 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
       if (binary) return;
       const text = data.toString();
       if (text === "pong") answered = true;
-      else applyState(s, text);
+      else if (!tool(s, plane, socket, text)) applyState(s, text);
     });
     socket.on("close", (code) => {
       ping?.();
@@ -133,6 +133,27 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
       socket.close();
     });
   });
+
+/// A device tool request pushed on the socket (`{type: "tool", id, request}`, contract §8 presence transport): run
+/// by the mesh's tools and answered `{type: "tool_result", id, response}`. Only a provider with device tools pushes
+/// them; anything else is not a tool frame.
+function tool(s: CloudState, plane: ProviderSpec, socket: WebSocket, text: string): boolean {
+  if (!text.startsWith('{"type":"tool"')) return false;
+  let body: any;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return false;
+  }
+  if (body?.type !== "tool" || typeof body.id !== "string") return false;
+  const run = plane.tools ? s.toolCalls : null;
+  const reply = (response: unknown) => {
+    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "tool_result", id: body.id, response }));
+  };
+  if (run === null) reply({ ok: false, error: { code: "unavailable", message: "this station takes no device tools now" } });
+  else run(body.request).then(reply, (e) => reply({ ok: false, error: { code: "invalid_request", message: (e as Error).message } }));
+  return true;
+}
 
 /// The cloud says the station is out of its workspace: marked in cloud.json, kept through restarts.
 function removed(s: CloudState, code: number) {

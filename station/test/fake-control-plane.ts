@@ -48,6 +48,8 @@ export type FakeOptions = { provider: "stillfail" | "comma"; gateways?: string[]
 export class FakeControlPlane {
   readonly asked: Asked[] = [];
   readonly sockets: WebSocket[] = [];
+  /// What stations said on the presence socket besides "ping" (tool results), parsed.
+  readonly heard: any[] = [];
   readonly grant = new GrantKey();
   gateways: string[];
   origin = "";
@@ -85,7 +87,9 @@ export class FakeControlPlane {
       this.wss.handleUpgrade(req, socket, head, (ws) => {
         this.sockets.push(ws);
         ws.on("message", (data) => {
-          if (data.toString() === "ping") ws.send("pong");
+          const text = data.toString();
+          if (text === "ping") ws.send("pong");
+          else this.heard.push(JSON.parse(text));
         });
         ws.send(JSON.stringify(this.state(station)));
       });
@@ -99,6 +103,11 @@ export class FakeControlPlane {
     };
     if (this.provider === "comma") state.gateway_keys = this.gateways;
     return state;
+  }
+
+  /// A device tool request pushed as Comma does over the presence socket (contract §8, presence transport).
+  tool(id: string, request: unknown) {
+    for (const ws of this.sockets) ws.send(JSON.stringify({ type: "tool", id, request }));
   }
 
   /// The roster, gateways and the rest pushed again to every station connected.
