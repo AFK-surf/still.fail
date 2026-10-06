@@ -28,7 +28,8 @@ export class TestTime implements HostTime {
   /// What the clock read at its zero: the TestClock starts at 0, and the wall clock is this from there.
   readonly #base: number;
 
-  constructor(start = Date.now()) {
+  /// `start`: a fixed moment by default, so a test reads the same time (and day) whenever it runs.
+  constructor(start = Date.UTC(2026, 9, 6, 9, 0, 0)) {
     const scope = Effect.runSync(Scope.make());
     this.#test = Effect.runSync(Scope.provide(TestClock.make(), scope)) as TestClock.TestClock;
     this.#base = start;
