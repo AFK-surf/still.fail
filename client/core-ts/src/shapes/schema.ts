@@ -677,6 +677,7 @@ export const SHAPES: Record<string, Shape> = {
     ["line", "String"],
     ["facts", vec("String")],
     ["meters", vec("Meter")],
+    ["usage", "String", { doc: "Memory and disk in a line, what is used and what is left: 内存 12.3 / 32 GB · 磁盘 剩 45.2 / 460 GB." }],
     ["emberText", "String"],
   ], { doc: "The machine a station runs on, with it in words." }),
   SessionDetail: struct([

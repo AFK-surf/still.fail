@@ -2217,6 +2217,8 @@ export interface Host {
 	line: string;
 	facts: string[];
 	meters: Meter[];
+	/** Memory and disk in a line, what is used and what is left: 内存 12.3 / 32 GB · 磁盘 剩 45.2 / 460 GB. */
+	usage: string;
 	emberText: string;
 }
 

@@ -716,17 +716,16 @@ export function host(h: J): void {
     days > 0 ? t("core-views.present.host.up_days_hours", { days, hours }) : t("core-views.present.host.up_hours", { hours }),
   ];
   const remaining = (bytes: number) => t("core-views.present.host.remaining", { size: format.fixed1(Math.max(bytes, 0) / GIB) });
-  o.meters = [
-    cpu,
-    {
-      ...meter(t("core-views.present.host.memory"), t("core-views.present.host.memory_short"), memTotal > 0 ? (memUsed / memTotal) * 100 : 0, `${format.gb1(memUsed)} / ${format.gb1(memTotal)}`, swap > 0 ? `swap ${format.gb1(swap)}` : null),
-      remaining: remaining(memTotal - memUsed),
-    },
-    {
-      ...meter(t("core-views.present.host.disk"), t("core-views.present.host.disk_short"), diskTotal > 0 ? ((diskTotal - diskFree) / diskTotal) * 100 : 0, t("core-views.present.host.disk_value", { free: format.gb1(diskFree), total: format.gb1(diskTotal) }), null),
-      remaining: remaining(diskFree),
-    },
-  ];
+  const memory = {
+    ...meter(t("core-views.present.host.memory"), t("core-views.present.host.memory_short"), memTotal > 0 ? (memUsed / memTotal) * 100 : 0, `${format.gb1(memUsed)} / ${format.gb1(memTotal)}`, swap > 0 ? `swap ${format.gb1(swap)}` : null),
+    remaining: remaining(memTotal - memUsed),
+  };
+  const disk = {
+    ...meter(t("core-views.present.host.disk"), t("core-views.present.host.disk_short"), diskTotal > 0 ? ((diskTotal - diskFree) / diskTotal) * 100 : 0, t("core-views.present.host.disk_value", { free: format.gb1(diskFree), total: format.gb1(diskTotal) }), null),
+    remaining: remaining(diskFree),
+  };
+  o.meters = [cpu, memory, disk];
+  o.usage = [memory, disk].map((m) => `${m.label} ${m.value}`).join(" · ");
   o.emberText = `${brand.name()} ${format.round(n("emberRssBytes") / 1024 ** 2)} MB`;
 }
 

@@ -2255,6 +2255,8 @@ data class Host (
 	val line: String,
 	val facts: List<String>,
 	val meters: List<Meter>,
+	/// Memory and disk in a line, what is used and what is left: 内存 12.3 / 32 GB · 磁盘 剩 45.2 / 460 GB.
+	val usage: String,
 	val emberText: String
 )
 

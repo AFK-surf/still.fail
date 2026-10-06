@@ -26,7 +26,7 @@ class StationsLayoutTest {
     private val host = Host(
         hostname = "h", os = "macOS", arch = "arm64", cpus = 10, cpuModel = "Apple M2", load = 0.2, uptimeSec = 1e5,
         memory = Memory(32L shl 30, 12L shl 30), disk = Disk("/", 500L shl 30, 200L shl 30), emberRssBytes = 1, checkedAt = 1,
-        summary = "", line = "", facts = emptyList(), emberText = "",
+        summary = "", line = "", facts = emptyList(), usage = "", emberText = "",
         meters = listOf(Meter("CPU", "C", 20, "ok", "20%"), Meter("内存", "M", 40, "ok", "40%"), Meter("磁盘", "D", 60, "ok", "60%")),
     )
     private val net = StationNet(path = "直连", rtt = NetFigure("12 ms", "ok"), rttHistory = emptyList(), down = "1.2 MB/s", up = "30 KB/s", total = "", downTotal = "212 MB", upTotal = "9.6 MB")

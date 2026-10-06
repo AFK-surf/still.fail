@@ -79,7 +79,7 @@ export function StationsScreen() {
 const noNet: StationNet = { path: "直连", rtt: { text: "0 ms", level: "ok" }, rttHistory: [], down: " ", up: " ", total: "" };
 
 /**
- * An online station's machine on its page: its load, what it is, its network, its agents' processes, each in its room
+ * An online station's machine on its page: its load, what it is, its memory and disk in figures, its network, its agents' processes, each in its room
  * whether known yet or not (grey bars until it is); reconnecting, as last heard, faded.
  */
 function StationFigures({ s }: { s: StationView }) {
@@ -88,6 +88,7 @@ function StationFigures({ s }: { s: StationView }) {
     <span className={css.mStationFaded} data-stale={s.reconnecting || undefined}>
       <span className={css.mStationRings}>{s.host ? <MeterChips meters={s.host.meters} /> : <span className={css.mBarChips} style={{ marginTop: 0 }}>{[46, 52, 50].map((w) => <i key={w} style={{ width: w }} />)}</span>}</span>
       <Known text={s.host?.line ?? null} bar={180} />
+      <Known text={s.host?.usage ?? null} bar={220} />
       <span className={css.mStationBody}>
         <span className={css.mStationLoad}><span className={css.mStationNet} data-hidden={!s.net || undefined}><Net net={s.net ?? noNet} stacked /></span></span>
         {!s.net && <span className={css.mStationBars} aria-hidden><span className={css.mBarNet}><span><i style={{ width: 34 }} /><i style={{ width: 96 }} /></span><span><i style={{ width: 132 }} /><i style={{ width: 132 }} /></span></span></span>}

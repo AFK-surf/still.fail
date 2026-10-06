@@ -169,7 +169,7 @@ private fun StationBody(s: StationView) {
 }
 
 /**
- * An online station's machine on its page: its load, what it is, its network, its agents' processes, each in its room
+ * An online station's machine on its page: its load, what it is, its memory and disk in figures, its network, its agents' processes, each in its room
  * whether known yet or not (grey bars until it is); reconnecting, as last heard, faded.
  */
 @Composable
@@ -183,6 +183,7 @@ private fun StationFigures(s: StationView) {
             else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, 6.dp) } }
         }
         Line(host?.line, 180.dp, Modifier.padding(top = 8.dp))
+        Line(host?.usage, 220.dp, Modifier.padding(top = 4.dp))
         Box(Modifier.padding(top = 6.dp)) {
             NetLine(net ?: noNet, Modifier.alpha(if (net != null) 1f else 0f))
             if (net == null) Row(Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically) {

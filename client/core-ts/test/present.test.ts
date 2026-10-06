@@ -383,6 +383,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   const cpu = h.meters[0];
   assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M2 Max"]);
   assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩 50.0 GB / 1000 GB", "still.fail 100 MB"]);
+  assert.match(h.usage, /^内存 .+ · 磁盘 剩 50\.0 GB \/ 1000 GB$/);
 });
 
 test("a_watching_chat_says_what_it_watches_and_what_archiving_it_means", () => {
