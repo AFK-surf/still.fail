@@ -112,6 +112,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         Crashes.install(applicationContext)
+        StillFailCore.onFailed = { reason -> Crashes.coreFailed(applicationContext, reason) }
         fail.still.android.ui.I18n.load(applicationContext)
         lifecycleScope.launch {
             val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA)

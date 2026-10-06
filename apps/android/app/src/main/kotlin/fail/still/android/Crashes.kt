@@ -102,11 +102,37 @@ object Crashes {
 
     private class Report(val at: Long, val pid: Int, val exceptions: JsonArray, val fingerprint: String?, val trace: String?, val facts: JsonObject, val kept: File?)
 
+    /** Where the core's restarts are told from: the account the last report went as (they come before one is known). */
+    private const val ACCOUNT = "crashes.account"
+
+    /** The core died and is started again (StillFailCore.onFailed): not a crash of the app, but what leads to one (its
+     *  old engine's answers after it closed crashed the app, 2026-10), and the reason is the only trace of the core's
+     *  own bug. Sent at once, as the web's CoreFailed is. */
+    fun coreFailed(context: Context, reason: String) {
+        if (BuildConfig.POSTHOG_KEY.isEmpty()) return
+        val account = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getString(ACCOUNT, null) ?: "android-anonymous"
+        val at = System.currentTimeMillis()
+        Thread {
+            val r = Report(at, android.os.Process.myPid(), buildJsonArray {
+                addJsonObject {
+                    put("type", "CoreFailed")
+                    put("value", reason.take(1000))
+                    putJsonObject("mechanism") { put("handled", true); put("synthetic", false); put("type", "generic") }
+                }
+            }, null, null, buildJsonObject { put("reason", "core_failed") }, null)
+            try {
+                send(listOf(event(r, account, "error")))
+            } catch (_: Exception) {
+            }
+        }.start()
+    }
+
     /** Sends what crashed since the last start, as `account` (the signed-in account's id, the web's distinct id); what
      *  fails to go (offline) goes at the next start. */
     suspend fun report(context: Context, account: String) {
         if (BuildConfig.POSTHOG_KEY.isEmpty()) return
         val prefs = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE)
+        prefs.edit().putString(ACCOUNT, account).apply()
         withContext(Dispatchers.IO) {
             val reports = gather(context, prefs.getLong(SINCE, System.currentTimeMillis() - LOOK_BACK))
             if (reports.isEmpty()) return@withContext
@@ -120,15 +146,15 @@ object Crashes {
         }
     }
 
-    private fun event(r: Report, account: String) = buildJsonObject {
+    private fun event(r: Report, account: String, level: String = "fatal") = buildJsonObject {
         put("event", "\$exception")
         put("distinct_id", account)
         // The same crash sent again (its answer lost) is the same event: PostHog keeps one.
-        put("uuid", UUID.nameUUIDFromBytes("android-crash-${r.at}-${r.pid}".toByteArray()).toString())
+        put("uuid", UUID.nameUUIDFromBytes("android-$level-${r.at}-${r.pid}".toByteArray()).toString())
         put("timestamp", iso(r.at))
         putJsonObject("properties") {
             put("\$exception_list", r.exceptions)
-            put("\$exception_level", "fatal")
+            put("\$exception_level", level)
             r.fingerprint?.let { put("\$exception_fingerprint", it) }
             r.trace?.let { put("trace", it) }
             put("release", BuildConfig.VERSION_NAME)
