@@ -16,12 +16,10 @@ import { verifyMember } from "../src/mesh/credential.ts";
 import { readOnlyMay } from "../src/api/admin.ts";
 import { FakeControlPlane } from "./fake-control-plane.ts";
 
-const until = async (what: () => boolean, ms = 10_000) => {
-  const end = Date.now() + ms;
-  while (!what()) {
-    if (Date.now() > end) throw new Error("timed out");
-    await new Promise((r) => setTimeout(r, 20));
-  }
+/// Looks every 20 ms until `what` holds: what comes over real connections has no event here. No deadline (it comes,
+/// however slow the machine, or the test hangs).
+const until = async (what: () => boolean) => {
+  while (!what()) await new Promise((r) => setTimeout(r, 20));
 };
 
 /// Enrolled with `provider` in a fake control plane, its plane made and its presence socket held.

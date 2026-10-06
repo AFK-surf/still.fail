@@ -232,6 +232,8 @@ export type SlackSurfaceOptions = {
   backoffMs?: number;
   /// The clock its pings, its waits for a socket and between tries run on (a TestClock in tests).
   clock?: Clock.Clock;
+  /// Told each time a socket said something (a pong too): what a test waits for before it moves that clock on.
+  onHeard?: () => void;
 };
 
 const MAX_BACKOFF_MS = 60_000;
@@ -252,6 +254,7 @@ export class SlackSurface implements ChatSurface {
   private staleMs: number;
   private backoffMs: number;
   private clock: Clock.Clock | undefined;
+  private onHeard: () => void;
   private stopped = false;
   private scope: Scope.Closeable;
   private run: (effect: Effect.Effect<void, never>) => Promise<void>;
@@ -268,6 +271,7 @@ export class SlackSurface implements ChatSurface {
     this.staleMs = options.staleMs ?? 20_000;
     this.backoffMs = options.backoffMs ?? 1_000;
     this.clock = options.clock;
+    this.onHeard = options.onHeard ?? (() => {});
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
@@ -398,7 +402,10 @@ export class SlackSurface implements ChatSurface {
           self.setStatus(true, null);
           Deferred.doneUnsafe(opened, Effect.void);
         });
-        const alive = () => (heard = clock.currentTimeMillisUnsafe());
+        const alive = () => {
+          heard = clock.currentTimeMillisUnsafe();
+          self.onHeard();
+        };
         socket.on("pong", alive);
         socket.on("ping", alive);
         socket.on("message", (data, binary) => {

@@ -34,14 +34,14 @@ const turn = async () => {
   for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
 };
 
-/// Waits for what real I/O does (a process, a peer's answer), `ms` at most.
-async function until(what: string, check: () => boolean, ms = 5000) {
-  const end = Date.now() + ms;
-  while (!check()) {
-    if (Date.now() > end) assert.fail(`never: ${what}`);
-    await sleep(5);
-  }
+/// Waits for what real I/O does (a process, a peer's answer), looking every 5 ms. No deadline: it comes, however slow
+/// the machine, or the test hangs.
+async function until(_what: string, check: () => boolean) {
+  while (!check()) await sleep(5);
 }
+
+/// A task's command that never ends by itself: running for as long as a test needs, however slow the machine.
+const FOREVER = "tail -f /dev/null";
 
 /// A TestClock, and how many sleeps were asked of it: a fiber asked for one is sleeping on it (an adjust reaches it).
 function testClock() {
@@ -61,11 +61,10 @@ function testClock() {
   return clock;
 }
 
-/// Moves `clock` on by `by` until `check` holds: a schedule's next round, whenever its fiber goes to sleep.
-async function rounds(what: string, clock: ReturnType<typeof testClock>, by: Duration.Input, check: () => boolean) {
-  const end = Date.now() + 5000;
+/// Moves `clock` on by `by` until `check` holds: a schedule's next round, whenever its fiber goes to sleep (no
+/// deadline: what is checked for happens on rounds of the clock, however slow the machine).
+async function rounds(_what: string, clock: ReturnType<typeof testClock>, by: Duration.Input, check: () => boolean) {
   while (!check()) {
-    if (Date.now() > end) assert.fail(`never: ${what}`);
     await Effect.runPromise(clock.adjust(by));
     await sleep(1);
   }
@@ -137,10 +136,7 @@ describe("remote", { concurrency: true }, () => {
     await call(r, "peer-a", "task.prepare", spec);
     await call(r, "peer-a", "file.put", { path: "input", offset: 0, data: b64("hello"), final: true });
     const first = await call(r, "peer-a", "task.start");
-    for (let i = 0; i < 200; i++) {
-      if ((await call(r, "peer-a", "task.get")).job.state !== "running") break;
-      await sleep(25);
-    }
+    while ((await call(r, "peer-a", "task.get")).job.state === "running") await sleep(25);
     const again = await call(r, "peer-a", "task.start");
     assert.equal(first.job.id, again.job.id);
     assert.equal(again.job.exitCode, 0);
@@ -157,7 +153,7 @@ describe("remote", { concurrency: true }, () => {
   test("withdrawal stops only the revoked peer's task", async () => {
     const r = station(["peer-a", "peer-b"]);
     for (const peer of ["peer-a", "peer-b"]) {
-      await call(r, peer, "task.prepare", { spec: { command: "sleep 30" } });
+      await call(r, peer, "task.prepare", { spec: { command: FOREVER } });
       await call(r, peer, "task.start");
     }
     await r.remote.revoke("ws", ["peer-b"], true);
@@ -173,12 +169,12 @@ describe("remote", { concurrency: true }, () => {
   async function run(s: Station, session: string, key: string, command: string): Promise<Json> {
     await callAs(s, session, key, "task.prepare", { spec: { command } });
     await callAs(s, session, key, "task.start");
-    for (let i = 0; i < 200; i++) {
+    // A real process: looked at every 25 ms (no deadline).
+    for (;;) {
       const got = await callAs(s, session, key, "task.get");
       if (got.job.state !== "running") return got;
       await sleep(25);
     }
-    assert.fail("task did not finish");
   }
 
   test("a session's tasks share one directory that closing removes", async () => {
@@ -188,7 +184,7 @@ describe("remote", { concurrency: true }, () => {
     assert.equal(unb64(await callAs(r, "s", "build", "file.get", { path: "copy" })), "built\n");
     // Another session starts empty and is left alone when the first closes.
     assert.notEqual((await run(r, "t", "look", "test -e repo")).job.exitCode, 0);
-    await callAs(r, "s", "long", "task.prepare", { spec: { command: "sleep 30" } });
+    await callAs(r, "s", "long", "task.prepare", { spec: { command: FOREVER } });
     const long = await callAs(r, "s", "long", "task.start");
     await r.remote.handle("ws", "peer-a", { method: "session.close", session: "s" });
     assert.ok(!existsSync(r.remote.room("ws", "peer-a", "s")));
@@ -238,12 +234,8 @@ describe("remote", { concurrency: true }, () => {
     });
     r.remote.closeSession("s");
     const path = r.remote.usedPath("s");
-    for (let i = 0; i < 300; i++) {
-      await Effect.runPromise(clock.adjust("1 second"));
-      await turn();
-      if (!existsSync(path)) break;
-    }
-    assert.ok(!existsSync(path), "every station answered");
+    // Every station answered, as many rounds as it takes.
+    await rounds("every station answered", clock, "1 second", () => !existsSync(path));
     assert.equal(asked.filter((s) => s === "up").length, 1);
     assert.equal(asked.filter((s) => s === "old").length, 1);
     assert.equal(asked.filter((s) => s === "down").length, 3);
@@ -271,11 +263,7 @@ describe("remote", { concurrency: true }, () => {
       if (n < 2) throw new Error("offline");
       return { job: { state: "exited", exitCode: 0 }, log: "done", notices: [] };
     });
-    for (let i = 0; i < 20; i++) {
-      await Effect.runPromise(clock.adjust("1 second"));
-      await turn();
-      if (readJson(path).delivered === true) break;
-    }
+    await rounds("delivered", clock, "1 second", () => readJson(path).delivered === true);
     assert.equal(attempts, 3);
     assert.equal(messages.length, 1);
     assert.equal(messages[0][0], "original-session");
@@ -364,8 +352,7 @@ describe("remote", { concurrency: true }, () => {
     await until("the first round is over", () => clock.asked() > asleep);
     assert.ok(existsSync(a.remote.usedPath("s1")));
     await Effect.runPromise(clock.adjust("60 seconds"));
-    await turn();
-    assert.ok(!existsSync(a.remote.usedPath("s1")));
+    await until("the record goes", () => !existsSync(a.remote.usedPath("s1")));
   });
 
   test("a start the target refuses is final, and asked for again only by a new start", async () => {

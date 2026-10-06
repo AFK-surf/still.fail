@@ -118,8 +118,9 @@ ${approval === undefined ? "" : `read approved < '${approval}'`}
 echo "Successfully logged in"
 `;
 
-/// Waits until `f` gives something, looking again each time `changes` says something changed (up to 30 s).
-export function upon<T>(changes: (wake: () => void) => () => void, f: () => T | undefined | null | false | Promise<T | undefined | null | false>, what: string, ms = 30_000): Promise<T> {
+/// Waits until `f` gives something, looking again each time `changes` says something changed. No deadline: what is
+/// waited for happens or the test hangs (and node --test's own timeout ends it), whatever the machine's speed.
+export function upon<T>(changes: (wake: () => void) => () => void, f: () => T | undefined | null | false | Promise<T | undefined | null | false>, _what: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let over = false;
     let looking = false;
@@ -127,7 +128,6 @@ export function upon<T>(changes: (wake: () => void) => () => void, f: () => T | 
     const finish = (then: () => void) => {
       if (over) return;
       over = true;
-      clearTimeout(timer);
       stop();
       then();
     };
@@ -147,19 +147,16 @@ export function upon<T>(changes: (wake: () => void) => () => void, f: () => T | 
         looking = false;
       }
     };
-    const timer = setTimeout(() => finish(() => reject(new Error(`never: ${what}`))), ms);
     const stop = changes(() => void look());
     void look();
   });
 }
 
-/// Waits until `f` gives something (up to 30 s: a new executable can take long to start on a busy machine).
-export async function until<T>(f: () => T | undefined | null | false, what: string, ms = 30_000): Promise<T> {
-  const end = Date.now() + ms;
+/// Waits until `f` gives something, looking every 20 ms. No deadline, as `upon`.
+export async function until<T>(f: () => T | undefined | null | false, _what: string): Promise<T> {
   for (;;) {
     const got = f();
     if (got) return got;
-    if (Date.now() > end) throw new Error(`never: ${what}`);
     await new Promise((r) => setTimeout(r, 20));
   }
 }

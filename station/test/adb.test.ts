@@ -39,12 +39,12 @@ function fakeAdb(files: Record<string, string> = {}) {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function until<T>(what: () => T | undefined | null | false, ms = 10_000): Promise<T> {
-  const deadline = Date.now() + ms;
+/// Looks every 20 ms until `what` gives something: what a real process or connection does has no event here. No
+/// deadline (it comes, however slow the machine, or the test hangs).
+async function until<T>(what: () => T | undefined | null | false): Promise<T> {
   for (;;) {
     const got = what();
     if (got) return got;
-    if (Date.now() > deadline) throw new Error("timed out waiting");
     await sleep(20);
   }
 }

@@ -15,18 +15,17 @@ import {
 } from "../src/updates/versions.ts";
 import { setChannelIn } from "../src/updates/channel.ts";
 import { launcher, script as stand_in } from "./accounts-fakes.ts";
+import { settle, testClock } from "./hub-fakes.ts";
 
 delete process.env.STILLFAIL_CONFIG;
 delete process.env.EMBER_CONFIG;
 
 const temp = () => realpathSync(mkdtempSync(join(tmpdir(), "stillfail-updates-")));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function until(what: string, f: () => boolean, ms = 5000) {
-  const end = Date.now() + ms;
-  while (!f()) {
-    if (Date.now() > end) assert.fail(`not in time: ${what}`);
-    await sleep(20);
-  }
+/// Looks every 20 ms until `f` holds: what real processes, files and sockets do has no event here. No deadline (it
+/// comes, however slow the machine, or the test hangs).
+async function until(_what: string, f: () => boolean) {
+  while (!f()) await sleep(20);
 }
 /// An executable script at `path` (a shell one by the launcher the stand-ins share: see accounts-fakes.ts).
 const script = (path: string, text: string) => {
@@ -395,7 +394,7 @@ describe("updates", { concurrency: true }, () => {
     // Asked again meanwhile: refused.
     await assert.rejects(updates.update("station", "zh"), (e: Error) => e.message === "Station 正在更新");
     finish();
-    await until("ended", () => station(updates).state === "idle", 10_000);
+    await until("ended", () => station(updates).state === "idle");
     assert.equal(station(updates).done, "已更新到 0.1.1310，agent 没有中断");
     assert.ok(asked.includes("/install.sh?lang=zh"), asked.join());
     assert.equal(readFileSync(join(dir, "installer-saw"), "utf8").trim(), `stable ${dir} ${dir}`);
@@ -407,13 +406,35 @@ describe("updates", { concurrency: true }, () => {
     const dir = temp();
     const [origin, server, asked] = await cloudWithRelease("0.1.1310", "1310");
     t.after(() => server.close());
-    const updates = installed(dir, "1300", null, { origin: () => origin, env: { PATH: "/usr/bin:/bin" }, timing: { followLook: 200, idlePoll: 50, idleFor: 100 } });
+    const time = testClock();
+    const updates = installed(dir, "1300", null, { origin: () => origin, env: { PATH: "/usr/bin:/bin" }, timing: { followLook: 200, idlePoll: 50, idleFor: 100 }, clock: time.clock });
     t.after(() => updates.close());
     new ConfigFile(dir).update((raw) => (raw.autoUpdate = true));
+    /// Moves its time on by `ms` until `f` holds (what it waits for meanwhile may be a real process).
+    const steps = async (ms: number, f: () => boolean) => {
+      while (!f()) {
+        await time.adjust(ms);
+        await sleep(10);
+      }
+    };
+    // A reading of what is out ended once the feed was asked a second time (it decides as it ends).
+    const feeds = () => asked.filter((a) => a.startsWith("/releases/station.json")).length;
+    let readAgain = false;
+    updates.changes(() => void (feeds() >= 2 && (readAgain = true)));
     updates.start();
-    await until("updated by itself", () => station(updates).done === "已更新到 0.1.1310，agent 没有中断", 10_000);
-    // The feed still says 0.1.1310 and the release is 0.1.1310: nothing more.
-    await sleep(300);
+    // It reads what is out at once; quiet for 100 ms of its time, it updates itself by the installer.
+    await until("read", () => station(updates).latest === "0.1.1310");
+    await steps(50, () => station(updates).state === "updating");
+    await until("the installer ended", () => existsSync(join(dir, "run", "update.exit")));
+    await steps(200, () => station(updates).done === "已更新到 0.1.1310，agent 没有中断");
+    // Then reads what is out again: the feed still says 0.1.1310 and the release is 0.1.1310, so nothing more (its
+    // decision taken as the reading ends), nor on its rounds after.
+    await until("read again", () => readAgain);
+    for (let i = 0; i < 5; i++) {
+      await time.adjust(50);
+      await settle();
+    }
+    assert.equal(station(updates).state, "idle");
     assert.equal(asked.filter((a) => a.startsWith("/install.sh")).length, 1);
   });
 
@@ -455,7 +476,7 @@ describe("updates", { concurrency: true }, () => {
       });
       await updates.update("codex", "zh");
       assert.equal(updates.get("zh")[2]!.state, "updating");
-      await until("installed", () => updates.get("zh")[2]!.state !== "updating", 10_000);
+      await until("installed", () => updates.get("zh")[2]!.state !== "updating");
       codex = updates.get("zh")[2]!;
       assert.deepEqual([codex.installed, codex.version, codex.newer, codex.state, codex.message], [true, "0.47.0", false, "idle", undefined]);
       assert.equal(changed, 1);
@@ -473,7 +494,7 @@ describe("updates", { concurrency: true }, () => {
       t.after(() => updates.close());
       await updates.check();
       await updates.update("codex", "zh");
-      await until("failed", () => updates.get("zh")[2]!.state === "failed", 10_000);
+      await until("failed", () => updates.get("zh")[2]!.state === "failed");
       assert.equal(updates.get("zh")[2]!.message, `${join(bin, "npm")} 跑完了，但 station 的 PATH 上还是找不到 codex：可能装到了别处`);
     });
   });

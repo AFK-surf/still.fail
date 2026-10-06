@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { openAgentsDoor } from "../src/tools/http.ts";
 import { McpEndpoint } from "../src/tools/mcp.ts";
+import { settle } from "./hub-fakes.ts";
 
 test("the agents' door answers /mcp, /jobs/notify and /health, and finishes its calls when closed", async () => {
   let release: () => void = () => {};
@@ -35,7 +36,8 @@ test("the agents' door answers /mcp, /jobs/notify and /health, and finishes its 
   await called;
   let closed = false;
   const closing = door.close().then(() => (closed = true));
-  await new Promise((r) => setTimeout(r, 50));
+  // What is queued runs (closing it with no call under way ends there): still open while the call is.
+  await settle();
   assert.equal(closed, false);
   release();
   const answer: any = await (await call).json();

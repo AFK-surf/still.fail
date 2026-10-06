@@ -1,5 +1,6 @@
 // The usage counter (src/usage/counter.ts): the Rust station's usage/tests.rs ported, the push-driven reads, and (when a
 // copy of a real station is at $USAGE_WORK, default /tmp/usage-work) what it records against what the Rust recorded.
+import type { Clock } from "effect";
 import assert from "node:assert/strict";
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,6 +13,7 @@ import { cost, price, priceTable } from "../src/read/usage.ts";
 import { iso, parseIso } from "../src/read/transcript.ts";
 import { type StoreChange, type UsageGroup, Store, newMessage } from "../src/store/store.ts";
 import { type CallState, UsageCounter, callsOf, claudeFiles, claudeProject, readFrom } from "../src/usage/counter.ts";
+import { testClock } from "./hub-fakes.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -125,10 +127,10 @@ test("GPT usage has a price, and unknown variants do not borrow one", () => {
 
 type Rig = { data: string; store: Store; usage: UsageCounter };
 
-function rig(options: { settleMs?: number; safetyMs?: number } = {}): Rig {
+function rig(options: { settleMs?: number; safetyMs?: number; clock?: Clock.Clock } = {}): Rig {
   const data = tempdir();
   writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "cc", runtime: "claude", home: "homes/cc" }] }));
-  const store = Store.open(":memory:");
+  const store = Store.open(":memory:", null, options.clock);
   stores.push(store);
   const usage = new UsageCounter({ store, config: () => ({ dataDir: data, profiles: [{ home: join(data, "homes/cc") }] }), ...options });
   counters.push(usage);
@@ -144,13 +146,21 @@ function append(path: string, lines: string[]) {
   appendFileSync(path, lines.map((l) => `${l}\n`).join(""));
 }
 
-const pause = () => new Promise((r) => setTimeout(r, 15));
 const MAX = Number.MAX_SAFE_INTEGER;
 
+/// A TestClock at a day of 2026 (on its own it starts at 1970).
+async function today() {
+  const time = testClock();
+  await time.adjust(Date.parse("2026-10-06T08:00:00Z"));
+  return time;
+}
+
 test("each call is counted once, for whom its turn worked, where and on what", async () => {
-  const r = rig();
+  const time = await today();
+  const pause = () => time.adjust(15);
+  const r = rig({ clock: time.clock });
   const workspace = join(r.data, "sessions/ember/c-1/workspace");
-  const created = Date.now();
+  const created = r.store.now();
   session(r.store, "ember:c-1", workspace, created);
   const chat = r.store.openThreadOf("ember", "ember", "1.0", null, "creator@x", "ember:c-1");
   r.store.joinThread(chat.id, "ember:c-1", "ember");
@@ -265,28 +275,33 @@ test("a file read in parts records each part's whole lines and leaves a partial 
 });
 
 test("a turn's end is read shortly after, and the pages are told", async () => {
-  const r = rig({ settleMs: 20, safetyMs: 60_000 });
+  const time = await today();
+  const r = rig({ settleMs: 20, safetyMs: 60_000, clock: time.clock });
   const workspace = join(r.data, "w");
-  session(r.store, "k", workspace, Date.now() - 1000);
+  session(r.store, "k", workspace, r.store.now() - 1000);
   const told: StoreChange[] = [];
   r.store.subscribe((c) => told.push(c));
   r.usage.start();
-  const until = async (done: () => boolean) => {
-    for (let i = 0; i < 200 && !done(); i++) await new Promise((res) => setTimeout(res, 10));
-    assert.ok(done());
-  };
-  await until(() => !r.usage.readingAll());
+  // Everything read once, it waits (the first wait: the round's).
+  await time.begun(1);
+  assert.equal(r.usage.readingAll(), false);
   const calls = () => r.store.usageGroups(0, MAX, 0).reduce((s, g) => s + g.calls, 0);
   assert.equal(calls(), 0);
   r.store.startTurn("t1", "k", "input");
-  append(join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl"), [claudeLine("m", Date.now(), "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
-  // A turn starting is not its end: nothing read yet.
-  await new Promise((res) => setTimeout(res, 100));
+  append(join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl"), [claudeLine("m", r.store.now() + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  // Woken, it lets the burst settle; a turn starting is not its end: it waits again, nothing read (a read would come
+  // before that wait).
+  await time.begun(2);
+  await time.adjust(20);
+  await time.begun(3);
   assert.equal(calls(), 0);
   r.store.endTurn("t1", "completed", null, null, null);
-  await until(() => calls() === 1);
+  await time.begun(4);
+  await time.adjust(20);
+  await time.begun(5);
+  assert.equal(calls(), 1);
   // Told once the read is over (the rows are there a moment before).
-  await until(() => told.some((c) => c.type === "usage"));
+  assert.ok(told.some((c) => c.type === "usage"));
   await r.usage.stop();
 });
 

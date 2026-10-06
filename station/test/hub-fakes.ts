@@ -205,10 +205,28 @@ export const reply = (to: InboundMessage, ts: string, text: string, over: Partia
 export type Setup = { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage; clock?: Clock.Clock };
 
 /// A TestClock for a rig (its hub's, its store's, its sessions'): `adjust(ms)` moves it on, and what was due by then runs.
-export function testClock(): { clock: Clock.Clock; adjust(ms: number): Promise<void> } {
+/// `asked()` counts the waits begun on it; `begun(n)` resolves once `n` have, each then sleeping on it (an adjust
+/// reaches it): what a test waits for before it moves the time, rather than for a while.
+export function testClock(): { clock: Clock.Clock; adjust(ms: number): Promise<void>; asked(): number; begun(n: number): Promise<void> } {
   const scope = Effect.runSync(Scope.make());
-  const clock = Effect.runSync(Scope.provide(TestClock.make(), scope));
-  return { clock, adjust: (ms) => Effect.runPromise(clock.adjust(`${ms} millis`)) };
+  const test = Effect.runSync(Scope.provide(TestClock.make(), scope));
+  let asked = 0;
+  let heard: (() => void)[] = [];
+  const clock: Clock.Clock = {
+    ...test,
+    sleep: (d) =>
+      Effect.suspend(() => {
+        asked++;
+        for (const wake of heard.splice(0)) wake();
+        return test.sleep(d);
+      }),
+  };
+  const begun = async (n: number) => {
+    while (asked < n) await new Promise<void>((r) => heard.push(r));
+    // Its sleep is on the clock once the fiber that began it has gone on.
+    await settle(5);
+  };
+  return { clock, adjust: (ms) => Effect.runPromise(test.adjust(`${ms} millis`)), asked: () => asked, begun };
 }
 
 export class Rig {

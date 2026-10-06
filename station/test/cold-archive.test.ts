@@ -36,6 +36,7 @@ import {
   workspaceFile,
 } from "../src/sessions/archive.ts";
 import { measureRoom, measured, rebuildable, roomOf, safeToRemove } from "../src/sessions/footprint.ts";
+import { settle } from "./hub-fakes.ts";
 
 const temp = () => realpathSync(mkdtempSync(join(tmpdir(), "cold-")));
 const write = (path: string, bytes: string | Buffer) => {
@@ -208,12 +209,21 @@ test("long names, long link targets, nested directories, empty files and hard li
 test("the room's lock is taken in turn", async () => {
   const room = temp();
   const order: string[] = [];
+  let entered = () => {};
+  const inside = new Promise<void>((r) => (entered = r));
+  let leave = () => {};
+  const out = new Promise<void>((r) => (leave = r));
   const first = withLock(room, async () => {
     order.push("first in");
-    await new Promise((r) => setTimeout(r, 20));
+    entered();
+    await out;
     order.push("first out");
   });
+  // Asked for while the first holds it (and given what is queued to run meanwhile): it waits.
+  await inside;
   const second = withLock(room, async () => void order.push("second"));
+  await settle();
+  leave();
   await Promise.all([first, second]);
   assert.deepEqual(order, ["first in", "first out", "second"]);
   rmSync(room, { recursive: true });

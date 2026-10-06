@@ -95,8 +95,8 @@ test("archiving a session cleans what can be made again from its directory", asy
   await settle();
   await archive(r.hub, key, false);
   await archive(r.hub, key, true);
-  for (let i = 0; i < 200 && existsSync(join(workspace, "app/node_modules")); i++) await new Promise((res) => setTimeout(res, 10));
-  assert.ok(!existsSync(join(workspace, "app/node_modules")), "cleaned once archived");
+  // Cleaned once archived (in the background, on the file system: looked at every 10 ms, no deadline).
+  while (existsSync(join(workspace, "app/node_modules"))) await new Promise((res) => setTimeout(res, 10));
   await finishArchive(r, key);
   assert.deepEqual(await workspaceFile(dirname(workspace), "notes.md"), Buffer.from("kept"));
   await archive(r.hub, key, false);

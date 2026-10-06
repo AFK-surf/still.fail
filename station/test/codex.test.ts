@@ -3,7 +3,9 @@
 // app-server per profile and its restart once a profile edit leaves it idle, what it is started with, and threads taken
 // up by a next driver (with a snapshot, and after a crash) with the turn's end told once and no live event twice.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -24,10 +26,16 @@ writeFileSync(join(skills, "mine", "SKILL.md"), "");
 const bundle = join(data, "cert.pem");
 writeFileSync(bundle, "");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-/// Waits (at most 5 s) for `done`, then gives back whether it came.
+/// Looks every 20 ms until `done` holds: what real processes do has no event here. No deadline (it comes, however
+/// slow the machine, or the test hangs).
 async function eventually(done: () => boolean) {
-  for (let t = 0; !done() && t < 5000; t += 20) await sleep(20);
-  return done();
+  while (!done()) await sleep(20);
+}
+/// The fifos a `gate:<n>:<k>:<name>` turn waits at (test/fake/codex.mjs): `open(part)` lets it go on.
+function gates(dump: string, name: string) {
+  const at = `${dump}.${name}`;
+  for (const part of ["a", "b"]) execFileSync("/usr/bin/mkfifo", [`${at}.${part}`]);
+  return { open: (part: "a" | "b") => writeFile(`${at}.${part}`, "go"), said: () => existsSync(`${at}.said`) };
 }
 const drivers: CodexDriver[] = [];
 after(async () => {
@@ -57,12 +65,7 @@ function options(p: Profile, extra: Partial<OpenOptions> = {}): OpenOptions {
 function listen() {
   const events: RuntimeEvent[] = [];
   const push = (e: RuntimeEvent) => void events.push(e);
-  const until = async (what: (events: RuntimeEvent[]) => boolean, ms = 8000) => {
-    for (let t = 0; !what(events); t += 20) {
-      if (t > ms) throw new Error(`timed out; events: ${JSON.stringify(events)}`);
-      await sleep(20);
-    }
-  };
+  const until = (what: (events: RuntimeEvent[]) => boolean) => eventually(() => what(events));
   return { events, push, until };
 }
 
@@ -162,7 +165,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     const { events, push, until } = listen();
     const session = await d.open(options(p), push);
     assert.equal(await session.steer("early"), false);
-    await session.prompt("slow:8");
+    await session.prompt("hold:1");
     await until((e) => deltas(e).length >= 1);
     assert.equal(await session.steer("more"), true);
     await until(ended(1));
@@ -172,11 +175,13 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.deepEqual(steer.params, { threadId: session.id(), input: [{ type: "text", text: "more" }], expectedTurnId: steer.params.expectedTurnId });
     assert.match(steer.params.expectedTurnId, /^tu-/);
 
-    await session.prompt("slow:30");
-    await until((e) => deltas(e).length >= 12);
+    assert.deepEqual(deltas(events), ["d0 ", "steer:more"]);
+    await session.prompt("hold:3");
+    await until((e) => deltas(e).length >= 5);
     await session.abort();
     await until(ended(2));
     assert.deepEqual(outcome(events, 1), { kind: "aborted" });
+    assert.deepEqual(deltas(events).slice(2), ["d0 ", "d1 ", "d2 "]);
     const interrupt = stdin(p.dump).find((m) => m.method === "turn/interrupt");
     assert.equal(interrupt.params.threadId, session.id());
     assert.match(interrupt.params.turnId, /^tu-/);
@@ -267,24 +272,31 @@ describe("the Codex driver", { concurrency: true }, () => {
       const a2 = listen();
       const one = await first.open(options(p), a.push);
       const two = await first.open(options(p), a2.push);
-      await one.prompt("slow:12");
-      await two.prompt("slow:14");
+      const [gateOne, gateTwo] = [gates(p.dump, "one"), gates(p.dump, "two")];
+      await one.prompt("gate:12:4:one");
+      await two.prompt("gate:14:4:two");
       await a.until((e) => deltas(e).length >= 4);
+      await a2.until((e) => deltas(e).length >= 4);
       // A request in flight as it lets go: its reply goes to the next driver, which drops it.
       const steering = one.steer("late");
       let snapshots: unknown[] = [null, null];
       if (!crashed) snapshots = JSON.parse(JSON.stringify([one.snapshot(), two.snapshot()]));
       first.detach();
       assert.equal(await steering, false, "its reply is the next station's");
-      await sleep(125);
+      // The app-server has the steer; the first turn says the rest of its reply with nobody reading.
+      await eventually(() => stdin(p.dump).some((m) => m.method === "turn/steer"));
+      await gateOne.open("a");
+      await eventually(gateOne.said);
       const next = driver();
       const b = listen();
       const b2 = listen();
       const takenOne = await next.adopt(options(p, { resume: one.id() }), snapshots[0], b.push);
-      // The second is taken up a moment later: what came for it meanwhile waits for it.
-      await sleep(200);
+      // The second is taken up later: what came for it meanwhile (the rest of its reply) waits for it.
+      await gateTwo.open("a");
+      await eventually(gateTwo.said);
       const takenTwo = await next.adopt(options(p, { resume: two.id() }), snapshots[1], b2.push);
       assert.equal(takenOne.id(), one.id());
+      await Promise.all([gateOne.open("b"), gateTwo.open("b")]);
       await b.until(ended(1));
       await b2.until(ended(1));
       for (const [before, now, count] of [[a, b, 12], [a2, b2, 14]] as const) {

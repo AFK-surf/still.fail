@@ -132,12 +132,10 @@ async function rig(o: Setup = {}) {
   return { data, path, fake, config, store, hub: hub!, slack, claude, ask, get, saved, overview: () => overview(owner), close };
 }
 
-async function until(what: string, f: () => boolean) {
-  for (let i = 0; i < 300; i++) {
-    if (f()) return;
-    await new Promise((r) => setTimeout(r, 20));
-  }
-  throw new Error(`timed out: ${what}`);
+/// Looks every 20 ms until `f` holds: what the stand-in's sockets do has no event here. No deadline (it comes, however
+/// slow the machine, or the test hangs).
+async function until(_what: string, f: () => boolean) {
+  while (!f()) await new Promise((r) => setTimeout(r, 20));
 }
 
 /// What Slack's app API remembers of an app's manifest, and what the station asked of it.

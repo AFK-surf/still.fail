@@ -11,11 +11,11 @@ import { machine, provider, temp } from "./accounts-fakes.ts";
 
 const base = { runtime: "claude" as const, key: "k", via: {}, home: "/nonexistent-check-test", env: {}, machine: false, lang: "zh" as const };
 
-test("a decision-only provider is checked without asking it anything", async () => {
-  const started = Date.now();
+test("a decision-only provider is checked without asking it anything", async (t) => {
+  const asked = t.mock.method(globalThis, "fetch", () => Promise.reject(new Error("asked")));
   const check = await checkProfile({ ...base, kind: "api-provider", via: { provider: "jev" } });
   assert.equal(check.state, "ok", check.detail);
-  assert.ok(Date.now() - started < 1000);
+  assert.equal(asked.mock.callCount(), 0);
 });
 
 test("a key is tried where its provider says whether it works", async () => {

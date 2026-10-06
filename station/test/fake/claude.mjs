@@ -1,7 +1,10 @@
 // A fake `claude -p --input-format stream-json --output-format stream-json`: frames as the real CLI writes them
 // (system/init, status, stream_event partial messages, assistant/user messages, result), driven by what the prompt says:
 //   say:<text>    a reply                       fail:auth|rate|model   a result with is_error
-//   slow:<n>      n deltas, 50 ms apart          retry401               api_retry 401 frames until interrupted
+//   slow:<n>      n deltas, 50 ms apart          retry401               two api_retry 401 frames, then waits until interrupted
+//   hold:<k>      k deltas, then waits until steered (the steers its deltas) or interrupted
+//   gate:<n>:<k>:<name>   k of n deltas; the rest once FAKE_DUMP.<name>.a (a fifo) is written, then FAKE_DUMP.<name>.said
+//                 made; the end once FAKE_DUMP.<name>.b is (what the test lets happen when, not a time)
 //   tool          a Bash call that waits until background_tasks (or interrupt)
 //   again         a reply, then a turn of its own (no prompt of ours)
 //   exit          says why on stderr and exits 3 in the middle of the turn
@@ -21,16 +24,11 @@ const sessionId = flag("--session-id") || flag("--resume") || "none";
 
 const say = (frame) => fs.writeSync(1, JSON.stringify(frame) + "\n");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-/// A wait that a control request (interrupt, background_tasks) ends at once.
+/// A wait that a control request (interrupt, background_tasks) or a steer ends; nothing else does.
 let wake = () => {};
-const pause = (ms) =>
-  new Promise((r) => {
-    const timer = setTimeout(r, ms);
-    wake = () => {
-      clearTimeout(timer);
-      r();
-    };
-  });
+const pause = () => new Promise((r) => (wake = r));
+/// Waits until the fifo at `path` is written (and closed).
+const gate = (path) => fs.promises.readFile(path);
 
 let busy = false;
 let interrupted = false;
@@ -43,20 +41,30 @@ function stream(event) {
   say({ type: "stream_event", event, parent_tool_use_id: null, session_id: sessionId, uuid: `u${++n}` });
 }
 
-async function message(texts, gap) {
+/// A reply of `texts`, `gap` ms apart; `before(i)`, if given, waited for before the i-th (and before its end, at i =
+/// texts.length).
+async function message(texts, gap, before) {
   const id = `msg_${++n}`;
   stream({ type: "message_start", message: { id, role: "assistant", content: [] } });
   stream({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } });
   let all = "";
-  for (const t of texts) {
-    if (interrupted) break;
-    stream({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: t } });
-    all += t;
+  const steered = () => {
     for (const s of steers.splice(0)) {
       stream({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: `steer:${s}` } });
       all += `steer:${s}`;
     }
+  };
+  for (const [i, t] of texts.entries()) {
+    if (before) await before(i);
+    if (interrupted) break;
+    stream({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: t } });
+    all += t;
+    steered();
     if (gap) await sleep(gap);
+  }
+  if (before && !interrupted) {
+    await before(texts.length);
+    steered();
   }
   stream({ type: "content_block_stop", index: 0 });
   stream({ type: "message_stop" });
@@ -78,11 +86,27 @@ async function turn(text) {
   else if (text === "fail:rate") result({ is_error: true, result: "You've hit your weekly limit · resets Oct 8" });
   else if (text === "fail:model") result({ is_error: true, result: "prompt is too long" });
   else if (text === "retry401") {
-    for (let attempt = 1; !interrupted && attempt < 200; attempt++) {
-      say({ type: "system", subtype: "api_retry", attempt, retry_delay_ms: 100, error_status: 401, error: "invalid token", session_id: sessionId });
-      await pause(100);
-    }
+    for (const attempt of [1, 2]) say({ type: "system", subtype: "api_retry", attempt, retry_delay_ms: 100, error_status: 401, error: "invalid token", session_id: sessionId });
+    while (!interrupted) await pause();
     result({ subtype: "error_during_execution", is_error: true, result: "" });
+  } else if (text.startsWith("hold:")) {
+    const k = Number(text.slice(5));
+    const all = await message(Array.from({ length: k }, (_, i) => `d${i} `), 0, async (i) => {
+      while (i === k && !interrupted && steers.length === 0) await pause();
+    });
+    if (interrupted) result({ subtype: "error_during_execution", is_error: true, result: "" });
+    else result({ result: all });
+  } else if (text.startsWith("gate:")) {
+    const [count, held, name] = text.slice(5).split(":");
+    const at = `${dump}.${name}`;
+    const all = await message(Array.from({ length: Number(count) }, (_, i) => `d${i} `), 0, async (i) => {
+      if (i === Number(held)) await gate(`${at}.a`);
+      if (i === Number(count)) {
+        fs.writeFileSync(`${at}.said`, "");
+        await gate(`${at}.b`);
+      }
+    });
+    result({ result: all });
   } else if (text.includes("post:")) {
     const server = JSON.parse(flag("--mcp-config")).mcpServers.stillfail;
     const to = /thread="([^"]+)"/.exec(text)?.[1] ?? "";
@@ -107,7 +131,7 @@ async function turn(text) {
     stream({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: '"sleep 60"}' } });
     stream({ type: "content_block_stop", index: 0 });
     stream({ type: "message_stop" });
-    if (!backgrounded && !interrupted) await pause(10_000);
+    while (!backgrounded && !interrupted) await pause();
     say({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "call_1", content: backgrounded ? "moved to background" : "interrupted" }] } });
     if (interrupted) result({ subtype: "error_during_execution", is_error: true, result: "" });
     else result({ result: await message(["done"], 0) });
@@ -146,6 +170,9 @@ rl.on("line", (line) => {
   const text = msg.message.content.map((c) => c.text).join("");
   if (!busy) turn(text);
   else if (text.startsWith("queue:")) queued.push(text.slice(6));
-  else steers.push(text);
+  else {
+    steers.push(text);
+    wake();
+  }
 });
 rl.on("close", () => process.exit(0));

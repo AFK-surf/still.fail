@@ -143,12 +143,6 @@ function client() {
   return { up, down, reading: new FrameReader(down) };
 }
 
-function within<T>(ms: number, p: Promise<T>): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error("timed out")), ms)));
-  return Promise.race([p, late]).finally(() => clearTimeout(timer));
-}
-
 test("a service's websocket passes messages both ways, framed, until it closes", async () => {
   const s = await socketService();
   const port = s.port;
@@ -166,7 +160,7 @@ test("a service's websocket passes messages both ways, framed, until it closes",
   const [kind, payload] = (await c.reading.next())!;
   assert.deepEqual([kind, payload.readUInt16BE(0), payload.subarray(2).toString()], [FRAME_CLOSE, 4001, "done"], "the service's close, with its code and reason");
   assert.equal(await c.reading.next(), null, "then the stream ends");
-  await within(5000, pump);
+  await pump;
   await s.close();
 });
 
@@ -178,7 +172,7 @@ test("a close from the client is answered by the service's own", async () => {
   await c.up.write(frame(FRAME_CLOSE, Buffer.concat([Buffer.from([0x0f, 0xa2]), Buffer.from("leaving")])));
   const [kind, payload] = (await c.reading.next())!;
   assert.deepEqual([kind, payload.readUInt16BE(0)], [FRAME_CLOSE, 4002], "the service's close comes back");
-  await within(5000, pump);
+  await pump;
   await s.close();
 });
 
@@ -188,7 +182,7 @@ test("a client gone closes the service's socket, and a refusal says why", async 
   const c = client();
   const pump = pumpSocket(socket, new FrameReader(c.up), c.down);
   await c.up.finish();
-  await within(5000, pump);
+  await pump;
   await s.close();
   // A port with plain HTTP on it (no socket there) and one with nothing at all.
   const http = await service();

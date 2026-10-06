@@ -20,6 +20,7 @@ import { chatTools } from "../src/tools/chat.ts";
 import { openAgentsDoor } from "../src/tools/http.ts";
 import { McpEndpoint } from "../src/tools/mcp.ts";
 import { Store } from "../src/store/store.ts";
+import { settle } from "./hub-fakes.ts";
 import { FakeSlack, bot } from "./slack-fake.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
@@ -66,12 +67,9 @@ test("an app_mention over Socket Mode starts a turn; the agent's chat_post lands
     const key = "ds:C1:1700000000.000100";
     assert.ok(store.getSession(key), "its session made");
     // Its turn: started, posted, ended.
-    await slackStandIn.until("posted", () => slackStandIn.calls("chat.postMessage").length > 0, 20_000);
-    for (let i = 0; i < 400; i++) {
-      const last = store.lastTurn(key);
-      if (last !== null && last.endedAt !== null) break;
-      await new Promise((r) => setTimeout(r, 25));
-    }
+    await slackStandIn.until("posted", () => slackStandIn.calls("chat.postMessage").length > 0);
+    // Real processes: looked at every 25 ms (no deadline).
+    while (store.lastTurn(key)?.endedAt == null) await new Promise((r) => setTimeout(r, 25));
     const posts = slackStandIn.calls("chat.postMessage");
     assert.equal(posts.length, 1, JSON.stringify(posts.map((p) => p.params)));
     assert.deepEqual(posts[0]!.params, { channel: "C1", thread_ts: "1700000000.000100", text: "hello from the agent", unfurl_links: "false" });
@@ -87,13 +85,11 @@ test("an app_mention over Socket Mode starts a turn; the agent's chat_post lands
     assert.equal(turns.length, 1, "not nudged");
     assert.deepEqual([turns[0]!.summary.outcome, turns[0]!.summary.ending], ["completed", "all_done"]);
     // While it worked, the thread said so, and the line was cleared at the end: at once, or (the line changed just
-    // before) once its couple of seconds are up.
+    // before) once its couple of seconds are up: what was due by then has gone.
     const cleared = () => slackStandIn.calls("assistant.threads.setStatus").some((c) => c.params.status === "");
-    for (let i = 0; i < 10 && !cleared(); i++) {
-      await Effect.runPromise(clock.adjust("1 second"));
-      await slackStandIn.until("the status cleared", cleared, 100).catch(() => {});
-    }
-    assert.ok(cleared(), "the status cleared");
+    await settle();
+    await Effect.runPromise(clock.adjust("2 seconds"));
+    await slackStandIn.until("the status cleared", cleared);
     assert.equal(slackStandIn.calls("assistant.threads.setStatus")[0]!.params.thread_ts, "1700000000.000100");
   } finally {
     await slack.close();

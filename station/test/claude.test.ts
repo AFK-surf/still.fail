@@ -3,7 +3,9 @@
 // exiting, background_tools, what it is started with, and a session taken up by a next driver (with a snapshot, and
 // after a crash) with its turn's end told once and no live event twice.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -19,10 +21,16 @@ process.env.CLAUDE_CODE_OAUTH_TOKEN = "leaked";
 // Short: the runners' sockets live under it (104 bytes at most on macOS).
 const data = mkdtempSync("/tmp/cl-");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-/// Waits (at most 5 s) for `done`, then gives back whether it came.
+/// Looks every 20 ms until `done` holds: what real processes do has no event here. No deadline (it comes, however
+/// slow the machine, or the test hangs).
 async function eventually(done: () => boolean) {
-  for (let t = 0; !done() && t < 5000; t += 20) await sleep(20);
-  return done();
+  while (!done()) await sleep(20);
+}
+/// The fifos a `gate:<n>:<k>:<name>` turn waits at (test/fake/claude.mjs): `open(part)` lets it go on.
+function gates(dump: string, name: string) {
+  const at = `${dump}.${name}`;
+  for (const part of ["a", "b"]) execFileSync("/usr/bin/mkfifo", [`${at}.${part}`]);
+  return { open: (part: "a" | "b") => writeFile(`${at}.${part}`, "go"), said: () => existsSync(`${at}.said`) };
 }
 const drivers: ClaudeDriver[] = [];
 after(async () => {
@@ -61,12 +69,7 @@ function options(extra: Partial<OpenOptions> & { machine?: boolean } = {}): Open
 function listen() {
   const events: RuntimeEvent[] = [];
   const push = (e: RuntimeEvent) => void events.push(e);
-  const until = async (what: (events: RuntimeEvent[]) => boolean, ms = 8000) => {
-    for (let t = 0; !what(events); t += 20) {
-      if (t > ms) throw new Error(`timed out; events: ${JSON.stringify(events)}`);
-      await sleep(20);
-    }
-  };
+  const until = (what: (events: RuntimeEvent[]) => boolean) => eventually(() => what(events));
   return { events, push, until };
 }
 
@@ -163,14 +166,14 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     const { events, push, until } = listen();
     const session = await d.open(o, push);
     await session.abort(); // nothing running: nothing sent
-    await session.prompt("slow:30");
+    await session.prompt("hold:2");
     await until((e) => deltas(e).length >= 2);
     await session.abort();
     await session.abort(); // once
     await until(ended(1));
     assert.deepEqual(outcome(events), { kind: "aborted" });
     assert.equal(stdin(o.dump).filter((m) => m.type === "control_request").length, 1);
-    assert.ok(deltas(events).length < 30);
+    assert.deepEqual(deltas(events), ["d0 ", "d1 "]);
     await session.dispose();
   });
 
@@ -179,7 +182,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     const { events, push, until } = listen();
     const session = await d.open(options(), push);
     assert.equal(await session.steer("early"), false);
-    await session.prompt("slow:8");
+    await session.prompt("hold:1");
     await until((e) => deltas(e).length >= 1);
     assert.equal(await session.steer("more"), true);
     await until(ended(1));
@@ -213,8 +216,8 @@ describe("the Claude Code driver", { concurrency: true }, () => {
       { type: "closed", why: "claude exited (3): noise\nerror: An unknown error occurred (Unexpected)" },
     ]);
     await assert.rejects(session.prompt("again"), /closed/);
+    // Read to the end, its runner is gone.
     await eventually(() => !existingRunners(data).some((r) => r.args.includes(session.id())));
-    assert.ok(!existingRunners(data).some((r) => r.args.includes(session.id())), "read to the end, its runner is gone");
   });
 
   test("background_tools sends background_tasks; the call it waited on returns and the turn goes on", async () => {
@@ -263,18 +266,21 @@ describe("the Claude Code driver", { concurrency: true }, () => {
       const o = options();
       const a = listen();
       const session = await first.open(o, a.push);
-      await session.prompt("slow:12");
+      const gate = gates(o.dump, "g");
+      await session.prompt("gate:12:4:g");
       await a.until((e) => deltas(e).length >= 4);
       let snapshot: unknown = null;
       if (!crashed) snapshot = JSON.parse(JSON.stringify(session.snapshot()));
-      // Stops: the process goes on under its runner.
+      // Stops: the process goes on under its runner, saying the rest of its reply with nobody reading.
       first.detach();
-      await sleep(125);
+      await gate.open("a");
+      await eventually(gate.said);
       const next = driver();
       const b = listen();
       const taken: AgentSession = await next.adopt(o, snapshot, b.push);
       assert.equal(taken.id(), session.id());
       assert.equal(taken.busy(), true);
+      await gate.open("b");
       await b.until(ended(1));
       const all = [...a.events, ...b.events];
       assert.equal(ends(all).length, 1, "the turn's end, once");

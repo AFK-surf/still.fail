@@ -57,7 +57,8 @@ test("exec: exit code and output, each capped at 1 MiB, a timeout ending it", as
   assert.ok(env.ok && env.result.stdout === "hello\n");
   const big = await run(t, "exec", { command: "head -c 2000000 /dev/zero" });
   assert.ok(big.ok && big.result.truncated === true && big.result.stdout.length === 1024 * 1024);
-  const slow = await run(t, "exec", { command: "sleep 5", timeout_ms: 200 });
+  // One that never ends by itself: timed out, however slow the machine.
+  const slow = await run(t, "exec", { command: "tail -f /dev/null", timeout_ms: 200 });
   assert.ok(slow.ok && slow.result.timed_out === true);
   const missing = await run(t, "exec", {});
   assert.equal(!missing.ok && missing.code, "invalid_request");
@@ -91,33 +92,26 @@ test("processes: started, written to, tailed from where the last tail ended, lis
   assert.ok(started.ok);
   const id = started.result.process_id;
   assert.ok((await run(t, "process.write", { process_id: id, data_base64: Buffer.from("one\n").toString("base64") })).ok);
-  let tail: any;
-  for (let i = 0; i < 100; i++) {
-    tail = await run(t, "process.tail", { process_id: id });
-    if (tail.ok && tail.result.next > 0) break;
-    await new Promise((r) => setTimeout(r, 20));
-  }
+  /// Tails it (from `since`) every 20 ms until `done` says what came is what was waited for (a real process: no
+  /// deadline).
+  const tailUntil = async (since: number | undefined, done: (got: any) => boolean) => {
+    for (;;) {
+      const got = await run(t, "process.tail", since === undefined ? { process_id: id } : { process_id: id, since });
+      if (done(got)) return got;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+  };
+  const tail = await tailUntil(undefined, (got) => got.ok && got.result.next > 0);
   assert.equal(Buffer.from(tail.result.data_base64, "base64").toString(), "one\n");
   assert.equal(tail.result.exited, false);
   const next = tail.result.next;
   await run(t, "process.write", { process_id: id, data_base64: Buffer.from("two\n").toString("base64") });
-  let more: any;
-  for (let i = 0; i < 100; i++) {
-    more = await run(t, "process.tail", { process_id: id, since: next });
-    if (more.ok && more.result.next > next) break;
-    await new Promise((r) => setTimeout(r, 20));
-  }
+  const more = await tailUntil(next, (got) => got.ok && got.result.next > next);
   assert.equal(Buffer.from(more.result.data_base64, "base64").toString(), "two\n");
   const listed = await run(t, "process.list");
   assert.ok(listed.ok && listed.result.processes.some((p: any) => p.process_id === id && p.command === "cat"));
   assert.ok((await run(t, "process.stop", { process_id: id })).ok);
-  let ended: any;
-  for (let i = 0; i < 100; i++) {
-    ended = await run(t, "process.tail", { process_id: id, since: more.result.next });
-    if (ended.result.exited) break;
-    await new Promise((r) => setTimeout(r, 20));
-  }
-  assert.equal(ended.result.exited, true);
+  const ended = await tailUntil(more.result.next, (got) => got.result.exited);
   assert.ok("exit_code" in ended.result);
   const unknown = await run(t, "process.tail", { process_id: "p999" });
   assert.equal(!unknown.ok && unknown.code, "not_found");

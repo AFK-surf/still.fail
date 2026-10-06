@@ -86,12 +86,10 @@ function aspect(hash: Buffer): number {
 const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 const sent = (path: string): Attachment => ({ name: path.split("/").at(-1)!, path, size: 0 });
 
-async function until(what: string, f: () => boolean) {
-  for (let i = 0; i < 200; i++) {
-    if (f()) return;
-    await new Promise((r) => setTimeout(r, 20));
-  }
-  throw new Error(`timed out: ${what}`);
+/// Looks every 20 ms until `f` holds: a thumbnail is made in the background, on the file system. No deadline (it
+/// comes, however slow the machine, or the test hangs).
+async function until(_what: string, f: () => boolean) {
+  while (!f()) await new Promise((r) => setTimeout(r, 20));
 }
 
 test("which files: png, jpg, jpeg and webp, by name", () => {

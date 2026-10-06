@@ -14,9 +14,9 @@ import { NameBook } from "../src/slack/names.ts";
 import { ThreadStatus } from "../src/slack/status.ts";
 import { SlackSurface, toEvent, verifySlackTokens } from "../src/slack/surface.ts";
 import { SlackClient } from "../src/slack/web.ts";
+import { settle, testClock } from "./hub-fakes.ts";
 import { FakeSlack, bot } from "./slack-fake.ts";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const quiet = async (_: ChatEvent) => {};
 const PING = 50;
 const STALE = 200;
@@ -138,13 +138,14 @@ describe("slack", { concurrency: true }, () => {
     const fake = await FakeSlack.start();
     try {
       const clock = Effect.runSync(Scope.provide(TestClock.make(), scope));
-      /// Moves the clock a ping on, until `done`: each time once the socket's last ping (if it was sent) came, so the
-      /// surface is waiting for its next.
+      let heard = 0;
+      /// Moves the clock a ping on, until `done`: each time once the surface's look came to its end (or a ping it sent
+      /// came, and when the stand-in answers pings, its pong came back), so the surface is waiting for its next.
       const ping = async (done: () => boolean) => {
         while (!done()) {
-          const pings = fake.pings;
+          const [pings, pongs] = [fake.pings, heard];
           await Effect.runPromise(clock.adjust(PING_MS));
-          await fake.until("a ping, or the end", () => done() || fake.pings > pings, 100).catch(() => {});
+          await fake.until("a ping, or the end", () => done() || (fake.pings > pings && (!fake.answersPings || heard > pongs)));
         }
       };
 
@@ -154,18 +155,21 @@ describe("slack", { concurrency: true }, () => {
       let failed: Error | undefined;
       void Effect.runPromise(Effect.flip(surface.runSocket(fake.socketUrl(), quiet))).then((e) => (failed = e));
       await fake.until("a socket", () => surface.socket().connected);
+      // Its watch goes on from the socket's opening to its first wait.
+      await settle();
       await ping(() => failed !== undefined);
       const took = clock.currentTimeMillisUnsafe() - started;
       assert.match(failed!.message, /said nothing/);
       assert.ok(took >= STALE_MS && took < STALE_MS * 3, `${took} ms`);
 
       fake.answersPings = true;
-      const staying = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), clock });
+      const staying = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), clock, onHeard: () => heard++ });
       // Nothing but pongs comes in, for well past its staleness: still up.
       let raced: Result.Result<Option.Option<void>, Error> | undefined;
       const running = Effect.timeoutOption(staying.runSocket(fake.socketUrl(), quiet), STALE_MS * 6).pipe(Effect.provideService(Clock.Clock, clock));
       void Effect.runPromise(Effect.result(running)).then((r) => (raced = r));
       await fake.until("a second socket", () => fake.sockets.length === 2 && staying.socket().connected);
+      await settle();
       await ping(() => raced !== undefined);
       assert.ok(Result.isSuccess(raced!) && Option.isNone(raced.success), "still running when the time was up");
       assert.ok(fake.pings >= 6 * (STALE_MS / PING_MS) - 1, `pinged ${fake.pings} times`);
@@ -179,7 +183,15 @@ describe("slack", { concurrency: true }, () => {
   test("a connected surface takes Socket Mode events, acknowledges those it kept, reconnects when asked, and stops", async () => {
     const fake = await FakeSlack.start();
     bot(fake);
-    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5 });
+    // The connections it asks Slack for, counted as it asks.
+    const client = new SlackClient(fake.base);
+    const api = client.api.bind(client);
+    let opens = 0;
+    client.api = ((method: string, ...rest: unknown[]) => {
+      if (method === "apps.connections.open") opens++;
+      return (api as any)(method, ...rest);
+    }) as typeof client.api;
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client, pingMs: PING, staleMs: STALE * 5 });
     const heard: ChatEvent[] = [];
     let changes = 0;
     surface.onChange(() => changes++);
@@ -195,12 +207,13 @@ describe("slack", { concurrency: true }, () => {
       fake.event("e1", { type: "app_mention", channel: "C1", user: "U1", ts: "5.1", text: "<@UBOT> hi" });
       fake.event("e2", { type: "message", channel: "C1", user: "UBOT", ts: "5.2", text: "mine" });
       fake.event("e3", { type: "message", channel: "C1", user: "U1", ts: "5.3", text: "refuse" });
+      // Taken after e3 was (each event's handler ends before the next is read here): its ack comes after any of e3's.
+      fake.event("e4", { type: "message", channel: "C1", user: "UBOT", ts: "5.4", text: "mine again" });
       fake.send({ type: "hello" });
-      await fake.until("two acks", () => fake.acks.length >= 2);
-      await sleep(50);
+      await fake.until("e4's ack", () => fake.acks.some((a) => a.envelope_id === "e4"));
       assert.deepEqual(
         fake.acks.map((a) => a.envelope_id).sort(),
-        ["e1", "e2"],
+        ["e1", "e2", "e4"],
         "what it kept, and what it ignores, acknowledged; what failed is not (Slack sends it again)",
       );
       assert.deepEqual(heard, [{ type: "message", message: { channel: "C1", threadTs: "5.1", ts: "5.1", user: "U1", text: "<@UBOT> hi", addressed: true } }]);
@@ -210,8 +223,8 @@ describe("slack", { concurrency: true }, () => {
       assert.ok(changes >= 3, "the socket's ups and downs are told");
       await surface.stop();
       await fake.until("the socket closed", () => fake.sockets[1]!.readyState === fake.sockets[1]!.CLOSED);
-      await sleep(100);
-      assert.equal(fake.sockets.length, 2, "stopped: not connected again");
+      await settle();
+      assert.deepEqual([opens, fake.sockets.length], [2, 2], "stopped: not connected again");
     } finally {
       await surface.stop();
       await fake.close();
@@ -352,7 +365,8 @@ describe("slack", { concurrency: true }, () => {
     const dir = mkdtempSync(join(tmpdir(), "nb-"));
     const path = join(dir, "slack-names.json");
     try {
-      const book = new NameBook(path, { learnAfterMs: 20, saveAfterMs: 60 });
+      const time = testClock();
+      const book = new NameBook(path, { learnAfterMs: 20, saveAfterMs: 60, clock: time.clock });
       let told = 0;
       let asked = 0;
       book.onLearn(() => told++);
@@ -361,14 +375,17 @@ describe("slack", { concurrency: true }, () => {
       assert.equal(book.person("u:T:U1", ada), null, "asked again while fetching: not twice");
       assert.equal(book.channel("c:T:D1", async () => null), null);
       assert.equal(book.person("u:T:U9", async () => null), null);
-      await sleep(150);
+      await settle();
       assert.equal(asked, 1);
       assert.equal(book.person("u:T:U1", ada)?.name, "Ada");
+      assert.equal(told, 0, "told once the burst is over");
+      await time.adjust(20);
+      await settle();
       assert.equal(told, 1, "once per burst");
       // A failed lookup is not tried again for a while.
       let again = 0;
       book.person("u:T:U9", async () => (again++, null));
-      await sleep(10);
+      await settle();
       assert.equal(again, 0);
       await book.close();
       // Kept on disk: a direct message known to have no name, and the person.
@@ -401,21 +418,24 @@ describe("slack", { concurrency: true }, () => {
   }
   /// Runs a status line's waits as fibers of a scope the test closes: a wait still due (the next change, seconds on) ends
   /// with it, and does not hold the test's process.
-  function fibers(): { run: (effect: Effect.Effect<void>) => Promise<void>; close: () => Promise<void> } {
+  /// On a TestClock, moved on by `adjust`.
+  function fibers(): { run: (effect: Effect.Effect<void>) => Promise<void>; adjust: (ms: number) => Promise<void>; close: () => Promise<void> } {
     const scope = Effect.runSync(Scope.make());
-    const run = Effect.runSync(Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), scope));
-    return { run, close: () => Effect.runPromise(Scope.close(scope, Exit.void)) };
+    const time = testClock();
+    const runtime = Effect.runSync(Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), scope));
+    const run = (effect: Effect.Effect<void>) => runtime(effect.pipe(Effect.provideService(Clock.Clock, time.clock)));
+    return { run, adjust: time.adjust, close: () => Effect.runPromise(Scope.close(scope, Exit.void)) };
   }
 
   test("a thread's status line says what the agent does and goes when it is done", async (t) => {
-    const { run, close } = fibers();
+    const { run, adjust, close } = fibers();
     t.after(close);
     const [call, calls] = recording(null);
     const line = new ThreadStatus(call, run, "C1", "1.1");
     line.say("正在思考…", "1.2");
-    await sleep(30);
+    await settle();
     line.say("", null);
-    await sleep(30);
+    await settle();
     assert.deepEqual(
       calls.map(([m, p]) => [m, p.status]),
       [
@@ -428,11 +448,16 @@ describe("slack", { concurrency: true }, () => {
     const [paced, sent] = recording(null);
     const busy = new ThreadStatus(paced, run, "C1", "1.1");
     busy.say("a", null);
-    await sleep(20);
+    await settle();
+    await adjust(20);
     busy.say("b", null);
     busy.say("c", null);
-    await sleep(50);
+    await adjust(1_000);
+    await settle();
     assert.deepEqual(sent.map(([, p]) => p.status), ["a"]);
+    await adjust(980);
+    await settle();
+    assert.deepEqual(sent.map(([, p]) => p.status), ["a", "c"]);
   });
 
   test("where Slack will not show a status, an eyes reaction stands in", async (t) => {
@@ -441,9 +466,9 @@ describe("slack", { concurrency: true }, () => {
     const [call, calls] = recording("missing_scope");
     const line = new ThreadStatus(call, run, "C1", "1.1");
     line.say("正在运行命令…", "1.2");
-    await sleep(30);
+    await settle();
     line.say("", null);
-    await sleep(30);
+    await settle();
     assert.deepEqual(
       calls.map(([m, p]) => [m, p.timestamp ?? null, p.name ?? null]),
       [

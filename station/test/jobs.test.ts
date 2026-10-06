@@ -84,14 +84,14 @@ function memory(): Store {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/// Waits for what a real process does (it has no event here), `ms` at most.
-async function until(what: string, check: () => boolean, ms = 5000) {
-  const end = Date.now() + ms;
-  while (!check()) {
-    if (Date.now() > end) assert.fail(`never: ${what}`);
-    await sleep(5);
-  }
+/// Waits for what a real process does (it has no event here), looking every 5 ms. No deadline: it comes, however slow
+/// the machine, or the test hangs.
+async function until(_what: string, check: () => boolean) {
+  while (!check()) await sleep(5);
 }
+
+/// A job's command that never ends by itself: running for as long as a test needs, however slow the machine.
+const FOREVER = "tail -f /dev/null";
 
 /// A TestClock for a station, and how many sleeps were asked of it and are over: a fiber asked for one is sleeping on
 /// it (an adjust reaches it), one whose sleep is over has gone on past it.
@@ -149,7 +149,7 @@ describe("jobs", { concurrency: true }, () => {
 
   test("a job tells its agent on the way through its token", async () => {
     const r = new Rig();
-    const job = r.jobs.start("s1", "long", "sleep 5", r.work, null, false);
+    const job = r.jobs.start("s1", "long", FOREVER, r.work, null, false);
     r.jobs.notified(job.token, "  half way  ");
     assert.deepEqual(r.said(), [`Job "long" (${job.id}) says: half way`]);
     assert.throws(() => r.jobs.notified("wrong", "x"));
@@ -172,7 +172,7 @@ describe("jobs", { concurrency: true }, () => {
       `stillfail-job 2>&1; ember-job 2>&1; [ "$STILLFAIL_JOB_ID" = "$EMBER_JOB_ID" ] && [ "$STILLFAIL_JOB_TOKEN" = "$EMBER_JOB_TOKEN" ] && echo same`,
       r.work, null, false,
     );
-    await until("it ends", () => r.state(job.id) !== "running", 20_000);
+    await until("it ends", () => r.state(job.id) !== "running");
     const ended = r.store.getJob(job.id)!;
     assert.equal(ended.state, "exited");
     assert.equal(tail(ended.log, 10), "usage: stillfail-job notify <words>\nusage: stillfail-job notify <words>\nsame");
@@ -223,7 +223,7 @@ describe("jobs", { concurrency: true }, () => {
   test("a job stopped from the pages tells its agent who did", async () => {
     const r = new Rig();
     sessionActive(r.store, "s1", 60_000);
-    const job = r.jobs.start("s1", "watch", "sleep 5", r.work, null, false);
+    const job = r.jobs.start("s1", "watch", FOREVER, r.work, null, false);
     const stopped = await r.jobs.stopFor(job.id, "ann@example.com");
     assert.equal(stopped.state, "stopped");
     assert.deepEqual(r.said(), [`Job "watch" (${job.id}) was stopped by ann@example.com from still.fail's page.`]);
@@ -232,10 +232,10 @@ describe("jobs", { concurrency: true }, () => {
   test("a job stopped from the pages does not wake an idle agent", async () => {
     const r = new Rig();
     sessionActive(r.store, "s1", 6 * 60_000);
-    const job = r.jobs.start("s1", "watch", "sleep 5", r.work, null, false);
+    const job = r.jobs.start("s1", "watch", FOREVER, r.work, null, false);
     assert.equal((await r.jobs.stopFor(job.id, "ann@example.com")).state, "stopped");
     // Once it is at work again, it is told.
-    const other = r.jobs.start("s1", "again", "sleep 5", r.work, null, false);
+    const other = r.jobs.start("s1", "again", FOREVER, r.work, null, false);
     r.store.setRunning("s1", true);
     await r.jobs.stopFor(other.id, "ann@example.com");
     assert.deepEqual(r.said(), [`Job "again" (${other.id}) was stopped by ann@example.com from still.fail's page.`]);
@@ -245,7 +245,7 @@ describe("jobs", { concurrency: true }, () => {
     const r = new Rig();
     const failed = r.jobs.start("s1", "boom", "echo x; exit 2", r.work, null, false);
     const done = r.jobs.start("s1", "done", "true", r.work, null, false);
-    const live = r.jobs.start("s1", "watch", "sleep 5", r.work, null, false);
+    const live = r.jobs.start("s1", "watch", FOREVER, r.work, null, false);
     const other = r.jobs.start("s2", "boom", "exit 2", r.work, null, false);
     await until("they end", () => [failed, done, other].every((j) => r.state(j.id) === "exited"));
     r.store.addJobNotice(failed.id, "broke");
@@ -320,7 +320,7 @@ describe("jobs", { concurrency: true }, () => {
 
   test("a job gone without a word runs again when the station starts", async () => {
     const before = new Rig();
-    const job = before.jobs.start("s1", "watch", "sleep 30", before.work, null, false);
+    const job = before.jobs.start("s1", "watch", FOREVER, before.work, null, false);
     await before.jobs.shutdown();
     // What a restart of the machine does to it.
     const pgid = before.store.getJob(job.id)!.pgid!;
@@ -338,7 +338,7 @@ describe("jobs", { concurrency: true }, () => {
     const r = new Rig();
     const tools = jobTools(r.jobs, () => r.work);
     const call = (name: string, key: string, args: Record<string, unknown>) => tools.find((t) => t.name === name)!.run(key, args);
-    const made = JSON.parse(await call("job_start", "s1", { command: "echo hello; sleep 5", name: "hi", port: 5010 }));
+    const made = JSON.parse(await call("job_start", "s1", { command: `echo hello; ${FOREVER}`, name: "hi", port: 5010 }));
     const id: string = made.id;
     assert.equal(made.link, `https://ember.test/o/ws/st/s1?service=${id}`);
     assert.ok(!("token" in made), "its token is not said");
@@ -352,8 +352,8 @@ describe("jobs", { concurrency: true }, () => {
 
   test("leaving the workspace stops every job and service and says why", async () => {
     const r = new Rig();
-    const job = r.jobs.start("s1", "long", "sleep 30", r.work, null, false);
-    const service = r.jobs.start("s2", "web", "sleep 30", r.work, 47991, false);
+    const job = r.jobs.start("s1", "long", FOREVER, r.work, null, false);
+    const service = r.jobs.start("s2", "web", FOREVER, r.work, 47991, false);
     const done = r.jobs.start("s1", "done", "exit 0", r.work, null, false);
     await until("the short one ends", () => r.state(done.id) === "exited");
     await r.jobs.stopAll("the station was removed from its workspace");
@@ -367,7 +367,7 @@ describe("jobs", { concurrency: true }, () => {
   /// A station that starts out of its workspace takes nothing up; stopping all then ends what the one before left running.
   test("stopping all ends jobs an earlier station left running", async () => {
     const before = new Rig();
-    const job = before.jobs.start("s1", "long", "sleep 30", before.work, null, false);
+    const job = before.jobs.start("s1", "long", FOREVER, before.work, null, false);
     await before.jobs.shutdown();
     const pgid = before.store.getJob(job.id)!.pgid!;
     const after = restarted(before);
@@ -382,9 +382,9 @@ describe("jobs", { concurrency: true }, () => {
 
   test("a watch is kept by its session while it runs, with when it last said something", async () => {
     const r = new Rig();
-    assert.throws(() => r.jobs.start("s1", "w", "sleep 5", r.work, 4998, true), /no port/, "a watch is no service");
-    const plain = r.jobs.start("s2", "build", "sleep 5", r.work, null, false);
-    const watch = r.jobs.start("s1", "盯 CI", "sleep 5", r.work, null, true);
+    assert.throws(() => r.jobs.start("s1", "w", FOREVER, r.work, 4998, true), /no port/, "a watch is no service");
+    const plain = r.jobs.start("s2", "build", FOREVER, r.work, null, false);
+    const watch = r.jobs.start("s1", "盯 CI", FOREVER, r.work, null, true);
     assert.ok(!plain.watch && watch.watch);
     assert.equal(r.store.getJob(watch.id)!.watch, true, "kept as a watch");
     const now = watching(r.store);
@@ -400,7 +400,7 @@ describe("jobs", { concurrency: true }, () => {
 
   test("a remote task whose process was lost is not run again", async () => {
     const r = new Rig();
-    const job = r.jobs.startId("remote:ws:peer:session", "once", "echo ran >> count; sleep 30", r.work, null, false, "remote_lost_test");
+    const job = r.jobs.startId("remote:ws:peer:session", "once", `echo ran >> count; ${FOREVER}`, r.work, null, false, "remote_lost_test");
     await until("command started", () => existsSync(join(r.work, "count")));
     await r.jobs.shutdown();
     await Effect.runPromise(endGroup(job.pgid!, 50));
@@ -446,7 +446,7 @@ describe("jobs", { concurrency: true }, () => {
 
   test("what a job says reaches /jobs/notify with its token, and nothing else does", async () => {
     const r = new Rig();
-    const job = r.jobs.start("s1", "long", "sleep 5", r.work, null, false);
+    const job = r.jobs.start("s1", "long", FOREVER, r.work, null, false);
     assert.deepEqual(notifyEndpoint(r.jobs, `Bearer ${job.token}`, "built ✓"), { status: 200, body: { ok: true } });
     assert.deepEqual(notifyEndpoint(r.jobs, "Bearer nope", "x"), { status: 400, body: { error: "unknown job token" } });
     assert.deepEqual(notifyEndpoint(r.jobs, `Bearer ${job.token}`, "   "), { status: 400, body: { error: "nothing to say" } });

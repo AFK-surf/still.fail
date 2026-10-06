@@ -40,11 +40,8 @@ test("a message in the station's chat: a turn starts, the agent posts through th
     const [key, thread] = newSession(hub, { runtime: "claude", createdBy: "ada@x.com" });
     say(hub, thread.id, "ada@x.com", "post:hello from the agent");
     // Its turn: started, posted, ended.
-    for (let i = 0; i < 400; i++) {
-      const last = store.lastTurn(key);
-      if (last?.endedAt !== null && last !== null) break;
-      await new Promise((r) => setTimeout(r, 25));
-    }
+    // Real processes: looked at every 25 ms (no deadline).
+    while (store.lastTurn(key)?.endedAt == null) await new Promise((r) => setTimeout(r, 25));
     const said = store.messagesBefore(thread.id, null, 10).map((m) => [m.authorKind, m.author, m.text]);
     assert.deepEqual(said, [
       ["person", "ada@x.com", "post:hello from the agent"],

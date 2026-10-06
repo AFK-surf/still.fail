@@ -93,11 +93,10 @@ export class FakeSlack {
     this.send({ type: "events_api", envelope_id: id, payload: { event } });
   }
 
-  /// Resolves once `f` holds (looked at whenever the stand-in heard something, and every 20 ms).
-  async until(what: string, f: () => boolean, ms = 5000) {
-    const end = Date.now() + ms;
+  /// Resolves once `f` holds (looked at whenever the stand-in heard something, and every 20 ms). No deadline: what is
+  /// waited for comes, however slow the machine, or the test hangs.
+  async until(_what: string, f: () => boolean) {
     while (!f()) {
-      if (Date.now() > end) throw new Error(`timed out: ${what}`);
       await new Promise<void>((resolve) => {
         this.waiters.push(resolve);
         setTimeout(resolve, 20);

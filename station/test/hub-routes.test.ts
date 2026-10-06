@@ -20,12 +20,9 @@ import { FakeDriver, settle } from "./hub-fakes.ts";
 const viewer = { sub: "u", email: "a@x", name: "A", role: "member", workspace: "w", device: "d" };
 const en = (key: string, args: Record<string, unknown> = {}) => tr("en", key, args);
 
-async function until(what: string, f: () => boolean) {
-  for (let i = 0; i < 200; i++) {
-    if (f()) return;
-    await new Promise((r) => setTimeout(r, 25));
-  }
-  throw new Error(`timed out: ${what}`);
+/// Looks every 25 ms until `f` holds (no deadline: it comes, however slow the machine, or the test hangs).
+async function until(_what: string, f: () => boolean) {
+  while (!f()) await new Promise((r) => setTimeout(r, 25));
 }
 
 function rig(withAgents = true) {
@@ -285,7 +282,8 @@ test("a chat's ended jobs cleared, a job stopped from the pages", async () => {
     const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });
     const work = r.store.getSession(made.key)!.workspace;
     const done = r.jobs.start(made.key, "done", "true", work, null, false);
-    const live = r.jobs.start(made.key, "watch", "sleep 5", work, null, false);
+    // Never ends by itself: still running when it is stopped, however slow the machine.
+    const live = r.jobs.start(made.key, "watch", "tail -f /dev/null", work, null, false);
     await until("it ends", () => r.store.getJob(done.id)!.state === "exited");
     assert.deepEqual(await r.ask("DELETE", "/sessions/nope/jobs"), [404, { error: "unknown session nope" }]);
     assert.deepEqual(await r.ask("DELETE", `/sessions/${made.key}/jobs`), [200, { removed: [done.id] }]);

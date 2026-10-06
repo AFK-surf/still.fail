@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { claudeOAuthToken, RefreshLock } from "../src/accounts/oauth.ts";
 import { URLS } from "../src/accounts/profiles.ts";
 import { at, claudeUsage, claudeWithRefresh, codexQuota, codexUsage, codexWindows, windowLabel } from "../src/accounts/quota.ts";
-import { provider, script, temp } from "./accounts-fakes.ts";
+import { provider, script, temp, until } from "./accounts-fakes.ts";
 
 describe("allowances and renewing", { concurrency: true }, () => {
   test("an account its provider refuses is blocked, a sign-in no longer good is not", async () => {
@@ -159,13 +159,14 @@ describe("allowances and renewing", { concurrency: true }, () => {
     writeFileSync(path, JSON.stringify(credentials(1)));
     const lock = `${realpathSync(home)}.lock`;
     mkdirSync(lock);
-    setTimeout(() => {
-      const data = credentials(Date.now() + 3_600_000);
-      data.claudeAiOauth.accessToken = "cli-won";
-      writeFileSync(path, JSON.stringify(data));
-      rmdirSync(lock);
-    }, 100);
-    const [token] = await claudeOAuthToken({}, home, null, "http://127.0.0.1:1");
+    const renewed = claudeOAuthToken({}, home, null, "http://127.0.0.1:1");
+    // Its own lock taken, it is waiting on the legacy one (taken in the same run of microtasks): the CLI saves and leaves.
+    await until(() => existsSync(join(home, ".oauth_refresh.lock")), "its own lock taken");
+    const data = credentials(Date.now() + 3_600_000);
+    data.claudeAiOauth.accessToken = "cli-won";
+    writeFileSync(path, JSON.stringify(data));
+    rmdirSync(lock);
+    const [token] = await renewed;
     assert.equal(token, "cli-won");
   });
 

@@ -5,6 +5,9 @@
 //   slow:<n>      n deltas, 50 ms apart          cmd                    a command with output, then a reply
 //   again         a reply, then a turn of its own                      ask   asks the client something first
 //   exit          exits 4 in the middle of the turn
+//   hold:<k>      k deltas, then waits until steered (the steers its deltas) or interrupted
+//   gate:<n>:<k>:<name>   k of n deltas; the rest once FAKE_DUMP.<name>.a (a fifo) is written, then FAKE_DUMP.<name>.said
+//                 made; the end once FAKE_DUMP.<name>.b is (what the test lets happen when, not a time)
 // FAKE_DUMP: its argv and env are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin.
 import fs from "node:fs";
 import readline from "node:readline";
@@ -15,6 +18,13 @@ if (dump) fs.appendFileSync(dump, JSON.stringify({ argv: process.argv.slice(2), 
 const say = (msg) => fs.writeSync(1, JSON.stringify(msg) + "\n");
 const notify = (method, params) => say({ method, params });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/// Waits until the fifo at `path` is written (and closed).
+const gate = (path) => fs.promises.readFile(path);
+/// What wakes a thread's turn waiting for a steer or an interrupt, by thread id.
+const wakes = new Map();
+/// What wakes a turn waiting for the client's answer, by request id.
+const heard = new Map();
 
 let initialized = false;
 let n = 0;
@@ -27,14 +37,24 @@ function thread(id) {
   return threads.get(id);
 }
 
-async function agentMessage(threadId, t, texts, gap) {
+/// A reply of `texts`, `gap` ms apart; `before(i)`, if given, waited for before the i-th (and before its end, at i =
+/// texts.length).
+async function agentMessage(threadId, t, texts, gap, before) {
   const itemId = `it-${++n}`;
   notify("item/started", { threadId, turnId: t.turn, item: { type: "agentMessage", id: itemId, text: "" } });
-  for (const text of texts) {
+  const steered = () => {
+    for (const s of t.steers.splice(0)) notify("item/agentMessage/delta", { threadId, turnId: t.turn, itemId, delta: `steer:${s}` });
+  };
+  for (const [i, text] of texts.entries()) {
+    if (before) await before(i);
     if (t.interrupted) break;
     notify("item/agentMessage/delta", { threadId, turnId: t.turn, itemId, delta: text });
-    for (const s of t.steers.splice(0)) notify("item/agentMessage/delta", { threadId, turnId: t.turn, itemId, delta: `steer:${s}` });
+    steered();
     if (gap) await sleep(gap);
+  }
+  if (before && !t.interrupted) {
+    await before(texts.length);
+    steered();
   }
   notify("item/completed", { threadId, turnId: t.turn, item: { type: "agentMessage", id: itemId } });
 }
@@ -59,7 +79,7 @@ async function runTurn(threadId, text) {
   }
   if (text === "ask") {
     say({ id: "srv-1", method: "item/commandExecution/requestApproval", params: { threadId, turnId: t.turn, itemId: "x" } });
-    for (let i = 0; i < 50 && !answers.has("srv-1"); i++) await sleep(20);
+    if (!answers.has("srv-1")) await new Promise((r) => heard.set("srv-1", r));
   }
   if (text === "cmd") {
     const itemId = `it-${++n}`;
@@ -70,6 +90,21 @@ async function runTurn(threadId, text) {
   if (text.startsWith("slow:")) {
     const count = Number(text.slice(5));
     await agentMessage(threadId, t, Array.from({ length: count }, (_, i) => `d${i} `), 50);
+  } else if (text.startsWith("hold:")) {
+    const k = Number(text.slice(5));
+    await agentMessage(threadId, t, Array.from({ length: k }, (_, i) => `d${i} `), 0, async (i) => {
+      while (i === k && !t.interrupted && t.steers.length === 0) await new Promise((r) => wakes.set(threadId, r));
+    });
+  } else if (text.startsWith("gate:")) {
+    const [count, held, name] = text.slice(5).split(":");
+    const at = `${dump}.${name}`;
+    await agentMessage(threadId, t, Array.from({ length: Number(count) }, (_, i) => `d${i} `), 0, async (i) => {
+      if (i === Number(held)) await gate(`${at}.a`);
+      if (i === Number(count)) {
+        fs.writeFileSync(`${at}.said`, "");
+        await gate(`${at}.b`);
+      }
+    });
   } else {
     await agentMessage(threadId, t, [text.startsWith("say:") ? text.slice(4) : text], 0);
   }
@@ -87,6 +122,7 @@ function handle(msg) {
   const fail = (message) => say({ id, error: { code: -32600, message } });
   if (method === undefined) {
     answers.set(id, msg);
+    heard.get(id)?.();
     return;
   }
   if (method === "initialize") {
@@ -117,11 +153,13 @@ function handle(msg) {
     const t = thread(params.threadId);
     if (!t.turn || t.turn !== params.expectedTurnId) return fail("no active turn to steer");
     t.steers.push(params.input.map((i) => i.text).join(""));
+    wakes.get(params.threadId)?.();
     return reply({ turnId: t.turn });
   }
   if (method === "turn/interrupt") {
     const t = thread(params.threadId);
     if (t.turn === params.turnId) t.interrupted = true;
+    wakes.get(params.threadId)?.();
     return reply({});
   }
   if (method === "thread/unsubscribe") return reply({ status: "unsubscribed" });

@@ -1,6 +1,7 @@
 // The accounts' admin routes (admin/tests.rs: profiles, sign-ins, allowances, machine profiles, automatic decisions),
 // on a station of the test's own: a config.json in a temp directory, a store, stand-in checks, allowances and login
 // commands. Nothing reaches a provider, a keychain or a real login.
+import type { Clock } from "effect";
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -16,6 +17,7 @@ import { fingerprint } from "../src/sessions/decision.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
 import { Store } from "../src/store/store.ts";
 import { approval, fakeLogin, machine as fakeMachine, script, temp, until, upon } from "./accounts-fakes.ts";
+import { settle, testClock } from "./hub-fakes.ts";
 
 const viewer = (email: string, role: string) => ({ sub: `sub-${email}`, email, name: "", role, workspace: "ws", device: "d" });
 const owner = viewer("owner@example.com", "owner");
@@ -23,7 +25,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; machine?: MachineLogins; discover?: AccountsDeps["discover"] } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; machine?: MachineLogins; discover?: AccountsDeps["discover"]; clock?: Clock.Clock } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -60,6 +62,7 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
       : null,
     resetQuota: o.resetQuota ?? null,
     discover: o.discover ?? (async (profile) => ({ state: "unsupported", detail: "", model: null, provider: null, models: [], fingerprint: fingerprint(profile) })),
+    clock: o.clock,
   });
   accounts.start();
   const table = routes({
@@ -300,11 +303,12 @@ describe("the accounts routes", { concurrency: true }, () => {
 
   test("a profile just made has its allowance read at once, without waiting for a round", async () => {
     const quota = { n: 0 };
-    const t = await rig({ quota });
+    // Its time never moves: no round comes.
+    const t = await rig({ quota, clock: testClock().clock });
     const made = await t.call("PUT", "/profiles/linked", { name: "Linked", runtime: "codex", access: { kind: "subscription" }, home: "homes/linked" });
     assert.equal(made[0], 200);
     await until(() => quota.n > 0, "the allowance read");
-    await new Promise((r) => setTimeout(r, 50));
+    await settle();
     assert.equal(quota.n, 1);
     assert.equal(t.view("linked")!.quota.windows[0].usedPercent, 12);
     await t.close();
