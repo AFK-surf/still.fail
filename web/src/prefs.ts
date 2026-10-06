@@ -1,10 +1,10 @@
 // How its person likes it on this device, as the core keeps it (its `prefs` topic, `prefs.set`; client/core-ts/src/prefs.ts):
-// the lists' filter, the appearance, whose pictures lead a row, times as dates, keys changed, the chat last open, each
-// chat's history tabs, an invite code kept through signing in. The page reads them at once, before the core answers,
-// from a copy of the core's last value in localStorage (`stillfail.prefs`): the first paint is as it was left (the
-// sidebar filtered, the theme set; index.html reads the appearance's own copy before the page's code runs). The core is
-// what they are: its value overwrites the copy whenever it comes. A core from before prefs answers the topic with an
-// error: the copy is then all there is, written here as before.
+// the lists' filter, the appearance, whose pictures lead a row, times as dates, keys changed, the workspace and the chat
+// last open, each chat's history tabs, an invite code kept through signing in. The page reads them at once, before the
+// core answers, from a copy of the core's last value in localStorage (`stillfail.prefs`): the first paint is as it was
+// left (the sidebar filtered, the theme set; index.html reads the appearance's own copy before the page's code runs). The
+// core is what they are: its value overwrites the copy whenever it comes. A core from before prefs answers the topic
+// with an error: the copy is then all there is, written here as before.
 import { useSyncExternalStore } from "react";
 import { core } from "./core/react.ts";
 import type { DeviceView, PrefsView } from "./core/shapes.ts";

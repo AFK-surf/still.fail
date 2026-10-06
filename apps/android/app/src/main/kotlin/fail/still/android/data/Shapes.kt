@@ -2696,7 +2696,7 @@ data class PrefsView (
 	val lang: String? = null,
 	/// Keys changed for an action (the desktop app's), by action.
 	val keys: Map<String, List<String>>? = null,
-	/// The workspace last open (the Android app's).
+	/// The workspace last open, as the apps keep it: the one they open at start (the first one when it is gone).
 	val workspace: String? = null,
 	/// The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went).
 	val lastChat: Map<String, String>? = null,

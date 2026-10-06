@@ -141,9 +141,9 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
           <Button icon={LogOut} onClick={() => setSigningOut(true)}>{t("web-pages.settings.account.signOutAction")}</Button>
         </div>
       </Section>
-      {/* Away at once; signing out goes on by itself, a failure said by toast (useSignOut). */}
+      {/* Away at once (to none of its workspaces: Landing); signing out goes on by itself, a failure said by toast (useSignOut). */}
       <Confirm open={signingOut} onClose={() => setSigningOut(false)}
-        onConfirm={() => { setSigningOut(false); navigate("/"); void signOut.signOut(account.sub).then((out) => { if (out) toast(t("web-pages.settings.account.signedOut", { email: account.email })); }); }}
+        onConfirm={() => { setSigningOut(false); navigate("/", { state: { signingOut: account.sub } }); void signOut.signOut(account.sub).then((out) => { if (out) toast(t("web-pages.settings.account.signedOut", { email: account.email })); }); }}
         title={t("web-pages.settings.account.signOutConfirm", { email: account.email })} action={t("web-pages.settings.account.signOutAction")} description={t("web-pages.settings.account.signOutConfirmBody")} />
     </div>
   );
@@ -212,10 +212,10 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
           )}
         </div>
       </Section>
-      {/* Away at once: it goes on by itself, a failure said by toast. */}
-      <Confirm open={leaving} onClose={() => setLeaving(false)} onConfirm={() => { setLeaving(false); navigate("/"); void leave.run(); }}
+      {/* Away at once (to another workspace: Landing): it goes on by itself, a failure said by toast. */}
+      <Confirm open={leaving} onClose={() => setLeaving(false)} onConfirm={() => { setLeaving(false); navigate("/", { state: { left: entry.id } }); void leave.run(); }}
         title={t("web-pages.settings.workspace.leaveConfirm", { name: view.name })} action={t("web-pages.settings.workspace.leaveAction")} description={t("web-pages.settings.workspace.leaveConfirmBody")} />
-      <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); navigate("/"); void remove.run(); }}
+      <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); navigate("/", { state: { left: entry.id } }); void remove.run(); }}
         title={t("web-pages.settings.workspace.deleteConfirm", { name: view.name })} action={t("web-pages.settings.workspace.delete")}
         description={t("web-pages.settings.workspace.deleteConfirmBody", { n: view.stations.length, name: NAME })} />
     </Page>

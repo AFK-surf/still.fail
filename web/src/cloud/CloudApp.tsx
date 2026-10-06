@@ -22,7 +22,7 @@ import { cloud, errorText, inviteCode, needsInviteCode, useAction, useWorkspaces
 import { Illustration } from "../brand.tsx";
 import { PageViews, track } from "../telemetry.ts";
 import { useNotices } from "../notify.ts";
-import { usePrefs } from "../prefs.ts";
+import { prefs, setPrefs, usePrefs } from "../prefs.ts";
 import { stationApi, useStationCall } from "../api.ts";
 import * as controlsCss from "../styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
@@ -114,12 +114,18 @@ function SignedIn() {
 }
 
 /**
- * Straight into a workspace: the first one. An account in none is shown its
- * invitations, or told it is in none; a workspace of its own is made only when
- * it asks for one (with the invite code it came with, or after asking for it).
+ * Straight into a workspace: the one last open on this device (WorkspaceRoute
+ * keeps it), else the first. An account in none is shown its invitations, or
+ * told it is in none; a workspace of its own is made only when it asks for one
+ * (with the invite code it came with, or after asking for it).
  */
 function Landing() {
-  const workspaces = useWorkspaces().value;
+  // Come from something going away, as the page that let it go says (its `state`: settings.tsx, mobile/WorkspacePage.tsx):
+  // a workspace left or deleted, or an account signed out. The core lists it until that is done; meanwhile it is not
+  // opened again.
+  const going = useLocation().state as { left?: string; signingOut?: string } | null;
+  const workspaces = useWorkspaces().value?.filter((a) => a.account.sub !== going?.signingOut);
+  const last = usePrefs().workspace;
   const list = useAccounts() ?? [];
   const navigate = useNavigate();
   const signIn = useSignIn();
@@ -136,14 +142,22 @@ function Landing() {
   const asked = useRef(false);
   if (needsInviteCode(create.error)) asked.current = true;
   const asking = asked.current && !create.result;
-  const first = workspaces?.flatMap((a) => a.workspaces)[0];
+  const all = workspaces?.flatMap((a) => a.workspaces).filter((w) => w.id !== going?.left) ?? [];
   const pending = workspaces?.flatMap((a) => a.invitations.map((i) => ({ ...i, account: a.account }))) ?? [];
   // Only once every account has answered does "no workspace" mean none: not before, not after a failure.
   const ready = workspaces !== undefined && workspaces.every((a) => a.loaded);
   const failed = workspaces?.find((a) => a.error)?.error;
+  // The one last open may not be in what was kept yet: until every account has answered (or failed), it is waited for
+  // rather than another put in its place, as the Android app does.
+  const lastOpen = all.find((w) => w.id === last);
+  const waiting = !!last && !lastOpen && !workspaces?.every((a) => a.loaded || a.error);
+  const open = lastOpen ?? (waiting ? undefined : all[0]);
   // The beta app, and an account not let into the beta (the core says so): said, with a way out.
   const blocked = workspaces?.find((a) => a.blocked);
-  if (first) return <Navigate to={`/w/${first.id}`} replace />;
+  if (open) return <Navigate to={`/w/${open.id}`} replace />;
+  if (waiting) return <Splash label={t("web-pages.cloud.workspacesLoading")}><StatusLine /></Splash>;
+  // Every account being signed out: the sign-in page comes once they are (Home).
+  if (workspaces?.length === 0) return <Splash />;
   if (blocked) {
     return (
       <div className={`${shellCss.gate} ${css.invitePage}`}>
@@ -222,9 +236,12 @@ function WorkspaceRoute() {
   const { ws = "" } = useParams();
   const narrow = useNarrow();
   const workspaces = useWorkspaces().value;
-  if (!workspaces) return <Splash label={t("web-pages.cloud.opening")}><StatusLine /></Splash>;
-  const owner = workspaces.find((a) => a.workspaces.some((w) => w.id === ws));
+  const owner = workspaces?.find((a) => a.workspaces.some((w) => w.id === ws));
   const found = owner?.workspaces.find((w) => w.id === ws);
+  // Shown, it is the one last open on this device: where the app opens next time (Landing).
+  const shown = found !== undefined;
+  useEffect(() => { if (shown && prefs().workspace !== ws) setPrefs({ workspace: ws }); }, [shown, ws]);
+  if (!workspaces) return <Splash label={t("web-pages.cloud.opening")}><StatusLine /></Splash>;
   // One just joined (or kept from before) may not be in what was kept yet: until every account has answered (or failed),
   // it is waited for, not said to be out of reach.
   if ((!owner || !found) && !workspaces.every((a) => a.loaded || a.error)) return <Splash label={t("web-pages.cloud.opening")}><StatusLine /></Splash>;

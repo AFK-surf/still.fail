@@ -928,7 +928,7 @@ export const SHAPES: Record<string, Shape> = {
     ["language", opt("String"), { default: true, doc: "The language chosen: `zh`, `en`, or none to follow the device's (its `locale`)." }],
     ["lang", opt("String"), { default: true, doc: "The language things are said in, as chosen or else as the device is: `zh` or `en` (the core's; none from a core\nbefore languages, when the clients go by the device themselves)." }],
     ["keys", map(vec("String")), { default: true, doc: "Keys changed for an action (the desktop app's), by action." }],
-    ["workspace", opt("String"), { default: true, doc: "The workspace last open (the Android app's)." }],
+    ["workspace", opt("String"), { default: true, doc: "The workspace last open, as the apps keep it: the one they open at start (the first one when it is gone)." }],
     ["lastChat", map("String"), { default: true, doc: "The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went)." }],
     ["openChat", map("OpenChat"), { default: true, doc: "The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it\nwas): what the workspace's page goes back to." }],
     ["chatTabs", map("KeptTabs"), { default: true, doc: "Each chat's history tabs, by `<station>:<chat>` (the latest 200)." }],
