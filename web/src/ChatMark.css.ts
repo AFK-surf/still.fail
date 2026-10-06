@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { busyRing } from "./styles/busyRing.ts";
 import { spinKeyframes } from "./styles/keyframes.css.ts";
@@ -70,4 +70,12 @@ export const waitingLead = style({ fontWeight: 600 });
  * Compact needs-you prefix in the desktop sidebar; the explanation keeps the remaining line. Pulled 2px left so the
  * bell (drawn centred in its 14px box) stands under the 10px ring of the title line above, centre on centre.
  */
+/**
+ * A state line led by an icon in the title's mark's column (ChatMark.tsx WaitingText `slot`): the icon (14px, its ink
+ * narrower) centred in the mark's 10px, then what follows 8px on, where the title starts.
+ */
+export const leadLine = style({ display: "flex", alignItems: "center", gap: 8 });
+export const leadSlot = style({ display: "flex", flex: "none", width: 10, height: 14, alignItems: "center", justifyContent: "center", overflow: "visible" });
+globalStyle(`${leadSlot} svg`, { flex: "none" });
+export const leadRest = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const needMark = style({ display: "inline-flex", width: 14, height: 14, marginLeft: -2, verticalAlign: "-2px", alignItems: "center", justifyContent: "center" });

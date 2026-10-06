@@ -14,7 +14,7 @@ import { ask, confirm } from "./sheets.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { FailedMark, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
-import { ChatMark, jumpFromLine, stateLine, WaitingText } from "../ChatMark.tsx";
+import { ChatMark, chatTone, jumpFromLine, stateLine, WaitingText } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
@@ -358,7 +358,8 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
       onClick={(e) => { if (!longPressed.current) { jumpFromLine(item, e.target); app.open(path); } }}>
       <span className={css.mChatText}>
       <span className={css.mChatLine1}>
-        <ChatMark item={item} inline />
+        {/* The mark in a 10px column (its dots are 8px, its rings 10), the one the state line's icon stands in. */}
+        {chatTone(item) && <span className={css.mMarkSlot}><ChatMark item={item} inline /></span>}
         <span className={css.mChatTitle} data-unread={item.unread || undefined}>{item.title}</span>
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
         {busy ? <span className={css.mChatMark} aria-label={t("web-mobile.home.busy")}><Spinner size={12} /></span>
@@ -370,7 +371,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
       <span className={css.mChatLine2}>
         {/* Where it stands, when the core has words for it (奏 · …, 要你帮忙：…, 做完了), instead. */}
         <span className={css.mChatLast}>{stateLine(item)
-          ? <span className={css.mLast}><WaitingText text={stateLine(item)!} className={css.mLastText} /></span>
+          ? <span className={css.mLast}><WaitingText slot text={stateLine(item)!} className={css.mLastText} /></span>
           : item.last && <LastMessage item={item} />}</span>
         <RowAside item={item} lead={lead} size={18} className={css.mRowAside} />
         <span className={css.mChatTime} data-shown={held || undefined}>{item.time?.lastActiveAt?.ago ?? ""}</span>

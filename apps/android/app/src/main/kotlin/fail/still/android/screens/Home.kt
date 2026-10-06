@@ -697,28 +697,25 @@ internal fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
 
 /**
  * Where the chat stands, in its last message's place (the core's `stateText`): a decision waiting for the viewer
- * (奏 · …) in ink with its 奏 bold; anything else in the secondary colour, 在等：… and 做完了 as an hourglass and a check.
+ * (奏 · …) in ink with its 奏 bold; anything else in the secondary colour. A lead said as an icon (要你帮忙 a bell, in
+ * ink; 在等 an hourglass, 做完了 a check) sits where the title's mark does, what follows where the title starts.
  */
 @Composable
 private fun StateLine(state: String, modifier: Modifier = Modifier) {
-    if (fail.still.android.ui.doneLead.containsMatchIn(state) || fail.still.android.ui.waitLead.containsMatchIn(state)) {
-        fail.still.android.ui.StatusText(
-            state, modifier, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
-                androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
-            )),
-        )
-        return
-    }
-    // An agent needing the viewer (要你帮忙：…, Needs you: …): a bell in its words' place, then what it needs, in ink
-    // (web: ChatMark.tsx WaitingText compactNeed).
-    needLead.find(state)?.let { need ->
-        val rest = state.substring(need.value.length)
+    val need = needLead.find(state)
+    val done = if (need == null) fail.still.android.ui.doneLead.find(state) else null
+    val wait = if (need == null && done == null) fail.still.android.ui.waitLead.find(state) else null
+    val iconLead = need ?: done ?: wait
+    if (iconLead != null) {
+        val rest = state.substring(iconLead.value.length)
+        val tint = if (need != null) C.ink else C.muted
+        val icon = if (need != null) Icons.Bell else if (done != null) Icons.Check else Icons.Hourglass
         Row(modifier.semantics(mergeDescendants = true) { contentDescription = state }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Centred under the title's mark (ChatMark, 10dp then 8dp), so what follows starts where the title does.
-            Box(Modifier.width(10.dp), contentAlignment = Alignment.Center) { IconIn(Icons.Bell, 14.dp, C.ink, Modifier.requiredSize(14.dp)) }
+            // The title's mark's place (ChatMark, 10dp then 8dp): centred under a mark, at the title's start with none,
+            // so what follows starts where the title does in a marked row, every row's icon in the same column.
+            Box(Modifier.width(10.dp), contentAlignment = Alignment.Center) { IconIn(icon, 14.dp, tint, Modifier.requiredSize(14.dp)) }
             if (rest.isNotEmpty()) Text(
-                rest, fontSize = 14.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                rest, fontSize = 14.sp, lineHeight = 20.sp, color = tint, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
                     androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
                 )),

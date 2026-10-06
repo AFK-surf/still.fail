@@ -97,6 +97,7 @@ export const mRowAside = style({
   "@media": { "(hover: hover) and (pointer: fine)": { selectors: { [`${mChatRow}:hover &`]: { display: "none" } } } },
 });
 export const mChatLine1 = style({ display: "flex", alignItems: "center", gap: "8px", height: "22px" });
+export const mMarkSlot = style({ display: "flex", flex: "none", width: 10, justifyContent: "center" });
 export const mChatTitle = style({
   flex: "1", minWidth: "0", fontSize: "16px", lineHeight: "22px", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",

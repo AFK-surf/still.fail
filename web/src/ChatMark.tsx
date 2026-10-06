@@ -6,7 +6,7 @@ import { StatusText, Tip } from "./ui.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
 import { t } from "./i18n.ts";
-import { Bell } from "./icons.tsx";
+import { Bell, Check, Hourglass } from "./icons.tsx";
 
 export type ChatTone = "busy" | "done" | "alert" | "wait" | "other";
 
@@ -68,12 +68,26 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
 /**
  * A row's second line from where its chat stands (the core's `stateText`; a core before it: its decision's `decision.text`):
  * 奏 · … (Decision · …) in ink, its lead bold; 要你帮忙：… (Needs you: …) in ink too (it wants the viewer); 出问题：…, 在等：…, 做完了 as quiet as the
- * last message would be.
+ * last message would be. `slot` (the phone's list, as Android's): a lead said as an icon (a bell, an hourglass, a check)
+ * stands in the title's mark's column, centred under it, and what follows starts where the title does.
  */
-export function WaitingText({ text, className, compactNeed = false }: { text: string; className: string; compactNeed?: boolean }) {
-  const need = compactNeed ? /^(?:要你帮忙|Needs you)(?:[：:]\s*|$)/.exec(text) : null;
+export function WaitingText({ text, className, compactNeed = false, slot = false }: { text: string; className: string; compactNeed?: boolean; slot?: boolean }) {
+  const need = compactNeed || slot ? /^(?:要你帮忙|Needs you)(?:[：:]\s*|$)/.exec(text) : null;
   const lead = /^(?:奏|Decision)(?: · |$)/.test(text) ? text.split(" · ")[0]! : "";
   const turn = lead !== "" || /^(?:要你帮忙|Needs you:)/.test(text);
+  const icon = slot ? need ?? DONE.exec(text) ?? WAIT.exec(text) : null;
+  if (icon) {
+    const label = t(need ? "web-main.chatMark.alert" : DONE.test(text) ? "web-main.status.done" : "web-main.status.waiting");
+    const rest = text.slice(icon[0].length);
+    return (
+      <span className={`${className} ${css.leadLine}`} data-turn={turn || undefined} data-state-line="" aria-label={text}>
+        <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label}>
+          {need ? <Bell size={14} /> : DONE.test(text) ? <Check size={14} strokeWidth={1.7} /> : <Hourglass size={14} strokeWidth={1.7} />}
+        </span></Tip>
+        {rest && <span className={css.leadRest}>{rest}</span>}
+      </span>
+    );
+  }
   return (
     <span className={className} data-turn={turn || undefined} data-state-line="">
       {need ? <><Tip label={t("web-main.chatMark.alert")}><span className={css.needMark} role="img" aria-label={t("web-main.chatMark.alert")}>
@@ -83,6 +97,10 @@ export function WaitingText({ text, className, compactNeed = false }: { text: st
     </span>
   );
 }
+
+/** The core's done and waiting leads, in either language (as ui.tsx StatusText reads them). */
+const DONE = /^(?:做完了(?:：|$)|Done(?:: |$))/;
+const WAIT = /^(?:在等：|等待中$|Waiting(?:: |$))/;
 
 /**
  * A row pressed on its state line (WaitingText) when the core says which message the state is about (`stateAbout`):
