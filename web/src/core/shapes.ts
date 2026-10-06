@@ -2673,7 +2673,7 @@ export interface PrefsView {
 	lang?: string;
 	/** Keys changed for an action (the desktop app's), by action. */
 	keys?: Record<string, string[]>;
-	/** The workspace last open (the Android app's). */
+	/** The workspace last open, as the apps keep it: the one they open at start (the first one when it is gone). */
 	workspace?: string;
 	/** The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went). */
 	lastChat?: Record<string, string>;

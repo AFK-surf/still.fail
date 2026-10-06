@@ -43,8 +43,8 @@ export interface MobileApp {
   /** The page in view's path (`/w/<id>…`, as the address has it): the latest chats mark its row. */
   current: string;
   pop: () => void;
-  /** The top page gives way to another (a new chat becomes the chat it made). */
-  replace: (path: string) => void;
+  /** The top page gives way to another (a new chat becomes the chat it made); `state`, the history's for it. */
+  replace: (path: string, state?: unknown) => void;
   home: () => void;
   sheet: (spec: SheetSpec | null) => void;
   menu: (spec: MenuSpec | null) => void;
@@ -165,7 +165,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
     // The wait for a closing sheet's back is inside the crossfade, which starts a frame later: a sheet closed in the same
     // tap (another workspace from the workspace sheet) starts its back in between, and replacing before that back lands
     // would put the new page on the sheet's entry, which the back then leaves for the old page.
-    replace: (path) => void transitionTo(() => afterBack(() => navigate(path, { replace: true }))),
+    replace: (path, state) => void transitionTo(() => afterBack(() => navigate(path, { replace: true, state }))),
     home: () => afterBack(() => navigate(home)),
     sheet: setSheet,
     menu: setMenu,

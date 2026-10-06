@@ -33,12 +33,12 @@ export function WorkspaceScreen() {
   const manager = view.role === "owner" || view.role === "admin";
   const leave = () => confirm(app, {
     title: t("web-mobile.workspace.leaveAsk", { name: view.name }), text: t("web-mobile.workspace.leaveText"), action: t("web-mobile.workspace.leaveAction"), danger: true, atOnce: "web-mobile.workspace.leaveFailed",
-    run: () => { app.replace("/"); return cloud.removeMember(me.sub, view.id, me.sub).then(() => app.toast(t("web-mobile.workspace.left"))); },
+    run: () => { app.replace("/", { left: view.id }); return cloud.removeMember(me.sub, view.id, me.sub).then(() => app.toast(t("web-mobile.workspace.left"))); },
   });
   const remove = () => confirm(app, {
     title: t("web-mobile.archive.deleteAsk", { title: view.name }), action: t("web-mobile.workspace.delete"), danger: true,
     text: t("web-mobile.workspace.deleteText", { n: view.stations.length, name: NAME }), atOnce: "web-main.chat.deleteFailed",
-    run: () => { app.replace("/"); return cloud.deleteWorkspace(me.sub, view.id).then(() => app.toast(t("web-mobile.workspace.deleted"))); },
+    run: () => { app.replace("/", { left: view.id }); return cloud.deleteWorkspace(me.sub, view.id).then(() => app.toast(t("web-mobile.workspace.deleted"))); },
   });
   const rename = () => ask(app, { title: t("web-mobile.workspace.renameTitle"), value: view.name, placeholder: t("web-mobile.workspaces.namePlaceholder"), action: t("common.save"), atOnce: "web-main.rename.failed",
     run: (name) => cloud.renameWorkspace(me.sub, view.id, name).then(() => app.toast(t("web-mobile.workspace.renamed"))) });
