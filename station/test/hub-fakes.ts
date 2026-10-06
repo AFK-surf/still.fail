@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentDriver, AgentSession, OpenOptions, RuntimeEvent, TurnOutcome } from "../src/agents/runtime.ts";
-import type { ChatMessage, ChatSurface, InboundMessage, ThreadRef } from "../src/sessions/chat.ts";
+import type { ChatMessage, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "../src/sessions/chat.ts";
 import { type HubConfig, hubConfig } from "../src/sessions/config.ts";
 import { type ColdStorage, Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
@@ -31,6 +31,9 @@ export class FakeChat implements ChatSurface {
   files: string[][] = [];
   /// Like a Slack app without files:write.
   noFiles = false;
+  /// The bytes of files shared in messages, by file id (others cannot be read); the ids fetched, in order.
+  shared = new Map<string, string>();
+  downloads: string[] = [];
 
   constructor(bot: string) {
     this.bot = bot;
@@ -55,6 +58,12 @@ export class FakeChat implements ChatSurface {
     this.files.push(files.map((f) => f.name));
     this.posts.push([thread, message]);
     return `${9_000_000 + next()}.000200`;
+  }
+  async download(file: InboundFile) {
+    this.downloads.push(file.id);
+    const bytes = this.shared.get(file.id);
+    if (bytes === undefined) throw new Error("missing_scope");
+    return new TextEncoder().encode(bytes);
   }
   working(thread: ThreadRef, messageTs: string | null, status: string) {
     this.statuses.push([`${thread.channel}/${thread.threadTs}`, messageTs, status]);

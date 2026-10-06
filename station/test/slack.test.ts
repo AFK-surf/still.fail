@@ -59,6 +59,51 @@ describe("slack", { concurrency: true }, () => {
     assert.equal(toEvent({ type: "message", subtype: "bot_message", channel: "C1", bot_id: "BBOT", ts: "4.3" }, "UBOT", "BBOT"), null);
   });
 
+  test("files shared with a message come with it, those Slack keeps back without an address", () => {
+    const shared = toEvent(
+      {
+        type: "message",
+        subtype: "file_share",
+        channel: "C1",
+        user: "U1",
+        ts: "6.1",
+        text: "<@UBOT> 看看",
+        files: [
+          { id: "F1", name: "image.png", size: 10, mode: "hosted", url_private: "https://files.slack.com/files-pri/T-F1/image.png", url_private_download: "https://files.slack.com/files-pri/T-F1/download/image.png" },
+          { id: "F2", title: "doc", mode: "external", url_private: "https://docs.google.com/x" },
+          { id: "F3", mode: "hidden_by_limit" },
+        ],
+      },
+      "UBOT",
+      "BBOT",
+    );
+    assert.ok(shared?.type === "message");
+    assert.deepEqual(shared.message.files, [
+      { id: "F1", name: "image.png", size: 10, url: "https://files.slack.com/files-pri/T-F1/download/image.png" },
+      { id: "F2", name: "doc", size: 0, url: null },
+      { id: "F3", name: "F3", size: 0, url: null },
+    ]);
+  });
+
+  test("a shared file is read with the bot's token from Slack only, and a sign-in page is no file", async () => {
+    const fake = await FakeSlack.start();
+    try {
+      const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base) });
+      const at = (path: string) => fake.base.replace(/\/api$/, `/${path}`);
+      fake.answer("F1/shot.png", { __status: 200, __headers: { "content-type": "image/png" }, __body: "png" });
+      const bytes = await surface.download({ id: "F1", name: "shot.png", size: 5, url: at("F1/shot.png") });
+      assert.equal(new TextDecoder().decode(bytes), '"png"');
+      assert.equal(fake.calls("F1/shot.png")[0]!.auth, "xoxb-1");
+      fake.answer("F2/shot.png", { __status: 200, __headers: { "content-type": "text/html" }, __body: "sign in" });
+      await assert.rejects(surface.download({ id: "F2", name: "shot.png", size: 5, url: at("F2/shot.png") }), /files:read/);
+      await assert.rejects(surface.download({ id: "F3", name: "x", size: 1, url: "https://evil.example/x" }), /not a Slack address/);
+      await assert.rejects(surface.download({ id: "F4", name: "x", size: 1, url: null }), /does not give/);
+      assert.equal(fake.calls("x").length, 0);
+    } finally {
+      await fake.close();
+    }
+  });
+
   test("tables in blocks and attachments are read with the text, as Markdown tables", () => {
     const link = (url: string, label: string) => ({ type: "rich_text", elements: [{ type: "rich_text_section", elements: [{ type: "link", url, text: label }] }] });
     const table = {

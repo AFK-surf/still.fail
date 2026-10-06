@@ -212,6 +212,7 @@
   "station.session.modelOff": "“{profile}” doesn't have {model} turned on: pick another model, or turn it on in its Profile first",
   "station.session.noProfile": "No Profile can run {runtime}",
   "station.session.noProfileForModel": "No {runtime} Profile can run {model}: turn it on in a Profile first",
+  "station.slack.fileNotFetched": "[file {name} not fetched: {error}]",
   "station.slack.sessionFailed": "Couldn't create session: {error}",
   "station.slack.viewFigure": "View the chart in still.fail",
   "station.slack.viewFigureAndFiles": "View the chart and files in still.fail",

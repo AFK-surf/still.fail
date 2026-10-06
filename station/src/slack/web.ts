@@ -92,6 +92,30 @@ export class SlackClient {
     return data;
   }
 
+  /// A shared file's bytes from Slack (its url_private), with the bot's token: only to Slack's own hosts (or the stand-in
+  /// it is pointed at), never to an address elsewhere. Without files:read Slack answers its sign-in page instead.
+  async download(url: string, name: string, token: string): Promise<Uint8Array> {
+    let to: URL;
+    try {
+      to = new URL(url);
+    } catch {
+      throw new Error(`not an address: ${url}`);
+    }
+    const slack = to.protocol === "https:" && (to.hostname === "slack.com" || to.hostname.endsWith(".slack.com") || to.hostname.endsWith(".slack-edge.com"));
+    if (!slack && to.origin !== new URL(this.base).origin) throw new Error(`not a Slack address: ${to.origin}`);
+    const got = await fetch(to, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(120_000) });
+    if (!got.ok) {
+      await got.body?.cancel();
+      throw new Error(`HTTP ${got.status}`);
+    }
+    const page = (got.headers.get("content-type") ?? "").startsWith("text/html") && (got.redirected || !/\.html?$/i.test(name));
+    if (page) {
+      await got.body?.cancel();
+      throw new Error("Slack answered with its sign-in page: the app lacks files:read (turn on 读写文件 in its permissions)");
+    }
+    return new Uint8Array(await got.arrayBuffer());
+  }
+
   /// A file's bytes to the address Slack gave for them (files.getUploadURLExternal).
   async upload(url: string, bytes: Uint8Array, name: string): Promise<void> {
     const sent = await fetch(url, { method: "POST", body: bytes as Uint8Array<ArrayBuffer>, signal: AbortSignal.timeout(300_000) });

@@ -77,6 +77,40 @@ test("a mention inside an existing thread records what was said before and tells
   await r.close();
 });
 
+test("files shared in Slack are fetched into the session's uploads and given to the agent, once", async () => {
+  const r = new Rig();
+  r.chat.shared.set("F1", "error overlay");
+  const file = (id: string, name: string) => ({ id, name, size: 13, url: `https://files.slack.com/${id}` });
+  const m = say("<@UBOT> 看看", { files: [file("F1", "shot.png"), file("F2", "log.txt")] });
+  await r.accept(m);
+  await r.accept(m);
+  await settle();
+  assert.deepEqual(r.chat.downloads, ["F1", "F2"], "a message sent again is not fetched again");
+  const [said] = r.said(r.thread("C1", m.threadTs).id);
+  assert.equal(said!.text, "<@UBOT> 看看\n\n[文件 log.txt 没拿到：missing_scope]");
+  assert.equal(said!.attachments.length, 1);
+  const [shot] = said!.attachments;
+  assert.equal(shot!.name, "shot.png");
+  assert.equal(dirname(shot!.path), join(r.session(sessionKey("cl", "C1", m.threadTs)).workspace, "uploads"));
+  assert.equal(readFileSync(shot!.path, "utf8"), "error overlay");
+  const prompt = r.claude.last().prompts[0]!;
+  assert.ok(prompt.includes(`Attached files:\n- ${shot!.path} (shot.png, 13 bytes)`), prompt);
+  assert.ok(prompt.includes("log.txt 没拿到"), prompt);
+  await r.close();
+});
+
+test("files shared before the station joined a thread are fetched with what was said", async () => {
+  const r = new Rig();
+  r.chat.shared.set("F3", "trace");
+  r.chat.earlier.set("1.000002", [{ ts: "1.000002", user: "U2", text: "", fromBot: false, files: [{ id: "F3", name: "trace.txt", size: 5, url: "https://files.slack.com/F3" }] }]);
+  await r.accept(message({ threadTs: "1.000002", ts: "5.000002" }));
+  await settle();
+  const [first] = r.said(r.thread("C1", "1.000002").id);
+  assert.equal(first!.attachments[0]!.name, "trace.txt");
+  assert.equal(readFileSync(first!.attachments[0]!.path, "utf8"), "trace");
+  await r.close();
+});
+
 test("a message during a running turn is steered into it", async () => {
   const r = new Rig();
   const first = message();

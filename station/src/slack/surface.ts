@@ -7,7 +7,7 @@ import WebSocket from "ws";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
-import { type ChatEvent, type ChatMessage, type ChatSurface, type Handler, type Person, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
+import { type ChatEvent, type ChatMessage, type ChatSurface, type Handler, type InboundFile, type Person, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
 import type { NameBook } from "./names.ts";
 import { ThreadStatus } from "./status.ts";
 import { type Params, SlackClient, field } from "./web.ts";
@@ -143,6 +143,18 @@ export function messageText(m: Json): string {
   return [text(m?.text), ...tables].filter((t) => t !== "").join("\n\n");
 }
 
+/// The files shared with a message. Ones Slack keeps back (over a free workspace's limit, deleted) or that live
+/// elsewhere (external: Google Drive and the like) have no url.
+export function messageFiles(m: Json): InboundFile[] {
+  return (Array.isArray(m?.files) ? m.files : [])
+    .filter((f: Json) => text(f?.id) !== "")
+    .map((f: Json) => {
+      const held = !["tombstone", "hidden_by_limit", "external"].includes(text(f?.mode));
+      const url = text(f?.url_private_download) || text(f?.url_private);
+      return { id: text(f.id), name: text(f?.name) || text(f?.title) || text(f.id), size: typeof f?.size === "number" ? f.size : 0, url: held && url !== "" ? url : null };
+    });
+}
+
 /// A Slack event as the station takes it: someone's message (a person, or another app's bot: agents work together in
 /// threads), an edit, or nothing it keeps (its own messages, deletes). `botId`: this app's bot id (B…).
 export function toEvent(event: Json, botUserId: string, botId: string): ChatEvent | null {
@@ -172,6 +184,7 @@ export function toEvent(event: Json, botUserId: string, botId: string): ChatEven
   if (user === "") return null;
   const body = messageText(event);
   const ts = text(event.ts);
+  const files = messageFiles(event);
   return {
     type: "message",
     message: {
@@ -181,6 +194,7 @@ export function toEvent(event: Json, botUserId: string, botId: string): ChatEven
       user,
       text: body,
       addressed: kind === "app_mention" || event.channel_type === "im" || body.includes(`<@${botUserId}>`),
+      ...(files.length > 0 ? { files } : {}),
     },
   };
 }
@@ -606,7 +620,8 @@ export class SlackSurface implements ChatSurface {
           const by = m?.user !== undefined && m?.user !== null ? m.user : m?.bot_id;
           const user = typeof by === "string" ? by : "unknown";
           const fromBot = (m?.bot_id !== undefined && m?.bot_id !== null) || user === bot;
-          all.push({ ts: text(m?.ts), user, text: messageText(m), fromBot });
+          const files = messageFiles(m);
+          all.push({ ts: text(m?.ts), user, text: messageText(m), fromBot, ...(files.length > 0 ? { files } : {}) });
         }
         const next = page?.response_metadata?.next_cursor;
         cursor = typeof next === "string" && next !== "" ? next : null;
@@ -616,6 +631,12 @@ export class SlackSurface implements ChatSurface {
       const earlier = all.filter((m) => (number(m.ts) ?? 0) < until);
       return earlier.slice(Math.max(0, earlier.length - limit));
     })();
+  }
+
+  /// A shared file's bytes, read as the bot (files:read).
+  async download(file: InboundFile): Promise<Uint8Array> {
+    if (file.url === null) throw new Error("Slack does not give its contents");
+    return this.client.download(file.url, file.name, this.botToken);
   }
 
   /// Any Web API method as the bot; values that are not strings (blocks, arrays) go as JSON, as Slack takes them.

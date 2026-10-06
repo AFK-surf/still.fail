@@ -209,6 +209,7 @@
   "station.session.modelOff": "「{profile}」没有启用 {model}：换一个模型，或先在它的 Profile 里启用",
   "station.session.noProfile": "没有能跑 {runtime} 的 Profile",
   "station.session.noProfileForModel": "没有能跑 {model} 的 {runtime} Profile：先在一个 Profile 上启用它",
+  "station.slack.fileNotFetched": "[文件 {name} 没拿到：{error}]",
   "station.slack.sessionFailed": "无法创建会话：{error}",
   "station.slack.viewFigure": "在 still.fail 里查看图表",
   "station.slack.viewFigureAndFiles": "在 still.fail 里查看图表和附件",

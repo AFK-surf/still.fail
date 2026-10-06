@@ -15,7 +15,13 @@ export type InboundMessage = {
   text: string;
   /// Mentions the bot or is a direct message: may start a session. Other thread replies only continue one.
   addressed: boolean;
+  /// Files shared with it, fetched (`download`) into the uploads of a session of its thread when it is recorded.
+  files?: InboundFile[];
 };
+
+/// A file shared with a message, as the platform holds it. `url`: where its bytes are; null where the platform keeps
+/// them back (a file over a free workspace's limit, a deleted one).
+export type InboundFile = { id: string; name: string; size: number; url: string | null };
 
 /// What a platform tells the station: a new message, or an edit of one already said (deletes are not taken: the
 /// station keeps what was said).
@@ -23,7 +29,7 @@ export type ChatEvent =
   | { type: "message"; message: InboundMessage }
   | { type: "changed"; channel: string; threadTs: string; ts: string; text: string };
 
-export type ChatMessage = { ts: string; user: string; text: string; fromBot: boolean };
+export type ChatMessage = { ts: string; user: string; text: string; fromBot: boolean; files?: InboundFile[] };
 
 export type Person = { name: string; email: string };
 
@@ -43,6 +49,8 @@ export interface ChatSurface {
   /// posted message's ts. `files` are attachments already copied into the session's uploads; surfaces that cannot carry
   /// files refuse them.
   post(thread: ThreadRef, message: string, files: Attachment[]): Promise<string>;
+  /// A shared file's bytes, as the bot may read them; throws where it may not (a Slack app without files:read).
+  download?(file: InboundFile): Promise<Uint8Array>;
   /// A person's display name, or null if unknown.
   userName?(user: string): Promise<string | null>;
   /// Says in the thread what the agent working for it is doing ("" when it is done), best effort, never waited on.

@@ -29,12 +29,12 @@ import { runnerId } from "../agents/process.ts";
 import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
-import { transcriptPath } from "../read/transcript.ts";
-import { type SessionRow, type Store, STILLFAIL_SURFACE, slackSurface, type ThreadRow } from "../store/store.ts";
+import { iso, transcriptPath } from "../read/transcript.ts";
+import { type Attachment, type SessionRow, type Store, STILLFAIL_SURFACE, slackSurface, type ThreadRow } from "../store/store.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { isStopCommand } from "./args.ts";
-import type { ChatEvent, ChatSurface, InboundMessage, ThreadRef } from "./chat.ts";
+import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
 import { type Connect, type HubConfig, profilesFor, runtimeNamed } from "./config.ts";
 import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
@@ -43,6 +43,7 @@ import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths } from "./agent-home.ts";
 import { startsAfresh } from "./afresh.ts";
 import { serves } from "./pool.ts";
+import { imageSize } from "./image-size.ts";
 
 type Json = any;
 
@@ -73,6 +74,9 @@ export interface ColdStorage {
   /// Packs what it can of an archived, idle session.
   pack(key: string): void | Promise<void>;
 }
+
+/// The most of a shared file the station fetches, as much as an agent may attach.
+const MAX_INBOUND_FILE = 50 * 1024 * 1024;
 
 const NOTHING_COLD: ColdStorage = { isCold: () => false, restore: () => {}, pack: () => {} };
 
@@ -413,9 +417,12 @@ export class Hub {
         chat.post(here, `<${link}|${tr(stationLang(), "station.slack.viewSession")}>`, []).catch((error) => log.warn("hub", "session link not posted", { session: key, error: (error as Error).message }));
       }
     }
-    const thread = existing ?? (await this.openSlackThread(chat, surface, message, createdBy));
+    const thread = existing ?? (await this.openSlackThread(chat, surface, message, createdBy, key));
     if (wanted) this.store.joinThread(thread.id, key, connect.id);
-    const [n, fresh] = this.store.insertMessage({ thread: thread.id, ts: message.ts, authorKind: "person", author: message.user, text: message.text });
+    // Its files go where a session of the thread reads them; once (Slack sends a message again it was slow to hear of).
+    const into = wanted ? key : (members[0]?.session ?? key);
+    const said = this.store.messageAt(thread.id, message.ts) === null ? await this.fetched(chat, into, message.text, message.files) : { text: message.text, attachments: [] };
+    const [n, fresh] = this.store.insertMessage({ thread: thread.id, ts: message.ts, authorKind: "person", author: message.user, ...said });
     // A message seen by a second connect is already delivered to the thread; only a session it brings in lacks it.
     const targets = fresh ? this.store.threadSessions(thread.id).map((m) => m.session) : wanted ? [key] : [];
     this.deliver(thread.id, n, targets, message.text);
@@ -423,8 +430,8 @@ export class Hub {
 
   /// A Slack thread the station starts following. When that happens mid-thread, what was said before is recorded first
   /// (without deliveries), so the thread on the pages and chat_history are complete and the log keeps Slack's order.
-  private async openSlackThread(chat: ChatSurface, surface: string, message: InboundMessage, createdBy: string): Promise<ThreadRow> {
-    let earlier: { ts: string; user: string; text: string }[] = [];
+  private async openSlackThread(chat: ChatSurface, surface: string, message: InboundMessage, createdBy: string, key: string): Promise<ThreadRow> {
+    let earlier: { ts: string; user: string; text: string; files?: InboundFile[] }[] = [];
     if (message.ts !== message.threadTs) {
       try {
         earlier = (await chat.history?.({ channel: message.channel, threadTs: message.threadTs }, message.ts, 200)) ?? [];
@@ -433,9 +440,42 @@ export class Hub {
       }
     }
     // Asked before the thread exists, so a connect seeing the same message meanwhile cannot record it ahead of these.
+    const said = [];
+    for (const m of earlier) said.push({ ...m, ...(await this.fetched(chat, key, m.text, m.files)) });
     const thread = this.store.openThread(surface, message.channel, message.threadTs, null, createdBy);
-    for (const m of earlier) this.store.insertMessage({ thread: thread.id, ts: m.ts, authorKind: "person", author: m.user, text: m.text });
+    for (const m of said) this.store.insertMessage({ thread: thread.id, ts: m.ts, authorKind: "person", author: m.user, text: m.text, attachments: m.attachments });
     return thread;
+  }
+
+  /// A message's text and its shared files, fetched into the session's uploads (as files sent in the station's own
+  /// chats are). A file that cannot be fetched is named in the text with why, so its reader knows one was there.
+  private async fetched(chat: ChatSurface, key: string, text: string, files: InboundFile[] | undefined): Promise<{ text: string; attachments: Attachment[] }> {
+    const row = files && files.length > 0 ? this.store.getSession(key) : null;
+    if (!files || !row) return { text, attachments: [] };
+    const dir = join(row.workspace, "uploads");
+    const attachments: Attachment[] = [];
+    const missing: string[] = [];
+    for (const file of files) {
+      try {
+        if (!chat.download) throw new Error("this platform does not give files");
+        if (file.size > MAX_INBOUND_FILE) throw new Error("over 50 MB");
+        const bytes = await chat.download(file);
+        mkdirSync(dir, { recursive: true });
+        const safe = Array.from(file.name)
+          .map((c) => (c === "\\" || c === "/" || c.codePointAt(0)! < 0x20 ? "_" : c))
+          .join("");
+        const path = join(dir, `${iso(this.now()).slice(0, 19).replace(/[:.]/g, "-")}-${file.id}-${safe}`);
+        writeFileSync(path, bytes);
+        const attachment: Attachment = { name: file.name, path, size: bytes.length };
+        const size = /\.(png|jpe?g|gif|webp)$/i.test(file.name) ? imageSize(path) : null;
+        if (size) [attachment.width, attachment.height] = size;
+        attachments.push(attachment);
+      } catch (error) {
+        log.warn("hub", "shared file not fetched", { session: key, file: file.id, error: (error as Error).message });
+        missing.push(tr(stationLang(), "station.slack.fileNotFetched", { name: file.name, error: (error as Error).message }));
+      }
+    }
+    return { text: [text, ...missing].filter((t) => t !== "").join("\n\n"), attachments };
   }
 
   /// Gives sessions a message they have not had: each runs it, or stops for `-stop` (hub.rs `hand_over`).
