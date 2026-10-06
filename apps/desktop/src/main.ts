@@ -4,7 +4,7 @@
 // the page is served from app://ember, the core runs in Node (client/core-ts,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, MessageChannelMain, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
 import { autoUpdater } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -658,15 +658,56 @@ function showContextMenu(window: BrowserWindow, params: Electron.ContextMenuPara
   const items = contextMenu(params, { app: APP_ORIGIN, cloud: CLOUD_ORIGIN });
   if (items.length === 0) return;
   const page = window.webContents;
+  // A picture that may stand in for an image (a chat's thumbnail): the image is asked for as the menu opens, so it is
+  // likely here by the time 「复制图片」 is chosen.
+  const whole = items.some((item) => item?.action.do === "copyImage" && item.action.whole) ? wholeImage(page, params.srcURL) : null;
   const act = (action: Action) => {
     if (action.do === "edit") page[action.command]();
-    else if (action.do === "copyImage") page.copyImageAt(params.x, params.y);
+    else if (action.do === "copyImage") void copyImage(page, params, whole).catch((error: Error) => console.warn("copying the image failed", error.message));
     else if (action.do === "copyText") void clipboard.writeText(action.text).catch((error: Error) => console.warn("copying to the clipboard failed", error.message));
     else external(action.url);
   };
   Menu.buildFromTemplate(items.map((item) => item ? { label: t(item.key), enabled: item.enabled, click: () => act(item.action) } : { type: "separator" }))
     // The frame right-clicked, for what macOS adds to a field's menu (Writing Tools).
     .popup({ window, ...(params.frame ? { frame: params.frame } : {}) });
+}
+
+/** The image under the pointer to the clipboard: the whole one a picture stands in for, if the page gave it; else as shown. */
+async function copyImage(page: WebContents, { x, y }: { x: number; y: number }, whole: Promise<Uint8Array<ArrayBuffer> | null> | null): Promise<void> {
+  const png = await whole;
+  // Waited for, the window may have closed.
+  if (page.isDestroyed()) return;
+  if (!png) return page.copyImageAt(x, y);
+  await clipboard.write([new ClipboardItem({ "image/png": new Blob([png], { type: "image/png" }) })]).catch((error: Error) => {
+    console.warn("copying the whole image failed; copying it as shown", error.message);
+    if (!page.isDestroyed()) page.copyImageAt(x, y);
+  });
+}
+
+/** How long the page has to give an image whole (it may come from the station first) before the picture is copied as shown. */
+const WHOLE_IMAGE_MS = 30_000;
+/** The answers awaited to image:wanted (wholeImage), by the number each was asked with. */
+const wholeImages = new Map<number, (png: Uint8Array<ArrayBuffer> | null) => void>();
+let nextWholeImage = 1;
+
+ipcMain.on("image:whole", (event, id: unknown, png: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof id !== "number") return;
+  wholeImages.get(id)?.(png instanceof Uint8Array && png.length > 0 ? new Uint8Array(png) : null);
+  wholeImages.delete(id);
+});
+
+/**
+ * The image the page's picture at `src` stands in for, whole, as a PNG: a chat shows its images as thumbnails (at most
+ * 720×600, station/src/sessions/thumbs.ts), and the page fetches the image itself (web/src/wholeImages.ts, through
+ * preload.ts onImageWanted). Null for a picture that is the image itself, or an image not had in time.
+ */
+function wholeImage(page: WebContents, src: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  const id = nextWholeImage++;
+  return new Promise((resolve) => {
+    wholeImages.set(id, resolve);
+    setTimeout(() => { if (wholeImages.delete(id)) resolve(null); }, WHOLE_IMAGE_MS);
+    page.send("image:wanted", id, src);
+  });
 }
 
 /**

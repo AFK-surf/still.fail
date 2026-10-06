@@ -15,6 +15,7 @@ import { VideoViewer } from "./VideoViewer.tsx";
 import { useImageMarks } from "./annotate/ImageMarks.tsx";
 import { useBackClose } from "./backClose.ts";
 import { thumbId, viewerFlight } from "./viewerFlight.ts";
+import { standIn } from "./wholeImages.ts";
 import { animate, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import * as css2 from "./FilePreview.css.ts";
@@ -125,6 +126,7 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
   useEffect(() => {
     if (!enabled) return;
     let u: string | null = null;
+    let unstand: (() => void) | null = null;
     let current = true;
     setLoaded({ state: "loading" });
     const promise = fetchFile(api, station.address, sessionKey, file, thumb);
@@ -137,6 +139,8 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
     promise.then((blob) => {
       if (!current) return;
       u = URL.createObjectURL(blob);
+      // A thumbnail stands in for the image: copied in the desktop app, the image itself is (wholeImages.ts).
+      if (thumb) unstand = standIn(u, () => fetchFile(api, station.address, sessionKey, file));
       setLoaded({ state: "ready", blob, url: u });
     }, (error: unknown) => {
       if (current) setLoaded({ state: "error", message: error instanceof Error ? error.message : String(error) });
@@ -144,6 +148,7 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
     return () => {
       current = false;
       on?.watchers.delete(watch);
+      unstand?.();
       if (u) URL.revokeObjectURL(u);
     };
   }, [api, station.address, sessionKey, file.path, enabled, thumb]);

@@ -53,6 +53,17 @@ const desktop = {
     ipcRenderer.on("network:changed", on);
     return () => ipcRenderer.off("network:changed", on);
   },
+  /**
+   * The app asks for the image a picture right-clicked stands in for (main.ts, wholeImage): `answer` gives it whole as a
+   * PNG, or null where the picture is the image itself (web/src/wholeImages.ts). The returned function stops answering.
+   */
+  onImageWanted: (answer: (src: string) => Promise<Uint8Array | null>): (() => void) => {
+    const on = (_event: unknown, id: number, src: string) => {
+      void answer(src).catch(() => null).then((png) => ipcRenderer.send("image:whole", id, png));
+    };
+    ipcRenderer.on("image:wanted", on);
+    return () => ipcRenderer.off("image:wanted", on);
+  },
 };
 contextBridge.exposeInMainWorld("stillfailDesktop", desktop);
 // Its name before the rename, while pages built before it may still look for it (a dev server's, dev.sh HMR=1).
