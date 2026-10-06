@@ -1,0 +1,52 @@
+{
+  "name": "@stillfail/core-kernel",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The domain-free base of a client core: Effect runner, keyed topics and deltas, sync scheduler, doing, protocol, single-writer SQLite, the UI's client and the web worker relay",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    },
+    "./node-sql": {
+      "types": "./dist/node-sql.d.ts",
+      "default": "./dist/node-sql.js"
+    },
+    "./web-worker": {
+      "types": "./dist/worker/relay.d.ts",
+      "default": "./dist/worker/relay.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsgo -p tsconfig.build.json && node scripts/declarations.mjs",
+    "check": "tsgo --noEmit",
+    "test": "node --test test/*.test.ts",
+    "pack": "pnpm run build && pnpm pack"
+  },
+  "peerDependencies": {
+    "effect": "4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "effect": "4.0.0"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "peerDependenciesMeta": {
+    "effect": {
+      "optional": true
+    }
+  }
+}
