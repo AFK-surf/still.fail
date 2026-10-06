@@ -7,7 +7,7 @@
 // StillFailPreviewNative. No port on the station is open to anyone.
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
@@ -56,7 +56,7 @@ import kotlinx.serialization.json.putJsonArray
 /** The host the WebView loads the service at: nothing answers it but the core. */
 internal const val PREVIEW_HOST = "preview.stillfail.invalid"
 /** page.js as served, the language now said first (its words for a person are in it, in both). */
-internal fun pageScript(script: ByteArray): ByteArray = "self.__stillfailLang = \"${fail.still.android.ui.I18n.lang}\";\n".toByteArray() + script
+internal fun pageScript(script: ByteArray): ByteArray = "self.__stillfailLang = \"${fail.still.android.data.I18n.lang}\";\n".toByteArray() + script
 
 /** The page's own script, served here (never asked of the service). */
 private const val PAGE_JS = "/_stillfail/page.js"

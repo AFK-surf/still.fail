@@ -1,6 +1,6 @@
 package fail.still.android
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
@@ -36,6 +36,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import fail.still.android.ui.LocalUi
 
 class MainActivity : ComponentActivity() {
     private var app by mutableStateOf<AppState?>(null)
@@ -113,7 +114,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Crashes.install(applicationContext)
         StillFailCore.onFailed = { reason -> Crashes.coreFailed(applicationContext, reason) }
-        fail.still.android.ui.I18n.load(applicationContext)
+        fail.still.android.data.I18n.load(applicationContext)
         lifecycleScope.launch {
             val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA)
             val shared = getSharedPreferences("stillfail", Context.MODE_PRIVATE)
@@ -122,7 +123,7 @@ class MainActivity : ComponentActivity() {
             Prefs.tellDevice(core)
             Prefs.moveIn(core, shared)
             val first = Prefs.first(core)
-            fail.still.android.ui.I18n.follow(first.lang)
+            fail.still.android.data.I18n.follow(first.lang)
             Notifier.keepLang(shared, first.lang)
             val made = AppState(core, shared, BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN, core), first)
             // The notification settings the app kept, into the core before anything goes by them.
@@ -165,7 +166,7 @@ class MainActivity : ComponentActivity() {
             }
             StillFailTheme(dark) {
                 if (current == null) Loading(t("android-misc.starting"))
-                else CompositionLocalProvider(LocalApp provides current) { StillFailApp(current) }
+                else CompositionLocalProvider(LocalApp provides current, LocalUi provides current) { StillFailApp(current) }
             }
         }
     }

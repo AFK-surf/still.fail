@@ -4,7 +4,7 @@
 // (model, allowance, the station it runs on).
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import fail.still.android.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.withStyle
@@ -563,7 +563,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                 // Each property on its line: what it was, and, when it changes, an arrow to what it becomes.
                 (listOf(t("android-chat.run.label.model"), t("android-chat.run.label.effort"), t("android-chat.run.label.account")) + if (v.fastAvailable == true) listOf(t("android-chat.run.label.speed")) else emptyList()).forEachIndexed { i, label ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(label, fontSize = 13.sp, color = C.muted, modifier = Modifier.width(if (fail.still.android.ui.I18n.lang == "zh") 32.dp else 60.dp))
+                        Text(label, fontSize = 13.sp, color = C.muted, modifier = Modifier.width(if (fail.still.android.data.I18n.lang == "zh") 32.dp else 60.dp))
                         val was = v.was.getOrElse(i) { "" }
                         val becomes = v.becomes.getOrElse(i) { "" }
                         val moved = becomes != was

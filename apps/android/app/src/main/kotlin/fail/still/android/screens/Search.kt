@@ -72,7 +72,7 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.reducedMotion
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 

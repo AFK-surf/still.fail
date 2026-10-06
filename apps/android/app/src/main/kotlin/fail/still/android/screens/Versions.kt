@@ -3,7 +3,7 @@
 // workspace's owner or admin). Grey but for what wants doing: a newer version out, an update going on, one that failed.
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement

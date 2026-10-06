@@ -14,6 +14,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import fail.still.android.data.t
 
 /** The core's done lead in either language (client/core-ts present.ts: 做完了, 做完了：<why>; Done, Done: <why>). */
 val doneLead = Regex("^(?:做完了(?:：|$)|Done(?:: |$))")

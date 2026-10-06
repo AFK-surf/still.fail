@@ -3,7 +3,6 @@
 // and brings the topics it touches up to date before it answers; nothing here keeps a cache.
 package fail.still.android.data
 
-import fail.still.android.ui.t
 import android.util.Base64
 import fail.still.android.BuildConfig
 import fail.still.core.CoreException

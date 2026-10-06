@@ -5,7 +5,7 @@
 // last message the whole line under it. No lines between.
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column

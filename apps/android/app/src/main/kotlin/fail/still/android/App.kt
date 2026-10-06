@@ -3,7 +3,7 @@
 // bar), or a sheet from the bottom.
 package fail.still.android
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import fail.still.android.ui.Splash
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -97,6 +97,7 @@ import fail.still.android.screens.StationScreen
 import fail.still.android.screens.StationsScreen
 import fail.still.android.ui.C
 import fail.still.android.ui.Loading
+import fail.still.android.ui.UiHost
 import fail.still.android.ui.MenuHost
 import fail.still.android.ui.ReaderHost
 import fail.still.android.ui.ReaderSpec
@@ -182,7 +183,10 @@ sealed interface Screen {
     data class SlackApp(val station: String, val connect: String) : Screen { override val id = "slack-app/$station/$connect" }
 }
 
-class AppState(val core: StillFailCore, private val prefs: SharedPreferences, val cloudOrigin: String, val updates: Updates, kept: PrefsView = PrefsView()) {
+class AppState(override val core: StillFailCore, private val prefs: SharedPreferences, val cloudOrigin: String, val updates: Updates, kept: PrefsView = PrefsView()) : UiHost {
+    override fun follow(url: String, orElse: () -> Unit) = openLink(url, orElse = orElse)
+    override fun note(text: String) { toast = text }
+
     var stack by mutableStateOf(listOf<Screen>(Screen.Home)); private set
     /** Whether the last move went deeper, for the direction of the transition. */
     var forward by mutableStateOf(true); private set
@@ -220,7 +224,7 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
             val value = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(PrefsView.serializer(), it) }.getOrNull() } ?: return@collect
             known = value
             if (sending > 0) waiting = value else kept = value
-            fail.still.android.ui.I18n.follow(value.lang)
+            fail.still.android.data.I18n.follow(value.lang)
             Notifier.keepLang(prefs, value.lang)
         }
     }
@@ -279,8 +283,8 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     /** 语言: "zh" or "en" as chosen; null follows the phone. The words change at once, then as the core says (its `lang`). */
     val language: String? get() = kept.language
     fun setLanguage(value: String?) {
-        val shown = kept.copy(language = value, lang = value ?: fail.still.android.ui.I18n.langOf(java.util.Locale.getDefault().toLanguageTag()))
-        fail.still.android.ui.I18n.follow(shown.lang)
+        val shown = kept.copy(language = value, lang = value ?: fail.still.android.data.I18n.langOf(java.util.Locale.getDefault().toLanguageTag()))
+        fail.still.android.data.I18n.follow(shown.lang)
         setPrefs(shown, buildJsonObject { put("language", value) })
     }
 
@@ -594,10 +598,10 @@ private fun AppContent(app: AppState) {
         LaunchedEffect(app.inFront, lookedAt) { app.core.focus(buildJsonObject { put("visible", app.inFront); put("focused", lookedAt) }) }
         // An image or a video opened, over the pages (it grows out of its thumbnail in the chat); sheets and notes over it.
         fail.still.android.screens.ViewerHost()
-        SheetHost(app)
-        ReaderHost(app)
-        MenuHost(app)
-        ToastHost(app)
+        SheetHost(app.sheet, app.haze) { app.sheet = null }
+        ReaderHost(app.reader) { app.reader = null }
+        MenuHost(app.menu) { app.menu = null }
+        ToastHost(app.toast) { app.toast = null }
     } }
 }
 

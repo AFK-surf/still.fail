@@ -12,7 +12,7 @@
 // of a type this app does not know is answered in its chat. In a chat only an options card has anything under it.
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import dev.chrisbanes.haze.hazeSource
 import androidx.compose.animation.AnimatedVisibility
 import fail.still.android.ui.AgentStateMark

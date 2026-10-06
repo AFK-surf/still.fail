@@ -1,6 +1,6 @@
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*

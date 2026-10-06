@@ -3,7 +3,7 @@
 // (or file) makes the session on that station; then the page becomes the chat.
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import fail.still.android.BuildConfig
 import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.ComposerCorner
