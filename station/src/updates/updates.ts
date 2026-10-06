@@ -849,6 +849,8 @@ export class Updates {
       try {
         code = readFileSync(exitFile, "utf8");
       } catch {}
+      // Made but not yet written (the shell opens it, then writes the code): not ended yet; its write is seen next.
+      if (code !== null && code.trim() === "") code = null;
       let failed: Words | null = null;
       let done: Words | null = null;
       if (code !== null && code.trim() === "0") done = this.done(started, step);
