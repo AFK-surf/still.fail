@@ -5,7 +5,7 @@
 import { Dialog as RDialog } from "radix-ui";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
-import { ChevronLeft, ChevronRight, Close, Download, Minus, Plus } from "./icons.tsx";
+import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, Minus, Plus } from "./icons.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
 import { isFragment, vizDocument } from "./Viz.tsx";
 import { fileLink } from "./Prose.css.ts";
@@ -15,7 +15,8 @@ import { VideoViewer } from "./VideoViewer.tsx";
 import { useImageMarks } from "./annotate/ImageMarks.tsx";
 import { useBackClose } from "./backClose.ts";
 import { thumbId, viewerFlight } from "./viewerFlight.ts";
-import { standIn } from "./wholeImages.ts";
+import { asPng, standIn } from "./wholeImages.ts";
+import { failure, useToast } from "./toast.tsx";
 import { animate, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import * as css2 from "./FilePreview.css.ts";
@@ -479,6 +480,9 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
         </div>
         {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
         {controls}
+        {kind === "image" && !marking && (loaded.state === "ready"
+          ? <CopyImage key={file.path} image={loaded.blob} />
+          : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Copy size={18} /></span>)}
         {marking ? null : loaded.state === "ready"
           ? <Tip label={t("web-main.preview.download")}><a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label={t("web-main.preview.download")}><Download size={18} /></a></Tip>
           // Its place kept until it comes.
@@ -499,6 +503,19 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
       </div>
     </RDialog.Content>
   );
+}
+
+/** The bar's button that puts the image shown (whole, as a PNG) on the clipboard. */
+function CopyImage({ image }: { image: Blob }) {
+  const [copied, setCopied] = useState(false);
+  const toast = useToast();
+  const label = copied ? t("common.copied") : t("common.copy");
+  const copy = () => {
+    // The PNG is handed over still to come: the clipboard is written while the click still counts as the person's (Safari).
+    void navigator.clipboard.write([new ClipboardItem({ "image/png": asPng(image) })])
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }, (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) })));
+  };
+  return <Tip label={label}><button type="button" className={pagesCss.iconBtn} aria-label={label} onClick={copy}>{copied ? <Check size={18} /> : <Copy size={18} />}</button></Tip>;
 }
 
 /** Text, when its first bytes decode as UTF-8 with no NULs. */

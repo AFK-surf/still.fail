@@ -19,9 +19,12 @@ export function standIn(url: string, whole: () => Promise<Blob>): () => void {
 export async function wholeImage(src: string): Promise<Uint8Array | null> {
   const whole = standIns.get(src);
   if (!whole) return null;
-  const image = await whole();
-  const bytes = new Uint8Array(await image.arrayBuffer());
-  return isPng(bytes) ? bytes : new Uint8Array(await (await redrawn(image)).arrayBuffer());
+  return new Uint8Array(await (await asPng(await whole())).arrayBuffer());
+}
+
+/** An image as a PNG, the clipboard's kind of image: another kind (a JPEG, a WebP, …) is drawn again as one. */
+export async function asPng(image: Blob): Promise<Blob> {
+  return isPng(new Uint8Array(await image.slice(0, 8).arrayBuffer())) ? new Blob([image], { type: "image/png" }) : redrawn(image);
 }
 
 /** Whether `bytes` are a PNG, by its signature (a file's name may say otherwise). */
