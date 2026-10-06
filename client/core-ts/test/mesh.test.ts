@@ -1,14 +1,19 @@
-// The Rust core's mesh.rs tests, ported: a station on localhost over the native addon (station/native/mesh), the
-// client's mesh over the same addon. Real time here (iroh needs its own clock).
-// Each test has its own station, endpoints, runner and relays: they all run at once (the suite at the end).
+// The Rust core's mesh.rs tests, ported, on a simulated network (sim-iroh.ts): a station and the client's mesh as they
+// talk over iroh, each relay's lines as a test sets them, all on the test's clock. Nothing here waits for real time or
+// depends on how busy the machine is: a run is the same every time its seed is (what varies: jitter, how writes are
+// cut). Each test runs on the same seeds (sim-seeds.ts); a failure says its seed and network, and SIM_SEED=<seed> runs that
+// one again.
+// The native addon itself, the few things only it can show, at the end ("over the addon"): what it answers, never how
+// long it takes.
 import assert from "node:assert/strict";
 import { suite, test as register, type TestOptions } from "node:test";
-import { Clock, Duration, Effect } from "effect";
+import { Effect, Queue } from "effect";
 import type { Credential } from "../src/cloud.ts";
 import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ALPN, CONNECT_TIMEOUT_MS, cost, DEVICE_KEY, FORMER_ALPN, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, quicker, sampleRelayRtt, SPEED_MIN_BYTES, type CredentialSource, type Link } from "../src/mesh.ts";
+import type { Iroh } from "../src/iroh.ts";
+import { ALPN, cost, DEVICE_KEY, FORMER_ALPN, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, quicker, sampleRelayRtt, SPEED_MIN_BYTES, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -18,20 +23,82 @@ import { Tracer } from "../src/trace.ts";
 import { hex } from "../src/util.ts";
 import { Wake, Wakes } from "../src/wake.ts";
 import { Station } from "./mesh-station.ts";
+import { type RelaySpec, SimNet, SimTime } from "./sim-iroh.ts";
+import { seeds } from "./sim-seeds.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
 const addon = loadAddon() as J;
-const skip = addon === null ? "the mesh addon is not built here" : false;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const noAddon = addon === null ? "the mesh addon is not built here" : false;
 type Body = () => Promise<void> | void;
 const tests: [string, TestOptions, Body][] = [];
-function test(name: string, options: TestOptions | Body, body?: Body) {
-  if (typeof options === "function") tests.push([name, {}, options]);
-  else tests.push([name, options, body!]);
-}
 const text = (b: Uint8Array) => new TextDecoder().decode(b);
+
+/// One run of a simulated test: its clock, network, host, and how it waits.
+type Sim = {
+  time: SimTime;
+  net: SimNet;
+  host: FakeHost;
+  wakes: Wakes;
+  runner: Runner;
+  /// The device's iroh on this network.
+  iroh: Iroh;
+  /// Moves the clock on until `p` is done.
+  settle<A>(p: Promise<A>, limitMs?: number): Promise<A>;
+  /// Runs `effect` on the core's runner, moving the clock on until it is done.
+  run<A, E>(effect: Effect.Effect<A, E>, limitMs?: number): Promise<A>;
+  /// Moves the clock on until `cond` holds (looked at after each timer); fails after `limitMs`.
+  until(cond: () => boolean, limitMs?: number): Promise<void>;
+  /// A station on this network.
+  station(alpns?: Uint8Array[]): Promise<Station>;
+  stationOn(home: string, other: string): Promise<Station>;
+  stationBound(options: J): Promise<Station>;
+  /// Sets a relay's lines; gives its url.
+  relay(url: string, spec?: RelaySpec): string;
+};
+
+/// A test on the simulated network, run on each seed; a failure says which.
+function sim(name: string, body: (s: Sim) => Promise<void>) {
+  tests.push([
+    name,
+    {},
+    async () => {
+      for (const seed of seeds()) {
+        const time = new SimTime();
+        const net = new SimNet(time.clock, seed);
+        const host = new FakeHost(time);
+        const wakes = new Wakes();
+        const runner = new Runner(time.clock);
+        const world = net.world();
+        const s: Sim = {
+          time,
+          net,
+          host,
+          wakes,
+          runner,
+          iroh: net.iroh(),
+          settle: (p, limitMs) => time.settle(p, limitMs),
+          run: (effect, limitMs) => time.settle(runner.run(effect), limitMs),
+          until: (cond, limitMs = 10 * 60_000) => time.until(cond, limitMs),
+          station: (alpns) => time.settle(Station.start(alpns, world)),
+          stationOn: (home, other) => time.settle(Station.on(home, other, world)),
+          stationBound: (options) => time.settle(Station.bound(options, world)),
+          relay: (url, spec) => net.relay(url, spec),
+        };
+        try {
+          await body(s);
+        } catch (e) {
+          const error = e instanceof Error ? e : new Error(String(e));
+          error.message = `${name} on ${net.describe()}:\n${error.message}`;
+          throw error;
+        } finally {
+          runner.shutdown();
+        }
+      }
+    },
+  ]);
+}
 
 /// Grants "<prefix>-1", "<prefix>-2", … and counts them.
 function grants(prefix: string, count: { n: number }): CredentialSource {
@@ -43,208 +110,188 @@ function grants(prefix: string, count: { n: number }): CredentialSource {
     });
 }
 
-/// Real time but for `times`: each timer of a duration there lasts as long as it says instead, read as the timer starts
-/// (changed later, it changes the timers started after). By default renewals every 150 ms, as mesh.rs's tests'
-/// QuickHost had them. (CONNECT_TIMEOUT_MS and RETIRE_MS are both 10 s: one entry is both. Shortened, a connection on a
-/// machine busy with other tests may well take longer: a test shortens them only while nothing it needs is connecting.)
-function quickClock(times = new Map([[RENEW_MS, 150]])): Clock.Clock {
-  const base = Effect.runSync(Clock.clockWith(Effect.succeed));
-  const quick = (ms: number) => times.get(ms) ?? ms;
-  return {
-    currentTimeMillisUnsafe: () => base.currentTimeMillisUnsafe(),
-    currentTimeMillis: base.currentTimeMillis,
-    currentTimeNanosUnsafe: () => base.currentTimeNanosUnsafe(),
-    currentTimeNanos: base.currentTimeNanos,
-    monotonicTimeNanosUnsafe: () => base.monotonicTimeNanosUnsafe(),
-    monotonicTimeNanos: base.monotonicTimeNanos,
-    sleep: (d: Duration.Duration) => base.sleep(Duration.millis(quick(Duration.toMillis(d)))),
-  } as Clock.Clock;
+function env(s: Sim) {
+  return { host: s.host, runner: s.runner, tracer: new Tracer(s.host, s.runner, 1), iroh: s.iroh, wakes: s.wakes };
 }
 
-function env(host: FakeHost, wakes = new Wakes(), clock?: Clock.Clock) {
-  const runner = new Runner(clock);
-  return { host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes };
-}
-
-async function setup(station?: Station, host = new FakeHost(), wakes = new Wakes(), clock?: Clock.Clock) {
-  const s = station ?? (await Station.start());
-  const e = env(host, wakes, clock);
-  const mesh = await e.runner.run(Mesh.make(e, []));
-  mesh.addAddr(s.addr());
-  return { mesh, station: s, runner: e.runner, host };
+/// A station of its own and the device's mesh, which knows where it is.
+async function setup(s: Sim, station?: Station) {
+  const st = station ?? (await s.station());
+  const mesh = await s.run(Mesh.make(env(s), []));
+  mesh.addAddr(st.addr());
+  return { mesh, station: st };
 }
 
 const head = (path: string): RequestHead => ({ method: "POST", path, headers: [["content-type", "application/json"]] });
 
-async function request(runner: Runner, link: Link, h: RequestHead, body = new Uint8Array()) {
-  return runner.run(link.request(h, body));
+function request(s: Sim, link: Link, h: RequestHead, body = new Uint8Array()) {
+  return s.run(link.request(h, body));
 }
 
-test("opens_requests_and_streams_the_reply", { skip }, async () => {
-  const { mesh, station, runner, host } = await setup();
-  assert.equal(host.stored(DEVICE_KEY)?.length, 32);
-  const link = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
-  const reply = await request(runner, link, head("/admin/api/sessions"), new TextEncoder().encode('{"a":1}'));
+/// A wire over `mesh`, as the core has one.
+function wireOf(s: Sim, mesh: Mesh) {
+  const status = new Status(s.host, s.runner);
+  return new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials: () => grants("ok", { n: 0 }), relays: () => [], status: () => status });
+}
+
+const network = (host: FakeHost) => new Wake(host.nowMs(), 0, true, false);
+
+async function close(s: Sim, station: Station, mesh: Mesh) {
+  await s.settle(station.close());
+  await s.run(mesh.close());
+}
+
+sim("opens_requests_and_streams_the_reply", async (s) => {
+  const { mesh, station } = await setup(s);
+  assert.equal(s.host.stored(DEVICE_KEY)?.length, 32);
+  const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  const reply = await request(s, link, head("/admin/api/sessions"), new TextEncoder().encode('{"a":1}'));
   assert.deepEqual(station.grants, ["ok-1"]);
   assert.equal(reply.status, 200);
   assert.ok(reply.headers.some(([k, v]) => k === "content-type" && v === "text/event-stream"));
   assert.ok(reply.headers.some(([k, v]) => k === "x-method" && v === "POST"));
-  const first = text((await runner.run(reply.body.take))!);
-  assert.deepEqual(JSON.parse(first.split("|")[0]), { method: "POST", path: "/admin/api/sessions", headers: { "content-type": "application/json" } });
-  assert.equal(first.split("|")[1], '{"a":1}');
-  assert.ok(!first.includes("three"));
-  const rest = text(await runner.run(readAll(reply.body)));
-  assert.ok(rest.endsWith("|one|two|three"), rest);
+  const all = text(await s.run(readAll(reply.body)));
+  assert.deepEqual(JSON.parse(all.split("|")[0]!), { method: "POST", path: "/admin/api/sessions", headers: { "content-type": "application/json" } });
+  assert.equal(all.split("|")[1], '{"a":1}');
+  assert.ok(all.endsWith("|one|two|three"), all);
   assert.equal(link.closed(), null);
-  await station.close();
-  await runner.run(mesh.close());
-  runner.shutdown();
+  await close(s, station, mesh);
 });
 
-test("reaches_stations_from_before_and_after_the_rename", { skip }, async () => {
+sim("streams_a_reply_as_it_comes", async (s) => {
+  const { mesh, station } = await setup(s);
+  const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  const reply = await request(s, link, head("/admin/api/sessions"));
+  // What the station said first comes before what it says 100 ms later.
+  const first = text((await s.run(reply.body.take))!);
+  assert.ok(!first.includes("one"), first);
+  const rest = text(await s.run(readAll(reply.body)));
+  assert.ok((first + rest).endsWith("|one|two|three"), first + rest);
+  await close(s, station, mesh);
+});
+
+sim("reaches_stations_from_before_and_after_the_rename", async (s) => {
   for (const [alpns, spoken] of [[[FORMER_ALPN], FORMER_ALPN], [[ALPN, FORMER_ALPN], ALPN]] as [Uint8Array[], Uint8Array][]) {
-    const { mesh, station, runner } = await setup(await Station.start(alpns));
-    const link = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
-    const reply = await request(runner, link, head("/admin/api/overview"));
-    assert.equal(reply.status, 200);
+    const { mesh, station } = await setup(s, await s.station(alpns));
+    const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+    assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
     assert.equal(hex(new Uint8Array(station.conns[0].alpn())), hex(spoken));
-    await station.close();
-    await runner.run(mesh.close());
-  runner.shutdown();
+    await close(s, station, mesh);
   }
 });
 
-test("refused_grant_fails_with_a_reason", { skip }, async () => {
-  const { mesh, station, runner } = await setup();
+sim("refused_grant_fails_with_a_reason", async (s) => {
+  const { mesh, station } = await setup(s);
   const count = { n: 0 };
-  const link = await runner.run(mesh.link(station.id(), grants("bad", count)));
-  const error = await request(runner, link, head("/admin/api/sessions")).then(
+  const link = await s.run(mesh.link(station.id(), grants("bad", count)));
+  const error = await request(s, link, head("/admin/api/sessions")).then(
     () => null,
     (e) => e as CoreError,
   );
   assert.equal(error?.code, "credential_refused", JSON.stringify(error));
   assert.ok(error?.message.includes("station 拒绝了授权"), error?.message);
-  const again = await runner.run(mesh.link(station.id(), grants("bad", count)));
+  const again = await s.run(mesh.link(station.id(), grants("bad", count)));
   assert.notEqual(link, again);
   assert.equal(count.n, 2);
-  await station.close();
-  await runner.run(mesh.close());
-  runner.shutdown();
+  await close(s, station, mesh);
 });
 
-test("reuses_the_open_link_and_shares_an_opening", { skip }, async () => {
-  const { mesh, station, runner } = await setup();
+sim("reuses_the_open_link_and_shares_an_opening", async (s) => {
+  const { mesh, station } = await setup(s);
   const count = { n: 0 };
   const id = station.id();
-  const [a, b] = await Promise.all([runner.run(mesh.link(id, grants("ok", count))), runner.run(mesh.link(id, grants("ok", count)))]);
+  const [a, b] = await s.settle(Promise.all([s.runner.run(mesh.link(id, grants("ok", count))), s.runner.run(mesh.link(id, grants("ok", count)))]));
   assert.equal(a, b);
-  const c = await runner.run(mesh.link(id, grants("ok", count)));
-  assert.equal(a, c);
+  assert.equal(await s.run(mesh.link(id, grants("ok", count))), a);
   assert.equal(count.n, 1);
-  await request(runner, a, head("/admin/api/overview"));
+  await request(s, a, head("/admin/api/overview"));
   assert.equal(station.conns.length, 1);
-  await station.close();
-  await runner.run(mesh.close());
-  runner.shutdown();
+  await close(s, station, mesh);
 });
 
-test("reopens_a_closed_link_with_a_new_credential", { skip }, async () => {
-  const { mesh, station, runner } = await setup();
+sim("reopens_a_closed_link_with_a_new_credential", async (s) => {
+  const { mesh, station } = await setup(s);
   const count = { n: 0 };
-  const first = await runner.run(mesh.link(station.id(), grants("ok", count)));
-  await request(runner, first, head("/admin/api/overview"));
+  const first = await s.run(mesh.link(station.id(), grants("ok", count)));
+  await request(s, first, head("/admin/api/overview"));
   station.conns[0].close(3, "credential_expired");
-  for (let i = 0; i < 100 && first.closed() === null; i++) await sleep(20);
+  await s.until(() => first.closed() !== null);
   assert.equal(first.closed(), "授权已过期");
-  const second = await runner.run(mesh.link(station.id(), grants("ok", count)));
+  const second = await s.run(mesh.link(station.id(), grants("ok", count)));
   assert.notEqual(first, second);
-  const reply = await request(runner, second, head("/admin/api/overview"));
+  const reply = await request(s, second, head("/admin/api/overview"));
   assert.deepEqual(station.grants, ["ok-1", "ok-2"]);
   assert.equal(reply.status, 200);
-  await runner.run(readAll(reply.body));
-  await station.close();
-  await runner.run(mesh.close());
-  runner.shutdown();
+  await s.run(readAll(reply.body));
+  await close(s, station, mesh);
 });
 
-test("keeps_the_device_key_and_migrates_to_the_pages", { skip }, async () => {
-  const host = new FakeHost();
-  const e = env(host);
-  const first = await e.runner.run(Mesh.make(e, []));
-  const again = await e.runner.run(Mesh.make(e, []));
+sim("keeps_the_device_key_and_migrates_to_the_pages", async (s) => {
+  const e = env(s);
+  const first = await s.run(Mesh.make(e, []));
+  const again = await s.run(Mesh.make(e, []));
   assert.equal(first.deviceId(), again.deviceId());
   const page = new Uint8Array(32).fill(7);
-  await e.runner.run(first.migrate(page));
-  assert.deepEqual([...(host.stored(DEVICE_KEY) ?? [])], [...page]);
+  await s.run(first.migrate(page));
+  assert.deepEqual([...(s.host.stored(DEVICE_KEY) ?? [])], [...page]);
   assert.notEqual(first.deviceId(), again.deviceId());
   const migrated = first.deviceId();
-  await e.runner.run(first.migrate(page));
+  await s.run(first.migrate(page));
   assert.equal(first.deviceId(), migrated);
-  const bad = await e.runner.run(first.migrate(new Uint8Array([1, 2, 3]))).then(
+  const bad = await s.run(first.migrate(new Uint8Array([1, 2, 3]))).then(
     () => null,
     (err) => err as CoreError,
   );
   assert.equal(bad?.code, "invalid_params");
-  await e.runner.run(first.close());
-  await e.runner.run(again.close());
-  e.runner.shutdown();
+  await s.run(first.close());
+  await s.run(again.close());
 });
 
-const network = (host: FakeHost) => new Wake(host.nowMs(), 0, true, false);
-
-test("a_link_that_answers_as_the_network_changes_is_kept", { skip }, async () => {
-  const wakes = new Wakes();
-  const { mesh, station, runner, host } = await setup(undefined, new FakeHost(), wakes);
-  const link = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
-  await request(runner, link, head("/admin/api/overview"));
-  // The one opened beside it never is: it answering decides, not which of the two is quicker on this machine.
+sim("a_link_that_answers_as_the_network_changes_is_kept", async (s) => {
+  const { mesh, station } = await setup(s);
+  const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  await request(s, link, head("/admin/api/overview"));
+  // The one opened beside it never is: it answering decides.
   station.unanswered(1);
-  wakes.wake(network(host));
-  await sleep(500);
+  s.wakes.wake(network(s.host));
+  // Past every wait the race has (the probe's, the other try's): nothing of it changes the link.
+  await s.time.pass(2 * PROBE_MS);
   assert.equal(mesh.current(station.id()), link);
   assert.equal(link.closed(), null);
-  await station.close();
-  await runner.run(mesh.close());
-  runner.shutdown();
+  await close(s, station, mesh);
 });
 
-test("a_link_gone_quiet_is_replaced_by_one_opened_beside_it_at_once", { skip }, async () => {
-  const wakes = new Wakes();
-  const { mesh, station, runner, host } = await setup(undefined, new FakeHost(), wakes);
+sim("a_link_gone_quiet_is_replaced_by_one_opened_beside_it_at_once", async (s) => {
+  const { mesh, station } = await setup(s);
   const id = station.id();
-  const old = await runner.run(mesh.link(id, grants("ok", { n: 0 })));
-  await request(runner, old, head("/admin/api/overview"));
+  const old = await s.run(mesh.link(id, grants("ok", { n: 0 })));
+  await request(s, old, head("/admin/api/overview"));
   station.deadBelow = station.conns.length;
-  const started = Date.now();
-  const replaced = runner.run(mesh.replaced(id, old));
-  wakes.wake(network(host));
-  await replaced;
-  assert.ok(Date.now() - started < 2500, `${Date.now() - started}`);
+  const started = s.time.now();
+  const replaced = s.runner.run(mesh.replaced(id, old));
+  s.wakes.wake(network(s.host));
+  await s.settle(replaced);
+  // At once: the new one opened beside it, not after the probe of the old gave up.
+  assert.ok(s.time.now() - started < PROBE_MS, `${s.time.now() - started}`);
   const next = mesh.current(id)!;
   assert.notEqual(old, next);
-  assert.equal((await request(runner, next, head("/admin/api/overview"))).status, 200);
-  await station.close();
-  await runner.run(mesh.close());
-  runner.shutdown();
+  assert.equal((await request(s, next, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
 });
 
-test("a_write_is_asked_again_only_of_a_station_that_does_it_once", { skip }, async () => {
-  const wakes = new Wakes();
-  const { mesh, station, runner, host } = await setup(undefined, new FakeHost(), wakes);
-  const status = new Status(host, runner);
-  const wire = new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials: () => grants("ok", { n: 0 }), relays: () => [], status: () => status });
+sim("a_write_is_asked_again_only_of_a_station_that_does_it_once", async (s) => {
+  const { mesh, station } = await setup(s);
+  const wire = wireOf(s, mesh);
   const addr = StationAddr.parse(`w/${station.id()}`);
+  const ask = (h: RequestHead) => s.run(Effect.scoped(Effect.flatMap(wire.request(addr, h, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
   const post: RequestHead = { method: "POST", path: "/admin/api/x", headers: [["idempotency-key", "k1"]] };
   // Not said to keep writes to once: a write is asked once.
-  const ask = (h: RequestHead) => runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, h, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
   assert.equal(await ask(post), 200);
   station.idempotent = true;
   assert.equal(await ask(post), 200);
   // Now it said so: the wire may ask it again.
   assert.equal(await ask({ method: "GET", path: "/admin/api/overview", headers: [] }), 200);
-  await station.close();
-  await runner.run(mesh.close());
-  runner.shutdown();
+  await close(s, station, mesh);
 });
 
 test("moves_only_to_a_clearly_quicker_relay", () => {
@@ -272,266 +319,144 @@ test("weighs_each_relays_speed_with_its_round_trip", () => {
   assert.equal(Math.round(cost(100, MB)), 100 + 250);
 });
 
-const close = async (station: Station, runner: Runner, mesh: Mesh) => {
-  await station.close();
-  await runner.run(mesh.close());
-  runner.shutdown();
-};
-
-test("renews_the_grant_until_the_link_closes", { skip }, async () => {
-  const { mesh, station, runner } = await setup(undefined, new FakeHost(), new Wakes(), quickClock());
+sim("renews_the_grant_until_the_link_closes", async (s) => {
+  const { mesh, station } = await setup(s);
   const count = { n: 0 };
-  const link = await runner.run(mesh.link(station.id(), grants("ok", count)));
-  // Renewed every 150 ms: three by some 300 ms, waited for as long as a busy machine takes.
-  for (let i = 0; i < 250 && station.grants.length < 3; i++) await sleep(20);
-  const seen = [...station.grants];
-  assert.ok(seen.length >= 3, JSON.stringify(seen));
-  assert.deepEqual(seen.slice(0, 3), ["ok-1", "ok-2", "ok-3"]);
+  const link = await s.run(mesh.link(station.id(), grants("ok", count)));
+  // Renewed every RENEW_MS: three renewals by three of them.
+  await s.time.pass(3 * RENEW_MS + 1000);
+  assert.deepEqual(station.grants, ["ok-1", "ok-2", "ok-3", "ok-4"]);
   // Renewing kept the same link.
-  assert.equal(await runner.run(mesh.link(station.id(), grants("ok", count))), link);
+  assert.equal(await s.run(mesh.link(station.id(), grants("ok", count))), link);
   link.close();
   const asked = count.n;
-  await sleep(400);
+  await s.time.pass(2 * RENEW_MS);
   assert.equal(count.n, asked);
   assert.equal(link.closed(), "连接已关闭");
-  await close(station, runner, mesh);
+  await close(s, station, mesh);
 });
 
-test("a_refused_renewal_makes_the_next_link_reopen", { skip }, async () => {
-  const { mesh, station, runner } = await setup(undefined, new FakeHost(), new Wakes(), quickClock());
+sim("a_refused_renewal_makes_the_next_link_reopen", async (s) => {
+  const { mesh, station } = await setup(s);
   let n = 0;
   const refuseLater: CredentialSource = () => Effect.sync(() => ({ credential: ++n === 1 ? "ok" : "revoked", issued_at: 0, expires_at: 0, relay_url: "" }) as Credential);
-  const first = await runner.run(mesh.link(station.id(), refuseLater));
-  // Its renewal (150 ms on) refused, as a busy machine takes.
-  for (let i = 0; i < 250 && first.usable(); i++) await sleep(20);
-  const second = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  const first = await s.run(mesh.link(station.id(), refuseLater));
+  await s.until(() => !first.usable(), 2 * RENEW_MS);
+  const second = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
   assert.notEqual(first, second);
-  await close(station, runner, mesh);
+  await close(s, station, mesh);
 });
 
-/// A wire over `mesh` for the station `id`, as the core has one.
-function wireOf(mesh: Mesh, runner: Runner, host: FakeHost) {
-  const status = new Status(host, runner);
-  return new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials: () => grants("ok", { n: 0 }), relays: () => [], status: () => status });
-}
-const within = <A>(ms: number, p: Promise<A>, what: string) => Promise.race([p, sleep(ms).then(() => Promise.reject(new Error(`${what}: not within ${ms} ms`)))]);
-
-test("a_read_under_way_on_a_link_that_is_replaced_is_answered_on_the_new_one", { skip }, async () => {
-  const wakes = new Wakes();
-  const { mesh, station, runner, host } = await setup(undefined, new FakeHost(), wakes);
-  const wire = wireOf(mesh, runner, host);
+sim("a_read_under_way_on_a_link_that_is_replaced_is_answered_on_the_new_one", async (s) => {
+  const { mesh, station } = await setup(s);
+  const wire = wireOf(s, mesh);
   const addr = StationAddr.parse(`w/${station.id()}`);
   const get: RequestHead = { method: "GET", path: "/admin/api/overview", headers: [] };
-  const ask = (h: RequestHead) => runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, h, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
-  assert.equal(await ask(get), 200);
+  const ask = (h: RequestHead) => s.runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, h, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
+  assert.equal(await s.settle(ask(get)), 200);
   station.deadBelow = station.conns.length;
   // Sent on the dead way: it would never be answered.
   const asked = ask(get);
-  await sleep(50);
-  wakes.wake(network(host));
-  assert.equal(await within(PROBE_MS / 2, asked, "answered on the new link"), 200);
+  await s.time.pass(50);
+  const woken = s.time.now();
+  s.wakes.wake(network(s.host));
+  assert.equal(await s.settle(asked), 200);
+  assert.ok(s.time.now() - woken < PROBE_MS / 2, `answered on the new link ${s.time.now() - woken} ms after the wake`);
   assert.equal(station.conns.length, 2);
-  await close(station, runner, mesh);
+  await close(s, station, mesh);
 });
 
-test("a_write_whose_link_went_before_its_answer_is_asked_again_once_its_station_is_back", { skip }, async () => {
-  const { mesh, station, runner, host } = await setup();
+sim("a_write_whose_link_went_before_its_answer_is_asked_again_once_its_station_is_back", async (s) => {
+  const { mesh, station } = await setup(s);
   station.idempotent = true;
-  const wire = wireOf(mesh, runner, host);
+  const wire = wireOf(s, mesh);
   const addr = StationAddr.parse(`w/${station.id()}`);
-  const ask = (h: RequestHead) => runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, h, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
+  const ask = (h: RequestHead) => s.runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, h, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
   // Its first answer says it keeps writes to once.
-  assert.equal(await ask({ method: "GET", path: "/admin/api/overview", headers: [] }), 200);
+  assert.equal(await s.settle(ask({ method: "GET", path: "/admin/api/overview", headers: [] })), 200);
   station.deadBelow = station.conns.length;
   const asked = ask({ method: "POST", path: "/admin/api/sessions/k/pin", headers: [["idempotency-key", "k1"]] });
-  await sleep(50);
+  await s.time.pass(50);
   // Its link goes before it is answered (the station restarting): asked again, with its key, on the next.
   station.conns[0].close(0, "restart");
-  assert.equal(await within(5_000, asked, "asked again"), 200);
+  assert.equal(await s.settle(asked, 5_000), 200);
   assert.equal(station.conns.length, 2);
-  await close(station, runner, mesh);
+  await close(s, station, mesh);
 });
 
-test("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", { skip }, async () => {
-  // A connection unanswered after 1 s (time enough, on a busy machine, for the try to reach the station, which holds it
-  // unanswered: given up on sooner, the next would be the one held).
-  const times = new Map([[CONNECT_TIMEOUT_MS, 1000]]);
-  const { mesh, station, runner } = await setup(undefined, new FakeHost(), new Wakes(), quickClock(times));
+sim("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", async (s) => {
+  const { mesh, station } = await setup(s);
   station.unanswered(1);
   const before = mesh.endpoint();
   const device = mesh.deviceId();
-  const error = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 }))).then(
+  const error = await s.run(mesh.link(station.id(), grants("ok", { n: 0 }))).then(
     () => null,
     (e) => e as CoreError,
   );
   assert.equal(error?.message, "连不上这台 station：没有回应");
-  times.clear();
-  const link = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
-  assert.equal((await request(runner, link, head("/admin/api/overview"))).status, 200);
+  const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
   // Another endpoint (other sockets), the same device.
   assert.notEqual(mesh.endpoint(), before);
   assert.equal(mesh.deviceId(), device);
   // Answered: the next try stays on it.
   const now = mesh.endpoint();
   link.close();
-  await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
   assert.equal(mesh.endpoint(), now);
-  await close(station, runner, mesh);
+  await close(s, station, mesh);
 });
 
-test("a_wake_while_a_try_goes_unanswered_opens_one_beside_it", { skip }, async () => {
-  const wakes = new Wakes();
-  const { mesh, station, runner, host } = await setup(undefined, new FakeHost(), wakes);
+sim("a_wake_while_a_try_goes_unanswered_opens_one_beside_it", async (s) => {
+  const { mesh, station } = await setup(s);
   station.unanswered(1);
   const id = station.id();
-  const opening = runner.run(mesh.link(id, grants("ok", { n: 0 })));
-  await sleep(50);
+  const opening = s.runner.run(mesh.link(id, grants("ok", { n: 0 })));
+  await s.time.pass(50);
   // A person taps 重试 (client.wake, network) while a try that will never be answered is under way: another beside it
   // opens.
-  wakes.wake(network(host));
-  await within(5_000, opening, "opened beside it");
+  const woken = s.time.now();
+  s.wakes.wake(network(s.host));
+  await s.settle(opening);
+  assert.ok(s.time.now() - woken < 5_000, `${s.time.now() - woken}`);
   const link = mesh.current(id)!;
-  assert.equal((await request(runner, link, head("/admin/api/overview"))).status, 200);
-  await close(station, runner, mesh);
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
 });
 
-// ── relays: iroh-relay in dev mode (plain HTTP) on this machine, as many as a test needs ──
-
-import { spawn, type ChildProcess } from "node:child_process";
-import { createServer as tcpServer, connect as tcpConnect } from "node:net";
-import { existsSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
-
-const RELAY_BIN = process.env.STILLFAIL_RELAY_BIN ?? join(homedir(), ".config/ember-spike/relay/iroh-relay");
-const noRelay = skip || (existsSync(RELAY_BIN) ? false : "no iroh-relay here (STILLFAIL_RELAY_BIN)");
-/// A port free now: the system's choice, let go for the relay to take (another run of these tests at once on this
-/// machine has relays too).
-function freePort(): Promise<number> {
-  return new Promise((resolve) => {
-    const server = tcpServer();
-    server.listen(0, "127.0.0.1", () => {
-      const port = (server.address() as J).port;
-      server.close(() => resolve(port));
-    });
-  });
-}
-
-/// A relay on localhost: its url, and a way to stop it.
-async function relay(): Promise<[string, ChildProcess]> {
-  const port = await freePort();
-  const config = join(tmpdir(), `relay-${process.pid}-${port}.toml`);
-  writeFileSync(config, `enable_relay = true\nhttp_bind_addr = "127.0.0.1:${port}"\nenable_metrics = false\nenable_quic_addr_discovery = false\n`);
-  const child = spawn(RELAY_BIN, ["--dev", "--config-path", config], { stdio: "ignore" });
-  const url = `http://127.0.0.1:${port}`;
-  for (let i = 0; i < 100; i++) {
-    if (await fetch(url).then(() => true, () => false)) break;
-    await sleep(50);
-  }
-  return [url, child];
-}
-
-/// The relay at `url` reached through a proxy that holds what goes through it, either way, `delay` ms (a delay line:
-/// what comes meanwhile is held as long, behind it, as a far away relay is): its url for those who should find it slow.
-/// The first `quick` relay connections through it (asking to upgrade to the relay's protocol) are not held.
-async function slowed(url: string, delay: number, quick = 0, bytesPerSecond = 0): Promise<string> {
-  const upstream = new URL(url);
-  type Way = { held: number | null };
-  const pump = (from: import("node:net").Socket, to: import("node:net").Socket, way: Way) => {
-    // With a speed, each way a line of its own: a chunk goes on once the ones before it have, at that speed.
-    let free = 0;
-    const pass = (f: () => void, size: number) => {
-      if (bytesPerSecond === 0 || way.held === 0) return way.held === 0 ? f() : setTimeout(f, way.held!);
-      const now = Date.now();
-      free = Math.max(free, now + way.held!) + (size / bytesPerSecond) * 1000;
-      setTimeout(f, free - now);
-    };
-    from.on("data", (chunk: Buffer) => {
-      if (way.held === null) way.held = quick > 0 && /^upgrade:/im.test(chunk.toString("latin1")) && quick-- > 0 ? 0 : delay;
-      pass(() => to.write(chunk), chunk.length);
-    });
-    from.on("close", () => (way.held === null ? to.destroy() : pass(() => to.destroy(), 0)));
-  };
-  const server = tcpServer((down) => {
-    const up = tcpConnect(Number(upstream.port), upstream.hostname);
-    // The client speaks first: what it says first decides.
-    const way: Way = { held: null };
-    pump(down, up, way);
-    pump(up, down, way);
-    up.on("error", () => down.destroy());
-    down.on("error", () => up.destroy());
-  });
-  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
-  server.unref();
-  return `http://127.0.0.1:${(server.address() as J).port}`;
-}
+// ── relays ──
 
 const sameRelay = (a: string | null, b: string) => a !== null && new URL(a).host === new URL(b).host;
 
-test("relay_probes_disable_ip_without_disabling_live_hole_punching", { skip: noRelay }, async () => {
-  const [url, server] = await relay();
-  const probe = await addon.bind({ secretKey: Buffer.alloc(32, 31), alpns: [], relayUrls: [url], discovery: false, relayOnly: true });
-  assert.deepEqual(probe.sockets(), []);
-  const live = await addon.bind({ secretKey: Buffer.alloc(32, 32), alpns: [], relayUrls: [url], discovery: false });
-  assert.ok(live.sockets().length > 0);
-  await probe.close();
-  await live.close();
-  server.kill();
-});
-
-test("a_direct_rtt_is_never_reported_as_a_relay_measurement", { skip }, async () => {
-  const station = await Station.start();
-  const runner = new Runner();
-  const endpoint = await runner.run(nodeIroh()!.bind({ secretKey: new Uint8Array(32).fill(5), relayUrls: [], lookup: false, relayOnly: false }));
-  endpoint.addAddr(station.addr());
-  const conn = await runner.run(endpoint.connect({ id: station.id(), relays: [] }, ALPN, []));
-  assert.equal(await runner.run(sampleRelayRtt(conn, "https://relay.test/")), null);
-  conn.close(0, "done");
-  await runner.run(endpoint.close());
-  await station.close();
-  runner.shutdown();
-});
+/// The device's first link to the station, through its relays as they are.
+async function reach(s: Sim, mesh: Mesh, id: string, relays?: string[]): Promise<Link> {
+  const link = await s.run(mesh.link(id, grants("ok", { n: 0 }), relays));
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  return link;
+}
 
 /// A phone's link to a station abroad went through the relay nearest the phone, the station's way there slow
 /// (2026-10-01, bft: 11 s a round trip); measured, it moves to the relay that is quicker the whole way.
-test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, async () => {
-  const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
-  // The station reaches a slowly (65 ms each way: a round trip through a at least 130 ms, QUIC's estimate never below
-  // its least sample; well past what quicker() asks of a move, QUICKER_MS and QUICKER_SHARE, and each round trip of the
-  // connecting and measuring through a is the test's time), b at once; the device reaches both at once. (Its keeper on a
-  // (keep.rs), on the relay before the station dials it there, is the first relay connection through: not held, not
-  // being what is measured.)
-  const station = await Station.on(b, await slowed(a, 65, 1));
+sim("a_link_through_a_slow_relay_moves_to_the_quicker_one", async (s) => {
+  // a: the station 65 ms away each way; b: next to both.
+  const a = s.relay("https://a.relay.test/", { station: { ms: 65 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 2 }, station: { ms: 2 } });
+  const station = await s.stationOn(b, a);
   const id = station.id();
-  const host = new FakeHost();
-  // Real timers until the last measuring (connecting through the slow relay takes its time), then quick ones.
-  const times = new Map<number, number>();
-  const e = env(host, new Wakes(), quickClock(times));
   // As it went: through a, the only relay the device was on then.
-  const mesh = await e.runner.run(Mesh.make(e, [a]));
-  const runner = e.runner;
-  let link: Link | null = null;
-  for (let i = 0; i < 40 && link === null; i++) {
-    const tried = await runner.run(mesh.link(id, grants("ok", { n: 0 }))).catch(() => null);
-    if (tried && (await request(runner, tried, head("/admin/api/overview")).then((r) => r.status === 200, () => false))) link = tried;
-    else await sleep(250);
-  }
-  assert.ok(link, "reached through a");
-  const asked = await Promise.all([1, 2, 3].map(() => request(runner, link!, head("/admin/api/overview"))));
-  for (const reply of asked) assert.equal(reply.status, 200);
+  const mesh = await s.run(Mesh.make(env(s), [a]));
+  const link = await reach(s, mesh, id);
   const slow = link.net().rttMs!;
   assert.ok(sameRelay(link.via(), a), `${link.via()}`);
-  assert.ok(slow > 125, `${slow}`);
   // Now on both: measured, it moves to b.
   (mesh.relays as string[]).push(b);
-  await runner.run(mesh.remeasure(id));
+  await s.run(mesh.remeasure(id));
   const moved = mesh.current(id)!;
   assert.notEqual(moved, link);
   assert.ok(sameRelay(moved.via(), b), `${moved.via()}`);
   assert.ok(moved.pinned !== null && sameRelay(moved.pinned, b));
-  for (let i = 0; i < 5; i++) assert.equal((await request(runner, moved, head("/admin/api/overview"))).status, 200);
-  const quick = moved.net().rttMs!;
-  assert.ok(quick < slow / 2, `${quick} vs ${slow}`);
+  for (let i = 0; i < 5; i++) assert.equal((await request(s, moved, head("/admin/api/overview"))).status, 200);
+  assert.ok(moved.net().rttMs! < slow / 2, `${moved.net().rttMs} vs ${slow}`);
   // On b's own endpoint, under a key of its own: the station sees another device.
   const device = station.conns.filter((c: J) => !c.isClosed()).at(-1).remoteId();
   assert.notEqual(device, mesh.deviceId());
@@ -540,181 +465,128 @@ test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, 
   assert.equal(shown.moved, new URL(b).hostname);
   assert.equal(shown.relays.length, 2);
   assert.ok(shown.relays.every(([, ms]) => ms !== null), JSON.stringify(shown));
-  // Measured again, as a person asks: it stays, nothing is quicker than where it is. What is let go after it goes soon:
-  // no link is opened from here on (the probes have their own timeout), so of the 10 s timers only RETIRE_MS is to come.
-  const retired = 100;
-  times.set(RETIRE_MS, retired);
-  await runner.run(mesh.remeasure(id));
+  // Measured again, as a person asks: it stays, nothing is quicker than where it is.
+  await s.run(mesh.remeasure(id));
   assert.equal(mesh.measured(id)!.moved, null);
   assert.equal(mesh.current(id), moved);
   // The endpoint only measured on is let go (RETIRE_MS after measuring); b's, with the link on it, stays.
-  await sleep(retired + 300);
-  assert.equal((await request(runner, moved, head("/admin/api/overview"))).status, 200);
-  await runner.run(mesh.close());
-  runner.shutdown();
-  // The station's close waits out the draining of its connection to its keeper on a (keep.rs), its close never
-  // acknowledged (the keeper goes first) and the round trip there long: some 8 s, over by itself, not waited for.
-  void station.close();
-  ra.kill();
-  rb.kill();
+  await s.time.pass(RETIRE_MS + 1000);
+  assert.equal((await request(s, moved, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
 });
+
+/// How long a request takes on `link`, on the test's clock.
+async function took(s: Sim, link: Link): Promise<number> {
+  const started = s.time.now();
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  return s.time.now() - started;
+}
 
 /// The choice judged by what it chooses: of two relays, one next to the device but far from the station, one far from the
 /// device but next to the station, the link ends up on the one its requests are answered quicker through. Measured with
 /// QUIC's smoothed estimate, the probe's getting onto the far relay counted (several times the device's distance to it),
 /// and the link stayed on the near one (2026-10-05: bft in Tokyo, the device in China, kept on Beijing's relay, never
-/// on Cloudflare's or Hong Kong's). What a machine adds to each round trip is the same on both ways: the outcome is
-/// not a number with room for a slow machine.
-test("a_link_moves_to_the_relay_its_requests_go_quicker_through_far_from_the_device_or_not", { skip: noRelay }, async () => {
-  const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
+/// on Cloudflare's or Hong Kong's).
+sim("a_link_moves_to_the_relay_its_requests_go_quicker_through_far_from_the_device_or_not", async (s) => {
   // a: the device at once, the station 100 ms each way (200 ms a round trip); b: the device 60 ms each way (getting
   // onto it as well), the station at once (120 ms).
-  const station = await Station.on(b, await slowed(a, 100, 1));
+  const a = s.relay("https://a.relay.test/", { station: { ms: 100 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 60 } });
+  const station = await s.stationOn(b, a);
   const id = station.id();
-  const farB = await slowed(b, 60);
-  const e = env(new FakeHost(), new Wakes(), quickClock(new Map()));
-  const mesh = await e.runner.run(Mesh.make(e, [a]));
-  const runner = e.runner;
-  let link: Link | null = null;
-  for (let i = 0; i < 40 && link === null; i++) {
-    const tried = await runner.run(mesh.link(id, grants("ok", { n: 0 }))).catch(() => null);
-    if (tried && (await request(runner, tried, head("/admin/api/overview")).then((r) => r.status === 200, () => false))) link = tried;
-    else await sleep(250);
-  }
-  assert.ok(link, "reached through a");
+  const mesh = await s.run(Mesh.make(env(s), [a]));
+  const link = await reach(s, mesh, id);
   assert.ok(sameRelay(link.via(), a), `${link.via()}`);
-  // How long requests take on a link: the median of five.
-  const took = async (l: Link) => {
-    const times: number[] = [];
-    for (let i = 0; i < 5; i++) {
-      const started = Date.now();
-      assert.equal((await request(runner, l, head("/admin/api/overview"))).status, 200);
-      times.push(Date.now() - started);
-    }
-    return times.sort((x, y) => x - y)[2];
-  };
-  const throughA = await took(link);
-  (mesh.relays as string[]).push(farB);
-  await runner.run(mesh.remeasure(id));
+  const throughA = await took(s, link);
+  (mesh.relays as string[]).push(b);
+  await s.run(mesh.remeasure(id));
   const now = mesh.current(id)!;
-  assert.ok(sameRelay(now.via(), farB), `still through ${now.via()}: ${JSON.stringify(mesh.measured(id))}`);
-  const throughB = await took(now);
+  assert.ok(sameRelay(now.via(), b), `still through ${now.via()}: ${JSON.stringify(mesh.measured(id))}`);
+  const throughB = await took(s, now);
   assert.ok(throughB < throughA, `requests through b ${throughB} ms, through a ${throughA} ms`);
-  await runner.run(mesh.close());
-  runner.shutdown();
-  void station.close();
-  ra.kill();
-  rb.kill();
+  await close(s, station, mesh);
 });
 
 /// Judged by what it chooses, again: b answers sooner than a but brings a reply slowly (the device 60 ms away each way
 /// on a 256 KiB/s line, as Hong Kong's back to the mainland). Its speed not known, the link goes there; a large reply
 /// through it shows how slow it is, and the link goes back to a, where the same reply comes sooner.
-test("a_link_leaves_a_relay_found_slow_for_one_that_brings_replies_sooner", { skip: noRelay }, async () => {
-  const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
-  const station = await Station.on(b, await slowed(a, 100, 1));
+sim("a_link_leaves_a_relay_found_slow_for_one_that_brings_replies_sooner", async (s) => {
+  const a = s.relay("https://a.relay.test/", { station: { ms: 100 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 60, bps: 256 * 1024 } });
+  const station = await s.stationOn(b, a);
   const id = station.id();
-  const slowB = await slowed(b, 60, 0, 256 * 1024);
-  const e = env(new FakeHost(), new Wakes(), quickClock(new Map()));
-  const mesh = await e.runner.run(Mesh.make(e, [a]));
-  const runner = e.runner;
-  let link: Link | null = null;
-  for (let i = 0; i < 40 && link === null; i++) {
-    const tried = await runner.run(mesh.link(id, grants("ok", { n: 0 }))).catch(() => null);
-    if (tried && (await request(runner, tried, head("/admin/api/overview")).then((r) => r.status === 200, () => false))) link = tried;
-    else await sleep(250);
-  }
-  assert.ok(link, "reached through a");
-  const status = new Status(e.host, runner);
-  const wire = new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials: () => grants("ok", { n: 0 }), relays: () => [], status: () => status });
+  const mesh = await s.run(Mesh.make(env(s), [a]));
+  await reach(s, mesh, id);
+  const wire = wireOf(s, mesh);
   const addr = StationAddr.parse(`w/${id}`);
   // A large reply, as the core reads one: how long it takes.
   const big = async () => {
-    const started = Date.now();
-    const bytes = await runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, head("/admin/api/big"), new Uint8Array()), (r) => readAll(r.body))));
+    const started = s.time.now();
+    const bytes = await s.run(Effect.scoped(Effect.flatMap(wire.request(addr, head("/admin/api/big"), new Uint8Array()), (r) => readAll(r.body))));
     assert.ok(bytes.length >= SPEED_MIN_BYTES, `${bytes.length}`);
-    return Date.now() - started;
+    return s.time.now() - started;
   };
-  (mesh.relays as string[]).push(slowB);
-  await runner.run(mesh.remeasure(id));
-  assert.ok(sameRelay(mesh.current(id)!.via(), slowB), `${mesh.current(id)!.via()}`);
+  (mesh.relays as string[]).push(b);
+  await s.run(mesh.remeasure(id));
+  assert.ok(sameRelay(mesh.current(id)!.via(), b), `${mesh.current(id)!.via()}`);
   const throughB = await big();
-  assert.ok(mesh.speed(id, slowB) !== null, "how fast b is, seen");
-  // Measured again, as the core does every few minutes. Once on Linux CI (2026-10-06) it stayed on b after one
-  // measuring: either b's speed was taken for faster than it is (then measuring again changes nothing: the fastest
-  // seen counts) or the link through a did not open in time (then it does). What failing says tells which.
-  for (let i = 0; i < 3 && !sameRelay(mesh.current(id)!.via(), a); i++) await runner.run(mesh.remeasure(id));
-  assert.ok(sameRelay(mesh.current(id)!.via(), a), `still through ${mesh.current(id)!.via()}: ${JSON.stringify({ ...mesh.measured(id), speedB: mesh.speed(id, slowB), throughB })}`);
+  assert.ok(mesh.speed(id, b) !== null, "how fast b is, seen");
+  await s.run(mesh.remeasure(id));
+  assert.ok(sameRelay(mesh.current(id)!.via(), a), `still through ${mesh.current(id)!.via()}: ${JSON.stringify({ ...mesh.measured(id), speedB: mesh.speed(id, b), throughB })}`);
   const throughA = await big();
   assert.ok(throughA < throughB, `the reply through a ${throughA} ms, through b ${throughB} ms`);
-  await runner.run(mesh.close());
-  runner.shutdown();
-  void station.close();
-  ra.kill();
-  rb.kill();
+  await close(s, station, mesh);
 });
 
 /// A workspace's own relay (cloud directory.ts setRelays): its station is on that relay alone, the device's endpoint on
-/// still.fail's; told the workspace's relays, the device reaches the station through it, and measures it.
-test("reaches_a_station_through_its_workspaces_own_relay", { skip: noRelay }, async () => {
-  const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
-  const station = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
-  await station.endpoint.online();
+/// still.fail's; told the workspace's relays, the device reaches the station through it.
+sim("reaches_a_station_through_its_workspaces_own_relay", async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 5 }, station: { ms: 5 } });
+  const b = s.relay("https://ws.relay.test/", { device: { ms: 20 }, station: { ms: 5 } });
+  const station = await s.stationBound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
+  await s.settle(station.endpoint.online());
   const id = station.id();
-  const e = env(new FakeHost(), new Wakes());
-  const mesh = await e.runner.run(Mesh.make(e, [a]));
-  const runner = e.runner;
-  let link: Link | null = null;
-  for (let i = 0; i < 40 && link === null; i++) {
-    const tried = await runner.run(mesh.link(id, grants("ok", { n: 0 }), [b])).catch(() => null);
-    if (tried && (await request(runner, tried, head("/admin/api/overview")).then((r) => r.status === 200, () => false))) link = tried;
-    else await sleep(250);
-  }
-  assert.ok(link, "reached through the workspace's relay");
+  const mesh = await s.run(Mesh.make(env(s), [a]));
+  const link = await reach(s, mesh, id, [b]);
   assert.ok(sameRelay(link.via(), b), `${link.via()}`);
   assert.deepEqual(mesh.relaysFor(id), [a, b]);
   // Its endpoint stays on still.fail's relay alone; a link asked for again without saying keeps the station's relays.
   assert.deepEqual(mesh.relays, [a]);
-  assert.equal(await runner.run(mesh.link(id, grants("ok", { n: 0 }))), link);
+  assert.equal(await s.run(mesh.link(id, grants("ok", { n: 0 }))), link);
   assert.deepEqual(mesh.relaysFor(id), [a, b]);
-  await runner.run(mesh.close());
-  runner.shutdown();
-  void station.close();
-  ra.kill();
-  rb.kill();
+  await close(s, station, mesh);
 });
 
 // ── adb.rs ──
 
-import { createServer } from "node:net";
 import { Adb } from "../src/adb.ts";
 import { parseAdb, MAX_MINUTES } from "../src/adb-parse.ts";
 import { Store } from "../src/store.ts";
-import { nodeTcp } from "../src/hosts/node.ts";
+import type { TcpConnection } from "../src/host.ts";
 
-/// adbd: says back what it hears.
-function adbd(): Promise<number> {
-  return new Promise((resolve) => {
-    const server = createServer((socket) => socket.pipe(socket));
-    server.listen(0, "127.0.0.1", () => resolve((server.address() as J).port));
-    server.unref();
+/// adbd, as the host reaches it: says back what it hears.
+function echoTcp(_port: number) {
+  return Effect.gen(function* () {
+    const said = yield* Queue.unbounded<Uint8Array | null>();
+    return {
+      read: { take: Queue.take(said) },
+      write: (bytes: Uint8Array) => Effect.asVoid(Queue.offer(said, bytes)),
+      end: () => void Queue.offerUnsafe(said, null),
+    } satisfies TcpConnection;
   });
 }
 
-test("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", { skip }, async () => {
-  const port = await adbd();
+sim("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", async (s) => {
   // A station that takes a credential, then an offer: answers it, opens a tunnel and says "hello" through it.
-  const key = new Uint8Array(32);
-  crypto.getRandomValues(key);
-  const endpoint = await addon.bind({ secretKey: Buffer.from(key), alpns: [Buffer.from(ALPN)], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
   const seen: { offer?: J; echoed?: string; stopped?: boolean } = {};
   void (async () => {
-    const conn = await endpoint.accept();
-    const control = await conn.acceptBi();
+    const conn = (await endpoint.accept())!;
+    const control = (await conn.acceptBi())!;
     const c1 = { bytes: Buffer.alloc(0) };
     await Station.readLine(control, c1);
     await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
-    const offer = await conn.acceptBi();
+    const offer = (await conn.acceptBi())!;
     const c2 = { bytes: Buffer.alloc(0) };
     seen.offer = JSON.parse((await Station.readLine(offer, c2))!);
     await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
@@ -734,32 +606,29 @@ test("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", { skip }
     await offer.stopped();
     seen.stopped = true;
   })().catch(() => {});
-  const host = new FakeHost();
-  (host as J).tcp = nodeTcp;
-  const e = env(host);
-  const mesh = await e.runner.run(Mesh.make(e, []));
-  mesh.addAddr({ id: endpoint.id(), ips: [endpoint.sockets().find((a: string) => a.startsWith("127.0.0.1"))] });
-  const store = new Store(host, e.runner);
-  const adb = new Adb({ host, runner: e.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [] });
+  s.host.tcpConnect = echoTcp;
+  const mesh = await s.run(Mesh.make(env(s), []));
+  mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [] });
   const station = `ws/${endpoint.id()}`;
-  await e.runner.run(adb.run({ kind: "share", offer: { station, connect: port, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
-  for (let i = 0; i < 200 && (seen.echoed === undefined || adb.value().tunnels !== 1 || adb.value().adb !== "connected"); i++) await sleep(20);
-  const head = seen.offer;
-  assert.equal(head.path, "/admin/api/adb");
-  assert.equal(head.adb.phone.length, 64);
-  delete head.adb.phone;
-  assert.deepEqual(head.adb, { op: "share", device: "Pixel 8", android: "14", package: "fail.still.android", adbd: true, pair: false });
+  await s.run(adb.run({ kind: "share", offer: { station, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
+  await s.until(() => seen.echoed !== undefined && adb.value().tunnels === 1 && adb.value().adb === "connected");
+  const offered = seen.offer;
+  assert.equal(offered.path, "/admin/api/adb");
+  assert.equal(offered.adb.phone.length, 64);
+  delete offered.adb.phone;
+  assert.deepEqual(offered.adb, { op: "share", device: "Pixel 8", android: "14", package: "fail.still.android", adbd: true, pair: false });
   assert.equal(seen.echoed, "hello");
   const value = adb.value();
   assert.deepEqual([value.sharing, value.station, value.phase, value.serial], [true, station, "offered", "127.0.0.1:37001"]);
-  await e.runner.run(adb.run({ kind: "stop" }));
-  for (let i = 0; i < 250 && !seen.stopped; i++) await sleep(20);
+  await s.run(adb.run({ kind: "stop" }));
+  await s.until(() => seen.stopped === true);
   assert.ok(seen.stopped, "the station sees the offer stop");
   const after = adb.value();
   assert.deepEqual([after.sharing, after.phase], [false, "off"]);
-  await e.runner.run(mesh.close());
-  await endpoint.close();
-  e.runner.shutdown();
+  await s.run(mesh.close());
+  await s.settle(endpoint.close());
 });
 
 test("reads_its_calls", () => {
@@ -768,6 +637,53 @@ test("reads_its_calls", () => {
   assert.throws(() => parseAdb("adb.share", {}));
   assert.deepEqual(parseAdb("adb.pair", { code: "123456" }), { kind: "pair", code: "123456" });
   assert.equal(parseAdb("job.stop", {}), null);
+});
+
+// ── over the addon: what only it can show, never timed ──
+
+function test(name: string, options: TestOptions | Body, body?: Body) {
+  if (typeof options === "function") tests.push([name, {}, options]);
+  else tests.push([name, options, body!]);
+}
+
+test("over_the_addon_opens_requests_and_streams_the_reply", { skip: noAddon }, async () => {
+  const station = await Station.start();
+  const host = new FakeHost();
+  const runner = new Runner();
+  const mesh = await runner.run(Mesh.make({ host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes: new Wakes() }, []));
+  mesh.addAddr(station.addr());
+  const link = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  const reply = await runner.run(link.request(head("/admin/api/sessions"), new TextEncoder().encode('{"a":1}')));
+  assert.equal(reply.status, 200);
+  const all = text(await runner.run(readAll(reply.body)));
+  assert.equal(all.split("|")[1], '{"a":1}');
+  assert.ok(all.endsWith("|one|two|three"), all);
+  await station.close();
+  await runner.run(mesh.close());
+  runner.shutdown();
+});
+
+test("over_the_addon_relay_probes_disable_ip_without_disabling_live_hole_punching", { skip: noAddon }, async () => {
+  // No relay needed to see it: a relay-only endpoint has no sockets of its own, another has.
+  const probe = await addon.bind({ secretKey: Buffer.alloc(32, 31), alpns: [], relayUrls: ["http://127.0.0.1:9/"], discovery: false, relayOnly: true });
+  assert.deepEqual(probe.sockets(), []);
+  const live = await addon.bind({ secretKey: Buffer.alloc(32, 32), alpns: [], relayUrls: ["http://127.0.0.1:9/"], discovery: false });
+  assert.ok(live.sockets().length > 0);
+  await probe.close();
+  await live.close();
+});
+
+test("over_the_addon_a_direct_rtt_is_never_reported_as_a_relay_measurement", { skip: noAddon }, async () => {
+  const station = await Station.start();
+  const runner = new Runner();
+  const endpoint = await runner.run(nodeIroh()!.bind({ secretKey: new Uint8Array(32).fill(5), relayUrls: [], lookup: false, relayOnly: false }));
+  endpoint.addAddr(station.addr());
+  const conn = await runner.run(endpoint.connect({ id: station.id(), relays: [] }, ALPN, []));
+  assert.equal(await runner.run(sampleRelayRtt(conn, "https://relay.test/")), null);
+  conn.close(0, "done");
+  await runner.run(endpoint.close());
+  await station.close();
+  runner.shutdown();
 });
 
 suite("mesh", { concurrency: true }, () => {

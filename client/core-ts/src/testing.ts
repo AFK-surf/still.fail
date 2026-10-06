@@ -10,8 +10,17 @@ import { NodeSql } from "./hosts/node-sql.ts";
 import type { ClientId, CoreMessage } from "./protocol.ts";
 import { compareKeys, toJsonBytes } from "./util.ts";
 
+/// A test host's time: its clock, its now, and how it is moved on (TestTime; a simulated network's SimTime).
+export interface HostTime {
+  readonly clock: Clock.Clock;
+  /// Every sleep asked of it (ms), in order.
+  readonly sleeps: number[];
+  now(): number;
+  pass(ms: number, step?: number): Promise<void>;
+}
+
 /// A test's clock: a TestClock, with every sleep asked of it noted.
-export class TestTime {
+export class TestTime implements HostTime {
   readonly clock: Clock.Clock;
   readonly #test: TestClock.TestClock;
   /// Every sleep asked for (ms), in order: timers show here.
@@ -106,7 +115,7 @@ export class FakeHost implements Host {
   origin = "https://stillfail.test";
   isBeta = false;
   onTestChannel = false;
-  readonly time: TestTime;
+  readonly time: HostTime;
   readonly storage = new Map<string, Uint8Array>();
   /// The former records store (what db/import.ts brings over): `${table}\u0000${key}` → bytes.
   readonly db = new Map<string, Uint8Array>();
@@ -128,7 +137,7 @@ export class FakeHost implements Host {
   #offset = 0;
   #ahead = 0;
 
-  constructor(time = new TestTime()) {
+  constructor(time: HostTime = new TestTime()) {
     this.time = time;
   }
 

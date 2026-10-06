@@ -39,7 +39,7 @@ Everything Rust that the TypeScript station, the clients, their builds and their
 | `shell` | `client/shell`: the Android core's IO (`libstillfail_shell.so`) | android-arm64 | `apps/android/build.py` |
 | `engine` | `apps/android/core/src/main/cpp`: Hermes with its JSI (`libstillfail_hermes.so`, `libjsi.so`, the NDK's `libc++_shared.so`) | android-arm64 | `apps/android/build.py` |
 | `archive-rs`, `station-load` | `station/test/archive-rs` (the Rust station's cold storage, kept for data it left), `station/tools/load`: test tools | darwin-arm64 published | station tests, `e2e.sh`, `compare.sh` |
-| `iroh-relay` | n0's release v1.1.0, checked against its SHA-256 (not ours to publish) | darwin-arm64, linux | core-ts mesh tests |
+| `iroh-relay` | n0's release v1.1.0, checked against its SHA-256 (not ours to publish) | darwin-arm64, linux | core-ts side run (`side/mesh-real.test.ts`) |
 
 **Keys.** A part's key is the SHA-256 of: the git hash of every file it is made from (its crate, its `Cargo.lock`, the vendored crates it patches in, …: `inputs` in `scripts/native.ts`), as committed or as edited in the worktree; the Rust toolchain (pinned there, `TOOLCHAIN`, and installed by rustup when building); zig's version for Linux; the target; and the build's command, flags, NDK, Hermes and AGP versions. Nothing else changes a key, so a change anywhere else compiles no Rust. `node scripts/native.ts status` lists every part's key and where it is.
 
@@ -88,6 +88,24 @@ One Node version everywhere, `.node-version`'s: CI (`.github/actions/setup`, and
 the station's releases (which name it in `NODE_VERSION` rather than carry it: the installer gets it once per version,
 `scripts/node-dist.sh` puts it beside the releases) and the desktop app, which runs its station on its own Electron as
 Node. It is Electron's Node: upgrading Electron, `.node-version` goes with it (`apps/desktop/build.sh` stops otherwise).
+
+## Tests: CI's and the side run's
+
+A test CI runs is the same every run: what it shows is decided by the code alone, never by how fast or busy the machine
+is, the time of day, real timers, or real sockets and processes taking their time. So a failure in CI is the code's,
+and fails again, the same way, anywhere. Time is a test's clock (Effect's `TestClock`, the core's `FakeHost`), moved on
+by the test; networks are simulated (`client/core-ts/test/sim-iroh.ts`: relays, their lines' latency and speed, outages,
+on the test's clock). A test does not sleep and then assert that nothing more happened, poll against a deadline, or
+assert how long something took: it moves its clock past the time in question and looks.
+
+Where a seed decides what a simulated run leaves open (jitter, how writes are cut), the seeds are fixed
+(`client/core-ts/test/sim-seeds.ts`); a failure names its seed and network, and `SIM_SEED=<seed>` runs only it.
+
+What cannot be made the same every run (real processes and signals, the native addon and iroh-relay over real
+sockets, networks made up at random) is the side run's: `sh scripts/side.sh` (each package's `side/`; Rust's
+`#[ignore = "side: …"]`), every few hours on the Mac Studio, blocking nothing. A side failure goes to an agent, which
+reproduces it as a test CI runs, failing the same way every time, and fixes it; one it cannot reproduce is let be.
+Never a retry, a longer deadline or a looser bound to make a test pass.
 
 ## CI time
 

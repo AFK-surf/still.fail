@@ -1,12 +1,16 @@
-// A station on localhost over the native addon (station/native/mesh), for the mesh tests (mesh.test.ts,
-// bridge.test.ts): accepts credentials starting with "ok", echoes requests.
+// A station for the mesh tests (mesh.test.ts, bridge.test.ts): accepts credentials starting with "ok", echoes requests.
+// On localhost over the native addon (station/native/mesh), or on a simulated network (sim-iroh.ts: its `world`).
 import { loadAddon } from "../src/hosts/node-iroh.ts";
 import { ALPN, FORMER_ALPN } from "../src/mesh.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
 const addon = loadAddon() as J;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/// Where a station runs: what binds its endpoint, and its time.
+export type World = { bind(options: J): Promise<J>; sleep(ms: number): Promise<void> };
+/// The machine's own: the addon, real time.
+export const REAL: World = { bind: (o) => addon.bind(o), sleep: (ms) => new Promise((r) => setTimeout(r, ms)) };
 
 export class Station {
   endpoint: J;
@@ -15,24 +19,32 @@ export class Station {
   /// Connections before this one answer nothing more.
   deadBelow = 0;
   idempotent = false;
+  /// Each request it carried out (read whole, on a way not dead): its head.
+  served: J[] = [];
+  world: World = REAL;
 
-  static async start(alpns: Uint8Array[] = [ALPN, FORMER_ALPN]): Promise<Station> {
-    return Station.bound({ alpns: alpns.map((a) => Buffer.from(a)), relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  static async start(alpns: Uint8Array[] = [ALPN, FORMER_ALPN], world: World = REAL): Promise<Station> {
+    return Station.bound({ alpns: alpns.map((a) => Buffer.from(a)), relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" }, world);
   }
 
   /// One at home on the relay `home`, held on `other` too by a keeper there (station/native/mesh keep.rs).
-  static async on(home: string, other: string): Promise<Station> {
-    const s = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [home], discovery: false, relayOnly: true });
+  static async on(home: string, other: string, world: World = REAL): Promise<Station> {
+    const s = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [home], discovery: false, relayOnly: true }, world);
     await s.endpoint.online();
     s.endpoint.keep([other]);
     return s;
   }
 
-  static async bound(options: J): Promise<Station> {
+  /// `key`: its secret (a random one by default; a simulated network's runs draw theirs from its seed).
+  static async bound(options: J, world: World = REAL, key?: Uint8Array): Promise<Station> {
     const s = new Station();
-    const key = new Uint8Array(32);
-    crypto.getRandomValues(key);
-    s.endpoint = await addon.bind({ secretKey: Buffer.from(key), ...options });
+    s.world = world;
+    if (!key) {
+      const fresh = new Uint8Array(32);
+      crypto.getRandomValues(fresh);
+      key = fresh;
+    }
+    s.endpoint = await world.bind({ secretKey: Buffer.from(key), ...options });
     void (async () => {
       for (;;) {
         const conn = await s.endpoint.accept();
@@ -89,7 +101,7 @@ export class Station {
     await control.write(Buffer.from(`${JSON.stringify(reply)}\n`));
     if (reply.error) {
       await control.finish().catch(() => {});
-      await sleep(200);
+      await this.world.sleep(200);
       conn.close(1, "credential_refused");
       return;
     }
@@ -116,6 +128,7 @@ export class Station {
         }
         if (dead()) return;
         const parsed = JSON.parse(head!);
+        this.served.push(parsed);
         const headers: J = { "content-type": "text/event-stream", "x-method": parsed.method };
         if (once) headers["stillfail-idempotent"] = "1";
         await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers })}\n`));
@@ -127,7 +140,7 @@ export class Station {
         }
         await stream.write(Buffer.from(`${head}|${body.toString()}`));
         for (const part of ["|one", "|two", "|three"]) {
-          await sleep(100);
+          await this.world.sleep(100);
           try {
             await stream.write(Buffer.from(part));
           } catch {

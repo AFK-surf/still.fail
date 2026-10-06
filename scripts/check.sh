@@ -230,7 +230,8 @@ if [ $full = 1 ]; then
   if part ts && [ $core_tests = 1 ]; then
     if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root pnpm test; fi
   fi
-  # The TypeScript core's own tests; its mesh tests use the station's addon and n0's relay, prebuilt (its package.json).
+  # The TypeScript core's own tests; its mesh tests on a simulated network, a few over the station's addon, prebuilt (its
+  # package.json). Its side run's (real relays, networks made up at random) are scripts/side.sh's.
   if part ts && touches "$ts_core|^station/native/mesh/|^vendor/"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility

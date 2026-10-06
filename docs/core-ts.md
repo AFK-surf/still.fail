@@ -282,8 +282,8 @@ cloud 的端口、`doing` 的 `since`。
   应用器、安卓 `ChatsDecoder`、2000 行测量（见上面「按 key 的增量」）。
 
 - Rust 的测试全部移植（2026-10-03）：`station/tests.rs`、`kept.rs`（改成对记录的测试，`test/data.test.ts`）、`data.rs`、
-  `sync.rs`、`wake.rs`、mesh 里要 relay 的（测试自己起 `iroh-relay --dev`，`STILLFAIL_RELAY_BIN`，默认
-  `~/.config/ember-spike/relay/iroh-relay`）、entries/activity/brand/doing/marks。Rust 的 357 个测试名在 `test/` 里都有；
+  `sync.rs`、`wake.rs`、mesh 里要 relay 的（2026-10-06 起在模拟网络 `test/sim-iroh.ts` 上跑；
+  真 relay 的版本挪到旁路 `side/mesh-real.test.ts`）、entries/activity/brand/doing/marks。Rust 的 357 个测试名在 `test/` 里都有；
   core-ts 共 384 个测试。mesh 插件为「握手不答」的测试加了 `holdIncoming(n)`。
 - 对照运行加了 station（见上）。
 - Rust core 删了（2d8a53ab）：`client/core`、`client/wasm`、`client/node`、`client/ffi`；`client/shapes` 只剩 Rust station

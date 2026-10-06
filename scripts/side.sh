@@ -1,0 +1,22 @@
+#!/bin/sh
+# The side run (docs/development.md, "Tests"): the tests CI does not run because they are not the same every run (real
+# time, real processes and sockets, networks made up at random), run every few hours, blocking nothing. A failure here
+# is for an agent to reproduce as a test CI runs, one that fails the same way every time, and to fix; one it cannot
+# reproduce is let be.
+#
+#   sh scripts/side.sh           every part's
+#   sh scripts/side.sh core-ts   one part's
+set -u
+cd "$(dirname "$0")/.."
+parts=${*:-core-ts}
+status=0
+for part in $parts; do
+  echo "· side: $part"
+  case $part in
+    # The mesh on the real addon and iroh-relay (side/mesh-real.test.ts), and on simulated networks made up at random
+    # (side/mesh-explore.test.ts, SIM_EXPLORE of them).
+    core-ts) (cd client/core-ts && pnpm side) || status=1 ;;
+    *) echo "no side part $part"; status=1 ;;
+  esac
+done
+exit $status

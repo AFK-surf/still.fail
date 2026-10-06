@@ -8,7 +8,7 @@
 // All of it runs as fibers (rule 1): an opening is a Deferred everyone asking for the station meanwhile waits on, a
 // link's renewal and its first answer are fibers in the core's scope, a race and a hedge are fibers started as the UI
 // comes back, measuring and the day's tally are fibers on the clock.
-import { Deferred, Effect, Fiber, Semaphore } from "effect";
+import { Clock, Deferred, Effect, Fiber, Semaphore } from "effect";
 import type { Credential } from "./cloud.ts";
 import type { Inner } from "./core.ts";
 import { CoreError, asCoreError } from "./error.ts";
@@ -534,13 +534,15 @@ export class Mesh {
     let first: number | null = null;
     let bytes = 0;
     return {
-      take: Effect.map(body.take, (chunk) => {
-        if (chunk === null) {
-          if (first !== null) this.noteSpeed(stationId, relay, bytes, Date.now() - first);
-        } else if (first === null) first = Date.now();
-        else bytes += chunk.length;
-        return chunk;
-      }),
+      take: Effect.flatMap(body.take, (chunk) =>
+        Effect.map(Clock.currentTimeMillis, (now) => {
+          if (chunk === null) {
+            if (first !== null) this.noteSpeed(stationId, relay, bytes, now - first);
+          } else if (first === null) first = now;
+          else bytes += chunk.length;
+          return chunk;
+        }),
+      ),
     };
   }
 
@@ -1006,7 +1008,7 @@ export function sampleRelayRtt(conn: IrohConnection, relay: string): Effect.Effe
   return Effect.gen(function* () {
     const samples: number[] = [];
     for (let i = 0; i < MEASURE_WARMUP + MEASURE_SAMPLES; i++) {
-      const started = Date.now();
+      const started = yield* Clock.currentTimeMillis;
       const sent = yield* Effect.result(
         Effect.gen(function* () {
           const s = yield* conn.openUni();
@@ -1015,7 +1017,7 @@ export function sampleRelayRtt(conn: IrohConnection, relay: string): Effect.Effe
           return yield* s.stopped();
         }),
       );
-      const took = Date.now() - started;
+      const took = (yield* Clock.currentTimeMillis) - started;
       if (sent._tag === "Failure" || sent.success !== null) return null;
       const path = conn.paths().find((p) => p.selected);
       if (path === undefined || !sameRelay(path.relay, relay)) return null;
