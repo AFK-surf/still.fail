@@ -261,7 +261,7 @@ if [ $full = 1 ]; then
   # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed.
   # The app carries the visualizations' page (web/src/viz) and the native parts. STILLFAIL_CHECK_APK=1 (a branch's CI)
   # makes the debug app in the same Gradle run, as evidence it builds: one build, not a second job doing it again.
-  if part android && touches '^(apps/android|client|web/src/viz)/|^scripts/native\.ts$'; then
+  if part android && printf '%s\n' "$changed" | grep -v '^client/core-kernel/' | grep -qE '^(apps/android|client|web/src/viz)/|^scripts/native\.ts$'; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
     if [ -d "$sdk/platforms" ]; then
       remembered "Android${STILLFAIL_CHECK_APK:+ (and the debug app)}" "apps/android client web/src/viz scripts/native.ts scripts/icons.py design/icons package.json pnpm-lock.yaml" heavy python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest :app:lintDebug :core:lintDebug ${STILLFAIL_CHECK_APK:+:app:assembleDebug}
