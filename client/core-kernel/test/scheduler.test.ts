@@ -18,3 +18,18 @@ test("a lane runs its most urgent tasks first, a few at a time, one run per key"
   await time.pass(400);
   assert.deepEqual(ran, ["a", "b", "c"]);
 });
+
+test("a task is asked for when the asking effect runs, not when it is made", async () => {
+  const time = new TestTime();
+  const runner = new Runner(time.clock);
+  const scheduler = new Scheduler(runner, runner.root);
+  let runs = 0;
+  const later = Effect.sleep(1_000).pipe(
+    Effect.andThen(scheduler.ask("api", "a", Priority.background, Effect.sync(() => void runs++))),
+  );
+  runner.fork(later);
+  await time.pass(500);
+  assert.equal(runs, 0);
+  await time.pass(600);
+  assert.equal(runs, 1);
+});

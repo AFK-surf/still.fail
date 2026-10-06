@@ -69,10 +69,11 @@ export class Scheduler {
     return p;
   }
 
-  /// Asks for a task: in `lane`, by `key` (one task per key), at `priority`. Returns its completion: what its run
-  /// ends with (a task asked for while it runs is run again after, for what changed meanwhile).
+  /// Asks for a task: in `lane`, by `key` (one task per key), at `priority`, when the returned effect runs (not when
+  /// it is made: an effect built for later asks nothing until then). It ends with what the task's run ends with (a
+  /// task asked for while it runs is run again after, for what changed meanwhile).
   ask(lane: string, key: string, priority: number, work: Effect.Effect<void, CoreError>): Effect.Effect<void, CoreError> {
-    return Deferred.await(this.enqueue(lane, key, priority, work));
+    return Effect.suspend(() => Deferred.await(this.enqueue(lane, key, priority, work)));
   }
 
   /// As `ask`, without waiting: the completion to wait on, if one wants to.
