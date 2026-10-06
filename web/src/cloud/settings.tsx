@@ -141,7 +141,8 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
           <Button icon={LogOut} onClick={() => setSigningOut(true)}>{t("web-pages.settings.account.signOutAction")}</Button>
         </div>
       </Section>
-      {/* Away at once (to none of its workspaces: Landing); signing out goes on by itself, a failure said by toast (useSignOut). */}
+      {/* Away at once (to another account's workspace while one stays: Landing); signing out goes on by itself, a failure
+          said by toast (useSignOut). */}
       <Confirm open={signingOut} onClose={() => setSigningOut(false)}
         onConfirm={() => { setSigningOut(false); navigate("/", { state: { signingOut: account.sub } }); void signOut.signOut(account.sub).then((out) => { if (out) toast(t("web-pages.settings.account.signedOut", { email: account.email })); }); }}
         title={t("web-pages.settings.account.signOutConfirm", { email: account.email })} action={t("web-pages.settings.account.signOutAction")} description={t("web-pages.settings.account.signOutConfirmBody")} />

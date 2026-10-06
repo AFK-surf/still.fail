@@ -22,6 +22,7 @@ import { cloud, errorText, inviteCode, needsInviteCode, useAction, useWorkspaces
 import { Illustration } from "../brand.tsx";
 import { PageViews, track } from "../telemetry.ts";
 import { useNotices } from "../notify.ts";
+import { useDoingFailed } from "../doing.ts";
 import { prefs, setPrefs, usePrefs } from "../prefs.ts";
 import { stationApi, useStationCall } from "../api.ts";
 import * as controlsCss from "../styles/controls.css.ts";
@@ -122,9 +123,14 @@ function SignedIn() {
 function Landing() {
   // Come from something going away, as the page that let it go says (its `state`: settings.tsx, mobile/WorkspacePage.tsx):
   // a workspace left or deleted, or an account signed out. The core lists it until that is done; meanwhile it is not
-  // opened again.
+  // opened again, unless still.fail cloud said no to it (the last owner leaving, say).
   const going = useLocation().state as { left?: string; signingOut?: string } | null;
-  const workspaces = useWorkspaces().value?.filter((a) => a.account.sub !== going?.signingOut);
+  const refused = useDoingFailed(["workspace.removeMember", "workspace.delete"], { workspace: going?.left }) !== undefined;
+  const left = refused ? undefined : going?.left;
+  const signedIn = useWorkspaces().value;
+  // The accounts staying; all of them when none is (the sign-in page comes once the last is out: Home).
+  const staying = signedIn?.filter((a) => a.account.sub !== going?.signingOut);
+  const workspaces = staying?.length ? staying : signedIn;
   const last = usePrefs().workspace;
   const list = useAccounts() ?? [];
   const navigate = useNavigate();
@@ -142,7 +148,7 @@ function Landing() {
   const asked = useRef(false);
   if (needsInviteCode(create.error)) asked.current = true;
   const asking = asked.current && !create.result;
-  const all = workspaces?.flatMap((a) => a.workspaces).filter((w) => w.id !== going?.left) ?? [];
+  const all = workspaces?.flatMap((a) => a.workspaces).filter((w) => w.id !== left) ?? [];
   const pending = workspaces?.flatMap((a) => a.invitations.map((i) => ({ ...i, account: a.account }))) ?? [];
   // Only once every account has answered does "no workspace" mean none: not before, not after a failure.
   const ready = workspaces !== undefined && workspaces.every((a) => a.loaded);
@@ -156,8 +162,6 @@ function Landing() {
   const blocked = workspaces?.find((a) => a.blocked);
   if (open) return <Navigate to={`/w/${open.id}`} replace />;
   if (waiting) return <Splash label={t("web-pages.cloud.workspacesLoading")}><StatusLine /></Splash>;
-  // Every account being signed out: the sign-in page comes once they are (Home).
-  if (workspaces?.length === 0) return <Splash />;
   if (blocked) {
     return (
       <div className={`${shellCss.gate} ${css.invitePage}`}>
