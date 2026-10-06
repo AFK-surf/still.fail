@@ -18,5 +18,5 @@ declare module "@stillfail/core-ts/web" {
     receive(client: number, message: unknown): void;
   }
   /** `emit(client, message)`: what the core says to each client; `onFatal`: a bug ended the core; `loadSqlite`: its databases. */
-  export function startWeb(emit: (client: number, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string) => void, loadSqlite: () => Promise<WasmSqlite>): Promise<WebCore>;
+  export function startWeb(emit: (client: number, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string, error: unknown) => void, loadSqlite: () => Promise<WasmSqlite>): Promise<WebCore>;
 }

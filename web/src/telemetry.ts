@@ -103,8 +103,16 @@ function scrubProperties(properties: Properties | undefined): void {
   for (const name of URL_PROPERTIES) if (name in properties) properties[name] = scrubUrl(properties[name]);
 }
 
+/** Errors that say nothing is wrong: Chrome's notice that a ResizeObserver's callback changed sizes again (nearly all
+ *  the errors reported, 2026-10), which is the observers working as meant. */
+const NOT_ERRORS = [/^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/];
+
 function scrub(event: CaptureResult | null): CaptureResult | null {
   if (!event) return null;
+  if (event.event === "$exception") {
+    const values = ((event.properties?.$exception_list ?? []) as { value?: unknown }[]).map((e) => String(e.value ?? ""));
+    if (values.length > 0 && values.every((v) => NOT_ERRORS.some((re) => re.test(v)))) return null;
+  }
   scrubProperties(event.properties);
   scrubProperties(event.$set);
   scrubProperties(event.$set_once);

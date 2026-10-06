@@ -274,7 +274,11 @@ void navigator.locks.request(CORE_LOCK, async () => {
   if (dead) return;
   const followed = leader !== null;
   // On the test channel the page names the worker so (core/client.ts workerName): the core's words say youdid.wtf.
-  ready = startWeb(emit, (globalThis as { name?: string }).name?.endsWith("-test") ?? false, loadIroh, fatal, loadSqlite);
+  // A defect's stack goes to error tracking first (as a fault): the fatal the pages hear is its message only.
+  ready = startWeb(emit, (globalThis as { name?: string }).name?.endsWith("-test") ?? false, loadIroh, (reason, error) => {
+    if (!dead) fault(error);
+    fatal(reason);
+  }, loadSqlite);
   ready.catch((error: unknown) => fatal(`核心没有启动：${String(error)}`));
   const running = await ready;
   core = running;
