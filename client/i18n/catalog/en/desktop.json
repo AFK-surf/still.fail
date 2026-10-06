@@ -1,4 +1,12 @@
 {
+  "desktop.contextMenu.copy": "Copy",
+  "desktop.contextMenu.copyImage": "Copy Image",
+  "desktop.contextMenu.copyImageAddress": "Copy Image Address",
+  "desktop.contextMenu.copyLink": "Copy Link",
+  "desktop.contextMenu.cut": "Cut",
+  "desktop.contextMenu.openLink": "Open Link in Browser",
+  "desktop.contextMenu.paste": "Paste",
+  "desktop.contextMenu.selectAll": "Select All",
   "desktop.core.callFailed": "Call failed",
   "desktop.core.exited": "Core process exited",
   "desktop.core.exitedCode": "Core process exited ({code})",
