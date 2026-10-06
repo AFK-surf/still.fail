@@ -207,7 +207,7 @@ private val pictures = java.util.concurrent.ConcurrentHashMap<String, androidx.c
 
 @Composable
 private fun rememberPicture(url: String?): androidx.compose.ui.graphics.ImageBitmap? {
-    val core = fail.still.android.LocalApp.current.core
+    val core = LocalUi.current.core
     val known = url?.let { pictures[it] }
     val loaded by androidx.compose.runtime.produceState(known, url) {
         if (url.isNullOrBlank() || value != null) return@produceState

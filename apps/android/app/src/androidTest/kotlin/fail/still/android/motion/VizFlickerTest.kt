@@ -53,6 +53,7 @@ import kotlinx.serialization.json.put
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import fail.still.android.ui.LocalUi
 
 class VizFlickerTest {
     @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
@@ -88,7 +89,7 @@ class VizFlickerTest {
         val haze = HazeState()
         rule.setContent {
             StillFailTheme(dark) {
-                CompositionLocalProvider(LocalApp provides app) {
+                CompositionLocalProvider(LocalApp provides app, LocalUi provides app) {
                     Box(Modifier.fillMaxSize().background(C.bg)) {
                         LazyColumn(Modifier.fillMaxSize().then(if (glass) Modifier.hazeSource(haze) else Modifier).background(C.bg).padding(start = 16.dp, end = 16.dp), contentPadding = PaddingValues(top = 120.dp, bottom = 120.dp)) {
                             item { Text("上面的一条消息", color = C.ink) }

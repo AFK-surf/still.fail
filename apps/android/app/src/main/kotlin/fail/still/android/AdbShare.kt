@@ -31,7 +31,7 @@ import fail.still.android.data.decode
 import fail.still.android.data.errorText
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import java.net.InetAddress
 import java.net.NetworkInterface
 import kotlinx.coroutines.Job

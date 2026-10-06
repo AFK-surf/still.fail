@@ -8,7 +8,7 @@
 // once the service is back).
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Outline
@@ -164,17 +164,17 @@ fun PreviewFileScreen(station: String, session: String, path: String, name: Stri
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val file = remember(path, name) { fail.still.android.data.Attachment(name = name, path = path, size = 0) }
-    val loaded = fail.still.android.ui.rememberViz(station, session, file)
+    val loaded = rememberViz(station, session, file)
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
         NavBar(t("android-chat.preview.back"), app::pop, name, sub = { Text(rememberStationName(station), fontSize = 11.sp, color = C.muted, maxLines = 1) })
         when (val l = loaded) {
-            fail.still.android.ui.Loaded.Failed -> PreviewNote(t("android-chat.preview.unreadable", "name" to name))
-            fail.still.android.ui.Loaded.Waiting -> Unit
-            is fail.still.android.ui.Loaded.Ready -> {
+            Loaded.Failed -> PreviewNote(t("android-chat.preview.unreadable", "name" to name))
+            Loaded.Waiting -> Unit
+            is Loaded.Ready -> {
                 val kept = remember(l) { arrayOf(l.state) }
                 val page = FilePage(l.html, { kept[0] }) { s ->
                     kept[0] = s
-                    fail.still.android.ui.keepViz(app, scope, station, session, path, s)
+                    keepViz(app, scope, station, session, path, s)
                 }
                 ServicePage(station, "file:$session\n$path", 0, name, restarting = false, restarts = 0, session = session, file = page)
             }

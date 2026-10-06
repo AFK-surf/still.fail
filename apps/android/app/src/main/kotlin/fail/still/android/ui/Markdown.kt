@@ -106,6 +106,7 @@ import org.commonmark.node.ThematicBreak
 import org.commonmark.parser.Parser
 import kotlin.math.max
 import kotlin.math.roundToInt
+import fail.still.android.data.t
 
 private fun markdownParser(): Parser = Parser.builder()
     .extensions(listOf(TablesExtension.create(), StrikethroughExtension.create(), AutolinkExtension.create(), TaskListItemsExtension.create()))

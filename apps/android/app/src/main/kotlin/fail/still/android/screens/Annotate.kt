@@ -4,7 +4,7 @@
 // the chat's draft as a quote with its comment.
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -520,7 +520,7 @@ private fun QuoteFlight(sent: SentQuote, note: Note?, placed: PagePlaces, p: () 
                 modifier = Modifier.padding(start = 16.dp, end = 34.dp, top = 9.dp),
             )
             val said = sent.quote.comment
-            Text(said.ifEmpty { fail.still.android.ui.t("android-chat.quote.comment") }, color = if (said.isEmpty()) chatSubtle() else C.ink, fontSize = 15.sp, lineHeight = 22.sp, maxLines = 1,
+            Text(said.ifEmpty { fail.still.android.data.t("android-chat.quote.comment") }, color = if (said.isEmpty()) chatSubtle() else C.ink, fontSize = 15.sp, lineHeight = 22.sp, maxLines = 1,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 3.dp, bottom = 10.dp))
         }
     }

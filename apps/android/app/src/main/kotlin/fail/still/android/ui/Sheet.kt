@@ -8,6 +8,7 @@ import fail.still.android.ui.keyboard
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -80,9 +81,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import fail.still.android.AppState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import fail.still.android.data.t
 
 
 /** A sheet: how much of the screen it takes at first, and whether its grabber drags it. */
@@ -112,11 +113,10 @@ private suspend fun PointerInputScope.dragTop(drag: SheetDrag) {
 private val LocalSheetDrag = staticCompositionLocalOf<SheetDrag?> { null }
 
 @Composable
-fun SheetHost(app: AppState) {
-    val spec = app.sheet
+fun SheetHost(spec: SheetSpec?, haze: HazeState, close: () -> Unit) {
     var shown by remember { mutableStateOf<SheetSpec?>(null) }
     if (spec != null && shown !== spec) shown = spec
-    BackHandler(enabled = spec != null) { app.sheet = null }
+    BackHandler(enabled = spec != null) { close() }
     // A sheet comes up in the keyboard's place: what was being typed into lets go of it first.
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
@@ -167,8 +167,8 @@ fun SheetHost(app: AppState) {
                 held = null
                 val f = at / total
                 when {
-                    !current.draggable -> if (base - at > with(density) { 80.dp.toPx() }) app.sheet = null else settle(base, v)
-                    f < 0.3f -> app.sheet = null
+                    !current.draggable -> if (base - at > with(density) { 80.dp.toPx() }) close() else settle(base, v)
+                    f < 0.3f -> close()
                     else -> settle(if (f > 0.72f) total * 0.94f else total * 0.55f, v)
                 }
             },
@@ -176,7 +176,7 @@ fun SheetHost(app: AppState) {
         ) }
         Box(
             Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f * scrim))
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { app.sheet = null },
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { close() },
         )
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -187,7 +187,7 @@ fun SheetHost(app: AppState) {
                 .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
                 // Frosted glass over the page, as the bars and capsules are. The web's backdrop has the scrim in it (it
                 // frosts all that is behind it); here the pages alone are the source, so the scrim goes under the glass.
-                .hazeEffect(app.haze) {
+                .hazeEffect(haze) {
                     backgroundColor = paper; blurRadius = cssBlur(28f); noiseFactor = 0f
                     tints = listOf(HazeTint(Color.Black.copy(alpha = 0.28f * scrim)), HazeTint(glass))
                 }
@@ -234,8 +234,7 @@ class MenuSpec(val anchor: Rect, val items: List<MenuItem>, val onDismiss: () ->
 private val MenuSpring = motionSpring<Float>(0.24f, bounce = 0.08f, visibilityThreshold = 0.001f)
 
 @Composable
-fun MenuHost(app: AppState) {
-    val spec = app.menu
+fun MenuHost(spec: MenuSpec?, closed: () -> Unit) {
     var shown by remember { mutableStateOf<MenuSpec?>(null) }
     if (spec != null) shown = spec
     // Keep the closed state alive before the first menu is mounted, and keep its
@@ -247,7 +246,7 @@ fun MenuHost(app: AppState) {
         if (spec == null && visible.isIdle && !visible.currentState && scrim == 0f) shown = null
     }
     val current = shown ?: return
-    val close = { current.onDismiss(); app.menu = null }
+    val close = { current.onDismiss(); closed() }
     BackHandler(enabled = spec != null) { close() }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -268,7 +267,7 @@ fun MenuHost(app: AppState) {
             Column(Modifier.widthIn(min = width).width(width).shadow(18.dp, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).background(C.surface)) {
                 current.items.forEachIndexed { i, item ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { app.menu = null; item.action() }.padding(horizontal = 16.dp, vertical = 12.dp),
+                        Modifier.fillMaxWidth().clickable { closed(); item.action() }.padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(item.label, fontSize = 15.sp, color = C.ink)
@@ -290,9 +289,9 @@ fun said(message: String): String = Regex("^没能([^：]*)：(不确定做没�
     .replace(Regex("^Couldn't ([^:]*): (Unsure if it went through: )"), "$1: $2")
 
 @Composable
-fun ToastHost(app: AppState) {
-    val text = app.toast?.let(::said)
-    LaunchedEffect(text) { if (text != null) { delay(2600); app.toast = null } }
+fun ToastHost(toast: String?, done: () -> Unit) {
+    val text = toast?.let(::said)
+    LaunchedEffect(text) { if (text != null) { delay(2600); done() } }
     // Kept while it fades, so it fades with its words.
     var last by remember { mutableStateOf("") }
     if (text != null) last = text
@@ -311,11 +310,10 @@ class ReaderSpec(val label: @Composable RowScope.() -> Unit, val content: @Compo
 
 /** The reader comes in from the side over everything; back (or ‹) returns to where it was opened. */
 @Composable
-fun ReaderHost(app: AppState) {
-    val spec = app.reader
+fun ReaderHost(spec: ReaderSpec?, close: () -> Unit) {
     var shown by remember { mutableStateOf<ReaderSpec?>(null) }
     if (spec != null) shown = spec
-    BackHandler(enabled = spec != null) { app.reader = null }
+    BackHandler(enabled = spec != null) { close() }
     // web mobile's mReader: translateX 100% → 0 and back, 300ms (.4, 0, .2, 1).
     val slide = tween<IntOffset>(300, easing = Ease.Standard)
     AnimatedVisibility(spec != null, enter = androidx.compose.animation.slideInHorizontally(slide) { it }, exit = androidx.compose.animation.slideOutHorizontally(slide) { it }) {
@@ -324,7 +322,7 @@ fun ReaderHost(app: AppState) {
             Modifier.fillMaxSize().background(C.bg).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
                 .windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars),
         ) {
-            Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)) { NavBack(t("android-misc.reader.back")) { app.reader = null } }
+            Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)) { NavBack(t("android-misc.reader.back")) { close() } }
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) { current.label(this) }
                 current.content()

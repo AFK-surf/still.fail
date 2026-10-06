@@ -4,7 +4,7 @@ import androidx.compose.runtime.*
 import fail.still.android.AppState
 import fail.still.android.data.ConnectFlowView
 import fail.still.android.data.rememberTopic
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import kotlinx.serialization.json.*
 
 /** UI adapter only: the core owns the steps, draft, model choices and writes. */

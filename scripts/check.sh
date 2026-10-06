@@ -222,8 +222,6 @@ if part ts; then
   if touches "$ts_desktop"; then prep desktop deps apps/desktop; step "typecheck: desktop" after desktop sh -c 'cd apps/desktop && pnpm run typecheck'; fi
   # The TypeScript core (docs/core-ts.md): its own tsconfig.
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
-  # The domain-free base of a client core (client/core-kernel), a package other apps (Cue) pin by version.
-  if touches '^client/core-kernel/'; then prep kernel deps client/core-kernel; step "typecheck: core-kernel" after kernel sh -c 'cd client/core-kernel && pnpm exec tsgo --noEmit'; fi
 
 fi
 
@@ -236,7 +234,6 @@ if [ $full = 1 ]; then
   # package.json). Its side run's (real relays, networks made up at random) are scripts/side.sh's.
   if part ts && touches "$ts_core|^station/native/mesh/|^vendor/"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n" after cloud sh -c 'cd cloud && pnpm test'; fi
-  if part ts && touches '^client/core-kernel/'; then prep kernel deps client/core-kernel; remembered "tests: core-kernel" "client/core-kernel" after kernel sh -c 'cd client/core-kernel && pnpm test'; fi
   # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility
   # tests): its tests run whenever it, one of them or the words it says changed.
   if part station && touches '^station/|^vendor/|^client/i18n/|^scripts/native\.ts$'; then

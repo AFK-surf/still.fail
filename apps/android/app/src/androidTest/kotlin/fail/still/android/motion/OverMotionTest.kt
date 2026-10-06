@@ -58,6 +58,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import fail.still.android.ui.LocalUi
 
 class OverMotionTest {
     @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
@@ -260,7 +261,7 @@ class OverMotionTest {
         val file = Attachment(name = "wwl.png", path = "ws/c-1/wwl.png", size = bytes.size.toLong(), width = 800, height = 600)
         rule.setContent {
             StillFailTheme(false) {
-                CompositionLocalProvider(LocalApp provides app) {
+                CompositionLocalProvider(LocalApp provides app, LocalUi provides app) {
                     Box(Modifier.fillMaxSize().background(C.bg)) {
                         // Where a chat shows an agent's image: under its words, at the list's side.
                         Column(Modifier.padding(start = 16.dp, top = 360.dp).width(260.dp)) {
@@ -323,7 +324,7 @@ class OverMotionTest {
         val gallery = files.map { fail.still.android.screens.Shown("ember:c-1", it) }
         rule.setContent {
             StillFailTheme(false) {
-                CompositionLocalProvider(LocalApp provides app) {
+                CompositionLocalProvider(LocalApp provides app, LocalUi provides app) {
                     Box(Modifier.fillMaxSize().background(C.bg)) {
                         Column(Modifier.padding(start = 16.dp, top = 360.dp).width(260.dp)) {
                             StationImage(Fixtures.STATION, "ember:c-1", files[0], gallery = { gallery })
@@ -433,7 +434,7 @@ class OverMotionTest {
         val file = Attachment(name = "clip.mp4", path = "ws/c-1/clip.mp4", size = bytes.size.toLong(), width = 320, height = 240)
         rule.setContent {
             StillFailTheme(false) {
-                CompositionLocalProvider(LocalApp provides app) {
+                CompositionLocalProvider(LocalApp provides app, LocalUi provides app) {
                     Box(Modifier.fillMaxSize().background(C.bg)) {
                         Column(Modifier.padding(start = 16.dp, top = 360.dp).width(260.dp)) {
                             Text("录了一段：", fontSize = 16.sp, color = C.ink, modifier = Modifier.padding(bottom = 10.dp))

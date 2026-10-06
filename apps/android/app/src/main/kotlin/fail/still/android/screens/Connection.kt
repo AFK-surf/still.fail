@@ -1,7 +1,7 @@
 // 重试 for a connection down (the web's Connection.tsx): the connections tried again at once.
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement

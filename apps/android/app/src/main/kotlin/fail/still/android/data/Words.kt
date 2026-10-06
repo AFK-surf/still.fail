@@ -2,7 +2,6 @@
 // core's, client/core-ts/src/present.ts and format.ts). As web/src/format.ts.
 package fail.still.android.data
 
-import fail.still.android.ui.t
 
 val RUNTIME_LABEL = mapOf("claude" to "Claude Code", "codex" to "Codex")
 

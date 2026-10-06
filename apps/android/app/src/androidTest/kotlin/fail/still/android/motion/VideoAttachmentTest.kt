@@ -37,6 +37,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import fail.still.android.ui.LocalUi
 
 class VideoAttachmentTest {
     @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
@@ -107,7 +108,7 @@ class VideoAttachmentTest {
         val ctx = fail.still.android.screens.Here(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD), Fixtures.chat(emptyList()), emptyList(), "ember:c-1")
         rule.setContent {
             StillFailTheme(false) {
-                CompositionLocalProvider(LocalApp provides app) {
+                CompositionLocalProvider(LocalApp provides app, LocalUi provides app) {
                     Box(Modifier.fillMaxSize().background(C.bg)) {
                         Column(Modifier.padding(start = 16.dp, top = 160.dp).width(320.dp)) {
                             fail.still.android.screens.AgentWords(ctx,
