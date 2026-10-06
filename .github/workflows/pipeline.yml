@@ -84,7 +84,7 @@ jobs:
           # The station in TypeScript, its native parts (vendor/: the mesh addon's iroh), the words it says.
           if has '^(station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native)\.ts$)'; then station=true; fi
           android=false
-          if has '^(apps/android/|client/|web/src/viz/|scripts/release\.sh$|scripts/native\.ts$)'; then android=true; fi
+          if printf '%s\n' "$changed" | sh apps/android/carries.sh; then android=true; fi
           # The desktop app carries the core, the web app and a station: any of them changed is a new app.
           desktop=false
           if has '^(apps/desktop/|client/|web/|station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native)\.ts$)'; then desktop=true; fi
