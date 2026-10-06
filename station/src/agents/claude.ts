@@ -279,12 +279,15 @@ export class ClaudeSession implements AgentSession {
         for (const event of this.live.feed(frame)) this.events({ type: "live", event });
         onFrame(frame, this.turn, this.events, () => this.proc.write(interruptRequest()));
       },
-      exit: (said: string) => {
+      exit: (said: string, stderr: string) => {
         this.turn.closed = true;
         const busy = this.turn.busy;
         this.turn.busy = false;
-        if (busy) this.events({ type: "turnEnded", outcome: { kind: "failed", reason: "exited", message: `claude exited (${said}) during the turn` } });
-        this.events({ type: "closed", why: `claude exited (${said})` });
+        // What it wrote to stderr last is the only word of why one that fails as it starts gives (`claude exited (1)`
+        // alone says nothing).
+        const why = stderr === "" ? "" : `: ${stderr}`;
+        if (busy) this.events({ type: "turnEnded", outcome: { kind: "failed", reason: "exited", message: `claude exited (${said}) during the turn${why}` } });
+        this.events({ type: "closed", why: `claude exited (${said})${why}` });
         this.driver.forget(this);
       },
     };

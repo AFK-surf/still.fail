@@ -205,6 +205,8 @@
   "station.session.busy": "Session running; change it after this turn",
   "station.session.continued": "Continues the local {runtime} session in {cwd} · [See earlier conversation]({link})",
   "station.session.cwdGone": "Its directory {cwd} is gone",
+  "station.session.cwdDenied": "The station may not read {cwd}, so the agent can't start there",
+  "station.session.cwdDeniedMac": "The station may not read {cwd}: macOS privacy protection keeps it out (Documents, Desktop, Downloads and similar folders are protected), so the agent can't start there. On this Mac, add and turn on {program} in System Settings → Privacy & Security → Full Disk Access, then restart the station.",
   "station.session.fastOpenAiOnly": "Fast is only for OpenAI subscriptions",
   "station.session.from": "From {from}:",
   "station.session.modelOff": "“{profile}” doesn't have {model} turned on: pick another model, or turn it on in its Profile first",

@@ -165,7 +165,7 @@ class Host {
   }
 
   processOptions(label: string) {
-    return { label, line: (line: string) => this.onLine(line), exit: (said: string) => this.onExit(said) };
+    return { label, line: (line: string) => this.onLine(line), exit: (said: string, stderr: string) => this.onExit(said, stderr) };
   }
 
   /// When the login it was started with runs out, if it was lent by another station.
@@ -252,8 +252,8 @@ class Host {
     }
   }
 
-  private onExit(said: string) {
-    const reason = `codex app-server exited (${said})`;
+  private onExit(said: string, stderr: string) {
+    const reason = `codex app-server exited (${said})${stderr === "" ? "" : `: ${stderr}`}`;
     for (const pending of this.pending.values()) pending.reject(new Error(reason));
     this.pending.clear();
     const threads = [...this.threads.values()];

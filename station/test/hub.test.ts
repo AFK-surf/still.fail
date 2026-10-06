@@ -2,7 +2,7 @@
 // recover and handover, eviction, single-session connects, the station's own chat. Ported from
 // the Rust station's hub/tests.rs, on a real Store, a fake chat platform and fake runtimes.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE } from "../src/agents/instructions.ts";
@@ -1397,6 +1397,37 @@ test("a session the machine kept goes on in a chat, run in its own directory, wi
   await deleteSession(r.hub, key);
   assert.ok(existsSync(join(project, "main.rs")));
   assert.ok(existsSync(found.path));
+  await r.close();
+});
+
+// root reads a directory whatever its mode says.
+test("a directory the station may not read is told as that, not left to the agent to fail in", { skip: process.getuid?.() === 0 }, async () => {
+  const { find } = await import("../src/read/machine.ts");
+  const { continueMachineSession } = await import("../src/sessions/lifecycle.ts");
+  const r = new Rig();
+  const root = join(r.dir, "machine");
+  const project = join(root, "Documents/proj");
+  mkdirSync(project, { recursive: true });
+  const roots = machine(root, project);
+  const found = find(roots, "claude", "11111111-aaaa-bbbb-cccc-000000000001")!;
+  // As macOS privacy protection answers a station nobody gave access to: it may stat the directory, not list it.
+  chmodSync(project, 0o000);
+  try {
+    assert.throws(() => continueMachineSession(r.hub, roots, found, "local"), /没有权限读取目录/);
+    assert.equal(r.store.listSessions().length, 0);
+    // One continued while it could be read, and read no more later: its turn says why, and no agent is started.
+    chmodSync(project, 0o755);
+    const [, thread] = continueMachineSession(r.hub, roots, found, "local");
+    chmodSync(project, 0o000);
+    sayIn(r.hub, thread.id, "local", "go on");
+    await settle();
+    assert.equal(r.claude.count(), 0);
+    const notice = r.said(thread.id).at(-1)!;
+    assert.equal(notice.authorKind, "ember");
+    assert.ok(notice.text.includes("没有权限读取目录") && notice.text.includes(project), notice.text);
+  } finally {
+    chmodSync(project, 0o755);
+  }
   await r.close();
 });
 

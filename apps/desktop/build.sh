@@ -78,7 +78,8 @@ else
     b.productName = name;
     b.extraMetadata = { ...b.extraMetadata, version, productName: name };
     b.protocols = [{ name, schemes: ["stillfail-beta"] }];
-    b.mac = { ...b.mac, extendInfo: { ...b.mac.extendInfo, CFBundleName: name, CFBundleDisplayName: name, NSLocalNetworkUsageDescription: b.mac.extendInfo.NSLocalNetworkUsageDescription.replace("still.fail", name) }, artifactName: "stillfail-beta-${version}-${arch}-mac.${ext}", icon: "icon-beta.png" };
+    const usage = Object.fromEntries(Object.entries(b.mac.extendInfo).filter(([k]) => k.endsWith("UsageDescription")).map(([k, v]) => [k, v.replace("still.fail", name)]));
+    b.mac = { ...b.mac, extendInfo: { ...b.mac.extendInfo, CFBundleName: name, CFBundleDisplayName: name, ...usage }, artifactName: "stillfail-beta-${version}-${arch}-mac.${ext}", icon: "icon-beta.png" };
     b.publish = { ...b.publish, channel: "stillfail-beta" };
     require("fs").writeFileSync(out, JSON.stringify(b, null, 2));
   ' "$version" build/builder-beta.json

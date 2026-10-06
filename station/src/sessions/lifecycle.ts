@@ -5,6 +5,7 @@
 import { copyFileSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
+import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
@@ -313,6 +314,7 @@ export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSes
     }
   }
   if (!(statSync(found.cwd, { throwIfNoEntry: false })?.isDirectory() ?? false)) throw new Error(tr(lang, "station.session.cwdGone", { cwd: found.cwd }));
+  if (unreadableDir(found.cwd)) throw new Error(unreadableDirMessage(lang, found.cwd));
   const config = hub.config();
   const profiles = config.profiles.filter((p) => p.runtimes.includes(runtime));
   if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfile", { runtime: runtimeTitle(runtime) }));

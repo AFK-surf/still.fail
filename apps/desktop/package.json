@@ -61,6 +61,11 @@
       "signIgnore": "\\.(pak|dat|bin|json|plist|png|webp|svg|woff2?|ttf|otf|wasm|icns|ico|car|nib|strings|txt|md|html|css|m?js|map|webmanifest|jpe?g|gif|asar)$",
       "extendInfo": {
         "NSLocalNetworkUsageDescription": "still.fail connects straight to your stations on the local network when it can.",
+        "NSDocumentsFolderUsageDescription": "still.fail's station runs your agents in the projects you give them, including ones in Documents.",
+        "NSDesktopFolderUsageDescription": "still.fail's station runs your agents in the projects you give them, including ones on the Desktop.",
+        "NSDownloadsFolderUsageDescription": "still.fail's station runs your agents in the projects you give them, including ones in Downloads.",
+        "NSRemovableVolumesUsageDescription": "still.fail's station runs your agents in the projects you give them, including ones on removable drives.",
+        "NSNetworkVolumesUsageDescription": "still.fail's station runs your agents in the projects you give them, including ones on network drives.",
         "CFBundleName": "still.fail",
         "CFBundleDisplayName": "still.fail"
       },

@@ -202,6 +202,8 @@
   "station.session.busy": "这个会话正在跑，等这一轮结束再改",
   "station.session.continued": "接着本机 {runtime} 在 {cwd} 的会话 · [查看之前的对话]({link})",
   "station.session.cwdGone": "它原来的目录 {cwd} 已经不在了",
+  "station.session.cwdDenied": "station 没有权限读取目录 {cwd}，agent 在那里启动不了",
+  "station.session.cwdDeniedMac": "station 没有权限读取目录 {cwd}：macOS 的隐私保护挡住了它（文稿、桌面、下载等文件夹都受保护），agent 在那里启动不了。在这台 Mac 的 系统设置 → 隐私与安全性 → 完全磁盘访问权限 里加上并打开 {program}，再重启 station。",
   "station.session.fastOpenAiOnly": "Fast 只适用于 OpenAI 订阅",
   "station.session.from": "来自 {from}：",
   "station.session.modelOff": "「{profile}」没有启用 {model}：换一个模型，或先在它的 Profile 里启用",

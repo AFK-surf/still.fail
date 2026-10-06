@@ -201,7 +201,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await session.dispose();
   });
 
-  test("the process exiting during a turn fails it as exited, then closes the session", async () => {
+  test("the process exiting during a turn fails it as exited, with its last stderr, then closes the session", async () => {
     const d = driver();
     const { events, push, until } = listen();
     const session = await d.open(options(), push);
@@ -209,8 +209,8 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await until((e) => e.some((x) => x.type === "closed"));
     const told = events.filter((e) => e.type !== "live");
     assert.deepEqual(told, [
-      { type: "turnEnded", outcome: { kind: "failed", reason: "exited", message: "claude exited (3) during the turn" } },
-      { type: "closed", why: "claude exited (3)" },
+      { type: "turnEnded", outcome: { kind: "failed", reason: "exited", message: "claude exited (3) during the turn: noise\nerror: An unknown error occurred (Unexpected)" } },
+      { type: "closed", why: "claude exited (3): noise\nerror: An unknown error occurred (Unexpected)" },
     ]);
     await assert.rejects(session.prompt("again"), /closed/);
     await eventually(() => !existingRunners(data).some((r) => r.args.includes(session.id())));

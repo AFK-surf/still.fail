@@ -71,9 +71,14 @@ export type ProcessOptions = {
   label: string;
   /// Each line of its stdout, in order; acknowledged once this returns.
   line: (text: string) => void;
-  /// It exited (all of its output handled), as `describeExit` says, unless it was let go first.
-  exit: (said: string) => void;
+  /// It exited (all of its output handled), as `describeExit` says, unless it was let go first; with the last lines it
+  /// wrote to stderr (STDERR_TAIL of them, "" when none): what a runtime that fails as it starts says of why.
+  exit: (said: string, stderr: string) => void;
 };
+
+/// How many of a runtime's last stderr lines its exit carries, and how long each may be.
+const STDERR_TAIL = 3;
+const STDERR_LINE = 300;
 
 export class AgentProcess {
   readonly info: RunnerInfo;
@@ -82,6 +87,8 @@ export class AgentProcess {
   private gone = false;
   private killing = false;
   private said: string | null = null;
+  /// Its last lines of stderr, for its exit.
+  private stderr: string[] = [];
   /// Its exit, described; resolved once its last line has been handled.
   readonly exited: Promise<string>;
 
@@ -93,8 +100,10 @@ export class AgentProcess {
       // Frozen: the line stays unacknowledged, for whoever takes the process up next.
       if (this.frozen) return new Promise<void>(() => {});
       const line = text.endsWith("\r") ? text.slice(0, -1) : text;
-      if (stream === "err") debug("agents::process", "runtime stderr", { label: options.label, line: line.slice(0, 2000) });
-      else options.line(line);
+      if (stream === "err") {
+        debug("agents::process", "runtime stderr", { label: options.label, line: line.slice(0, 2000) });
+        if (line.trim() !== "") this.stderr = [...this.stderr, line.trim().slice(0, STDERR_LINE)].slice(-STDERR_TAIL);
+      } else options.line(line);
     });
     const socket = socketOf(this.conn);
     socket.on("error", (error) => {
@@ -111,7 +120,7 @@ export class AgentProcess {
       } else {
         this.said = "runner gone";
         resolveExit(this.said);
-        if (!this.frozen) options.exit(this.said);
+        if (!this.frozen) options.exit(this.said, this.stderr.join("\n"));
       }
     });
     this.conn.exited.then((exit) => {
@@ -119,7 +128,7 @@ export class AgentProcess {
       this.said = describeExit(exit);
       resolveExit(this.said);
       if (this.frozen) return;
-      options.exit(this.said);
+      options.exit(this.said, this.stderr.join("\n"));
       // Read to the end: the runner may go (kill does it once what is left of the group is gone).
       if (!this.killing) this.conn.done();
     });

@@ -4,7 +4,7 @@
 //   slow:<n>      n deltas, 50 ms apart          retry401               api_retry 401 frames until interrupted
 //   tool          a Bash call that waits until background_tasks (or interrupt)
 //   again         a reply, then a turn of its own (no prompt of ours)
-//   exit          exits 3 in the middle of the turn
+//   exit          says why on stderr and exits 3 in the middle of the turn
 //   …post:<text>  (anywhere in a message the station hands it) calls chat_post through the MCP endpoint of --mcp-config
 //                 with its token, to the message's thread, ending the turn all_done; then a reply with what it answered
 //                 (`slow:<n> post:<text>`: n deltas, 50 ms apart, before it)
@@ -97,6 +97,7 @@ async function turn(text) {
     result({ result: await message([answer.result.content[0].text], 0) });
   } else if (text === "exit") {
     await message(["partial"], 0);
+    fs.writeSync(2, "noise\n\nerror: An unknown error occurred (Unexpected)\n");
     process.exit(3);
   } else if (text === "tool") {
     const id = `msg_${++n}`;

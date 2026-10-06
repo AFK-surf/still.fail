@@ -9,6 +9,7 @@ import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
 import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { latest as latestNote, untold } from "../agents/migrations.ts";
+import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 
@@ -636,6 +637,9 @@ export class SessionActor {
     const driver = this.deps.driver(this.runtime);
     const profile = this.deps.runOn(this.key);
     const base = openOptions(row, profile, this.deps);
+    // A runtime started where the station may not read exits at once with nothing to say why (macOS privacy protection
+    // on a session continued in ~/Documents): told as it is instead.
+    if (unreadableDir(base.cwd)) throw new Error(unreadableDirMessage(stationLang(), base.cwd));
     const generation = this.nextGeneration();
     let agent: AgentSession;
     // Recorded before it may be left, so the history reads on from it.
