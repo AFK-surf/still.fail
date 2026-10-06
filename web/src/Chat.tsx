@@ -2216,7 +2216,8 @@ function span(s: number): string {
   if (s < 60) return `${s}s`;
   if (s < 3600) return s % 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s / 60}m`;
   const m = Math.floor((s % 3600) / 60);
-  return m ? `${Math.floor(s / 3600)}h ${m}m` : `${s / 3600}h`;
+  const h = Math.floor(s / 3600);
+  return m ? `${h}h ${m}m` : `${h}h`;
 }
 
 /** The quoted passage inside a message, as a range over its text nodes (whitespace-insensitive), or null. */
