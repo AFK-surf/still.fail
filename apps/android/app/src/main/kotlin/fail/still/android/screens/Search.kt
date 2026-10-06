@@ -1,6 +1,6 @@
 // The search at the top of the home lists (web mobile/Home.tsx SearchField, SearchPage): a field there once a list is
 // scrolled to its top; tapped, the list goes up and away with the bars, the field comes up from where it was to the
-// top, and under it the chats the words find (the core's `chatSearch`, as ⌘K's on the wide screen), then the messages
+// top (narrowing as 取消 comes in beside it), and under it the chats the words find (the core's `chatSearch`, as ⌘K's on the wide screen), then the messages
 // that have them, newest first, each opening its chat at it. 取消 (or back) puts the field back in the list.
 package fail.still.android.screens
 
@@ -40,9 +40,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -72,6 +74,7 @@ import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.reducedMotion
 import fail.still.android.ui.t
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** How many of the messages that have the words the search lists, under the chats. */
 private const val FOUND_MESSAGES = 50
@@ -80,14 +83,14 @@ private const val FOUND_MESSAGES = 50
 private val FIELD = 38.dp
 private val BAR_TOP = 8.dp
 
-/** At a list's top: tapped, the search opens from it (`onOpen`, with its top in the root, px). `hidden` while the
- *  search's field is it (one field at a time, flying from and back to here). */
+/** At a list's top: tapped, the search opens from it (`onOpen`, with its top in the root and its width, px). `hidden`
+ *  while the search's field is it (one field at a time, flying from and back to here). */
 @Composable
-internal fun SearchField(onOpen: (Float) -> Unit, hidden: Boolean) {
-    var top by remember { mutableStateOf(0f) }
+internal fun SearchField(onOpen: (Float, Float) -> Unit, hidden: Boolean) {
+    var at by remember { mutableStateOf(Rect.Zero) }
     Row(
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp).height(FIELD).onGloballyPositioned { top = it.boundsInRoot().top }
-            .graphicsLayer { alpha = if (hidden) 0f else 1f }.clip(RoundedCornerShape(FIELD / 2)).background(C.ink.copy(alpha = 0.06f)).clickable { onOpen(top) }.padding(horizontal = 12.dp),
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp).height(FIELD).onGloballyPositioned { at = it.boundsInRoot() }
+            .graphicsLayer { alpha = if (hidden) 0f else 1f }.clip(RoundedCornerShape(FIELD / 2)).background(C.ink.copy(alpha = 0.06f)).clickable { onOpen(at.top, at.width) }.padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         IconIn(Icons.Search, 17.dp, C.muted)
@@ -96,11 +99,11 @@ internal fun SearchField(onOpen: (Float) -> Unit, hidden: Boolean) {
 }
 
 /**
- * The search over the home lists, its field come up from `from` (its top in the list, px) to the bar; `onLeave` as it
- * starts going back, `onClose` once it is back there. The words typed stay while a chat opened from it is read.
+ * The search over the home lists, its field come up from `from` (its top in the list, px) to the bar, from `wide` (its
+ * width there, px) to the room 取消 leaves it; `onLeave` as it starts going back, `onClose` once it is back there. The words typed stay while a chat opened from it is read.
  */
 @Composable
-internal fun SearchPage(scope: String, from: Float, onLeave: () -> Unit = {}, onClose: () -> Unit) {
+internal fun SearchPage(scope: String, from: Float, wide: Float, onLeave: () -> Unit = {}, onClose: () -> Unit) {
     val app = LocalApp.current
     val density = LocalDensity.current
     var query by rememberSaveable { mutableStateOf("") }
@@ -142,8 +145,15 @@ internal fun SearchPage(scope: String, from: Float, onLeave: () -> Unit = {}, on
             Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = BAR_TOP, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // As wide as the list's while there, narrowing to its room as it comes up (and back as it goes): 取消 comes in
+            // with its right edge, not the field jumping between the two widths.
             Row(
-                Modifier.weight(1f).height(FIELD).graphicsLayer { translationY = (from - to) * (1f - up.value) }
+                Modifier.weight(1f).layout { measurable, constraints ->
+                    val room = constraints.maxWidth
+                    val now = if (wide > 0f) (wide + (room - wide) * up.value).roundToInt().coerceAtLeast(0) else room
+                    val placeable = measurable.measure(constraints.copy(minWidth = now, maxWidth = now))
+                    layout(room, placeable.height) { placeable.place(0, 0) }
+                }.height(FIELD).graphicsLayer { translationY = (from - to) * (1f - up.value) }
                     .clip(RoundedCornerShape(FIELD / 2)).background(C.ink.copy(alpha = 0.06f)).padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -160,7 +170,7 @@ internal fun SearchPage(scope: String, from: Float, onLeave: () -> Unit = {}, on
             }
             Text(
                 t("android-chat.search.cancel"), fontSize = 16.sp, color = C.accent,
-                modifier = Modifier.graphicsLayer { alpha = up.value }.clickable(enabled = !leaving) { close() },
+                modifier = Modifier.graphicsLayer { alpha = up.value; translationX = (size.width + 12.dp.toPx()) * (1f - up.value) }.clickable(enabled = !leaving) { close() },
             )
         }
         LazyColumn(Modifier.fillMaxWidth().weight(1f).graphicsLayer { alpha = up.value }) {

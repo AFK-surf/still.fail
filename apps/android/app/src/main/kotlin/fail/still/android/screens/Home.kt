@@ -165,8 +165,10 @@ fun HomeScreen(current: WorkspaceEntry) {
     var topBar by rememberSaveable { mutableIntStateOf(statusTop + with(density) { 50.dp.roundToPx() }) }
     var bottomBar by rememberSaveable { mutableIntStateOf(0) }
     val padding = with(density) { PaddingValues(top = topBar.toDp() + 8.dp, bottom = bottomBar.toDp() + 8.dp) }
-    // Searching (Search.kt): where the field at the list's top was when tapped. The lists go up and away, the bars fade.
+    // Searching (Search.kt): where the field at the list's top was when tapped, and how wide. The lists go up and away,
+    // the bars fade.
     var searchFrom by rememberSaveable { mutableStateOf<Float?>(null) }
+    var searchWidth by rememberSaveable { mutableStateOf(0f) }
     // Away while the search is open; as it closes the lists come back in the same 240 ms as its field goes back, so
     // the field lands where the list's is, together (not the field first, then the list coming down a second time).
     var searchOpen by rememberSaveable { mutableStateOf(false) }
@@ -175,7 +177,7 @@ fun HomeScreen(current: WorkspaceEntry) {
     Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze).graphicsLayer { translationY = -awayBy * away; alpha = 1f - away }) {
             val width = constraints.maxWidth
-            val onSearch = { at: Float -> searchFrom = at; searchOpen = true }
+            val onSearch = { at: Float, wide: Float -> searchFrom = at; searchWidth = wide; searchOpen = true }
             val searching = searchFrom != null
             ChatPane(current, all, "all", allList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
             ChatPane(current, mine, "mine", mineList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
@@ -240,13 +242,13 @@ fun HomeScreen(current: WorkspaceEntry) {
         }
         // Wide (Wide.kt), the new-chat button is at the screen's corner instead, not the column's.
         if (!LocalWide.current) Toolbar(app, decisionsWaiting(current), haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.graphicsLayer { alpha = 1f - away })
-        searchFrom?.let { from -> SearchPage(scope, from, onLeave = { searchOpen = false }) { searchFrom = null } }
+        searchFrom?.let { from -> SearchPage(scope, from, searchWidth, onLeave = { searchOpen = false }) { searchFrom = null } }
     }
 }
 
 /** One of the lists, all, the viewer's or the watching ones: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
 @Composable
-private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: String, list: LazyListState, padding: PaddingValues, onSearch: (Float) -> Unit, searching: Boolean, modifier: Modifier) {
+private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: String, list: LazyListState, padding: PaddingValues, onSearch: (Float, Float) -> Unit, searching: Boolean, modifier: Modifier) {
     val view = chats.value
     val app = LocalApp.current
     // The rows move as the list changes (ListMotion.kt); while a finger is on the list or it scrolls, they keep their

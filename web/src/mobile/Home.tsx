@@ -111,7 +111,8 @@ function SearchField({ onOpen }: { onOpen: (at: DOMRect) => void }) {
 
 /**
  * The search, over the lists (the core's `chatSearch`, as ⌘K's on the wide screen): its field comes up from where it
- * was in the list to the top as the list goes up and away (its place taken at once, the move drawn back to it: FLIP);
+ * was in the list to the top as the list goes up and away, narrowing as 取消 comes in (its place taken at once, the
+ * move drawn back to it: FLIP);
  * under it the chats the words find, then the messages, newest first, each opening its chat at it. 取消 puts the field
  * back in the list.
  */
@@ -125,11 +126,22 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
   const messages = words ? view?.messages ?? [] : [];
   const field = useRef<HTMLDivElement>(null);
   const page = useRef<HTMLDivElement>(null);
+  const cancel = useRef<HTMLButtonElement>(null);
   const leaving = useRef(false);
-  const offset = () => from.top - (field.current?.getBoundingClientRect().top ?? from.top);
+  // The field as it was in the list (where, and as wide) and as it is here, the move's two ends: narrowing, it draws
+  // 取消 in after its right edge (laid out after it), not jumping between the two widths.
+  const frames = () => {
+    const at = field.current?.getBoundingClientRect() ?? from;
+    return [
+      { transform: `translateY(${from.top - at.top}px)`, width: `${from.width}px`, flex: "none" },
+      { transform: "none", width: `${at.width}px`, flex: "none" },
+    ];
+  };
   useLayoutEffect(() => {
     if (reducedMotion()) return;
-    field.current?.animate([{ transform: `translateY(${offset()}px)` }, { transform: "none" }], { duration: 280, easing: "cubic-bezier(.2, .8, .2, 1)" });
+    const timing = { duration: 280, easing: "cubic-bezier(.2, .8, .2, 1)" };
+    field.current?.animate(frames(), timing);
+    cancel.current?.animate([{ opacity: 0 }, { opacity: 1 }], timing);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const close = () => {
     if (leaving.current) return;
@@ -137,7 +149,7 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
     onLeave();
     if (reducedMotion()) return onClose();
     page.current?.setAttribute("data-leaving", "");
-    field.current?.animate([{ transform: "none" }, { transform: `translateY(${offset()}px)` }], { duration: 240, easing: "cubic-bezier(.4, 0, .2, 1)", fill: "forwards" }).finished.then(onClose, onClose);
+    field.current?.animate(frames().reverse(), { duration: 240, easing: "cubic-bezier(.4, 0, .2, 1)", fill: "forwards" }).finished.then(onClose, onClose);
   };
   return (
     <div ref={page} className={css.mSearchPage}>
@@ -147,7 +159,7 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
           <input autoFocus type="search" enterKeyHint="search" value={query} spellCheck={false} placeholder={t("web-mobile.home.search")} aria-label={t("web-mobile.home.search")}
             onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") close(); }} />
         </div>
-        <button type="button" className={css.mSearchCancel} onClick={close}>{t("web-mobile.home.searchCancel")}</button>
+        <button ref={cancel} type="button" className={css.mSearchCancel} onClick={close}>{t("web-mobile.home.searchCancel")}</button>
       </div>
       <div className={css.mSearchResults}>
         {words && search.error && !view && <Note text={t("web-mobile.home.searchUpdate")} error />}

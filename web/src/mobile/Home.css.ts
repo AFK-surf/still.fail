@@ -210,7 +210,7 @@ export const mSearchBar = style({
   flex: "none", display: "flex", alignItems: "center", gap: "12px", padding: "calc(var(--m-top) + 8px) 16px 8px",
 });
 export const mSearchInput = style({
-  flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "8px", height: "38px", padding: "0 12px",
+  flex: "1", minWidth: "0", boxSizing: "border-box", display: "flex", alignItems: "center", gap: "8px", height: "38px", padding: "0 12px",
   borderRadius: "19px", background: "color-mix(in srgb, var(--m-ink) 6%, transparent)", color: "var(--m-muted)",
 });
 globalStyle(`${mSearchInput} svg`, { flex: "none" });
