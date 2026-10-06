@@ -578,6 +578,8 @@ private fun FlightLayer(host: Host) {
             val r = overlay.localPositionOf(row, Offset.Zero) - Offset(0f, flight.shift())
             androidx.compose.ui.geometry.Rect(-1e5f, g.top, 1e5f, g.bottom + (r.y + row.size.height - g.bottom).coerceAtLeast(0f) * settle)
         } ?: androidx.compose.ui.geometry.Rect(-1e5f, -1e5f, 1e5f, 1e5f)
+        // Under the words: where they cross on the way, the words stay readable.
+        files(flight, overlay)
         clipRect(view.left, view.top, view.right, view.bottom) {
             // The row (its words, when they fly apart, drawn by the pieces below and not in it; and its ground, above).
             translate(at.x, at.y) {
@@ -602,7 +604,6 @@ private fun FlightLayer(host: Host) {
                 }
             }
         }
-        files(flight, overlay)
         // Out of the composer (its top edge as it is now, changing shape as they go): its hint comes back.
         val top = host.capsule?.takeIf { it.isAttached }?.let { overlay.localPositionOf(it, Offset.Zero).y } ?: flight.top
         if (host.hintAway && at.y + (row.size.height - inRow.y) * s <= top) host.hintAway = false

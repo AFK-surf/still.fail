@@ -362,7 +362,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
       for (const el of next.querySelectorAll<HTMLElement>("[data-send-image]")) {
         if (pictures.some((p) => p.key === el.dataset.sendImage)) el.style.visibility = "hidden";
       }
-      if (copy) copy.replaceWith(next); else ghost.prepend(next);
+      if (copy) copy.replaceWith(next); else ghost.append(next);
       copy = next;
       if (!ground) {
         const bubble = copy.querySelector(`.${conversationCss.msgBubble}`);
@@ -423,7 +423,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     });
     layer.append(ghost);
     stand?.remove();
-    // Over the row's copy, as they were over the composer.
+    // Under the row's copy: where they cross the words on the way, the words stay readable.
     for (const picture of pictures) ghost.append(picture.stand);
     // The one timeline all of it follows (what it moves is read anew each frame): paused and stepped, so is it.
     clock = ghost.animate([{ opacity: 1 }, { opacity: 1 }], { duration: ARRIVE, easing: "linear" });
