@@ -15,6 +15,7 @@ import { GRACE, PORTS, SETTLE, Shares, answerAdb, bind, isPackage, text } from "
 import type { Viewer } from "../src/mesh/credential.ts";
 import { loadMesh, type Connection, type Stream } from "../src/mesh/native.ts";
 import { Reader, writeLine } from "../src/mesh/serve.ts";
+import { script } from "./accounts-fakes.ts";
 
 const FAKE = fileURLToPath(new URL("./fake", import.meta.url));
 process.env.PATH = `${FAKE}${delimiter}${process.env.PATH ?? ""}`;
@@ -23,10 +24,13 @@ const viewer: Viewer = { sub: "u1", email: "pat@example.com", name: "Pat", role:
 // tests at once on this machine would otherwise share, each one's adb and tunnels reaching the other's.
 const PHONE = randomBytes(32).toString("hex");
 
-/// A fresh FAKE_ADB_DIR: what the fake adb was asked, and what it says.
+/// A fresh FAKE_ADB_DIR: what the fake adb was asked, and what it says; `path`, an adb of its own for a `Shares`. Not
+/// the process's environment: an adb a test before still runs (its background `connect` after a pairing, say) would
+/// then ask this one's.
 function fakeAdb(files: Record<string, string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), "fake-adb-"));
-  process.env.FAKE_ADB_DIR = dir;
+  const path = join(dir, "adb");
+  script(path, `FAKE_ADB_DIR='${dir}' exec '${join(FAKE, "adb")}' "$@"`);
   for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content);
   const lines = (name: string) => {
     try {
@@ -35,7 +39,7 @@ function fakeAdb(files: Record<string, string> = {}) {
       return [];
     }
   };
-  return { calls: () => lines("calls").map((l) => JSON.parse(l) as string[]), dialed: () => lines("dialed") };
+  return { path, calls: () => lines("calls").map((l) => JSON.parse(l) as string[]), dialed: () => lines("dialed") };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -144,7 +148,6 @@ test("an ask about no offer, or an unknown one, is answered in the asker's langu
 });
 
 test("without adb the offer says missing; a phone the station cannot reach says why", async () => {
-  fakeAdb();
   const time = testClock();
   const missing = new Shares({ adb: () => null, clock: time.clock });
   const stream = new Memory();
@@ -163,7 +166,7 @@ test("without adb the offer says missing; a phone the station cannot reach says 
 
   // Its tunnel refused (here: no stream on the connection), adb not getting in is put down to that.
   const adb = fakeAdb();
-  const shares = new Shares({ clock: time.clock });
+  const shares = new Shares({ adb: () => adb.path, clock: time.clock });
   const failing = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE }), failing as unknown as Stream);
   // Not in yet after `connect`: its state looked at again after 500 ms, and once SETTLE is over taken as it is.
@@ -184,7 +187,7 @@ test("without adb the offer says missing; a phone the station cannot reach says 
 test("Wireless debugging off: adb is not left trying, and the offer says so", async () => {
   const adb = fakeAdb();
   const time = testClock();
-  const shares = new Shares({ clock: time.clock });
+  const shares = new Shares({ adb: () => adb.path, clock: time.clock });
   const stream = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE, adbd: false }, { "stillfail-lang": "en-US" }), stream as unknown as Stream);
   const off = await until(() => stream.lines().find((l) => l.adb === "off"));
@@ -198,7 +201,6 @@ test("Wireless debugging off: adb is not left trying, and the offer says so", as
 });
 
 test("a newer offer of the same phone takes the older's place, its port and all", async () => {
-  fakeAdb();
   const time = testClock();
   const shares = new Shares({ adb: () => null, clock: time.clock });
   const first = new Memory();
@@ -237,7 +239,7 @@ test("the station removed from its workspace ends offers at once", async () => {
   let removed = false;
   const listeners = new Set<() => void>();
   const time = testClock();
-  const shares = new Shares({ clock: time.clock, cloud: { removed: () => removed, listen: (f) => (listeners.add(f), () => listeners.delete(f)) } });
+  const shares = new Shares({ adb: () => adb.path, clock: time.clock, cloud: { removed: () => removed, listen: (f) => (listeners.add(f), () => listeners.delete(f)) } });
   const stream = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE }), stream as unknown as Stream);
   await time.asleep(500);
@@ -334,7 +336,7 @@ function through(port: number, line: string): Promise<string> {
 test("a phone offered over the mesh: adb connects through its tunnel, asks reach it, and it goes after GRACE", async () => {
   const adb = fakeAdb();
   const time = testClock();
-  const shares = new Shares({ clock: time.clock });
+  const shares = new Shares({ adb: () => adb.path, clock: time.clock });
   const mesh = await link(shares);
   try {
     const offer = { op: "share", phone: PHONE, device: "Pixel\n8", android: "14", package: "fail.still.android", adbd: true, pair: true };
@@ -392,7 +394,7 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
 test("over the mesh: a phone adb is not paired with, or whose adbd turned the tunnel down", async () => {
   const adb = fakeAdb({ "on-connect": "offline" });
   const time = testClock();
-  const shares = new Shares({ clock: time.clock });
+  const shares = new Shares({ adb: () => adb.path, clock: time.clock });
   const mesh = await link(shares);
   try {
     const { stream, reader } = await mesh.ask({ op: "share", phone: PHONE }, { "stillfail-lang": "en" });

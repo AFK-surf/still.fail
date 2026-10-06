@@ -36,7 +36,7 @@ test("lines in order; a station that lets go and comes back reads on where it ac
   assert.equal(existingRunners(data).length, 1, "the runner outlives the connection");
   const second: string[] = [];
   const b = new RunnerConnection(info, (stream, text) => void second.push(`${stream}:${text}`));
-  await until(() => second.filter((l) => l.startsWith("out:line")).length === 4);
+  await until(() => second.includes("out:line6"));
   b.write("hello\n");
   const exit = await b.exited;
   assert.deepEqual(exit, { code: 3, signal: null });
