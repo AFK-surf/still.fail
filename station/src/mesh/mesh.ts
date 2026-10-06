@@ -6,7 +6,7 @@ import { log } from "../ops/log.ts";
 import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
 import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
-import { TOOLS_ALPN, adminSessions, serveTools } from "./tools.ts";
+import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { Agents } from "../sessions/agents.ts";
 import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
 import { Traces } from "./traces.ts";
@@ -80,6 +80,9 @@ export const MeshLive = Layer.effectDiscard(
         (tools) => Effect.sync(() => tools.close()),
       );
       const gateways = { cloud: cloud.state, tools: device, access: () => accessOf(agents.config.raw()), enabled: () => plane.spec().tools };
+      // The same tools for requests Comma pushes on the presence socket.
+      cloud.state.toolCalls = presenceTools(gateways);
+      yield* Effect.addFinalizer(() => Effect.sync(() => (cloud.state.toolCalls = null)));
       for (;;) {
         const conn = yield* Effect.promise(() => endpoint.accept());
         if (!conn) return;

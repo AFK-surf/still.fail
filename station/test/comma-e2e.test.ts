@@ -19,7 +19,7 @@ import { DeviceTools, accessOf } from "../src/device/tools.ts";
 import { Jobs } from "../src/jobs/jobs.ts";
 import { loadMesh, type Connection, type Stream as MeshStream } from "../src/mesh/native.ts";
 import { ALPN, Reader, serve } from "../src/mesh/serve.ts";
-import { TOOLS_ALPN, adminSessions, serveTools } from "../src/mesh/tools.ts";
+import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "../src/mesh/tools.ts";
 import { ABOUT } from "../src/api/routes/tools.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { checkConfig } from "../src/accounts/check.ts";
@@ -103,6 +103,7 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
   const device = new DeviceTools({ home: work, protect: () => [data], sessions: adminSessions(() => admin, () => store, () => ["claude"], () => "ws1", gateway.id()) });
   const members = { cloud: state, admin, up: () => true, shares: {} as any, accepted: plane.credential };
   const gateways = { cloud: state, tools: device, access: () => accessOf(config.raw()), enabled: () => plane.spec().tools };
+  state.toolCalls = presenceTools(gateways);
   void (async () => {
     for (;;) {
       const conn = await station.accept();
@@ -172,6 +173,18 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
   assert.ok(readFileSync(join(work, "big.bin")).equals(big));
   const ran = await tool(tools, "exec", { command: "echo hi" });
   assert.deepEqual(ran, { ok: true, result: { exit_code: 0, stdout: "hi\n", stderr: "", truncated: false } });
+
+  // The same tools over the presence socket: Comma pushes a request, the station answers on the socket.
+  comma.tool("p1", { op: "exec", id: "p1", context: { workspace: "ws1", user_email: "owner@x", agent: "salix" }, args: { command: "echo presence" } });
+  await until(() => comma.heard.some((m) => m.id === "p1"));
+  assert.deepEqual(comma.heard.find((m) => m.id === "p1"), {
+    type: "tool_result",
+    id: "p1",
+    response: { ok: true, result: { exit_code: 0, stdout: "presence\n", stderr: "", truncated: false } },
+  });
+  comma.tool("p2", { op: "fs.read", id: "p2", context: { workspace: "ws1" }, args: { path: join(data, "mesh", "secret.key") } });
+  await until(() => comma.heard.some((m) => m.id === "p2"));
+  assert.equal(comma.heard.find((m) => m.id === "p2").response.error.code, "forbidden");
 
   // A chat started for its requester, as the pages start one: its session and thread, the prompt said in it.
   const started = await tool(tools, "session.start", { prompt: "look at the build", title: "build", requester_email: "owner@x" });
