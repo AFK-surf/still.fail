@@ -196,6 +196,7 @@
   "android-misc.starting": "Starting…",
   "android-misc.stations.loading": "Loading stations…",
   "android-misc.status.done": "Done",
+  "android-misc.status.waiting": "Waiting",
   "android-misc.tool.exitCode": "Exit code {code}",
   "android-misc.tool.from": "From line {from}",
   "android-misc.tool.lines": {

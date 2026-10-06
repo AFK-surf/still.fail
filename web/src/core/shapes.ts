@@ -2103,6 +2103,8 @@ export interface HistoryWait {
 	since: number;
 	until?: number;
 	seconds?: number;
+	/** What it waited for, in its own words (chat_state's `for`); absent when it did not say. */
+	what?: string;
 }
 
 /** A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with an hourglass). */

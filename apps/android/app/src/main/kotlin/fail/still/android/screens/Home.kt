@@ -697,11 +697,11 @@ internal fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
 
 /**
  * Where the chat stands, in its last message's place (the core's `stateText`): a decision waiting for the viewer
- * (奏 · …) in ink with its 奏 bold; anything else (在等：…, 做完了) in the secondary colour.
+ * (奏 · …) in ink with its 奏 bold; anything else in the secondary colour, 在等：… and 做完了 as an hourglass and a check.
  */
 @Composable
 private fun StateLine(state: String, modifier: Modifier = Modifier) {
-    if (fail.still.android.ui.doneLead.containsMatchIn(state)) {
+    if (fail.still.android.ui.doneLead.containsMatchIn(state) || fail.still.android.ui.waitLead.containsMatchIn(state)) {
         fail.still.android.ui.StatusText(
             state, modifier, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(

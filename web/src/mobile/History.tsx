@@ -190,7 +190,7 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
       return (
         <p className={css.mHMark}>
           {body.content.wait && <Hourglass size={14} />}
-          {body.content.wait && body.content.wait.until == null ? <span>{t("web-mobile.history.waiting")} <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}
+          {body.content.wait && body.content.wait.until == null ? <span>{body.content.wait.what != null && <>{body.content.wait.what} · </>}{t("web-mobile.history.waiting")} <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}
         </p>
       );
     case "text":

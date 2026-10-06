@@ -212,7 +212,7 @@ type Item =
   | { kind: "received"; i: number }
   | { kind: "text"; i: number }
   | { kind: "post"; step: number }
-  | { kind: "mark"; mark: string; seconds: number | null }
+  | { kind: "mark"; mark: string; seconds: number | null; what: string | null }
   | { kind: "group"; rows: Row[] };
 /// A group's thinking and calls, in the order they came: a thought by its timeline index, a call by its step.
 type Row = { thought: number } | { step: number };
@@ -253,7 +253,8 @@ export function presentHistory(live: J, cx: Context): J {
         grouping = false;
       } else if (name === "chat_state" && arg("kind") !== null && !sub) {
         const sec = a?.seconds;
-        items.push([{ kind: "mark", mark: arg("kind") ?? "", seconds: typeof sec === "number" ? Math.trunc(Math.max(sec, 0)) : null }, i, i]);
+        const what = arg("for")?.trim() || null;
+        items.push([{ kind: "mark", mark: arg("kind") ?? "", seconds: typeof sec === "number" ? Math.trunc(Math.max(sec, 0)) : null, what }, i, i]);
         grouping = false;
       } else {
         if (!grouping) {
@@ -338,7 +339,7 @@ export function presentHistory(live: J, cx: Context): J {
             const w = Math.trunc(Math.max(until - since, 0) / 1000);
             return item.seconds === null ? w : Math.min(w, item.seconds);
           })() : null;
-          const text =
+          const how =
             waited !== null && item.seconds !== null
               ? t("core-logic.history.waited_most", { waited: span(waited), most: span(item.seconds) })
               : waited !== null
@@ -346,7 +347,9 @@ export function presentHistory(live: J, cx: Context): J {
                 : item.seconds !== null
                   ? t("core-logic.history.waiting_most", { most: span(item.seconds) })
                   : t("core-logic.history.waiting");
-          v = { kind: "mark", text, wait: since !== null ? { since, until, seconds: item.seconds } : null };
+          // What it waited for (chat_state's `for`) leads, as the activity line says it.
+          const text = item.what !== null ? `${item.what} · ${how}` : how;
+          v = { kind: "mark", text, wait: since !== null ? { since, until, seconds: item.seconds, what: item.what } : null };
         } else {
           const m = item.mark;
           v = {

@@ -193,6 +193,7 @@
   "android-misc.starting": "正在启动…",
   "android-misc.stations.loading": "正在读取 station…",
   "android-misc.status.done": "做完了",
+  "android-misc.status.waiting": "在等",
   "android-misc.tool.exitCode": "退出码 {code}",
   "android-misc.tool.from": "第 {from} 行起",
   "android-misc.tool.lines": "{n} 行",

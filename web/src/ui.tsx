@@ -6,7 +6,7 @@ import { shortcutOf, useKeymap, type Action } from "./keymap.ts";
 import { useBackClose } from "./backClose.ts";
 import { setPrefs, usePrefs } from "./prefs.ts";
 import type { Badge, Maker, Stamp } from "./api.ts";
-import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, Info, More, Plug, Sliders } from "./icons.tsx";
+import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, Hourglass, Info, More, Plug, Sliders } from "./icons.tsx";
 import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
@@ -231,14 +231,18 @@ export function Select({ value, onChange, options, id, placeholder, disabled, la
 export type Tone = "neutral" | "green" | "blue" | "amber" | "red" | "accent";
 
 /**
- * Keep a completed state compact while retaining its explanation and accessible name. The core says it in words, in
- * either language (client/core-ts present.ts: 做完了, 做完了：<why>; Done, Done: <why>).
+ * Keep a completed or waiting state compact while retaining its explanation and accessible name: a check, an hourglass
+ * in its words' place. The core says it in words, in either language (client/core-ts present.ts: 做完了, 做完了：<why>;
+ * Done, Done: <why>; 等待中, 在等：<what>; Waiting, Waiting: <what>).
  */
 export function StatusText({ text }: { text: string }) {
   const done = /^(?:做完了(?:：|$)|Done(?:: |$))/.exec(text);
-  if (!done) return <>{text}</>;
-  const reason = text.slice(done[0].length);
-  return <><Tip label={t("web-main.status.done")}><span className={css.doneMark} role="img" aria-label={t("web-main.status.done")}><Check size={14} strokeWidth={1.7} /></span></Tip>{reason && <> {reason}</>}</>;
+  const wait = done ? null : /^(?:在等：|等待中$|Waiting(?:: |$))/.exec(text);
+  const lead = done ?? wait;
+  if (!lead) return <>{text}</>;
+  const label = t(done ? "web-main.status.done" : "web-main.status.waiting");
+  const reason = text.slice(lead[0].length);
+  return <><Tip label={label}><span className={css.doneMark} role="img" aria-label={label}>{done ? <Check size={14} strokeWidth={1.7} /> : <Hourglass size={14} strokeWidth={1.7} />}</span></Tip>{reason && <> {reason}</>}</>;
 }
 
 export function Pill({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {

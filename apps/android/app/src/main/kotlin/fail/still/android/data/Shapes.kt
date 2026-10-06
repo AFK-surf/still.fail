@@ -2127,7 +2127,9 @@ data class HistoryLive (
 data class HistoryWait (
 	val since: Long,
 	val until: Long? = null,
-	val seconds: Long? = null
+	val seconds: Long? = null,
+	/// What it waited for, in its own words (chat_state's `for`); absent when it did not say.
+	val what: String? = null
 )
 
 /// A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with an hourglass).

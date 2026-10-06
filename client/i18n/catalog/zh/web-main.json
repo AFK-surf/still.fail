@@ -447,6 +447,7 @@
   "web-main.slack.step.install": "在 Install App 页安装到工作区，复制 Bot User OAuth Token。",
   "web-main.slack.verified": "连接到「{team}」，bot 是 @{bot}",
   "web-main.status.done": "做完了",
+  "web-main.status.waiting": "在等",
   "web-main.switcher.messages": "消息",
   "web-main.switcher.noMatch": "没有找到对话或消息",
   "web-main.switcher.none": "还没有对话",

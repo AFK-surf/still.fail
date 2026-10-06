@@ -152,7 +152,7 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
     case "mark":
       // A wait: how long it waited, said by the core once it is over; still waiting, it counts on here.
       return body.content.wait
-        ? <div className={css.hLabel}><Hourglass {...ICON} size={14} />{body.content.wait.until == null ? <span>{t("web-main.activity.waiting")} <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}</div>
+        ? <div className={css.hLabel}><Hourglass {...ICON} size={14} />{body.content.wait.until == null ? <span>{body.content.wait.what != null && <>{body.content.wait.what} · </>}{t("web-main.activity.waiting")} <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}</div>
         : <div className={css.hMark}>{body.content.text}</div>;
     case "group":
       return <Group group={body.content} />;

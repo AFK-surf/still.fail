@@ -312,7 +312,7 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
                 var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
                 LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
                 val waited = ((now - wait.since) / 1000).coerceAtLeast(0).let { s -> wait.seconds?.let { minOf(s, it) } ?: s }
-                Text(t("android-chat.history.waiting", "time" to shortSpan(waited)) + (wait.seconds?.let { " / ${shortSpan(it)}" } ?: ""), fontSize = 13.sp, color = C.muted)
+                Text((wait.what?.let { "$it · " } ?: "") + t("android-chat.history.waiting", "time" to shortSpan(waited)) + (wait.seconds?.let { " / ${shortSpan(it)}" } ?: ""), fontSize = 13.sp, color = C.muted)
             } else Text(body.content.text, fontSize = 13.sp, color = C.muted)
         }
         is HistoryBody.Text -> Box(Modifier.let { if (body.content.subagent) it.padding(start = 12.dp) else it }) {

@@ -93,10 +93,13 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   };
   const back = waits('{"kind":"waiting","seconds":150}', "2026-09-27T00:01:20.000Z");
   assert.equal(back.text, "等待了 1m 20s / 2m 30s");
-  assert.deepEqual(back.wait, { since: 1790467200000, until: 1790467280000, seconds: 150 });
+  assert.deepEqual(back.wait, { since: 1790467200000, until: 1790467280000, seconds: 150, what: null });
   assert.equal(waits('{"kind":"waiting","seconds":60}', "2026-09-27T01:00:00.000Z").text, "等待了 1m / 1m");
   const now = waits('{"kind":"waiting","seconds":600}', null);
   assert.deepEqual([now.text, now.wait.until], ["等待中，最长 10m", null]);
+  // What it waited for (chat_state's `for`) leads its words, and goes with the wait for the pages' running count.
+  const ci = waits('{"kind":"waiting","seconds":600,"for":"CI 跑完"}', "2026-09-27T00:05:00.000Z");
+  assert.deepEqual([ci.text, ci.wait.what], ["CI 跑完 · 等待了 5m / 10m", "CI 跑完"]);
   assert.deepEqual(h.live, [{ id: "s", text: "正在思考…" }]);
   assert.equal(h.phase.text, "正在启动 Codex");
   assert.equal(h.usage[4].value, "50%");
