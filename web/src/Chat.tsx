@@ -15,7 +15,8 @@ import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
 import { shortcutOf, takesKeys, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
-import { thumbhashRatio, thumbhashUrl } from "./thumbhash.ts";
+import { imageBox } from "./imageBox.ts";
+import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { animate, arrive, EASE_OUT, follower, moveState, type AnimationPlaybackControls, type Follower } from "./motion.ts";
@@ -1316,10 +1317,11 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
     revealed.add(key);
   };
   const preview = sessionKey !== null && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />;
+  const { letterbox, ...size } = look.box(file, video ? 96 : undefined);
   if (video && sessionKey !== null) {
     return (
       <>
-        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={thumbId(station.address, sessionKey, file.path)} onClick={() => setOpen(true)} aria-label={t(videoFailed ? "web-main.file.view" : "web-main.file.play", { name: file.name })} style={look.box(file)} data-unavailable={videoFailed || undefined}
+        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={thumbId(station.address, sessionKey, file.path)} onClick={() => setOpen(true)} aria-label={t(videoFailed ? "web-main.file.view" : "web-main.file.play", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined} data-unavailable={videoFailed || undefined}
           data-loaded={still.poster ? "instant" : undefined}>
           {still.url && !videoFailed && (still.poster
             ? <img src={still.url} alt="" aria-hidden="true" />
@@ -1336,10 +1338,10 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <button ref={box} type="button" className={look.image} data-send-image={sentImageKey(file.path)} onClick={() => (url || failed) && setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={look.box(file)}
+        <button ref={box} type="button" className={look.image} data-send-image={sentImageKey(file.path)} onClick={() => (url || failed) && setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
           data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
           data-loaded={loaded ?? undefined} data-failed={failed || undefined}>
-          {loaded !== "instant" && <Waiting hash={file.thumbhash} />}
+          {loaded !== "instant" && <Waiting hash={file.thumbhash} fit={letterbox} />}
           {failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>{t("web-main.file.noPreview")}</span></span>}
           {url && <img src={url} alt={file.name} onLoad={shown} />}
         </button>
@@ -1357,31 +1359,16 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
 }
 
 /** What an image's box shows until it loads: its ThumbHash drawn, sent with it; else the blots drifting. */
-function Waiting({ hash }: { hash: string | undefined }) {
+/** `fit`: a letterboxed image's share of its box, all the placeholder takes. */
+function Waiting({ hash, fit }: { hash: string | undefined; fit?: { width: string; height: string } | undefined }) {
   const likeness = thumbhashUrl(hash);
   return likeness
-    ? <span className={look.wait} style={{ backgroundImage: `url(${likeness})` }} data-likeness="" aria-hidden="true" />
-    : <span className={look.wait} aria-hidden="true"><i /><i /><i /></span>;
+    ? <span className={look.wait} style={{ ...fit, backgroundImage: `url(${likeness})` }} data-likeness="" aria-hidden="true" />
+    : <span className={look.wait} style={fit} aria-hidden="true"><i /><i /><i /></span>;
 }
 
 /** How the chat draws a file: an image's button, the box it takes before it loads and what shows until then; a file's card and its button. */
-const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment) => imageBox(f), open: css.fileCardOpen, card: (f: Attachment) => <FileCard file={f} /> };
-
-/**
- * The box an image takes in the chat, known before it loads: its own
- * proportions (sent with it, or read from its ThumbHash) within 360×300, or a
- * fixed box for images sent before sizes were recorded. A narrower chat shrinks it (max-width), the
- * proportions kept.
- */
-export function imageBox(file: Attachment): { width: number; aspectRatio: string } {
-  // No size sent, but a ThumbHash: its proportions, at the fixed box's height.
-  const ratio = thumbhashRatio(file.thumbhash);
-  const [w, h] = file.width && file.height ? [file.width, file.height] : ratio ? [Math.round(160 * ratio), 160] : [0, 0];
-  if (!w || !h) return { width: 240, aspectRatio: "240 / 160" };
-  const scale = Math.min(1, 360 / w, 300 / h);
-  const width = Math.max(40, Math.round(w * scale)), height = Math.max(40, Math.round(h * scale));
-  return { width, aspectRatio: `${width} / ${height}` };
-}
+const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment, least?: number) => imageBox(f, least), open: css.fileCardOpen, card: (f: Attachment) => <FileCard file={f} /> };
 
 function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; sent?: number | undefined; error?: string | null }) {
   // A file of more than one part says how far it has gone.
