@@ -1,8 +1,8 @@
-// A station in Comma end to end, over the real mesh addon and a fake Comma control plane (test/fake-control-plane.ts):
-// enrolled with `--provider comma`, online on Comma's presence socket (its gateways named there), a member's credential
-// Comma signed taken on `stillfail/admin/1`, a viewer's write refused, and the gateway's `comma/tools/1` admitted —
-// exec refused under the default `read`, done once an owner sets `full`, a chat started and driven — while another
-// iroh id is turned away.
+// A station in Comma end to end, over the mesh (its endpoints connected in memory, memory-mesh.ts) and a fake Comma
+// control plane (test/fake-control-plane.ts): enrolled with `--provider comma`, online on Comma's presence socket (its
+// gateways named there), a member's credential Comma signed taken on `stillfail/admin/1`, a viewer's write refused, and
+// the gateway's `comma/tools/1` admitted — exec refused under the default `read`, done once an owner sets `full`, a chat
+// started and driven — while another iroh id is turned away.
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -17,7 +17,7 @@ import { makeControlPlane } from "../src/cloud/plane.ts";
 import { Cloud } from "../src/cloud/state.ts";
 import { DeviceTools, accessOf } from "../src/device/tools.ts";
 import { Jobs } from "../src/jobs/jobs.ts";
-import { loadMesh, type Connection, type Stream as MeshStream } from "../src/mesh/native.ts";
+import type { Connection, Stream as MeshStream } from "../src/mesh/native.ts";
 import { ALPN, Reader, serve } from "../src/mesh/serve.ts";
 import { TOOLS_ALPN, adminSessions, serveTools } from "../src/mesh/tools.ts";
 import { ABOUT } from "../src/api/routes/tools.ts";
@@ -30,6 +30,7 @@ import { InternalChat } from "../src/sessions/internal.ts";
 import { Store } from "../src/store/store.ts";
 import { FakeControlPlane } from "./fake-control-plane.ts";
 import { FakeDriver, settle } from "./hub-fakes.ts";
+import { memoryMesh } from "./memory-mesh.ts";
 
 /// Looks every 20 ms until `what` holds: what comes over real connections has no event here. No deadline (it comes,
 /// however slow the machine, or the test hangs).
@@ -66,7 +67,7 @@ async function tool(conn: Connection, op: string, args: Record<string, unknown>,
 }
 
 test("a station in Comma: enrolled, online, a member admitted, a viewer read-only, the gateway's tools as access allows", async (t) => {
-  const mesh = loadMesh();
+  const mesh = memoryMesh();
   const bindClient = () => mesh.bind({ secretKey: randomBytes(32), alpns: [Buffer.from("client/1")], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [gateway, stranger, client, viewerDevice] = await Promise.all([bindClient(), bindClient(), bindClient(), bindClient()]);
 

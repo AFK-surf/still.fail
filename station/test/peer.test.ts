@@ -1,11 +1,12 @@
-// Stations of a workspace calling each other over the real mesh addon (peer.rs): a request answered by the other's
-// remote tasks; its refusal a Refused; who may call only the roster's stations, while the roster is current.
+// Stations of a workspace calling each other over the mesh (peer.rs), its endpoints connected in memory
+// (memory-mesh.ts): a request answered by the other's remote tasks; its refusal a Refused; who may call only the
+// roster's stations, while the roster is current.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 import { Refused } from "../src/jobs/remote.ts";
-import { loadMesh } from "../src/mesh/native.ts";
 import { PEER_ALPN, member, peerCall, servePeer } from "../src/mesh/peer.ts";
+import { memoryMesh } from "./memory-mesh.ts";
 
 const cloudOf = (station: string, peers: string[]): any => ({
   state: { workspace: "ws", station, peers: peers.map((id) => ({ id })) },
@@ -15,7 +16,7 @@ const cloudOf = (station: string, peers: string[]): any => ({
 });
 
 test("a peer's request is answered by the other station's remote tasks", async () => {
-  const mesh = loadMesh();
+  const mesh = memoryMesh();
   const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [source, target] = await Promise.all([bind(), bind()]);
   const sourceCloud = cloudOf(source.id(), [target.id()]);
