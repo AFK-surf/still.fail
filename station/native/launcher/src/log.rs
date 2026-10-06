@@ -1,8 +1,6 @@
 //! The launcher's lines on stderr (launchd writes them to stillfail.log), shaped like the Rust station's: an RFC 3339
 //! time, the level, what happened.
 
-use std::io::Write;
-
 pub fn info(text: &str) {
     line("INFO", text);
 }
@@ -16,7 +14,15 @@ pub fn error(text: &str) {
 }
 
 fn line(level: &str, text: &str) {
-    let _ = writeln!(std::io::stderr().lock(), "{} {level:>5} stillfail-station: {text}", iso(crate::data::now_ms()));
+    let line = format!("{} {level:>5} stillfail-station: {text}", iso(crate::data::now_ms()));
+    // In tests, where the harness keeps it to show with a failure.
+    #[cfg(test)]
+    eprintln!("{line}");
+    #[cfg(not(test))]
+    {
+        use std::io::Write;
+        let _ = writeln!(std::io::stderr().lock(), "{line}");
+    }
 }
 
 /// `ms` since the epoch as UTC, to the millisecond.

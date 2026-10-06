@@ -1,7 +1,9 @@
 // A stand-in for the station's Node side in the launcher's tests: it speaks the control socket's protocol and answers a
 // TCP connection on each port it is given with "<pid> mcp|admin". What it does is set by <data>/fake.conf (key=value
 // lines, read as it starts): version=…, ready=no (never says ready), ready_after=ms, crash_after=ms (exits 1 that long
-// after ready), start=crash (exits 1 at once). What happens is appended to <data>/fake.log: "<ms> <pid> <what>".
+// after ready), crash=once (the data directory's first Node exits 1 once ready), start=crash (exits 1 at once). What
+// happens is appended to <data>/fake.log: "<ms> <pid> <what>", among it "ports <mcp> <admin>" once both serve (the
+// launcher binds them where it finds them free).
 "use strict";
 const fs = require("fs");
 const net = require("net");
@@ -34,12 +36,15 @@ if (conf.start === "crash") {
 }
 
 const [mcp, admin, control] = flag("--launcher-fds").split(",").map(Number);
+let serving = 0;
 const servers = [
   [mcp, "mcp"],
   [admin, "admin"],
 ].map(([fd, name]) => {
   const server = net.createServer((socket) => socket.end(`${process.pid} ${name}\n`));
-  server.listen({ fd });
+  server.listen({ fd }, () => {
+    if (++serving === 2) log(`ports ${servers[0].address().port} ${servers[1].address().port}`);
+  });
   return server;
 });
 
@@ -79,8 +84,15 @@ function quit(code) {
 if (conf.ready !== "no") {
   const after = Number(conf.ready_after || 0);
   setTimeout(() => {
-    say({ ready: true, version: conf.version || "0.1.0" });
+    // Logged first: the launcher may act on the word before this process runs again.
     log("ready");
+    say({ ready: true, version: conf.version || "0.1.0" });
+    const crashed = path.join(data, "crashed");
+    if (conf.crash === "once" && !fs.existsSync(crashed)) {
+      fs.writeFileSync(crashed, "");
+      log("crash");
+      process.exit(1);
+    }
     if (conf.crash_after)
       setTimeout(() => {
         log("crash");

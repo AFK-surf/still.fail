@@ -107,11 +107,6 @@ impl Node {
         }
     }
 
-    fn kill(&self) {
-        // SAFETY: a signal to a child of this process not yet reaped (its pid is still its).
-        unsafe { libc::kill(self.pid, libc::SIGKILL) };
-    }
-
     /// Whole lines come in on the control socket since the last read.
     fn read(&mut self) -> Vec<Value> {
         let mut buf = [0u8; 4096];
@@ -157,7 +152,72 @@ enum Slot {
     Retiring,
 }
 
-struct Station {
+/// What the launcher does to processes, and its clock: the system's (`System`), or a test's.
+trait Os {
+    fn now(&self) -> Instant;
+    /// A new Node, given `fds` (the listening sockets) as fds 3 and 4.
+    fn spawn(&mut self, options: &Options, fds: [RawFd; 2]) -> Result<Node>;
+    /// SIGKILL to a Node not yet reaped (its pid is still its).
+    fn kill(&mut self, pid: i32);
+    fn parent(&self) -> i32;
+}
+
+struct System;
+
+impl Os for System {
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+
+    fn spawn(&mut self, options: &Options, fds: [RawFd; 2]) -> Result<Node> {
+        let app = &options.app;
+        let (ours, theirs) = socketpair()?;
+        let mut command = Command::new(crate::node(app));
+        command
+            .arg(crate::main_js(app))
+            .arg("run")
+            .arg("--app")
+            .arg(app)
+            .arg("--data")
+            .arg(&options.data)
+            .args(["--launcher-fds", "3,4,5"])
+            .stdin(Stdio::null())
+            .process_group(0);
+        let given = [fds[0], fds[1], theirs.as_raw_fd()];
+        // SAFETY: only dup2 (async-signal-safe) between fork and exec. The sources are all at 10 and up, so none is
+        // overwritten before it is copied; the copies are not close-on-exec.
+        unsafe {
+            command.pre_exec(move || {
+                for (to, from) in given.iter().enumerate() {
+                    if libc::dup2(*from, 3 + to as c_int) < 0 {
+                        return Err(Error::last_os_error());
+                    }
+                }
+                Ok(())
+            });
+        }
+        let child = command.spawn()?;
+        drop(theirs);
+        nonblocking(ours.as_raw_fd())?;
+        let pid = child.id() as i32;
+        // Reaped by waitpid in reap(), not by std.
+        drop(child);
+        Ok(Node { pid, control: ours, pending: vec![], open: true, ready: None, version: String::new() })
+    }
+
+    fn kill(&mut self, pid: i32) {
+        // SAFETY: a signal to a child of this process not yet reaped.
+        unsafe { libc::kill(pid, libc::SIGKILL) };
+    }
+
+    fn parent(&self) -> i32 {
+        // SAFETY: getppid has no preconditions.
+        unsafe { libc::getppid() }
+    }
+}
+
+struct Station<O: Os = System> {
+    os: O,
     options: Options,
     times: Times,
     run: PathBuf,
@@ -342,65 +402,37 @@ pub fn run(options: Options) -> i32 {
             return 1;
         }
     };
-    let times = Times::of_env();
-    // SAFETY: getppid has no preconditions.
-    let parent = options.with_parent.then(|| (unsafe { libc::getppid() }, Instant::now() + times.parent));
-    let mut station = Station {
-        options,
-        times,
-        run,
-        mcp,
-        admin,
-        current: None,
-        next: None,
-        retiring: None,
-        stopping: None,
-        restart_at: None,
-        failures: 0,
-        backoff_step: 0,
-        drained_at: None,
-        parent,
-        exit: 0,
-    };
+    let mut station = Station::new(System, options, Times::of_env(), run, mcp, admin);
     station.start_current();
     station.serve(signals)
 }
 
-impl Station {
-    fn spawn(&self) -> Result<Node> {
-        let app = &self.options.app;
-        let (ours, theirs) = socketpair()?;
-        let mut command = Command::new(crate::node(app));
-        command
-            .arg(crate::main_js(app))
-            .arg("run")
-            .arg("--app")
-            .arg(app)
-            .arg("--data")
-            .arg(&self.options.data)
-            .args(["--launcher-fds", "3,4,5"])
-            .stdin(Stdio::null())
-            .process_group(0);
-        let given = [self.mcp.as_raw_fd(), self.admin.as_raw_fd(), theirs.as_raw_fd()];
-        // SAFETY: only dup2 (async-signal-safe) between fork and exec. The sources are all at 10 and up, so none is
-        // overwritten before it is copied; the copies are not close-on-exec.
-        unsafe {
-            command.pre_exec(move || {
-                for (to, from) in given.iter().enumerate() {
-                    if libc::dup2(*from, 3 + to as c_int) < 0 {
-                        return Err(Error::last_os_error());
-                    }
-                }
-                Ok(())
-            });
+impl<O: Os> Station<O> {
+    fn new(os: O, options: Options, times: Times, run: PathBuf, mcp: OwnedFd, admin: OwnedFd) -> Station<O> {
+        let parent = options.with_parent.then(|| (os.parent(), os.now() + times.parent));
+        Station {
+            os,
+            options,
+            times,
+            run,
+            mcp,
+            admin,
+            current: None,
+            next: None,
+            retiring: None,
+            stopping: None,
+            restart_at: None,
+            failures: 0,
+            backoff_step: 0,
+            drained_at: None,
+            parent,
+            exit: 0,
         }
-        let child = command.spawn()?;
-        drop(theirs);
-        nonblocking(ours.as_raw_fd())?;
-        let pid = child.id() as i32;
-        // Reaped by waitpid in reap(), not by std.
-        drop(child);
-        Ok(Node { pid, control: ours, pending: vec![], open: true, ready: None, version: String::new() })
+    }
+
+    fn spawn(&mut self) -> Result<Node> {
+        let fds = [self.mcp.as_raw_fd(), self.admin.as_raw_fd()];
+        self.os.spawn(&self.options, fds)
     }
 
     /// Starts the Node that serves (at first, after a crash).
@@ -435,7 +467,7 @@ impl Station {
         let delay = self.times.backoff.saturating_mul(1 << self.backoff_step.min(16)).min(self.times.backoff_max);
         self.backoff_step += 1;
         log::info(&format!("starting Node again in {} ms", delay.as_millis()));
-        self.restart_at = Some(Instant::now() + delay);
+        self.restart_at = Some(self.os.now() + delay);
     }
 
     /// station.json says this Node's start: the installer takes a new startedAt with the same pid for "handed over".
@@ -467,11 +499,12 @@ impl Station {
             if slot == Slot::Next && self.next.as_ref().is_some_and(|n| n.2) {
                 return;
             }
+            let now = self.os.now();
             let Some(node) = self.node_mut(slot) else { return };
             if node.ready.is_some() {
                 return;
             }
-            node.ready = Some(Instant::now());
+            node.ready = Some(now);
             node.version = message["version"].as_str().unwrap_or_default().to_string();
             log::info(&format!("Node {} ready (version {})", node.pid, node.version));
             match slot {
@@ -485,7 +518,7 @@ impl Station {
         } else if let Some(said) = message["drained"].as_str().filter(|_| slot == Slot::Current) {
             log::info(&format!("drained ({said})"));
             let _ = write_whole(&self.run.join("drained"), &format!("{said}\n"));
-            self.drained_at = Some(Instant::now());
+            self.drained_at = Some(self.os.now());
         } else {
             log::warn(&format!("Node said what the launcher does not know: {message}"));
         }
@@ -499,7 +532,7 @@ impl Station {
             Some(old) => {
                 log::info(&format!("handing over from Node {} to Node {}", old.pid, self.current.as_ref().map_or(0, |n| n.pid)));
                 old.tell("handover");
-                self.retiring = Some((old, Instant::now() + self.times.exit));
+                self.retiring = Some((old, self.os.now() + self.times.exit));
             }
             // The old one had crashed meanwhile: nothing to wait for.
             None => {
@@ -540,7 +573,7 @@ impl Station {
         match self.spawn() {
             Ok(node) => {
                 log::info(&format!("handover: Node {} started beside the one serving", node.pid));
-                self.next = Some((node, Instant::now() + self.times.ready, false));
+                self.next = Some((node, self.os.now() + self.times.ready, false));
             }
             Err(error) => self.handoff_failed(&format!("{} did not start: {error}", crate::node(&self.options.app).display())),
         }
@@ -552,7 +585,7 @@ impl Station {
             return;
         }
         self.restart_at = None;
-        self.stopping = Some(Instant::now() + self.times.stop);
+        self.stopping = Some(self.os.now() + self.times.stop);
         if let Some(node) = &self.current {
             node.tell("stop");
         }
@@ -570,29 +603,34 @@ impl Station {
             if pid <= 0 {
                 return;
             }
-            let how = describe(status);
-            if self.current.as_ref().is_some_and(|n| n.pid == pid) {
-                let node = self.current.take().unwrap();
-                log::info(&format!("Node {pid} {how}"));
-                if self.stopping.is_none() {
-                    self.crashed(node);
-                }
-            } else if self.next.as_ref().is_some_and(|n| n.0.pid == pid) {
-                let (node, _, given_up) = self.next.take().unwrap();
-                log::info(&format!("Node {pid} (starting beside) {how}"));
-                if !given_up && self.stopping.is_none() {
-                    self.handoff_failed(&format!("the new station {how} before it was ready"));
-                }
-                drop(node);
-                if self.current.is_none() && self.stopping.is_none() && self.restart_at.is_none() {
-                    self.schedule_restart();
-                }
-            } else if self.retiring.as_ref().is_some_and(|n| n.0.pid == pid) {
-                self.retiring = None;
-                log::info(&format!("Node {pid} handed over and {how}"));
-                if self.stopping.is_none() && self.current.as_ref().is_some_and(|n| n.ready.is_some()) {
-                    self.say_started();
-                }
+            self.ended(pid, status);
+        }
+    }
+
+    /// A Node ended (`status` as waitpid says).
+    fn ended(&mut self, pid: i32, status: c_int) {
+        let how = describe(status);
+        if self.current.as_ref().is_some_and(|n| n.pid == pid) {
+            let node = self.current.take().unwrap();
+            log::info(&format!("Node {pid} {how}"));
+            if self.stopping.is_none() {
+                self.crashed(node);
+            }
+        } else if self.next.as_ref().is_some_and(|n| n.0.pid == pid) {
+            let (node, _, given_up) = self.next.take().unwrap();
+            log::info(&format!("Node {pid} (starting beside) {how}"));
+            if !given_up && self.stopping.is_none() {
+                self.handoff_failed(&format!("the new station {how} before it was ready"));
+            }
+            drop(node);
+            if self.current.is_none() && self.stopping.is_none() && self.restart_at.is_none() {
+                self.schedule_restart();
+            }
+        } else if self.retiring.as_ref().is_some_and(|n| n.0.pid == pid) {
+            self.retiring = None;
+            log::info(&format!("Node {pid} handed over and {how}"));
+            if self.stopping.is_none() && self.current.as_ref().is_some_and(|n| n.ready.is_some()) {
+                self.say_started();
             }
         }
     }
@@ -607,7 +645,7 @@ impl Station {
         match node.ready {
             Some(at) => {
                 self.failures = 0;
-                if at.elapsed() >= self.times.stable {
+                if self.os.now().saturating_duration_since(at) >= self.times.stable {
                     self.backoff_step = 0;
                 }
                 self.schedule_restart();
@@ -618,29 +656,31 @@ impl Station {
 
     /// What is due by now: a handover given up, a Node killed, a restart, the parent gone.
     fn tick(&mut self) {
-        let now = Instant::now();
+        let now = self.os.now();
         if let Some((node, by, given_up)) = &mut self.next
             && !*given_up
             && now >= *by
         {
             *given_up = true;
-            node.kill();
             let pid = node.pid;
+            self.os.kill(pid);
             self.handoff_failed(&format!("the new station (pid {pid}) was not ready within {} s", self.times.ready.as_secs_f32()));
         }
         if let Some((node, by)) = &mut self.retiring
             && now >= *by
         {
             log::warn(&format!("Node {} did not exit within {} s of handing over; killed", node.pid, self.times.exit.as_secs_f32()));
-            node.kill();
             *by = now + Duration::from_secs(3600);
+            let pid = node.pid;
+            self.os.kill(pid);
         }
         if let Some(by) = self.stopping
             && now >= by
         {
-            for node in [self.current.as_ref(), self.next.as_ref().map(|n| &n.0), self.retiring.as_ref().map(|n| &n.0)].into_iter().flatten() {
-                log::warn(&format!("Node {} did not stop within {} s; killed", node.pid, self.times.stop.as_secs_f32()));
-                node.kill();
+            let pids: Vec<i32> = [self.current.as_ref(), self.next.as_ref().map(|n| &n.0), self.retiring.as_ref().map(|n| &n.0)].into_iter().flatten().map(|n| n.pid).collect();
+            for pid in pids {
+                log::warn(&format!("Node {pid} did not stop within {} s; killed", self.times.stop.as_secs_f32()));
+                self.os.kill(pid);
             }
             self.stopping = Some(now + Duration::from_secs(3600));
         }
@@ -658,8 +698,7 @@ impl Station {
             && now >= *at
         {
             *at = now + self.times.parent;
-            // SAFETY: getppid has no preconditions.
-            if unsafe { libc::getppid() } != *parent {
+            if self.os.parent() != *parent {
                 log::info("parent ended; stopping");
                 self.parent = None;
                 self.stop();
@@ -699,7 +738,7 @@ impl Station {
                     slots.push(slot);
                 }
             }
-            let timeout = self.next_due().map_or(-1, |at| at.saturating_duration_since(Instant::now()).as_millis().min(i32::MAX as u128) as c_int + 1);
+            let timeout = self.next_due().map_or(-1, |at| at.saturating_duration_since(self.os.now()).as_millis().min(i32::MAX as u128) as c_int + 1);
             // SAFETY: poll over a live array of pollfds.
             let n = unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout) };
             if n < 0 && Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
@@ -751,5 +790,292 @@ fn describe(status: c_int) -> String {
         format!("was ended by signal {}", libc::WTERMSIG(status))
     } else {
         format!("ended ({status})")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read;
+    use std::os::unix::net::UnixStream;
+
+    use serde_json::json;
+
+    /// The test's processes and clock: a Node is a pid (from 101 on) and the far end of its control socket.
+    struct Fake {
+        dir: PathBuf,
+        now: Instant,
+        pid: i32,
+        theirs: Vec<(i32, UnixStream)>,
+        killed: Vec<i32>,
+        parent: i32,
+    }
+
+    impl Os for Fake {
+        fn now(&self) -> Instant {
+            self.now
+        }
+
+        fn spawn(&mut self, _: &Options, _: [RawFd; 2]) -> Result<Node> {
+            let (ours, theirs) = socketpair()?;
+            nonblocking(ours.as_raw_fd())?;
+            nonblocking(theirs.as_raw_fd())?;
+            self.pid += 1;
+            self.theirs.push((self.pid, UnixStream::from(theirs)));
+            Ok(Node { pid: self.pid, control: ours, pending: vec![], open: true, ready: None, version: String::new() })
+        }
+
+        fn kill(&mut self, pid: i32) {
+            self.killed.push(pid);
+        }
+
+        fn parent(&self) -> i32 {
+            self.parent
+        }
+    }
+
+    impl Drop for Fake {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    const MS: Duration = Duration::from_millis(1);
+
+    fn s(secs: u64) -> Duration {
+        Duration::from_secs(secs)
+    }
+
+    /// A launcher with its first Node started.
+    fn station(name: &str, with_parent: bool) -> Station<Fake> {
+        let data = std::env::temp_dir().join(format!("launcher-run-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        let run = data.join("run");
+        std::fs::create_dir_all(&run).unwrap();
+        let null = || OwnedFd::from(File::open("/dev/null").unwrap());
+        let fake = Fake { dir: data.clone(), now: Instant::now(), pid: 100, theirs: vec![], killed: vec![], parent: 4321 };
+        let times = Times { ready: s(60), exit: s(30), stop: s(30), backoff: s(1), backoff_max: s(4), stable: s(60), parent: s(2), drained: s(300) };
+        let options = Options { data, app: PathBuf::from("/nowhere"), port: 0, named: false, with_parent };
+        let mut station = Station::new(fake, options, times, run, null(), null());
+        station.start_current();
+        station
+    }
+
+    fn ready(version: &str) -> Value {
+        json!({"ready": true, "version": version})
+    }
+
+    /// waitpid's status for an exit with `code`, and for SIGKILL.
+    fn exited(code: c_int) -> c_int {
+        code << 8
+    }
+
+    const KILLED: c_int = libc::SIGKILL;
+
+    impl Station<Fake> {
+        /// The clock moved on by `by`, and what is due by then done.
+        fn pass(&mut self, by: Duration) {
+            self.os.now += by;
+            self.tick();
+        }
+
+        /// The Node started last.
+        fn last(&self) -> i32 {
+            self.os.pid
+        }
+
+        fn serving(&self) -> i32 {
+            self.current.as_ref().unwrap().pid
+        }
+
+        /// The ops told to Node `pid` since last asked.
+        fn told(&mut self, pid: i32) -> Vec<String> {
+            let (_, theirs) = self.os.theirs.iter_mut().find(|(p, _)| *p == pid).unwrap();
+            let mut bytes = vec![];
+            // Up to what is there (non-blocking); everything told was written before.
+            let _ = theirs.read_to_end(&mut bytes);
+            String::from_utf8(bytes).unwrap().lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["op"].as_str().unwrap().to_string()).collect()
+        }
+
+        fn file(&self, name: &str) -> Option<String> {
+            std::fs::read_to_string(self.run.join(name)).ok()
+        }
+
+        fn station_json(&self) -> Value {
+            serde_json::from_str(&self.file("station.json").unwrap()).unwrap()
+        }
+    }
+
+    #[test]
+    fn a_handover_lets_the_old_node_go_once_the_new_one_is_ready() {
+        let mut station = station("handover", false);
+        let old = station.last();
+        station.said(Slot::Current, ready("0.1.0"));
+        assert_eq!(station.station_json()["version"], "0.1.0");
+        assert_eq!(station.station_json()["pid"], std::process::id());
+        station.signal(libc::SIGUSR2);
+        let new = station.last();
+        assert_ne!(new, old);
+        // Asked again meanwhile: not a second one.
+        station.signal(libc::SIGUSR2);
+        assert_eq!(station.last(), new);
+        assert!(station.told(old).is_empty(), "the old one serves until the new one is ready");
+        station.said(Slot::Next, ready("0.2.0"));
+        assert_eq!(station.told(old), ["handover"]);
+        assert_eq!(station.serving(), new);
+        // The old one not gone within its time: killed. station.json says the new start once it is gone.
+        station.pass(s(30) - MS);
+        assert!(station.os.killed.is_empty());
+        assert_eq!(station.station_json()["version"], "0.1.0");
+        station.pass(MS);
+        assert_eq!(station.os.killed, [old]);
+        station.ended(old, KILLED);
+        assert_eq!(station.station_json()["version"], "0.2.0");
+        assert_eq!(station.station_json()["pid"], std::process::id());
+        assert!(station.file("handoff-failed").is_none());
+        assert!(station.told(new).is_empty() && station.stopping.is_none());
+    }
+
+    #[test]
+    fn a_new_node_never_ready_is_given_up_and_the_old_one_serves_on() {
+        let mut station = station("handfail", false);
+        let old = station.last();
+        station.said(Slot::Current, ready("0.1.0"));
+        let first = station.file("station.json");
+        station.signal(libc::SIGUSR2);
+        let new = station.last();
+        station.pass(s(60) - MS);
+        assert!(station.os.killed.is_empty() && station.file("handoff-failed").is_none());
+        station.pass(MS);
+        assert_eq!(station.os.killed, [new]);
+        assert!(station.file("handoff-failed").unwrap().contains("not ready"));
+        // Ready too late: not taken.
+        station.said(Slot::Next, ready("0.2.0"));
+        station.ended(new, KILLED);
+        assert_eq!(station.serving(), old);
+        assert!(station.told(old).is_empty());
+        assert_eq!(station.file("station.json"), first);
+        assert!(station.restart_at.is_none());
+        // A later handover works.
+        station.signal(libc::SIGUSR2);
+        let again = station.last();
+        station.said(Slot::Next, ready("0.2.0"));
+        assert_eq!(station.told(old), ["handover"]);
+        station.ended(old, exited(0));
+        assert_eq!(station.serving(), again);
+        assert_eq!(station.station_json()["version"], "0.2.0");
+    }
+
+    #[test]
+    fn a_new_node_that_ends_before_it_is_ready_fails_the_handover() {
+        let mut station = station("handend", false);
+        let old = station.last();
+        station.said(Slot::Current, ready("0.1.0"));
+        station.signal(libc::SIGUSR2);
+        station.ended(station.last(), exited(1));
+        assert!(station.file("handoff-failed").unwrap().contains("exited with 1 before it was ready"));
+        assert_eq!(station.serving(), old);
+        assert!(station.told(old).is_empty() && station.os.killed.is_empty());
+    }
+
+    #[test]
+    fn sigterm_during_a_handover_stops_both_and_kills_what_does_not_stop_in_time() {
+        let mut station = station("stopboth", false);
+        let old = station.last();
+        station.said(Slot::Current, ready("0.1.0"));
+        station.signal(libc::SIGUSR2);
+        let new = station.last();
+        station.signal(libc::SIGTERM);
+        assert_eq!(station.told(old), ["stop"]);
+        assert_eq!(station.told(new), ["stop"]);
+        station.pass(s(30) - MS);
+        assert!(station.os.killed.is_empty());
+        station.ended(old, exited(0));
+        station.pass(MS);
+        assert_eq!(station.os.killed, [new]);
+        station.ended(new, KILLED);
+        assert!(!station.running());
+        assert_eq!(station.exit, 0);
+        // Nothing is started again.
+        station.pass(s(3600));
+        assert_eq!(station.last(), new);
+    }
+
+    #[test]
+    fn a_crashed_node_is_started_again_after_a_backoff_that_doubles() {
+        let mut station = station("crash", false);
+        // Each one crashing once ready: again after 1, 2, 4, then 4 s (backoff_max).
+        for expected in [1000, 2000, 4000, 4000] {
+            let node = station.last();
+            station.said(Slot::Current, ready("0.1.0"));
+            station.ended(node, exited(1));
+            station.pass(Duration::from_millis(expected) - MS);
+            assert_eq!(station.last(), node, "not again before {expected} ms");
+            station.pass(MS);
+            assert_ne!(station.last(), node, "again after {expected} ms");
+        }
+        // One that served for `stable` before it crashed: back to the first backoff.
+        let node = station.last();
+        station.said(Slot::Current, ready("0.1.0"));
+        station.pass(s(60));
+        station.ended(node, exited(1));
+        station.pass(s(1) - MS);
+        assert_eq!(station.last(), node);
+        station.pass(MS);
+        assert_ne!(station.last(), node);
+        assert!(station.stopping.is_none());
+    }
+
+    #[test]
+    fn five_starts_in_a_row_that_end_before_ready_and_it_gives_up() {
+        let mut station = station("giveup", false);
+        for start in 1..=5 {
+            station.ended(station.last(), exited(1));
+            if start < 5 {
+                station.pass(s(4));
+            }
+        }
+        assert_eq!(station.os.theirs.len(), 5);
+        assert!(station.stopping.is_some() && !station.running());
+        assert_eq!(station.exit, 1);
+        station.pass(s(3600));
+        assert_eq!(station.os.theirs.len(), 5);
+    }
+
+    #[test]
+    fn with_parent_it_stops_once_the_parent_is_gone() {
+        let mut station = station("parent", true);
+        let node = station.last();
+        station.said(Slot::Current, ready("0.1.0"));
+        for _ in 0..30 {
+            station.pass(s(2));
+        }
+        assert!(station.stopping.is_none() && station.told(node).is_empty(), "still there while the parent is");
+        // Taken up by another: seen at the next look.
+        station.os.parent = 1;
+        station.pass(s(2) - MS);
+        assert!(station.stopping.is_none());
+        station.pass(MS);
+        assert!(station.stopping.is_some());
+        assert_eq!(station.told(node), ["stop"]);
+        station.ended(node, exited(0));
+        assert!(!station.running());
+    }
+
+    #[test]
+    fn sigusr1_and_sighup_go_to_node_and_drained_is_taken_back_when_nobody_stops_it() {
+        let mut station = station("drain", false);
+        let node = station.last();
+        station.said(Slot::Current, ready("0.1.0"));
+        station.signal(libc::SIGUSR1);
+        station.signal(libc::SIGHUP);
+        assert_eq!(station.told(node), ["drain", "hup"]);
+        station.said(Slot::Current, json!({"drained": "idle"}));
+        assert_eq!(station.file("drained").as_deref(), Some("idle\n"));
+        station.pass(s(300) - MS);
+        assert!(station.file("drained").is_some());
+        station.pass(MS);
+        assert!(station.file("drained").is_none());
+        assert!(station.stopping.is_none() && station.told(node).is_empty());
     }
 }

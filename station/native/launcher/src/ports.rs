@@ -47,10 +47,15 @@ pub fn admin(data: &Path, port: u16, named: bool, english: bool) -> Result<TcpLi
 }
 
 fn listen(host: &str, port: u16, named: bool, taken: impl Fn() -> String) -> Result<TcpListener, String> {
-    match TcpListener::bind((host, port)) {
+    listen_with(host, port, named, taken, |port| TcpListener::bind((host, port)))
+}
+
+/// As `listen`, binding with `bind` (a test's, for a port no other program can take meanwhile).
+fn listen_with(host: &str, port: u16, named: bool, taken: impl Fn() -> String, mut bind: impl FnMut(u16) -> std::io::Result<TcpListener>) -> Result<TcpListener, String> {
+    match bind(port) {
         Ok(listener) => Ok(listener),
         Err(e) if e.kind() == ErrorKind::AddrInUse && named => Err(taken()),
-        Err(e) if e.kind() == ErrorKind::AddrInUse => TcpListener::bind((host, 0)).map_err(|e| format!("{host}:0: {e}")),
+        Err(e) if e.kind() == ErrorKind::AddrInUse => bind(0).map_err(|e| format!("{host}:0: {e}")),
         Err(e) => Err(format!("{host}:{port}: {e}")),
     }
 }
@@ -68,10 +73,17 @@ mod tests {
         assert_eq!(listen("127.0.0.1", taken, true, || "taken".into()).unwrap_err(), "taken");
         let config = Config { host: "127.0.0.1".into(), port: taken, named: true, english: false };
         assert!(mcp(&config).unwrap_err().contains("已被别的程序占用"));
-        // Free, the usual one is used as it is.
+        // Free, the usual one is used as it is. Found free by a bind of the test's: a real port let go to be bound
+        // again could be taken by another program meanwhile.
         let free = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = free.local_addr().unwrap().port();
-        drop(free);
-        assert_eq!(listen("127.0.0.1", port, false, String::new).unwrap().local_addr().unwrap().port(), port);
+        let at = free.local_addr().unwrap();
+        let mut free = Some(free);
+        let mut asked = vec![];
+        let bind = |port: u16| -> std::io::Result<TcpListener> {
+            asked.push(port);
+            Ok(free.take().unwrap())
+        };
+        assert_eq!(listen_with("127.0.0.1", at.port(), false, String::new, bind).unwrap().local_addr().unwrap(), at);
+        assert_eq!(asked, [at.port()]);
     }
 }
