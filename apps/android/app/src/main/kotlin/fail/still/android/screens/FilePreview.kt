@@ -4,7 +4,7 @@
 // One bar floats at the top with its name and tools, frosted, and fades when left alone; a tap brings it back.
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
@@ -936,7 +936,7 @@ private fun TextViewer(bytes: ByteArray, kind: PreviewKind, language: String?, n
     if (kind == PreviewKind.Csv && !source) { CsvTable(t, name.lowercase().endsWith(".tsv"), cut, top, bottom, onTap); return }
     val tap = Modifier.clickable(interactionSource = null, indication = null, onClick = onTap)
     Column(Modifier.fillMaxSize().then(tap).verticalScroll(rememberScrollState())) {
-        if (cut) Cut(fail.still.android.ui.t("android-chat.file.cut", "size" to fileSize(SHOW_LIMIT.toLong())), top)
+        if (cut) Cut(fail.still.android.data.t("android-chat.file.cut", "size" to fileSize(SHOW_LIMIT.toLong())), top)
         when {
             kind == PreviewKind.Markdown && !source -> Markdown(t, Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 64.dp + top, bottom = 64.dp + bottom))
             else -> {

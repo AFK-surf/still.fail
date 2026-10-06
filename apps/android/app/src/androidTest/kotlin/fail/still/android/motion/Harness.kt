@@ -31,11 +31,12 @@ import fail.still.android.Screen
 import fail.still.android.StillFailApp
 import fail.still.android.Updates
 import fail.still.android.data.Topics
-import fail.still.android.ui.I18n
+import fail.still.android.data.I18n
 import fail.still.android.ui.StillFailTheme
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.abs
+import fail.still.android.ui.LocalUi
 
 typealias MotionRule = AndroidComposeTestRule<ActivityScenarioRule<ComponentActivity>, ComponentActivity>
 
@@ -65,7 +66,7 @@ class Harness(val rule: MotionRule) {
         rule.runOnUiThread { context.enableEdgeToEdge() }
         app = AppState(fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", fake.core))
         stack.forEach { if (it != Screen.Home) app.push(it) }
-        rule.setContent { StillFailTheme(dark) { CompositionLocalProvider(LocalApp provides app) { StillFailApp(app) } } }
+        rule.setContent { StillFailTheme(dark) { CompositionLocalProvider(LocalApp provides app, LocalUi provides app) { StillFailApp(app) } } }
         settle()
     }
 

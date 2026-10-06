@@ -1,7 +1,7 @@
 // A chat's info sheet (split from Chat.kt).
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import fail.still.android.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue

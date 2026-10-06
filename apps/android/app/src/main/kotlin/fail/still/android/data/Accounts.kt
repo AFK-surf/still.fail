@@ -2,7 +2,6 @@
 // workspaces each account reaches (web/src/cloud/accounts.ts, web/src/cloud/api.ts).
 package fail.still.android.data
 
-import fail.still.android.ui.t
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement

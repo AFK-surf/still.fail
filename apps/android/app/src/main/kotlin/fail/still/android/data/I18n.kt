@@ -2,7 +2,7 @@
 // (client/i18n/catalog/<lang>/*.json, packaged as the app's assets; client/i18n/src/lib.rs says how). Which language is
 // the core's (prefs `lang`: as chosen, else as the phone is); before the core answers, or with a core from before
 // languages, the phone's. `lang` is state: what reads words while it is drawn is drawn again when it changes.
-package fail.still.android.ui
+package fail.still.android.data
 
 import android.content.Context
 import androidx.compose.runtime.getValue

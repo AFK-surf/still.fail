@@ -5,7 +5,7 @@
 // the person agrees.
 package fail.still.android
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context

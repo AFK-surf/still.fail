@@ -4,7 +4,7 @@
 // both off (kept in the core).
 package fail.still.android
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
@@ -26,7 +26,7 @@ import fail.still.android.data.Notice
 import fail.still.android.data.NotifyView
 import fail.still.android.data.Topics
 import fail.still.android.data.decode
-import fail.still.android.ui.I18n
+import fail.still.android.data.I18n
 import fail.still.core.CoreException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flatMapLatest

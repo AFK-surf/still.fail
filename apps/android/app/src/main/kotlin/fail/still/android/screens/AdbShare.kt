@@ -50,7 +50,7 @@ import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.SectionHeader
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put

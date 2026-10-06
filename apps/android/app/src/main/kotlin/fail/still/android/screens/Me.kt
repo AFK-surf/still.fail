@@ -38,7 +38,7 @@ import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import kotlinx.coroutines.launch
 
 @Composable

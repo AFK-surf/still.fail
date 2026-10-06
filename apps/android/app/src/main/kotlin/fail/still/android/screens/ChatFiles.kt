@@ -3,7 +3,7 @@
 // preview (FilePreview.kt).
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap

@@ -4,7 +4,7 @@
 // small player of the same kind.
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.graphics.Matrix

@@ -5,7 +5,7 @@
 // and a new one.
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import fail.still.android.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

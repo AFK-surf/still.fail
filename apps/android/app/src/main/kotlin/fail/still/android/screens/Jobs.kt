@@ -4,7 +4,7 @@
 // name and a word on the line under it; a service opens its page (Preview.kt), a job its sheet.
 package fail.still.android.screens
 
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable

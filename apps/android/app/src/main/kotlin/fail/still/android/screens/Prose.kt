@@ -26,8 +26,6 @@ import fail.still.android.data.Attachment
 import fail.still.android.ui.LocalFollowUp
 import fail.still.android.ui.Markdown
 import fail.still.android.ui.Placing
-import fail.still.android.ui.VizFile
-import fail.still.android.ui.VizOpen
 import fail.still.android.ui.placeFiles
 
 private val IMAGE = Regex("\\.(png|jpe?g|gif|webp)$", RegexOption.IGNORE_CASE)

@@ -44,7 +44,7 @@ import fail.still.android.R
 import fail.still.android.data.Auth
 import fail.still.android.ui.C
 import fail.still.android.ui.Illustration
-import fail.still.android.ui.t
+import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
