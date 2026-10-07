@@ -676,7 +676,7 @@ export class CodexSession implements AgentSession {
     const model = options.model ?? profileModel(options.profile);
     const effort = options.effort;
     if (this.state.closed || this.state.busy) return false;
-    if (this.running?.model === model && this.running.effort === effort) return true;
+    if (this.running !== null && this.running.model === model && this.running.effort === effort) return true;
     if (model === undefined || effort === undefined) return false;
     this.tuned = { model, effort };
     this.running = this.tuned;
