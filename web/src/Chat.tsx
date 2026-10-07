@@ -1741,11 +1741,19 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
   );
 }
 
-/** A file waiting to go with the message: an image as its picture, anything else a card. */
+/** A file waiting to go with the message: an image as its picture (clicked, shown whole), anything else a card. */
 function PendingFile({ file: f, onRemove }: { file: Pending; onRemove?: () => void }) {
+  const station = useStation();
+  const [open, setOpen] = useState(false);
+  // Not sent yet: no session keeps it, it is shown from this device.
+  const shown: Attachment = { name: f.name, path: `draft:${f.id}`, size: f.size };
   return f.preview ? (
     <Tip label={f.error ?? f.name}><span className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : undefined} data-error={f.error ? true : undefined}>
-      <img src={f.preview} alt={f.name} />
+      <button type="button" className={css.composerThumbOpen} aria-label={t("web-main.file.view", { name: f.name })} data-viewer-thumb={thumbId(station.address, "", shown.path)}
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}>
+        <img src={f.preview} alt={f.name} />
+      </button>
+      {f.image && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.image, url: f.preview }} />}
       {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
       {onRemove && <button type="button" className={css.composerThumbRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span></Tip>
