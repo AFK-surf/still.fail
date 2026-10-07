@@ -42,6 +42,7 @@ import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
 import { autoArchive } from "./lifecycle.ts";
 import { fromPeer } from "./messages.ts";
+import { forPeer, READ } from "./others.ts";
 import { reviewUndecided, startReview } from "./review.ts";
 
 /// server.rs `encode` (encodeURIComponent).
@@ -172,7 +173,7 @@ export const AgentsLive = (control: Control) =>
       hub.setJobs(jobs);
       hub.onPeer((station, request) => remote.ask(station, request));
       hub.onClose((session) => remote.closeSession(session));
-      remote.setInbox((peer, request) => fromPeer(hub, peer, request));
+      remote.setInbox((peer, request) => (request?.method === READ ? forPeer(hub, peer, request) : fromPeer(hub, peer, request)));
 
       const tools = [
         ...chatTools(hub),

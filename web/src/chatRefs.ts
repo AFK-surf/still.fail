@@ -24,3 +24,46 @@ export function splitBy(text: string, pattern: RegExp): (string | RegExpExecArra
 export function isChatLink(href: string | undefined): boolean {
   return !!href && (/\/chats\/[^/?#\s]+\/?(?:[?#]|$)/.test(href) || /^https?:\/\/[^/]+\/o\/[^/]+\/[^/]+\/[^/?#]+\/?(?:#|$)/.test(href));
 }
+
+/**
+ * The link a chat is given away by (copied from its row's menu): still.fail's, `…/o/<workspace>/<station>/<session>`,
+ * which opens it wherever it is pasted and which an agent on any station of the workspace reads it by (chat_read);
+ * `history`: its agent's execution history (session_history). A station of no workspace has no such link: its page
+ * here (`root`, where this page's routes start).
+ */
+export function shareLink(item: { station: string; session: string; id: string }, root: string, history = false): string {
+  const at = item.station.indexOf("/");
+  const here = /^https?:$/.test(location.protocol) ? location.origin : null;
+  const cloud = window.stillfailDesktop?.cloudOrigin || here;
+  const page = at >= 0 && cloud
+    ? `${cloud.replace(/\/+$/, "")}/o/${item.station.slice(0, at)}/${item.station.slice(at + 1)}/${encodeURIComponent(item.session)}`
+    : `${here ?? ""}${root.replace(/\/+$/, "")}/chats/${encodeURIComponent(item.id)}`;
+  return history ? `${page}?history=${encodeURIComponent(item.session)}` : page;
+}
+
+/**
+ * Puts a link to a chat on the clipboard: as a reference is sent, `[its title](link)`, for plain text (a composer,
+ * where it becomes a reference again, or a terminal), and as a link for what takes HTML (Slack, documents).
+ */
+export function copyChatLink(title: string, link: string): Promise<void> {
+  const shown = Array.from(title.replace(/[[\]\n]/g, " ").trim() || link).slice(0, 120).join("");
+  const plain = `[${shown}](${link})`;
+  if (typeof ClipboardItem === "undefined" || !navigator.clipboard.write) return navigator.clipboard.writeText(plain);
+  const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const html = `<a href="${escape(link)}">${escape(shown)}</a>`;
+  return navigator.clipboard.write([new ClipboardItem({ "text/plain": new Blob([plain], { type: "text/plain" }), "text/html": new Blob([html], { type: "text/html" }) })]);
+}
+
+/**
+ * The chat a link names, when it is one of a workspace's chats as a whole (not one entry of its history): a still.fail
+ * link (`…/o/<workspace>/<station>/<session>`) or its page (`…/w/<workspace>/s/<station>/chats/<id>`). Null otherwise.
+ */
+export function chatOfLink(href: string): { station: string; id: string } | null {
+  const m = /\/o\/([^/?#\s]+)\/([^/?#\s]+)\/([^/?#\s]+)\/?$/.exec(href) ?? /\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/chats\/([^/?#\s]+)\/?$/.exec(href);
+  if (!m) return null;
+  try {
+    return { station: `${m[1]}/${m[2]}`, id: decodeURIComponent(m[3]!) };
+  } catch {
+    return null;
+  }
+}

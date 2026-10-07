@@ -2,10 +2,12 @@
 // `chatSearch`), and the one chosen goes into the text as a chip (chatRefs.ts), sent as a link, [its title](its page).
 // The agent reads that chat by the link (the station's chat_read and session_history tools).
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { useHref } from "react-router";
 import { useChatSearch, type ChatItem } from "./api.ts";
 import { scopeOf, useStation } from "./station.tsx";
 import { ModelLogo, Time } from "./ui.tsx";
-import { REF_LINK, REF_MARK, splitBy } from "./chatRefs.ts";
+import { copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy } from "./chatRefs.ts";
+import { failure } from "./toast.tsx";
 import * as css from "./ChatRef.css.ts";
 
 import { NAME } from "./channel.ts";
@@ -52,8 +54,22 @@ export function markBefore(text: string, caret: number): number | null {
 }
 
 /**
- * The chats `query` finds on this station (another station's agents cannot read them), titles first, but not `here`
- * (the chat written in). `found` hands them to the composer, whose keys move `active`.
+ * Copying a chat's link from its row's menu (shareLink), to paste into another chat for its agent to read: `history`,
+ * the link to its agent's execution history. `toast` says it is copied, or why not.
+ */
+export function useCopyChatLink(toast: (text: string) => void) {
+  const root = useHref("/");
+  return (item: Pick<ChatItem, "station" | "session" | "id" | "title">, history = false) => {
+    void copyChatLink(item.title, shareLink(item, root, history)).then(
+      () => toast(t(history ? "web-main.chat.historyLinkCopied" : "web-main.chat.linkCopied")),
+      (e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })),
+    );
+  };
+}
+
+/**
+ * The chats `query` finds on this station's workspace (an agent reads one on any of its stations), titles first, but
+ * not `here` (the chat written in); another station's say which. `found` hands them to the composer, whose keys move `active`.
  */
 export function ChatRefMenu({ query, here, active, onPick, found }: {
   query: string; here: string | null; active: number;
@@ -61,7 +77,7 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
   found(items: ChatItem[]): void;
 }) {
   const station = useStation();
-  const search = useChatSearch({ scope: scopeOf(station.address), query, station: station.address, exclude: here, limit: SHOWN });
+  const search = useChatSearch({ scope: scopeOf(station.address), query, exclude: here, limit: SHOWN });
   const items = search.value?.items;
   useEffect(() => found(items ?? []), [items]);
   const list = useRef<HTMLDivElement>(null);
@@ -78,6 +94,7 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
               onClick={(e) => { e.stopPropagation(); onPick(item); }}>
               <span className={css.refLogo}>{agent && <ModelLogo maker={agent.maker} runtime={agent.runtime} size={14} />}</span>
               <span className={css.refTitle}>{item.title}</span>
+              {item.station !== station.address && <span className={css.refTime}>{item.stationName}</span>}
               <Time className={css.refTime} stamp={item.time?.lastActiveAt} fixed />
             </button>
           );

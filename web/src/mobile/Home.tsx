@@ -9,8 +9,9 @@ import type { FoundMessage } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
 import { Marked } from "../Marked.tsx";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Search, Settings, Unplug, Zou } from "../icons.tsx";
+import { Archive, Bot, Check, Copy, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Search, Settings, Unplug, Zou } from "../icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
+import { useCopyChatLink } from "../ChatRef.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { FailedMark, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
@@ -516,12 +517,14 @@ function useRowArchive(item: ChatItem) {
 }
 
 /**
- * What can be done to a chat from its row: pin it, rename it, archive it. None for a new chat its station has not made
+ * What can be done to a chat from its row: pin it, rename it, copy its link (for another chat's agent to read), archive
+ * it. None for a new chat its station has not made
  * yet, or one on a station offline.
  */
 function useRowMenu(item: ChatItem, busy: boolean) {
   const app = useApp();
   const api = stationApi(useStationCall(item.station));
+  const copyLink = useCopyChatLink(app.toast);
   // One thing at a time: while one asked of it is under way, its menu waits.
   if (item.offline || item.pending || busy) return null;
   const failed = (key: string) => (error: unknown) => app.toast(t(key, { error: error instanceof Error ? error.message : String(error) }));
@@ -532,6 +535,8 @@ function useRowMenu(item: ChatItem, busy: boolean) {
       title: t("web-mobile.home.renameTitle"), value: item.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"), atOnce: "web-main.rename.failed",
       run: (title) => api.rename(item, title),
     }) },
+    { label: t("web-main.chat.copyLink"), icon: <Copy size={16} />, action: () => copyLink(item) },
+    { label: t("web-main.chat.copyHistoryLink"), icon: <Bot size={16} />, action: () => copyLink(item, true) },
     // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
     { label: t("web-mobile.home.archive"), icon: <Archive size={16} />, action: () => {
       const archive = () => api.archive(item, true).then(() => app.toast(t("web-mobile.home.archived")));

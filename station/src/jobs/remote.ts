@@ -435,15 +435,16 @@ export class Remote {
   async handle(workspace: string, peer: string, request: Json): Promise<Json> {
     const method = text(request, "method");
     if (method === "describe") {
-      return { protocol: 1, os: OS, arch: ARCH, tasks: this.allowed(peer), sessions: true, messages: true, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
+      return { protocol: 1, os: OS, arch: ARCH, tasks: this.allowed(peer), sessions: true, messages: true, reads: true, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
     }
     if (method.startsWith("share.")) {
       const shares = this.shares;
       if (!shares) throw new Error("station is starting");
       return shares(peer, request);
     }
-    // A message, not execution: workspace membership (checked by the transport) is enough.
-    if (method === "session.message") {
+    // A message or a chat read, not execution: workspace membership (checked by the transport) is enough, as it is for
+    // the chats' pages.
+    if (method === "session.message" || method === "session.read") {
       const inbox = this.inbox;
       if (!inbox) throw new Error("station is starting");
       return inbox(peer, request);

@@ -7,6 +7,12 @@ import { STILLFAIL_SURFACE, type SessionRow, type SessionThread, type ThreadRow 
 import { type Args, jsNumber, jsString } from "./args.ts";
 import { threadHistory } from "./conversations.ts";
 import type { Hub } from "./hub.ts";
+import { Refused } from "./neighbours.ts";
+
+type Json = any;
+
+/// The method another station's agent reads a chat of this one by (chat_read and session_history with its link).
+export const READ = "session.read";
 
 /// What an agent named: a conversation, or a session (maybe one entry of its execution history).
 export type Named = { type: "thread"; thread: ThreadRow } | { type: "session"; key: string; entry: number | null };
@@ -60,6 +66,59 @@ export function linkedSession(reference: string): [string, number | null] | null
     }
   }
   return null;
+}
+
+/// The station a link to a chat is on: a still.fail link (…/o/<workspace>/<station>/<key>) or a chat's page under its
+/// station's (…/w/<workspace>/s/<station>/chats/<key>, as a reference written in a chat is).
+export function linkedStation(reference: string): string | null {
+  const page = /\/w\/[^/\s]+\/s\/([^/?#\s]+)\/chats\//u.exec(reference);
+  if (page) return page[1]!;
+  const at = reference.indexOf("/o/");
+  if (at < 0) return null;
+  const parts = splitN(reference.slice(at + 3), "/", 3);
+  return parts.length === 3 && parts[1] !== "" ? parts[1]! : null;
+}
+
+/// What another station answers with when it is from before a request (it took it for a task).
+export function fromBefore(refusal: string): boolean {
+  return refusal.includes("remote tasks are not enabled") || refusal.includes("task key");
+}
+
+/// The other station of the workspace a chat's link is on, for session `key` to read it there; null when it is on this
+/// one (or this station is in no workspace, so has no others).
+export function elsewhere(hub: Hub, key: string, reference: string): string | null {
+  const link = hub.link(key);
+  const here = link !== undefined ? linkedStation(link) : null;
+  const there = linkedStation(reference);
+  return here !== null && there !== null && there !== here ? there : null;
+}
+
+/// chat_read or session_history of a chat on another station of the workspace: asked of that station (`forPeer` there).
+export async function readAfar(hub: Hub, key: string, station: string, tool: "chat_read" | "session_history", args: Args): Promise<string> {
+  const call = hub.peers();
+  if (!call) throw new Error("other stations cannot be reached from this one yet");
+  const given = Object.fromEntries(["chat", "before", "limit", "max_chars"].filter((k) => args[k] !== undefined).map((k) => [k, args[k]]));
+  let answer: Json;
+  try {
+    answer = await call(station, { method: READ, session: key, tool, args: given });
+  } catch (error) {
+    const why = (error as Error).message;
+    if (error instanceof Refused && fromBefore(why)) throw new Error(`station ${station} is not updated yet: its chats cannot be read from here`);
+    throw new Error(`not read from station ${station}: ${why}`);
+  }
+  if (typeof answer?.text !== "string") throw new Error(`station ${station} answered with nothing to read`);
+  return `(Read from station ${station}: give its chats' links, not their addresses or keys, to read more there.)\n${answer.text}`;
+}
+
+/// What another station's session reads here (`readAfar` there), from station `peer`: its own chats are not involved.
+export async function forPeer(hub: Hub, peer: string, request: Json): Promise<Json> {
+  const tool = request?.tool;
+  const args: Args = request?.args !== null && typeof request?.args === "object" && !Array.isArray(request.args) ? request.args : {};
+  const from = typeof request?.session === "string" ? request.session : "";
+  if (typeof args.chat !== "string" || args.chat.trim() === "") throw new Error("chat is required");
+  if (tool === "chat_read") return { text: await chatRead(hub, `${peer}/${from}`, args) };
+  if (tool === "session_history") return { text: sessionHistory(hub, args) };
+  throw new Error(`cannot read with ${JSON.stringify(tool)}`);
 }
 
 /// str::splitn.
