@@ -150,17 +150,17 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
 
 /// Changes how a session runs from its next turn on: another profile of its runtime (another account, say), another
 /// model it can run, another effort. Its transcript is shared by the runtime's profiles, so the next message resumes it
-/// with all it had; its idle process ends first so the change takes. Not while a turn runs. Another model starts over
+/// with all it had; its process ends so the change takes: at once when idle, else when the running turn is over, before
+/// the next one starts (nobody waits for the turn to end to change it). Another model starts over
 /// what went with the old one: its effort back to the runtime's default, its profile back to the station's choice
 /// (picked here, among those with the model enabled), unless given with it.
 export async function configure(hub: Hub, key: string, change: SessionChange, lang: Lang = stationLang()) {
   const { row, model, effort, profile } = hub.accounts.change(key, change, lang);
-  if (hub.processState(key) === "running") throw new Error(tr(lang, "station.session.busy"));
-  await hub.evict(key);
   if (profile !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null);
   if (model !== row.model || effort !== row.effort) hub.store.setSessionModel(key, model, effort);
   if (change.fast !== undefined) hub.store.setSessionFast(key, change.fast);
   if (profile === null) hub.accounts.runOn(key);
+  await hub.changed(key);
   log.info("hub", "session changed", { session: key, profile: hub.store.getSession(key)?.profile ?? "", model, effort });
   // Its last turn stopped at the allowance: changed, it goes on by itself.
   const last = hub.store.lastTurn(key);

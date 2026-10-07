@@ -566,6 +566,11 @@ export class Hub {
     await this.actors.get(key)?.evict();
   }
 
+  /// How a session runs changed: its process ends now if idle, else before its next turn (SessionActor.changed).
+  async changed(key: string) {
+    await this.actors.get(key)?.changed();
+  }
+
   /// Starts a session's runtime ahead of a message (SessionActor.warm).
   async warm(key: string) {
     const row = this.store.getSession(key);

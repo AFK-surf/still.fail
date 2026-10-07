@@ -1016,12 +1016,22 @@ test("a session changes profile, model and effort by hand, and is taken on by an
     throw new Error("not refused");
   };
   r.edit(withProfile("cc2", "another", ["opus"]));
-  assert.ok((await refused(configure(r.hub, key, { profile: "cc2" }))).includes("正在跑"), "not while a turn runs");
+  // Changed while a turn runs: that turn goes on in its process, which ends before the next turn; the next starts on
+  // the new profile.
+  const running = r.claude.last();
+  await configure(r.hub, key, { profile: "cc2" });
+  assert.equal(r.session(key).profile, "cc2");
+  assert.ok(!running.disposed, "the running turn is not cut off");
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  running.complete();
+  await settle();
+  await r.accept({ ...say("<@UBOT> once more"), threadTs: m.threadTs });
+  await settle();
+  assert.ok(running.disposed, "its process ended before the next turn");
+  assert.equal(r.claude.last().options.profile.id, "cc2", "the next turn runs as changed");
   await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
   r.claude.last().complete();
   await settle();
-  await configure(r.hub, key, { profile: "cc2" });
-  assert.equal(r.session(key).profile, "cc2");
   assert.ok((await refused(configure(r.hub, key, { profile: "cx" }))).includes("不能跑 Claude Code"));
   r.edit(withProfile("cc3", "third", []));
   assert.ok((await refused(configure(r.hub, key, { profile: "cc3" }))).includes("「third」没有启用 opus"), "only one with its model enabled");

@@ -124,6 +124,8 @@ export type Snapshot = {
   waitingSeconds: number;
   nudges: number;
   stopRequested: boolean;
+  /// Changed while busy (optional: a station from before it does not say).
+  stale?: boolean;
 };
 
 const t = (key: string, args?: Record<string, unknown>) => tr(stationLang(), key, args);
@@ -138,6 +140,8 @@ export class SessionActor {
   private scope: Scope.Closeable;
 
   private agent: { generation: number; session: AgentSession } | null = null;
+  /// How it runs was changed while its process was busy: that process ends before the next turn, which starts as changed.
+  private stale = false;
   private profile: string | null = null;
   private generation = 0;
   private phase: Phase = "idle";
@@ -320,6 +324,12 @@ export class SessionActor {
     });
   }
 
+  /// How it runs (profile, model, effort) changed: its process ends now if idle, else before its next turn.
+  changed(): Promise<void> {
+    if (this.agent) this.stale = true;
+    return this.evict();
+  }
+
   /// Ends the runtime process if it is idle.
   evict(): Promise<void> {
     return this.enqueue(async () => {
@@ -382,6 +392,7 @@ export class SessionActor {
       waitingSeconds: this.waitingSeconds,
       nudges: this.nudges,
       stopRequested: this.stopRequested,
+      stale: this.stale,
     };
     agent?.detach();
     this.close();
@@ -403,6 +414,7 @@ export class SessionActor {
     this.notices = snap.notices;
     this.nudges = snap.nudges;
     this.stopRequested = snap.stopRequested;
+    this.stale = snap.stale ?? false;
     this.idleSince = this.now();
     if (snap.waitingMs !== null) this.waitMs(snap.waitingSeconds, snap.waitingMs);
   }
@@ -629,6 +641,12 @@ export class SessionActor {
   }
 
   private async ensureAgent(): Promise<AgentSession> {
+    if (this.agent && this.stale && !this.agent.session.busy()) {
+      const old = this.agent.session;
+      this.agent = null;
+      log.info("session", "ending the process from before the session was changed", { session: this.key });
+      await old.dispose();
+    }
     if (this.agent) return this.agent.session;
     if (this.deps.archiveIsCold(this.key)) await this.deps.restoreArchive(this.key);
     const store = this.deps.store;
@@ -666,6 +684,7 @@ export class SessionActor {
     }
     this.deps.ranIn?.(this.key, agent.id(), profile.id);
     this.agent = { generation, session: agent };
+    this.stale = false;
     this.profile = profile.id;
     return agent;
   }
