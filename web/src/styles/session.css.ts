@@ -43,6 +43,14 @@ export const chat = style({
 /** Back to the newest, when scrolled up: a round button over the pane's bottom right, above the composer. */
 export const chatPane = style({
   position: "relative", flex: "1", minHeight: "0", display: "flex", flexDirection: "column",
+  selectors: {
+    // Where the messages meet the bar above, they fade out rather than being cut (a scroll edge, not a line); at the
+    // list's top there is nothing under it yet. The avatars that stay at the top lie over it (Chat.css.ts).
+    "&::before": {
+      content: "\"\"", position: "absolute", top: "0", left: "0", right: "0", height: "20px", zIndex: "1",
+      background: `linear-gradient(${vars.canvas}, color-mix(in srgb, ${vars.canvas} 0%, transparent))`, pointerEvents: "none",
+    },
+  },
 });
 /** These panes keep their distance from the bottom themselves; the browser's top anchoring would fight it. */
 export const chatList = style({

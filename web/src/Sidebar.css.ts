@@ -109,6 +109,22 @@ export const navNew = style({ display: "flex", alignItems: "center", gap: 4, pad
 globalStyle(`${navNew} > ${navRow}`, { flex: 1, minWidth: 0 });
 // Align the compose icon with the 14px completion check below.
 globalStyle(`${navNew} > ${navRow} > svg`, { transform: "translateX(-1px)" });
+/**
+ * On the wide screen, 新建对话 is a button laid on the window, as Cue's secondary one: the pane's surface, a hairline
+ * round it and the faintest shadow; it gives a little when pressed.
+ */
+globalStyle(`${navNew} > ${navRow}`, {
+  "@media": {
+    [wide]: {
+      background: vars.surface, boxShadow: `0 0 0 .5px ${vars.ring}, 0 1px 2px rgb(16 24 40 / .05)`, fontWeight: "500",
+      transition: `background ${vars.dur} ${vars.easeOut}, transform 100ms ${vars.easeOut}`,
+    },
+  },
+});
+globalStyle(`${navNew} > ${navRow}:hover, ${navNew} > ${navRow}[aria-current="page"]`, {
+  "@media": { [wide]: { background: `color-mix(in srgb, ${vars.text} 3%, ${vars.surface})` } },
+});
+globalStyle(`${navNew} > ${navRow}:active`, { "@media": { [wide]: { transform: "scale(.98)" } } });
 
 // ── a chat's row ──
 

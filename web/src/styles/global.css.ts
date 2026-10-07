@@ -134,6 +134,13 @@ globalStyle("body", {
  */
 globalStyle("h1, h2, h3", { textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere" });
 globalStyle("button, input, select, textarea", { font: "inherit", color: "inherit" });
+/**
+ * Reached by the keyboard, a control shows a soft ring in the accent round it (after Cue's focus ring), in place of the
+ * browser's. No weight of its own: whatever a control says about its focus wins.
+ */
+globalStyle(":where(a, button, summary, [role=\"button\"], [role=\"tab\"], [role=\"menuitem\"], [tabindex]):focus-visible", {
+  outline: `3px solid color-mix(in srgb, ${vars.accent} 38%, transparent)`, outlineOffset: "1px",
+});
 // The browser pads a button 1px 6px: an icon button narrower than its icon plus that pushes the icon off center.
 globalStyle("button", { padding: "0" });
 globalStyle("a", { color: "inherit", textDecoration: "none" });

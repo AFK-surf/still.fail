@@ -538,7 +538,7 @@ globalStyle(`${msgRow} > ${msgAvatar}`, {
   },
 });
 /** Sticky offsets count from inside the list's padding: these put the avatar 8px under the pane's top. */
-globalStyle(`${msgRow} > ${msgAvatar}`, { position: "sticky", top: "-16px" });
+globalStyle(`${msgRow} > ${msgAvatar}`, { position: "sticky", top: "-16px", zIndex: "2" });
 globalStyle(`${msgRow} > ${msgAvatar}`, {
   "@media": {
     "(max-width: 700px)": {
