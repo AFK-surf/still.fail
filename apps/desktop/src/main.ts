@@ -17,6 +17,7 @@ import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/prev
 import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
 import { LocalStation, type Place } from "./station";
 import { contextMenu, type Action } from "./context-menu.mts";
+import { Dock, dockHelper } from "./dock.mts";
 import { moveUserData } from "./moves.mts";
 import { exportOriginStorage, importOriginStorage, type OriginSnapshot } from "./origin-storage";
 import zhWords from "../../../client/i18n/catalog/zh/desktop.json" with { type: "json" };
@@ -163,6 +164,7 @@ ipcMain.on("app:language", (event, lang: unknown) => {
   if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || (lang !== "zh" && lang !== "en") || lang === chosenLang) return;
   chosenLang = lang;
   if (app.isReady()) setMenu();
+  dock?.words();
 });
 
 // The app's own way to the core, for what it serves itself (previews): a client of the core as a page is, making calls.
@@ -181,7 +183,7 @@ function dropOwnLink(reason: string): void {
   own.port.close();
   own = null;
   // What it held goes on on a new link, once the core is back.
-  setTimeout(() => { followNotices(); followBadge(); }, 1000);
+  setTimeout(() => { followNotices(); followBadge(); dock?.follow(); }, 1000);
 }
 
 /** The app's own link to the core, opened when first needed. */
@@ -225,6 +227,50 @@ function coreCall(name: string, params: unknown, onProgress?: (value: unknown) =
     link.port.postMessage({ id, call: name, params });
     signal?.addEventListener("abort", () => { if (link.waiting.has(id)) link.port.postMessage({ id, cancel: true }); }, { once: true });
   });
+}
+
+/** A topic of the core's held on the app's own link: its value each time it changes (deltas applied). Returns the letting go. */
+function coreSubscribe(topic: Record<string, unknown>, onValue: (value: unknown) => void): () => void {
+  const link = ownLink();
+  const id = link.next++;
+  link.topics.set(id, { value: undefined, onValue });
+  link.port.postMessage({ id, subscribe: topic });
+  return () => { if (own === link && link.topics.delete(id)) link.port.postMessage({ id, unsubscribe: true }); };
+}
+
+// The dock (dock.mts, docs/desktop-dock.md): on a Mac, the chats that want the person on the screen's edge, also with no
+// window open. On unless the person turned it off (userData/dock.json, the app menu).
+const DOCK_FILE = () => join(app.getPath("userData"), "dock.json");
+const dockPath = dockHelper(resources);
+let dock: Dock | null = null;
+
+function dockWords(): Record<string, string> {
+  const words: Record<string, string> = {};
+  for (const name of ["open", "read", "later", "empty", "next", "last", "waiting", "hide"]) words[name] = t(`desktop.dock.${name}`);
+  words.locale = (chosenLang ?? langOf(app.getLocale())) === "zh" ? "zh-Hans" : "en";
+  return words;
+}
+
+function dockOn(): boolean {
+  try { return JSON.parse(readFileSync(DOCK_FILE(), "utf8")).on !== false; } catch { return true; }
+}
+
+function setDock(on: boolean): void {
+  if (!dockPath) return;
+  writeFileSync(DOCK_FILE(), JSON.stringify({ on }));
+  if (on) {
+    dock ??= new Dock(dockPath, {
+      subscribe: coreSubscribe,
+      call: (name, params) => coreCall(name, params),
+      open: (path) => { app.focus({ steal: true }); openPath(path); },
+      words: dockWords,
+      turnedOff: () => setDock(false),
+    });
+    dock.start();
+  } else {
+    dock?.stop();
+  }
+  setMenu();
 }
 
 // Previews: a page asks for a station's port as a host of stillfail-preview:// (p<port>-<the station's hash>), puts that
@@ -588,6 +634,7 @@ function setMenu(): void {
       submenu: [
         { role: "about", label: t("desktop.menu.about", { app: app.name }) },
         { label: t("desktop.menu.checkUpdates"), click: () => void checkFromMenu() },
+        ...(dockPath ? [{ label: t("desktop.menu.dock"), type: "checkbox" as const, checked: dock !== null && dockOn(), click: () => setDock(!dockOn()) }] : []),
         { type: "separator" },
         { role: "services", label: t("desktop.menu.services") },
         { type: "separator" },
@@ -902,11 +949,13 @@ if (!app.requestSingleInstanceLock()) {
     try { notifyOn = JSON.parse(readFileSync(NOTIFY_FILE(), "utf8")).on !== false; } catch { /* on, as it starts */ }
     followNotices();
     followBadge();
+    if (dockOn()) setDock(true);
     followSleep();
     followNetwork();
   });
   // The station stops with the app, its runtimes first; the app quits once it has.
   app.on("before-quit", (event) => {
+    dock?.stop();
     if (stationStopped) return;
     event.preventDefault();
     void stopStation().then(() => app.quit());

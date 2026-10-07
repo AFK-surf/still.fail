@@ -166,6 +166,20 @@ const PARTS: Record<string, Part> = {
       }
     },
   },
+  // The desktop app's dock (apps/desktop/dock, docs/desktop-dock.md): a SwiftUI helper, built with the Xcode the Mac
+  // has (its SDK decides whether the glass is Liquid Glass: macOS 26's or later).
+  dock: {
+    files: () => ["StillfailDock"],
+    targets: ["darwin-arm64"],
+    inputs: ["apps/desktop/dock"],
+    recipe: () => ({ swift: DOCK_BUILD, sdk: "macOS 26" }),
+    build(_t, out) {
+      const dir = join(ROOT, "apps/desktop/dock");
+      const scratch = process.env.CARGO_TARGET_DIR ? join(process.env.CARGO_TARGET_DIR, "native", "dock") : join(dir, ".build");
+      run("swift", [...DOCK_BUILD, "--scratch-path", scratch], { cwd: dir });
+      copyFileSync(join(scratch, "arm64-apple-macosx/release/StillfailDock"), join(out, "StillfailDock"));
+    },
+  },
   // iroh's relay in dev mode, for the core's mesh tests (client/core-ts/test/mesh.test.ts): n0's own build, the
   // version still.fail's relays run (cloud/Dockerfile).
   "iroh-relay": {
@@ -190,6 +204,7 @@ const RELAY: Record<string, { url: string; sha256: string }> = {
   "linux-x64": { url: RELAY_URL("x86_64-unknown-linux-musl"), sha256: "9a68108b824e4164ad2eec729cf0e8167e4cb50581cb745a242bace135df7614" },
   "linux-arm64": { url: RELAY_URL("aarch64-unknown-linux-musl"), sha256: "1b4261b6dd0d17ae9a7516aa6d122b296a77678bac174ce30262702c9f91cb00" },
 };
+const DOCK_BUILD = ["build", "-c", "release", "--arch", "arm64"];
 const SHELL_RUSTFLAGS = "-C link-arg=-Wl,-z,max-page-size=16384";
 const shellCommand = () => [
   "rustc", "--locked", "-p", "stillfail-shell", "--lib", "--crate-type", "cdylib", "--target", "aarch64-linux-android", "--release",

@@ -39,6 +39,7 @@ Everything Rust that the TypeScript station, the clients, their builds and their
 | `shell` | `client/shell`: the Android core's IO (`libstillfail_shell.so`) | android-arm64 | `apps/android/build.py` |
 | `engine` | `apps/android/core/src/main/cpp`: Hermes with its JSI (`libstillfail_hermes.so`, `libjsi.so`, the NDK's `libc++_shared.so`) | android-arm64 | `apps/android/build.py` |
 | `archive-rs`, `station-load` | `station/test/archive-rs` (the Rust station's cold storage, kept for data it left), `station/tools/load`: test tools | darwin-arm64 published | station tests, `e2e.sh`, `compare.sh` |
+| `dock` | `apps/desktop/dock`: the desktop app's dock, SwiftUI (`StillfailDock`; built with the Mac's Xcode, whose SDK must be macOS 26's for Liquid Glass) | darwin-arm64 | the desktop app's bundle (`apps/desktop/build.sh`) |
 | `iroh-relay` | n0's release v1.1.0, checked against its SHA-256 (not ours to publish) | darwin-arm64, linux | core-ts side run (`side/mesh-real.test.ts`) |
 
 **Keys.** A part's key is the SHA-256 of: the git hash of every file it is made from (its crate, its `Cargo.lock`, the vendored crates it patches in, …: `inputs` in `scripts/native.ts`), as committed or as edited in the worktree; the Rust toolchain (pinned there, `TOOLCHAIN`, and installed by rustup when building); zig's version for Linux; the target; and the build's command, flags, NDK, Hermes and AGP versions. Nothing else changes a key, so a change anywhere else compiles no Rust. `node scripts/native.ts status` lists every part's key and where it is.

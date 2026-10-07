@@ -38,6 +38,10 @@
         "to": "mesh.node"
       },
       {
+        "from": "build/dock",
+        "to": "dock"
+      },
+      {
         "from": "build/station/stillfail",
         "to": "station"
       }
