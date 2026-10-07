@@ -144,6 +144,23 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(stdin(p.dump).at(-1).method, "thread/unsubscribe");
   });
 
+  test("another model and effort go with the next turn/start; back to a default takes a new start", async () => {
+    const d = driver();
+    const p = profile();
+    const { push, until } = listen();
+    const session = await d.open(options(p, { model: "gpt-x", effort: "high" }), push);
+    assert.ok(session.retune!(options(p, { model: "gpt-x", effort: "high" })), "as it runs: nothing to do");
+    await session.prompt("cmd");
+    await until(ended(1));
+    assert.ok(session.retune!(options(p, { model: "gpt-y", effort: "low" })));
+    await session.prompt("cmd");
+    await until(ended(2));
+    const turns = stdin(p.dump).filter((m) => m.method === "turn/start").map((m) => [m.params.model, m.params.effort]);
+    assert.deepEqual(turns, [[undefined, undefined], ["gpt-y", "low"]]);
+    assert.ok(!session.retune!(options(p, { model: "gpt-y" })), "no effort named: the thread's would stay");
+    await session.dispose();
+  });
+
   test("a failed turn is told apart by its codexErrorInfo", async () => {
     const d = driver();
     const { events, push, until } = listen();
