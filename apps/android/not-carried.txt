@@ -1,8 +1,6 @@
 # Paths under what the Android app is built from (apps/android/carries.sh) that it does not carry, one extended
 # regular expression a line: a change to only these runs no Android check (CI's check-android: two minutes and more).
 # The core's bundle checks them as it is made (client/core-ts/scripts/hermes-bundle.ts): one of these in it fails.
-# Only Cue uses it, by version.
-^client/core-kernel/
 # The web's iroh.
 ^client/iroh-wasm/
 # The core's tests, benchmarks, harness and side tests: node's, not the app's.
