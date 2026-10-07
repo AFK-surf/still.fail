@@ -79,8 +79,8 @@ export function dockItems(workspace: string, chats: unknown, decisions: unknown)
       const session = c.session ?? c.id;
       const id = `${c.station}|${session}`;
       if (out.has(id)) continue;
-      // Failed, or done with something not read; waiting on someone else is not the person's.
-      const tone = c.tone === "alert" ? "alert" : c.unread ? "done" : null;
+      // Something not read: red when it failed. Read, it is the sidebar's; waiting on someone else is not the person's.
+      const tone = !c.unread ? null : c.tone === "alert" ? "alert" : "done";
       if (!tone) continue;
       out.set(id, {
         item: {

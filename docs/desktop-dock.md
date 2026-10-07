@@ -10,10 +10,9 @@ turns it off and on (`userData/dock.json`); so does the half circle's own right-
 The chats of every workspace (`chats` with `mine`, and `decisions`, per workspace of the `workspaces` topic):
 
 - a card waiting on the person (the 奏 list, set-aside ones left out), with its question and options;
-- a failed chat (the sidebar's red mark);
-- a chat with something unread (the blue dot).
+- a chat with something unread (the blue dot; red when it failed).
 
-Chats at work, and cards waiting on someone else, are not the person's: not shown.
+Chats read, at work, and cards waiting on someone else are not shown: the sidebar has them.
 
 ## How it behaves
 

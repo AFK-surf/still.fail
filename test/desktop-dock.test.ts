@@ -15,8 +15,11 @@ test("an unread chat: its newest message, who said it, and where to open and rea
   assert.deepEqual(one!.place, { url: "/o/w1/st1/s1", station: "w1/st1", thread: 7, seq: 12 });
 });
 
-test("failed shows read or not; at work, or read and fine, does not", () => {
-  const items = dockItems("w1", chats(row({ id: "a", session: "a", tone: "alert", unread: false }), row({ id: "b", session: "b", tone: "busy", unread: false }), row({ id: "c", session: "c", tone: undefined, unread: false })), undefined);
+test("only what is not read yet: red when it failed; read ones stay in the sidebar", () => {
+  const items = dockItems("w1", chats(
+    row({ id: "a", session: "a", tone: "alert", unread: true }), row({ id: "b", session: "b", tone: "alert", unread: false }),
+    row({ id: "c", session: "c", tone: "busy", unread: false }), row({ id: "d", session: "d", tone: undefined, unread: false }),
+  ), undefined);
   assert.deepEqual(items.map((i) => [i.item.id, i.item.tone]), [["w1/st1|a", "alert"]]);
 });
 

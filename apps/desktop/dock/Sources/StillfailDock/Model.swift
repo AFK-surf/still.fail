@@ -10,7 +10,7 @@ struct Item: Codable, Identifiable, Equatable {
   var key: String
   var title: String
   var station: String
-  /// The sidebar's mark (web/src/ChatMark.tsx): "wait" (a card waits on the person), "alert" (failed), "done" (unread).
+  /// The sidebar's mark (web/src/ChatMark.tsx): "wait" (a card waits on the person), "alert" (failed, unread), "done" (unread).
   var tone: String
   var who: String?
   var text: String

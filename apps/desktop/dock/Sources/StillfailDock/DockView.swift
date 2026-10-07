@@ -212,7 +212,8 @@ struct CardView: View {
     } else {
       HStack(spacing: 6) {
         Button(model.words.open) { send(.open(item)) }.glassButton(prominent: false)
-        Button(model.words.read) { send(.read(item)) }.glassButton(prominent: false)
+        // A card to write an answer to is answered in its chat: nothing to mark read here.
+        if item.tone != "wait" { Button(model.words.read) { send(.read(item)) }.glassButton(prominent: false) }
         Spacer(minLength: 4)
         later
       }
