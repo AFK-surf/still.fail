@@ -10,6 +10,7 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
 import { enroll, id, status } from "./cli.ts";
+import { Components } from "./components/components.ts";
 import { MeshLive } from "./mesh/mesh.ts";
 import { AgentsLive } from "./sessions/agents.ts";
 import { dataDir, flag } from "./ops/files.ts";
@@ -84,6 +85,22 @@ const Loopback = (control: Control) =>
     }),
   );
 
+/// The components apps hand the station to keep running (src/components): taken up and brought in line with their
+/// declarations as the station starts; left running when it stops, for the next one.
+const ComponentsLive = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const { data } = yield* Paths;
+    yield* Effect.acquireRelease(
+      Effect.promise(async () => {
+        const components = new Components({ data });
+        await components.start();
+        return components;
+      }),
+      (components) => Effect.promise(() => components.close()),
+    );
+  }),
+);
+
 function run() {
   const app = flag(args, "--app");
   if (!app) usage();
@@ -105,7 +122,7 @@ function run() {
   const paths = Layer.succeed(Paths)({ data, app });
   const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer).pipe(Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
-  const station = Layer.mergeAll(MeshLive, Loopback(control)).pipe(
+  const station = Layer.mergeAll(MeshLive, Loopback(control), ComponentsLive).pipe(
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
     Layer.provideMerge(Events.layer),
