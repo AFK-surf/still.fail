@@ -13,6 +13,9 @@ const names = [
   "accent", "accent-text", "accent-bg", "blue", "blue-bg", "code-inline", "green", "green-bg", "amber", "amber-bg",
   "red", "red-bg", "neutral-bg", "overlay", "shadow", "primary", "primary-hover", "on-primary", "field-hover",
   "field-focus", "online",
+  // The window round the panes (the sidebar's ground), what is laid on a pane (the composer, cards), the hairline round
+  // them, and the shadow a pane casts on the window.
+  "window", "surface", "ring", "pane-shadow",
   "r-field", "r-card", "r-dialog", "r-nav", "r-menu", "r-option",
   "text-xs", "text-sm", "text-body", "text-md", "text-lg",
   "dur", "ease-out", "corner-shape", "corner-scale",

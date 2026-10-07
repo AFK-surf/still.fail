@@ -519,6 +519,9 @@ globalStyle(`${msgHead} ${msgName}`, {
   fontWeight: "650", fontSize: vars.textBody, color: vars.accentText, maxWidth: "240px", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
+/** On the wide screen, names in the text's colour (after Cue): the accent is kept for what waits and what is new. */
+globalStyle(`${msgHead} ${msgName}`, { "@media": { "(min-width: 701px)": { fontWeight: "600", color: vars.text } } });
+globalStyle(`${msgHead} ${msgAgent}:hover`, { "@media": { "(min-width: 701px)": { color: vars.accentText } } });
 globalStyle(`${fileCard} ${spinner}`, { width: "14px", height: "14px", flex: "none" });
 globalStyle(`${fileCard} svg`, { flex: "none", color: vars.muted });
 globalStyle(`${msgImage} img`, { display: "block", maxWidth: "100%", maxHeight: "300px", width: "auto", height: "auto" });

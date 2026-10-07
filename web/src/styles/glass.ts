@@ -7,3 +7,14 @@ export const glass = {
   WebkitBackdropFilter: "blur(20px)",
   backdropFilter: "blur(20px)",
 } as const;
+
+/**
+ * The composer's ground, after Cue's: the pane's surface (white in light), barely let through and blurred, with a
+ * hairline round it and a soft shadow under it, rather than the grey glass.
+ */
+export const composerGround = {
+  background: `color-mix(in srgb, ${vars.surface} 88%, transparent)`,
+  WebkitBackdropFilter: "blur(20px)",
+  backdropFilter: "blur(20px)",
+  boxShadow: `0 0 0 .5px ${vars.ring}, 0 1px 2px rgb(16 24 40 / .05), 0 4px 16px -4px rgb(16 24 40 / .06)`,
+} as const;

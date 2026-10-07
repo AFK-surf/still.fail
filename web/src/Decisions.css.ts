@@ -3,10 +3,12 @@ import { composerWrap } from "./styles/cloud.css.ts";
 import { vars } from "./styles/tokens.css.ts";
 import { spinner } from "./styles/waiting.css.ts";
 import { glass } from "./styles/glass.ts";
+import { m } from "./mobile/styles/root.css.ts";
 
-// A decision's options (Decisions.tsx): under the message that asks it in a chat, and at the foot of the decisions
-// page. One per line, as wide as the message's column; the recommended one last, in the accent. The phone's page colours
-// (`--m-*`) where they are set, the wide screen's otherwise.
+// A decision's options (Decisions.tsx): under the message that asks it in a chat (or in its composer, when the chat ends
+// on it), and at the foot of the decisions page. One per line, as wide as the message's column; the recommended one
+// last, in ink on the wide screen (the accent is kept for what waits: 奏, the unread line), in the accent on the phone.
+// The phone's page colours (`--m-*`) where they are set, the wide screen's otherwise.
 const ground = `var(--m-bg, ${vars.canvas})`;
 const accent = `var(--m-accent, ${vars.accent})`;
 const chip = `var(--m-chip, color-mix(in srgb, ${vars.text} 7%, transparent))`;
@@ -22,24 +24,48 @@ export const option = style({
   transition: `filter ${vars.dur}, opacity ${vars.dur}`,
   selectors: {
     "&:hover:not(:disabled)": { filter: "brightness(.96)" },
-    "&[data-recommended]": { background: accent, color: "#fff" },
+    "&[data-recommended]": { background: vars.primary, color: vars.onPrimary },
     "&[data-recommended]:hover:not(:disabled)": { filter: "none", opacity: ".88" },
     "&:disabled": { cursor: "default" },
     // Another one of them is being sent: the rest step back.
     "&:disabled:not([data-busy])": { opacity: ".5" },
   },
 });
+globalStyle(`${m} ${option}[data-recommended]`, { background: accent, color: "#fff" });
 export const optionLabel = style({
   fontSize: vars.textSm, lineHeight: "20px", fontWeight: "500", overflowWrap: "anywhere",
   selectors: { [`${option}[data-busy] &`]: { paddingRight: "22px" } },
 });
 export const optionDetail = style({
   fontSize: vars.textXs, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere",
-  selectors: { [`${option}[data-recommended] &`]: { color: "rgba(255, 255, 255, .78)" } },
+  selectors: { [`${option}[data-recommended] &`]: { color: "color-mix(in srgb, currentColor 72%, transparent)" } },
 });
 /** Being sent: a small ring at the button's right. */
 export const optionSpinner = style({ position: "absolute", right: "14px", top: "12px" });
 globalStyle(`${optionSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
+
+/** The number that picks an option in a composer (DockedDecision), at the button's right. */
+export const optionKey = style({
+  position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", minWidth: "18px", height: "18px",
+  padding: "0 4px", boxSizing: "border-box", borderRadius: "5px", boxShadow: "inset 0 0 0 1px currentColor",
+  fontFamily: "inherit", fontSize: "11px", lineHeight: "18px", textAlign: "center", opacity: ".45",
+});
+globalStyle(`${option}:has(${optionKey})`, { paddingRight: "40px" });
+
+/**
+ * A decision the chat ends on, at the top of its composer (DockedDecision): who decides, by 奏's mark, then the
+ * options, a little in from the box's round corners.
+ */
+export const docked = style({ display: "grid", gap: "4px", padding: "2px 2px 4px", cursor: "default" });
+export const dockedHead = style({
+  display: "flex", alignItems: "center", gap: "8px", margin: "0", padding: "0 4px", fontSize: vars.textXs,
+  lineHeight: "20px", color: vars.muted,
+});
+export const dockedTag = style({
+  padding: "0 6px", borderRadius: "6px", background: vars.accentBg, color: vars.accentText, fontWeight: "600",
+});
+globalStyle(`${docked} ${options}`, { marginTop: "2px" });
+globalStyle(`${docked} ${option}:not([data-recommended])`, { background: `color-mix(in srgb, ${vars.text} 5%, transparent)` });
 
 /** Under an agent's post in its chat: its options, or how it was settled; what settles leaves over it (useSettling). */
 export const decision = style({ position: "relative" });

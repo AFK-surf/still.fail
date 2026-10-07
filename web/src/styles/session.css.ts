@@ -21,8 +21,10 @@ export const sessionPage = style({
     },
     "(min-width: 1101px)": {
       selectors: {
-        // The chat keeps 360px however wide the tab set is dragged: the tab set gives way first.
+        // The chat keeps 360px however wide the tab set is dragged: the tab set gives way first. Side by side, the chat
+        // and the tab set are two panes laid into the window, 8px apart (shell.css.ts main holds them).
         "&[data-panel=\"true\"]": {
+          columnGap: "8px",
           gridTemplateColumns: [
             "minmax(360px, 1fr) minmax(0, var(--panel-w, max(360px, 38%)))",
             "minmax(360px, 1fr) minmax(0, var(--panel-w, max(360px, round(down, 38%, 1px))))",
@@ -83,6 +85,15 @@ globalStyle(`${sessionPage} ${pageBarTitle}`, {
   "@media": {
     "(max-width: 1100px)": {
       gridColumn: "2", paddingLeft: "0",
+    },
+  },
+});
+/** Side by side (the side panel open on a wide window), each of the two is a pane of its own, with its hairline. */
+globalStyle(`${sessionPage}[data-panel="true"] > *`, {
+  "@media": {
+    "(min-width: 1101px)": {
+      borderRadius: "12px", background: vars.canvas, overflow: "hidden",
+      boxShadow: `${vars.paneShadow}, inset 0 0 0 .5px ${vars.ring}`,
     },
   },
 });

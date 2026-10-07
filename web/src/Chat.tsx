@@ -43,7 +43,7 @@ import { sendingHere, toMadeChat as toMadeChatOf } from "./madeChat.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast, useAct } from "./toast.tsx";
-import { MessageDecision } from "./Decisions.tsx";
+import { DockedDecision, MessageDecision, dockedDecision, type ComposerAsk } from "./Decisions.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
 import { jumped, jumpWords, useJump } from "./jumpTo.ts";
@@ -103,6 +103,12 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
     archive: () => latest.current.onArchive?.() }));
   useShortcut("chat.latest", rows.toEnd);
   const askedFile = useAskedFile(list, rows.messages, ownerOf);
+  // The chat ends on a decision waiting for an answer: its options are in the composer, over what is written, rather
+  // than under the post (Decisions.tsx DockedDecision).
+  const asking = outbox.length === 0 ? dockedDecision(chat, rows.messages) : undefined;
+  const ask = useMemo<ComposerAsk | null>(() => asking && id !== null
+    ? { station: station.address, thread: id, seq: asking.seq, options: asking.options ?? [], who: asking.card?.assigneeText }
+    : null, [station.address, id, asking?.seq, asking?.options, asking?.card?.assigneeText]);
   // Selecting text inside one message offers to quote it.
   const quoting = useSelectionQuote(list, (q) => {
     const quote = { ...q, comment: "", id: `${Date.now()}` };
@@ -123,7 +129,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           if (to) { e.preventDefault(); onOpenHistory(to.key, to.entry); }
         }}>
         <DraftKey.Provider value={draftKey}>
-          <ChatRows chat={chat} rows={rows} to={to} owners={ownersOf(chat)} owner={stable.owner} onOpenHistory={stable.open} onArchive={onArchive ? stable.archive : undefined} />
+          <ChatRows chat={chat} rows={rows} to={to} owners={ownersOf(chat)} owner={stable.owner} onOpenHistory={stable.open} onArchive={onArchive ? stable.archive : undefined} docked={ask?.seq ?? null} />
         </DraftKey.Provider>
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
@@ -135,7 +141,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused}
-        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
+        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} ask={ask} />
     </section>
   );
 }
@@ -156,11 +162,13 @@ export function ownersOf(chat: ChatView): string {
  * `owner` and `onOpenHistory` stay the same functions while the page lasts; `owners` says when whose files are whose
  * has changed.
  */
-export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchive }: {
+export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchive, docked = null }: {
   chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null; owners: string;
   owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
   /** Archives the chat (its page's 归档). */
   onArchive?: (() => void) | undefined;
+  /** The post whose options are in the composer instead of under it (the wide screen's ChatPanel). */
+  docked?: number | null;
 }) {
   const { messages, divider, shown, rowOf, caughtAgent, poseOf } = rows;
   const here = (key: string | undefined) => key !== undefined && chat.agents.some((a) => a.session.key === key);
@@ -193,7 +201,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
         return (
           <Fragment key={m.seq}>
             {line}
-            <MessageRow message={m} enter={enter} emitted={emitted} caught={caught} thread={thread}
+            <MessageRow message={m} enter={enter} emitted={emitted} caught={caught} thread={thread} options={m.seq !== docked}
               agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory}
               {...(archiveAt === m.seq ? { archive: onArchive } : {})} {...(checkAt === m.seq ? { check: chat.archiveCheck } : {})} />
             {sent(m.seq)}
@@ -1385,6 +1393,8 @@ export interface ComposerProps {
   draftKey?: string;
   /** A key whose draft goes on from what is typed now, instead of its own (a new chat becoming its chat). */
   carry?: MutableRefObject<string | null>;
+  /** The decision the chat ends on: its options at the top of the box, over what is written (Decisions.tsx). */
+  ask?: ComposerAsk | null;
 }
 
 export function Composer(props: ComposerProps) {
@@ -1395,7 +1405,7 @@ export function Composer(props: ComposerProps) {
 }
 
 /** The chat's composer, also used where a page sends its draft as a reply to a decision. */
-export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
+export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey, ask = null }: ComposerProps & {
   draft: Draft; submitDraft?: (draft: Draft) => void;
 }) {
   const api = useApi();
@@ -1445,13 +1455,13 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   const submit = () => {
     if (ready) void send();
   };
-  const multiline = roomy || focused || text !== "" || files.length > 0 || quotes.length > 0;
+  const multiline = roomy || !!ask || focused || text !== "" || files.length > 0 || quotes.length > 0;
   const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder: hint ?? placeholder, className: css.composerText, layout: multiline, onType: warm, onSubmit: submit });
   // Capsule ⇄ box, in one motion (morph.ts); laid out for another page (a new chat's roomy box ⇄ a chat's foot), the
   // dock moves it (dock.tsx).
   const box = useRef<HTMLFormElement>(null);
   // What it is laid out by: any change of it may change its height (a line more or less, capsule ⇄ box, files).
-  useMorph(box, `${multiline}|${text}|${files.length}|${quotes.length}`, roomy);
+  useMorph(box, `${multiline}|${text}|${files.length}|${quotes.length}|${ask?.seq ?? ""}`, roomy);
   return (
     <div className={cloudCss.composerWrap}>
       {menu}
@@ -1463,6 +1473,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) { e.preventDefault(); setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); if (!locked) add(e.dataTransfer.files); } }}>
+        {ask && <DockedDecision ask={ask} />}
         <ComposerExtras draft={draft} focusQuote={focusQuote} onFocused={onFocused} onDone={() => input.current?.focus()} />
         {field}
         <div className={css.composerToolbar}>

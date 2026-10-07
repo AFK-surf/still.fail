@@ -11,8 +11,8 @@
 //
 // Everything said goes through the core's calls (decision.answer / reply / defer / dismiss); what is under way shows
 // on its button (doing.ts), what failed in a toast (useAct).
-import { useLayoutEffect, useMemo, useRef, useState, type RefObject, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import type { ChatMessage, DecisionItem, DecisionOption, DecisionsView, MessageCard } from "./core/shapes.ts";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import type { ChatMessage, ChatView, DecisionItem, DecisionOption, DecisionsView, MessageCard } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
 import { CoreError, useApi, useStations } from "./api.ts";
 import { StationContext, stationBase, useStation, type Station } from "./station.tsx";
@@ -33,8 +33,10 @@ const TAKES = 0.35;
 const FLING = 0.6;
 
 /** The options of one decision, one per line; pressing one answers with it (its label, quoting the post). */
-export function DecisionOptions({ station, thread, seq, options, onPick, className }: {
+export function DecisionOptions({ station, thread, seq, options, onPick, className, numbered = false }: {
   station: string; thread: number; seq: number; options: DecisionOption[];
+  /** Each says the number that picks it (DockedDecision). */
+  numbered?: boolean;
   /** Before the answer goes: the decisions page sends the decision on its way. */
   onPick?: (option: DecisionOption) => void;
   className?: string;
@@ -50,17 +52,70 @@ export function DecisionOptions({ station, thread, seq, options, onPick, classNa
   };
   return (
     <div className={`${css.options} ${className ?? ""}`} role="group" aria-label={t("web-main.decisions.options")}>
-      {options.map((o) => {
+      {options.map((o, i) => {
         const busy = sending?.params.option === o.label;
         return (
           <button key={o.label} type="button" className={css.option} data-recommended={o.recommended || undefined} data-busy={busy || undefined}
             disabled={!!sending} aria-busy={busy || undefined} onClick={() => pick(o)}>
             <span className={css.optionLabel}>{o.label}</span>
             {o.detail && <span className={css.optionDetail}>{o.detail}</span>}
+            {numbered && !busy && <kbd className={css.optionKey} aria-hidden="true">{i + 1}</kbd>}
             {busy && <span className={`${waitingCss.spinner} ${css.optionSpinner}`} aria-hidden="true" />}
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** A decision the chat ends on, its options in the composer (the wide screen's chat): where they answer, and who decides. */
+export interface ComposerAsk {
+  station: string; thread: number; seq: number; options: DecisionOption[];
+  /** Who needs to decide, in the viewer's words (the card's `assigneeText`). */
+  who?: string | undefined;
+}
+
+/**
+ * The post a chat ends on, when it asks for one of its options and nothing has settled it: its options go in the
+ * composer (ChatPanel). Not in a window short of the chat's end, nor in a chat nothing can be sent to.
+ */
+export function dockedDecision(chat: ChatView, messages: readonly ChatMessage[]): ChatMessage | undefined {
+  if (chat.newer || chat.offline || chat.archived || !chat.thread) return undefined;
+  const m = messages.at(-1);
+  if (!m || m.authorKind !== "agent" || m.system || !m.options?.length || cardType(m.card, m.options) !== "options") return undefined;
+  if (m.decision?.resolved || m.decision?.dismissed) return undefined;
+  return m;
+}
+
+/**
+ * The options of the decision a chat ends on, at the top of its composer: who decides, then the options, numbered.
+ * With nothing that takes keys focused, a number picks its option (as a press does).
+ */
+export function DockedDecision({ ask }: { ask: ComposerAsk }) {
+  const box = useRef<HTMLDivElement>(null);
+  const count = ask.options.length;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.repeat || e.isComposing || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const n = Number(e.key);
+      if (!Number.isInteger(n) || n < 1 || n > count) return;
+      const at = document.activeElement;
+      if (at instanceof HTMLElement && (at.isContentEditable || at.matches("input, textarea, select, [role=\"textbox\"]"))) return;
+      // Not while a dialog or menu is open over the page.
+      if (document.querySelector("[role=\"dialog\"][data-state=\"open\"], [role=\"menu\"]")) return;
+      const button = box.current?.querySelectorAll<HTMLButtonElement>(`.${css.option}`)[n - 1];
+      if (!button || button.disabled) return;
+      e.preventDefault();
+      button.click();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [count]);
+  return (
+    // A press in it is not one in the box: the box puts the cursor in its field.
+    <div ref={box} className={css.docked} onClick={(e) => e.stopPropagation()}>
+      <p className={css.dockedHead}><span className={css.dockedTag}>{t("web-main.decisions.title")}</span>{ask.who}</p>
+      <DecisionOptions station={ask.station} thread={ask.thread} seq={ask.seq} options={ask.options} numbered />
     </div>
   );
 }
