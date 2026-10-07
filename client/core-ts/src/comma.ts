@@ -1,6 +1,7 @@
 // The Comma account provider (contract v1 §4–5; account-provider.ts): the core's account is whoever the embedding
-// app's Comma session is. The app gives `bearer()` (its session token, e.g. from Electron's main-process credential
-// lease); there is no sign-in here. What Comma answers is put in still.fail cloud's shapes, so the rest of the core
+// app's Comma session is. The app gives either `bearer()` (its session token, e.g. from Electron's main-process
+// credential lease) or `transport`, requests the app sends with its session itself, so this core never holds the
+// token (Comma's client core, whose host puts the credential on); there is no sign-in here. What Comma answers is put in still.fail cloud's shapes, so the rest of the core
 // keeps, shows and connects as it always does: `/v1/comma/stations/me` as `/v1/me`, a workspace's stations as
 // `/v1/workspaces/:id`, its SSE events as `/v1/events` frames. Member credentials are kept and reused as still.fail
 // cloud's are (sync/cloud.ts): a day, then asked again, the kept one serving until it expires while Comma is away.
@@ -9,18 +10,39 @@ import type { AccountProvider, AccountProviderFactory, AccountSessions, Feature 
 import type { AccountView } from "./accounts.ts";
 import { cloudError, readCredential, type Credential } from "./cloud.ts";
 import { CoreError, HostError, asCoreError } from "./error.ts";
-import type { Host, Pull } from "./host.ts";
+import type { Host, HttpRequest, HttpResponse, Pull, StreamResponse } from "./host.ts";
 import { t } from "./i18n.ts";
 import { SseParser } from "./station/sse.ts";
 import { CLOUD, cloudWhat, type Status } from "./status.ts";
 import { isObject, parseJson, toJsonBytes } from "./util.ts";
 
+/// Requests to Comma that the app sends with its session (it adds the credential); plain promises, so an app that
+/// bundles its own Effect can give them. A stream's `next` resolves null once it ended; `close` lets it go.
+export type CommaTransport = {
+  fetch(request: HttpRequest): Promise<HttpResponse>;
+  fetchStream(request: HttpRequest): Promise<{
+    status: number;
+    headers: [string, string][];
+    next(): Promise<Uint8Array | null>;
+    close(): void;
+  }>;
+};
+
 export type CommaOptions = {
   /// Comma's backend, e.g. https://api.cue.surf (no trailing slash).
   origin: string;
-  /// The app's Comma session token, now; rejects when signed out.
-  bearer: () => Promise<string>;
-};
+} & (
+  | {
+      /// The app's Comma session token, now; rejects when signed out.
+      bearer: () => Promise<string>;
+      transport?: undefined;
+    }
+  | {
+      /// Requests the app sends with its session; the token never reaches this core.
+      transport: CommaTransport;
+      bearer?: undefined;
+    }
+);
 
 /// Where the account is kept: who the session was last (so the core starts with it, and what it kept, offline).
 export const COMMA_ACCOUNT_KEY = "comma/account";
@@ -136,7 +158,29 @@ export const commaAccountProvider =
     Effect.gen(function* () {
       const origin = options.origin.replace(/\/+$/, "");
       const kept = readAccount(parseJson(yield* Effect.orElseSucceed(host.storageGet(COMMA_ACCOUNT_KEY), () => null)));
-      const accounts = new CommaAccounts(host, options.bearer, kept);
+      const transport = options.transport;
+      // With a transport the app puts the session on; the "token" is only who it is for.
+      const accounts = new CommaAccounts(host, options.transport ? () => Promise.resolve("") : options.bearer, kept);
+      const toHost = (e: unknown) => (e instanceof HostError ? e : new HostError(e instanceof Error ? e.message : String(e)));
+      /// One request: through the app's transport, or this host's fetch with the token on it.
+      const send = (bearer: string, request: HttpRequest): Effect.Effect<HttpResponse, HostError> =>
+        transport
+          ? Effect.tryPromise({ try: () => transport.fetch(request), catch: toHost })
+          : host.fetch({ ...request, headers: [["authorization", `Bearer ${bearer}`], ...request.headers] });
+      const open = (bearer: string, request: HttpRequest): Effect.Effect<StreamResponse, HostError, Scope.Scope> =>
+        transport
+          ? Effect.map(
+              Effect.acquireRelease(
+                Effect.tryPromise({ try: () => transport.fetchStream(request), catch: toHost }),
+                (stream) => Effect.sync(() => stream.close()),
+              ),
+              (stream): StreamResponse => ({
+                status: stream.status,
+                headers: stream.headers,
+                body: { take: Effect.tryPromise({ try: () => stream.next(), catch: toHost }) },
+              }),
+            )
+          : host.fetchStream({ ...request, headers: [["authorization", `Bearer ${bearer}`], ...request.headers] });
       /// The last `/v1/me` of each account, for naming its workspaces.
       const mes = new Map<string, Record<string, unknown>>();
 
@@ -144,12 +188,13 @@ export const commaAccountProvider =
       const call = (token: Effect.Effect<string, CoreError>, method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> =>
         Effect.gen(function* () {
           const bearer = yield* token;
-          const headers: [string, string][] = [["authorization", `Bearer ${bearer}`]];
+          const headers: [string, string][] = [];
           if (body !== undefined && body !== null) headers.push(["content-type", "application/json"]);
           const waiting = status.begin(CLOUD, cloudWhat(method, path), false);
-          const response = yield* host
-            .fetch({ method, url: `${origin}${path}`, headers, body: body === undefined || body === null ? null : toJsonBytes(body) })
-            .pipe(Effect.mapError(asCoreError), Effect.ensuring(Effect.sync(() => waiting.end())));
+          const response = yield* send(bearer, { method, url: `${origin}${path}`, headers, body: body === undefined || body === null ? null : toJsonBytes(body) }).pipe(
+            Effect.mapError(asCoreError),
+            Effect.ensuring(Effect.sync(() => waiting.end())),
+          );
           waiting.received(response.body.length);
           const parsed = parseJson(response.body);
           const data = parsed === undefined ? {} : parsed;
@@ -218,9 +263,9 @@ export const commaAccountProvider =
           const put = (item: Item) => Effect.asVoid(Queue.offer(queue, item));
           for (const id of ids) {
             const bearer = yield* accounts.accessToken(sub);
-            const response = yield* host
-              .fetchStream({ method: "GET", url: `${origin}/v1/comma/workspaces/${encodeURIComponent(id)}/stations/events`, headers: [["authorization", `Bearer ${bearer}`], ["accept", "text/event-stream"]], body: null })
-              .pipe(Effect.mapError(asCoreError));
+            const response = yield* open(bearer, { method: "GET", url: `${origin}/v1/comma/workspaces/${encodeURIComponent(id)}/stations/events`, headers: [["accept", "text/event-stream"]], body: null }).pipe(
+              Effect.mapError(asCoreError),
+            );
             if (response.status !== 200) {
               return yield* Effect.fail(response.status === 401 ? CoreError.signedOut(t("core-logic.accounts.signed_out")).withStatus(401) : cloudError(`http_${response.status}`, response.status));
             }
@@ -270,7 +315,10 @@ export const commaAccountProvider =
         start: () =>
           void Effect.runFork(
             Effect.gen(function* () {
-              const token = Effect.tryPromise({ try: () => options.bearer(), catch: () => CoreError.signedOut(t("core-logic.accounts.signed_out")) });
+              const bearer = options.bearer;
+              const token = bearer
+                ? Effect.tryPromise({ try: () => bearer(), catch: () => CoreError.signedOut(t("core-logic.accounts.signed_out")) })
+                : Effect.succeed("");
               const answer = yield* Effect.result(Effect.map(call(token, "GET", "/v1/comma/stations/me", null), meOf));
               if (answer._tag === "Success" && answer.success !== null) yield* Effect.ignore(identify(answer.success));
               // Signed out of the app: what this device kept for the account goes with it.

@@ -18,9 +18,10 @@ const header = (r: HttpRequest, name: string) => r.headers.find(([k]) => k === n
 
 type Rig = { host: FakeHost; core: Core; up: { on: boolean }; asked: number; events: Queue.Queue<Uint8Array | null> | null; token: { value: string | null } };
 
-async function rig(): Promise<Rig> {
+/// `transport`: the app sends the core's requests and puts the session on them itself (what reaches it is noted).
+async function rig(mode: { transport?: boolean } = {}): Promise<Rig & { sent: HttpRequest[] }> {
   const host = new FakeHost();
-  const r: Rig = { host, core: null as unknown as Core, up: { on: true }, asked: 0, events: null, token: { value: "sess-1" } };
+  const r: Rig & { sent: HttpRequest[] } = { host, core: null as unknown as Core, up: { on: true }, asked: 0, events: null, token: { value: "sess-1" }, sent: [] };
   host.onFetch((req) => {
     if (!req.url.startsWith(ORIGIN)) return jsonResponse(404, { error: "not_found" });
     if (!r.up.on) throw new Error("connection refused");
@@ -51,7 +52,30 @@ async function rig(): Promise<Rig> {
       return { status: 200, headers: [["content-type", "text/event-stream"]] as [string, string][], body: { take: Queue.take(queue) } };
     }),
   );
-  r.core = await Core.create(host, { clock: host.time.clock, account: commaAccountProvider({ origin: ORIGIN, bearer: async () => (r.token.value === null ? Promise.reject(new Error("signed out")) : r.token.value) }) });
+  const session = (req: HttpRequest): HttpRequest => {
+    r.sent.push(req);
+    return { ...req, headers: [["authorization", `Bearer ${r.token.value}`], ...req.headers] };
+  };
+  const account = mode.transport
+    ? commaAccountProvider({
+        origin: ORIGIN,
+        transport: {
+          fetch: (req) => Effect.runPromise(host.fetch(session(req))),
+          fetchStream: (req) =>
+            Effect.runPromise(
+              Effect.scoped(
+                Effect.map(host.fetchStream(session(req)), (stream) => ({
+                  status: stream.status,
+                  headers: stream.headers,
+                  next: () => Effect.runPromise(stream.body.take),
+                  close: () => {},
+                })),
+              ),
+            ),
+        },
+      })
+    : commaAccountProvider({ origin: ORIGIN, bearer: async () => (r.token.value === null ? Promise.reject(new Error("signed out")) : r.token.value) });
+  r.core = await Core.create(host, { clock: host.time.clock, account });
   return r;
 }
 
@@ -91,6 +115,24 @@ test("the host's session is the account: its workspaces, stations and events", a
   assert.ok(host.requests.filter((q) => q.url.startsWith(ORIGIN)).every((q) => header(q, "authorization") === "Bearer sess-1"));
   // No login sessions, operator lists or pushes asked for: Comma has none of them here.
   assert.ok(!host.requests.some((q) => /auth\/sessions|admin|push/.test(q.url)));
+  core.close();
+});
+
+test("through the app's transport the core sends no token, and the account, stations, events and credentials come", async () => {
+  const r = await rig({ transport: true });
+  const { host, core } = r;
+  const inner = core.inner;
+  await settled(host, () => inner.accounts.list().length === 1 && r.events !== null && inner.cloudSync.nameOf("ws1/st") === "studio");
+  assert.deepEqual(inner.accounts.list(), [{ sub: "usr_1", email: "a@x.com", name: "Ada", picture: "" }]);
+  Queue.offerUnsafe(r.events!, new TextEncoder().encode('event: station\ndata: {"id":"st","online":true}\n\n'));
+  const station = () => (inner.data.get({ topic: "workspace", workspace: "ws1" }) as { stations: { online: boolean }[] }).stations[0]!;
+  await settled(host, () => station().online === true);
+  assert.equal((await run(inner.cloudSync.credential("ws1", "dev", false, null))).credential, "c1");
+  // Every Comma request went through the app, and none the core made carried a token.
+  assert.ok(r.sent.some((q) => q.url.endsWith("/stations/events")));
+  assert.ok(r.sent.some((q) => q.url.endsWith("/station-credential")));
+  assert.ok(r.sent.every((q) => header(q, "authorization") === undefined));
+  assert.equal(host.requests.filter((q) => q.url.startsWith(ORIGIN)).length, r.sent.length);
   core.close();
 });
 
