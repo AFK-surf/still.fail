@@ -804,16 +804,6 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
   };
 }
 
-/// Posts worth concentrating on at the end of a chat.
-export function focusMessage(message: J): boolean {
-  if (get(message, "authorKind") !== "agent" || get(message, "system") === true) return false;
-  const e = str(get(message, "ending")) ?? str(get(message, "declared"));
-  if (e === "all_done" || e === "final") return true;
-  const d = get(message, "decision");
-  if (get(d, "resolved") === true || get(d, "dismissed") === true) return false;
-  return ["need_human", "need_help", "need_decision", "block"].includes(e ?? "") || (d !== undefined && get(d, "resolved") === false);
-}
-
 // ── Decoration ──
 
 /// What the views put into a topic's value as it goes out (theirs: chats, chat, archive…), by topic; registered by

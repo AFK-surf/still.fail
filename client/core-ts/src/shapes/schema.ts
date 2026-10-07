@@ -1463,7 +1463,6 @@ export const SHAPES: Record<string, Shape> = {
     ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`)." }],
   ], { doc: "A message in Slack an agent of a chat sent (chat_post to a Slack thread, slack_api chat.postMessage) or was given,\nread from its transcript: the chat shows it after the message it followed, without it being one of the chat's." }),
   ChatView: struct([
-    ["focusLast", opt("bool"), { doc: "The newest message asks for attention or gives a final result: dim earlier messages only at the scroll end." }],
     ["archived", "bool", { default: true, doc: "Archived chats must be restored before composing another message." }],
     ["pinned", opt("bool"), { doc: "Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned)." }],
     ["me", "Me"],

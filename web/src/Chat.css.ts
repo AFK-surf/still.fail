@@ -16,10 +16,6 @@ export const chatMessages = style({});
 // Historical loading changes opacity only, all rows in a commit together: no queue, motion or repeated layout.
 globalStyle(`${chatMessages} > ${msg}[data-history-fade]`, { animation: `${fadeKeyframes} 180ms ${vars.easeOut}` });
 globalStyle(`${chatMessages} > ${msg}[data-history-fade]`, { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } } });
-// The last important post stays fully legible; earlier messages ease out and back as the reader leaves the end.
-globalStyle(`${chatMessages}[data-focus-motion] > ${msg}`, { transition: `opacity 180ms ${vars.easeOut}` });
-globalStyle(`${chatMessages}[data-focus-motion] > ${msg}`, { "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } } });
-globalStyle(`${chatMessages}[data-at-end]:has(> [data-focus]) > ${msg}:not([data-focus])`, { opacity: 0.4 });
 export const chatToBottom = style({
   position: "absolute", right: "24px", bottom: "12px", zIndex: "5", display: "grid", placeItems: "center",
   width: "34px", height: "34px", borderRadius: "50%", border: `1px solid ${vars.line}`, background: vars.canvas,

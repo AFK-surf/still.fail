@@ -13,7 +13,7 @@ import { stationBase, usePerson, useStation } from "./station.tsx";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
-import { shortcutOf, takesKeys, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
+import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
@@ -193,7 +193,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
         return (
           <Fragment key={m.seq}>
             {line}
-            <MessageRow message={m} focus={chat.focusLast === true && m.seq === messages.at(-1)?.seq} enter={enter} emitted={emitted} caught={caught} thread={thread}
+            <MessageRow message={m} enter={enter} emitted={emitted} caught={caught} thread={thread}
               agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory}
               {...(archiveAt === m.seq ? { archive: onArchive } : {})} {...(checkAt === m.seq ? { check: chat.archiveCheck } : {})} />
             {sent(m.seq)}
@@ -342,7 +342,6 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   useStickToBottom(list, `.${conversationCss.msg}`, floor, short);
   useWindowMoves(list, messages);
   useHistoryFade(list, messages);
-  useAtScrollEnd(list, messages, place);
   // Where the reader leaves it, the core keeps too, on the device (it opens there next, while nothing is unread, also
   // after a reload): the message at the top of the pane and where its top is, or none at its end. A core from before
   // `chat.place` does not know it.
@@ -644,41 +643,6 @@ export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView
   return target;
 }
 
-/** Exact scroll end, separate from the 120px threshold for the jump button and the following animation. */
-function useAtScrollEnd(ref: RefObject<HTMLElement | null>, messages: ChatMessage[], place: string): void {
-  // Opening/restoring the pane is already in its final appearance. Only the reader's scrolling enables fades.
-  useEffect(() => {
-    const pane = ref.current;
-    if (!pane) return;
-    const enable = () => pane.setAttribute("data-focus-motion", "");
-    const key = (event: KeyboardEvent) => {
-      if (!takesKeys(event.target instanceof Element ? event.target : null) && ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) enable();
-    };
-    pane.addEventListener("wheel", enable, { passive: true });
-    pane.addEventListener("touchmove", enable, { passive: true });
-    pane.addEventListener("pointerdown", enable, { passive: true });
-    pane.addEventListener("keydown", key);
-    return () => {
-      pane.removeEventListener("wheel", enable);
-      pane.removeEventListener("touchmove", enable);
-      pane.removeEventListener("pointerdown", enable);
-      pane.removeEventListener("keydown", key);
-      pane.removeAttribute("data-focus-motion");
-    };
-  }, [ref, place]);
-  useLayoutEffect(() => {
-    const pane = ref.current;
-    if (!pane) return;
-    const check = () => pane.toggleAttribute("data-at-end", pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2);
-    check();
-    pane.addEventListener("scroll", check, { passive: true });
-    const resize = new ResizeObserver(check);
-    resize.observe(pane);
-    for (const child of pane.children) resize.observe(child);
-    return () => { pane.removeEventListener("scroll", check); resize.disconnect(); pane.removeAttribute("data-at-end"); };
-  }, [ref, messages]);
-}
-
 /** Whether the reader is scrolled up, away from the newest messages (more than a screenful's corner). */
 export function useAwayFromBottom(ref: RefObject<HTMLElement | null>): boolean {
   const [away, setAway] = useState(false);
@@ -934,8 +898,7 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
  * One message of the chat. It is drawn again only when something it shows changes: an agent at work makes the chat
  * draw again many times a second (its activity), and every message's Markdown would be laid out anew each time.
  */
-const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true, archive, check, focus }: {
-  focus?: boolean;
+const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true, archive, check }: {
   message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined; agentHere: boolean;
   /** Its chat's thread, where a decision's options answer (Decisions.tsx); null while nothing can be sent there. */
   thread: number | null;
@@ -965,7 +928,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   const who = m.by.name;
   const agent = agentHere ? m.by.agent : undefined;
   return (
-    <OthersMessage data-focus={focus || undefined} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
+    <OthersMessage data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
       data-enter={enter} data-caught={caught} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
       avatar={<MessageAvatar message={m} name={who} />} time={m.time?.createdAt}
       name={agent
@@ -984,7 +947,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     </OthersMessage>
   );
 }, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && a.thread === b.thread
-  && a.options === b.options && a.archive === b.archive && a.check?.text === b.check?.text && a.check?.failed === b.check?.failed && a.focus === b.focus && sameMessage(a.message, b.message));
+  && a.options === b.options && a.archive === b.archive && a.check?.text === b.check?.text && a.check?.failed === b.check?.failed && sameMessage(a.message, b.message));
 
 /**
  * What an agent of the chat said in Slack rather than here, or a person's Slack message it was given (the core reads

@@ -6,7 +6,6 @@
 package fail.still.android.screens
 
 import fail.still.android.data.t
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -20,7 +19,6 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.expandHorizontally
@@ -798,9 +796,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val resumed by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     // (The end of a window short of the chat's end is not its end: nothing past it has shown. Nor is the end of the
     // list as last laid out while rows that came since are not: a page landing at the end would be read unseen.)
-    val dragging by list.interactionSource.collectIsDraggedAsState()
-    var focusMotion by remember(list) { mutableStateOf(false) }
-    LaunchedEffect(dragging) { if (dragging) focusMotion = true }
     val lastRowKey = rememberUpdatedState(rows.lastOrNull()?.id)
     val lastLaidOut by remember(list) { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.key == lastRowKey.value } }
     val seen = !short && endInView(list) && lastLaidOut && follow.placed && resumed.isAtLeast(Lifecycle.State.RESUMED)
@@ -851,9 +846,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 // place, going on from where it is and its speed when pushed again (web useActivityGlide); folded to an
                 // avatar that is out flying it shows nothing, and is put there at once for the avatar to fly to.
                 val glides = row is Entry.Working && !motion.away(row.agent.key)
-                val faded = view.focusLast == true && !list.canScrollForward && row is Entry.Said && row.m.seq != messages.lastOrNull()?.seq
-                val messageOpacity by animateFloatAsState(if (faded) 0.4f else 1f, if (focusMotion || dragging) tween(180, easing = Ease.Out) else snap(), label = "message-focus")
-                Box(Modifier.sendReflow(host, row.id).graphicsLayer { alpha = messageOpacity }.animateItem(fadeInSpec = null, placementSpec = if (glides && flight == null) ACTIVITY_GLIDE else null, fadeOutSpec = if (fades) tween(200) else null).rise(eases).flying(host, f).onSizeChanged { size ->
+                Box(Modifier.sendReflow(host, row.id).animateItem(fadeInSpec = null, placementSpec = if (glides && flight == null) ACTIVITY_GLIDE else null, fadeOutSpec = if (fades) tween(200) else null).rise(eases).flying(host, f).onSizeChanged { size ->
                     if (row is Entry.Floor) return@onSizeChanged
                     val before = heights.put(row.id, size.height)
                     // Something new took its place at the bottom: the floor gives that much back.

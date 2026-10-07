@@ -393,20 +393,6 @@ test("a_watching_chat_says_what_it_watches_and_what_archiving_it_means", () => {
   assert.deepEqual(marked, { text: "监控中：盯 CI、relay 延迟", ask: "「盯 CI」、「relay 延迟」还在监控。归档后它照常运行，有新消息时对话会回到列表。" });
 });
 
-test("focus_message_results_and_pending_requests", () => {
-  for (const ending of ["all_done", "need_human", "need_help", "need_decision"]) assert.ok(p.focusMessage({ authorKind: "agent", ending }));
-  assert.ok(p.focusMessage({ authorKind: "agent", declared: "final" }));
-  assert.ok(p.focusMessage({ authorKind: "agent", decision: { resolved: false } }));
-  for (const message of [
-    { authorKind: "person", ending: "all_done" },
-    { authorKind: "agent" },
-    { authorKind: "agent", ending: "waiting" },
-    { authorKind: "agent", ending: "need_human", decision: { resolved: true } },
-    { authorKind: "agent", ending: "need_human", decision: { resolved: false, dismissed: true } },
-  ])
-    assert.ok(!p.focusMessage(message), JSON.stringify(message));
-});
-
 test("alert_capacity_is_remaining_while_its_edge_is_used_percent", () => {
   const h: J = { memory: { usedBytes: 5.3 * GIB, totalBytes: 6 * GIB }, disk: { freeBytes: 6 * GIB, totalBytes: 60 * GIB } };
   p.host(h);
