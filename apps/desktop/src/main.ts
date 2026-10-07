@@ -782,11 +782,12 @@ function followNotices(): void {
   link.port.postMessage({ id, subscribe: { topic: "notify" } });
 }
 
-// The count on the Dock's icon (macOS): the chats that want the person or have something unread, in every workspace,
-// as the workspace switcher counts them (the core's `workspaceMarks`, client/core-ts/src/views/marks.ts).
+// The count on the Dock's icon (macOS): the chats that want the person (failed, or waiting on them), in every workspace,
+// as the workspace switcher counts them (the core's `workspaceMarks`, client/core-ts/src/views/marks.ts). Unread ones
+// are not counted: the badge is what waits for the person, as the 奏 page.
 let badgeHeld: number | null = null;
 
-interface Mark { alert?: number; wait?: number; unread?: number }
+interface Mark { alert?: number; wait?: number }
 
 function followBadge(): void {
   if (badgeHeld !== null && own?.topics.has(badgeHeld)) return;
@@ -796,7 +797,7 @@ function followBadge(): void {
     value: undefined,
     onValue: (value) => {
       const marks = Object.values((value as { workspaces?: Record<string, Mark> } | undefined)?.workspaces ?? {});
-      app.setBadgeCount(marks.reduce((n, m) => n + (m.alert ?? 0) + (m.wait ?? 0) + (m.unread ?? 0), 0));
+      app.setBadgeCount(marks.reduce((n, m) => n + (m.alert ?? 0) + (m.wait ?? 0), 0));
     },
   });
   badgeHeld = id;
