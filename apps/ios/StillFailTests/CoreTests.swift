@@ -49,7 +49,7 @@ private final class TestCoreEngine: CoreEngine, @unchecked Sendable {
     func receive(client: UInt64, json: String) {
         guard let message = try? JSONValue.parse(json) else { return }
         lock.lock(); messages.append(message); lock.unlock()
-        if message["call"].stringValue == "client.focus" { emit(.object(["id": message["id"], "ok": .null])) }
+        if ["client.focus", "client.wake"].contains(message["call"].stringValue ?? "") { emit(.object(["id": message["id"], "ok": .null])) }
         if ["accounts", "workspaces"].contains(message["subscribe"]["topic"].stringValue ?? "") {
             emit(.object(["id": message["id"], "value": .array([])]))
         }
@@ -64,6 +64,35 @@ private final class TestCoreEngine: CoreEngine, @unchecked Sendable {
 
 @MainActor
 final class CoreStoreTests: XCTestCase {
+    func testReturnFromBackgroundTellsCoreHowLongItWasAway() async throws {
+        let engine = TestCoreEngine(); let app = store(engine)
+        try await waitUntil { app.isReady }
+        app.pause()
+        try await Task.sleep(for: .milliseconds(25))
+        app.resume()
+        try await waitUntil { engine.sent().contains { $0["call"].stringValue == "client.wake" } }
+        let wake = try XCTUnwrap(engine.sent().last { $0["call"].stringValue == "client.wake" })
+        guard case .number(let away) = wake["params"]["away"] else { return XCTFail("wake needs elapsed milliseconds") }
+        XCTAssertGreaterThanOrEqual(away, 20)
+        XCTAssertEqual(wake["params"]["network"].boolValue, false)
+        let count = engine.sent().filter { $0["call"].stringValue == "client.wake" }.count
+        app.resume()
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(engine.sent().filter { $0["call"].stringValue == "client.wake" }.count, count)
+    }
+
+    func testNetworkChangeWakesCoreWithoutLosingWorkspaceScope() async throws {
+        let engine = TestCoreEngine(); let app = store(engine)
+        try await loadScope(app, engine, accounts: ["a"], groups: [group("a", [workspace()])])
+        let epoch = app.scopeEpoch
+        app.networkDidChange()
+        try await waitUntil { engine.sent().contains { $0["call"].stringValue == "client.wake" } }
+        let wake = try XCTUnwrap(engine.sent().last { $0["call"].stringValue == "client.wake" })
+        XCTAssertEqual(wake["params"]["network"].boolValue, true)
+        XCTAssertEqual(wake["params"]["away"], .number(0))
+        XCTAssertEqual(app.scopeEpoch, epoch)
+    }
+
     private func store(_ engine: TestCoreEngine, timeout: Duration = .seconds(5)) -> AppStore {
         AppStore(engineFactory: { engine.attach($0); return engine }, callTimeout: timeout)
     }

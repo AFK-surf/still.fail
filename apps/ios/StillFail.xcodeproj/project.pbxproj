@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0125AC0016C4878082DF3FD6 /* NativeCoreEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA47BE52094ACA879D56196C /* NativeCoreEngineTests.swift */; };
 		01C94A07573FA4F03C12D9AA /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E7528F3FA255DE028C234B57 /* Localizable.xcstrings */; };
 		042F17D98ADF737D73823C80 /* KeychainStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A998985BBF18B04CB006610E /* KeychainStorage.swift */; };
 		06B5A503F40A7F8D069FD642 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 904D93A8CB6C8A641BB80406 /* JSONValue.swift */; };
@@ -16,7 +17,6 @@
 		11691A3AB1D926936C9BE953 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5948A7FF69B49D7514763CD7 /* WidgetKit.framework */; };
 		1EEDA201CCDAD163D7A091ED /* ChatTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D842FE11E9550EDB2B0699 /* ChatTimeline.swift */; };
 		1F9C9A468370E53E4036AFD3 /* Litext in Frameworks */ = {isa = PBXBuildFile; productRef = 7A219B34613E57AE6C38A847 /* Litext */; };
-		2118CC63FD7241A9BFDB3F07 /* StillFailCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700C67AA3C1E92EA7D7F8202 /* StillFailCore.swift */; };
 		2397D3EA68263586E2889B91 /* ChatMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7CCE8C49DAD4B230BD0E406 /* ChatMarkdown.swift */; };
 		249A860F7D30A9CC33B6555A /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2331F6126F19C80B8C6BED01 /* LocalizationTests.swift */; };
 		261553DFB99ED37D36F4916D /* Conversations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A6E6EC2B5BB7E71EC3F213D /* Conversations.swift */; };
@@ -31,7 +31,9 @@
 		4F8CB30B24E370B5BDBB70C1 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF9C3D0A5411B736F85B8C0C /* Localization.swift */; };
 		54BD91670A36D8893B571175 /* TaskWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C06807582FE01B326294FD0 /* TaskWidgets.swift */; };
 		559ECEEA1A7818F8D5E4AD97 /* Common.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E8D4BB09A9D7B024DF8A6A7 /* Common.swift */; };
+		5744A434E147A45D3366E722 /* JavaScriptCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF26D5584BEB3FA880E4A333 /* JavaScriptCore.framework */; };
 		5998879C8BCC6159E285B078 /* ChatTimelineStressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F78F379339462EF18D5048 /* ChatTimelineStressTests.swift */; };
+		5C970CE4570B20FDB46167CF /* NativeCoreEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141F04CB866473260F504236 /* NativeCoreEngine.swift */; };
 		5E1BF575F0DF982317540C92 /* SlackTimelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BB6754782881E139406C41B /* SlackTimelineTests.swift */; };
 		6244810D9B4BC36C80F4AAFF /* ChatSlack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85548373412A3907F4F5E410 /* ChatSlack.swift */; };
 		62D28F228B793230E5E4BD48 /* StillFailWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2C0C931E6B1548FFA006270 /* StillFailWidgets.swift */; };
@@ -65,6 +67,7 @@
 		E8EFB17D6487BF6D9E986F59 /* NewChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2DE4889D0A986882AB930C2 /* NewChat.swift */; };
 		EF53C57AD72AF107DD52E4CC /* AuthenticationServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DAFD32954893ABB324AFA974 /* AuthenticationServices.framework */; };
 		F2A714A7E563490880DC6ACF /* MarkdownParser in Frameworks */ = {isa = PBXBuildFile; productRef = 027209FF2D5D8741B5184703 /* MarkdownParser */; };
+		F9B42F67E452681EED2B5733 /* stillfail-core.js in Resources */ = {isa = PBXBuildFile; fileRef = EF77201B457D90BCA6BEBD2A /* stillfail-core.js */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -103,6 +106,7 @@
 		09493D6CC93011D3A31E2935 /* StillFailApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillFailApp.swift; sourceTree = "<group>"; };
 		0E55704D15545E0CFA9928BB /* ChatComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatComposer.swift; sourceTree = "<group>"; };
 		102A597081E9DDBB2F8A7CA4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		141F04CB866473260F504236 /* NativeCoreEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCoreEngine.swift; sourceTree = "<group>"; };
 		1BB6754782881E139406C41B /* SlackTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackTimelineTests.swift; sourceTree = "<group>"; };
 		20BC8B220AB8AF6D27437CFB /* CoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreTests.swift; sourceTree = "<group>"; };
 		21BF1B3277665CC8606EA56A /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
@@ -113,6 +117,7 @@
 		2CB0384F249F445F7341F4D2 /* StillFailTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StillFailTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2F8BFEA54C0C94F5BC4B6494 /* ToolStepRendering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolStepRendering.swift; sourceTree = "<group>"; };
 		334282F8CABF63F396C6CB8D /* NativePreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePreviewTests.swift; sourceTree = "<group>"; };
+		3630A69E988542189E69BB48 /* Shell.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Shell.h; sourceTree = "<group>"; };
 		36CC930EC8CED1F96FD9FBC9 /* ChatChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatChrome.swift; sourceTree = "<group>"; };
 		37F87C3322B0C3B75DC3C614 /* Workspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace.swift; sourceTree = "<group>"; };
 		4101189D81D8F532C85B96C7 /* StillFail.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StillFail.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -127,7 +132,6 @@
 		5948A7FF69B49D7514763CD7 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		5CADAA1B5A485394B568F6DE /* DeletionCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeletionCopyTests.swift; sourceTree = "<group>"; };
 		5EA7CEA7BC0245349A76DB43 /* MarkdownHotPathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownHotPathTests.swift; sourceTree = "<group>"; };
-		700C67AA3C1E92EA7D7F8202 /* StillFailCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillFailCore.swift; sourceTree = "<group>"; };
 		712DC3D47ECA9676A13D295A /* NewChatFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatFlow.swift; sourceTree = "<group>"; };
 		72188CEC91CCF051E1E9E158 /* StillFailWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillFailWidgets.entitlements; sourceTree = "<group>"; };
 		729D23748EEC6F7C6370668A /* ChatDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetails.swift; sourceTree = "<group>"; };
@@ -139,7 +143,9 @@
 		904D93A8CB6C8A641BB80406 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
 		A998985BBF18B04CB006610E /* KeychainStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStorage.swift; sourceTree = "<group>"; };
 		A9C5924C53D334AB93807E74 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshot.swift; sourceTree = "<group>"; };
+		AA47BE52094ACA879D56196C /* NativeCoreEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCoreEngineTests.swift; sourceTree = "<group>"; };
 		B2DE4889D0A986882AB930C2 /* NewChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChat.swift; sourceTree = "<group>"; };
+		BF26D5584BEB3FA880E4A333 /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		C2C0C931E6B1548FFA006270 /* StillFailWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillFailWidgets.swift; sourceTree = "<group>"; };
 		C7CCE8C49DAD4B230BD0E406 /* ChatMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMarkdown.swift; sourceTree = "<group>"; };
 		CCF8D6E9F183F605C83987B0 /* StillFailWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StillFailWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -150,6 +156,7 @@
 		E4B6BC3221C2A9CE71014F98 /* NativeScrollingPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeScrollingPerformanceTests.swift; sourceTree = "<group>"; };
 		E7528F3FA255DE028C234B57 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		E917716F8F4153750310E7F2 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		EF77201B457D90BCA6BEBD2A /* stillfail-core.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "stillfail-core.js"; sourceTree = "<group>"; };
 		EF9C3D0A5411B736F85B8C0C /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
 		F0D842FE11E9550EDB2B0699 /* ChatTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTimeline.swift; sourceTree = "<group>"; };
 		F7FD0EE4D1172B7D3F4F7773 /* CoreBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreBridge.swift; sourceTree = "<group>"; };
@@ -174,6 +181,7 @@
 				D84C5716F170084BBE588D6E /* MarkdownView in Frameworks */,
 				F2A714A7E563490880DC6ACF /* MarkdownParser in Frameworks */,
 				1F9C9A468370E53E4036AFD3 /* Litext in Frameworks */,
+				5744A434E147A45D3366E722 /* JavaScriptCore.framework in Frameworks */,
 				EF53C57AD72AF107DD52E4CC /* AuthenticationServices.framework in Frameworks */,
 				07E2C7F5A33AA69FCBE42409 /* Security.framework in Frameworks */,
 				9FC997FDC4B5258490B99401 /* PhotosUI.framework in Frameworks */,
@@ -235,6 +243,7 @@
 			isa = PBXGroup;
 			children = (
 				DAFD32954893ABB324AFA974 /* AuthenticationServices.framework */,
+				BF26D5584BEB3FA880E4A333 /* JavaScriptCore.framework */,
 				E46F9F9084D46ECEF009E536 /* PhotosUI.framework */,
 				DC694D444099A658DD81D293 /* Security.framework */,
 				E917716F8F4153750310E7F2 /* SwiftUI.framework */,
@@ -252,7 +261,9 @@
 				904D93A8CB6C8A641BB80406 /* JSONValue.swift */,
 				A998985BBF18B04CB006610E /* KeychainStorage.swift */,
 				EF9C3D0A5411B736F85B8C0C /* Localization.swift */,
+				141F04CB866473260F504236 /* NativeCoreEngine.swift */,
 				712DC3D47ECA9676A13D295A /* NewChatFlow.swift */,
+				3630A69E988542189E69BB48 /* Shell.h */,
 				282F3E78D54C4772D4D1C7DE /* WidgetFeed.swift */,
 			);
 			path = Core;
@@ -261,7 +272,7 @@
 		B36A89C36BD02514ADDE2A3D /* core */ = {
 			isa = PBXGroup;
 			children = (
-				700C67AA3C1E92EA7D7F8202 /* StillFailCore.swift */,
+				EF77201B457D90BCA6BEBD2A /* stillfail-core.js */,
 			);
 			path = core;
 			sourceTree = "<group>";
@@ -336,6 +347,7 @@
 				2331F6126F19C80B8C6BED01 /* LocalizationTests.swift */,
 				FF2D858B371C157739EB5D3D /* LoginCopyTests.swift */,
 				5EA7CEA7BC0245349A76DB43 /* MarkdownHotPathTests.swift */,
+				AA47BE52094ACA879D56196C /* NativeCoreEngineTests.swift */,
 				334282F8CABF63F396C6CB8D /* NativePreviewTests.swift */,
 				E4B6BC3221C2A9CE71014F98 /* NativeScrollingPerformanceTests.swift */,
 				4AB4EAEB936E1BEF5306C5A2 /* NewChatFlowTests.swift */,
@@ -351,7 +363,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 157E01640C7DF9C44141B465 /* Build configuration list for PBXNativeTarget "StillFail" */;
 			buildPhases = (
-				C35A05979D8C001CC4E59218 /* Prepare project-local Rust core */,
+				3D3AD2EBE714F68D99D24E95 /* Prepare shared TypeScript core and native IO shell */,
 				D6E277F0AC48676CDA41B50E /* Sources */,
 				D138C91786368B78CE3119EE /* Resources */,
 				7FC2C721C9F41554135FB244 /* Frameworks */,
@@ -474,13 +486,14 @@
 			files = (
 				7956E8CB7A20A9588B286331 /* Assets.xcassets in Resources */,
 				D39839710C694C413538DA2A /* Localizable.xcstrings in Resources */,
+				F9B42F67E452681EED2B5733 /* stillfail-core.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		C35A05979D8C001CC4E59218 /* Prepare project-local Rust core */ = {
+		3D3AD2EBE714F68D99D24E95 /* Prepare shared TypeScript core and native IO shell */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -490,10 +503,12 @@
 			);
 			inputPaths = (
 			);
-			name = "Prepare project-local Rust core";
+			name = "Prepare shared TypeScript core and native IO shell";
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(SRCROOT)/../../.airbuild/generated/core/stillfail-core.js",
+				"$(SRCROOT)/../../.airbuild/generated/core/libstillfail_shell.a",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
@@ -527,6 +542,7 @@
 				249A860F7D30A9CC33B6555A /* LocalizationTests.swift in Sources */,
 				E58B9AFE0A1FE53EF7B3F33B /* LoginCopyTests.swift in Sources */,
 				8E81CB88BEB461C66A98EC73 /* MarkdownHotPathTests.swift in Sources */,
+				0125AC0016C4878082DF3FD6 /* NativeCoreEngineTests.swift in Sources */,
 				63E023C82B976BBFBAA80432 /* NativePreviewTests.swift in Sources */,
 				331763B82AE7ECD0ED147FF6 /* NativeScrollingPerformanceTests.swift in Sources */,
 				0B27AC4E18A8EF7F6D5355B4 /* NewChatFlowTests.swift in Sources */,
@@ -554,12 +570,12 @@
 				042F17D98ADF737D73823C80 /* KeychainStorage.swift in Sources */,
 				4F8CB30B24E370B5BDBB70C1 /* Localization.swift in Sources */,
 				2ADFCA89E2E122C1D574C90A /* Login.swift in Sources */,
+				5C970CE4570B20FDB46167CF /* NativeCoreEngine.swift in Sources */,
 				E8EFB17D6487BF6D9E986F59 /* NewChat.swift in Sources */,
 				69CBF57314BA8DCFF18B1522 /* NewChatFlow.swift in Sources */,
 				27AE21AD1DD51312110F2DCC /* Nodes.swift in Sources */,
 				71E554E7958B809E9B5F60B2 /* Settings.swift in Sources */,
 				D1F08298612D69EC20010350 /* StillFailApp.swift in Sources */,
-				2118CC63FD7241A9BFDB3F07 /* StillFailCore.swift in Sources */,
 				B8B4CA33C7B3E2AA8BFA9CB0 /* ToolStepRendering.swift in Sources */,
 				943466102CB3916321AA4518 /* WidgetFeed.swift in Sources */,
 				BE6A8D5C6999796D310D556C /* WidgetSnapshot.swift in Sources */,
@@ -638,14 +654,13 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				HEADER_SEARCH_PATHS = "$(inherited) \"$(SRCROOT)/../../.airbuild/generated/core\"";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LIBRARY_SEARCH_PATHS = "$(inherited) \"$(SRCROOT)/../../.airbuild/generated/core\"";
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				OTHER_LDFLAGS = "$(inherited) -lstillfail_core_ffi -framework Security -framework SystemConfiguration -lresolv";
+				OTHER_LDFLAGS = "$(inherited) -lstillfail_shell -framework Security -framework SystemConfiguration -lresolv";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -653,7 +668,6 @@
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INCLUDE_PATHS = "$(inherited) \"$(SRCROOT)/../../.airbuild/generated/core\"";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -677,6 +691,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = fail.still.iphone;
 				PRODUCT_NAME = StillFail;
 				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = StillFail/Core/Shell.h;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -730,13 +745,12 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				HEADER_SEARCH_PATHS = "$(inherited) \"$(SRCROOT)/../../.airbuild/generated/core\"";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LIBRARY_SEARCH_PATHS = "$(inherited) \"$(SRCROOT)/../../.airbuild/generated/core\"";
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				OTHER_LDFLAGS = "$(inherited) -lstillfail_core_ffi -framework Security -framework SystemConfiguration -lresolv";
+				OTHER_LDFLAGS = "$(inherited) -lstillfail_shell -framework Security -framework SystemConfiguration -lresolv";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -744,7 +758,6 @@
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INCLUDE_PATHS = "$(inherited) \"$(SRCROOT)/../../.airbuild/generated/core\"";
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -784,6 +797,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = fail.still.iphone;
 				PRODUCT_NAME = StillFail;
 				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = StillFail/Core/Shell.h;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;

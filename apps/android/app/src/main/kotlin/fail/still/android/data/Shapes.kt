@@ -2107,11 +2107,12 @@ sealed class HistoryBody {
 	data class Group(val content: HistoryGroup): HistoryBody()
 }
 
-/// One item of an execution history, and the transcript entries it draws (`entries`: first, last).
+/// One item of an execution history, its transcript entries (`entries`: first, last), and when its first entry was written (`at`, epoch ms, when known).
 @Serializable
 data class HistoryItem (
 	val key: String,
 	val entries: List<Long>,
+	val at: Long? = null,
 	val body: HistoryBody
 )
 

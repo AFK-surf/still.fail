@@ -27,10 +27,8 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     CLANG_ENABLE_MODULES: YES
     SWIFT_EMIT_LOC_STRINGS: YES
-    HEADER_SEARCH_PATHS: '$(inherited) "$(SRCROOT)/../../.airbuild/generated/core"'
-    SWIFT_INCLUDE_PATHS: '$(inherited) "$(SRCROOT)/../../.airbuild/generated/core"'
     LIBRARY_SEARCH_PATHS: '$(inherited) "$(SRCROOT)/../../.airbuild/generated/core"'
-    OTHER_LDFLAGS: '$(inherited) -lstillfail_core_ffi -framework Security -framework SystemConfiguration -lresolv'
+    OTHER_LDFLAGS: '$(inherited) -lstillfail_shell -framework Security -framework SystemConfiguration -lresolv'
 targets:
   StillFail:
     type: application
@@ -38,11 +36,15 @@ targets:
     sources:
       - path: StillFail
       - path: Shared
-      - path: ../../.airbuild/generated/core/StillFailCore.swift
+      - path: ../../.airbuild/generated/core/stillfail-core.js
+        buildPhase: resources
     preBuildScripts:
-      - name: Prepare project-local Rust core
+      - name: Prepare shared TypeScript core and native IO shell
         shell: /bin/bash
         basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(SRCROOT)/../../.airbuild/generated/core/stillfail-core.js
+          - $(SRCROOT)/../../.airbuild/generated/core/libstillfail_shell.a
         script: |
           set -e -o pipefail
           cd "$SRCROOT/../.."
@@ -52,6 +54,7 @@ targets:
     settings:
       base:
         ENABLE_USER_SCRIPT_SANDBOXING: NO
+        SWIFT_OBJC_BRIDGING_HEADER: StillFail/Core/Shell.h
         PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone
         PRODUCT_NAME: StillFail
         INFOPLIST_FILE: Info.plist
@@ -66,6 +69,7 @@ targets:
         product: MarkdownParser
       - package: Litext
         product: Litext
+      - sdk: JavaScriptCore.framework
       - sdk: AuthenticationServices.framework
       - sdk: Security.framework
       - sdk: PhotosUI.framework
@@ -74,7 +78,7 @@ targets:
       - target: StillFailWidgets
         embed: true
   # Home-screen widgets. They read the snapshot the app writes into the shared App
-  # Group (Shared/WidgetSnapshot.swift); they never start the Rust core.
+  # Group (Shared/WidgetSnapshot.swift); they never start the client core.
   StillFailWidgets:
     type: app-extension
     platform: iOS
@@ -102,7 +106,7 @@ targets:
         PRODUCT_NAME: StillFailWidgets
         SKIP_INSTALL: YES
         SWIFT_EMIT_LOC_STRINGS: NO
-        # The project links the Rust core into every target; the widgets need none of it.
+        # The project links the native shell into every target; the widgets need none of it.
         OTHER_LDFLAGS: ''
         LD_RUNPATH_SEARCH_PATHS: '$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks'
     dependencies:

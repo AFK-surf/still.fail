@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import AuthenticationServices
 import UIKit
+import Network
 
 @MainActor @Observable
 final class CoreTopic {
@@ -77,6 +78,8 @@ final class AppStore {
     @ObservationIgnored private var restoredScope = false
     @ObservationIgnored private var restoringScope = false
     @ObservationIgnored private var choseOnlyWorkspace = false
+    @ObservationIgnored private var pausedAt: ContinuousClock.Instant?
+    @ObservationIgnored private var networkMonitor: NWPathMonitor?
     static let rememberedScopeKey = "lastWorkspaceScope"
 
     private struct PendingCall {
@@ -91,6 +94,13 @@ final class AppStore {
         bridge = CoreBridge { [weak self] event in self?.receive(event) }
         openBaseTopics()
         bridge.start()
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            guard path.status == .satisfied else { return }
+            Task { @MainActor [weak self] in self?.networkDidChange() }
+        }
+        networkMonitor = monitor
+        monitor.start(queue: DispatchQueue(label: "fail.still.iphone.network"))
     }
     /// Internal injection point for unit tests; production init never uses it.
     init(engineFactory: @escaping CoreEngineFactory, callTimeout: Duration, preferences: UserDefaults? = nil) {
@@ -100,12 +110,12 @@ final class AppStore {
         openBaseTopics()
         bridge.start()
     }
-    deinit { bridge?.stop() }
+    deinit { networkMonitor?.cancel(); bridge?.stop() }
 
     func call(_ name: String, params: [String: JSONValue] = [:]) async throws -> JSONValue {
         try Task.checkCancellation()
         let id = allocateID()
-        let epoch: Int? = name.hasPrefix("auth.") || name == "client.focus" ? nil : scopeEpoch
+        let epoch: Int? = name.hasPrefix("auth.") || name == "client.focus" || name == "client.wake" ? nil : scopeEpoch
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let timer = Task { [weak self, timeout] in
@@ -223,7 +233,23 @@ final class AppStore {
             preferences.removeObject(forKey: Self.rememberedScopeKey)
         }
     }
-    func resume() { sendFocus() }
+    func resume() {
+        if let pausedAt {
+            let elapsed = pausedAt.duration(to: ContinuousClock().now).components
+            self.pausedAt = nil
+            sendWake(away: max(0, Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15))
+        }
+        sendFocus()
+    }
+    func networkDidChange() {
+        guard isReady else { return }
+        sendWake(away: 0, network: true)
+    }
+    private func sendWake(away: Double, network: Bool = false) {
+        Task { [weak self] in
+            _ = try? await self?.call("client.wake", params: ["away": .number(away), "network": .bool(network)])
+        }
+    }
     /// stillfail://chat?… from a widget. Another workspace is switched to first, when this account may.
     func open(_ url: URL) {
         guard url.scheme == "stillfail", url.host == "chat",
@@ -236,6 +262,8 @@ final class AppStore {
         requestedRoute = ChatRoute(station: station, session: session, thread: query["thread"].flatMap(Int.init))
     }
     func pause() {
+        // Preserve the first departure when active → inactive → background.
+        if pausedAt == nil { pausedAt = ContinuousClock().now }
         Task { [weak self] in _ = try? await self?.call("client.focus", params: ["visible": .bool(false), "focused": .bool(false)]) }
     }
     func signInWithGoogle() async {

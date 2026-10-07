@@ -26,6 +26,10 @@ export type Call =
   | { kind: "authBegin"; redirectUri: string; returnTo: string; deviceName: string | null }
   | { kind: "authComplete"; query: string }
   | { kind: "signOut"; account: string }
+  | { kind: "appleBegin" }
+  | { kind: "appleComplete"; attempt: string; identityToken: string; authorizationCode: string; name: string | null; state: string | null }
+  | { kind: "deletionSummary"; account: string }
+  | { kind: "deleteAccount"; account: string }
   | { kind: "op"; op: ops.Request }
   | { kind: "profileModels"; op: ops.Request; id: string; models: unknown }
   | { kind: "chatArchive"; op: ops.Request; thread: number | null; session: string; archived: boolean }
@@ -134,6 +138,9 @@ export function counts(call: Call, name: string): boolean {
     case "chatLatest":
     case "signOut":
     case "authBegin":
+    case "appleBegin":
+    case "appleComplete":
+    case "deleteAccount":
     case "stationMeasure":
       return true;
     case "decisionAnswer":
@@ -217,6 +224,20 @@ export function parseCall(name: string, params: unknown): Call {
       return { kind: "authComplete", query: read(params, [["query", S, "req"]]).query as string };
     case "auth.signOut":
       return { kind: "signOut", account: read(params, [["account", S, "req"]]).account as string };
+    case "auth.appleBegin":
+      return { kind: "appleBegin" };
+    case "auth.appleComplete": {
+      const p = read(params, [["attempt", S, "req"], ["identityToken", S, "req"], ["authorizationCode", S, "req"], ["name", S, "opt"], ["state", S, "opt"]]);
+      const attempt = p.attempt as string, identityToken = p.identityToken as string, authorizationCode = p.authorizationCode as string;
+      const name = p.name as string | null, state = p.state as string | null;
+      const size = (s: string) => new TextEncoder().encode(s).length;
+      if (size(attempt) !== 43 || size(identityToken) < 1 || size(identityToken) > 4096 || size(authorizationCode) < 1 || size(authorizationCode) > 4096 || (name !== null && size(name) > 120)) throw CoreError.invalid("Apple 登录参数无效");
+      return { kind: "appleComplete", attempt, identityToken, authorizationCode, name, state };
+    }
+    case "auth.deletionSummary":
+      return { kind: "deletionSummary", account: read(params, [["account", S, "req"]]).account as string };
+    case "auth.deleteAccount":
+      return { kind: "deleteAccount", account: read(params, [["account", S, "req"]]).account as string };
     case "client.error": {
       const p = read(params, [
         ["source", S, "req"],

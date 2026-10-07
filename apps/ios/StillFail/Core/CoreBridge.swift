@@ -7,26 +7,6 @@ protocol CoreEngine: AnyObject, Sendable {
 }
 typealias CoreEngineFactory = @Sendable (@escaping @Sendable (UInt64, String) -> Void) throws -> any CoreEngine
 
-private final class NativeListener: CoreListener, @unchecked Sendable {
-    let callback: @Sendable (UInt64, String) -> Void
-    init(_ callback: @escaping @Sendable (UInt64, String) -> Void) { self.callback = callback }
-    func onMessage(client: UInt64, json: String) { callback(client, json) }
-}
-
-/// The wrapper is confined to CoreBridge.worker. No FFI copying on the UI actor.
-private final class NativeCoreEngine: CoreEngine, @unchecked Sendable {
-    private let core: StillFailCoreFfi
-    init(callback: @escaping @Sendable (UInt64, String) -> Void) throws {
-        let storage = KeychainStorage()
-        let directory = try storage.prepareDirectory()
-        core = try startSecure(dataDir: directory.path, cloudOrigin: "https://app.still.fail",
-                               beta: false, listener: NativeListener(callback), storage: storage)
-    }
-    func connect() -> UInt64 { core.connect() }
-    func receive(client: UInt64, json: String) { core.receive(client: client, json: json) }
-    func disconnect(client: UInt64) { core.disconnect(client: client) }
-}
-
 enum CoreEvent: Sendable {
     case started
     /// A topic's latest state; `valueChanged` when its value differs from the last one delivered.

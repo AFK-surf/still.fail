@@ -163,6 +163,7 @@ test("marks_are_said_in_english_too", () => {
 // read from the Rust source, had them capitalized, and a history item would not have gone out).
 test("a_history_item_goes_out_through_its_shape", () => {
   const item = { key: "k", entries: [1, 2], body: { kind: "mark", content: { text: "等 CI", wait: { since: 5 } } } };
-  assert.deepEqual(conformTy("HistoryItem", item), { ok: item });
+  assert.deepEqual(conformTy("HistoryItem", item), { ok: { ...item, at: null } });
+  assert.deepEqual(conformTy("HistoryItem", { ...item, at: 1790467205000 }), { ok: { ...item, at: 1790467205000 } });
   assert.match((conformTy("HistoryBody", { kind: "Mark", content: { text: "x" } }) as J).error, /unknown variant `Mark`/);
 });

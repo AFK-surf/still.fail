@@ -3,7 +3,9 @@ import Security
 
 /// Only this application's service is touched. No preferences, access group,
 /// synchronization or plaintext fallback. Safe on foreign storage threads.
-final class KeychainStorage: SecureStorage, @unchecked Sendable {
+enum SecureStorageError: Error { case unavailable }
+
+final class KeychainStorage: @unchecked Sendable {
     static let service = "fail.still.iphone.core"
     private let lock = NSLock()
 
@@ -22,7 +24,7 @@ final class KeychainStorage: SecureStorage, @unchecked Sendable {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(q as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = result as? Data else { throw SecureStorageError.Unavailable }
+        guard status == errSecSuccess, let data = result as? Data else { throw SecureStorageError.unavailable }
         return data
     }
     func set(key: String, value: Data) throws {
@@ -33,12 +35,12 @@ final class KeychainStorage: SecureStorage, @unchecked Sendable {
         if status == errSecItemNotFound {
             status = SecItemAdd(query(key).merging(attributes) { _, new in new } as CFDictionary, nil)
         }
-        guard status == errSecSuccess else { throw SecureStorageError.Unavailable }
+        guard status == errSecSuccess else { throw SecureStorageError.unavailable }
     }
     func delete(key: String) throws {
         lock.lock(); defer { lock.unlock() }
         let status = SecItemDelete(query(key) as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw SecureStorageError.Unavailable }
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw SecureStorageError.unavailable }
     }
 
     /// Missing sandbox marker means reinstall: remove ONLY our service before
@@ -52,7 +54,7 @@ final class KeychainStorage: SecureStorage, @unchecked Sendable {
         let marker = directory.appendingPathComponent("installation")
         if !fm.fileExists(atPath: marker.path) {
             let status = SecItemDelete(query() as CFDictionary)
-            guard status == errSecSuccess || status == errSecItemNotFound else { throw SecureStorageError.Unavailable }
+            guard status == errSecSuccess || status == errSecItemNotFound else { throw SecureStorageError.unavailable }
             // Any orphan cache belongs to the old identity, not a new install.
             if fm.fileExists(atPath: directory.path) { try fm.removeItem(at: directory) }
         }

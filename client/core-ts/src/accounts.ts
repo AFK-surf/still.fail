@@ -18,6 +18,8 @@ import { base64url, isObject, parseJson, pointer, sha256, toJsonBytes, utf8 } fr
 
 export const STORAGE_KEY = "accounts";
 export const LOGIN_KEY = "login";
+const APPLE_LOGIN_KEY = "login/apple";
+const DELETED_KEY = "accounts/deleted";
 
 export type StoredAccount = {
   sub: string;
@@ -37,7 +39,8 @@ export function view(a: StoredAccount): AccountView {
   return { sub: a.sub, email: a.email, name: a.name, picture: a.picture };
 }
 
-type PendingLogin = { verifier: string; state: string; return_to: string; redirect_uri: string };
+type PendingLogin = { verifier: string; state: string; return_to: string; redirect_uri: string; epoch?: number };
+type AppleAttempt = { attempt: string; nonce: string; state: string; epoch: number };
 
 /// serde's reading of a StoredAccount: every field there, of its type (else the whole list is dropped, as
 /// `unwrap_or_default` does in the Rust core).
@@ -76,6 +79,8 @@ export class Accounts {
   #tracer: Tracer | null = null;
   /// Since when (monotonic ms) a refresh has had no answer.
   #unanswered: number | null = null;
+  #epoch = 0;
+  readonly #deleted = new Map<string, number>();
 
   private constructor(host: Host, list: StoredAccount[]) {
     this.#host = host;
@@ -84,7 +89,16 @@ export class Accounts {
 
   /// Loads the stored accounts.
   static load(host: Host): Effect.Effect<Accounts> {
-    return Effect.map(Effect.orElseSucceed(host.storageGet(STORAGE_KEY), () => null), (bytes) => new Accounts(host, readStored(parseJson(bytes)) ?? []));
+    return Effect.gen(function* () {
+      const bytes = yield* Effect.orElseSucceed(host.storageGet(STORAGE_KEY), () => null);
+      const fence = parseJson(yield* Effect.orElseSucceed(host.storageGet(DELETED_KEY), () => null));
+      const accounts = new Accounts(host, readStored(parseJson(bytes)) ?? []);
+      if (isObject(fence)) for (const [sub, until] of Object.entries(fence)) {
+        if (typeof until === "number" && Number.isFinite(until) && until > host.nowMs() / 1000) accounts.#deleted.set(sub, until);
+      }
+      accounts.#list = accounts.#list.filter((a) => !accounts.#deleted.has(a.sub));
+      return accounts;
+    });
   }
 
   setTracer(tracer: Tracer): void {
@@ -109,7 +123,7 @@ export class Accounts {
     return Effect.gen({ self: this }, function* () {
       const verifier = this.#secret();
       const state = this.#secret();
-      const pending: PendingLogin = { verifier, state, return_to: returnTo, redirect_uri: redirectUri };
+      const pending: PendingLogin = { verifier, state, return_to: returnTo, redirect_uri: redirectUri, epoch: this.#epoch };
       yield* Effect.mapError(this.#host.storageSet(LOGIN_KEY, toJsonBytes(pending)), asCoreError);
       const query = (
         [
@@ -146,6 +160,7 @@ export class Accounts {
       if (!ok(response)) return yield* Effect.fail(expired().withStatus(response.status));
       const tokens = readTokens(parseJson(response.body));
       if (!tokens) return yield* Effect.fail(expired());
+      if ((pending.epoch ?? 0) !== this.#epoch || this.#deleted.has(tokens.subject)) return yield* Effect.fail(new CoreError("login_superseded", "账号状态已改变，请重新登录"));
       const account: StoredAccount = {
         sub: tokens.subject,
         email: tokens.email,
@@ -158,13 +173,84 @@ export class Accounts {
       yield* this.#put(account);
       // The picture comes with the profile; fetched once, best effort.
       const picture = yield* this.#picture(account.access);
-      if (picture !== null) {
+      if (picture !== null && (pending.epoch ?? 0) === this.#epoch && this.#get(account.sub)) {
         account.picture = picture;
         yield* Effect.ignore(this.#put(account));
       }
       const returnTo = pending.return_to === "" || pending.return_to.startsWith("/auth/") ? "/" : pending.return_to;
       return [view(account), returnTo] as [AccountView, string];
     });
+  }
+
+  appleBegin(): Effect.Effect<Omit<AppleAttempt, "epoch">, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const epoch = this.#epoch;
+      const value = yield* Effect.flatMap(this.#post("/v1/auth/apple/challenge", null, {}, null), (r) => this.#authResponse(r)).pipe(Effect.mapError(asCoreError));
+      if (!isObject(value) || ["attempt", "nonce", "state"].some((k) => typeof value[k] !== "string" || value[k].length !== 43)) {
+        return yield* Effect.fail(new CoreError("apple_login_failed", "Apple 登录挑战无效"));
+      }
+      if (epoch !== this.#epoch) return yield* Effect.fail(new CoreError("login_superseded", "账号状态已改变"));
+      const pending: AppleAttempt = { attempt: value.attempt as string, nonce: value.nonce as string, state: value.state as string, epoch };
+      yield* Effect.mapError(this.#host.storageSet(APPLE_LOGIN_KEY, toJsonBytes(pending)), asCoreError);
+      return { attempt: pending.attempt, nonce: pending.nonce, state: pending.state };
+    });
+  }
+
+  appleComplete(attempt: string, identityToken: string, authorizationCode: string, name: string | null, state: string | null): Effect.Effect<unknown, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const pending = parseJson(yield* Effect.mapError(this.#host.storageGet(APPLE_LOGIN_KEY), asCoreError));
+      if (!isObject(pending) || typeof pending.state !== "string") return yield* Effect.fail(new CoreError("login_expired", "请重新发起 Apple 登录"));
+      if (pending.attempt !== attempt || pending.epoch !== this.#epoch || (state !== null && state !== pending.state)) {
+        return yield* Effect.fail(new CoreError("login_state_mismatch", "Apple 登录状态不匹配"));
+      }
+      yield* Effect.mapError(this.#host.storageDelete(APPLE_LOGIN_KEY), asCoreError);
+      const response = yield* Effect.mapError(this.#post("/v1/auth/apple/token", null, { attempt, identityToken, authorizationCode, name: name ?? "", state: pending.state }, null), asCoreError);
+      const tokens = readTokens(yield* this.#authResponse(response));
+      if (!tokens) return yield* Effect.fail(new CoreError("apple_login_failed", "Apple 登录回复无效"));
+      if (pending.epoch !== this.#epoch || this.#deleted.has(tokens.subject)) return yield* Effect.fail(new CoreError("login_superseded", "账号状态已改变，请重新登录"));
+      const account: StoredAccount = { sub: tokens.subject, email: tokens.email, name: tokens.name ?? "", picture: "", access: tokens.access_token, refresh: tokens.refresh_token, access_expires: tokens.expires_at };
+      yield* this.#put(account);
+      return { account: view(account), accounts: this.list() };
+    });
+  }
+
+  deletionSummary(sub: string): Effect.Effect<unknown, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const access = yield* this.accessToken(sub);
+      return yield* this.#authResponse(yield* Effect.mapError(this.#post("/v1/auth/deletion-summary", access, {}, null), asCoreError));
+    });
+  }
+
+  deleteAccount(sub: string): Effect.Effect<unknown, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const access = yield* this.accessToken(sub);
+      const receipt = yield* this.#authResponse(yield* Effect.mapError(this.#post("/v1/auth/delete-account", access, {}, null), asCoreError));
+      if (!isObject(receipt) || receipt.deleted !== true || receipt.state !== "completed" || receipt.account !== sub ||
+          typeof receipt.fence_expires_at !== "number" || !Number.isFinite(receipt.fence_expires_at) || receipt.fence_expires_at <= this.#host.nowMs() / 1000) {
+        return yield* Effect.fail(new CoreError("deletion_incomplete", "服务器尚未完成账号删除"));
+      }
+      this.#epoch++;
+      this.#deleted.set(sub, receipt.fence_expires_at);
+      yield* Effect.mapError(this.#host.storageSet(DELETED_KEY, toJsonBytes(Object.fromEntries(this.#deleted))), asCoreError);
+      yield* Effect.ignore(this.#host.storageDelete(LOGIN_KEY));
+      yield* Effect.ignore(this.#host.storageDelete(APPLE_LOGIN_KEY));
+      yield* this.#forget(sub);
+      return receipt;
+    });
+  }
+
+  #authResponse(response: HttpResponse): Effect.Effect<unknown, CoreError> {
+    const value = parseJson(response.body);
+    if (ok(response)) return Effect.succeed(value);
+    const raw = isObject(value) ? value.error : undefined;
+    const code = typeof raw === "string" && /^[a-z_]{1,80}$/.test(raw) ? raw : "auth_failed";
+    const messages: Record<string, string> = {
+      apple_not_configured: "Apple 登录尚未配置，请使用 Google 登录",
+      deletion_coverage_incomplete: "远端个人数据删除尚未支持，账号未被删除",
+      reauth_required: "请重新登录后再删除账号",
+      last_owner: "请先转移所有权或单独删除工作区",
+    };
+    return Effect.fail(new CoreError(code, messages[code] ?? "请求未完成，请重试", response.status));
   }
 
   /// A usable access token, refreshing it when it expires within a minute (once at a time per account). A refused
@@ -219,6 +305,7 @@ export class Accounts {
         if (!isObject(item)) continue;
         const { sub, email, access, refresh, accessExpires } = item;
         if (typeof sub !== "string" || typeof email !== "string" || typeof access !== "string" || typeof refresh !== "string" || typeof accessExpires !== "number") continue;
+        if (this.#deleted.has(sub)) continue;
         const name = item.name === undefined ? "" : item.name;
         const picture = item.picture === undefined ? "" : item.picture;
         if (typeof name !== "string" || typeof picture !== "string") continue;
@@ -237,7 +324,7 @@ export class Accounts {
     return Effect.map(Effect.orElseSucceed(this.#host.storageGet(STORAGE_KEY), () => null), (bytes) => {
       const theirs = readStored(parseJson(bytes))?.find((a) => a.sub === sub);
       const ours = this.#get(sub);
-      if (!theirs || !ours || theirs.refresh === ours.refresh) return null;
+      if (!theirs || !ours || this.#deleted.has(sub) || theirs.refresh === ours.refresh) return null;
       const good = theirs.access_expires - 60 > this.#host.nowMs() / 1000;
       const i = this.#list.findIndex((a) => a.sub === sub);
       if (i >= 0) this.#list[i] = theirs;
@@ -257,6 +344,7 @@ export class Accounts {
 
   #refresh(sub: string): Effect.Effect<string, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      const epoch = this.#epoch;
       // Another core on the same storage may have refreshed already: its credentials are the current ones.
       const adopted = yield* this.#adoptStored(sub);
       if (adopted !== null) return adopted;
@@ -295,6 +383,7 @@ export class Accounts {
       if (!ok(response)) return yield* Effect.fail(new CoreError("refresh_failed", t("core-logic.accounts.refresh_failed", { status: response.status }), response.status));
       const tokens = readTokens(parseJson(response.body));
       if (!tokens) return yield* Effect.fail(new CoreError("refresh_failed", t("core-logic.accounts.refresh_unreadable")));
+      if (epoch !== this.#epoch || this.#deleted.has(sub) || !this.#get(sub)) return yield* Effect.fail(CoreError.signedOut(t("core-logic.accounts.signed_out")));
       const name = tokens.name ? tokens.name : account.name;
       // The new tokens are good even if they cannot be written down.
       yield* Effect.ignore(this.#put({ ...account, access: tokens.access_token, refresh: tokens.refresh_token, access_expires: tokens.expires_at, name }));
@@ -324,6 +413,7 @@ export class Accounts {
   /// Adds or replaces an account, keeping its place in the list.
   #put(account: StoredAccount): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
+      if (this.#deleted.has(account.sub)) return Effect.fail(CoreError.signedOut(t("core-logic.accounts.signed_out")));
       const i = this.#list.findIndex((a) => a.sub === account.sub);
       if (i >= 0) this.#list[i] = stored(account);
       else this.#list.push(stored(account));
