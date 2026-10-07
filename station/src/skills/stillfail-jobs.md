@@ -15,7 +15,10 @@ available to workspace members through its returned link.
   is needed before answering, wait for it in the turn.
 - Supply `command` (run by `sh -c`), a short `name`, and optionally `cwd` (defaults to the session workspace).
   Keep clones and outputs in that workspace.
-- Tell people what is running, then end `waiting`; use `need_human` instead if you also need their input.
+- Tell people what is running, carry on with whatever does not depend on it, and end `waiting` only when nothing
+  else is left; use `need_human` instead if you also need their input.
+- To wait on CI or another remote run, start a job (or background command) that polls it and exits on the first
+  failure: its completion wakes you. Do not end `waiting` on a guessed duration with nothing watching.
 - Inside long jobs, `stillfail-job notify "<words>"` reports meaningful milestones or trouble, not every line.
   `ember-job` is an alias. Notices arrive via="ember"; relay only what matters and act on failures.
 - Completion includes the exit code and log tail. `job_log` reads more (up to 1000 lines); `job_list` shows your
@@ -23,7 +26,7 @@ available to workspace members through its returned link.
 
 ## Watches
 
-For an explicitly requested ongoing watch (CI, deployment, metrics, review queue), set `watch: true` and loop,
+For an explicitly requested ongoing watch (CI, deployment, metrics, review queue) that outlives your own work, set `watch: true` and loop,
 notifying on changes. The chat appears under 监控中, does not auto-archive, and asks before manual archiving.
 End `waiting`: its timeout will not wake you while the watch runs; a notice, completion or user message will.
 Give the next post a title naming the watch (e.g. 监控 · PR #482 的 CI); watch chats can be renamed immediately.
