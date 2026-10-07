@@ -169,6 +169,13 @@ globalStyle(`${sidePanel} ${resizeHandle}`, {
     },
   },
 });
+/** Side by side, the tab set is a pane that clips what is past its edge: its handle lies just inside that edge. */
+globalStyle(`${sidePanel} ${resizeHandle}[data-edge="left"]`, {
+  "@media": { "(min-width: 1101px)": { left: "0" } },
+});
+globalStyle(`${sidePanel} ${resizeHandle}[data-edge="left"]::after`, {
+  "@media": { "(min-width: 1101px)": { left: "0", top: "12px", bottom: "12px" } },
+});
 globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "auto", padding: "0", borderBottom: "0" });
 /** The chat's title when it can be renamed: pressed, it turns into the field (Rename.css.ts titleInputBar) in the same box. */
 export const titleBtn = style({

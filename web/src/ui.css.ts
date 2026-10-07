@@ -270,8 +270,9 @@ export const resizeHandle = style({
       content: "\"\"", position: "absolute", top: "0", bottom: "0", left: "3px", width: "1px",
       background: "transparent", transition: `background ${vars.dur} ${vars.easeOut}`,
     },
-    "&:hover::after": { background: vars.fieldFocus },
-    "body[data-resizing] &::after": { background: vars.fieldFocus },
+    // A line fading out at both ends, as Cue's handle (not a hard rule down the window).
+    "&:hover::after": { background: `linear-gradient(transparent, ${vars.fieldFocus} 15%, ${vars.fieldFocus} 85%, transparent)` },
+    "body[data-resizing] &::after": { background: `linear-gradient(transparent, ${vars.fieldFocus} 15%, ${vars.fieldFocus} 85%, transparent)` },
   },
   "@media": {
     "(max-width: 700px)": {

@@ -28,6 +28,14 @@ globalStyle(`${sidebar} :is(a, img, svg)`, { WebkitUserDrag: "none" });
 // Closing or opening, its contents keep their width and are cut, not laid out anew at every step.
 globalStyle(`${sidebar} > :not(${resizeHandle})`, { "@media": { [wide]: { minWidth: fallbackVar(vars.sidebarW, "240px") } } });
 
+/**
+ * On the wide screen the sidebar's edge is the 8px of window between it and the pane: its handle takes that gap, and
+ * the line it shows (hovered, dragged) runs down the gap's middle, fading out at both ends, rather than on the edge.
+ */
+globalStyle(`${sidebar} > ${resizeHandle}[data-edge="right"]`, { "@media": { [wide]: { right: "-8px", width: "8px" } } });
+globalStyle(`${sidebar} > ${resizeHandle}[data-edge="right"]::after`, {
+  "@media": { [wide]: { left: "3.5px", top: "12px", bottom: "12px" } },
+});
 /** The buddy's drawing starts a little inside the lockup: 16 px puts it on the rows' icons below. */
 export const brand = style({
   display: "flex", alignItems: "center", gap: 8, height: 56, padding: "0 16px",
