@@ -8,7 +8,9 @@ import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import { type Args, jsString } from "./args.ts";
 import type { Hub } from "./hub.ts";
 import { Refused } from "./neighbours.ts";
-import { linkedSession, named, sessionThreadOf, splitN } from "./others.ts";
+import { fromBefore, linkedSession, linkedStation, named, sessionThreadOf } from "./others.ts";
+
+export { linkedStation };
 
 type Json = any;
 
@@ -19,14 +21,6 @@ export const METHOD = "session.message";
 const MAX_TEXT = 200_000;
 
 const chars = (s: string) => Array.from(s).length;
-
-/// The station a still.fail link (…/o/<workspace>/<station>/<key>) is on.
-export function linkedStation(reference: string): string | null {
-  const at = reference.indexOf("/o/");
-  if (at < 0) return null;
-  const parts = splitN(reference.slice(at + 3), "/", 3);
-  return parts.length === 3 && parts[1] !== "" ? parts[1]! : null;
-}
 
 /// Who a message comes from, as its header shows it: the sender's chat by its title, linked when it has a link.
 function header(surface: string, title: string, link: string | null): string {
@@ -72,7 +66,7 @@ export async function sessionSend(hub: Hub, key: string, args: Args): Promise<st
     } catch (error) {
       // What a station from before session.message answers it with (it took it for a task).
       const old = (error as Error).message;
-      if (error instanceof Refused && (old.includes("remote tasks are not enabled") || old.includes("task key"))) {
+      if (error instanceof Refused && fromBefore(old)) {
         throw new Error(`not sent to ${to}: that station is not updated yet and takes no messages`);
       }
       throw new Error(`not sent to ${to}: ${old}. If it timed out, it may have arrived: ask before sending it again`);

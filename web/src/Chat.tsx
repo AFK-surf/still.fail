@@ -5,11 +5,12 @@
 import { sentImage, sentImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
-import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
-import { stationBase, usePerson, useStation } from "./station.tsx";
+import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
+import { chatOfLink } from "./chatRefs.ts";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
@@ -1551,6 +1552,32 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
       setText(`${now.slice(0, start)}${mark} ${now.slice(end)}`);
     }, (e: unknown) => toast(t("web-main.composer.refFailed", { title: item.title, error: failure(e) })));
   };
+  // A chat's link pasted (copied from its row's menu: `[its title](its link)`) goes in as a reference, as one picked
+  // with `@` does, when the chat is of this workspace; the rest of what is pasted as it is.
+  const here = useStation().address;
+  const pasteReferences = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = e.clipboardData.getData("text/plain");
+    const found = here.includes("/") ? [...pasted.matchAll(/\[([^\]\n]{1,120})\]\((\S+?)\)/g)].flatMap((m) => {
+      const chat = chatOfLink(m[2]!);
+      return chat && scopeOf(chat.station) === scopeOf(here) ? [{ m, chat }] : [];
+    }) : [];
+    if (found.length === 0) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    const [start, end, before] = [el.selectionStart, el.selectionEnd, el.value];
+    const marks = found.map(({ m, chat }) => core().call("chat.ref", { station: chat.station, id: chat.id, title: m[1], base }).then((answer) => (answer as { mark: string }).mark, () => m[0]));
+    void Promise.all(marks).then((made) => {
+      let text = "", at = 0;
+      found.forEach(({ m }, i) => { text += pasted.slice(at, m.index) + made[i]; at = m.index + m[0].length; });
+      text += pasted.slice(at);
+      // Typed on meanwhile: at the end.
+      const now = input.current?.value ?? "";
+      const [from, to] = now === before ? [start, end] : [now.length, now.length];
+      caretAt.current = from + text.length;
+      setText(`${now.slice(0, from)}${text}${now.slice(to)}`);
+      onType();
+    });
+  };
   // Where the caret goes once the text changed by hand is drawn (before anything more is typed).
   const caretAt = useRef<number | null>(null);
   useLayoutEffect(() => {
@@ -1633,7 +1660,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
         onChange={(e) => { setText(e.target.value); onType(); lookForReference(e.target); }}
         onSelect={(e) => lookForReference(e.currentTarget)}
         onBlur={() => setReference(null)}
-        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); } }}
+        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); } else pasteReferences(e); }}
         onKeyDown={(e) => {
           if (reference && !e.nativeEvent.isComposing) {
             const n = refItems.current.length;

@@ -1,4 +1,5 @@
-import { Archive, Edit, Pin, Unplug } from "./icons.tsx";
+import { Archive, Bot, Copy, Edit, Pin, Unplug } from "./icons.tsx";
+import { useCopyChatLink } from "./ChatRef.tsx";
 import { stationBase, useSidebarMode, type ChatFilter } from "./station.tsx";
 import { SidebarActions } from "./SidebarActions.tsx";
 import { NavLink, useLocation, useNavigate } from "react-router";
@@ -223,6 +224,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
   const [asking, setAsking] = useState(false);
   const archiveAsked = () => { if (item.watch) setAsking(true); else void archive(); };
   const pin = usePin(item);
+  const copyLink = useCopyChatLink(useToast());
   const rename = useRename(item.station);
   const [editing, setEditing] = useState(false);
   // Pinned, renamed (its new name shown meanwhile) or brought back from the archive, until the station answers.
@@ -284,6 +286,9 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
             {item.pinned != null && <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => void pin()}><Pin size={14} />{item.pinned ? t("web-main.chat.unpin") : t("web-main.chat.pin")}</ContextMenu.Item>}
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setEditing(true)}><Edit size={14} />{t("web-main.chat.rename")}</ContextMenu.Item>
+            {/* Its link, for another chat's agent to read it (chat_read / session_history), on any station of the workspace. */}
+            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => copyLink(item)}><Copy size={14} />{t("web-main.chat.copyLink")}</ContextMenu.Item>
+            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => copyLink(item, true)}><Bot size={14} />{t("web-main.chat.copyHistoryLink")}</ContextMenu.Item>
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={archiveAsked}><Archive size={14} />{t("web-main.chat.archive")}</ContextMenu.Item>
           </ContextMenu.Content>
         </ContextMenu.Portal>

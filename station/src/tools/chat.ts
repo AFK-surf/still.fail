@@ -4,7 +4,8 @@
 import { chatHistory, chatPost, chatState } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
-import { chatList, chatRead, sessionHistory } from "../sessions/others.ts";
+import type { Args } from "../sessions/args.ts";
+import { chatList, chatRead, elsewhere, readAfar, sessionHistory } from "../sessions/others.ts";
 import { suggestArchive } from "../sessions/review.ts";
 import type { Tool } from "./mcp.ts";
 import { slackTools } from "./slack.ts";
@@ -257,7 +258,7 @@ export const CHAT_LIST = {
 export const CHAT_READ = {
   name: "chat_read",
   description:
-    "Read the messages of any conversation on this station, not only your own, oldest first: the chat people refer to by its link.",
+    "Read the messages of any conversation on this station or, by its link, on another station of the workspace, not only your own, oldest first: the chat people refer to by its link.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -310,7 +311,7 @@ export const SESSION_SEND = {
 export const SESSION_HISTORY = {
   name: "session_history",
   description:
-    "Read a session's execution history, as the pages show it: what its agent thought, the tools it called and what they returned, numbered #0 onwards. The latest entries unless before is given.",
+    "Read a session's execution history, as the pages show it: what its agent thought, the tools it called and what they returned, numbered #0 onwards. The latest entries unless before is given. A session on another station of the workspace is read by its chat's link.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -343,6 +344,12 @@ export const SESSION_HISTORY = {
   },
 };
 
+/// A chat on another station of the workspace, by its link: read there (others.ts `readAfar`); null to read it here.
+function afar(hub: Hub, key: string, tool: "chat_read" | "session_history", args: Args): Promise<string> | null {
+  const station = typeof args.chat === "string" ? elsewhere(hub, key, args.chat) : null;
+  return station !== null ? readAfar(hub, key, station, tool, args) : null;
+}
+
 /// The hub's tools, in the Rust station's order (slack_api, second, is slack.ts's).
 export function chatTools(hub: Hub): Tool[] {
   return [
@@ -359,8 +366,8 @@ export function chatTools(hub: Hub): Tool[] {
     { ...CHAT_STATE, run: (key, args) => chatState(hub, key, args) },
     { ...CHAT_HISTORY, run: (key, args) => chatHistory(hub, key, args) },
     { ...CHAT_LIST, run: async (key, args) => chatList(hub, key, args) },
-    { ...CHAT_READ, run: (key, args) => chatRead(hub, key, args) },
+    { ...CHAT_READ, run: (key, args) => afar(hub, key, "chat_read", args) ?? chatRead(hub, key, args) },
     { ...SESSION_SEND, run: (key, args) => sessionSend(hub, key, args) },
-    { ...SESSION_HISTORY, run: async (_key, args) => sessionHistory(hub, args) },
+    { ...SESSION_HISTORY, run: async (key, args) => afar(hub, key, "session_history", args) ?? sessionHistory(hub, args) },
   ];
 }

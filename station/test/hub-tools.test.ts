@@ -11,6 +11,8 @@ import { cardArg, optionsArg } from "../src/sessions/args.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer } from "../src/sessions/messages.ts";
+import { forPeer } from "../src/sessions/others.ts";
+import { Refused } from "../src/sessions/neighbours.ts";
 import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { review, reviewUndecided } from "../src/sessions/review.ts";
 import { cleanTitle } from "../src/sessions/titles.ts";
@@ -669,6 +671,48 @@ test("a message to another station's session goes through the station transport,
   assert.ok(matches(last.text, ["<https://ember.test/o/ws/far/s%3A1|部署>", "\n\nyes"]), last.text);
   assert.equal(r.store.pendingMessages(keyB).length, 1);
   await assert.rejects(fromPeer(r.hub, "far", { session: "s:1", to: "nobody", text: "yes" }));
+  await r.close();
+});
+
+test("a chat on another station of the workspace is read there, by its link", async () => {
+  const r = new Rig({ link: true });
+  const [a, b] = [say("<@UBOT> build it"), say("<@UBOT> what did it find?")];
+  await r.accept(a);
+  await r.accept(b);
+  await settle();
+  const [keyA, keyB] = [sessionKey("cl", "C1", a.threadTs), sessionKey("cl", "C1", b.threadTs)];
+  await r.call(keyA, "chat_post", { to: `C1/${a.threadTs}`, text: "the build is green" });
+  const asked: [string, Json][] = [];
+  r.hub.onPeer(async (station, request) => {
+    asked.push([station, request]);
+    return { text: "Conversation EMBER/2.000001; its agents: s:1.\nit works" };
+  });
+  // A still.fail link and a chat's page (as a reference is written) both name the station.
+  for (const chat of ["https://ember.test/o/ws/far/s%3A1", "/w/ws/s/far/chats/s%3A1?history=s%3A1&entry=3"]) {
+    const read = await r.call(keyB, "chat_read", { chat, limit: 5 });
+    assert.ok(matches(read, ["station far", "it works"]), read);
+    const [station, request] = asked.pop()!;
+    assert.equal(station, "far");
+    assert.deepEqual([request.method, request.tool, request.session, request.args], ["session.read", "chat_read", keyB, { chat, limit: 5 }]);
+  }
+  await r.call(keyB, "session_history", { chat: "https://ember.test/o/ws/far/s%3A1" });
+  assert.equal(asked.pop()![1].tool, "session_history");
+  // This station's own link is read here.
+  const here = await r.call(keyB, "chat_read", { chat: `https://ember.test/o/ws/st/${keyA.replaceAll(":", "%3A")}` });
+  assert.ok(here.includes("the build is green") && !here.includes("station far"), here);
+  assert.equal(asked.length, 0);
+  // A station from before reads: it says so.
+  r.hub.onPeer(async () => {
+    throw new Refused("remote tasks are not enabled for this source station");
+  });
+  assert.ok((await r.refused(keyB, "chat_read", { chat: "https://ember.test/o/ws/far/s%3A1" })).includes("not updated yet"));
+  // The other way: what a session there reads here.
+  const got = await forPeer(r.hub, "far", { method: "session.read", session: "s:1", tool: "chat_read", args: { chat: keyA } });
+  assert.ok(matches(got.text, [`Conversation C1/${a.threadTs}`, "the build is green"]), got.text);
+  const steps = await forPeer(r.hub, "far", { method: "session.read", session: "s:1", tool: "session_history", args: { chat: keyA } });
+  assert.equal(steps.text, `Session ${keyA} has no execution history yet.`);
+  await assert.rejects(forPeer(r.hub, "far", { method: "session.read", session: "s:1", tool: "chat_post", args: { chat: keyA } }));
+  await assert.rejects(forPeer(r.hub, "far", { method: "session.read", session: "s:1", tool: "chat_read", args: {} }));
   await r.close();
 });
 
