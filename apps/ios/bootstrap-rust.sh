@@ -7,7 +7,7 @@ export CARGO_HOME="$ROOT/.airbuild/cargo"
 export RUSTUP_TOOLCHAIN=1.95.0
 export RUSTUP_INIT_SKIP_PATH_CHECK=yes
 export RUSTUP_TERM_PROGRESS_WHEN=never
-export PATH="$CARGO_HOME/bin:/opt/homebrew/bin:$PATH"
+export PATH="$CARGO_HOME/bin:$PATH:/opt/homebrew/bin"
 if [ "${AIRBUILD_SIGN:-0}" = 1 ] || [ "${PLATFORM_NAME:-}" = iphoneos ]; then
   TARGET=aarch64-apple-ios
 else

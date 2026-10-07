@@ -124,7 +124,6 @@
 		4764AD16F34BDBFC519943CB /* StatsWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsWidgets.swift; sourceTree = "<group>"; };
 		4A6E6EC2B5BB7E71EC3F213D /* Conversations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversations.swift; sourceTree = "<group>"; };
 		4AB4EAEB936E1BEF5306C5A2 /* NewChatFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatFlowTests.swift; sourceTree = "<group>"; };
-		4B21FBE955EF2044EB1E7F09 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4E8D4BB09A9D7B024DF8A6A7 /* Common.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Common.swift; sourceTree = "<group>"; };
 		558835F877A0A3D3518E9C2D /* ChatComposerGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatComposerGeometryTests.swift; sourceTree = "<group>"; };
 		56015C848C1B91E39DDE2978 /* WidgetSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSupport.swift; sourceTree = "<group>"; };
@@ -133,7 +132,6 @@
 		5CADAA1B5A485394B568F6DE /* DeletionCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeletionCopyTests.swift; sourceTree = "<group>"; };
 		5EA7CEA7BC0245349A76DB43 /* MarkdownHotPathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownHotPathTests.swift; sourceTree = "<group>"; };
 		712DC3D47ECA9676A13D295A /* NewChatFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatFlow.swift; sourceTree = "<group>"; };
-		72188CEC91CCF051E1E9E158 /* StillFailWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StillFailWidgets.entitlements; sourceTree = "<group>"; };
 		729D23748EEC6F7C6370668A /* ChatDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetails.swift; sourceTree = "<group>"; };
 		72B7CFE0C7DF5ECEF051EB2C /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
 		74233A3FF0A66C2A09DD04B4 /* ChatRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRenderingTests.swift; sourceTree = "<group>"; };
@@ -196,9 +194,7 @@
 		03FEDF2073622EF563041101 /* StillFailWidgets */ = {
 			isa = PBXGroup;
 			children = (
-				4B21FBE955EF2044EB1E7F09 /* Info.plist */,
 				4764AD16F34BDBFC519943CB /* StatsWidgets.swift */,
-				72188CEC91CCF051E1E9E158 /* StillFailWidgets.entitlements */,
 				C2C0C931E6B1548FFA006270 /* StillFailWidgets.swift */,
 				2C06807582FE01B326294FD0 /* TaskWidgets.swift */,
 				56015C848C1B91E39DDE2978 /* WidgetSupport.swift */,
@@ -507,12 +503,12 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(SRCROOT)/../../.airbuild/generated/core/stillfail-core.js",
-				"$(SRCROOT)/../../.airbuild/generated/core/libstillfail_shell.a",
+				"$(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/stillfail-core.js",
+				"$(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/libstillfail_shell.a",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
-			shellScript = "set -e -o pipefail\ncd \"$SRCROOT/../..\"\nexport PATH=\"$PWD/.airbuild/cargo/bin:/opt/homebrew/bin:$PATH\"\n/bin/bash apps/ios/bootstrap-rust.sh\n/bin/bash apps/ios/build-core.sh\n";
+			shellScript = "set -e -o pipefail\ncd \"$STILLFAIL_SOURCE_ROOT\"\nexport PATH=\"$PWD/.airbuild/cargo/bin:$PATH:/opt/homebrew/bin\"\n/bin/bash apps/ios/bootstrap-rust.sh\n/bin/bash apps/ios/build-core.sh\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -655,7 +651,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				LIBRARY_SEARCH_PATHS = "$(inherited) \"$(SRCROOT)/../../.airbuild/generated/core\"";
+				LIBRARY_SEARCH_PATHS = "$(inherited) \"$(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core\"";
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -663,6 +659,7 @@
 				OTHER_LDFLAGS = "$(inherited) -lstillfail_shell -framework Security -framework SystemConfiguration -lresolv";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				STILLFAIL_SOURCE_ROOT = "$(SRCROOT)/../..";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
@@ -679,11 +676,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = StillFail.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_FILE = "$(STILLFAIL_SOURCE_ROOT)/apps/ios/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -691,7 +688,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = fail.still.iphone;
 				PRODUCT_NAME = StillFail;
 				SDKROOT = iphoneos;
-				SWIFT_OBJC_BRIDGING_HEADER = StillFail/Core/Shell.h;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail/Core/Shell.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -746,13 +743,14 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				LIBRARY_SEARCH_PATHS = "$(inherited) \"$(SRCROOT)/../../.airbuild/generated/core\"";
+				LIBRARY_SEARCH_PATHS = "$(inherited) \"$(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core\"";
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				OTHER_LDFLAGS = "$(inherited) -lstillfail_shell -framework Security -framework SystemConfiguration -lresolv";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				STILLFAIL_SOURCE_ROOT = "$(SRCROOT)/../..";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
@@ -785,11 +783,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = StillFail.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_FILE = "$(STILLFAIL_SOURCE_ROOT)/apps/ios/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -797,7 +795,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = fail.still.iphone;
 				PRODUCT_NAME = StillFail;
 				SDKROOT = iphoneos;
-				SWIFT_OBJC_BRIDGING_HEADER = StillFail/Core/Shell.h;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail/Core/Shell.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;

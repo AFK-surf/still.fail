@@ -27,7 +27,8 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     CLANG_ENABLE_MODULES: YES
     SWIFT_EMIT_LOC_STRINGS: YES
-    LIBRARY_SEARCH_PATHS: '$(inherited) "$(SRCROOT)/../../.airbuild/generated/core"'
+    STILLFAIL_SOURCE_ROOT: '$(SRCROOT)/../..'
+    LIBRARY_SEARCH_PATHS: '$(inherited) "$(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core"'
     OTHER_LDFLAGS: '$(inherited) -lstillfail_shell -framework Security -framework SystemConfiguration -lresolv'
 targets:
   StillFail:
@@ -43,22 +44,22 @@ targets:
         shell: /bin/bash
         basedOnDependencyAnalysis: false
         outputFiles:
-          - $(SRCROOT)/../../.airbuild/generated/core/stillfail-core.js
-          - $(SRCROOT)/../../.airbuild/generated/core/libstillfail_shell.a
+          - $(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/stillfail-core.js
+          - $(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/libstillfail_shell.a
         script: |
           set -e -o pipefail
-          cd "$SRCROOT/../.."
-          export PATH="$PWD/.airbuild/cargo/bin:/opt/homebrew/bin:$PATH"
+          cd "$STILLFAIL_SOURCE_ROOT"
+          export PATH="$PWD/.airbuild/cargo/bin:$PATH:/opt/homebrew/bin"
           /bin/bash apps/ios/bootstrap-rust.sh
           /bin/bash apps/ios/build-core.sh
     settings:
       base:
         ENABLE_USER_SCRIPT_SANDBOXING: NO
-        SWIFT_OBJC_BRIDGING_HEADER: StillFail/Core/Shell.h
+        SWIFT_OBJC_BRIDGING_HEADER: '$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail/Core/Shell.h'
         PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone
         PRODUCT_NAME: StillFail
-        INFOPLIST_FILE: Info.plist
-        CODE_SIGN_ENTITLEMENTS: StillFail.entitlements
+        INFOPLIST_FILE: '$(STILLFAIL_SOURCE_ROOT)/apps/ios/Info.plist'
+        CODE_SIGN_ENTITLEMENTS: '$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail.entitlements'
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
@@ -84,6 +85,9 @@ targets:
     platform: iOS
     sources:
       - path: StillFailWidgets
+        excludes:
+          - Info.plist
+          - StillFailWidgets.entitlements
       - path: Shared
       - path: StillFail/Localizable.xcstrings
     info:

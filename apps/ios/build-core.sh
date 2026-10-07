@@ -8,7 +8,7 @@ export RUSTUP_TOOLCHAIN="1.95.0"
 export CARGO_HOME="$ROOT/.airbuild/cargo"
 export CARGO_TARGET_DIR="$ROOT/.airbuild/cargo-target"
 export IPHONEOS_DEPLOYMENT_TARGET="${IPHONEOS_DEPLOYMENT_TARGET:-26.0}"
-export PATH="$CARGO_HOME/bin:$RUSTUP_HOME/bin:/opt/homebrew/bin:$PATH"
+export PATH="$CARGO_HOME/bin:$RUSTUP_HOME/bin:$PATH:/opt/homebrew/bin"
 CARGO="$CARGO_HOME/bin/cargo"
 if [[ ! -x "$CARGO" ]]; then CARGO="$RUSTUP_HOME/bin/cargo"; fi
 if [[ ! -x "$CARGO" ]]; then echo "Project-local Rust toolchain is required" >&2; exit 1; fi

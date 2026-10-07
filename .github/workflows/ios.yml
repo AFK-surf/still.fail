@@ -1,0 +1,71 @@
+name: iOS checks
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'apps/ios/**'
+      - 'client/core-ts/**'
+      - 'client/shell/**'
+      - 'client/Cargo.*'
+      - 'client/i18n/**'
+      - 'vendor/**'
+      - '.node-version'
+      - 'package.json'
+      - '.github/workflows/ios*.yml'
+      - '.github/actions/setup-ios/**'
+      - '.github/actionlint.yaml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ios-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tooling:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Check the release scripts
+        run: |
+          bash -n apps/ios/scripts/build-ci.sh apps/ios/scripts/build-testflight.sh
+          python3 -m unittest discover -s apps/ios/scripts -p 'test_*.py'
+      - name: Validate iOS workflows
+        env:
+          ACTIONLINT_VERSION: '1.7.11'
+        run: |
+          set -euo pipefail
+          tool_dir=$(mktemp -d "$RUNNER_TEMP/stillfail-actionlint.XXXXXX")
+          curl --fail --silent --show-error --location --retry 3 --connect-timeout 15 --max-time 120 \
+            "https://github.com/rhysd/actionlint/releases/download/v$ACTIONLINT_VERSION/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            | tar xz -C "$tool_dir" actionlint
+          "$tool_dir/actionlint" .github/workflows/ios.yml .github/workflows/ios-testflight.yml
+  build:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: ${{ fromJSON(vars.IOS_RUNNER_LABELS || '["self-hosted","mini1"]') }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Prepare results directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/stillfail-ios-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "IOS_RELEASE_DIR=$RUNNER_TEMP/stillfail-ios-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+          echo "IOS_DERIVED_DATA=$RUNNER_TEMP/stillfail-ios-derived" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-ios
+        with:
+          xcode-path: ${{ vars.IOS_XCODE_PATH }}
+      - name: Test on iPhone and build unsigned Release for devices
+        run: bash apps/ios/scripts/build-ci.sh all
+      - name: Preserve test results and build logs
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ios-checks-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.IOS_RELEASE_DIR }}
+          retention-days: 14
+          if-no-files-found: warn

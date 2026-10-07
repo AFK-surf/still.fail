@@ -13,3 +13,5 @@ App 的构建前脚本会自动执行 `bootstrap-rust.sh` 和 `build-core.sh`，
 ```
 
 重新生成会更新工程文件；工程设置应改在 `project.yml` 中，并先保留需要的手工修改。旧的 `.airbuild/xcode/StillFail.xcodeproj` 保留，但日常打开请使用上面的可见工程。
+
+自动构建检查、TestFlight 发布以及所需 runner / 签名配置见 [iOS CI 与 TestFlight](CI.md)。普通 push 会运行无签名测试和真机构建；TestFlight 由 main 上的手动 workflow 发起。
