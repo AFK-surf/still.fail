@@ -222,7 +222,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
             return (
               <div key={p.key} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
                 data-swiping={(swipe !== null && isTop) || undefined} style={style}>
-                {routes(p.location)}
+                <div className={css.mColumn}>{routes(p.location)}</div>
               </div>
             );
           })}

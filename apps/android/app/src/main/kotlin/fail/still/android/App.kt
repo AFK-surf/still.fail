@@ -48,7 +48,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.draw.clipToBounds
 import fail.still.android.screens.WideCorners
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.statusBars
@@ -723,8 +722,9 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     // Wider than a phone (screens/Wide.kt): the pages in a column, the latest chats and the new-chat button at the screen's corners.
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
     val wide = maxWidth >= fail.still.android.screens.WideAt
-    Box(Modifier.align(androidx.compose.ui.Alignment.TopCenter).fillMaxHeight()
-        .then(if (wide) Modifier.width(fail.still.android.screens.columnWidth(maxWidth)).clipToBounds() else Modifier.fillMaxWidth())) {
+    // Each page is the screen's whole width with its column in the middle, so the room either side moves with it as it slides.
+    val column = if (wide) Modifier.width(fail.still.android.screens.columnWidth(maxWidth)) else Modifier.fillMaxWidth()
+    Box(Modifier.fillMaxSize()) {
     CompositionLocalProvider(fail.still.android.screens.LocalWide provides wide) {
     transition.AnimatedContent(
         transitionSpec = {
@@ -754,6 +754,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         saved.SaveableStateProvider(app.pageOf(screen)) { CompositionLocalProvider(fail.still.android.data.LocalPageTopics provides topics) {
             // A message's page draws its own ground, coming in over its chat (Annotate.kt).
             Box(Modifier.fillMaxSize().then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
+                Box(Modifier.align(androidx.compose.ui.Alignment.TopCenter).fillMaxHeight().then(column)) {
                 when (screen) {
                     Screen.Home -> HomeScreen(current)
                     is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)
@@ -792,6 +793,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.Annotate -> CompositionLocalProvider(fail.still.android.screens.LocalPageTransition provides pageScope.transition) {
                         fail.still.android.screens.AnnotateScreen(screen.station, screen.of, screen.ts)
                     }
+                }
                 }
                 // The page scrolls under the status bar; it keeps the paper behind its icons, moving with its page (the
                 // list and a chat have frosted bars there instead, which show what runs under them).
