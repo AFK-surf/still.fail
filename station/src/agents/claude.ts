@@ -27,6 +27,12 @@ const MCP_TOKEN_VAR = "STILLFAIL_MCP_TOKEN";
 /// Inherited variables that would let a session authenticate as something other than its profile.
 const SCRUBBED = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"];
 
+/// The value given a flag in a process's arguments.
+const flagOf = (args: string[], flag: string) => {
+  const at = args.indexOf(flag);
+  return at >= 0 ? args[at + 1] : undefined;
+};
+
 export const userMessage = (text: string) => JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } });
 
 /// Claude keeps a session at $CLAUDE_CONFIG_DIR/projects/<encoded cwd>/<id>.jsonl.
@@ -94,6 +100,8 @@ const interruptRequest = () => JSON.stringify({ type: "control_request", request
 export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void, interrupt: () => void) {
   const kind = typeof frame?.type === "string" ? frame.type : "";
   const subtype = typeof frame?.subtype === "string" ? frame.subtype : "";
+  // A control request it refused (a model it cannot switch to, say): the turns go on as they were.
+  if (kind === "control_response" && frame.response?.subtype === "error") log.warn("agents::claude", "claude refused a control request", { request: String(frame.response.request_id ?? ""), error: String(frame.response.error ?? "") });
   if (kind === "system" && subtype === "init") {
     const was = turn.busy;
     turn.busy = true;
@@ -194,7 +202,7 @@ export class ClaudeDriver implements AgentDriver {
     // ordinary output reaches nobody, so the nudge turned into status posts in the chat; the instructions say when to post.
     env.CLAUDE_CODE_SILENT_TURN_REMINDER ??= "0";
 
-    const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false }, machine?.expiresAt ?? null, new LiveFromClaude(), events);
+    const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false }, machine?.expiresAt ?? null, new LiveFromClaude(), events, options.effort);
     const label = `claude ${sessionId}`;
     session.attach(await AgentProcess.start(this.data, runnerId("claude", options.key), this.command, args, env, options.cwd, session.processOptions(label)));
     this.live.add(session);
@@ -209,7 +217,7 @@ export class ClaudeDriver implements AgentDriver {
     let session: ClaudeSession;
     if (handed) {
       log.info("agents::claude", "taking up a claude process handed over", { session: handed.id, pgid: info.pgid, busy: handed.turn.busy });
-      session = new ClaudeSession(this, handed.id, { ...handed.turn, closed: false }, handed.machineExpires, new LiveFromClaude(handed.live), events);
+      session = new ClaudeSession(this, handed.id, { ...handed.turn, closed: false }, handed.machineExpires, new LiveFromClaude(handed.live), events, flagOf(info.args, "--effort"));
     } else {
       // The previous station crashed: what it had handled (stdout up to where it acknowledged) is read again, silently,
       // to know where the turn stands; the rest comes as it would have.
@@ -226,7 +234,7 @@ export class ClaudeDriver implements AgentDriver {
       const sessionId = flag >= 0 ? info.args[flag + 1]! : (options.resume ?? "");
       log.info("agents::claude", "taking up a claude process after a crash", { session: sessionId, pgid: info.pgid, busy: turn.busy, from: at });
       // Its token is not known: as if about to run out, so its next turn starts it again with the machine's current one.
-      session = new ClaudeSession(this, sessionId, turn, isMachine(options.profile) ? wall.now() : null, live, events);
+      session = new ClaudeSession(this, sessionId, turn, isMachine(options.profile) ? wall.now() : null, live, events, flagOf(info.args, "--effort"));
       // A turn is running that this station did not start.
       if (turn.busy) events({ type: "turnStarted" });
     }
@@ -260,9 +268,12 @@ export class ClaudeSession implements AgentSession {
   private machineExpires: number | null;
   private live: LiveFromClaude;
   private events: (event: RuntimeEvent) => void;
+  /// The effort it was started with: fixed for the process (`--effort` has no switch while it runs).
+  private effort: string | undefined;
 
-  constructor(driver: ClaudeDriver, sessionId: string, turn: Turn, machineExpires: number | null, live: LiveFromClaude, events: (event: RuntimeEvent) => void) {
+  constructor(driver: ClaudeDriver, sessionId: string, turn: Turn, machineExpires: number | null, live: LiveFromClaude, events: (event: RuntimeEvent) => void, effort: string | undefined) {
     this.driver = driver;
+    this.effort = effort;
     this.sessionId = sessionId;
     this.turn = turn;
     this.machineExpires = machineExpires;
@@ -331,6 +342,15 @@ export class ClaudeSession implements AgentSession {
     if (this.turn.closed || !this.turn.busy || this.turn.aborting) return;
     this.turn.aborting = true;
     this.proc.write(interruptRequest());
+  }
+
+  /// Another model is set in the process (set_model, read before the next prompt written after it); another effort needs
+  /// a new one.
+  retune(options: OpenOptions) {
+    const model = options.model ?? profileModel(options.profile);
+    if (this.turn.closed || this.turn.busy || model === undefined || options.effort !== this.effort) return false;
+    this.proc.write(JSON.stringify({ type: "control_request", request_id: `model-${uuid()}`, request: { subtype: "set_model", model } }));
+    return true;
   }
 
   async dispose() {

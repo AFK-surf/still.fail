@@ -65,6 +65,9 @@ export interface AgentSession {
   backgroundTools(): Promise<void>;
   /// Interrupts the running turn; its end still arrives as turnEnded.
   abort(): Promise<void>;
+  /// Between turns, takes the model and effort of `options` (opened as they were otherwise) from its next turn on,
+  /// without a new process. False when it cannot: it is then started again on them.
+  retune?(options: OpenOptions): boolean;
   /// Releases the session; ends the runtime process when it is not shared.
   dispose(): Promise<void>;
   /// What a next station needs to take this session up (its turn's state): written by the session layer at handover.

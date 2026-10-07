@@ -1039,6 +1039,28 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   assert.ok((await refused(configure(r.hub, key, { model: "gpt-5" }))).includes("没有能跑 gpt-5 的 Claude Code Profile"));
   assert.ok((await refused(configure(r.hub, key, { effort: "ultra" }))).includes("思考深度只有"));
   r.edit((raw) => raw.profiles.filter((p: any) => p.id === "cc" || p.id === "cc2").forEach((p: any) => (p.models = [...(p.models ?? []), "sonnet"])));
+  // Another model on the same profile while a turn runs: its process takes it in place before the next turn, nothing
+  // it runs in the background lost to a new start.
+  await r.accept({ ...say("<@UBOT> and again"), threadTs: m.threadTs });
+  await settle();
+  const same = r.claude.last();
+  assert.ok(same.busyNow);
+  await configure(r.hub, key, { model: "sonnet", effort: "low" });
+  assert.deepEqual(same.retuned, [], "not while its turn runs");
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  same.complete();
+  await settle();
+  await r.accept({ ...say("<@UBOT> on sonnet"), threadTs: m.threadTs });
+  await settle();
+  assert.equal(r.claude.last(), same, "the same process");
+  assert.deepEqual(same.retuned, [["sonnet", "low"]]);
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  same.complete();
+  await settle();
+  // Idle, one that cannot take it in place (Claude and another effort) ends at once; the next turn starts as changed.
+  same.retunable = false;
+  await configure(r.hub, key, { effort: "high" });
+  assert.ok(same.disposed);
   await configure(r.hub, key, { profile: "cc2", model: "sonnet", effort: "low" });
   let row = r.session(key);
   assert.deepEqual([row.model, row.effort], ["sonnet", "low"]);

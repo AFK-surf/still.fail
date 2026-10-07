@@ -317,6 +317,8 @@ export type CodexSnapshot = {
   turnId: string | null;
   live: CodexLiveState;
   host: CodexHostSnapshot;
+  /// The model and effort it was retuned to, given with its turns (optional: a station from before it does not say).
+  tuned?: { model: string; effort: string } | null;
 };
 
 export type CodexDriverOptions = {
@@ -506,6 +508,7 @@ export class CodexDriver implements AgentDriver {
     const threadId = opened?.thread?.id;
     if (typeof threadId !== "string") throw new Error("codex gave no thread id");
     const session = new CodexSession(this, threadId, host, options.profile, { busy: false, turnId: null, closed: false }, new LiveFromCodex(), events);
+    session.running = { model, effort: options.effort };
     host.addThread(threadId, session.sink());
     return session;
   }
@@ -529,6 +532,8 @@ export class CodexDriver implements AgentDriver {
     let session: CodexSession;
     if (handed) {
       session = new CodexSession(this, handed.threadId, host, options.profile, { busy: handed.busy, turnId: handed.turnId, closed: false }, new LiveFromCodex(handed.live), events);
+      session.tuned = handed.tuned ?? null;
+      session.running = session.tuned;
     } else {
       const threadId = options.resume;
       if (threadId === undefined) throw new Error("a codex thread is taken up by its id (resume)");
@@ -566,6 +571,10 @@ export class CodexSession implements AgentSession {
   private state: ThreadState;
   private live: LiveFromCodex;
   private events: (event: RuntimeEvent) => void;
+  /// Another model and effort its turns start with from now on (turn/start keeps them for the thread's later turns).
+  tuned: { model: string; effort: string } | null = null;
+  /// What its turns run with: as opened, or retuned to; null when not known (taken up from another station).
+  running: { model: string | undefined; effort: string | undefined } | null = null;
 
   constructor(driver: CodexDriver, threadId: string, host: Host, profile: Profile, state: ThreadState, live: LiveFromCodex, events: (event: RuntimeEvent) => void) {
     this.driver = driver;
@@ -634,6 +643,7 @@ export class CodexSession implements AgentSession {
     if (this.state.busy) throw new Error("a turn is already running");
     this.state.busy = true;
     const params: Json = { threadId: this.threadId, input: input(text) };
+    if (this.tuned) Object.assign(params, this.tuned);
     const p = this.driver.options.currentProfile ? this.driver.options.currentProfile(this.host.profile) : this.profile;
     if (p && accessKind(p) === "subscription") {
       // An explicit null clears a previously selected tier; omitting it would keep Fast on.
@@ -658,6 +668,19 @@ export class CodexSession implements AgentSession {
       debug("agents::codex", "codex steer refused", { thread: this.threadId, error: String(error) });
       return false;
     }
+  }
+
+  /// Given with the next turn/start. Back to a default (no model or effort named) only takes a new start: an override left
+  /// out keeps the thread's.
+  retune(options: OpenOptions) {
+    const model = options.model ?? profileModel(options.profile);
+    const effort = options.effort;
+    if (this.state.closed || this.state.busy) return false;
+    if (this.running?.model === model && this.running.effort === effort) return true;
+    if (model === undefined || effort === undefined) return false;
+    this.tuned = { model, effort };
+    this.running = this.tuned;
+    return true;
   }
 
   /// Codex cannot move what a turn waits on to the background.
@@ -694,6 +717,7 @@ export class CodexSession implements AgentSession {
       turnId: this.state.turnId,
       live: this.live.state(),
       host: this.host.snapshot(),
+      tuned: this.tuned,
     };
   }
 

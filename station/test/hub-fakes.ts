@@ -92,6 +92,9 @@ export class FakeSession implements AgentSession {
   busyNow = false;
   /// Takes no steer (e.g. a codex turn that is not steerable).
   unsteerable = false;
+  /// What it was retuned to in place (the model and effort of each), and whether it can be (as Claude cannot for effort).
+  retuned: [string | undefined, string | undefined][] = [];
+  retunable = true;
 
   constructor(id: string, options: OpenOptions, events: (event: RuntimeEvent) => void, busy = false) {
     this.sessionId = id;
@@ -129,6 +132,11 @@ export class FakeSession implements AgentSession {
   }
   async abort() {
     this.aborts++;
+  }
+  retune(options: OpenOptions) {
+    if (!this.retunable || this.busyNow) return false;
+    this.retuned.push([options.model, options.effort]);
+    return true;
   }
   async dispose() {
     this.disposed = true;

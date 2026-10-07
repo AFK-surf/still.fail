@@ -140,7 +140,8 @@ export class SessionActor {
   private scope: Scope.Closeable;
 
   private agent: { generation: number; session: AgentSession } | null = null;
-  /// How it runs was changed while its process was busy: that process ends before the next turn, which starts as changed.
+  /// How it runs was changed and its process has not caught up: before the next turn it takes the new model and effort
+  /// in place, or ends so the next one starts as changed.
   private stale = false;
   private profile: string | null = null;
   private generation = 0;
@@ -324,10 +325,10 @@ export class SessionActor {
     });
   }
 
-  /// How it runs (profile, model, effort) changed: its process ends now if idle, else before its next turn.
+  /// How it runs (profile, model, effort) changed: its process takes it now if idle, else before its next turn.
   changed(): Promise<void> {
     if (this.agent) this.stale = true;
-    return this.evict();
+    return this.enqueue(() => this.catchUp(!this.turn && this.waiting === null));
   }
 
   /// Ends the runtime process if it is idle.
@@ -640,13 +641,28 @@ export class SessionActor {
     this.deps.store.setRunning(this.key, true);
   }
 
-  private async ensureAgent(): Promise<AgentSession> {
-    if (this.agent && this.stale && !this.agent.session.busy()) {
-      const old = this.agent.session;
-      this.agent = null;
-      log.info("session", "ending the process from before the session was changed", { session: this.key });
-      await old.dispose();
+  /// A process idle since the session was changed takes its new model and effort in place, when it runs on the same
+  /// profile and can; otherwise it ends (when `end`: not while a turn or a wait holds on to it).
+  private async catchUp(end: boolean) {
+    const agent = this.agent;
+    if (!agent || !this.stale || agent.session.busy()) return;
+    const row = this.deps.store.getSession(this.key);
+    const profile = row ? this.deps.runOn(this.key) : null;
+    if (row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps))) {
+      this.stale = false;
+      log.info("session", "session process takes the change in place", { session: this.key, model: row.model ?? "", effort: row.effort ?? "" });
+      return;
     }
+    if (!end) return;
+    this.stale = false;
+    this.agent = null;
+    log.info("session", "ending the process from before the session was changed", { session: this.key });
+    await agent.session.dispose();
+    this.deps.store.notify(this.key);
+  }
+
+  private async ensureAgent(): Promise<AgentSession> {
+    await this.catchUp(true);
     if (this.agent) return this.agent.session;
     if (this.deps.archiveIsCold(this.key)) await this.deps.restoreArchive(this.key);
     const store = this.deps.store;
