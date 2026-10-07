@@ -3,7 +3,7 @@
 # in DIR/stillfail-core for PLATFORM (default darwin-arm64): client/core-ts's Node host bundled as one CommonJS file,
 # the mesh addon it connects to stations with (prebuilt: scripts/native.ts), and typings for what the embedding app
 # calls. Nothing is published here. How an app uses it: docs/core-ts.md, "Account providers and embedding".
-#   stillfail-core/core-ts.js       (hosts/node.ts: `start`, `commaAccountProvider`, `stillfailAccountProvider`)
+#   stillfail-core/core-ts.js       (hosts/node.ts: `start`, `commaAccountProvider` with `bearer` or `transport`, `stillfailAccountProvider`)
 #   stillfail-core/core-ts.d.ts     (their types)
 #   stillfail-core/mesh.node        (the addon; the app sets STILLFAIL_MESH_NATIVE to it before `start`)
 #   stillfail-core/package.json     (name, version 0.1.<BUILD>, main)
@@ -50,12 +50,29 @@ export type ClientId = number;
 export type Listener = (client: ClientId, json: string) => void;
 /** Who the accounts are with: still.fail cloud's (the default), or Comma's. Opaque to the app. */
 export type AccountProviderFactory = { readonly __accountProvider: unique symbol };
+export type HttpRequest = { method: string; url: string; headers: [string, string][]; body: Uint8Array | null };
+export type HttpResponse = { status: number; headers: [string, string][]; body: Uint8Array };
+/** Requests to Comma that the app sends with its own session (it adds the credential). */
+export type CommaTransport = {
+  fetch(request: HttpRequest): Promise<HttpResponse>;
+  /** `next` resolves null once the body ended; `close` lets the stream go. */
+  fetchStream(request: HttpRequest): Promise<{ status: number; headers: [string, string][]; next(): Promise<Uint8Array | null>; close(): void }>;
+};
 export type CommaOptions = {
   /** Comma's backend origin, e.g. https://api.cue.surf (no trailing slash). */
   origin: string;
-  /** The app's Comma session token now; rejects when the app is signed out. Never shown to a UI. */
-  bearer: () => Promise<string>;
-};
+} & (
+  | {
+      /** The app's Comma session token now; rejects when the app is signed out. Never shown to a UI. */
+      bearer: () => Promise<string>;
+      transport?: undefined;
+    }
+  | {
+      /** The app sends Comma's requests with its session: the core never holds the token. */
+      transport: CommaTransport;
+      bearer?: undefined;
+    }
+);
 export declare function commaAccountProvider(options: CommaOptions): AccountProviderFactory;
 export declare const stillfailAccountProvider: AccountProviderFactory;
 export type CoreHandle = {
