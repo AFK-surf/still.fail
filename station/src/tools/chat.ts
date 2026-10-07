@@ -162,7 +162,7 @@ export const CHAT_POST = {
 export const CHAT_STATE = {
   name: "chat_state",
   description:
-    "Record how this turn ends without posting another message: all_done (nothing in the chat is left unfinished: done says why, with the evidence), need_human (requires about pointing to your visible question, or a pending answer card; need alone is not visible in the chat) or waiting (only for work you started that brings you back on its own, such as CI, a build, a job: for says what; waiting on a person is need_human).",
+    "Record how this turn ends without posting another message: all_done (nothing in the chat is left unfinished: done says why, with the evidence), need_human (requires about pointing to your visible question, or a pending answer card; need alone is not visible in the chat) or waiting (only for work you started that brings you back on its own, such as a background command or agent, a job, a loop watching CI, and only when nothing else is left to do meanwhile: for says what; waiting on a person is need_human).",
   inputSchema: {
     "type": "object",
     "properties": {
