@@ -328,15 +328,18 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
         </FirstOne>
       ) : (
         <>
-          {/* The workspace's profiles in one list: one shared between stations once (where it is signed in, or which
-              stations may use it, in its line), the others each with the station they are on (the core's `profiles`). */}
-          {profiles.value && profiles.value.items.length > 0 && (
-            <ul className={pagesCss.list}>
-              {profiles.value.items.map((e) => (
-                <li key={e.key}><WorkspaceProfileRow entry={e} workspace={entry.id} /></li>
-              ))}
-            </ul>
-          )}
+          {/* The workspace's profiles, a section each kind of account: one shared between stations once (where it is
+              signed in, or which stations may use it, in its line), the others each with the station they are on (the
+              core's `profiles`). */}
+          {profileGroups(profiles.value?.items ?? []).map((g) => (
+            <Section key={g[0]!.group} title={g[0]!.groupTitle}>
+              <ul className={pagesCss.list}>
+                {g.map((e) => (
+                  <li key={e.key}><WorkspaceProfileRow entry={e} workspace={entry.id} /></li>
+                ))}
+              </ul>
+            </Section>
+          ))}
           {profiles.value?.loading && <Loading label={t("web-pages.settings.reading")} fill={false} />}
           {/* The machines' own logins not used yet, each where it is. */}
           {online.map((station) => (
@@ -357,6 +360,17 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
       </Dialog>
     </Page>
   );
+}
+
+/** The workspace's profiles a run each kind of account, as the core lists them (by kind, in order). */
+export function profileGroups(items: WorkspaceProfile[]): WorkspaceProfile[][] {
+  const groups: WorkspaceProfile[][] = [];
+  for (const e of items) {
+    const last = groups[groups.length - 1];
+    if (last && last[0]!.group === e.group) last.push(e);
+    else groups.push([e]);
+  }
+  return groups;
 }
 
 /** The stations an account is signed in on (or a key kept): one borrowing it has nothing of its own to set. */

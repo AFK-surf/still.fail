@@ -67,3 +67,20 @@ test("the same account signed in on two stations each is one row, each station a
   ]);
   assert.equal(two.items.length, 2);
 });
+
+test("the list is grouped by kind of account: Claude's subscriptions, ChatGPT's, then keys", () => {
+  const view = workspaceProfiles([
+    station(A, "studio", true, [
+      profile("key", { access: { kind: "api-provider" } }),
+      profile("gpt", { email: "g@x.test", runtime: "codex" }),
+      profile("b-claude", { email: "b@x.test", runtime: "claude" }),
+      profile("a-claude", { email: "a@x.test", runtime: "claude", checkTone: "red" }),
+    ]),
+  ]);
+  assert.deepEqual(view.items.map((e: any) => [e.group, e.groupTitle, e.profile.id]), [
+    ["claude", "Claude 订阅", "a-claude"],
+    ["claude", "Claude 订阅", "b-claude"],
+    ["chatgpt", "ChatGPT 订阅", "gpt"],
+    ["key", "API Key", "key"],
+  ]);
+});

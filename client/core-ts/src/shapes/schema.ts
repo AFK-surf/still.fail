@@ -1310,9 +1310,11 @@ export const SHAPES: Record<string, Shape> = {
   ProfilesView: struct([
     ["items", vec("WorkspaceProfile")],
     ["loading", "bool", { doc: "A station that is up is not read yet: its profiles come later." }],
-  ], { doc: "The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with\nthe station they are on; usable ones first.", keepNone: true }),
+  ], { doc: "The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with\nthe station they are on; by kind of account (`group`, in its order), usable ones first in each.", keepNone: true }),
   WorkspaceProfile: struct([
     ["key", "String", { doc: "The share's id, or station/profile for one on a station only." }],
+    ["group", "String", { doc: "The kind of account it is listed under: claude (Claude's subscription), chatgpt, key (the rest)." }],
+    ["groupTitle", "String", { doc: "That kind in words: Claude 订阅." }],
     ["station", "String", { doc: "The station whose copy this is (its page is there)." }],
     ["stationId", "String"],
     ["stationName", "String"],

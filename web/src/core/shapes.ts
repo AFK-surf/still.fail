@@ -2778,6 +2778,10 @@ export interface ShareStation {
 export interface WorkspaceProfile {
 	/** The share's id, or station/profile for one on a station only. */
 	key: string;
+	/** The kind of account it is listed under: claude (Claude's subscription), chatgpt, key (the rest). */
+	group: string;
+	/** That kind in words: Claude 订阅. */
+	groupTitle: string;
 	/** The station whose copy this is (its page is there). */
 	station: string;
 	stationId: string;
@@ -2806,7 +2810,7 @@ export interface WorkspaceProfile {
 
 /**
  * The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with
- * the station they are on; usable ones first.
+ * the station they are on; by kind of account (`group`, in its order), usable ones first in each.
  */
 export interface ProfilesView {
 	items: WorkspaceProfile[];

@@ -2,11 +2,11 @@
 // station's in one list, a profile's
 // page (whether it works, signing a subscription in, its allowance, which of its models may be used, who uses it, its
 // key or variables; renaming, checking and deleting under "…"), and a new one.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAction, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
 import type { MachineLogin, ProfileFlowView, WorkspaceProfile } from "../core/shapes.ts";
-import { hosts } from "../cloud/settings.tsx";
+import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { ACCESS, KEYED } from "../format.ts";
 import { Check, ChevronRight, More, Plus } from "../icons.tsx";
 import type { Choice } from "../pages/Accounts.tsx";
@@ -89,21 +89,30 @@ function WorkspaceList({ scope }: { scope: string }) {
   const app = useApp();
   const view = useProfiles(scope).value;
   if (!view) return <Loading text={t("web-mobile.reading")} />;
+  const groups = profileGroups(view.items);
   return (
-    <ListCard>
-      {view.items.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow>}
-      {view.items.map((e: WorkspaceProfile) => (
-        <ListRow key={e.key} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
-          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`} style={e.usable ? undefined : { opacity: 0.55 }}>
-            <span className={listsCss.mRowTitle}><Presence state={e.usable ? toneDot(e.profile.checkTone) : "error"} /> {e.profile.name}</span>
-            <span className={listsCss.mRowNote}>{e.usable ? e.where || `${e.profile.checkText} · ${e.profile.usesText || accessLabel(e.profile)}` : t("web-pages.settings.profiles.hostAway", { station: e.hostName })}</span>
-          </span>
-          {e.usable && <QuotaRings quota={e.profile.quota} />}
-          <ChevronRight size={14} className={partsCss.mSubtle} />
-        </ListRow>
+    <>
+      {view.items.length === 0 && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow></ListCard>}
+      {/* A section each kind of account (the core's order). */}
+      {groups.map((g) => (
+        <Fragment key={g[0]!.group}>
+          <SectionHeader title={g[0]!.groupTitle} start={24} />
+          <ListCard>
+            {g.map((e: WorkspaceProfile) => (
+              <ListRow key={e.key} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`} style={e.usable ? undefined : { opacity: 0.55 }}>
+                  <span className={listsCss.mRowTitle}><Presence state={e.usable ? toneDot(e.profile.checkTone) : "error"} /> {e.profile.name}</span>
+                  <span className={listsCss.mRowNote}>{e.usable ? e.where || `${e.profile.checkText} · ${e.profile.usesText || accessLabel(e.profile)}` : t("web-pages.settings.profiles.hostAway", { station: e.hostName })}</span>
+                </span>
+                {e.usable && <QuotaRings quota={e.profile.quota} />}
+                <ChevronRight size={14} className={partsCss.mSubtle} />
+              </ListRow>
+            ))}
+          </ListCard>
+        </Fragment>
       ))}
-      {view.loading && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.reading")}</span></ListRow>}
-    </ListCard>
+      {view.loading && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.reading")}</span></ListRow></ListCard>}
+    </>
   );
 }
 

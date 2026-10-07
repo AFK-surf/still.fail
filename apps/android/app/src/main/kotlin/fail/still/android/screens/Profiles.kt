@@ -156,35 +156,39 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
     }
 }
 
-/** The workspace's profiles in one list: a shared one once, where it is under it; one whose subscription's station is
- * away dimmed, said why (as the narrow web's WorkspaceList). */
+/** The workspace's profiles, a section each kind of account: a shared one once, where it is under it; one whose
+ * subscription's station is away dimmed, said why (as the narrow web's WorkspaceList). */
 @Composable
 private fun WorkspaceList(scope: String) {
     val app = LocalApp.current
     val topic by rememberTopic<ProfilesView>(app.core, Topics.profiles(scope))
     val view = topic.value ?: return Text(topic.error?.message ?: t("android-settings.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
-    ListCard {
-        if (view.items.isEmpty()) ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) }
-        view.items.forEach { e ->
-            val p = e.profile
-            ListRow(onClick = { app.push(if (e.members.orEmpty().count { it.role != "user" } > 1) Screen.ProfileAccount(e.key) else Screen.Profile(e.station, p.id)) }) {
-                Column(Modifier.weight(1f).then(if (e.usable) Modifier else Modifier.alpha(0.55f))) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        PresenceDot(if (e.usable) toneDot(p.checkTone) else "error")
-                        Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    if (view.items.isEmpty()) ListCard { ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) } }
+    // A section each kind of account (the core lists them by kind, in order).
+    view.items.groupBy { it.group }.forEach { (_, g) ->
+        SectionHeader(g.first().groupTitle, start = 24.dp)
+        ListCard {
+            g.forEach { e ->
+                val p = e.profile
+                ListRow(onClick = { app.push(if (e.members.orEmpty().count { it.role != "user" } > 1) Screen.ProfileAccount(e.key) else Screen.Profile(e.station, p.id)) }) {
+                    Column(Modifier.weight(1f).then(if (e.usable) Modifier else Modifier.alpha(0.55f))) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            PresenceDot(if (e.usable) toneDot(p.checkTone) else "error")
+                            Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Text(
+                            if (!e.usable) t("web-pages.settings.profiles.hostAway", "station" to e.hostName)
+                            else e.where.ifEmpty { listOfNotNull(p.checkText, p.usesText?.ifEmpty { null } ?: ACCESS_LABEL[p.access.kind] ?: p.access.kind).joinToString(" · ") },
+                            fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
                     }
-                    Text(
-                        if (!e.usable) t("web-pages.settings.profiles.hostAway", "station" to e.hostName)
-                        else e.where.ifEmpty { listOfNotNull(p.checkText, p.usesText?.ifEmpty { null } ?: ACCESS_LABEL[p.access.kind] ?: p.access.kind).joinToString(" · ") },
-                        fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
+                    if (e.usable) QuotaRings(p.quota)
+                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
-                if (e.usable) QuotaRings(p.quota)
-                IconIn(Icons.ChevronRight, 14.dp, C.subtle)
             }
         }
-        if (view.loading) ListRow { Text(t("android-settings.reading"), fontSize = 15.sp, color = C.muted) }
     }
+    if (view.loading) ListCard { ListRow { Text(t("android-settings.reading"), fontSize = 15.sp, color = C.muted) } }
 }
 
 /** An account on several stations (as the narrow web's ProfileAccountScreen): what they have in common, then each

@@ -1,4 +1,5 @@
-// The workspace's profiles in one list (the `profiles` view, docs/station-share.md), one row an account: the same
+// The workspace's profiles in one list (the `profiles` view, docs/station-share.md), grouped by the kind of account
+// (Claude's subscriptions, ChatGPT's, keys), one row an account: the same
 // subscription (by its runtime and the address signed in) or the same key (by its provider and key), whether shared
 // between stations or signed in on several of them each, is one row; its stations are its members, each with what it
 // is there (the one that has it and lends it, one borrowing it, one signed in on its own). Made from what the stations'
@@ -23,6 +24,15 @@ function account(p: J): string | null {
   // The key as the station shows it (its first five and last four characters): enough to tell two apart.
   if ((KEYED.has(a.kind) || (a.kind === "env" && a.provider)) && typeof a.key === "string" && a.key !== "") return `key:${a.provider ?? a.kind}:${a.endpoint ?? ""}:${a.key}`;
   return null;
+}
+
+/// The kinds of account the list is grouped by, in their order: a vendor's subscription (Claude's, ChatGPT's), then
+/// keys and the rest.
+const GROUPS = ["claude", "chatgpt", "key"] as const;
+
+function group(p: J): (typeof GROUPS)[number] {
+  if (p.access?.kind !== "subscription") return "key";
+  return p.runtime === "codex" ? "chatgpt" : "claude";
 }
 
 /// `stations`: the `stations` view's items (each with its decorated overview).
@@ -62,8 +72,11 @@ export function workspaceProfiles(stations: J[]): J {
     else if (!share) parts.push(t("core-views.profiles.on", { stations: members.map((m) => m.stationName).join("、") }));
     if (allow !== null) parts.push(t("core-views.profiles.allowed", { stations: allow.map(name).join("、") }));
     const host = share ? String(share.host) : String(s.id);
+    const kind = group(p);
     items.push({
       key,
+      group: kind,
+      groupTitle: t(`core-views.profiles.group.${kind}`),
       station: String(s.station),
       stationId: String(s.id),
       stationName: String(s.name),
@@ -84,11 +97,11 @@ export function workspaceProfiles(stations: J[]): J {
       members,
     });
   }
-  // What needs a look first (one nobody can use now, one whose check failed), then by name.
+  // By kind of account; in each, what needs a look first (one nobody can use now, one whose check failed), then by name.
   const look = (e: J) => !e.usable || e.profile.checkTone === "red";
   // Not localeCompare: Hermes on Android asks Java for it, which the app does not carry (it aborts the app).
   const byName = (a: J, b: J) => (String(a.profile.name) < String(b.profile.name) ? -1 : String(a.profile.name) > String(b.profile.name) ? 1 : 0);
-  items.sort((a, b) => Number(look(b)) - Number(look(a)) || byName(a, b));
+  items.sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || Number(look(b)) - Number(look(a)) || byName(a, b));
   return { items, loading };
 }
 

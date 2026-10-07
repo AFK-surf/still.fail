@@ -2798,6 +2798,10 @@ data class ShareStation (
 data class WorkspaceProfile (
 	/// The share's id, or station/profile for one on a station only.
 	val key: String,
+	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, key (the rest).
+	val group: String,
+	/// That kind in words: Claude 订阅.
+	val groupTitle: String,
 	/// The station whose copy this is (its page is there).
 	val station: String,
 	val stationId: String,
@@ -2825,7 +2829,7 @@ data class WorkspaceProfile (
 )
 
 /// The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with
-/// the station they are on; usable ones first.
+/// the station they are on; by kind of account (`group`, in its order), usable ones first in each.
 @Serializable
 data class ProfilesView (
 	val items: List<WorkspaceProfile>,
