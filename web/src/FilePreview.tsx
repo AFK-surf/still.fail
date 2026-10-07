@@ -257,8 +257,11 @@ export function chatImages(messages: { authorKind?: string; text: string; attach
   });
 }
 
+/** A file already on this device (one in the draft, not sent yet): shown as it is, not fetched from the station. */
+export interface LocalFile { blob: Blob; url: string }
+
 /** A file over the whole window, a bar with its name and tools on top; Esc closes it. */
-export function FilePreview({ open, onClose, sessionKey, file }: { open: boolean; onClose(): void; sessionKey: string; file: Attachment }) {
+export function FilePreview({ open, onClose, sessionKey, file, local }: { open: boolean; onClose(): void; sessionKey: string; file: Attachment; local?: LocalFile | undefined }) {
   // Closed by hand (its button, Esc, back), it goes back into the chat's thumbnail first (viewerFlight.ts).
   const closing = useRef<((done: () => void) => void) | null>(null);
   const close = () => { const c = closing.current; if (c) c(onClose); else onClose(); };
@@ -266,7 +269,7 @@ export function FilePreview({ open, onClose, sessionKey, file }: { open: boolean
   return (
     <RDialog.Root open={open} onOpenChange={(o) => { if (!o) close(); }}>
       <RDialog.Portal>
-        {open && <Viewer onClose={close} closing={closing} sessionKey={sessionKey} file={file} />}
+        {open && <Viewer onClose={close} closing={closing} sessionKey={sessionKey} file={file} local={local} />}
       </RDialog.Portal>
     </RDialog.Root>
   );
@@ -284,10 +287,11 @@ export function FileLink({ sessionKey, file, children }: { sessionKey: string | 
   );
 }
 
-function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: RefObject<((done: () => void) => void) | null>; sessionKey: string; file: Attachment }) {
+function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closing: RefObject<((done: () => void) => void) | null>; sessionKey: string; file: Attachment; local?: LocalFile | undefined }) {
   const [{ sessionKey, file }, setShown] = useState<Shown>(opened);
   const gallery = useContext(Gallery);
-  const images = isImage(file.name) ? gallery?.() ?? [] : [];
+  // One in the draft is not among the chat's: it shows alone.
+  const images = isImage(file.name) && !local ? gallery?.() ?? [] : [];
   const at = images.findIndex((i) => i.file.path === file.path);
   const before = at > 0 ? images[at - 1] : undefined;
   const after = at >= 0 ? images[at + 1] : undefined;
@@ -402,7 +406,8 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
     closing.current = (done) => flight.close(showing.current, done);
     return () => { closing.current = null; flight.stop(); };
   }, [flight, closing]);
-  const loaded = useFile(sessionKey, file, true);
+  const fetched = useFile(sessionKey, file, !local);
+  const loaded: Loaded = local ? { state: "ready", ...local } : fetched;
   const known = kindOf(file.name);
   // An image stands in as the chat showed it (its thumbnail, kept) while the whole of it comes.
   const thumb = useFileUrl(sessionKey, file, known.kind === "image" && loaded.state === "loading", true);

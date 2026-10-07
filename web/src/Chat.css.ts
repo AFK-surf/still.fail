@@ -486,8 +486,11 @@ export const composerThumb = style({
     "&[data-error]": { outline: `2px solid ${vars.red}`, outlineOffset: "-2px" },
   },
 });
+export const composerThumbOpen = style({
+  display: "block", width: "100%", height: "100%", padding: "0", border: "0", background: "none", cursor: "zoom-in",
+});
 export const composerThumbBusy = style({
-  position: "absolute", inset: "0", display: "grid", placeItems: "center",
+  position: "absolute", inset: "0", display: "grid", placeItems: "center", pointerEvents: "none",
   background: `color-mix(in srgb, ${vars.canvas} 55%, transparent)`,
 });
 export const composerThumbRemove = style({
