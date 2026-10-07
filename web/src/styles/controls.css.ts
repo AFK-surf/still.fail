@@ -14,9 +14,11 @@ export const btn = style({
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "36px",
   padding: "0 16px", borderRadius: "999px", border: `1px solid ${vars.lineStrong}`, background: vars.canvas,
   color: vars.text, fontSize: vars.textSm, fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer",
-  transition: `background ${vars.dur} ${vars.easeOut}, border-color ${vars.dur} ${vars.easeOut}`,
+  transition: `background ${vars.dur} ${vars.easeOut}, border-color ${vars.dur} ${vars.easeOut}, transform 100ms ${vars.easeOut}`,
   selectors: {
     "&:hover:not(:disabled)": { background: vars.hover },
+    // Pressed, it gives under the pointer at once (after Cue's press scale), not on release.
+    "&:active:not(:disabled)": { transform: "scale(.97)" },
     "&:disabled": { opacity: ".45", cursor: "default" },
     "&[aria-busy=\"true\"]": { cursor: "progress", opacity: ".7" },
   },
@@ -79,7 +81,8 @@ export const input = style({
 globalStyle(`input${input}`, { borderRadius: "999px", paddingLeft: "16px", paddingRight: "16px", cornerShape: "round" });
 export const popover = style({
   zIndex: "60", padding: "6px", borderRadius: vars.rMenu, ...glass,
-  boxShadow: `0 12px 32px ${vars.shadow}`, transformOrigin: "var(--radix-popper-transform-origin, top)",
+  // A hairline round it and a layered shadow (Cue's lg), rather than one wide blur.
+  boxShadow: `0 0 0 .5px ${vars.ring}, 0 4px 6px -2px rgb(16 24 40 / .03), 0 12px 16px -4px ${vars.shadow}`, transformOrigin: "var(--radix-popper-transform-origin, top)",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`, cornerShape: vars.cornerShape,
 });
 export const menuList = style({ minWidth: "180px" });

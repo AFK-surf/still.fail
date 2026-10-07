@@ -21,9 +21,10 @@ export const identityName = style({
 export const iconBtn = style({
   display: "inline-grid", placeItems: "center", width: "32px", height: "32px", padding: "0", border: "0",
   borderRadius: `calc(12px * ${vars.cornerScale})`, background: "transparent", color: vars.muted, cursor: "pointer",
-  flex: "none", transition: `background ${vars.dur} ${vars.easeOut}, color ${vars.dur} ${vars.easeOut}`,
+  flex: "none", transition: `background ${vars.dur} ${vars.easeOut}, color ${vars.dur} ${vars.easeOut}, transform 100ms ${vars.easeOut}`,
   cornerShape: vars.cornerShape,
   selectors: {
+    "&:active:not(:disabled)": { transform: "scale(.97)" },
     [`${identityName} &`]: { opacity: ".55" },
     [`${identityName}:hover &`]: { opacity: "1" },
     "&:hover": { background: vars.hover, color: vars.text },

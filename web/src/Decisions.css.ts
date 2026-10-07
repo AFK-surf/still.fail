@@ -2,6 +2,7 @@ import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { composerWrap } from "./styles/cloud.css.ts";
 import { vars } from "./styles/tokens.css.ts";
 import { spinner } from "./styles/waiting.css.ts";
+import { enterUpKeyframes } from "./styles/keyframes.css.ts";
 import { glass } from "./styles/glass.ts";
 import { m } from "./mobile/styles/root.css.ts";
 
@@ -21,8 +22,9 @@ export const option = style({
   position: "relative", display: "grid", gap: "0", width: "100%", boxSizing: "border-box", padding: "9px 14px",
   border: "0", borderRadius: vars.rField, cornerShape: vars.cornerShape, background: chip, color: vars.text,
   fontFamily: "inherit", textAlign: "left", cursor: "pointer", WebkitTapHighlightColor: "transparent",
-  transition: `filter ${vars.dur}, opacity ${vars.dur}`,
+  transition: `filter ${vars.dur}, opacity ${vars.dur}, transform 100ms ${vars.easeOut}`,
   selectors: {
+    "&:active:not(:disabled)": { transform: "scale(.985)" },
     "&:hover:not(:disabled)": { filter: "brightness(.96)" },
     "&[data-recommended]": { background: vars.primary, color: vars.onPrimary },
     "&[data-recommended]:hover:not(:disabled)": { filter: "none", opacity: ".88" },
@@ -56,7 +58,11 @@ globalStyle(`${option}:has(${optionKey})`, { paddingRight: "40px" });
  * A decision the chat ends on, at the top of its composer (DockedDecision): who decides, by 奏's mark, then the
  * options, a little in from the box's round corners.
  */
-export const docked = style({ display: "grid", gap: "4px", padding: "2px 2px 4px", cursor: "default" });
+export const docked = style({
+  display: "grid", gap: "4px", padding: "2px 2px 4px", cursor: "default",
+  animation: `${enterUpKeyframes} 200ms ${vars.easeOut} both`,
+  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
+});
 export const dockedHead = style({
   display: "flex", alignItems: "center", gap: "8px", margin: "0", padding: "0 4px", fontSize: vars.textXs,
   lineHeight: "20px", color: vars.muted,

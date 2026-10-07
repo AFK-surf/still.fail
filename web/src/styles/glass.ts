@@ -17,4 +17,6 @@ export const composerGround = {
   WebkitBackdropFilter: "blur(20px)",
   backdropFilter: "blur(20px)",
   boxShadow: `0 0 0 .5px ${vars.ring}, 0 1px 2px rgb(16 24 40 / .05), 0 4px 16px -4px rgb(16 24 40 / .06)`,
+  // Asked for less transparency, it is solid.
+  "@media": { "(prefers-reduced-transparency: reduce)": { background: vars.surface, WebkitBackdropFilter: "none", backdropFilter: "none" } },
 } as const;

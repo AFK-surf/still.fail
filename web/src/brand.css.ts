@@ -33,7 +33,7 @@ export const sidebarBuddy = style({
 });
 /** 更新 beside the buddy (the desktop app): left of it on the open sidebar's edge, right of it at rest by the window's buttons. */
 export const sidebarUpdate = style({
-  position: "fixed", zIndex: "40", top: "18px", left: "calc(var(--sidebar-w, 240px) - 36px)",
+  position: "fixed", zIndex: "40", top: "18px", left: "calc(var(--sidebar-w, 240px) - 28px)",
   transform: "translateX(-100%)", height: "22px", padding: "0 9px", border: "0", borderRadius: "999px",
   font: "inherit", fontSize: vars.textXs, fontWeight: "500", whiteSpace: "nowrap", background: vars.accentBg,
   color: vars.accentText, cursor: "pointer", WebkitAppRegion: "no-drag",
@@ -82,8 +82,9 @@ globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: "max(-12p
 globalStyle(dialogError, { margin: "12px 0 0", fontSize: vars.textSm, color: vars.red, textWrap: "pretty" });
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
 globalStyle(tooltip, {
-  zIndex: "70", padding: "5px 10px", borderRadius: `calc(8px * ${vars.cornerScale})`, background: vars.primary,
-  color: vars.onPrimary, fontSize: vars.textXs, lineHeight: "1.4", boxShadow: `0 4px 12px ${vars.shadow}`,
+  // Dark in either theme, as Cue's: it reads as a label over the page, not a part of it.
+  zIndex: "70", padding: "5px 10px", borderRadius: `calc(8px * ${vars.cornerScale})`, background: "#27282b",
+  color: "#f6f6f6", fontSize: vars.textXs, lineHeight: "1.4", boxShadow: `0 0 0 .5px #343538, 0 4px 12px ${vars.shadow}`,
   animation: `${fadeKeyframes} 120ms ${vars.easeOut}`, cornerShape: vars.cornerShape, width: "max-content",
   maxWidth: "min(300px, calc(100vw - 16px))", textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere",
 });

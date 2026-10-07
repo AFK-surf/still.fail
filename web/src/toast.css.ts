@@ -75,7 +75,7 @@ globalStyle(`${composerWrap} > *`, { maxWidth: "760px", marginLeft: "auto", marg
 globalStyle(sendBtn, {
   display: "grid", placeItems: "center", width: "32px", height: "32px", padding: "0", border: "0", borderRadius: "50%",
   background: vars.primary, color: vars.onPrimary, cursor: "pointer",
-  transition: `background ${vars.dur} ${vars.easeOut}`,
+  transition: `background ${vars.dur} ${vars.easeOut}, transform 100ms ${vars.easeOut}`,
 });
 /** The title bar's popover: what matters now. */
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
@@ -168,10 +168,10 @@ globalStyle(slackTeamIcon, {
   width: "28px", height: "28px", flex: "none", display: "inline-grid", placeItems: "center",
   borderRadius: `calc(7px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, overflow: "hidden",
 });
-/** The buddy that holds the sidebar open: on its edge, pushing; closed, resting at the top left. */
+/** The buddy that holds the sidebar open: pushing on the pane beside it (8px past the sidebar's edge); closed, resting at the top left. */
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(sidebarBuddy, {
-  position: "fixed", zIndex: "40", top: "14px", left: "calc(var(--sidebar-w, 240px) - 28px)", width: "28px",
+  position: "fixed", zIndex: "40", top: "14px", left: "calc(var(--sidebar-w, 240px) - 20px)", width: "28px",
   height: "28px", padding: "0", border: "0", background: "none", cursor: "pointer", WebkitAppRegion: "no-drag",
 });
 /** A list's first one to make (ui.tsx's FirstOne): a scene, a title, a line, what to do. */

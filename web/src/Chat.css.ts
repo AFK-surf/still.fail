@@ -112,6 +112,7 @@ export const composerToolbar = style({
 });
 export const sendBtn = style({
   selectors: {
+    "&:active:not(:disabled)": { transform: "scale(.94)" },
     "&:hover:not(:disabled)": { background: vars.primaryHover },
     "&:disabled": { background: vars.lineStrong, color: vars.canvas, cursor: "default" },
     [`${composerBox} &:not(:disabled)`]: { background: vars.text, color: vars.canvas },

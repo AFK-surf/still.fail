@@ -2,7 +2,7 @@ import { keyframes } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
 
 export const stillfailKeyframes = keyframes({ "50%": { opacity: ".35" } });
-export const popKeyframes = keyframes({ "from": { opacity: "0", transform: "scale(.97)" } });
+export const popKeyframes = keyframes({ "from": { opacity: "0", transform: "scale(.98)", filter: "blur(2px)" } });
 export const dialogInKeyframes = keyframes({ "from": { opacity: "0", transform: "translate(-50%, -48%) scale(.98)" } });
 export const fadeKeyframes = keyframes({ "from": { opacity: "0" } });
 export const toastInKeyframes = keyframes({ "from": { opacity: "0", transform: "translateY(8px)" } });

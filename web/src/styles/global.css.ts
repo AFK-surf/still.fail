@@ -73,7 +73,7 @@ globalStyle(":root", {
     "--text-body": "14px",
     "--text-md": "16px",
     "--text-lg": "22px",
-    "--ease-out": "cubic-bezier(.2, .7, .2, 1)",
+    "--ease-out": "cubic-bezier(.16, 1, .3, 1)",
     "--dur": "140ms",
   },
 });
@@ -125,7 +125,7 @@ globalStyle("*, *::before, *::after", { boxSizing: "border-box" });
 globalStyle("html, body, #app", { height: "100%", margin: "0" });
 globalStyle("body", {
   background: vars.canvas, color: vars.text, font: `450 ${vars.textBody}/1.55 ${vars.fontBody}`,
-  fontFeatureSettings: "\"cv11\", \"ss01\"", WebkitFontSmoothing: "antialiased", lineBreak: "strict",
+  fontFeatureSettings: "\"cv11\", \"ss01\"", fontOpticalSizing: "auto", WebkitFontSmoothing: "antialiased", lineBreak: "strict",
   textWrap: "pretty",
 });
 /**
