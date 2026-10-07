@@ -311,7 +311,6 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const archiveAsked = () => { if (chat.watch) setAskArchive(true); else void archive(); };
   // What the panel shows: its tabs, or while it slides out, what it showed.
   const side = panel && shown ? { tabs: open, shown } : leaving;
-  const slackUrl = chat.slackUrl;
   // Before its agent has a chat, what is sent goes to the agent: it waits in the outbox at once while the core has the
   // station make the chat behind it; the page stays (the core shows the chat at the same address once it is there).
   const sendTo = made ?? ("session" in of && !chat.thread ? of.session : undefined);
@@ -337,18 +336,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             </Tip>
           ))}
         </div>
-        <div className={css.pageBarActions}>
-          {/* Nothing left in it (the core's `archivable`): archived with one press. */}
-          {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
-          <JobsPanel station={station.address} view={jobsView} onService={(job) => openTab(`service:${job}`)} onTab={openJobs} />
-          {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
-          {slackUrl && (
-            <Tip label={t("web-pages.chat.openInSlack")}>
-              <a className={pagesCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
-            </Tip>
-          )}
-          {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onClick={() => openTab(agents[0]!.session.key)} />}
-        </div>
+        <ChatBarActions chat={chat} jobsView={jobsView} onArchive={chat.archivable && keeper ? archiveAsked : undefined}
+          onService={(job) => openTab(`service:${job}`)} onJobs={openJobs} onPanel={panel ? undefined : (key) => openTab(key)} />
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
       {/* A visualization in a message opens on its own in a tab of the side panel, beside the chat. */}
@@ -490,6 +479,64 @@ function JobsPanel({ station, view, onService, onTab }: { station: string; view:
       </Popover.Portal>
     </Popover.Root>
   );
+}
+
+/**
+ * The chat's buttons at the bar's right end: archive it (nothing left in it, the core's `archivable`: `onArchive`), its
+ * services and jobs, what it is, its Slack thread, and its agents' histories beside it (`onPanel`, while the panel is
+ * closed). Its own page has them, and the 奏 page for the decision in view (ChatBarActionsFor).
+ */
+function ChatBarActions({ chat, jobsView, onArchive, onService, onJobs, onPanel }: {
+  chat: ChatView; jobsView: ChatJobsView; onArchive: (() => void) | undefined;
+  onService: (job: string) => void; onJobs: (job?: string) => void; onPanel: ((key: string) => void) | undefined;
+}) {
+  const station = useStation();
+  const first = chat.agents[0];
+  return (
+    <div className={css.pageBarActions}>
+      {onArchive && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={onArchive} />}
+      <JobsPanel station={station.address} view={jobsView} onService={onService} onTab={onJobs} />
+      {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
+      {chat.slackUrl && (
+        <Tip label={t("web-pages.chat.openInSlack")}>
+          <a className={pagesCss.iconBtn} href={chat.slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
+        </Tip>
+      )}
+      {onPanel && first && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onClick={() => onPanel(first.session.key)} />}
+    </div>
+  );
+}
+
+/**
+ * The bar's buttons of a chat shown on another page (the 奏 page's decision, in its station's context), as its own page
+ * has them: what opens beside the chat there (a history, a service, its jobs) opens its page with that tab in front; a
+ * chat keeping watch is archived from its page, where it asks first.
+ */
+export function ChatBarActionsFor({ session, onOpen }: { session: string; onOpen: (path: string) => void }) {
+  const station = useStation();
+  const chatView = useChat(station.address, { session });
+  const jobsView = useChatJobs(station.address, { session }).value ?? NO_JOBS;
+  const api = stationApi(useStationCall(station.address));
+  const toast = useToast();
+  const chat = chatView.value;
+  if (!chat) return <div className={css.pageBarActions} />;
+  const path = `${station.base}/chats/${encodeURIComponent(session)}`;
+  const chatKey = `${station.address}:${session}`;
+  const openWith = (tab: string) => {
+    keepTabs(chatKey, { tabs: [...(keptTabs(chatKey)?.tabs ?? []).filter((x) => x !== tab), tab], active: tab });
+    onOpen(path);
+  };
+  const keeper = chat.agents[0]?.session.key ?? session;
+  const archive = async () => {
+    try {
+      await api.archive({ thread: chat.thread?.id ?? null, session: keeper }, true);
+      toast(t("web-pages.chat.archived"));
+    } catch (error) {
+      toast(t("web-pages.chat.archiveFailed", { error: error instanceof Error ? error.message : String(error) }));
+    }
+  };
+  return <ChatBarActions chat={chat} jobsView={jobsView} onArchive={chat.archivable && !chat.archived ? () => (chat.watch ? onOpen(path) : void archive()) : undefined}
+    onService={(job) => openWith(`service:${job}`)} onJobs={() => openWith(JOBS)} onPanel={openWith} />;
 }
 
 /** The connect a Slack chat's agents reach Slack through: links into Slack start at its workspace. */

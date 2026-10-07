@@ -1157,6 +1157,10 @@ export interface MessageCard {
 	assignee?: string;
 	/** Who needs to decide, in the viewer's words; prepared by the core. */
 	assigneeText?: string;
+	/** The viewer decides it. Absent otherwise (and from a core before it). */
+	yours?: boolean;
+	/** Who decides it, by name, when it is someone else. Absent when it is the viewer's or no one is set to. */
+	deciderName?: string;
 	/** options | text */
 	type: string;
 	options?: DecisionOption[];
@@ -1359,7 +1363,10 @@ export interface ChatMessage {
 	 * recommends last), as `card.options`; drawn under the message. Absent for every other message.
 	 */
 	options?: DecisionOption[];
-	/** The card it carries (options to pick, or a text field), as shown. Absent for a message with none. */
+	/**
+	 * The card it carries (options to pick, or a text field), as shown; the post an agent's need without a card
+	 * waits on (its row's `need`) is a text card while it waits. Absent for a message with none.
+	 */
 	card?: MessageCard;
 	/** With a card: whether it still waits for an answer, and who answered it how. */
 	decision?: MessageDecision;
@@ -1555,7 +1562,10 @@ export interface ChatView {
 	connection?: LinkShown;
 	/** Station update availability or progress, including the local outbox while reconnecting. */
 	stationUpdate?: StationUpdateNotice;
-	/** The card it waits on, as its row has it. Absent when there is none. */
+	/**
+	 * The ask open for the viewer in it (its card, or its agent's need as a text card; not dismissed, theirs to
+	 * decide, not answered from here), as its row has it. Absent when there is none.
+	 */
 	decision?: RowDecision;
 	/**
 	 * Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
@@ -1809,6 +1819,22 @@ export interface DecisionItem {
 }
 
 /**
+ * A chat of the viewer's with something unread and no ask open for them (奏's 有新消息): where it is, what was said
+ * last (`line`), and when (`time.lastActiveAt`). It opens as its chat.
+ */
+export interface DecisionUnread {
+	station: string;
+	stationName: string;
+	/** Its chat's item id (its session's key): what its page opens by. */
+	session: string;
+	thread?: number;
+	title: string;
+	/** The last thing said in it, on one line. */
+	line: string;
+	time?: Record<string, Stamp>;
+}
+
+/**
  * A chat of the viewer's where an agent is at work or waiting: where it is, and what it is doing (`line`: 在做 · …,
  * 在等：…), and since when (`time.lastActiveAt`).
  */
@@ -1833,8 +1859,10 @@ export interface DecisionsToday {
 }
 
 /**
- * The cards waiting in a workspace's chats for the viewer (the `decisions` view, the 奏 page, core decisions.ts):
- * pending whatever their agents do, not dismissed by them, those they set aside (待定) last; `count` for 奏 N.
+ * The asks open for the viewer in a workspace's chats (the `decisions` view, the 奏 page, core decisions.ts): a card,
+ * or the need an agent ended need_help with (a text card), pending whatever their agents do, not dismissed by them, not
+ * answered from here yet, those they set aside (待定) last; `count` for 奏 N. With them, the viewer's chats with
+ * something new (`unread`): the 奏 list is their inbox.
  */
 export interface DecisionsView {
 	items: DecisionItem[];
@@ -1847,6 +1875,11 @@ export interface DecisionsView {
 	working?: DecisionWorking[];
 	/** The day in numbers. */
 	today?: DecisionsToday;
+	/**
+	 * The viewer's chats with something unread and no ask open for them (有新消息), newest first. A core before
+	 * them says none.
+	 */
+	unread?: DecisionUnread[];
 }
 
 /** What this device is, as its host told the core at start (`client.device`), and what follows from it. */
@@ -2981,20 +3014,20 @@ export interface UsageView {
 }
 
 /**
- * A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
- * have something unread; of all its chats, how many have a decision waiting (`wait`); its `tone` (alert | wait | done, as a
- * chat's mark) and in words, none when it is 0 and 0; the chat last
- * open in it.
+ * A workspace's mark, each chat counted once: how many have an ask open for its person (`decisions`, the 奏 list's
+ * 要你决定 and 稍后), of the others in the chats they take part in how many failed (`alert`) and how many have something
+ * unread (`unread`, 奏's 有新消息); its `tone` (alert | wait | done, as a chat's mark) and in words, none when all are 0;
+ * the chat last open in it.
  */
 export interface WorkspaceMark {
 	alert: number;
 	unread: number;
-	/**
-	 * How many have a card waiting (not dismissed by them) or an agent needing them (need_help), not counted in
-	 * `alert`. Absent for 0.
-	 */
+	/** How many have an ask open for them: as `decisions`. Absent for 0. */
 	wait?: number;
-	/** How many cards wait in it for them in all (奏 N). Absent for 0. */
+	/**
+	 * How many asks are open for them in it (a card or an agent's need, not dismissed, theirs to decide, not
+	 * answered from here; 奏 N, those set aside too). Absent for 0.
+	 */
 	decisions?: number;
 	tone?: string;
 	/** 2 个需要处理 · 1 个在等你 · 3 个有新消息 */

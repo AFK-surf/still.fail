@@ -24,6 +24,7 @@ import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
 import { useWorkspaceMarks } from "./lastChat.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as decisionsCss from "./Decisions.css.ts";
+import * as markCss from "./ChatMark.css.ts";
 import { DecisionRows, openedAt, openedRecently } from "./DecisionDesk.tsx";
 import * as chatCss from "./styles/chat.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -133,16 +134,21 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
 }
 
 /**
- * 奏 N in the sidebar's foot, by the stations: the decisions waiting for the viewer in the workspace (the core's
- * `decisions` count), leading to their page. Nothing while there are none (or from a core before them).
+ * 奏 in the sidebar's foot, by the stations: how many asks are open for the viewer in the workspace and, in blue, how
+ * many of their chats have something new (the core's `workspaceMarks`, as the 奏 list groups them), leading to the list.
+ * Nothing while there are neither (or from a core before them).
  */
 export function DecisionsEntry({ scope, to }: { scope: string; to: string }) {
-  const n = useWorkspaceMarks(scope)?.workspaces[scope]?.decisions ?? 0;
-  if (n <= 0) return null;
+  const mark = useWorkspaceMarks(scope)?.workspaces[scope];
+  const n = mark?.decisions ?? 0;
+  const unread = mark?.unread ?? 0;
+  if (n <= 0 && unread <= 0) return null;
+  const label = [n > 0 && t("web-main.decisions.entry", { n }), unread > 0 && t("web-main.decisions.entryUnread", { n: unread })].filter(Boolean).join(" · ");
   return (
-    <NavLink className={`${nav.navRow} ${decisionsCss.sideEntry}`} to={to} onClick={(e) => openedAt(e.currentTarget)} aria-label={t("web-main.decisions.entry", { n })}>
+    <NavLink className={`${nav.navRow} ${decisionsCss.sideEntry}`} to={to} onClick={(e) => openedAt(e.currentTarget)} aria-label={label}>
       <span className={decisionsCss.sideEntryLead}>奏</span>
-      <span className={decisionsCss.sideEntryCount}>{t("web-main.decisions.count", { n })}</span>
+      <span className={decisionsCss.sideEntryCount}>{n > 0 && t("web-main.decisions.count", { n })}</span>
+      {unread > 0 && <span className={decisionsCss.sideEntryUnread}><span className={markCss.chatMarkInline} data-tone="done" />{unread}</span>}
     </NavLink>
   );
 }

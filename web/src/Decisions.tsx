@@ -137,8 +137,8 @@ export function MessageDecision({ message: m, thread }: { message: ChatMessage; 
   if (!m.card && !m.options?.length) return null;
   return (
     <div ref={box} className={css.decision}>
+      {/* Open, the post itself says whose it is (AskTag on its head); only an options card's options are under it. */}
       {shown ? <>
-        {m.card?.assigneeText && <p className={css.settledLine}>{m.card.assigneeText}</p>}
         {thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&
           <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} />}
       </> : d?.text ? <p className={css.settledLine}>{d.text}</p> : null}
@@ -373,11 +373,10 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
   );
 }
 
-/** Who has to decide, then the decision's post and what came just before it, as its chat draws them. */
+/** The decision's post (marked as asking, AskTag) and what came just before it, as its chat draws them. */
 export function DecisionMessages({ d, inline }: { d: DecisionItem; inline: boolean }) {
   const owner = () => d.message.by.agent ?? d.session;
   return <>
-    {d.card?.assigneeText && <p className={css.settledLine}>{d.card.assigneeText}</p>}
     <div className={`${chatCss.chatMessages} ${inline ? chatCss.inlineHeads : ""}`} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       {[...d.before, d.message].map((m) => <StaticMessage key={m.seq} message={m} owner={owner} />)}
     </div>
@@ -405,7 +404,19 @@ export function DecisionAnswer({ d, mobile, onAnswered, onReplying }: {
   const type = cardType(d.card, d.options);
   if (type !== "options" && type !== "text") return null;
   return <DecisionReply key={keyOf(d)} session={d.session} mobile={mobile} station={d.station} thread={d.thread} seq={d.seq}
-    placeholder={type === "text" ? d.card?.placeholder : undefined} onSent={onAnswered} onSending={onReplying} />;
+    placeholder={(type === "text" ? d.card?.placeholder : undefined) || t("web-main.decisions.replyTo", { name: d.message.by.name })}
+    onSent={onAnswered} onSending={onReplying} />;
+}
+
+/**
+ * A post that asks, while it waits: whose reply it waits on, a small tag after its author and time (the viewer's in the
+ * accent, someone else's quiet). The same in the chat and on the 奏 page (Chat.tsx MessageRow); null for any other.
+ */
+export function askOf(m: ChatMessage): { yours: boolean; tag: string } | null {
+  const d = m.decision;
+  if (!m.card || !d || d.resolved || d.dismissed) return null;
+  if (m.card.yours) return { yours: true, tag: t("web-main.decisions.tag.yours") };
+  return { yours: false, tag: m.card.deciderName ? t("web-main.decisions.tag.other", { name: m.card.deciderName }) : t("web-main.decisions.tag.none") };
 }
 
 /**

@@ -3,7 +3,7 @@ import { vars } from "./styles/tokens.css.ts";
 
 export const emptyList = style({ padding: "20px 10px", fontSize: vars.textXs, lineHeight: "20px", color: vars.subtle });
 
-/** 待定: the ones set aside, under the rest. */
+/** A group's heading: 要你决定, 有新消息, 稍后 (those set aside, under the rest). */
 export const group = style({ padding: "14px 10px 4px", fontSize: vars.textXs, lineHeight: "18px", color: vars.subtle });
 
 /** The rows apart as the chats' are (Sidebar.css.ts navSessionWrap). */
@@ -33,7 +33,7 @@ export const metaTime = style({ marginLeft: "auto", flex: "none", fontVariantNum
 
 /** The page: its bar, then the decision picked. */
 export const page = style({ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 });
-/** The bar: its chat (opening it) on the left, 待定 and 不再提醒 on the right. */
+/** The bar: its chat (opening it) on the left, the chat's own buttons on the right (ChatPage.tsx ChatBarActionsFor). */
 export const barLead = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0, gridColumn: "1 / 3", fontSize: vars.textSm });
 export const barChat = style({
   minWidth: 0, padding: "2px 6px", border: 0, borderRadius: 6, background: "none", color: vars.text, fontFamily: "inherit",
@@ -41,9 +41,3 @@ export const barChat = style({
   selectors: { "&:hover": { background: vars.hover } },
 });
 export const barStation = style({ flex: "none", color: vars.subtle, fontSize: vars.textXs });
-export const barActions = style({ display: "flex", justifyContent: "flex-end", gap: 2 });
-export const barButton = style({
-  height: 28, padding: "0 10px", border: 0, borderRadius: 8, background: "none", color: vars.muted, fontFamily: "inherit",
-  fontSize: vars.textXs, cursor: "pointer",
-  selectors: { "&:hover:not(:disabled)": { background: vars.hover, color: vars.text }, "&:disabled": { opacity: 0.4, cursor: "default" } },
-});

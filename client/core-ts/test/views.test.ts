@@ -338,7 +338,7 @@ test("the_decisions_page_has_the_starters_unassigned_cards_and_needs_without_one
   assert.deepEqual(v.items.map((i: J) => i.session), ["started", "needs"]);
   assert.equal(v.items[0].card.assigneeText, "需要你决策");
   const need = v.items[1];
-  assert.deepEqual([need.seq, need.card, need.options], [6, { type: "text", assigneeText: "需要你决策" }, []]);
+  assert.deepEqual([need.seq, need.card, need.options], [6, { type: "text", assigneeText: "需要你决策", yours: true }, []]);
   assert.equal(need.text, "奏 · 要 Stripe 的测试 key");
 });
 
@@ -442,7 +442,7 @@ test("a_text_card_is_on_the_page_and_its_row_whatever_its_agent_does", async () 
   let v = page.value;
   assert.equal(v.count, 1);
   const it = v.items[0];
-  assert.deepEqual([it.card, it.options], [{ type: "text", placeholder: "sk_test_…", assignee: "me@x.com", assigneeText: "需要你决策" }, []]);
+  assert.deepEqual([it.card, it.options], [{ type: "text", placeholder: "sk_test_…", assignee: "me@x.com", assigneeText: "需要你决策", yours: true }, []]);
   assert.deepEqual([it.message.card, it.message.options, it.text], [it.card, undefined, "奏 · Stripe 的测试 key 是多少？"]);
   v = chats.value;
   const all = v.days.flatMap((d: J) => d.items);
@@ -1021,7 +1021,8 @@ test("a_chats_decisions_show_their_options_and_where_they_stand", async () => {
   const picked = { ...entry(3, "B"), quotes: [{ author: "agent", text: "先 A 还是 B？", comment: "", ts: "2.0", role: "agent" }] };
   const again = { ...entry(4, "那 C 呢？"), authorKind: "agent", author: "k", options: [{ label: "C" }] };
   t.set(pageOf("ws/a", 7), { first: 1, last: 4, entries: [entry(1, "做吧"), asked, picked, again], thread: null });
-  const chatRow = { ...row("k", now), thread: 7, decision: { seq: 4, options: [{ label: "C" }], message: { seq: 4, text: "那 C 呢？" }, before: [] } };
+  // The viewer started it: the card is theirs to decide, the chat's open ask.
+  const chatRow = { ...row("k", now), thread: 7, creator: { id: "me@x.com", email: "me@x.com" }, decision: { seq: 4, options: [{ label: "C" }], message: { seq: 4, text: "那 C 呢？" }, before: [] } };
   t.set(rows("ws/a"), [chatRow]);
   await t.read(u, 1);
   const v = u.value;
@@ -1034,6 +1035,10 @@ test("a_chats_decisions_show_their_options_and_where_they_stand", async () => {
   assert.equal(m[0].decision, undefined);
   assert.equal(v.decision.text, "奏 · 那 C 呢？");
   assert.equal(v.archivable, undefined);
+  // Someone else's to decide: still waiting in the chat, but not the viewer's open ask.
+  t.set(rows("ws/a"), [{ ...chatRow, creator: { id: "other@x.com", email: "other@x.com" } }]);
+  await t.read(u, 1);
+  assert.deepEqual([u.value.messages[3].decision, u.value.decision], [{ resolved: false }, undefined]);
 });
 
 test("chat_is_a_thread_its_messages_and_its_agents", async () => {
