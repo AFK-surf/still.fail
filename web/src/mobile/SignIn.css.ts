@@ -4,6 +4,10 @@ import { globalStyle, style } from "@vanilla-extract/css";
 export const mSignIn = style({
   display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px",
   padding: "calc(40px + var(--m-top)) 30px calc(40px + var(--m-foot))", textAlign: "center", overflowY: "auto",
+  "@media": {
+    // Wider than a phone: in the pages' column (app.css.ts mColumn).
+    "(min-width: 680px)": { paddingInline: "max(72px, calc(50% - 340px))" },
+  },
 });
 export const mGoogle = style({
   display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", width: "100%", height: "50px",

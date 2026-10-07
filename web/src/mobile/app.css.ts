@@ -30,6 +30,17 @@ export const mPage = style({
     },
   },
 });
+/**
+ * What a page shows: wider than a phone (a foldable opened, a phone on its side; app.tsx WIDE), a column up to 680 wide in
+ * the middle, with at least 72 of room either side (the list's button sits in the left's). The page around it is the
+ * screen's whole width, so the room either side moves with it as it slides.
+ */
+export const mColumn = style({
+  position: "absolute", inset: "0",
+  "@media": {
+    "(min-width: 680px)": { left: "max(72px, calc(50% - 340px))", right: "max(72px, calc(50% - 340px))" },
+  },
+});
 export const mEdge = style({
   display: "none", position: "absolute", top: "0", bottom: "0", left: "0", zIndex: "40", width: "14px",
   touchAction: "none",
