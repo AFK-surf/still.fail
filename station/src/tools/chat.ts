@@ -190,7 +190,7 @@ export const CHAT_STATE = {
         "type": "integer",
         "minimum": 10,
         "maximum": 3600,
-        "description": "For waiting: your estimate of how long until the work brings you back. If nothing has by then, you are asked again (not while a watch of yours runs: job_start with watch)."
+        "description": "For waiting: how long until the work brings you back; if nothing has by then, you are asked again (not while a watch of yours runs: job_start with watch). A fallback only: something must watch the work. When it truly cannot be watched, give the shortest it could take, not the longest."
       },
       "for": {
         "type": "string",
