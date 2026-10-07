@@ -181,7 +181,7 @@ function dropOwnLink(reason: string): void {
   own.port.close();
   own = null;
   // What it held goes on on a new link, once the core is back.
-  setTimeout(followNotices, 1000);
+  setTimeout(() => { followNotices(); followBadge(); }, 1000);
 }
 
 /** The app's own link to the core, opened when first needed. */
@@ -782,6 +782,27 @@ function followNotices(): void {
   link.port.postMessage({ id, subscribe: { topic: "notify" } });
 }
 
+// The count on the Dock's icon (macOS): the chats that want the person or have something unread, in every workspace,
+// as the workspace switcher counts them (the core's `workspaceMarks`, client/core-ts/src/views/marks.ts).
+let badgeHeld: number | null = null;
+
+interface Mark { alert?: number; wait?: number; unread?: number }
+
+function followBadge(): void {
+  if (badgeHeld !== null && own?.topics.has(badgeHeld)) return;
+  const link = ownLink();
+  const id = link.next++;
+  link.topics.set(id, {
+    value: undefined,
+    onValue: (value) => {
+      const marks = Object.values((value as { workspaces?: Record<string, Mark> } | undefined)?.workspaces ?? {});
+      app.setBadgeCount(marks.reduce((n, m) => n + (m.alert ?? 0) + (m.wait ?? 0) + (m.unread ?? 0), 0));
+    },
+  });
+  badgeHeld = id;
+  link.port.postMessage({ id, subscribe: { topic: "workspaceMarks" } });
+}
+
 function show(n: Notice): void {
   shownNotices.get(n.tag)?.close();
   const notification = new Notification({ title: n.title, body: n.body });
@@ -879,6 +900,7 @@ if (!app.requestSingleInstanceLock()) {
     keepUpdated();
     try { notifyOn = JSON.parse(readFileSync(NOTIFY_FILE(), "utf8")).on !== false; } catch { /* on, as it starts */ }
     followNotices();
+    followBadge();
     followSleep();
     followNetwork();
   });
