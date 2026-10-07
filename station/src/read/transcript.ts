@@ -81,6 +81,21 @@ export function transcriptPath(runtime: "claude" | "codex", home: string, id: st
   return find(join(home, "sessions"));
 }
 
+/// The transcripts of a session's runtime sessions (`ids`, the first first, ending with its current one), each looked
+/// for in the homes given (its profile's first): a runtime session that ran on another account may have written into
+/// that account's home (one whose transcript directory is not the shared one, agent-home.ts `linkTranscripts`).
+/// `current` is whether the current one's is there: a runtime writes it only once its conversation has begun.
+export function transcriptPaths(runtime: "claude" | "codex", homes: string[], ids: string[]): { paths: string[]; current: boolean } {
+  const found = ids.map((id) => {
+    for (const home of homes) {
+      const path = transcriptPath(runtime, home, id);
+      if (path !== null) return path;
+    }
+    return null;
+  });
+  return { paths: found.filter((p) => p !== null), current: found.at(-1) != null };
+}
+
 function clip(text: string): string {
   const chars = Array.from(text);
   return chars.length > MAX_TEXT ? `${chars.slice(0, MAX_TEXT).join("")}\n… (${chars.length - MAX_TEXT} more characters)` : text;

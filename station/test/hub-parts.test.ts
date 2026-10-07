@@ -5,7 +5,7 @@ import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFile
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { readTimeline } from "../src/read/transcript.ts";
+import { readTimeline, transcriptPaths } from "../src/read/transcript.ts";
 import { linkAgentHome, linkTranscripts, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
 import { isSlackMethod, isStopCommand, slackWithFiles } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
@@ -195,14 +195,22 @@ test("a session gone on in a new runtime session: its history reads on from the 
   writeFileSync(left, line("one", "m1"));
   let paths = [left];
   const time = testClock();
-  const hub = new LiveHub(() => ({ runtime: "claude", paths }), time.clock);
+  let current = true;
+  const hub = new LiveHub(() => ({ runtime: "claude", paths, current }), time.clock);
   const got: LiveMessage[] = [];
   hub.subscribe("s", 0, null, (m) => void got.push(m));
-  // The one left gets its last words, then the session moves on.
+  // The one left gets its last words, then the session moves on: its new transcript is written only once the
+  // conversation begins, after it moved.
   appendFileSync(left, line("two", "m2"));
+  current = false;
+  hub.moved("s");
   writeFileSync(now, line("three", "m3"));
   paths = [left, now];
-  hub.moved("s");
+  current = true;
+  watched(hub, "s");
+  await settle();
+  await time.adjust(40);
+  await settle();
   appendFileSync(now, line("four", "m4"));
   watched(hub, "s");
   await settle();
@@ -214,6 +222,19 @@ test("a session gone on in a new runtime session: its history reads on from the 
   assert.equal(last.usage.modelCalls, 4, "the usage of both");
   assert.deepEqual(hub.before("s", 10, 10)![1].map((e) => e.text), ["one", "two", "three", "four"]);
   hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a session's transcripts are found in the home of whichever account wrote them, the current one's once written", () => {
+  const dir = temp();
+  const [a, b] = [join(dir, "a"), join(dir, "b")];
+  mkdirSync(join(a, "projects", "w"), { recursive: true });
+  mkdirSync(join(b, "projects", "w"), { recursive: true });
+  writeFileSync(join(a, "projects", "w", "one.jsonl"), line("one", "m1"));
+  writeFileSync(join(b, "projects", "w", "two.jsonl"), line("two", "m2"));
+  assert.deepEqual(transcriptPaths("claude", [b, a], ["one", "two", "three"]), { paths: [join(a, "projects", "w", "one.jsonl"), join(b, "projects", "w", "two.jsonl")], current: false });
+  writeFileSync(join(b, "projects", "w", "three.jsonl"), line("three", "m3"));
+  assert.equal(transcriptPaths("claude", [b, a], ["one", "two", "three"]).current, true);
   rmSync(dir, { recursive: true, force: true });
 });
 

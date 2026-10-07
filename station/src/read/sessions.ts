@@ -17,7 +17,7 @@ import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
-import { readTimeline, transcriptPath } from "./transcript.ts";
+import { readTimeline, transcriptPaths } from "./transcript.ts";
 import { HttpError, messageView } from "./views.ts";
 import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../sessions/thumbs.ts";
 import { parseUsize } from "./jobs.ts";
@@ -255,7 +255,8 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   const runtime = row.runtime === "claude" || row.runtime === "codex" ? row.runtime : null;
   if (!profile || runtime === null || row.runtimeSessionId === null) return { start: 0, entries: [] };
   // Those of the runtime sessions it ran in before come first (sessions/afresh.ts).
-  const paths = store.runtimeSessions(s, key).flatMap((id) => transcriptPath(runtime, profile.home, id) ?? []);
+  const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];
+  const { paths } = transcriptPaths(runtime, homes, store.runtimeSessions(s, key));
   const entries = paths.flatMap((path) => readTimeline(runtime, path));
   const end = Math.min(before, entries.length);
   const start = Math.max(0, end - limit);

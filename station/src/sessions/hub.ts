@@ -29,7 +29,7 @@ import { runnerId } from "../agents/process.ts";
 import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
-import { iso, transcriptPath } from "../read/transcript.ts";
+import { iso, transcriptPaths } from "../read/transcript.ts";
 import { type Attachment, type SessionRow, type Store, STILLFAIL_SURFACE, slackSurface, type ThreadRow } from "../store/store.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
@@ -159,8 +159,9 @@ export class Hub {
         const profile = row && this.config().profiles.find((p) => p.id === row.profile);
         const runtime = row && runtimeNamed(row.runtime);
         if (!row || !profile || !runtime || !row.runtimeSessionId) return null;
-        const paths = this.store.runtimeSessions(key).flatMap((id) => transcriptPath(runtime, profile.home, id) ?? []);
-        return paths.length === 0 ? null : { runtime, paths };
+        const homes = [profile.home, ...this.config().profiles.map((p) => p.home).filter((h) => h !== profile.home)];
+        const { paths, current } = transcriptPaths(runtime, homes, this.store.runtimeSessions(key));
+        return paths.length === 0 ? null : { runtime, paths, current };
       },
       this.clock,
     );
