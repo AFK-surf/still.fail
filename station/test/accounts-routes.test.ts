@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { Accounts, type AccountsDeps } from "../src/accounts/index.ts";
 import { checkConfig } from "../src/accounts/check.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
+import { OUTDATED } from "../src/accounts/models.ts";
 import { routes } from "../src/api/routes/accounts.ts";
 import type { Request } from "../src/api/request.ts";
 import { ConfigFile } from "../src/ops/config.ts";
@@ -25,7 +26,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; machine?: MachineLogins; discover?: AccountsDeps["discover"]; clock?: Clock.Clock } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -53,7 +54,7 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     loginCommands: { claude: fake, codex: fake },
     machine: o.machine ?? null,
     checkOnStart: false,
-    check: async () => ({ state: "ok", detail: "fake", models: [], checkedAt: Date.now() }),
+    check: o.check ?? (async () => ({ state: "ok", detail: "fake", models: [], checkedAt: Date.now() })),
     quota: quota
       ? async () => {
           quota.n++;
@@ -251,6 +252,67 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal((await t.call("DELETE", `/logins/${made.id}`))[0], 404);
     assert.deepEqual(await t.call("POST", "/logins", { runtime: "nope" }), [400, { error: "unknown runtime nope" }]);
     await t.close();
+  });
+
+  test("a profile just signed in takes the models the others of its runtime have, none outdated, unless some were chosen first", async () => {
+    const data = temp("adopt");
+    writeFileSync(
+      join(data, "config.json"),
+      JSON.stringify({
+        profiles: [
+          { id: "cc", runtime: "claude", home: "homes/cc", models: ["claude-opus-5-5"] },
+          // gpt-6-sol checked again by hand after it was unchecked: outdated all the same, not passed on.
+          { id: "cx", runtime: "codex", home: "homes/cx", models: ["gpt-6-astra", "gpt-6-sol"] },
+          { id: "routed", runtime: "codex", home: "homes/routed", models: ["openai/gpt-6.1-sol"] },
+        ],
+        outdatedUnchecked: [...OUTDATED.keys()],
+      }),
+    );
+    let gate: Promise<void> | null = null;
+    const offered = ["gpt-5.6-sol", "gpt-6-astra", "gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol"];
+    const t = await rig({
+      data,
+      check: async (request) => {
+        if (gate) await gate;
+        return { state: "ok", detail: "fake", models: request.kind === "subscription" ? offered : [], checkedAt: Date.now() };
+      },
+    });
+    const signedIn = async () => {
+      const [status, body] = await t.call("POST", "/logins", { runtime: "codex" });
+      assert.equal(status, 200, JSON.stringify(body));
+      return upon((wake) => t.accounts.onChange(wake), () => t.accounts.loginsView().find((l) => l.id === body.id)?.created as string | undefined, `the sign-in ${body.id} made a profile`);
+    };
+    const first = await signedIn();
+    const models = await upon((wake) => t.config.listen(wake), () => (t.profile(first)?.models.length ? t.profile(first)!.models : undefined), `${first} took models`);
+    assert.deepEqual(models, ["gpt-6-astra", "gpt-6.1-sol"]);
+    // Models chosen on its page before its check answered stay as chosen.
+    let open = () => {};
+    gate = new Promise((resolve) => (open = resolve));
+    const second = await signedIn();
+    assert.equal((await t.call("PUT", `/profiles/${second}`, { models: ["gpt-6-luna"] }))[0], 200);
+    open();
+    await settle();
+    assert.deepEqual(t.profile(second)!.models, ["gpt-6-luna"]);
+    await t.close();
+  });
+
+  test("known outdated models are unchecked once when the station starts; one checked again by hand stays", async () => {
+    const data = temp("outdated");
+    writeFileSync(
+      join(data, "config.json"),
+      JSON.stringify({ profiles: [{ id: "cc", runtime: "claude", access: { kind: "subscription" }, home: "homes/cc", models: ["claude-opus-4-6", "claude-sonnet-5-5"] }] }),
+    );
+    const db = join(data, "stillfail.db");
+    const store = Store.open(db, null);
+    store.setProfileCheck("cc", { state: "ok", detail: "", models: ["claude-opus-4-6", "claude-opus-5-5", "claude-sonnet-5-5"], checkedAt: 1 });
+    const first = await rig({ data, store });
+    assert.deepEqual(first.profile("cc")!.models, ["claude-sonnet-5-5", "claude-opus-5-5"]);
+    assert.deepEqual(JSON.parse(readFileSync(first.path, "utf8")).outdatedUnchecked, [...OUTDATED.keys()].sort());
+    assert.equal((await first.call("PUT", "/profiles/cc", { models: ["claude-opus-4-6", "claude-opus-5-5"] }))[0], 200);
+    await first.close();
+    const again = await rig({ data, store: Store.open(db, null) });
+    assert.deepEqual(again.profile("cc")!.models, ["claude-opus-4-6", "claude-opus-5-5"]);
+    await again.close();
   });
 
   test("profile checks and quotas are kept so a restart shows them at once", async () => {

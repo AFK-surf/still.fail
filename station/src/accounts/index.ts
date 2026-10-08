@@ -34,6 +34,7 @@ import { Fibers } from "../ops/fibers.ts";
 import { checkAutomaticDecisions } from "./check.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
 import { codexClaims, type MachineLogin, MachineLogins } from "./machine.ts";
+import { adopted, OUTDATED, uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { accessKinds, checkProfile, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, machineUsage } from "./quota.ts";
@@ -177,10 +178,11 @@ export class Accounts {
     }
   }
 
-  /// Starts what runs on its own: the pool told of profiles' health, sign-ins followed, the checks after start, the
-  /// allowance rounds, the machine's logins read.
+  /// Starts what runs on its own: the pool told of profiles' health, the known outdated models unchecked, sign-ins
+  /// followed, the checks after start, the allowance rounds, the machine's logins read.
   start() {
     this.deps.hub?.accounts.setHealth((id) => this.health(id));
+    this.uncheckOutdated();
     // A finished sign-in changes what the profile can do; it is checked again right away.
     this.stops.push(
       this.logins.changes((id) => {
@@ -480,7 +482,7 @@ export class Accounts {
       const made = { id, name, runtime, access: { kind: "subscription" }, home: `homes/${id}`, env: {}, machine: true };
       raw.profiles = [...(Array.isArray(raw.profiles) ? raw.profiles : []), made];
     });
-    this.afterSignIn(id);
+    this.afterSignIn(id, viewer);
     return id;
   }
 
@@ -559,7 +561,7 @@ export class Accounts {
       return this.pendingFailed(id, tr(lang, "station.login.saveFailed", { error: (e as Error).message }));
     }
     p.created = profileId;
-    this.afterSignIn(profileId);
+    this.afterSignIn(profileId, p.by);
     // Kept a while for the page that started it to follow it to the profile.
     this.background.after(PENDING_KEPT_MS, () => this.dropLogin(id));
   }
@@ -571,15 +573,65 @@ export class Accounts {
   }
 
   /// A profile just signed in: checked (which lists its models) and its allowance read, so its page shows them at once.
-  private afterSignIn(id: string) {
+  /// One just made (`made`: by whom) then takes the models of the others of its runtime.
+  private afterSignIn(id: string, made?: Viewer) {
     this.background.spawn(async () => {
       try {
-        await this.check(id);
+        const check = await this.check(id);
+        // Checked again with the models it took, as an edit on its page is.
+        if (made && this.adoptModels(id, check, made)) await this.check(id);
       } catch (e) {
         log.warn("accounts", "check after sign-in failed", { profile: id, error: (e as Error).message });
       }
       await this.refreshQuota(id);
     });
+  }
+
+  /// A profile just made, still with no model chosen, takes the models the station's other profiles of its runtime have
+  /// enabled, those its check found (in its spelling) and none known outdated (models.ts): it serves chats at once,
+  /// rather than none until someone picks its models (2026-10-09: one signed in and never given any got no chat for a
+  /// day). The first of its runtime has none to take; its models are chosen on its page. Whether it took any.
+  private adoptModels(id: string, check: ProfileCheck, by: Viewer): boolean {
+    const profile = this.profile(id);
+    if (!profile || profile.models.length > 0 || check.models === null) return false;
+    const others = this.profiles().filter((p) => p.id !== id && p.runtimes.some((r) => profile.runtimes.includes(r)));
+    const models = adopted(check.models, others.flatMap((p) => p.models));
+    if (models.length === 0) return false;
+    try {
+      this.save(by, `profile ${id} models of the others of its runtime`, (raw) => {
+        const p = (Array.isArray(raw.profiles) ? raw.profiles : []).find((x: Json) => x?.id === id);
+        if (isObject(p)) p.models = models;
+      });
+      return true;
+    } catch (e) {
+      log.warn("accounts", "a new profile could not take the others' models", { profile: id, error: (e as Error).message });
+      return false;
+    }
+  }
+
+  /// The known outdated models (models.ts) unchecked on this station's profiles, each once: config.json keeps which were
+  /// (`outdatedUnchecked`), so one checked again by hand stays, and a model added to the table is unchecked when the
+  /// station that has it next starts.
+  private uncheckOutdated() {
+    const found = (id: string) => this.checks.get(id)?.models ?? null;
+    const unchecked = (raw: Json) => {
+      const done = new Set<string>(Array.isArray(raw?.outdatedUnchecked) ? raw.outdatedUnchecked.filter((k: unknown) => typeof k === "string") : []);
+      const { changes, deferred } = uncheckOutdated(raw, found, done);
+      const now = [...new Set([...done, ...[...OUTDATED.keys()].filter((k) => !deferred.has(k))])].sort();
+      return { changes, now, grew: now.length > done.size };
+    };
+    // Worked out on a copy first: config.json is written only when something changes.
+    const { changes, grew } = unchecked(structuredClone(this.deps.config.raw()));
+    if (changes.length === 0 && !grew) return;
+    try {
+      this.deps.config.update((raw) => {
+        raw.outdatedUnchecked = unchecked(raw).now;
+      });
+    } catch (e) {
+      log.warn("accounts", "could not uncheck the outdated models", { error: (e as Error).message });
+      return;
+    }
+    for (const c of changes) log.info("accounts", "outdated models unchecked", { profile: c.profile, removed: c.removed.join(" "), added: c.added.join(" ") });
   }
 
   // ── checks and allowances ──
