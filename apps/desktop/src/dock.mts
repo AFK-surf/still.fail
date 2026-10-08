@@ -24,6 +24,9 @@ export interface DockItem {
 /** Where an item's chat is and what it is at: for opening it, reading it and answering its card. */
 interface Place { url: string; station: string; thread?: number; seq?: number; card?: number }
 
+/** The dock's settings (main.ts dock.json): shown at all; new ones peeking out; plain unread ones in it. */
+export interface DockSettings { on: boolean; peek: boolean; unread: boolean }
+
 export interface DockHost {
   /** Holds a topic of the core's (the app's own link); the value each time it changes. Returns the letting go. */
   subscribe(topic: Record<string, unknown>, onValue: (value: unknown) => void): () => void;
@@ -111,6 +114,7 @@ export class Dock {
   #places = new Map<string, Place>();
   #restarts = 0;
   #on = false;
+  #options = { peek: true, unread: true };
 
   readonly path: string;
   readonly host: DockHost;
@@ -140,6 +144,13 @@ export class Dock {
     if (!this.#on) return;
     this.#letGo();
     this.#held.push(this.host.subscribe({ topic: "workspaces" }, (value) => this.#workspaces(value)));
+  }
+
+  /** New ones peeking out or not; plain unread ones in it or only what waits on the person and what failed. */
+  settings(options: { peek: boolean; unread: boolean }): void {
+    this.#options = options;
+    this.#send({ type: "settings", peek: options.peek });
+    this.#items();
   }
 
   /** The app's language changed. */
@@ -175,6 +186,7 @@ export class Dock {
     this.#places.clear();
     for (const [id, w] of this.#perWorkspace) {
       for (const { item, place } of dockItems(id, w.chats, w.decisions)) {
+        if (!this.#options.unread && item.tone === "done") continue;
         all.push(item);
         this.#places.set(item.id, place);
       }
@@ -192,10 +204,11 @@ export class Dock {
       if (this.#child !== child) return;
       this.#child = null;
       // Gone by itself: back after a moment, a few times; then the app runs without it until it starts again.
-      if (this.#on && this.#restarts++ < 5) setTimeout(() => { if (this.#on && !this.#child) { this.#spawn(); this.words(); this.#items(); } }, 2000);
+      if (this.#on && this.#restarts++ < 5) setTimeout(() => { if (this.#on && !this.#child) { this.#spawn(); this.#items(); } }, 2000);
       else if (code !== 0) console.warn("the dock stopped", code);
     });
     this.words();
+    this.#send({ type: "settings", peek: this.#options.peek });
   }
 
   #send(message: unknown): void {

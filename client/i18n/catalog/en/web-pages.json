@@ -915,5 +915,12 @@
   "web-pages.profiles.share.hostAway": "{station} is not answering; it can't be used now",
   "web-pages.profiles.share.changeThere": "Change it there",
   "web-pages.profiles.share.users": "In use on {stations}",
-  "web-pages.profiles.account.each": "Hosts"
+  "web-pages.profiles.account.each": "Hosts",
+  "web-pages.dock.title": "Desktop dock",
+  "web-pages.dock.note": "Keeps chats waiting on you, failed or unread on the right edge of the screen, even with the window closed; touch the edge to open it. This Mac only",
+  "web-pages.dock.peek": "New ones peek out",
+  "web-pages.dock.peekNote": "Something new slides out from the edge until you have seen it; off, you see it when you touch the edge",
+  "web-pages.dock.unread": "Plain unread chats too",
+  "web-pages.dock.unreadNote": "Off, only what waits on you and what failed",
+  "web-pages.dock.failed": "Could not change the setting: {error}"
 }

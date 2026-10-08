@@ -479,6 +479,9 @@ export function workerOpener(): Opener {
 }
 
 /** What the desktop app's preload (apps/desktop/src/preload.ts) gives the page. */
+/** The desktop dock's settings (docs/desktop-dock.md): shown at all, new ones peeking out, plain unread ones in it. */
+export interface DockSettings { on: boolean; peek: boolean; unread: boolean }
+
 export interface StillFailDesktop {
   /** Asks for a port to the core; it arrives as a window message `{ stillfailCore: "port", id }`. */
   openCore(id: number): void;
@@ -509,6 +512,11 @@ export interface StillFailDesktop {
     start(): void;
     /** Asks for a newer build now, not waiting for the next check; an app from before it has none. */
     check?(): Promise<UpdateCheck | null>;
+  };
+  /** The dock on the screen's edge (apps/desktop/src/dock.mts): its settings, null where it cannot run; an app from before it has none. */
+  dock?: {
+    get(): Promise<DockSettings | null>;
+    set(settings: Partial<DockSettings>): Promise<DockSettings | null>;
   };
   /** Whether the app tells about the chats (it shows them from its main process); an app from before them has none. */
   notify?: {

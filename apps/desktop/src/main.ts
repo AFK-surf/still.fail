@@ -17,7 +17,7 @@ import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/prev
 import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
 import { LocalStation, type Place } from "./station";
 import { contextMenu, type Action } from "./context-menu.mts";
-import { Dock, dockHelper } from "./dock.mts";
+import { Dock, dockHelper, type DockSettings } from "./dock.mts";
 import { moveUserData } from "./moves.mts";
 import { exportOriginStorage, importOriginStorage, type OriginSnapshot } from "./origin-storage";
 import zhWords from "../../../client/i18n/catalog/zh/desktop.json" with { type: "json" };
@@ -239,7 +239,8 @@ function coreSubscribe(topic: Record<string, unknown>, onValue: (value: unknown)
 }
 
 // The dock (dock.mts, docs/desktop-dock.md): on a Mac, the chats that want the person on the screen's edge, also with no
-// window open. On unless the person turned it off (userData/dock.json, the app menu).
+// window open. Its settings (on; new ones peeking out; plain unread ones in it: all on unless turned off) are kept in
+// userData/dock.json, set from the settings page (dock:set) or the app menu (on or off).
 const DOCK_FILE = () => join(app.getPath("userData"), "dock.json");
 const dockPath = dockHelper(resources);
 let dock: Dock | null = null;
@@ -251,27 +252,43 @@ function dockWords(): Record<string, string> {
   return words;
 }
 
-function dockOn(): boolean {
-  try { return JSON.parse(readFileSync(DOCK_FILE(), "utf8")).on !== false; } catch { return true; }
+function dockSettings(): DockSettings {
+  let kept: Partial<DockSettings> = {};
+  try { kept = JSON.parse(readFileSync(DOCK_FILE(), "utf8")) as Partial<DockSettings>; } catch { /* none kept: all on */ }
+  return { on: kept.on !== false, peek: kept.peek !== false, unread: kept.unread !== false };
 }
 
-function setDock(on: boolean): void {
-  if (!dockPath) return;
-  writeFileSync(DOCK_FILE(), JSON.stringify({ on }));
-  if (on) {
+function setDock(change: Partial<DockSettings>): DockSettings | null {
+  if (!dockPath) return null;
+  const settings = { ...dockSettings(), ...change };
+  writeFileSync(DOCK_FILE(), JSON.stringify(settings));
+  if (settings.on) {
     dock ??= new Dock(dockPath, {
       subscribe: coreSubscribe,
       call: (name, params) => coreCall(name, params),
       open: (path) => { app.focus({ steal: true }); openPath(path); },
       words: dockWords,
-      turnedOff: () => setDock(false),
+      turnedOff: () => setDock({ on: false }),
     });
+    dock.settings({ peek: settings.peek, unread: settings.unread });
     dock.start();
   } else {
     dock?.stop();
   }
   setMenu();
+  return settings;
 }
+
+ipcMain.handle("dock:get", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) && dockPath ? dockSettings() : null);
+ipcMain.handle("dock:set", (event, change: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof change !== "object" || change === null) return null;
+  const valid: Partial<DockSettings> = {};
+  for (const key of ["on", "peek", "unread"] as const) {
+    const v = (change as Record<string, unknown>)[key];
+    if (typeof v === "boolean") valid[key] = v;
+  }
+  return setDock(valid);
+});
 
 // Previews: a page asks for a station's port as a host of stillfail-preview:// (p<port>-<the station's hash>), puts that
 // host's /_ember/frame (FRAME below) in a frame, and every other request of the host comes here and goes to the station
@@ -634,7 +651,7 @@ function setMenu(): void {
       submenu: [
         { role: "about", label: t("desktop.menu.about", { app: app.name }) },
         { label: t("desktop.menu.checkUpdates"), click: () => void checkFromMenu() },
-        ...(dockPath ? [{ label: t("desktop.menu.dock"), type: "checkbox" as const, checked: dock !== null && dockOn(), click: () => setDock(!dockOn()) }] : []),
+        ...(dockPath ? [{ label: t("desktop.menu.dock"), type: "checkbox" as const, checked: dockSettings().on, click: () => setDock({ on: !dockSettings().on }) }] : []),
         { type: "separator" },
         { role: "services", label: t("desktop.menu.services") },
         { type: "separator" },
@@ -949,7 +966,7 @@ if (!app.requestSingleInstanceLock()) {
     try { notifyOn = JSON.parse(readFileSync(NOTIFY_FILE(), "utf8")).on !== false; } catch { /* on, as it starts */ }
     followNotices();
     followBadge();
-    if (dockOn()) setDock(true);
+    if (dockSettings().on) setDock({});
     followSleep();
     followNetwork();
   });

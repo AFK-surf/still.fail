@@ -36,6 +36,11 @@ const desktop = {
     /** Asks for a newer build now: what it found (main.ts, UpdateCheck). */
     check: (): Promise<unknown> => ipcRenderer.invoke("update:check"),
   },
+  /** The dock on the screen's edge (main.ts, dock.mts): its settings, null where it cannot run. */
+  dock: {
+    get: (): Promise<unknown> => ipcRenderer.invoke("dock:get"),
+    set: (settings: unknown): Promise<unknown> => ipcRenderer.invoke("dock:set", settings),
+  },
   /** Whether the app tells about the chats (its main process shows the notices: main.ts). */
   notify: {
     get: (): Promise<boolean | null> => ipcRenderer.invoke("notify:get"),

@@ -2,6 +2,7 @@
 // for the person. The app (apps/desktop/src/dock.mts) starts it and talks to it a JSON object a line: on stdin
 //   {"type":"items","items":[Item…]}   what there is now (Model.swift `Item`), every time it changes
 //   {"type":"words","words":{…}}       what it says, in the app's language
+//   {"type":"settings","peek":…}       whether something new peeks out (else it only waits at the edge)
 // and on stdout
 //   {"type":"open","id":…}  {"type":"read","id":…}  {"type":"answer","id":…,"key":…,"option":…}  {"type":"off"}
 // It quits when stdin closes (the app went).
@@ -155,6 +156,7 @@ final class Dock: NSObject, NSApplicationDelegate {
     var type: String
     var items: [Item]?
     var words: Words?
+    var peek: Bool?
   }
 
   /// The app's lines, read on a thread of their own; each applied on the main thread. The end of them is the app gone.
@@ -165,6 +167,7 @@ final class Dock: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
           guard let self else { return }
           if let words = message.words { self.model.words = words }
+          if let peek = message.peek { self.model.peekOn = peek }
           if let items = message.items { withAnimation(self.spring) { self.model.update(items) } }
         }
       }

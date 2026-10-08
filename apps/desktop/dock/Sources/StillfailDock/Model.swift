@@ -45,6 +45,8 @@ enum Phase { case collapsed, peek, card }
   var items: [Item] = []
   var words = Words()
   var phase: Phase = .collapsed
+  /// Whether something new peeks out (the settings page's 「新消息冒出来」); off, it only waits at the edge.
+  var peekOn = true
   var peeking: Item?
   /// New ones since the peek came out: it shows the newest and how many more.
   var unseen = 0
@@ -81,7 +83,7 @@ enum Phase { case collapsed, peek, card }
     } else {
       let fresh = items.filter { !known.contains($0.key) }
       known.formUnion(items.map(\.key))
-      if let newest = fresh.max(by: { $0.at < $1.at }), phase != .card {
+      if peekOn, let newest = fresh.max(by: { $0.at < $1.at }), phase != .card {
         peeking = newest
         unseen += fresh.count
         phase = .peek

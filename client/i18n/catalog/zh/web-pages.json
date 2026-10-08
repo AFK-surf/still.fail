@@ -843,5 +843,12 @@
   "web-pages.profiles.share.hostAway": "{station} 没有响应，现在用不了",
   "web-pages.profiles.share.changeThere": "在那台上改",
   "web-pages.profiles.share.users": "在用：{stations}",
-  "web-pages.profiles.account.each": "Hosts"
+  "web-pages.profiles.account.each": "Hosts",
+  "web-pages.dock.title": "桌面浮窗",
+  "web-pages.dock.note": "在屏幕右边缘放等你决定、出错和未读的 chat，主窗口关着也在；鼠标碰到右边缘就展开，只对这台 Mac 生效",
+  "web-pages.dock.peek": "新消息冒出来",
+  "web-pages.dock.peekNote": "有新的从屏幕边冒出来提醒你，看过才收回；关掉后只在碰到边缘时看",
+  "web-pages.dock.unread": "普通未读也放进来",
+  "web-pages.dock.unreadNote": "关掉后只放等你决定的和出错的",
+  "web-pages.dock.failed": "没能改设置：{error}"
 }

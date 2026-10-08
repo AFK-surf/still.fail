@@ -3,7 +3,9 @@
 On a Mac (14 or later, Apple silicon), the desktop app keeps the chats that want the person on the right edge of the
 screen, also with no window open: a half circle of Liquid Glass (macOS 26; a material before it) drawn by a SwiftUI
 helper, `apps/desktop/dock`, which the app starts and feeds (`apps/desktop/src/dock.mts`). The app menu's 「桌面浮窗」
-turns it off and on (`userData/dock.json`); so does the sliver's own right-click menu.
+turns it off and on; so does the sliver's own right-click menu. Settings → 通知 has its settings (2026-10-08 「缺了设置」):
+shown at all, new ones peeking out (off: they only wait at the edge), plain unread chats in it (off: only what waits on
+the person and what failed); kept in `userData/dock.json` (main.ts `dock:get`, `dock:set`).
 
 ## What it shows
 
