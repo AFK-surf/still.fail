@@ -756,6 +756,7 @@
   "web-pages.signIn.failed": "Sign-in failed",
   "web-pages.signIn.google": "Sign in with Google",
   "web-pages.signIn.lead": "Sign in with Google to manage your workspaces and stations.",
+  "web-pages.signIn.or": "or",
   "web-pages.signIn.password": "Sign in with email and password",
   "web-pages.signIn.email": "Email",
   "web-pages.signIn.passwordField": "Password",

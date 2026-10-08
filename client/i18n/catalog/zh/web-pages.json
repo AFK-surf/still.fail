@@ -696,6 +696,7 @@
   "web-pages.signIn.failed": "登录没有完成",
   "web-pages.signIn.google": "使用 Google 账号登录",
   "web-pages.signIn.lead": "用 Google 账号登录，管理你的 workspace 和里面的 station。",
+  "web-pages.signIn.or": "或",
   "web-pages.signIn.password": "用邮箱和密码登录",
   "web-pages.signIn.email": "邮箱",
   "web-pages.signIn.passwordField": "密码",
