@@ -175,8 +175,8 @@ jobs:
           fi
           exit $status
 
-  # The parts of the full check that need no Mac, each on a Linux runner of its own (ts; android, with a branch's debug
-  # app), so they never wait for one of mini1's (2026-10-04: a run's jobs there queued up to 4 minutes behind one
+  # The part of the full check that needs no Mac (ts) on a Linux runner of its own (android is mini1's, check-android),
+  # so it never waits for one of mini1's (2026-10-04: a run's jobs there queued up to 4 minutes behind one
   # another) nor for each other (in one job, Gradle waited for the real-time tests before it). The native parts they
   # use come from the release or this run's natives job (mesh and iroh's relay for linux-x64, Android's shell and
   # engine); what passed before at the same inputs is kept in the Actions cache (scripts/check.sh, `remembered`).
@@ -203,10 +203,13 @@ jobs:
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
 
+  # The Android app's check on mini1: its SDK, NDK and JDK there, and Gradle's caches kept on the machine between runs
+  # (on Blacksmith each run restored them, and its Gradle run took 80-130 s, 160-270 s when its runners were slow,
+  # 2026-10-08).
   check-android:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.android == 'true' }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: [self-hosted, mini1]
     timeout-minutes: 45
     env:
       STILLFAIL_CHECK_PART: android
@@ -215,15 +218,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup
-        with:
-          android: 'true'
+      - uses: ./.github/actions/setup-mac
       - uses: ./.github/actions/natives
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/stillfail-check
-          key: check-android-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: check-android-${{ runner.os }}-
       - name: Full check (android)
         run: |
           range='${{ needs.plan.outputs.range }}'
