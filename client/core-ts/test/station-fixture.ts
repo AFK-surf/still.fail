@@ -102,7 +102,7 @@ export function base(): Answers {
     "GET /jobs": [],
     "GET /footprint": {},
     "GET /threads/7/entries?limit=50": { last: 3, entries: entries(1, 3) },
-    "GET /sessions/k1/timeline?before=1000000000000000&limit=200": { start: 0, entries: [] },
+    "GET /sessions/k1/timeline?before=1000000000000000&limit=200&brief=1": { start: 0, entries: [] },
   };
 }
 

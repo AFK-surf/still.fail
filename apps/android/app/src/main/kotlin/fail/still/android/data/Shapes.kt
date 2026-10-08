@@ -2196,7 +2196,11 @@ data class HistoryStep (
 	val meta: String,
 	val failed: Boolean,
 	val call: String,
-	val result: String? = null
+	val result: String? = null,
+	/// Its call's transcript entry and its result's: what `history.detail` reads whole while it is `brief`.
+	val entries: List<Long>,
+	/// `call` is only what says what it does and `result` empty (a station's in brief): opened, `history.detail` reads them whole.
+	val brief: Boolean
 )
 
 /// The agent's own words; `subagent`: a sub-agent's.
@@ -2209,7 +2213,11 @@ data class HistoryText (
 @Serializable
 data class HistoryThought (
 	val text: String,
-	val first: String
+	val first: String,
+	/// Its transcript entry: what `history.detail` reads whole while it is `brief`.
+	val entries: List<Long>,
+	/// `text` is its first line only (a station's in brief): opened, `history.detail` reads it whole.
+	val brief: Boolean
 )
 
 @Serializable

@@ -66,6 +66,12 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Brings the page of an agent's execution history before what it shows into the view. */
     suspend fun historyOlder(key: String) { core.call("history.older", buildJsonObject { put("station", station); put("key", key) }) }
 
+    /** Reads whole an execution history's step or thought shown in brief, as it is opened (its transcript entries). */
+    suspend fun historyDetail(key: String, entries: List<Long>) {
+        if (entries.isEmpty()) return
+        core.call("history.detail", buildJsonObject { put("station", station); put("key", key); put("from", entries.min()); put("to", entries.max()) })
+    }
+
     // ── connects (web/src/api.ts → stationApi) ──
 
     /** Changes a connect: any of `bind`, `mode`, `requireMention`, `enabled`, `slack`, `owner`. */

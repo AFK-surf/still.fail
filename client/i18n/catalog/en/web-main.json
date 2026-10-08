@@ -659,5 +659,7 @@
   "web-main.preview.openFailed": "Couldn't open {name}: {error}",
   "web-main.preview.more": "{count} more",
   "web-main.preview.binary": "Binary file",
-  "web-main.preview.clickToOpen": "Click to open"
+  "web-main.preview.clickToOpen": "Click to open",
+  "web-main.history.stepReading": "Loading…",
+  "web-main.history.stepUnread": "Couldn't load: {error}"
 }

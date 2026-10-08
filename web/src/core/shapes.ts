@@ -2171,6 +2171,10 @@ export interface HistoryStep {
 	failed: boolean;
 	call: string;
 	result?: string;
+	/** Its call's transcript entry and its result's: what `history.detail` reads whole while it is `brief`. */
+	entries: number[];
+	/** `call` is only what says what it does and `result` empty (a station's in brief): opened, `history.detail` reads them whole. */
+	brief: boolean;
 }
 
 /** The agent's own words; `subagent`: a sub-agent's. */
@@ -2182,6 +2186,10 @@ export interface HistoryText {
 export interface HistoryThought {
 	text: string;
 	first: string;
+	/** Its transcript entry: what `history.detail` reads whole while it is `brief`. */
+	entries: number[];
+	/** `text` is its first line only (a station's in brief): opened, `history.detail` reads it whole. */
+	brief: boolean;
 }
 
 export interface UsageLine {

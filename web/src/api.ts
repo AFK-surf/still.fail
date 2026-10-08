@@ -148,6 +148,13 @@ export function useHistoryOlder(station: string, key: string): () => Promise<{ m
   return useCallback(() => call("history.older", { station, key }) as Promise<{ more: boolean }>, [call, station, key]);
 }
 
+/** Reads whole the entries of an execution history's step or thought shown in brief (`brief`), as it is opened: the
+ *  history shows them whole as they come. */
+export function useHistoryDetail(station: string, key: string): (entries: number[]) => Promise<unknown> {
+  const call = useCall();
+  return useCallback((entries: number[]) => call("history.detail", { station, key, from: Math.min(...entries), to: Math.max(...entries) }), [call, station, key]);
+}
+
 /** Each session's live topic, by key: the agents of a chat as they run. */
 export function useLives(station: string, keys: string[]): ReadonlyMap<string, Live> {
   const states = useTopics<Live>(keys.map((key) => ({ topic: "live", station, key })));

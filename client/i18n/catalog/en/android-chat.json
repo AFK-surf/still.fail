@@ -325,5 +325,7 @@
   "android-chat.search.chats": "Chats",
   "android-chat.search.messages": "Messages",
   "android-chat.search.none": "No chats or messages found",
-  "android-chat.search.update": "Update to search"
+  "android-chat.search.update": "Update to search",
+  "android-chat.history.stepReading": "Loading…",
+  "android-chat.history.stepUnread": "Couldn't load: {error}"
 }

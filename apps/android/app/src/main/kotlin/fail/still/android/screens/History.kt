@@ -248,7 +248,9 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: Histor
             follow.toEnd(); follow.placed = true; follow.on = true
         }
     }
-    CompositionLocalProvider(LocalFollow provides follow) {
+    // A step or thought in brief is read whole as it is opened (`history.detail`).
+    val detail: suspend (List<Long>) -> Unit = { entries -> api.historyDetail(agent.session.key, entries) }
+    CompositionLocalProvider(LocalFollow provides follow, LocalDetail provides detail) {
         LazyColumn(Modifier.fillMaxWidth(), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item(key = "edge") { Edge(history.edge) }
             itemsIndexed(lines, key = { _, l -> when (l) { is Line.Live -> "live/${l.step.id}"; is Line.Phase -> "phase"; is Line.Item -> l.item.key } }) { _, line ->
@@ -267,6 +269,9 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: Histor
 
 /** The steps' list: a group or a step opened is read from its top, not followed down to the end. */
 private val LocalFollow = staticCompositionLocalOf<Follow?> { null }
+
+/** Reads whole what a step or thought in brief holds (its transcript entries), as it is opened. */
+private val LocalDetail = staticCompositionLocalOf<suspend (List<Long>) -> Unit> { {} }
 
 @Composable
 private fun Edge(text: String) = Text(text, color = C.subtle, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp))
@@ -441,7 +446,9 @@ private fun Group(g: HistoryGroup) {
                     is HistoryRow.Step -> StepRow(row.content)
                     is HistoryRow.Thought ->
                         if (!calls) Text(row.content.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted)
-                        else Folding(t("android-chat.history.thinking"), row.content.first, null, false) { Text(row.content.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
+                        else Folding(t("android-chat.history.thinking"), row.content.first, null, false) {
+                            Whole(row.content.brief, row.content.entries) { Text(row.content.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
+                        }
                 }
             }
         }
@@ -452,8 +459,21 @@ private fun Group(g: HistoryGroup) {
 private fun StepRow(step: HistoryStep) {
     // Opened: the call drawn by what it is (a command, a diff, code, a plan, its fields), then what came back (ui/ToolStep.kt).
     Folding(step.said ?: step.name, if (step.said == null) step.hint else null, step.meta, step.failed) {
-        fail.still.android.ui.ToolStepBody(step.name, step.call, step.said != null, step.result, step.failed)
+        Whole(step.brief, step.entries) { fail.still.android.ui.ToolStepBody(step.name, step.call, step.said != null, step.result, step.failed) }
     }
+}
+
+/** What an opened step or thought holds: in brief (only what names it came), read whole now, saying so till it comes. */
+@Composable
+private fun Whole(brief: Boolean, entries: List<Long>, body: @Composable () -> Unit) {
+    if (!brief) return body()
+    val detail = LocalDetail.current
+    var error by remember(entries) { mutableStateOf<String?>(null) }
+    LaunchedEffect(entries) {
+        error = null
+        try { detail(entries) } catch (e: CoreException) { error = errorText(e) }
+    }
+    Text(error?.let { t("android-chat.history.stepUnread", "error" to it) } ?: t("android-chat.history.stepReading"), fontSize = 13.sp, color = C.muted)
 }
 
 /** A line that opens to what is behind it. */

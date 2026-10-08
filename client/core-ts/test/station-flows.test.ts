@@ -430,7 +430,7 @@ test("topics_are_read_once_and_nothing_runs_on_a_timer", async () => {
   topics.forEach((t, i) => subscribe(core, ui, i + 1, t));
   await host.settle();
   await host.settle();
-  assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?host=1&live=k1&from=0&last=200"]);
+  assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?host=1&live=k1&from=0&last=200&brief=1"]);
   // Subscribing reads nothing: what is held shows (the stream opened anew for the host and the live session).
   assert.equal(reads(), before, JSON.stringify(host.requests.filter((r) => r.url.includes("/admin/api/") && !r.url.includes("/events")).slice(before).map((r) => r.url)));
   const requests = reqs(host);
@@ -1034,7 +1034,7 @@ test("live_holds_the_transcript_and_its_usage", async () => {
   core.receive(1, { kind: "subscribe", id: 1, subscribe: liveK });
   await read();
   await read();
-  assert.ok(streamPaths(host).includes("/events?live=k1&from=0&last=200"), JSON.stringify(streamPaths(host)));
+  assert.ok(streamPaths(host).includes("/events?live=k1&from=0&last=200&brief=1"), JSON.stringify(streamPaths(host)));
   const push = (m: J) => s.push("live", { key: "k1", ...m });
   push({ type: "timeline", start: 0, entries: ["a", "b"], usage: { modelCalls: 1, model: "claude-opus" } });
   push({ type: "steps", steps: [], phase: null });
@@ -1051,7 +1051,7 @@ test("live_holds_the_transcript_and_its_usage", async () => {
   // Reconnects ask from what is known.
   s.end();
   await host.time.pass(RECONNECT_MS + 50, 50);
-  assert.ok(streamPaths(host).includes("/events?live=k1&from=4&last=200"), JSON.stringify(streamPaths(host)));
+  assert.ok(streamPaths(host).includes("/events?live=k1&from=4&last=200&brief=1"), JSON.stringify(streamPaths(host)));
   // Started anew: the kept transcript at once, and only what came after it is asked for.
   let again = await reopen(s);
   const asked = streamPaths(host).length;
@@ -1059,7 +1059,7 @@ test("live_holds_the_transcript_and_its_usage", async () => {
   await again.read();
   await again.read();
   assert.deepEqual(liveOf(again.core).timeline, ["a", "B", "c", "d"]);
-  assert.ok(streamPaths(host).slice(asked).includes("/events?live=k1&from=4&last=200"), JSON.stringify(streamPaths(host)));
+  assert.ok(streamPaths(host).slice(asked).includes("/events?live=k1&from=4&last=200&brief=1"), JSON.stringify(streamPaths(host)));
   // Written anew and shorter: what is kept is cut there too.
   s.push("live", { key: "k1", type: "timeline", start: 1, entries: [], usage: {} });
   await again.read();
@@ -1079,7 +1079,7 @@ test("live_holds_the_transcript_and_its_usage", async () => {
   await again.read();
   await again.read();
   assert.deepEqual([liveOf(again.core).first, liveOf(again.core).timeline], [9, ["z"]]);
-  assert.ok(streamPaths(host).slice(before).includes("/events?live=k1&from=10&last=200"), JSON.stringify(streamPaths(host)));
+  assert.ok(streamPaths(host).slice(before).includes("/events?live=k1&from=10&last=200&brief=1"), JSON.stringify(streamPaths(host)));
   again.core.close();
 });
 
@@ -1095,11 +1095,11 @@ test("a_transcript_shows_its_latest_page_and_the_ones_before_as_asked", async ()
   await read();
   assert.equal(liveOf(core).first, 300);
   // From the station, and kept.
-  answers["GET /sessions/k1/timeline?before=300&limit=200"] = { start: 100, entries: items(100, 299) };
+  answers["GET /sessions/k1/timeline?before=300&limit=200&brief=1"] = { start: 100, entries: items(100, 299) };
   assert.equal(await run(core.inner.stationTopics.historyOlder(ST, "k1")), true);
   await read();
   assert.deepEqual([liveOf(core).first, liveOf(core).timeline.length, liveOf(core).timeline[0]], [100, 400, "e100"]);
-  answers["GET /sessions/k1/timeline?before=100&limit=200"] = { start: 0, entries: items(0, 99) };
+  answers["GET /sessions/k1/timeline?before=100&limit=200&brief=1"] = { start: 0, entries: items(0, 99) };
   assert.equal(await run(core.inner.stationTopics.historyOlder(ST, "k1")), false);
   await read();
   assert.equal(liveOf(core).first, 0);
@@ -1111,12 +1111,37 @@ test("a_transcript_shows_its_latest_page_and_the_ones_before_as_asked", async ()
   await again.read();
   await again.read();
   assert.deepEqual([liveOf(again.core).first, liveOf(again.core).timeline[0]], [300, "e300"]);
-  assert.ok(streamPaths(host).includes("/events?live=k1&from=500&last=200"), JSON.stringify(streamPaths(host)));
+  assert.ok(streamPaths(host).includes("/events?live=k1&from=500&last=200&brief=1"), JSON.stringify(streamPaths(host)));
   assert.equal(await run(again.core.inner.stationTopics.historyOlder(ST, "k1")), true);
   await again.read();
   assert.equal(liveOf(again.core).first, 100);
   assert.ok(!host.requests.slice(asked).some((r) => r.url.includes("/timeline")));
   again.core.close();
+});
+
+test("a_history_step_in_brief_is_read_whole_as_it_is_opened_and_shown_so", async () => {
+  const answers: J = base();
+  const s = await ui(answers);
+  const { core, values, read } = s;
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: { topic: "history", station: ST, key: "k1" } });
+  await read();
+  await read();
+  // In brief, as the station pushes it: the call by what says what it does, the result without what it gave.
+  const call = { at: "2026-10-08T00:00:00Z", kind: "tool_call", text: JSON.stringify({ command: "pnpm test", description: "Run the tests" }), tool: "Bash", callId: "c" };
+  s.push("live", { key: "k1", type: "timeline", start: 7, entries: [{ ...call, brief: true }, { at: "2026-10-08T00:00:03Z", kind: "tool_result", text: "", ok: true, callId: "c", brief: true }], usage: {} });
+  await read();
+  const step = () => {
+    const group = (v(values, 1) as J).items.find((i: J) => i.body.kind === "group").body.content;
+    return group.rows.find((r: J) => r.kind === "step").content;
+  };
+  assert.deepEqual([step().said, step().brief, step().entries], ["Run the tests", true, [7, 8]]);
+  // Opened: read whole, behind what is shown in brief, and shown so.
+  const whole = { ...call, text: JSON.stringify({ command: "pnpm test --runInBand", description: "Run the tests", timeout: 600000 }, null, 2) };
+  answers["GET /sessions/k1/timeline?from=7&to=8"] = { start: 7, entries: [whole, { at: "2026-10-08T00:00:03Z", kind: "tool_result", text: "Tests: 18 passed", ok: true, callId: "c" }] };
+  await run(core.inner.stationTopics.historyDetail(ST, "k1", 7, 8));
+  await read();
+  assert.deepEqual([step().brief, step().result, JSON.parse(step().call).timeout], [false, "Tests: 18 passed", 600000]);
+  core.close();
 });
 
 test("a_stream_silent_past_its_keepalive_is_read_again", async () => {
@@ -1125,7 +1150,7 @@ test("a_stream_silent_past_its_keepalive_is_read_again", async () => {
   subscribe(core, ui, 1, liveK);
   await host.settle();
   await host.settle();
-  const path = "/admin/api/events?live=k1&from=0&last=200";
+  const path = "/admin/api/events?live=k1&from=0&last=200&brief=1";
   assert.equal(gets(host, path), 1);
   // The keepalive keeps it open.
   await host.time.pass(STREAM_IDLE_MS / 2, 500);
@@ -1346,7 +1371,7 @@ test("the_core_keeps_its_workspaces_stations_and_agents_at_work_with_nobody_look
   push("chat", { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [{ key: "k", process: "running" }, { key: "idle", process: "warm" }] });
   await host.settle();
   await host.settle();
-  assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?live=k&from=0&last=200"]);
+  assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?live=k&from=0&last=200&brief=1"]);
   core.close();
 });
 

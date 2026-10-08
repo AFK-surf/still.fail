@@ -593,5 +593,7 @@
   "web-main.preview.openFailed": "没能打开 {name}：{error}",
   "web-main.preview.more": "还有 {count} 项",
   "web-main.preview.binary": "二进制文件",
-  "web-main.preview.clickToOpen": "点击打开"
+  "web-main.preview.clickToOpen": "点击打开",
+  "web-main.history.stepReading": "正在读取…",
+  "web-main.history.stepUnread": "没读到：{error}"
 }

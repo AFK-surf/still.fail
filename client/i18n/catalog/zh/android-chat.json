@@ -307,5 +307,7 @@
   "android-chat.search.chats": "对话",
   "android-chat.search.messages": "消息",
   "android-chat.search.none": "没有找到对话或消息",
-  "android-chat.search.update": "更新后才能搜索"
+  "android-chat.search.update": "更新后才能搜索",
+  "android-chat.history.stepReading": "正在读取…",
+  "android-chat.history.stepUnread": "没读到：{error}"
 }

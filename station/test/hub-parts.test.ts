@@ -5,7 +5,7 @@ import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFile
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { readTimeline, transcriptPaths } from "../src/read/transcript.ts";
+import { brief, readTimeline, transcriptPaths } from "../src/read/transcript.ts";
 import { linkAgentHome, linkTranscripts, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
 import { isSlackMethod, isStopCommand, slackWithFiles } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
@@ -109,6 +109,43 @@ test("posts show in the history where the agent made them, whole", () => {
   assert.deepEqual(entries.map((e) => e.kind), ["thinking", "tool_call", "tool_result", "assistant"]);
   assert.equal(JSON.parse(entries[1]!.text).text, long);
   assert.deepEqual([entries[1]!.callId, entries[2]!.callId, entries[2]!.ok], ["p", "p", true]);
+  rmSync(dir, { recursive: true });
+});
+
+test("in brief, a history's entries say only what names them; what is short, posts, states and Slack whole", () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const command = `cd station && ${"node --test test/account-proxy.test.ts && ".repeat(120)}true`;
+  const record = (content: unknown[]) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-05T00:00:00Z", message: { content } })}\n`;
+  const result = (id: string, text: string) => `${JSON.stringify({ type: "user", timestamp: "2026-10-05T00:00:01Z", message: { content: [{ type: "tool_result", tool_use_id: id, content: text }] } })}\n`;
+  writeFileSync(
+    path,
+    record([
+      { type: "thinking", thinking: `${"想".repeat(40)}\n${"细节".repeat(400)}` },
+      { type: "tool_use", id: "b", name: "Bash", input: { command, description: "Run the tests 3 times", timeout: 600000 } },
+    ]) +
+      result("b", "ok\n".repeat(400)) +
+      record([{ type: "tool_use", id: "r", name: "Read", input: { file_path: "/w/a.ts" } }]) +
+      result("r", "short") +
+      record([{ type: "tool_use", id: "s", name: "mcp__stillfail__slack_api", input: { method: "chat.postMessage", params: { channel: "C1", text: "嗨".repeat(400) } } }]) +
+      result("s", JSON.stringify({ ok: true, ts: "1.2", message: { text: "嗨".repeat(400) } })) +
+      record([{ type: "text", text: "说完了".repeat(300) }]),
+  );
+  const whole = readTimeline("claude", path);
+  const short = whole.map(brief);
+  assert.deepEqual(short.map((e) => [e.kind, e.brief === true]), [
+    ["thinking", true], ["tool_call", true], ["tool_result", true], ["tool_call", false], ["tool_result", false],
+    ["tool_call", false], ["tool_result", true], ["assistant", false],
+  ]);
+  // A thought by its first line; a call by what says what it does, the description whole after a long command.
+  assert.equal(short[0]!.text, "想".repeat(40));
+  assert.deepEqual(JSON.parse(short[1]!.text), { command: [...command].slice(0, 300).join(""), description: "Run the tests 3 times" });
+  // A result without what it gave, but Slack's answer: whether it went, and its ts.
+  assert.equal(short[2]!.text, "");
+  assert.deepEqual(JSON.parse(short[6]!.text), { ok: true, ts: "1.2" });
+  // Everything else as it is, and the whole of each as it was read.
+  assert.deepEqual([short[3], short[4], short[5], short[7]], [whole[3], whole[4], whole[5], whole[7]]);
+  assert.deepEqual(short.map((e, i) => ({ ...e, text: whole[i]!.text, brief: undefined })), whole.map((e) => ({ ...e, brief: undefined })));
   rmSync(dir, { recursive: true });
 });
 
