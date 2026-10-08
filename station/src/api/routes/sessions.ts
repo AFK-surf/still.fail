@@ -225,7 +225,8 @@ export const routes = ({ read, agents }: Tools): Route[] => [
       const key = segment(rawKey!);
       const action = rawAction === undefined ? undefined : segment(rawAction);
       if (action === undefined) return read(r, "session", { key, viewer: r.viewer, lang: r.lang });
-      if (action === "timeline") return read(r, "timeline", { key, before: param(r, "before"), limit: param(r, "limit"), lang: r.lang });
+      // `brief=1`: in brief (what a history shows unopened); `from`, `to`: those entries whole, as one is opened.
+      if (action === "timeline") return read(r, "timeline", { key, before: param(r, "before"), limit: param(r, "limit"), lang: r.lang, from: param(r, "from"), to: param(r, "to"), brief: param(r, "brief") });
       if (action === "files") return file(read, r, { key, name: param(r, "name") ?? "", thumb: param(r, "thumb") === "1", lang: r.lang });
       if (action === "parts") return part(read, r, key);
       if (action === "poster") return posterOf(read, r, key, agents?.hub.config().dataDir);

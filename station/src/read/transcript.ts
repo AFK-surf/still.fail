@@ -12,8 +12,9 @@ import { zstdDecompressSync } from "node:zlib";
 import { tr } from "./spoken.ts";
 import type { Json } from "./store.ts";
 
-/// TimelineEntry as serde writes it: `tool`, `ok`, `callId`, `subagent` left out when none.
-export type TimelineEntry = { at: string | null; kind: string; text: string; tool?: string; ok?: boolean; callId?: string; subagent?: boolean };
+/// TimelineEntry as serde writes it: `tool`, `ok`, `callId`, `subagent` left out when none; `brief` when what it says is
+/// cut to what a history shows before it is opened (`brief`).
+export type TimelineEntry = { at: string | null; kind: string; text: string; tool?: string; ok?: boolean; callId?: string; subagent?: boolean; brief?: boolean };
 
 const MAX_TEXT = 4000;
 
@@ -30,6 +31,72 @@ const isObj = (v: Json) => v !== null && typeof v === "object" && !Array.isArray
 /// serde_json's `value.get(key)`: an object's field, else none.
 const get = (v: Json, key: string): Json | undefined => (isObj(v) && Object.hasOwn(v, key) ? v[key] : undefined);
 const stringOf = (v: Json | undefined): string | undefined => (isStr(v) ? v : undefined);
+
+// ---- an entry in brief ----
+
+/// What is whole in brief too: up to this many characters.
+const SMALL = 600;
+/// How much of each field that says what a call does its brief keeps, and of a thought its first line.
+const BRIEF_CHARS = 300;
+/// The fields of a call's input that say what it does: what an execution history names a call by before it is opened,
+/// and a chat's activity says it does (client/core-ts/src/activity.ts doing, history.ts describe, hint, fileOf).
+const SAYING = ["description", "command", "cmd", "file_path", "path", "notebook_path", "pattern", "url", "query", "prompt"];
+/// Calls whole in brief too: what they hold is what a history shows of them (a post, a state, what went to Slack).
+const WHOLE = new Set(["chat_post", "chat_state", "slack_api"]);
+/// Each call's brief, as it was read (from its whole input, not one cut to MAX_TEXT).
+const briefs = new WeakMap<TimelineEntry, string>();
+
+const toolName = (tool: string) => tool.replace(/^(mcp__stillfail__|stillfail__|stillfail\.|mcp__ember__|ember__|ember\.)/, "");
+const firstChars = (text: string, n: number) => Array.from(text).slice(0, n).join("");
+
+/// A call's input in brief: of an object, only the fields that say what it does, each cut short; anything else cut short.
+function briefOf(input: Json | undefined): string {
+  if (isObj(input)) {
+    const kept: Record<string, string | string[]> = {};
+    for (const name of SAYING) {
+      const v = get(input, name);
+      if (isStr(v)) kept[name] = firstChars(v, BRIEF_CHARS);
+      else if (Array.isArray(v)) kept[name] = v.filter(isStr).map((p) => firstChars(p, BRIEF_CHARS));
+    }
+    return JSON.stringify(kept);
+  }
+  return firstChars(isStr(input) ? input : JSON.stringify(input ?? null), BRIEF_CHARS);
+}
+
+/// A call entry, its brief kept beside it.
+function withBrief(e: TimelineEntry, input: Json | undefined): TimelineEntry {
+  briefs.set(e, briefOf(input));
+  return e;
+}
+
+/**
+ * An entry as an execution history shows it before it is opened (`brief: true` when anything was left out; the whole of
+ * it is read again by its index when it is): a call by what says what it does, a result without what it gave (Slack's
+ * answer kept to whether it went and its ts), a thought by its first line. What it said or was given, posts, states and
+ * what went to Slack, and anything short, whole.
+ */
+export function brief(e: TimelineEntry): TimelineEntry {
+  if (Array.from(e.text).length <= SMALL) return e;
+  if (e.kind === "tool_call") {
+    if (WHOLE.has(toolName(e.tool ?? ""))) return e;
+    return { ...e, text: briefs.get(e) ?? firstChars(e.text, BRIEF_CHARS), brief: true };
+  }
+  if (e.kind === "tool_result") {
+    let text = "";
+    try {
+      const v = JSON.parse(e.text);
+      if (isObj(v) && typeof v.ok === "boolean") text = JSON.stringify(isStr(v.ts) ? { ok: v.ok, ts: v.ts } : { ok: v.ok });
+    } catch {
+      // Not Slack's answer: nothing of it.
+    }
+    return { ...e, text, brief: true };
+  }
+  if (e.kind === "thinking") {
+    const first = e.text.split("\n").find((l) => trim(l) !== "") ?? "";
+    return { ...e, text: firstChars(trim(first), BRIEF_CHARS), brief: true };
+  }
+  return e;
+}
 
 /// archive.rs `storage`: the file, or its `.zst` once put away.
 const storage = (path: string) => (existsSync(path) ? path : `${path}.zst`);
@@ -174,7 +241,7 @@ function claudeTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
         const name = stringOf(get(block, "name")) ?? "";
         const id = stringOf(get(block, "id"));
         const input = pretty(get(block, "input") ?? null);
-        out.push(withFields(entry("tool_call", isPosting(name) ? input : clip(input)), { tool: name, callId: id }));
+        out.push(withBrief(withFields(entry("tool_call", isPosting(name) ? input : clip(input)), { tool: name, callId: id }), get(block, "input")));
         break;
       }
       case "tool_result": {
@@ -272,11 +339,11 @@ function codexTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     // call them.
     const script = stringOf(get(p, "input")) ?? "";
     const [calls, only] = scriptCalls(script);
-    if (!only) out.push(call("exec", callId, clip(script)));
+    if (!only) out.push(withBrief(call("exec", callId, clip(script)), script));
     calls.forEach(([tool, args], i) => {
       // The script's output answers its first call when the script is nothing but calls.
       const id = callId === undefined ? undefined : only && i === 0 ? callId : `${callId}#${i}`;
-      out.push(call(tool, id, isPosting(tool) ? pretty(args) : clip(pretty(args))));
+      out.push(withBrief(call(tool, id, isPosting(tool) ? pretty(args) : clip(pretty(args))), args));
     });
     // Calls taken out of a script that does more: they are done when the script is.
     if (!only && callId !== undefined && calls.length > 0) state.inner.set(callId, calls.length);
@@ -287,12 +354,14 @@ function codexTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     const raw = given === undefined ? "" : isStr(given) ? given : JSON.stringify(given);
     // Not JSON (custom tools take free text): shown as is.
     let args: string;
+    let input: Json = raw;
     try {
-      args = pretty(JSON.parse(raw));
+      input = JSON.parse(raw);
+      args = pretty(input);
     } catch {
       args = raw;
     }
-    out.push(call(name, callId, isPosting(name) ? args : clip(args)));
+    out.push(withBrief(call(name, callId, isPosting(name) ? args : clip(args)), input));
     return;
   }
   if (kind === "function_call_output" || kind === "custom_tool_call_output") {

@@ -18,7 +18,7 @@ import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
-import { readTimeline, transcriptPaths } from "./transcript.ts";
+import { brief, readTimeline, transcriptPaths } from "./transcript.ts";
 import { HttpError, messageView } from "./views.ts";
 import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../sessions/thumbs.ts";
 import { parseUsize } from "./jobs.ts";
@@ -246,9 +246,10 @@ export function parseI64(text: string): number | null {
 // ---- a session's timeline and widgets ----
 
 /// GET /sessions/:key/timeline: transcript entries before those a page was sent: up to `limit` (200, from 1 to 1000)
-/// before entry `before` (0), and the index of the first (live.rs `before`). The transcript is found through the
-/// session's profile (hub.rs `locate`); none found: nothing.
-export function timeline(s: Store, key: string, beforeParam: string | undefined, limitParam: string | undefined, lang: Lang): Json {
+/// before entry `before` (0), and the index of the first (live.rs `before`); in brief (transcript.ts `brief`) with
+/// `brief=1`. `from` and `to` instead: those entries whole (both included, at most 1000), as one in brief is read again
+/// when it is opened. The transcript is found through the session's profile (hub.rs `locate`); none found: nothing.
+export function timeline(s: Store, key: string, beforeParam: string | undefined, limitParam: string | undefined, lang: Lang, fromParam?: string, toParam?: string, briefParam?: string): Json {
   setLang(lang);
   const row = sessionRow(s, key);
   const before = parseUsize(beforeParam) ?? 0;
@@ -260,9 +261,16 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];
   const { paths } = transcriptPaths(runtime, homes, store.runtimeSessions(s, key));
   const entries = paths.flatMap((path) => readTimeline(runtime, path));
+  const from = parseUsize(fromParam);
+  const to = parseUsize(toParam);
+  if (from !== null && to !== null) {
+    const last = Math.min(to, from + 999, entries.length - 1);
+    return { start: from, entries: entries.slice(from, last + 1) };
+  }
   const end = Math.min(before, entries.length);
   const start = Math.max(0, end - limit);
-  return { start, entries: entries.slice(start, end) };
+  const page = entries.slice(start, end);
+  return { start, entries: briefParam === "1" ? page.map(brief) : page };
 }
 
 /// GET /sessions/:key/widget-state?path: what a widget in one of the session's messages holds, null when nothing or
