@@ -65,8 +65,10 @@ function PasswordSignIn() {
       setError(null);
       passwordSignIn(email.trim(), password).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
     }}>
-      <input className={controlsCss.input} type="email" autoComplete="username" autoFocus placeholder={t("web-pages.signIn.email")} aria-label={t("web-pages.signIn.email")} value={email} onChange={(e) => setEmail(e.target.value)} />
-      <input className={controlsCss.input} type="password" autoComplete="current-password" placeholder={t("web-pages.signIn.passwordField")} aria-label={t("web-pages.signIn.passwordField")} value={password} onChange={(e) => setPassword(e.target.value)} />
+      <div className={css.fields}>
+        <input className={controlsCss.input} type="email" autoComplete="username" autoFocus placeholder={t("web-pages.signIn.email")} aria-label={t("web-pages.signIn.email")} value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input className={controlsCss.input} type="password" autoComplete="current-password" placeholder={t("web-pages.signIn.passwordField")} aria-label={t("web-pages.signIn.passwordField")} value={password} onChange={(e) => setPassword(e.target.value)} />
+      </div>
       {error && <div className={`${controlsCss.fieldError} ${css.passwordError}`} role="alert">{error}</div>}
       <Button type="submit" variant="primary" busy={busy} disabled={!email.trim() || !password}>{t("web-pages.signIn.passwordSubmit")}</Button>
     </form>
