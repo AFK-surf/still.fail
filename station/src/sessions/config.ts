@@ -57,6 +57,10 @@ const str = (v: unknown): string | undefined => (typeof v === "string" ? v : und
 const nonEmpty = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : undefined);
 const under = (dataDir: string, path: string) => (isAbsolute(path) ? path : join(dataDir, path));
 
+/// A profile on the machine's login as it was named before (「b@x.com（本机）」, "Local Codex"), without the "this machine"
+/// it was said with: read from another machine, that was the other machine.
+const machineName = (name: string | undefined) => name?.replace(/（本机）$| \(local\)$/, "").replace(/^本机 |^Local /, "");
+
 /// config.json (parsed) as the hub reads it: parse_config's defaults and derivations, without its checks (the config
 /// module refuses a config that does not pass them before anything reads it).
 export function hubConfig(raw: any, dataDir: string): HubConfig {
@@ -70,7 +74,7 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
     return {
       ...base,
       id: p.id,
-      name: str(p.name)?.trim() || p.id,
+      name: (p.machine === true ? machineName(str(p.name)) : str(p.name))?.trim() || p.id,
       // One that runs neither runtime (a provider of chat completions only) is Claude's in name.
       runtime: runtimes[0] ?? "claude",
       runtimes,

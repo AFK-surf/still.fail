@@ -183,6 +183,7 @@
   "core-logic.format.failure.exited": "进程退出了",
   "core-logic.format.failure.model": "模型出错",
   "core-logic.format.failure.other": "出错了",
+  "core-logic.format.failure.refused": "请求被拒绝",
   "core-logic.format.failure.rate_limit": "额度用完",
   "core-logic.format.maker.zhipu": "智谱",
   "core-logic.format.mode.multi": "多会话",

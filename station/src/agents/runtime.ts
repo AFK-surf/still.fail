@@ -4,7 +4,7 @@
 // again takes its sessions up from the runners (`adopt`), from what the previous one left (`snapshot`) or, after a
 // crash, from what the runner kept unread.
 
-export type FailureReason = "auth" | "rate_limit" | "model" | "exited" | "other";
+export type FailureReason = "auth" | "refused" | "rate_limit" | "model" | "exited" | "other";
 
 export type TurnOutcome = { kind: "completed" } | { kind: "aborted" } | { kind: "failed"; reason: FailureReason; message: string };
 

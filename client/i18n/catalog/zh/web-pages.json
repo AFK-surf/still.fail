@@ -491,7 +491,7 @@
   "web-pages.profiles.machineLoginAbout": "要换号、重新登录或登出，在这台机器的 {runtime} 里做，这个 Profile 跟着它变；不想用了就停用（右上角菜单）。",
   "web-pages.profiles.machineLoginHere": "这台机器上 {runtime} 的登录",
   "web-pages.profiles.machineLoginOn": "{station} 上 {runtime} 的登录",
-  "web-pages.profiles.machineSignedIn": "这台机器上已经登录了",
+  "web-pages.profiles.machineSignedIn": "{station} 上已经登录了",
   "web-pages.profiles.manual": "也可以在服务器上手动登录",
   "web-pages.profiles.models": "模型",
   "web-pages.profiles.modelsAbout": "只有启用的模型能在新对话和连接里选。",

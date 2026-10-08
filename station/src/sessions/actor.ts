@@ -788,8 +788,9 @@ export class SessionActor {
       await this.notice(failureNotice(outcome), this.profile);
     } else if (outcome.kind === "failed") {
       this.nudges = 0;
-      // A sign-in that failed is its profile's: the notice points there.
-      await this.notice(failureNotice(outcome), outcome.reason === "auth" ? this.profile : null);
+      // A sign-in that failed is its profile's, as is a refused request (its environment is where a proxy goes): the
+      // notice points there.
+      await this.notice(failureNotice(outcome), outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null);
     } else if (outcome.kind === "aborted") {
       this.nudges = 0;
       if (stopRequested) await this.notice(t("station.notice.stopped"));
@@ -911,7 +912,7 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
 
 function failureNotice(outcome: TurnOutcome): string {
   if (outcome.kind !== "failed") return "";
-  const key = outcome.reason === "auth" ? "auth" : outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "exited" ? "exited" : "failed";
+  const key = outcome.reason === "auth" ? "auth" : outcome.reason === "refused" ? "refused" : outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "exited" ? "exited" : "failed";
   return `⚠️ ${t(`station.notice.${key}`, { error: outcome.message })}`;
 }
 

@@ -2,6 +2,7 @@
 // (system/init, status, stream_event partial messages, assistant/user messages, result), driven by what the prompt says:
 //   say:<text>    a reply                       fail:auth|rate|model   a result with is_error
 //   slow:<n>      n deltas, 50 ms apart          retry401               two api_retry 401 frames, then waits until interrupted
+//                                                retry403               the same with 403 Request not allowed (a refused region)
 //   hold:<k>      k deltas, then waits until steered (the steers its deltas) or interrupted
 //   gate:<n>:<k>:<name>   k of n deltas; the rest once FAKE_DUMP.<name>.a (a fifo) is written, then FAKE_DUMP.<name>.said
 //                 made; the end once FAKE_DUMP.<name>.b is (what the test lets happen when, not a time)
@@ -85,8 +86,9 @@ async function turn(text) {
   if (text === "fail:auth") result({ is_error: true, result: "API Error: 401 invalid x-api-key" });
   else if (text === "fail:rate") result({ is_error: true, result: "You've hit your weekly limit · resets Oct 8" });
   else if (text === "fail:model") result({ is_error: true, result: "prompt is too long" });
-  else if (text === "retry401") {
-    for (const attempt of [1, 2]) say({ type: "system", subtype: "api_retry", attempt, retry_delay_ms: 100, error_status: 401, error: "invalid token", session_id: sessionId });
+  else if (text === "retry401" || text === "retry403") {
+    const [status, error] = text === "retry401" ? [401, "invalid token"] : [403, "Request not allowed"];
+    for (const attempt of [1, 2]) say({ type: "system", subtype: "api_retry", attempt, retry_delay_ms: 100, error_status: status, error, session_id: sessionId });
     while (!interrupted) await pause();
     result({ subtype: "error_during_execution", is_error: true, result: "" });
   } else if (text.startsWith("hold:")) {

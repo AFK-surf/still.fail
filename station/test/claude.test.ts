@@ -143,6 +143,8 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.deepEqual(outcome(events, 3), { kind: "completed" }, "a successful text saying a limit is no failure");
     assert.equal(classifyResult("Claude AI usage limit reached"), "rate_limit");
     assert.equal(classifyResult("session limit configuration is invalid"), "model");
+    assert.equal(classifyResult('API Error: 403 {"error":{"type":"forbidden","message":"Request not allowed"}}'), "refused");
+    assert.equal(classifyResult("API Error: 403 OAuth token does not meet scope requirement"), "auth");
     await session.dispose();
   });
 
@@ -157,6 +159,16 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     const interrupts = stdin(o.dump).filter((m) => m.type === "control_request" && m.request.subtype === "interrupt");
     assert.equal(interrupts.length, 1, "interrupted once");
     assert.match(interrupts[0].request_id, /^interrupt-/);
+    await session.dispose();
+  });
+
+  test("an api_retry 403 Request not allowed fails as refused, not auth: signing in again would not help", async () => {
+    const d = driver();
+    const { events, push, until } = listen();
+    const session = await d.open(options(), push);
+    await session.prompt("retry403");
+    await until(ended(1));
+    assert.deepEqual(outcome(events), { kind: "failed", reason: "refused", message: "403 Request not allowed" });
     await session.dispose();
   });
 

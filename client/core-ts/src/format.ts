@@ -350,6 +350,8 @@ export function failureText(detail: string): string {
       return said("core-logic.format.failure.rate_limit");
     case "auth":
       return said("core-logic.format.failure.auth");
+    case "refused":
+      return said("core-logic.format.failure.refused");
     case "model":
       return said("core-logic.format.failure.model");
     case "exited":
