@@ -1915,21 +1915,22 @@ function layoutSpot(pane: HTMLElement, el: Element) {
 
 /**
  * A message an agent posts while its activity shows comes out of the activity's avatar, one at a time: the avatar hops
- * at once to where the message's avatar goes, its activity's line folding away behind it (float: up, slowing, then
- * falling faster and faster, stopping dead there), the message comes out of it as it lands, carried on by the fall,
- * growing down into its place (spit), and the avatar goes on down to where the activity now is, which unfolds again
- * (return). The hop is short and waits for nothing: a message starts coming out under a third of a second after it came
- * (folding the line first and a longer hop made it over half a second, the chat list saying it already). The avatar
- * that flies is a copy over the list, put exactly where the real one is (and the real one hidden) as it sets out, and
- * let go of only once it has come to rest exactly where the real one is, so nothing blinks or jumps; where it goes is
- * read anew each frame (the message growing, the activity gliding down), and going home it is on springs, from the
- * speed it has. The message's own avatar is where it lands, the same picture in the same place. Until its turn a
- * message waits folded to nothing. With reduced motion messages just appear, and so do those no one watches come out:
- * arriving while the page is hidden or the reader has scrolled up (scroll.ts), and all still waiting when the page is
- * hidden or the reader scrolls up (the browser barely runs timers for a hidden page, so a queue would otherwise still
- * be playing out long after); an avatar then on its way goes home from where it is.
+ * to where the message's avatar goes as soon as its activity has taken the message's coming in (a frame: fold), its
+ * line folding away behind it (float: up, slowing, then falling faster and faster, stopping dead there), the message
+ * comes out of it as it lands, carried on by the fall, growing down into its place (spit), and the avatar goes on down
+ * to where the activity now is, which unfolds again (return). The hop is short and waits for nothing more: a message
+ * starts coming out a third of a second after it came (folding the line first and a longer hop made it over half a
+ * second, the chat list saying it already). The avatar that flies is a copy over the list, put exactly where the real
+ * one is (and the real one hidden) as it sets out, and let go of only once it has come to rest exactly where the real
+ * one is, so nothing blinks or jumps; where it goes is read anew each frame (the message growing, the activity gliding
+ * down), and going home it is on springs, from the speed it has. The message's own avatar is where it lands, the same
+ * picture in the same place. Until its turn a message waits folded to nothing. With reduced motion messages just
+ * appear, and so do those no one watches come out: arriving while the page is hidden or the reader has scrolled up
+ * (scroll.ts), and all still waiting when the page is hidden or the reader scrolls up (the browser barely runs timers
+ * for a hidden page, so a queue would otherwise still be playing out long after); an avatar then on its way goes home
+ * from where it is.
  */
-type Pose = "float" | "spit" | "return";
+type Pose = "fold" | "float" | "spit" | "return";
 /** How long an activity's line takes to fold to its avatar (and to unfold). */
 const FOLD_MS = 170;
 const SPIT_MS = 380;
@@ -1994,18 +1995,18 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     f.el.remove();
     flight.current = null;
   };
-  // Each sets out at once: the same agent's next one from where its avatar is (its activity folded already, its avatar
-  // out), another's hopping from its own activity, which folds behind it.
-  const nextAfter = () => {
+  // The same agent's next message goes straight on from where its avatar is (its activity folded already, its avatar
+  // out); another's sets out from its activity a frame on (fold).
+  const nextAfter = (agent: string | null) => {
     const next = queue.current.shift();
-    setCurrent(next ? { ...next, pose: "float" } : null);
+    setCurrent(next ? { ...next, pose: next.agent === agent ? "float" : "fold" } : null);
   };
   // Done: the copy let go of in the same frame as the real avatar shows again (or kept, flying on to the next message).
   const finish = (seq: number, agent: string, sync = true) => {
     done.current.add(seq);
     if (queue.current[0]?.agent !== agent || !sync) land();
-    if (sync) flushSync(nextAfter);
-    else nextAfter();
+    if (sync) flushSync(() => nextAfter(agent));
+    else nextAfter(agent);
   };
 
   // Everything waiting or coming out shows at once, where it is; an avatar on its way goes home from there.
@@ -2025,7 +2026,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
   const watched = () => document.visibilityState === "visible" && !list.current?.hasAttribute("data-reading-up");
   useLayoutEffect(() => {
     if (!watched()) release();
-    else if (!current && queue.current.length) nextAfter();
+    else if (!current && queue.current.length) nextAfter(null);
   });
   useEffect(() => {
     const pane = list.current;
@@ -2072,6 +2073,9 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
       };
       step();
     };
+    // A frame for its activity to take the message's coming in (what it pushes down glides on from where it showed, and
+    // its line starts folding), then the avatar sets out from where it shows: at once, not once the line has folded.
+    if (pose === "fold") frame = requestAnimationFrame(() => go("float"));
     let hop: AnimationPlaybackControls | undefined;
     if (pose === "float") {
       const f = (flight.current ??= launch(pane, avatar));
@@ -2153,7 +2157,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     // between, it does not unfold and fold again each time.
     poseOf(agent: string): { folded: boolean; away: boolean } {
       const mine = current?.agent === agent;
-      return { folded: mine || queue.current.some((q) => q.agent === agent), away: mine };
+      return { folded: mine || queue.current.some((q) => q.agent === agent), away: mine && current!.pose !== "fold" };
     },
   };
 }
