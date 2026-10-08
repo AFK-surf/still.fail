@@ -641,10 +641,77 @@ async function checkFromMenu(): Promise<void> {
 }
 
 /**
- * The menu bar: Electron's own, but for 检查更新… in the app's menu (macOS; elsewhere the app keeps the default one).
+ * The page's actions the menu bar offers (web/src/keymap.ts), as the window in front says them (menu:state): the first
+ * key each is bound to there, and which it can do now. The keys are the page's: it takes a key press before the menu
+ * does, so a menu item's key only shows it (menuItem).
  */
+interface MenuState { keys: Record<string, string | null>; on: string[] }
+const menuStates = new Map<number, MenuState>();
+/** The app's window last in front (open): the one the menu bar's page items act in, not the dock's. */
+let front: BrowserWindow | null = null;
+/** The keys the menu bar was built with: other keys build it again, which can be done now only enables its items. */
+let menuKeys = "";
+
+ipcMain.on("menu:state", (event, state: MenuState) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof state?.keys !== "object" || !Array.isArray(state.on)) return;
+  menuStates.set(event.sender.id, state);
+  if (front?.webContents === event.sender) followMenu();
+});
+
+/** The menu bar as the window in front would have it. */
+function followMenu(): void {
+  if (process.platform !== "darwin") return;
+  const state = frontState();
+  if (JSON.stringify(state.keys) !== menuKeys) return setMenu();
+  const menu = Menu.getApplicationMenu();
+  for (const action of MENU_ACTIONS) {
+    const item = menu?.getMenuItemById(`page:${action}`);
+    if (item) item.enabled = state.on.includes(action);
+  }
+}
+
+function frontState(): MenuState {
+  return (front && !front.isDestroyed() && menuStates.get(front.webContents.id)) || { keys: {}, on: [] };
+}
+
+/** The page's actions in the menu bar; the others (Space to the composer, Escape) are keys in a chat, not commands. */
+const MENU_ACTIONS = [
+  "chat.new", "chat.switch", "settings", "shortcuts", "sidebar.toggle", "nav.back", "nav.forward", "chat.prev", "chat.next",
+  "chat.latest", "chat.history", "chat.jobs", "composer.file", "chat.stop", "chat.rename", "chat.archive",
+] as const;
+
+/** A page's binding (Mod+Shift+H) as the menu shows it; none for a key a text field types (one with no ⌘, ⌥ or ⌃). */
+function accelerator(binding: string | null | undefined): string | undefined {
+  if (!binding) return undefined;
+  const parts = binding.split("+");
+  const key = parts.pop()!;
+  if (!parts.some((part) => part === "Mod" || part === "Alt" || part === "Ctrl") && !/^F\d{1,2}$/.test(key)) return undefined;
+  return [...parts.map((part) => (part === "Mod" ? "CmdOrCtrl" : part)), key].join("+");
+}
+
+/**
+ * A menu item doing one of the page's actions in the window in front. Its key is pressed in the page first, which does
+ * the action or leaves it (in a text field, under a dialog); the menu then hears it too, and leaves it to the page.
+ */
+function menuItem(action: (typeof MENU_ACTIONS)[number], state: MenuState): Electron.MenuItemConstructorOptions {
+  const keys = accelerator(state.keys[action]);
+  return {
+    id: `page:${action}`,
+    label: t(`desktop.menu.${action}`),
+    ...(keys ? { accelerator: keys } : {}),
+    enabled: state.on.includes(action),
+    click: (_item, _window, event) => {
+      if (!event.triggeredByAccelerator && front && !front.isDestroyed()) front.webContents.send("menu:action", action);
+    },
+  };
+}
+
+/** The menu bar (macOS; elsewhere the app keeps Electron's own), in the app's language, with the page's actions. */
 function setMenu(): void {
   if (process.platform !== "darwin") return;
+  const state = frontState();
+  menuKeys = JSON.stringify(state.keys);
+  const item = (action: (typeof MENU_ACTIONS)[number]) => menuItem(action, state);
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {
       label: app.name,
@@ -652,6 +719,8 @@ function setMenu(): void {
         { role: "about", label: t("desktop.menu.about", { app: app.name }) },
         { label: t("desktop.menu.checkUpdates"), click: () => void checkFromMenu() },
         ...(dockPath ? [{ label: t("desktop.menu.dock"), type: "checkbox" as const, checked: dockSettings().on, click: () => setDock({ on: !dockSettings().on }) }] : []),
+        { type: "separator" },
+        { ...item("settings"), label: t("desktop.menu.settings") },
         { type: "separator" },
         { role: "services", label: t("desktop.menu.services") },
         { type: "separator" },
@@ -662,10 +731,85 @@ function setMenu(): void {
         { role: "quit", label: t("desktop.menu.quit", { app: app.name }) },
       ],
     },
-    { role: "fileMenu" },
-    { role: "editMenu" },
-    { role: "viewMenu" },
-    { role: "windowMenu" },
+    {
+      label: t("desktop.menu.file"),
+      submenu: [
+        item("chat.new"),
+        { label: t("desktop.menu.newWindow"), accelerator: "CmdOrCtrl+Shift+N", click: () => void open() },
+        item("chat.switch"),
+        { type: "separator" },
+        item("composer.file"),
+        { type: "separator" },
+        { role: "close", label: t("desktop.menu.close") },
+      ],
+    },
+    {
+      label: t("desktop.menu.edit"),
+      submenu: [
+        { role: "undo", label: t("desktop.menu.undo") },
+        { role: "redo", label: t("desktop.menu.redo") },
+        { type: "separator" },
+        { role: "cut", label: t("desktop.contextMenu.cut") },
+        { role: "copy", label: t("desktop.contextMenu.copy") },
+        { role: "paste", label: t("desktop.contextMenu.paste") },
+        { role: "pasteAndMatchStyle", label: t("desktop.menu.pasteAndMatchStyle") },
+        { role: "delete", label: t("desktop.menu.delete") },
+        { role: "selectAll", label: t("desktop.contextMenu.selectAll") },
+      ],
+    },
+    {
+      label: t("desktop.menu.view"),
+      submenu: [
+        item("sidebar.toggle"),
+        { type: "separator" },
+        item("chat.history"),
+        item("chat.jobs"),
+        { type: "separator" },
+        { role: "resetZoom", label: t("desktop.menu.resetZoom") },
+        { role: "zoomIn", label: t("desktop.menu.zoomIn") },
+        { role: "zoomOut", label: t("desktop.menu.zoomOut") },
+        { type: "separator" },
+        { role: "reload", label: t("desktop.menu.reload") },
+        { role: "toggleDevTools", label: t("desktop.menu.devTools") },
+        { type: "separator" },
+        { role: "togglefullscreen", label: t("desktop.menu.fullScreen") },
+      ],
+    },
+    {
+      label: t("desktop.menu.go"),
+      submenu: [
+        item("nav.back"),
+        item("nav.forward"),
+        { type: "separator" },
+        item("chat.prev"),
+        item("chat.next"),
+        item("chat.latest"),
+      ],
+    },
+    {
+      label: t("desktop.menu.chat"),
+      submenu: [
+        item("chat.stop"),
+        { type: "separator" },
+        item("chat.rename"),
+        item("chat.archive"),
+      ],
+    },
+    {
+      role: "window",
+      label: t("desktop.menu.window"),
+      submenu: [
+        { role: "minimize", label: t("desktop.menu.minimize") },
+        { role: "zoom", label: t("desktop.menu.zoom") },
+        { type: "separator" },
+        { role: "front", label: t("desktop.menu.front") },
+      ],
+    },
+    {
+      role: "help",
+      label: t("desktop.menu.help"),
+      submenu: [item("shortcuts")],
+    },
   ]));
 }
 
@@ -788,6 +932,18 @@ function open(path = "/", titled = false): BrowserWindow {
     webPreferences: { preload: join(__dirname, "preload.js"), sandbox: true, contextIsolation: true },
   });
   window.once("ready-to-show", () => window.show());
+  // The menu bar's page items follow the window in front (followMenu): a new one is, though the app may not be.
+  const contents = window.webContents.id;
+  front = window;
+  window.on("focus", () => {
+    front = window;
+    followMenu();
+  });
+  window.on("closed", () => {
+    menuStates.delete(contents);
+    if (front === window) front = null;
+    followMenu();
+  });
   // Full screen, the window's buttons are gone: the page's top row stops keeping room for them (preload.ts).
   const fullScreen = () => { if (!window.isDestroyed()) window.webContents.send("window:fullscreen", window.isFullScreen()); };
   window.on("enter-full-screen", fullScreen);

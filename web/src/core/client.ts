@@ -538,6 +538,14 @@ export interface StillFailDesktop {
   onImageWanted?(answer: (src: string) => Promise<Uint8Array | null>): () => void;
   /** Says which language the page speaks, for the app's menus and dialogs. An app from before languages has none. */
   language?(lang: "zh" | "en"): void;
+  /**
+   * The menu bar's items for the page's actions (web/src/keymap.ts): told the first key each is bound to and which can
+   * be done now; `onAction` hears one chosen (the returned function stops listening). An app from before it has none.
+   */
+  menu?: {
+    state(state: { keys: Record<string, string | null>; on: string[] }): void;
+    onAction(listener: (action: string) => void): () => void;
+  };
 }
 
 /**
