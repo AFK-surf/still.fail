@@ -29,9 +29,13 @@ const darkVars = {
  */
 export const m = style({
   position: "fixed", inset: "0", overflow: "hidden", background: "var(--m-bg)", color: "var(--m-ink)",
-  fontSize: "15px", lineHeight: "1.4", WebkitTapHighlightColor: "transparent", WebkitTextSizeAdjust: "100%",
+  fontSize: vars.textBody, lineHeight: "1.4", WebkitTapHighlightColor: "transparent", WebkitTextSizeAdjust: "100%",
   colorScheme: "light",
   vars: {
+    // The phone's type, as Android's: what is read and tapped a size up, what is typed 16 (iOS zooms into less).
+    [vars.textControl]: "14px",
+    [vars.textBody]: "15px",
+    [vars.textInput]: "16px",
     "--m-bg": "#F5F3EF",
     "--m-surface": "#FFFFFF",
     "--m-surface2": "#FBFAF7",
@@ -96,7 +100,7 @@ export const mDark = style({
 
 export const wide = style({
   color: vars.text, fontSize: vars.textBody, lineHeight: "1.55",
-  vars: { [vars.textXs]: "13px", [vars.textSm]: "15px", [vars.textBody]: "15px", [vars.neutralBg]: "var(--m-bubble)" },
+  vars: { [vars.textLabel]: "13px", [vars.textSecondary]: "15px", [vars.textBody]: "15px", [vars.neutralBg]: "var(--m-bubble)" },
 });
 globalStyle(`${m} button:not(${wide} *)`, { font: "inherit", color: "inherit" });
 globalStyle(`${m} button`, { WebkitTapHighlightColor: "transparent" });

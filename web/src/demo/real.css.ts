@@ -15,7 +15,7 @@ export const card = style({
   boxShadow: `0 20px 50px -20px ${vars.shadow}`, animation: `${rise} .28s ${vars.easeOut}`,
 });
 export const mark = style({ display: "block", width: "56px", height: "56px", margin: "0 auto 14px" });
-export const title = style({ margin: "0 0 20px", fontSize: vars.textMd, fontWeight: "650", color: vars.text });
+export const title = style({ margin: "0 0 20px", fontSize: vars.textTitle, fontWeight: "650", color: vars.text });
 export const actions = style({ display: "flex", gap: "8px", justifyContent: "center" });
 export const button = style({
   display: "inline-flex", alignItems: "center", height: "36px", padding: "0 18px", borderRadius: "999px", border: "0",

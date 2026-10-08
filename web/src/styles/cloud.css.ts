@@ -11,7 +11,7 @@ export const personLetter = style({
 });
 export const stationTag = style({
   flex: "none", padding: "1px 8px", borderRadius: `calc(6px * ${vars.cornerScale})`, background: vars.neutralBg,
-  color: vars.muted, fontSize: vars.textXs, fontWeight: "500", cornerShape: vars.cornerShape,
+  color: vars.muted, fontSize: vars.textLabel, fontWeight: "500", cornerShape: vars.cornerShape,
   selectors: {
     [`&${inline}`]: { marginLeft: "8px" },
   },

@@ -201,6 +201,10 @@ if part ts; then
   if touches '^(web/src|apps/desktop/src)/'; then
     step "colours mixed in sRGB" sh -c '! git grep -n "in oklch" -- web/src apps/desktop/src'
   fi
+  # Type sizes are the tokens' (styles/tokens.css.ts: text-micro … text-display), never a style's own (an em, relative to its text, may be).
+  if touches '^web/src/'; then
+    step "type sizes from tokens" sh -c '! git grep -nE "fontSize: *(\"[0-9.]+(px|rem)|[0-9])|font: *\"[^\"]*[0-9.]+px" -- "web/src/*.css.ts"'
+  fi
   # Core tests also run for Rust-only client changes. A fresh CI checkout needs both
   # their JS dependencies and the real wasm package even when no TS file changed.
   core_tests=0

@@ -848,7 +848,7 @@ function followNotices(): void {
 
 // The count on the Dock's icon (macOS): the core's `badge` (client/core-ts/src/views/marks.ts), every workspace's: the
 // cards waiting for the person (奏) and the chats of theirs that went wrong, or as the notifications page chose; the same
-// number, and the chats it is made of, as the sidebar's 需要你. A core from before it: failed or waiting, added up.
+// number, and the chats it is made of, as the sidebar's 待处理. A core from before it: failed or waiting, added up.
 let badgeHeld: number | null = null;
 
 interface Mark { alert?: number; wait?: number }

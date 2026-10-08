@@ -72,7 +72,7 @@ export const size = style({
   ...glass,
   position: "absolute", zIndex: "3", display: "flex", alignItems: "center", gap: "6px", height: "26px",
   padding: "0 11px", borderRadius: "999px", transform: "translate(-50%, -100%)", pointerEvents: "none",
-  boxShadow: "0 1px 4px rgb(0 0 0 / .1)", color: vars.text, fontSize: vars.textXs, fontWeight: "500",
+  boxShadow: "0 1px 4px rgb(0 0 0 / .1)", color: vars.text, fontSize: vars.textLabel, fontWeight: "500",
   whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", opacity: "0", transition: `opacity 240ms ${vars.easeOut}`,
   selectors: { "&[data-shown]": { opacity: "1", transition: "opacity 80ms linear" } },
 });
@@ -98,7 +98,7 @@ export const chips = style({
 });
 export const chip = style({
   flex: "none", height: "36px", padding: "0 13px", border: "0", borderRadius: "999px", background: "none",
-  color: vars.muted, font: "inherit", fontSize: vars.textSm, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+  color: vars.muted, font: "inherit", fontSize: vars.textSecondary, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
   selectors: {
     "&[aria-pressed=true]": { background: vars.canvas, color: vars.text, fontWeight: "600", boxShadow: "0 1px 3px rgb(0 0 0 / .1)" },
   },
@@ -111,5 +111,5 @@ export const tool = style({
 });
 export const fitTool = style({
   height: "36px", padding: "0 12px", border: "0", borderRadius: "999px", background: vars.canvas, color: vars.text,
-  font: "inherit", fontSize: vars.textSm, fontWeight: "500", whiteSpace: "nowrap",
+  font: "inherit", fontSize: vars.textSecondary, fontWeight: "500", whiteSpace: "nowrap",
 });

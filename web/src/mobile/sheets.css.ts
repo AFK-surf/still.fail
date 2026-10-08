@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "../styles/tokens.css.ts";
 import { mJobLast } from "./Chat.css.ts";
 import { mDetails } from "./Profiles.css.ts";
 import { mButton } from "./parts.css.ts";
@@ -14,7 +15,7 @@ export const mCommand = style({
 /** Asking: a destructive action's button in red; a command with its copy button. */
 globalStyle(`${mDangerButton}[data-danger] ${mButton}`, { background: "var(--m-red)", color: "#fff !important" });
 globalStyle(`${mCommand} code`, {
-  flex: "1", minWidth: "0", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "12px",
+  flex: "1", minWidth: "0", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: vars.textLabel,
   lineHeight: "18px", overflowWrap: "anywhere", userSelect: "all",
 });
 globalStyle(`${mCommand} button`, {
@@ -23,6 +24,6 @@ globalStyle(`${mCommand} button`, {
 });
 /** Here rather than with its class: it comes after .m-command code, and wins over it. */
 globalStyle(`${mJobLast} code`, {
-  font: "11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace", color: "var(--m-muted)", whiteSpace: "nowrap",
+  font: `${vars.textCaption}/1.5 ui-monospace, SFMono-Regular, Menlo, monospace`, color: "var(--m-muted)", whiteSpace: "nowrap",
   overflow: "hidden", textOverflow: "ellipsis",
 });

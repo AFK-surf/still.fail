@@ -65,11 +65,26 @@ globalStyle(":root", {
     "--r-nav": `calc(12px * ${vars.cornerScale})`,
     "--r-menu": `calc(20px * ${vars.cornerScale})`,
     "--r-option": `calc(12px * ${vars.cornerScale})`,
-    "--text-xs": "12px",
-    "--text-sm": "13px",
+    // Counts in pills, the smallest marks.
+    "--text-micro": "10px",
+    // Times, tags, keys: what is read last.
+    "--text-caption": "11px",
+    // Small labels, a menu's headings, a row's third line.
+    "--text-label": "12px",
+    // A row's second line, notes under a setting, menus.
+    "--text-secondary": "13px",
+    // Buttons and other controls.
+    "--text-control": "13px",
+    // What is read: messages, pages.
     "--text-body": "14px",
-    "--text-md": "16px",
-    "--text-lg": "22px",
+    // What is typed in.
+    "--text-input": "14px",
+    // A section's or a dialog's title, a list's titles that lead.
+    "--text-title": "16px",
+    // A page's title.
+    "--text-heading": "22px",
+    // Big numbers.
+    "--text-display": "28px",
     "--ease-out": "cubic-bezier(.2, .7, .2, 1)",
     "--dur": "140ms",
   },

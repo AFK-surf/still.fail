@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "../styles/tokens.css.ts";
 
 export const mNewchatScreen = style({ paddingBottom: "var(--m-bottom)", boxSizing: "border-box" });
 export const mNewBody = style({
@@ -6,14 +7,14 @@ export const mNewBody = style({
   gap: "6px", padding: "30px 30px 10px", textAlign: "center",
 });
 export const mNewProblem = style({
-  marginTop: "6px !important", fontSize: "13px !important", color: "var(--m-red)",
+  marginTop: "6px !important", fontSize: `${vars.textSecondary} !important`, color: "var(--m-red)",
   selectors: {
     "&[data-wait]": { color: "var(--m-muted)" },
   },
 });
 export const mNewSpent = style({
   margin: "0 12px", padding: "8px 12px", borderRadius: "12px",
-  background: "color-mix(in srgb, var(--m-warn) 12%, transparent)", fontSize: "13px",
+  background: "color-mix(in srgb, var(--m-warn) 12%, transparent)", fontSize: vars.textSecondary,
 });
 export const mNewBottom = style({
   display: "flex", flexDirection: "column", gap: "4px", flex: "none", padding: "8px 10px 0",
@@ -26,8 +27,8 @@ export const mChoosers = style({
 });
 export const mChooser = style({
   display: "inline-flex", alignItems: "center", gap: "6px", flex: "none", height: "30px", boxSizing: "border-box",
-  padding: "0 11px", borderRadius: "15px", fontSize: "13px !important", whiteSpace: "nowrap", cursor: "pointer",
+  padding: "0 11px", borderRadius: "15px", fontSize: `${vars.textSecondary} !important`, whiteSpace: "nowrap", cursor: "pointer",
 });
-globalStyle(`${mNewBody} h2`, { margin: "6px 0 0", fontSize: "22px", fontWeight: "700" });
-globalStyle(`${mNewBody} > p`, { fontSize: "14px" });
+globalStyle(`${mNewBody} h2`, { margin: "6px 0 0", fontSize: vars.textHeading, fontWeight: "700" });
+globalStyle(`${mNewBody} > p`, { fontSize: vars.textControl });
 

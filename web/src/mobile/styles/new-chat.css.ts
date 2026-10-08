@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "../../styles/tokens.css.ts";
 
 export const mNewNone = style({});
-globalStyle(`${mNewNone} p`, { fontSize: "14px", color: "var(--m-muted)" });
+globalStyle(`${mNewNone} p`, { fontSize: vars.textSecondary, color: "var(--m-muted)" });

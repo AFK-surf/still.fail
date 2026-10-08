@@ -145,7 +145,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
 
 /**
  * What waits for the viewer in this chat (the core's `waiting`: a card for them, or an agent needing them), above the
- * composer: in a line, leading to the post it is about; 不用了 lets it go (`decision.dismiss`). A need has no card in
+ * composer: in a line, leading to the post it is about; 忽略 lets it go (`decision.dismiss`). A need has no card in
  * the chat, so this is where it shows.
  */
 function WaitingBar({ station, thread, waiting }: { station: string; thread: number; waiting: ChatWaiting }) {

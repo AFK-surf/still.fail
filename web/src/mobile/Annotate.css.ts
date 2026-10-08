@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "../styles/tokens.css.ts";
 import { popKeyframes } from "../styles/keyframes.css.ts";
 
 export const mAnnotate = style({});
@@ -12,7 +13,7 @@ export const mSheet = style({ position: "relative", padding: "12px 20px 24px 32p
 
 /** Picked by the page, not the browser: no selection of its own, no menu of its own. */
 export const mWords = style({
-  userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none", fontSize: "16px", lineHeight: "1.6",
+  userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none", fontSize: vars.textTitle, lineHeight: "1.6",
   cursor: "text",
 });
 globalStyle(`${mWords} a`, { pointerEvents: "none" });
@@ -49,7 +50,7 @@ export const mPickBar = style({
 });
 globalStyle(`${mAnnotate} ${mPickBar} button`, {
   display: "flex", alignItems: "center", gap: "5px", height: "32px", padding: "0 12px", border: "0", borderRadius: "16px",
-  background: "none", color: "var(--m-ink)", font: "inherit", fontSize: "14px", cursor: "pointer",
+  background: "none", color: "var(--m-ink)", font: "inherit", fontSize: vars.textControl, cursor: "pointer",
 });
 globalStyle(`${mPickBar} button:active`, { background: "color-mix(in srgb, var(--m-ink) 8%, transparent)" });
 
@@ -60,7 +61,7 @@ globalStyle(`${mPickBar} button:active`, { background: "color-mix(in srgb, var(-
 export const mPin = style({
   position: "absolute", zIndex: "1", right: "calc(100% - 30px)", minWidth: "20px", height: "20px", padding: "0 4px",
   boxSizing: "border-box", display: "grid", placeItems: "center", border: "2px solid #fff", borderRadius: "10px 10px 2px 10px",
-  background: "var(--m-accent)", color: "#fff", fontSize: "11px", fontWeight: "650", lineHeight: "16px",
+  background: "var(--m-accent)", color: "#fff", fontSize: vars.textCaption, fontWeight: "650", lineHeight: "16px",
   // Proportional figures: a tabular 1 sits left of the middle.
   fontVariantNumeric: "proportional-nums", boxShadow: "0 1px 4px rgb(0 0 0 / .2)", cursor: "pointer",
   transformOrigin: "100% 100%", animation: `${popKeyframes} 160ms var(--m-ease)`, transition: "transform 160ms var(--m-ease)",
@@ -77,15 +78,15 @@ export const mNote = style([mNoteBox, {
   position: "absolute", zIndex: "3", left: "12px", right: "12px", scrollMarginBottom: "calc(var(--m-foot) + 160px)",
 }]);
 export const mNoteQuote = style({
-  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", padding: "0 8px", color: "var(--m-muted)", fontSize: "13px",
+  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", padding: "0 8px", color: "var(--m-muted)", fontSize: vars.textSecondary,
   lineHeight: "18px",
 });
 globalStyle(`${mNoteQuote} q`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", quotes: "none" });
-export const mNotePin = style([mPin, { minWidth: "16px", height: "16px", padding: "0 4px", borderRadius: "8px 8px 2px 8px", fontSize: "10px", lineHeight: "16px", position: "static", flex: "none", boxShadow: "none", border: "0", animation: "none" }]);
+export const mNotePin = style([mPin, { minWidth: "16px", height: "16px", padding: "0 4px", borderRadius: "8px 8px 2px 8px", fontSize: vars.textMicro, lineHeight: "16px", position: "static", flex: "none", boxShadow: "none", border: "0", animation: "none" }]);
 export const mNoteBar = style({ display: "flex", alignItems: "flex-end", gap: "2px" });
 export const mNoteInput = style({
   flex: "1", minWidth: "0", minHeight: "36px", maxHeight: "30vh", boxSizing: "border-box", margin: "0", padding: "7px 8px",
-  border: "0", background: "none", resize: "none", color: "var(--m-ink)", font: "inherit", fontSize: "16px", lineHeight: "21px",
+  border: "0", background: "none", resize: "none", color: "var(--m-ink)", font: "inherit", fontSize: vars.textInput, lineHeight: "21px",
   textWrap: "wrap", selectors: { "&:focus": { outline: "none" }, "&::placeholder": { color: "var(--m-subtle)" } },
 });
 export const mNoteBtn = style({
@@ -110,14 +111,14 @@ export const mCard = style({
   selectors: { "&[data-open]": { boxShadow: "inset 0 0 0 1.5px var(--m-accent), 0 1px 3px rgb(0 0 0 / .04)" } },
 });
 export const mCardHead = style({
-  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontSize: "14px", lineHeight: "20px", whiteSpace: "nowrap",
+  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontSize: vars.textControl, lineHeight: "20px", whiteSpace: "nowrap",
   overflow: "hidden", textOverflow: "ellipsis",
 });
 export const mCardSaid = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
 globalStyle(`${mCardHead} [data-empty]`, { color: "var(--m-muted)" });
-export const mCardPin = style([mPin, { minWidth: "16px", height: "16px", padding: "0 4px", borderRadius: "8px 8px 2px 8px", fontSize: "10px", lineHeight: "16px", position: "static", flex: "none", boxShadow: "none", border: "0", animation: "none" }]);
+export const mCardPin = style([mPin, { minWidth: "16px", height: "16px", padding: "0 4px", borderRadius: "8px 8px 2px 8px", fontSize: vars.textMicro, lineHeight: "16px", position: "static", flex: "none", boxShadow: "none", border: "0", animation: "none" }]);
 export const mCardQuote = style({
-  display: "block", color: "var(--m-muted)", fontSize: "12px", lineHeight: "17px", whiteSpace: "nowrap", overflow: "hidden",
+  display: "block", color: "var(--m-muted)", fontSize: vars.textLabel, lineHeight: "17px", whiteSpace: "nowrap", overflow: "hidden",
   textOverflow: "ellipsis", quotes: "none",
 });
 
@@ -129,12 +130,12 @@ export const mFoot = style({
 export const mFootRow = style({ display: "flex", gap: "10px" });
 const footBtn = {
   pointerEvents: "auto", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "44px",
-  padding: "0 18px", borderRadius: "22px", font: "inherit", fontSize: "15px", cursor: "pointer",
+  padding: "0 18px", borderRadius: "22px", font: "inherit", fontSize: vars.textBody, cursor: "pointer",
 } as const;
 export const mFootBtn = style({ ...footBtn, color: "var(--m-ink)", boxShadow: "0 1px 3px rgb(0 0 0 / .06)" });
 export const mFootSend = style({ ...footBtn, flex: "1", color: "var(--m-accent) !important", fontWeight: "600", boxShadow: "0 1px 3px rgb(0 0 0 / .06)" });
 
 // The phone's rule for buttons' type (root.css.ts) is stronger than a class of their own: said again here, as strong.
-globalStyle(`${mAnnotate} button${mPin}`, { color: "#fff", fontSize: "11px", fontWeight: "650", lineHeight: "16px" });
-globalStyle(`${mAnnotate} button${mFootBtn}, ${mAnnotate} button${mFootSend}`, { fontSize: "15px" });
-globalStyle(`${mAnnotate} button${mCard}`, { fontSize: "14px" });
+globalStyle(`${mAnnotate} button${mPin}`, { color: "#fff", fontSize: vars.textCaption, fontWeight: "650", lineHeight: "16px" });
+globalStyle(`${mAnnotate} button${mFootBtn}, ${mAnnotate} button${mFootSend}`, { fontSize: vars.textBody });
+globalStyle(`${mAnnotate} button${mCard}`, { fontSize: vars.textControl });

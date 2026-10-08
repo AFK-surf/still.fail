@@ -20,13 +20,13 @@ export const msgAvatar = style({
   },
 });
 export const msgPlain = style({
-  whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: vars.textSm, lineHeight: "1.55",
+  whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: vars.textSecondary, lineHeight: "1.55",
 });
 export const msgWaiting = style({ display: "inline-flex", alignItems: "center", gap: "5px" });
 export const chooser = style({
   display: "inline-flex", alignItems: "center", gap: "5px", height: "28px", padding: "0 8px", border: "0",
   borderRadius: `calc(8px * ${vars.cornerScale})`, background: "none", color: vars.muted, font: "inherit",
-  fontSize: vars.textXs, cursor: "pointer", whiteSpace: "nowrap", cornerShape: vars.cornerShape,
+  fontSize: vars.textLabel, cursor: "pointer", whiteSpace: "nowrap", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
     "&[data-state=\"open\"]": { background: vars.hover, color: vars.text },
@@ -42,7 +42,7 @@ export const modelPoolTools = style({ display: "flex", alignItems: "center", gap
 export const modelPoolList = style({});
 export const modelPoolItem = style({
   display: "flex", alignItems: "center", gap: "8px", height: "30px", padding: "0 8px",
-  borderRadius: `calc(8px * ${vars.cornerScale})`, fontSize: vars.textSm, color: vars.muted, cursor: "pointer",
+  borderRadius: `calc(8px * ${vars.cornerScale})`, fontSize: vars.textSecondary, color: vars.muted, cursor: "pointer",
   cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover },
@@ -62,7 +62,7 @@ export const textButton = style({
   padding: "0", border: "0", background: "none", color: vars.text, font: "inherit", textDecoration: "underline",
   textUnderlineOffset: "2px", cursor: "pointer",
   selectors: {
-    [`${runCardRow} > &`]: { flex: "none", fontSize: vars.textSm, color: vars.muted },
+    [`${runCardRow} > &`]: { flex: "none", fontSize: vars.textSecondary, color: vars.muted },
   },
 });
 export const chooserChevron = style({});

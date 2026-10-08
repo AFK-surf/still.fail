@@ -4,7 +4,7 @@ import { muted } from "./styles/shell.css.ts";
 import { personLetter } from "./styles/cloud.css.ts";
 
 export const creator = style({
-  flex: "none", fontSize: vars.textXs, color: vars.muted, fontWeight: "400", whiteSpace: "nowrap",
+  flex: "none", fontSize: vars.textLabel, color: vars.muted, fontWeight: "400", whiteSpace: "nowrap",
 });
 export const mineFilterBtn = style({
   selectors: {
@@ -15,28 +15,28 @@ export const mineFilterBtn = style({
 });
 export const mineFilterWide = style({});
 export const owner = style({
-  display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textXs, color: vars.text,
+  display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textLabel, color: vars.text,
   whiteSpace: "nowrap",
 });
 export const ownerNone = style({ color: vars.subtle });
 export const quota = style({ display: "grid", gap: "10px" });
 export const quotaRow = style({
   display: "grid", gridTemplateColumns: "5.5em minmax(80px, 1fr) 3.2em minmax(7em, auto)", alignItems: "center",
-  gap: "10px", fontSize: vars.textSm,
+  gap: "10px", fontSize: vars.textSecondary,
 });
-export const quotaReset = style({ fontSize: vars.textXs, color: vars.subtle });
+export const quotaReset = style({ fontSize: vars.textLabel, color: vars.subtle });
 /** A window of an allowance, compact: a rounded box, what is left written in it and its edge drawn as far as is left. */
 export const quotaChips = style({ display: "inline-flex", alignItems: "center", gap: "4px", flex: "none" });
 export const quotaChip = style({
   position: "relative", display: "inline-flex", alignItems: "center", height: "20px", padding: "0 7px",
   overflow: "hidden", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
-  color: vars.green, fontSize: "11px", fontWeight: "600", lineHeight: "1", fontVariantNumeric: "tabular-nums",
+  color: vars.green, fontSize: vars.textCaption, fontWeight: "600", lineHeight: "1", fontVariantNumeric: "tabular-nums",
   cursor: "default",
   selectors: {
     "&[data-level=\"amber\"]": { color: vars.amber },
     "&[data-level=\"red\"]": { color: vars.red },
     "&[data-level=\"progress\"]": { color: vars.accent },
-    "&[data-small]": { height: "16px", padding: "0 5px", fontSize: "10px" },
+    "&[data-small]": { height: "16px", padding: "0 5px", fontSize: vars.textMicro },
   },
 });
 export const quotaChipEdge = style({
@@ -64,7 +64,7 @@ export const quotaRing = style({
 export const quotaRingTrack = style({ fill: "none", stroke: vars.neutralBg });
 export const quotaRingFill = style({ fill: "none", stroke: "currentColor", strokeLinecap: "round" });
 export const quotaRingNumber = style({
-  position: "relative", fontSize: "9.5px", fontWeight: "600", color: vars.text, fontVariantNumeric: "tabular-nums",
+  position: "relative", fontSize: vars.textMicro, fontWeight: "600", color: vars.text, fontVariantNumeric: "tabular-nums",
   letterSpacing: "-0.02em",
 });
 /** A profile's own page: per window its number large, ten cells lit as far as is left, its name and when it refills. */
@@ -78,22 +78,22 @@ export const quotaDial = style({
 });
 /** Its number quiet (the text's colour) while there is plenty; in its colour once it runs low. */
 export const quotaDialNumber = style({
-  fontSize: "28px", fontWeight: "600", lineHeight: "1.15", letterSpacing: "-0.02em", color: vars.text,
+  fontSize: vars.textDisplay, fontWeight: "600", lineHeight: "1.15", letterSpacing: "-0.02em", color: vars.text,
   fontVariantNumeric: "tabular-nums",
   selectors: {
     [`${quotaDial}:is([data-level="amber"], [data-level="red"]) &`]: { color: "currentColor" },
   },
 });
 export const quotaDialCells = style({ display: "flex", gap: "3px", margin: "4px 0 6px" });
-export const quotaDialLabel = style({ fontSize: vars.textSm, fontWeight: "500", color: vars.text });
-export const quotaDialReset = style({ fontSize: vars.textXs, color: vars.muted });
+export const quotaDialLabel = style({ fontSize: vars.textSecondary, fontWeight: "500", color: vars.text });
+export const quotaDialReset = style({ fontSize: vars.textLabel, color: vars.muted });
 export const quotaNote = style({});
 export const peopleStack = style({ display: "inline-flex", alignItems: "center", flex: "none" });
 export const peopleMore = style({
-  fontSize: "10px", color: vars.muted, paddingLeft: "6px", boxShadow: "none !important",
+  fontSize: vars.textMicro, color: vars.muted, paddingLeft: "6px", boxShadow: "none !important",
 });
 export const ring = style({
-  display: "inline-flex", alignItems: "center", gap: "4px", fontSize: vars.textXs, color: vars.muted,
+  display: "inline-flex", alignItems: "center", gap: "4px", fontSize: vars.textLabel, color: vars.muted,
 });
 export const ringTrack = style({ fill: "none", strokeWidth: "3", stroke: vars.line });
 export const ringFill = style({
@@ -115,9 +115,9 @@ globalStyle(`${quotaDialNumber} small`, { fontSize: "0.55em", fontWeight: "500",
 globalStyle(`${quotaDialCells} i`, { width: "8px", height: "14px", borderRadius: "2px", background: vars.neutralBg });
 globalStyle(`${quotaDialCells} i[data-on]`, { background: "currentColor" });
 globalStyle(`${peopleStack} > :first-child`, { marginLeft: "0" });
-globalStyle(`${peopleStack} ${personLetter}`, { width: "16px", height: "16px", fontSize: "9px" });
+globalStyle(`${peopleStack} ${personLetter}`, { width: "16px", height: "16px", fontSize: vars.textMicro });
 globalStyle(`${ring} svg`, { flex: "none" });
 globalStyle(`${ring} text`, {
-  fontSize: "9px", fontWeight: "600", fill: vars.text, fontVariantNumeric: "tabular-nums",
+  fontSize: vars.textMicro, fontWeight: "600", fill: vars.text, fontVariantNumeric: "tabular-nums",
 });
 

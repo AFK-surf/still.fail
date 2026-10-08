@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { vars } from "../../styles/tokens.css.ts";
 
 export const mChat = style({ position: "absolute", inset: "0", background: "var(--m-bg)" });
 /** The chat's messages, drawn as the wide screen draws them (../../Chat.tsx), a little closer together. */
@@ -12,5 +13,5 @@ export const mMessages = style({
 });
 export const mWaiting = style({ display: "inline-flex", alignItems: "center", gap: "5px" });
 export const mPlain = style({
-  margin: "0", fontSize: "15px", lineHeight: "23px", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
+  margin: "0", fontSize: vars.textBody, lineHeight: "23px", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
 });

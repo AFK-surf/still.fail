@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "../styles/tokens.css.ts";
 
 export const mDot = style({
   width: "7px", height: "7px", borderRadius: "50%", background: "var(--m-accent)", flex: "none",
@@ -99,7 +100,7 @@ export const mRowAside = style({
 export const mChatLine1 = style({ display: "flex", alignItems: "center", gap: "8px", height: "22px" });
 export const mMarkSlot = style({ display: "flex", flex: "none", width: 10, justifyContent: "center" });
 export const mChatTitle = style({
-  flex: "1", minWidth: "0", fontSize: "16px", lineHeight: "22px", overflow: "hidden", textOverflow: "ellipsis",
+  flex: "1", minWidth: "0", fontSize: vars.textTitle, lineHeight: "22px", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
   selectors: {
     "&[data-unread]": { fontWeight: "600" },
@@ -118,7 +119,7 @@ globalStyle(`${mChatMark} > span`, { display: "grid" });
 export const mChatLine2 = style({ display: "flex", alignItems: "center", gap: "8px", height: "20px" });
 export const mChatLast = style({ flex: "1", minWidth: "0", display: "flex" });
 export const mChatTime = style({
-  display: "none", fontSize: "12px", color: "var(--m-subtle)", whiteSpace: "nowrap",
+  display: "none", fontSize: vars.textLabel, color: "var(--m-subtle)", whiteSpace: "nowrap",
   selectors: {
     "&[data-shown]": { display: "inline" },
   },
@@ -137,24 +138,24 @@ export const mLast = style({
   },
 });
 export const mLastText = style({
-  minWidth: "0", fontSize: "14px", lineHeight: "20px", color: "var(--m-muted)", overflow: "hidden",
+  minWidth: "0", fontSize: vars.textSecondary, lineHeight: "20px", color: "var(--m-muted)", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
   // Its turn (something waits on the viewer, ../ChatMark.tsx WaitingText): in ink.
   selectors: { "&[data-turn]": { color: "var(--m-ink)" } },
 });
 globalStyle(`${mHomeWorkspace} svg`, { flex: "none", color: "var(--m-muted)" });
-globalStyle(`${mEmpty} p`, { fontSize: "14px", color: "var(--m-muted)" });
+globalStyle(`${mEmpty} p`, { fontSize: vars.textSecondary, color: "var(--m-muted)" });
 
 /** The latest chats (Home.tsx Recent): a head, a few rows, the way to them all. */
 export const mRecentHead = style({
   display: "flex", alignItems: "center", justifyContent: "space-between", flex: "none", padding: "12px 12px 6px 18px",
-  fontSize: "15px",
+  fontSize: vars.textBody,
 });
 export const mRecentRows = style({ flex: "1", minHeight: "0", overflowY: "auto", padding: "0 6px 6px" });
 export const mRecentAll = style({
   display: "flex", alignItems: "center", justifyContent: "space-between", flex: "none", width: "100%", boxSizing: "border-box",
   padding: "12px 16px 12px 18px", border: "0", borderTop: "0.5px solid var(--m-line)", background: "none",
-  color: "var(--m-accent-ink) !important", fontSize: "14px !important", cursor: "pointer",
+  color: "var(--m-accent-ink) !important", fontSize: `${vars.textControl} !important`, cursor: "pointer",
 });
 globalStyle(`${mRecentRows} ${mChatRow}`, { height: "60px", padding: "0 12px 0 14px", borderRadius: "14px" });
 globalStyle(`${mRecentRows} ${mChatRow}[data-open]`, { background: "var(--m-accent-bg)" });
@@ -180,11 +181,11 @@ export const mRowArchive = style({
   selectors: { "&:disabled": { opacity: ".4" }, "&:active:not(:disabled)": { filter: "brightness(.94)" } },
 });
 // The phone's buttons take their page's font (root.css.ts): its size and colour, as strong as that.
-globalStyle(`${mChatRowWrap} button${mRowArchive}`, { color: "var(--m-ink)", fontSize: "13px", lineHeight: "28px", fontWeight: "500" });
+globalStyle(`${mChatRowWrap} button${mRowArchive}`, { color: "var(--m-ink)", fontSize: vars.textSecondary, lineHeight: "28px", fontWeight: "500" });
 /** What a row swiped left uncovers, as wide as it has gone: 归档, in ink. */
 export const mSwipeUnder = style({
   position: "absolute", top: "0", bottom: "0", right: "0", width: "0", display: "flex", alignItems: "center",
-  overflow: "hidden", background: "var(--m-ink)", color: "var(--m-bg)", fontSize: "15px", fontWeight: "600",
+  overflow: "hidden", background: "var(--m-ink)", color: "var(--m-bg)", fontSize: vars.textBody, fontWeight: "600",
   whiteSpace: "nowrap",
 });
 globalStyle(`${mSwipeUnder} span`, { paddingLeft: "24px" });
@@ -195,7 +196,7 @@ globalStyle(`${mDecisions} svg`, { flex: "none" });
 export const mSearchField = style({
   display: "flex", alignItems: "center", gap: "8px", boxSizing: "border-box", width: "calc(100% - 32px)", height: "38px",
   margin: "0 16px 6px", padding: "0 12px", border: "0", borderRadius: "19px", cursor: "text",
-  background: "color-mix(in srgb, var(--m-ink) 6%, transparent)", color: "var(--m-muted)", fontSize: "15px",
+  background: "color-mix(in srgb, var(--m-ink) 6%, transparent)", color: "var(--m-muted)", fontSize: vars.textBody,
 });
 globalStyle(`${mSearchField} svg`, { flex: "none" });
 // Away while the search is open (`data-away`); as it closes they come back in the same 240 ms as its field goes back,
@@ -216,11 +217,11 @@ export const mSearchInput = style({
 globalStyle(`${mSearchInput} svg`, { flex: "none" });
 globalStyle(`${mSearchInput} input`, {
   flex: "1", minWidth: "0", height: "100%", padding: "0", border: "0", outline: "none", background: "none",
-  color: "var(--m-ink)", font: "inherit", fontSize: "16px", WebkitAppearance: "none", appearance: "none",
+  color: "var(--m-ink)", font: "inherit", fontSize: vars.textInput, WebkitAppearance: "none", appearance: "none",
 });
 globalStyle(`${mSearchInput} input::-webkit-search-cancel-button`, { display: "none" });
 export const mSearchCancel = style({
-  flex: "none", padding: "0", border: "0", background: "none", color: "var(--m-accent)", fontSize: "16px", cursor: "pointer",
+  flex: "none", padding: "0", border: "0", background: "none", color: "var(--m-accent)", fontSize: vars.textTitle, cursor: "pointer",
 });
 export const mSearchResults = style({
   flex: "1", minHeight: "0", overflowY: "auto", overscrollBehavior: "contain", paddingBottom: "calc(var(--m-foot) + 20px)",
@@ -230,9 +231,9 @@ export const mSearchResults = style({
 globalStyle(`${mSearchPage}[data-leaving] ${mSearchCancel}`, { opacity: "0", transition: "opacity 150ms" });
 /** A found message's first line: its chat (as a row's title, not bold), who said it and when at its end. */
 export const mFoundChat = style({
-  flex: "1", minWidth: "0", fontSize: "15px", lineHeight: "22px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  flex: "1", minWidth: "0", fontSize: vars.textBody, lineHeight: "22px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
-export const mFoundMeta = style({ flex: "none", fontSize: "12px", color: "var(--m-muted)", whiteSpace: "nowrap" });
+export const mFoundMeta = style({ flex: "none", fontSize: vars.textLabel, color: "var(--m-muted)", whiteSpace: "nowrap" });
 /** The words found, in a found message's line: in ink, bold (the rest of the line muted). */
 export const mFoundHit = style({ background: "none", color: "var(--m-ink)", fontWeight: "600" });
 // Over the page's own buttons' ink.

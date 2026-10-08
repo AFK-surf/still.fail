@@ -1,4 +1,5 @@
 import { keyframes, style } from "@vanilla-extract/css";
+import { vars } from "../styles/tokens.css.ts";
 
 // The placeholders breathe while waited on (Android screens/Loading.kt the same: 1 → 0.5 and back, 1.4s).
 const breathe = keyframes({ "0%, 100%": { opacity: 1 }, "50%": { opacity: 0.5 } });
@@ -7,7 +8,7 @@ export const mPillRow = style({ display: "flex", justifyContent: "center", paddi
 export const mPill = style({
   display: "inline-flex", alignItems: "center", gap: "8px", maxWidth: "100%", boxSizing: "border-box",
   padding: "6px 12px", borderRadius: "16px", background: "var(--m-chip)", color: "var(--m-muted)",
-  fontSize: "13px", lineHeight: "18px", textAlign: "center",
+  fontSize: vars.textSecondary, lineHeight: "18px", textAlign: "center",
   selectors: { "&[data-error]": { color: "var(--m-red)" } },
 });
 export const mPlaceholders = style({

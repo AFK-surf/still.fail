@@ -1,7 +1,7 @@
-// What wants the viewer (the core's `workspaceMarks`), in the sidebar's foot: 需要你, with how many came since they
+// What wants the viewer (the core's `workspaceMarks`), in the sidebar's foot: 待处理, with how many came since they
 // last looked (the badge, the Dock's number), and pressed, which chats: the cards and needs waiting for them (奏) and
 // the chats of theirs that went wrong, every workspace's, each leading to its chat. One looked at stays listed, quiet,
-// until it is answered or let go here (不用了, `decision.dismiss`).
+// until it is answered or let go here (忽略, `decision.dismiss`).
 import { useState } from "react";
 import { Popover } from "radix-ui";
 import { NavLink, useNavigate } from "react-router";
@@ -15,6 +15,9 @@ import * as nav from "./Sidebar.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as css from "./Attention.css.ts";
 import { t } from "./i18n.ts";
+
+/** Its state line without its lead (要你帮忙：, 出问题：, 奏 · ): the dot before it says that. */
+const line = (i: MarkItem) => i.text.replace(/^(?:要你帮忙|出问题|Needs you|Went wrong)[：:]\s*|^(?:奏|Decision) · /, "") || i.stationName;
 
 const keyOf = (i: MarkItem) => `${i.station}/${i.session ?? i.thread}`;
 
@@ -76,7 +79,7 @@ export function AttentionEntry({ scope }: { scope: string }) {
                   <span className={css.dot} data-kind={i.kind} aria-label={t(i.kind === "alert" ? "web-main.attention.alertOne" : "web-main.attention.waitOne")} role="img" />
                   <span className={css.itemText}>
                     <span className={css.itemTitle}>{i.title || t("web-main.attention.untitled")}</span>
-                    <span className={css.itemLine}>{i.text || i.stationName}</span>
+                    <span className={css.itemLine}>{line(i)}</span>
                   </span>
                   {i.kind === "wait" && i.seq != null && (
                     <button type="button" className={css.dismiss} title={t("web-main.attention.dismissNote")}

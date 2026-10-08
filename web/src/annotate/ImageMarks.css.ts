@@ -64,19 +64,19 @@ export const paletteItem = style({
 export const actions = style({ display: "flex", alignItems: "center", gap: "4px" });
 export const cancel = style({
   height: "30px", padding: "0 10px", border: "0", borderRadius: "15px", background: "none", color: vars.muted,
-  font: "inherit", fontSize: vars.textXs, cursor: "pointer", flex: "none",
+  font: "inherit", fontSize: vars.textLabel, cursor: "pointer", flex: "none",
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
 export const done = style({
   flex: "none", display: "inline-flex", alignItems: "center", gap: "5px", height: "30px", padding: "0 12px", marginLeft: "4px",
-  border: "0", borderRadius: "15px", background: INK, color: "#fff", font: "inherit", fontSize: vars.textXs,
+  border: "0", borderRadius: "15px", background: INK, color: "#fff", font: "inherit", fontSize: vars.textLabel,
   fontWeight: "600", cursor: "pointer",
   selectors: {
     "&:hover:not(:disabled)": { filter: "brightness(1.08)" },
     "&:disabled": { opacity: ".4", cursor: "default" },
   },
 });
-export const error = style({ color: vars.red, fontSize: vars.textXs, whiteSpace: "nowrap", padding: "0 6px" });
+export const error = style({ color: vars.red, fontSize: vars.textLabel, whiteSpace: "nowrap", padding: "0 6px" });
 
 /** Over the sheet, placed as it is: the numbered marks' pins (and their bubbles), only those taking the pointer. */
 export const pins = style({

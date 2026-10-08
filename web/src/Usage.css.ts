@@ -51,17 +51,17 @@ export const tiles = style({
 export const tile = style({
   display: "grid", gap: "2px", padding: "14px 16px", borderRadius: vars.rCard, background: u.tile, cornerShape: vars.cornerShape,
 });
-export const tileLabel = style({ fontSize: vars.textXs, color: u.muted });
-export const tileValue = style({ fontSize: "22px", lineHeight: "30px", fontWeight: "650", fontVariantNumeric: "tabular-nums", letterSpacing: "-.01em" });
-export const tileSub = style({ fontSize: vars.textXs, color: u.subtle });
+export const tileLabel = style({ fontSize: vars.textLabel, color: u.muted });
+export const tileValue = style({ fontSize: vars.textHeading, lineHeight: "30px", fontWeight: "650", fontVariantNumeric: "tabular-nums", letterSpacing: "-.01em" });
+export const tileSub = style({ fontSize: vars.textLabel, color: u.subtle });
 
 // ── the days ──────────────────────────────────────────────────────────────
 
 export const chartHead = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "12px", minHeight: "20px" });
-export const legend = style({ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: vars.textXs, color: u.muted });
+export const legend = style({ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: vars.textLabel, color: u.muted });
 export const legendItem = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 export const swatch = style({ width: "8px", height: "8px", borderRadius: "2px", flex: "none" });
-export const top = style({ fontSize: vars.textXs, color: u.subtle, fontVariantNumeric: "tabular-nums", marginLeft: "auto", whiteSpace: "nowrap" });
+export const top = style({ fontSize: vars.textLabel, color: u.subtle, fontVariantNumeric: "tabular-nums", marginLeft: "auto", whiteSpace: "nowrap" });
 
 const PLOT = 150;
 export const plot = style({
@@ -85,7 +85,7 @@ export const bar = style({
 export const part = style({ flex: "none", minHeight: "1px" });
 export const labels = style({ display: "flex", gap: "6px", marginTop: "6px", selectors: { "&[data-many]": { gap: "3px" } } });
 export const label = style({
-  flex: "1", minWidth: "0", textAlign: "center", fontSize: "11px", color: u.subtle, whiteSpace: "nowrap", overflow: "visible",
+  flex: "1", minWidth: "0", textAlign: "center", fontSize: vars.textCaption, color: u.subtle, whiteSpace: "nowrap", overflow: "visible",
   fontVariantNumeric: "tabular-nums",
   selectors: { "&[data-today]": { color: u.text, fontWeight: "500" } },
 });
@@ -100,27 +100,27 @@ export const rows = style({ display: "grid" });
 export const row = style({
   display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", alignItems: "center", columnGap: "12px", rowGap: "6px",
   padding: "10px 12px", borderRadius: vars.rField, cornerShape: vars.cornerShape, color: u.text, textDecoration: "none",
-  fontSize: vars.textSm, transition: `background ${vars.dur} ${vars.easeOut}`,
+  fontSize: vars.textSecondary, transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: { "a&:hover, button&:hover": { background: u.hover }, "button&": { width: "100%", border: "0", background: "none", font: "inherit", textAlign: "left", cursor: "pointer" } },
 });
-export const rank = style({ width: "20px", textAlign: "right", color: u.subtle, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums" });
+export const rank = style({ width: "20px", textAlign: "right", color: u.subtle, fontSize: vars.textLabel, fontVariantNumeric: "tabular-nums" });
 export const face = style({ width: "20px", height: "20px", borderRadius: "50%", overflow: "hidden", display: "grid", placeItems: "center" });
 export const rowText = style({ display: "grid", gap: "1px", minWidth: "0" });
 export const rowTitle = style({ fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const rowSub = style({ fontSize: vars.textXs, color: u.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const rowSub = style({ fontSize: vars.textLabel, color: u.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const rowCost = style({ display: "grid", justifyItems: "end", gap: "1px", fontVariantNumeric: "tabular-nums" });
-export const rowShare = style({ fontSize: vars.textXs, color: u.muted });
+export const rowShare = style({ fontSize: vars.textLabel, color: u.muted });
 /** Its share of the whole, under its words. */
 export const share = style({ gridColumn: "2 / 4", height: "4px", borderRadius: "2px", background: u.hover, overflow: "hidden" });
 export const shareFill = style({ height: "100%", borderRadius: "2px", background: u.strong });
 export const more = style({
   justifySelf: "start", marginTop: "4px", padding: "6px 12px", border: "0", borderRadius: vars.rField, background: "none",
-  color: u.muted, font: "inherit", fontSize: vars.textSm, cursor: "pointer", cornerShape: vars.cornerShape,
+  color: u.muted, font: "inherit", fontSize: vars.textSecondary, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: { "&:hover": { background: u.hover, color: u.text } },
 });
 
-export const notes = style({ display: "grid", gap: "4px", margin: "0", padding: "0", listStyle: "none", fontSize: vars.textXs, color: u.subtle });
-export const empty = style({ margin: "0", padding: "28px 0", textAlign: "center", fontSize: vars.textSm, color: u.muted });
+export const notes = style({ display: "grid", gap: "4px", margin: "0", padding: "0", listStyle: "none", fontSize: vars.textLabel, color: u.subtle });
+export const empty = style({ margin: "0", padding: "28px 0", textAlign: "center", fontSize: vars.textSecondary, color: u.muted });
 
 /** The phone's: what sits on a card of its own (the days, a list). */
 export const card = style({ padding: "14px 12px", borderRadius: "18px", background: u.tile });
@@ -133,5 +133,5 @@ globalStyle(`${pick} > button, ${pickLists} > button`, { whiteSpace: "nowrap", p
 
 // Inspect the rates behind the total, with the same cards on wide and narrow screens.
 export const tileLink = style({ color: "inherit", textDecoration: "none", selectors: { "&:hover": { background: u.hover } } });
-export const priceStation = style({ fontSize: "16px", margin: "0 0 8px", fontWeight: 600 });
-export const priceNote = style({ fontSize: "12px", color: u.muted, margin: "0 0 20px", lineHeight: 1.6 });
+export const priceStation = style({ fontSize: vars.textTitle, margin: "0 0 8px", fontWeight: 600 });
+export const priceNote = style({ fontSize: vars.textLabel, color: u.muted, margin: "0 0 20px", lineHeight: 1.6 });
