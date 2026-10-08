@@ -1,7 +1,7 @@
 // An agent's execution history as the clients show it (history.rs): what actually ran, put together here so every
 // client draws the same thing. Messages in and out, state marks and the agent's own words are boundaries; the tool
 // calls and thinking between two boundaries fold into one group, named by its latest call (shapes: HistoryView).
-import { epochMs, kindOf, toolName } from "./activity.ts";
+import { args, doing, epochMs, kindOf, toolName } from "./activity.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as present from "./present.ts";
@@ -29,56 +29,6 @@ function kindKey(kind: string): string {
 
 function did(kind: string, n: number): string {
   return t(`core-logic.history.did.${kindKey(kind)}`, { n });
-}
-
-function parseObject(text: string): Record<string, J> | null {
-  try {
-    const v = JSON.parse(text);
-    return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
-  } catch {
-    return null;
-  }
-}
-
-export function args(text: string): Record<string, J> | null {
-  try {
-    const v = JSON.parse(text);
-    return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
-  } catch {
-    // Not whole: read below.
-  }
-  // A long call is kept to its first characters, then `… (n more characters)`: read what is there.
-  const at = text.lastIndexOf("\n… (");
-  if (at < 0) return null;
-  const tail = text.slice(at + 4);
-  if (!tail.endsWith(" more characters)")) return null;
-  return parseObject(close(text.slice(0, at)));
-}
-
-/// JSON cut short, closed where it stops: the string it was in ends with an ellipsis, and what was open is closed.
-function close(json: string): string {
-  const open: string[] = [];
-  let quoted = false;
-  let escaped = false;
-  for (const c of json) {
-    if (escaped) escaped = false;
-    else if (quoted) {
-      if (c === "\\") escaped = true;
-      else if (c === '"') quoted = false;
-    } else if (c === '"') quoted = true;
-    else if (c === "{") open.push("}");
-    else if (c === "[") open.push("]");
-    else if (c === "}" || c === "]") open.pop();
-  }
-  let out = json;
-  if (quoted) {
-    if (escaped) out = out.slice(0, -1);
-    out += '…"';
-  }
-  out = out.trimEnd();
-  if (out.endsWith(":")) out += "null";
-  else if (out.endsWith(",")) out = out.slice(0, -1);
-  return out + open.reverse().join("");
 }
 
 function line(text: string, max: number): string {
@@ -482,15 +432,9 @@ function group(timeline: J[], steps: Step[], rows: Row[]): J {
     summary = t("core-logic.history.thinking", { text: thinking.length > 0 ? Array.from(firstLine(text(thinking[0]))).slice(0, 80).join("") : "" });
   } else {
     const call = steps[lastMember].call;
-    const name = tool(call);
-    const kind = kindOf(name);
-    const doing =
-      describe(text(call)) ??
-      (() => {
-        const verb = kind === "other" ? toolName(name) : t(`core-logic.history.verb.${kindKey(kind)}`);
-        return `${verb} ${hint(text(call))}`.trim();
-      })();
-    summary = members.length === 1 ? doing : t("core-logic.history.steps", { doing, n: members.length });
+    // Said as the chat's activity says the call while it runs (activity.ts doing).
+    const now = doing(tool(call), text(call));
+    summary = members.length === 1 ? now : t("core-logic.history.steps", { doing: now, n: members.length });
   }
   const step = (m: number) => {
     const st = steps[m];

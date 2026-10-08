@@ -1,7 +1,7 @@
 // What an agent at work is doing, as a chat shows it (activity.rs): one line, the thing it does now. From a `live`
 // topic's value into `activity`: `{ now: { key, text } }`.
 import { t } from "./i18n.ts";
-import { get, isObject } from "./util.ts";
+import { get } from "./util.ts";
 
 /// A tool's name without its MCP prefix.
 export function toolName(tool: string): string {
@@ -58,54 +58,78 @@ function verb(kind: string): string {
   return ["read", "search", "edit", "command", "web", "agent", "thread"].includes(kind) ? t(`core-logic.activity.verb.${kind}`) : t("core-logic.activity.verb.other");
 }
 
-/// A string field of a tool's input, read even when the input is cut short.
-export function field(input: string, name: string): string | null {
+// deno-lint-ignore no-explicit-any
+type J = any;
+
+function parseObject(text: string): Record<string, J> | null {
   try {
-    const args = JSON.parse(input) as unknown;
-    if (isObject(args)) {
-      const v = args[name];
-      if (typeof v === "string") return v;
-      if (Array.isArray(v)) return v.filter((p): p is string => typeof p === "string").join(" ");
-      return null;
-    }
-  } catch {}
-  const at = input.indexOf(`"${name}"`);
-  if (at < 0) return null;
-  let rest = input.slice(at + name.length + 2).trimStart();
-  if (!rest.startsWith(":")) return null;
-  rest = rest.slice(1).trimStart();
-  if (!rest.startsWith('"')) return null;
-  rest = rest.slice(1);
-  let out = "";
-  const chars = [...rest];
-  for (let i = 0; i < chars.length; i++) {
-    const c = chars[i];
-    if (c === '"') break;
-    if (c === "\\") {
-      const next = chars[++i];
-      if (next === undefined) break;
-      out += next === "n" ? "\n" : next === "t" ? "\t" : next;
-    } else out += c;
+    const v = JSON.parse(text);
+    return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
+  } catch {
+    return null;
   }
-  return out;
 }
 
-/// What a call does, in a few words.
-export function callText(tool: string, input: string): string {
-  const said = field(input, "description")?.trim();
+/// A call's input as an object: whole, kept to its first characters (a transcript's `… (n more characters)`), or cut
+/// short anywhere (an older station's live step carried its first 300 characters).
+export function args(text: string): Record<string, J> | null {
+  try {
+    const v = JSON.parse(text);
+    return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
+  } catch {
+    // Not whole: read below.
+  }
+  // A long call is kept to its first characters, then `… (n more characters)`: read what is there.
+  const at = text.lastIndexOf("\n… (");
+  if (at >= 0 && text.endsWith(" more characters)")) return parseObject(close(text.slice(0, at)));
+  return text.trimStart().startsWith("{") ? parseObject(close(text)) : null;
+}
+
+/// JSON cut short, closed where it stops: the string it was in ends with an ellipsis, and what was open is closed.
+function close(json: string): string {
+  const open: string[] = [];
+  let quoted = false;
+  let escaped = false;
+  for (const c of json) {
+    if (escaped) escaped = false;
+    else if (quoted) {
+      if (c === "\\") escaped = true;
+      else if (c === '"') quoted = false;
+    } else if (c === '"') quoted = true;
+    else if (c === "{") open.push("}");
+    else if (c === "[") open.push("]");
+    else if (c === "}" || c === "]") open.pop();
+  }
+  let out = json;
+  if (quoted) {
+    if (escaped) out = out.slice(0, -1);
+    out += '…"';
+  }
+  out = out.trimEnd();
+  if (out.endsWith(":")) out += "null";
+  else if (out.endsWith(",")) out = out.slice(0, -1);
+  return out + open.reverse().join("");
+}
+
+const firstLine = (s: string) => (s.split(/\r?\n/).find((l) => l.trim() !== "") ?? "").trim();
+
+/// What a call does, in a few words: its own description, else its verb and what it works on. The chat's activity
+/// says a running call so, and an execution history names a group of calls by its latest the same way.
+export function doing(tool: string, input: string): string {
+  const a = args(input) ?? {};
+  const said = typeof a.description === "string" ? firstLine(a.description) : "";
   if (said) return said;
   const kind = kindOf(tool);
-  let target: string | null = null;
+  let target = "";
   for (const name of ["command", "cmd", "file_path", "path", "pattern", "url", "query", "prompt"]) {
-    const v = field(input, name);
-    if (v !== null) {
-      const line = (v.split(/\r?\n/)[0] ?? "").trim();
-      target = kind === "read" || kind === "edit" ? (line.split("/").pop() ?? line) : line;
-      break;
-    }
+    const v = a[name];
+    const s = typeof v === "string" ? v : Array.isArray(v) ? v.filter((p): p is string => typeof p === "string").join(" ") : null;
+    if (s === null) continue;
+    const line = firstLine(s);
+    target = kind === "read" || kind === "edit" ? (line.split("/").pop() ?? line) : line;
+    break;
   }
-  const what = target ? `${verb(kind)} ${[...target].slice(0, 80).join("")}` : verb(kind);
-  return kind === "other" && toolName(tool) !== "" ? `${verb(kind)} ${toolName(tool)}` : what;
+  return `${kind === "other" ? toolName(tool) : verb(kind)} ${target}`.trim();
 }
 
 /// Milliseconds since the epoch of an RFC 3339 time; null for anything else.
@@ -149,7 +173,7 @@ export function present(live: unknown): unknown {
       if (name === "chat_post") replying = true;
       else if (name === "chat_state") {
       } else if (s(step, "input").trim() === "" && kindOf(tool) !== "other") {
-      } else call = [s(step, "id"), callText(tool, s(step, "input"))];
+      } else call = [s(step, "id"), doing(tool, s(step, "input"))];
     }
   }
   const r = get(live, "rate");

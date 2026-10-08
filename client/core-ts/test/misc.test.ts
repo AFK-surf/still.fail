@@ -1,7 +1,7 @@
 // entries.rs, activity.rs, brand.rs and doing.rs's tests, ported (same names, same checks).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { callText, epochMs, present } from "../src/activity.ts";
+import { doing, epochMs, present } from "../src/activity.ts";
 import { name, setTestChannel, STABLE, TEST } from "../src/brand.ts";
 import { Core } from "../src/core.ts";
 import { Doing } from "../src/doing.ts";
@@ -76,7 +76,11 @@ test("it_says_the_call_it_runs_or_its_reply_or_where_the_turn_stands", () => {
   assert.deepEqual(now({ steps: [{ id: "b", step: "tool", tool: "Bash", input: "" }], phase: { phase: "thinking" } }), ["think", "思考中"]);
   assert.deepEqual(now({ steps: [{ id: "b", step: "tool", tool: "Bash", input: '{"command":"ls"}' }] }), ["b", "运行 ls"]);
   // A call's own description says it best.
-  assert.equal(callText("Bash", '{"command":"npm i","description":"安装依赖"}'), "安装依赖");
+  assert.equal(doing("Bash", '{"command":"npm i","description":"安装依赖"}'), "安装依赖");
+  assert.equal(doing("Read", '{"file_path":"/w/web/src/Chat.tsx"}'), "读取 Chat.tsx");
+  // An older station's step carries the input's first 300 characters, cut anywhere: what is there is read.
+  assert.equal(doing("Bash", '{"command":"node --test","description":"Run account-proxy tests 3 times with new m'), "Run account-proxy tests 3 times with new m…");
+  assert.equal(doing("Bash", '{"command":"cd x && ls\\necho'), "运行 cd x && ls");
   assert.equal(epochMs("1970-01-02T00:00:01.500Z"), 86_401_500);
 });
 

@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as format from "../src/format.ts";
-import { args, hint, parsePrompt, presentHistory, type Context } from "../src/history.ts";
+import { args, doing } from "../src/activity.ts";
+import { hint, parsePrompt, presentHistory, type Context } from "../src/history.ts";
 import { holdLanguage } from "../src/i18n.ts";
 
 holdLanguage();
@@ -77,6 +78,8 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.deepEqual([m.from.name, m.text, m.place.name, m.place.session], ["你", "hi @ds-ember", "#ops", "s1"]);
   const g = items[1].body.content;
   assert.equal(g.summary, "看看目录 · 共 3 项");
+  // Named by its latest call as the chat's activity says that call while it runs.
+  assert.equal(presentHistory({ ...live, timeline: live.timeline.slice(0, 5) }, cx(threads, members, slack)).items[1].body.content.summary, `${doing("Read", '{"file_path":"/a.ts"}')} · 共 2 项`);
   assert.equal(g.title, "读取 1 个文件、运行 1 条命令");
   assert.deepEqual([g.failures, g.pending], [1, 1]);
   assert.deepEqual(g.rows.map((r: J) => r.kind), ["thought", "step", "step", "step"]);

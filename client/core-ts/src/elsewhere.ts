@@ -3,8 +3,8 @@
 // kept, as Markdown, in the account's database (`slack_said`, db/account.ts): a chat shows these among its messages, at
 // the time they were said, without them being entries of the chat (shapes: ChatSentElsewhere), and without its
 // transcripts being read again to find them.
-import { epochMs, toolName } from "./activity.ts";
-import { args, parsePrompt } from "./history.ts";
+import { args, epochMs, toolName } from "./activity.ts";
+import { parsePrompt } from "./history.ts";
 import * as format from "./format.ts";
 
 // deno-lint-ignore no-explicit-any
