@@ -290,6 +290,8 @@ export class StationsSync {
       const from = held ? held.max + 1 : 0;
       query.push(`live=${encode(key)}&from=${from}&last=${TRANSCRIPT_PAGE}`);
     }
+    // Their transcript entries in brief: what a history shows before a step is opened (`detail` reads it whole then).
+    if (wants.live.length > 0) query.push("brief=1");
     for (const [job, lines] of wants.logs) query.push(`job=${encode(job)}&lines=${lines}`);
     if (since !== null) query.push(`since=${encode(`${since.run}.${since.n}`)}`);
     return query.length === 0 ? "/events" : `/events?${query.join("&")}`;
@@ -624,7 +626,7 @@ export class StationsSync {
       if (!link || !this.reachable(address)) return;
       if (before === null && this.#core.data.logSpan("transcript", address, key) !== null) return;
       const at = before ?? 1e15;
-      const page = yield* this.requests.call(link.addr, "GET", `/sessions/${encode(key)}/timeline?before=${at}&limit=${TRANSCRIPT_PAGE}`, null, { quiet: before === null });
+      const page = yield* this.requests.call(link.addr, "GET", `/sessions/${encode(key)}/timeline?before=${at}&limit=${TRANSCRIPT_PAGE}&brief=1`, null, { quiet: before === null });
       const start = u64(get(page, "start")) ?? 0;
       const items = (get(page, "entries") as unknown[] | undefined) ?? [];
       if (items.length === 0) return;
@@ -635,6 +637,20 @@ export class StationsSync {
         items.map((item, i) => [start + i, item] as [number, unknown]),
       );
     });
+  }
+
+  /// A session's transcript entries `from` to `to` whole, in place of what is held of them in brief (`history.detail`):
+  /// never pushed, read when a history's step is opened, behind what is shown in brief (Priority.detail).
+  detail(address: string, key: string, from: number, to: number): Effect.Effect<void, CoreError> {
+    const work = Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const page = yield* this.requests.call(link.addr, "GET", `/sessions/${encode(key)}/timeline?from=${from}&to=${to}`, null, { quiet: true });
+      const start = u64(get(page, "start")) ?? from;
+      const items = (get(page, "entries") as unknown[] | undefined) ?? [];
+      if (items.length > 0) this.#core.data.putItems("transcript", address, key, items.map((item, i) => [start + i, item] as [number, unknown]));
+    });
+    return Deferred.await(this.#enqueue(address, `detail/${key}/${from}-${to}`, Priority.detail, work));
   }
 
   /// A thread gone from its station: its row and its entries go, and its topic says so.

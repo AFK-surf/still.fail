@@ -242,6 +242,12 @@ export class StationTopics implements Owner {
     });
   }
 
+  /// A history's entries `from` to `to` whole (`history.detail`), for what it shows of them in brief: read behind what is
+  /// shown in brief, and in their place, the topic showing them as they come.
+  historyDetail(station: string, key: string, from: number, to: number): Effect.Effect<void, CoreError> {
+    return this.#sync.detail(station, key, from, to);
+  }
+
   // ── threads ──
 
   /// The thread's summary as the station's lists say.

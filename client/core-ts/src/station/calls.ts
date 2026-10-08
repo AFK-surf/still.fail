@@ -58,6 +58,10 @@ export function install(): void {
     const c = call as Extract<Call, { kind: "historyOlder" }>;
     return Effect.andThen(parse(c.station), Effect.map(inner.stationTopics.historyOlder(c.station, c.key), (more) => ({ more })));
   };
+  handlers.historyDetail = (inner, call) => {
+    const c = call as Extract<Call, { kind: "historyDetail" }>;
+    return Effect.andThen(parse(c.station), Effect.as(inner.stationTopics.historyDetail(c.station, c.key, c.from, c.to), null));
+  };
   handlers.chatRead = (inner, call, _p, _a, ctx) => {
     const c = call as Extract<Call, { kind: "chatRead" }>;
     return Effect.andThen(parse(c.station), Effect.as(inner.stations.read(c.station, c.thread, c.seq, ctx), null));

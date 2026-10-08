@@ -309,7 +309,7 @@ export function presentHistory(live: J, cx: Context): J {
         }
         break;
       case "group":
-        v = group(timeline, steps, item.rows);
+        v = group(timeline, steps, item.rows, base);
         break;
     }
     const kind = v.kind ?? null;
@@ -376,7 +376,9 @@ export function presentHistory(live: J, cx: Context): J {
   return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0 };
 }
 
-function group(timeline: J[], steps: Step[], rows: Row[]): J {
+/// A group of the history; `base`: the transcript entry its timeline starts at (what a step's or thought's `entries` count
+/// from: what `history.detail` reads whole, of one in brief).
+function group(timeline: J[], steps: Step[], rows: Row[], base: number): J {
   const members = rows.flatMap((r) => ("step" in r ? [r.step] : []));
   const thinking = rows.flatMap((r) => ("thought" in r ? [r.thought] : []));
   const text = (i: number): string => (typeof timeline[i]?.text === "string" ? timeline[i].text : "");
@@ -429,6 +431,8 @@ function group(timeline: J[], steps: Step[], rows: Row[]): J {
       failed: isFailed,
       call: text(st.call),
       result: result === null ? null : (result.text ?? ""),
+      entries: st.result !== null ? [base + st.call, base + st.result] : [base + st.call],
+      brief: call?.brief === true || result?.brief === true,
     };
   };
   return {
@@ -437,7 +441,9 @@ function group(timeline: J[], steps: Step[], rows: Row[]): J {
     title,
     failures: failed,
     pending,
-    rows: rows.map((r) => ("thought" in r ? { kind: "thought", content: { text: text(r.thought), first: firstLine(text(r.thought)) } } : { kind: "step", content: step(r.step) })),
+    rows: rows.map((r) => ("thought" in r
+      ? { kind: "thought", content: { text: text(r.thought), first: firstLine(text(r.thought)), entries: [base + r.thought], brief: timeline[r.thought]?.brief === true } }
+      : { kind: "step", content: step(r.step) })),
   };
 }
 

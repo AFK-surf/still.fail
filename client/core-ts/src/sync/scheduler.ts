@@ -11,6 +11,9 @@ import type { Runner, Scoped } from "../runtime.ts";
 export const Priority = {
   /// Kept current in the background.
   background: 0,
+  /// What a UI shows only once opened (an execution history's step whole, `history.detail`): never pushed, and after
+  /// what a UI shows in brief.
+  detail: 5,
   /// Behind something a UI shows.
   shown: 10,
   /// The chat a UI has open.

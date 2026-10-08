@@ -46,6 +46,7 @@ export type Call =
   | { kind: "chatLatest"; station: string; thread: number }
   | { kind: "chatPlace"; station: string; thread: number; seq: number | null; offset: number | null }
   | { kind: "historyOlder"; station: string; key: string }
+  | { kind: "historyDetail"; station: string; key: string; from: number; to: number }
   | { kind: "stationMeasure"; station: string }
   | { kind: "stationUpdateNotice"; station: string; action: string; version: string | null }
   | { kind: "chatRead"; station: string; thread: number; seq: number }
@@ -381,6 +382,15 @@ export function parseCall(name: string, params: unknown): Call {
         ["key", S, "req"],
       ]);
       return { kind: "historyOlder", station: p.station as string, key: p.key as string };
+    }
+    case "history.detail": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["key", S, "req"],
+        ["from", "u64", "req"],
+        ["to", "u64", "req"],
+      ]);
+      return { kind: "historyDetail", station: p.station as string, key: p.key as string, from: p.from as number, to: p.to as number };
     }
     case "station.measure":
       return { kind: "stationMeasure", station: read(params, [["station", S, "req"]]).station as string };

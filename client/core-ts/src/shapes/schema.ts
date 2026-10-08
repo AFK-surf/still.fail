@@ -1630,6 +1630,8 @@ export const SHAPES: Record<string, Shape> = {
   HistoryThought: struct([
     ["text", "String"],
     ["first", "String"],
+    ["entries", vec("i64"), { client: vec("I54"), doc: "Its transcript entry: what `history.detail` reads whole while it is `brief`." }],
+    ["brief", "bool", { doc: "`text` is its first line only (a station's in brief): opened, `history.detail` reads it whole." }],
   ], { keepNone: true }),
   HistoryStep: struct([
     ["said", opt("String")],
@@ -1639,6 +1641,8 @@ export const SHAPES: Record<string, Shape> = {
     ["failed", "bool"],
     ["call", "String"],
     ["result", opt("String")],
+    ["entries", vec("i64"), { client: vec("I54"), doc: "Its call's transcript entry and its result's: what `history.detail` reads whole while it is `brief`." }],
+    ["brief", "bool", { doc: "`call` is only what says what it does and `result` empty (a station's in brief): opened, `history.detail` reads them whole." }],
   ]),
   HistoryReceived: struct([
     ["note", opt("String")],
