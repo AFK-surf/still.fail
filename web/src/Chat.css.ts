@@ -616,3 +616,22 @@ export const archiveCheck = style({
   margin: "6px 0 0", fontSize: vars.textXs, color: vars.muted, lineHeight: "18px",
   selectors: { "&[data-failed]": { color: vars.red } },
 });
+
+/** What waits for the viewer in the chat (Chat.tsx WaitingBar): a line above the composer, as the offline notice sits. */
+export const waitingBar = style({
+  display: "flex", alignItems: "center", gap: "8px", margin: "0 auto 8px", maxWidth: "760px", width: "calc(100% - 64px)",
+  padding: "6px 6px 6px 12px", borderRadius: "10px", background: vars.amberBg, color: vars.text, fontSize: vars.textSm,
+  selectors: { [`${chat}[data-under-composer] > &`]: { marginBottom: "calc(8px + var(--composer-room))" } },
+});
+export const waitingText = style({
+  flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "6px", padding: "0", border: "0", background: "none",
+  color: "inherit", font: "inherit", textAlign: "left", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden",
+});
+globalStyle(`${waitingText} > svg`, { flex: "none", color: vars.amber });
+globalStyle(`${waitingText} > b`, { flex: "none", fontWeight: "600" });
+globalStyle(`${waitingText} > span`, { overflow: "hidden", textOverflow: "ellipsis", color: vars.text });
+globalStyle(`${waitingText}:hover > span`, { textDecoration: "underline" });
+export const waitingDismiss = style({
+  flex: "none", padding: "3px 8px", border: "0", borderRadius: "7px", background: "none", color: vars.muted, font: "inherit",
+  fontSize: vars.textXs, cursor: "pointer", selectors: { "&:hover": { background: vars.hover, color: vars.text } },
+});

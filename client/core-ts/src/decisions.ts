@@ -77,6 +77,17 @@ export function forViewer(row: J, me: J): J | null {
   return who !== null && present.isViewer(me, who, []) ? d : null;
 }
 
+/// What waits for the viewer in a chat, for the bar above its composer (`ChatView.waiting`): the post it is about,
+/// whether it is a card (its options are on that post), and in a line what is wanted: the agent's need as it said it,
+/// else the post's first line.
+export function waitingOf(row: J, d: J): J {
+  const need = arr(get(row, "agents"))
+    .map((a) => get(get(a, "lastTurn"), "need"))
+    .find((n) => typeof n === "string" && n.trim() !== "");
+  const text = typeof need === "string" ? need.trim() : line(str(get(d.message, "text")) ?? "").replace(/^奏 · /, "");
+  return { seq: d.seq, card: ofRow(row) !== null, text };
+}
+
 export function asked(row: J): J | null {
   const card = ofRow(row);
   if (card !== null) return card;

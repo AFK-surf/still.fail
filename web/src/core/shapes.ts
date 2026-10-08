@@ -1492,6 +1492,16 @@ export interface StationUpdateNotice {
 	dismissible?: boolean;
 }
 
+/** What waits for the viewer in a chat (`ChatView.waiting`). */
+export interface ChatWaiting {
+	/** The post it is about (`decision.dismiss`, and where the bar jumps to). */
+	seq: number;
+	/** A card: its options are on that post. */
+	card: boolean;
+	/** What is wanted, in a line: the agent's need as it said it, else the post's first line. */
+	text: string;
+}
+
 /** An item's page: its chat (with the viewer's read position), or its agent before it has one. */
 export interface ChatView {
 	/** Archived chats must be restored before composing another message. */
@@ -1557,6 +1567,11 @@ export interface ChatView {
 	stationUpdate?: StationUpdateNotice;
 	/** The card it waits on, as its row has it. Absent when there is none. */
 	decision?: RowDecision;
+	/**
+	 * What waits for the viewer in it (a card for them, or an agent needing them), for the bar above the
+	 * composer. Absent when nothing does.
+	 */
+	waiting?: ChatWaiting;
 	/**
 	 * Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
 	 * (`chat.archive`). Absent otherwise.
@@ -2364,6 +2379,8 @@ export interface MarkItem {
 	text: string;
 	/** The waiting card's post (`decision.dismiss`), for `wait`. */
 	seq?: number;
+	/** Looked at since it came to want them: listed, not counted in the badge. */
+	seen?: boolean;
 	at: number;
 }
 

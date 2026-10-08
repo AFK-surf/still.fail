@@ -228,3 +228,11 @@ test("the_page_puts_those_set_aside_last", () => {
   assert.equal(d.deferredAt(prefs, "w/s", 7, 4), 12);
   assert.equal(d.deferredAt(prefs, "w/s", 7, 5), null);
 });
+
+test("what_waits_in_a_chat_says_the_agents_need_else_its_posts_first_line", () => {
+  const need = { seq: 9, message: { text: "测试版发好了\n你滑一下看看" } };
+  const row = { agents: [{ key: "k", lastTurn: { declared: "block", need: " 要你在手机上确认滑动 " } }], need };
+  assert.deepEqual(d.waitingOf(row, need), { seq: 9, card: false, text: "要你在手机上确认滑动" });
+  const card = { seq: 4, card: { type: "options", options: [{ label: "A" }] }, message: { text: "选哪个方案？\n细节" } };
+  assert.deepEqual(d.waitingOf({ agents: [{ key: "k" }], card }, card), { seq: 4, card: true, text: "选哪个方案？" });
+});

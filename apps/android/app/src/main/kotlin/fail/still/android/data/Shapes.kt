@@ -1498,6 +1498,17 @@ data class StationUpdateNotice (
 	val dismissible: Boolean? = null
 )
 
+/// What waits for the viewer in a chat (`ChatView.waiting`).
+@Serializable
+data class ChatWaiting (
+	/// The post it is about (`decision.dismiss`, and where the bar jumps to).
+	val seq: ULong,
+	/// A card: its options are on that post.
+	val card: Boolean,
+	/// What is wanted, in a line: the agent's need as it said it, else the post's first line.
+	val text: String
+)
+
 /// An item's page: its chat (with the viewer's read position), or its agent before it has one.
 @Serializable
 data class ChatView (
@@ -1552,6 +1563,9 @@ data class ChatView (
 	val stationUpdate: StationUpdateNotice? = null,
 	/// The card it waits on, as its row has it. Absent when there is none.
 	val decision: RowDecision? = null,
+	/// What waits for the viewer in it (a card for them, or an agent needing them), for the bar above the
+	/// composer. Absent when nothing does.
+	val waiting: ChatWaiting? = null,
 	/// Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
 	/// (`chat.archive`). Absent otherwise.
 	val archivable: Boolean? = null,
@@ -2406,6 +2420,8 @@ data class MarkItem (
 	val text: String,
 	/// The waiting card's post (`decision.dismiss`), for `wait`.
 	val seq: ULong? = null,
+	/// Looked at since it came to want them: listed, not counted in the badge.
+	val seen: Boolean? = null,
 	val at: Long
 )
 
