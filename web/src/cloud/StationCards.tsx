@@ -1,8 +1,8 @@
 // Station overview: only alerts and available updates. Click its name for the complete device and software details.
 import { useEffect, useState, type ReactNode } from "react";
 import { stamp, type StationView } from "../api.ts";
-import type { Host, Level, NetFigure, StationNet } from "../core/shapes.ts";
-import { Dialog, StatusDot, Time } from "../ui.tsx";
+import type { Host, Level, NetFigure, NetRelay, StationNet } from "../core/shapes.ts";
+import { Dialog, StatusDot, Time, Tip } from "../ui.tsx";
 import { UpdateSummary, Versions } from "../Versions.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
@@ -48,20 +48,39 @@ function Figure({ f }: { f: NetFigure }) {
  * over ↓, the speed each way and what went that way since it opened, each in a column of its own. Every line stays one
  * line with room kept for its figures: nothing wraps or moves as they change. */
 export function Net({ net, stacked = false }: { net: StationNet; stacked?: boolean }) {
+  const part = (
+    <span className={css.netPart} tabIndex={net.measured?.relays.length ? 0 : undefined}>
+      <span className={css.netLine}>
+        <span>{net.path}</span>
+        {net.loss && <Figure f={net.loss} />}
+      </span>
+      {net.rtt && <span>{tx("web-pages.stations.latency", { latency: <Figure f={net.rtt} /> })}</span>}
+    </span>
+  );
   return (
     <div className={stacked ? `${css.net} ${css.netStacked}` : css.net}>
-      <span className={css.netPart}>
-        <span className={css.netLine}>
-          <span>{net.path}</span>
-          {net.loss && <Figure f={net.loss} />}
-        </span>
-        {net.rtt && <span>{tx("web-pages.stations.latency", { latency: <Figure f={net.rtt} /> })}</span>}
-      </span>
+      {net.measured?.relays.length ? <Tip label={<Ways relays={net.measured.relays} />}>{part}</Tip> : part}
       <span className={css.netRates}>
         <span>↑</span><b>{net.up}</b><span>{net.upTotal && t("web-pages.stations.total", { total: net.upTotal })}</span>
         <span>↓</span><b>{net.down}</b><span>{net.downTotal && t("web-pages.stations.total", { total: net.downTotal })}</span>
       </span>
     </div>
+  );
+}
+
+/** Each way to the station as last pinged, on hover over how it goes: whether the one in use is the quickest. */
+function Ways({ relays }: { relays: NetRelay[] }) {
+  return (
+    <span className={css.ways}>
+      <span className={css.waysTitle}>{t("web-pages.stations.ways")}</span>
+      {relays.map((r) => (
+        <span key={r.name} className={css.way} data-current={r.current || undefined}>
+          <span>{r.name}</span>
+          {r.rtt ? <b data-level={r.rtt.level}>{r.rtt.text}</b> : <span>{t("web-pages.stations.wayNone")}</span>}
+          <span>{r.current ? t("web-pages.stations.wayCurrent") : ""}</span>
+        </span>
+      ))}
+    </span>
   );
 }
 

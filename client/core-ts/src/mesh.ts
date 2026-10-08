@@ -48,7 +48,11 @@ export const EXPLORE_MS = 5 * 60_000;
 /// Pings a way needs answered before it is compared with another.
 export const MIN_SAMPLES = 3;
 /// Ticks in a row a way must be clearly better than the one requests go on before they move to it.
-const BETTER_TICKS = 3;
+const BETTER_TICKS = 6;
+/// How long requests stay on a way they moved to before they may move again (unless it is gone): a move restarts the
+/// event stream and asks the reads under way again, and moving every few minutes between two ways near each other made
+/// things worse than staying (2026-10-08).
+export const MIN_STAY_MS = 3 * 60_000;
 /// Pings in a row a way may miss before it is let go.
 const DEAD_PINGS = 3;
 /// The least a read waits for its answer on its way before it is asked on the next best way as well.
@@ -131,7 +135,7 @@ export type Score = { score: number; dev: number };
 
 /// What a way must be quicker by, at least, for requests to move to it: a move re-asks the reads under way and starts
 /// the event stream again, worth it only for a gain a person could notice.
-export const MOVE_GAIN = 0.1;
+export const MOVE_GAIN = 0.3;
 
 /// Whether `other` is clearly better than `cur`: expected quicker by MOVE_GAIN at least, and by more than what the two
 /// vary by (half their deviations together), so two ways as good as each other are not swapped back and forth. A way
@@ -478,6 +482,7 @@ export class Mesh {
   /// By station: the relay requests last moved to (its host), and how many times they moved.
   readonly #moved = new Map<string, string>();
   readonly #moves = new Map<string, number>();
+  readonly #movedAt = new Map<string, number>();
   #closed = false;
   /// The relays a station's workspace has of its own, as the last `link` to it said.
   readonly #theirs = new Map<string, string[]>();
@@ -944,6 +949,7 @@ export class Mesh {
     const via = way.link.via();
     this.#moved.set(stationId, via !== null ? relayHost(via) : "direct");
     this.#moves.set(stationId, this.moves(stationId) + 1);
+    this.#movedAt.set(stationId, this.now());
     for (const w of this.#live(stationId)) w.better = 0;
     this.#notify();
   }
@@ -1011,6 +1017,7 @@ export class Mesh {
       return;
     }
     if (mine.samples < MIN_SAMPLES) return;
+    if (!now && this.now() - (this.#movedAt.get(stationId) ?? -Infinity) < MIN_STAY_MS) return;
     const best = this.#best(stationId, up.filter((w) => w.link !== cur && w.samples >= MIN_SAMPLES));
     for (const w of ways) if (w !== best) w.better = 0;
     if (best === null) return;
@@ -1123,19 +1130,25 @@ export class Mesh {
   }
 
   /// A read asked on `slow` and then on another way as well was answered on the other first, `ms` after it was asked on
-  /// `slow`: that long counts as a ping of `slow`, and the requests move at once if another way is now clearly better.
+  /// `slow`: that long counts as a ping of `slow` (the requests move as the pings decide, not on one read).
   outran(stationId: string, slow: Link, ms: number): void {
-    const w = this.#live(stationId).find((x) => x.link === slow);
-    if (w === undefined) return;
-    w.note(ms);
-    this.#choose(stationId, true);
+    this.#live(stationId).find((x) => x.link === slow)?.note(ms);
   }
 
+  /// Every way to the station as pinged: the round trip of each way open (its relay's host, or "direct"), then each
+  /// relay with no way open on it now (not reached, or let go: no figure).
   measured(stationId: string): Measured | null {
-    const ways = this.#live(stationId).filter((w) => w.samples > 0 && w.link.via() !== null);
+    const ways = this.#live(stationId).filter((w) => w.samples > 0);
     const measuring = this.#exploring.has(stationId);
     if (ways.length === 0 && !measuring) return null;
-    return { measuring, relays: ways.map((w) => [relayHost(w.link.via()!), Math.round(this.#score(stationId, w).score)]), moved: this.#moved.get(stationId) ?? null };
+    const relays: [string, number | null][] = [];
+    for (const w of [...ways].sort((a, b) => a.srtt - b.srtt)) {
+      const via = w.link.via();
+      const name = via !== null ? relayHost(via) : "direct";
+      if (!relays.some(([n]) => n === name)) relays.push([name, Math.round(w.srtt)]);
+    }
+    for (const r of this.relaysFor(stationId)) if (!relays.some(([n]) => n === relayHost(r))) relays.push([relayHost(r), null]);
+    return { measuring, relays, moved: this.#moved.get(stationId) ?? null };
   }
 
   /// The ways to a station dialled and pinged now, as a person asks; the requests moved to the best if it is clearly

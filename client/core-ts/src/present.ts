@@ -761,6 +761,8 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
           const h = str(get(x, "relay"));
           if (h === undefined) return [];
           const ms = get(x, "rttMs");
+          // "direct": the way that goes straight there, no relay.
+          if (h === "direct") return [{ name: t("core-views.present.net.direct"), rtt: typeof ms === "number" ? figure(ms) : null, current: r.path === "direct" }];
           return [{ name: named(h), rtt: typeof ms === "number" ? figure(ms) : null, current: via === h }];
         }),
         moved: typeof m.moved === "string" ? named(m.moved) : null,
