@@ -29,6 +29,7 @@ import { jobTools } from "../tools/jobs.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { UsageCounter } from "../usage/counter.ts";
+import { sessionUsage } from "../read/usage.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { overview } from "../api/overview.ts";
@@ -375,6 +376,11 @@ export const AgentsLive = (control: Control) =>
       // What the agents spent, read from their transcripts: now, and after each turn ends.
       const usage = new UsageCounter({ store, config: () => ({ dataDir: data, profiles: settings().profiles }), clock: hub.clock });
       usage.start();
+      // An execution's details show its calls as counted here, as the usage page does, and are told when more are.
+      hub.live.countWith({ of: (key) => sessionUsage(store.usageOfSession(key)), ask: () => usage.soon() });
+      const unsubscribeCounted = store.subscribe((change) => {
+        if (change.type === "usage") hub.live.usageCounted();
+      });
 
       // What the chats' people hear about while no client of theirs runs: pushed by the control plane.
       const notifier = new Notifier(store, readers, cloud, (notices) => Effect.runPromise(plane.notify(notices)));
@@ -461,6 +467,7 @@ export const AgentsLive = (control: Control) =>
             await hub.shutdown();
           }
           await jobs.shutdown();
+          unsubscribeCounted();
           await usage.stop();
           await updates.close();
           await accounts.close();

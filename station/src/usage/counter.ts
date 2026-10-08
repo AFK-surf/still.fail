@@ -359,6 +359,8 @@ export class UsageCounter {
   #ended = new Map<string, number>();
   #startedAt = 0;
   #wake = Effect.runSync(Queue.dropping<void>(1));
+  /// Asked to read though no turn ended (`soon`).
+  #asked = false;
   #fiber: Fiber.Fiber<void> | null = null;
   #unsubscribe: (() => void) | null = null;
   #abort = new AbortController();
@@ -408,13 +410,20 @@ export class UsageCounter {
         if (woken) {
           yield* Effect.sleep(me.#settleMs);
           yield* Queue.clear(me.#wake);
-          if (!(yield* turnEnded) && (yield* Clock.currentTimeMillis) < due) continue;
+          if (!(yield* turnEnded) && !me.#asked && (yield* Clock.currentTimeMillis) < due) continue;
         }
+        me.#asked = false;
         yield* readNow;
         due = (yield* Clock.currentTimeMillis) + me.#safetyMs;
       }
     });
     this.#fiber = Effect.runFork(loop.pipe(Effect.provideService(Clock.Clock, this.#clock)));
+  }
+
+  /// Reads shortly, though no turn ended: a session someone watches as it works (live.ts).
+  soon(): void {
+    this.#asked = true;
+    Queue.offerUnsafe(this.#wake, undefined);
   }
 
   /// Stops reading: the read under way stops at its next part (what it recorded stays).

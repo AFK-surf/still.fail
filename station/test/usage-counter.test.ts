@@ -9,7 +9,7 @@ import { monitorEventLoopDelay } from "node:perf_hooks";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
-import { cost, price, priceTable } from "../src/read/usage.ts";
+import { cost, price, priceTable, sessionUsage } from "../src/read/usage.ts";
 import { iso, parseIso } from "../src/read/transcript.ts";
 import { type StoreChange, type UsageGroup, Store, newMessage } from "../src/store/store.ts";
 import { type CallState, UsageCounter, callsOf, claudeFiles, claudeProject, readFrom } from "../src/usage/counter.ts";
@@ -302,6 +302,31 @@ test("a turn's end is read shortly after, and the pages are told", async () => {
   assert.equal(calls(), 1);
   // Told once the read is over (the rows are there a moment before).
   assert.ok(told.some((c) => c.type === "usage"));
+  await r.usage.stop();
+});
+
+test("asked, a working session is read before its turn ends; its execution details add it up and price it", async () => {
+  const time = await today();
+  const r = rig({ settleMs: 20, safetyMs: 60_000, clock: time.clock });
+  const workspace = join(r.data, "w");
+  session(r.store, "k", workspace, r.store.now() - 1000);
+  r.usage.start();
+  await time.begun(1);
+  r.store.startTurn("t1", "k", "input");
+  const project = join(r.data, "transcripts/claude", claudeProject(workspace));
+  append(join(project, "r.jsonl"), [claudeLine("m", r.store.now() + 1, "claude-opus-5-5", usage(10, 1000, 0, 0, 100))]);
+  await time.begun(2);
+  await time.adjust(20);
+  await time.begun(3);
+  assert.deepEqual(r.store.usageOfSession("k"), [], "a turn starting is not its end");
+  r.usage.soon();
+  await time.begun(4);
+  await time.adjust(20);
+  await time.begun(5);
+  // Opus 5.5: $4 in, $0.2 read, $20 out.
+  assert.deepEqual(sessionUsage(r.store.usageOfSession("k")), {
+    modelCalls: 1, inputTokens: 1010, cachedTokens: 1000, outputTokens: 100, cost: (10 * 4 + 1000 * 0.2 + 100 * 20) / 1e6, unpricedCalls: 0,
+  });
   await r.usage.stop();
 });
 
