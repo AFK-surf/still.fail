@@ -18,4 +18,4 @@ globalStyle(`${fields} input${input}`, {
   background: `color-mix(in srgb, ${vars.text} 5%, transparent)`, transition: `background ${vars.dur} ${vars.easeOut}`,
 });
 globalStyle(`${fields} input${input}:hover, ${fields} input${input}:focus`, { background: `color-mix(in srgb, ${vars.text} 8%, transparent)` });
-export const passwordError = style({ textAlign: "left", paddingLeft: "16px" });
+export const passwordError = style({ textAlign: "left", paddingLeft: "18px" });
