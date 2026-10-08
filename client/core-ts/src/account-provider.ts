@@ -24,6 +24,7 @@ export interface AccountSessions {
   accessToken(sub: string): Effect.Effect<string, CoreError>;
   beginSignIn(redirectUri: string, returnTo: string, deviceName: string): Effect.Effect<string, CoreError>;
   completeSignIn(query: string): Effect.Effect<[AccountView, string], CoreError>;
+  passwordSignIn(email: string, password: string, deviceName: string): Effect.Effect<AccountView, CoreError>;
   signOut(sub: string): Effect.Effect<void, CoreError>;
   /// Accounts kept before the core (a page's, a dev cloud's).
   migrate(accounts: unknown): Effect.Effect<void, CoreError>;

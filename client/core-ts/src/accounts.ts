@@ -2,7 +2,7 @@
 // token and a rotating refresh token. Tokens are refreshed at most once at a time per account (every caller waits on
 // the same refresh).
 //
-// Wire: POST /v1/auth/token {code, code_verifier, redirect_uri}, POST /v1/auth/refresh (Bearer refresh)
+// Wire: POST /v1/auth/token {code, code_verifier, redirect_uri} (or /v1/auth/password {email, password, name}), POST /v1/auth/refresh (Bearer refresh)
 // {request_id: ULID}, POST /v1/auth/logout (Bearer refresh) {all:false}; tokens answer {access_token, refresh_token,
 // subject, email, name?, expires_at}. Sign-in starts at GET /v1/auth/google/start?state&code_challenge&…&name.
 //
@@ -146,6 +146,28 @@ export class Accounts {
       if (!ok(response)) return yield* Effect.fail(expired().withStatus(response.status));
       const tokens = readTokens(parseJson(response.body));
       if (!tokens) return yield* Effect.fail(expired());
+      const account = yield* this.#signedIn(tokens);
+      const returnTo = pending.return_to === "" || pending.return_to.startsWith("/auth/") ? "/" : pending.return_to;
+      return [account, returnTo] as [AccountView, string];
+    });
+  }
+
+  /// Signs in with an email and a password: only the accounts still.fail cloud set up for that (App Store review's).
+  passwordSignIn(email: string, password: string, deviceName: string): Effect.Effect<AccountView, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const failed = () => new CoreError("login_failed", t("core-logic.accounts.login.password_failed"));
+      const response = yield* Effect.mapError(this.#post("/v1/auth/password", null, { email, password, name: deviceName }, null), failed);
+      if (response.status === 401) return yield* Effect.fail(new CoreError("login_wrong_password", t("core-logic.accounts.login.wrong_password")).withStatus(401));
+      if (!ok(response)) return yield* Effect.fail(failed().withStatus(response.status));
+      const tokens = readTokens(parseJson(response.body));
+      if (!tokens) return yield* Effect.fail(failed());
+      return yield* this.#signedIn(tokens);
+    });
+  }
+
+  /// Keeps the account a sign-in answered with.
+  #signedIn(tokens: Tokens): Effect.Effect<AccountView, CoreError> {
+    return Effect.gen({ self: this }, function* () {
       const account: StoredAccount = {
         sub: tokens.subject,
         email: tokens.email,
@@ -162,8 +184,7 @@ export class Accounts {
         account.picture = picture;
         yield* Effect.ignore(this.#put(account));
       }
-      const returnTo = pending.return_to === "" || pending.return_to.startsWith("/auth/") ? "/" : pending.return_to;
-      return [view(account), returnTo] as [AccountView, string];
+      return view(account);
     });
   }
 

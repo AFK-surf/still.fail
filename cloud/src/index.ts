@@ -9,6 +9,7 @@ import { requestLang, tr } from "./i18n.ts";
 import { latestDownload, serveRelease } from "./releases.ts";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
+import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
 import { adminApi, api, blockAccount, socketToken } from "./api";
@@ -143,6 +144,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return reply({ error: "invalid_request" }, 400);
     }
   }
+  if (path === "/v1/auth/password" && request.method === "POST") return passwordSignIn(env, request);
   if ((path === "/v1/auth/refresh" || path === "/v1/auth/logout") && request.method === "POST") {
     try {
       const token = bearerToken(request);

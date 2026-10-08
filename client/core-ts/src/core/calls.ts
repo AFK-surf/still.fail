@@ -25,6 +25,7 @@ export type Call =
   | { kind: "wake"; away: number; network: boolean; retry: boolean }
   | { kind: "authBegin"; redirectUri: string; returnTo: string; deviceName: string | null }
   | { kind: "authComplete"; query: string }
+  | { kind: "authPassword"; email: string; password: string; deviceName: string | null }
   | { kind: "signOut"; account: string }
   | { kind: "op"; op: ops.Request }
   | { kind: "profileModels"; op: ops.Request; id: string; models: unknown }
@@ -134,6 +135,7 @@ export function counts(call: Call, name: string): boolean {
     case "chatLatest":
     case "signOut":
     case "authBegin":
+    case "authPassword":
     case "stationMeasure":
       return true;
     case "decisionAnswer":
@@ -215,6 +217,14 @@ export function parseCall(name: string, params: unknown): Call {
     }
     case "auth.complete":
       return { kind: "authComplete", query: read(params, [["query", S, "req"]]).query as string };
+    case "auth.password": {
+      const p = read(params, [
+        ["email", S, "req"],
+        ["password", S, "req"],
+        ["device_name", S, "opt"],
+      ]);
+      return { kind: "authPassword", email: p.email as string, password: p.password as string, deviceName: p.device_name as string | null };
+    }
     case "auth.signOut":
       return { kind: "signOut", account: read(params, [["account", S, "req"]]).account as string };
     case "client.error": {

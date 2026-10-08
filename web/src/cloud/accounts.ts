@@ -42,6 +42,12 @@ export async function completeSignIn(): Promise<string> {
   return return_to;
 }
 
+/** Signs in with an email and a password: only the accounts still.fail cloud set up for it (App Store review's). */
+export async function passwordSignIn(email: string, password: string): Promise<void> {
+  await core().call("auth.password", { email, password });
+  track("sign_in");
+}
+
 export async function signOut(sub: string): Promise<void> {
   await core().call("auth.signOut", { account: sub });
   signedOut(sub);

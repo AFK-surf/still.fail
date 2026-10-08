@@ -36,6 +36,8 @@ like, nothing else changes):
             (docs/telemetry.md). Without it the web app is built without analytics.
   axiom     <deploy>/axiom.json, {"dataset", "token"}: where traces go (docs/telemetry.md).
             Without it the cloud takes no traces.
+  review    <deploy>/review-accounts.json, [{"email", "password", "name"}]: the accounts that sign in with a
+            password (cloud/src/password.ts), App Store review's. Without it nobody signs in that way.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
 import argparse
@@ -77,6 +79,7 @@ AXIOM = DEPLOY / "axiom.json"
 # Push notifications (docs/notifications.md): the VAPID key ({public, private, subject}) and Firebase's service account.
 VAPID = DEPLOY / "vapid.json"
 FCM = DEPLOY / "fcm-service-account.json"
+REVIEW = DEPLOY / "review-accounts.json"
 
 
 def write_private(path: Path, value) -> None:
@@ -164,6 +167,16 @@ def push() -> dict:
     else:
         print(f"note: {FCM} is missing; no pushes to Android")
     return value
+
+
+def review() -> dict:
+    if not REVIEW.exists():
+        return {}
+    # Read (and checked) here, so a malformed file stops the deploy rather than letting nobody in.
+    accounts = json.loads(REVIEW.read_text())
+    if not isinstance(accounts, list) or not all(isinstance(a, dict) and "@" in a.get("email", "") and len(a.get("password", "")) >= 12 for a in accounts):
+        sys.exit(f"{REVIEW}: expected a list of {{email, password (12 characters at least), name}}")
+    return {"REVIEW_ACCOUNTS": json.dumps(accounts)}
 
 
 @contextmanager
@@ -342,7 +355,7 @@ def main() -> None:
     # Read only for the parts that take them: keys() makes keys.json where there is none, which a deploy of the static
     # sites alone (CI's web-beta, on a machine without the deploy directory's keys) must not do.
     secrets_of = {
-        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push()},
+        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review()},
         "relay": lambda: {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
     def deploy(part: str, env) -> None:

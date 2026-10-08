@@ -48,4 +48,6 @@ export interface Env {
   VAPID_SUBJECT?: string;
   /** The Firebase project's service account (its JSON) that sends to the Android app (fcm.ts). Without it there is no FCM. */
   FCM_SERVICE_ACCOUNT?: string;
+  /** The accounts that sign in with an email and a password (password.ts): a JSON list of {email, password, name?}, App Store review's. Unset: none. */
+  REVIEW_ACCOUNTS?: string;
 }

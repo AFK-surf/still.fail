@@ -125,6 +125,9 @@ class CommaAccounts implements AccountSessions {
   completeSignIn(): Effect.Effect<[AccountView, string], CoreError> {
     return Effect.fail(new CoreError("unsupported", t("core-misc.comma.sign_in")));
   }
+  passwordSignIn(): Effect.Effect<AccountView, CoreError> {
+    return Effect.fail(new CoreError("unsupported", t("core-misc.comma.sign_in")));
+  }
   migrate(): Effect.Effect<void, CoreError> {
     return Effect.fail(new CoreError("unsupported", t("core-misc.comma.sign_in")));
   }

@@ -32,6 +32,10 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         const deviceName = call.deviceName ?? prefs.deviceName(inner.data) ?? brand.name();
         return Effect.map(inner.accounts.beginSignIn(call.redirectUri, call.returnTo, deviceName), (url) => ({ url }));
       }
+      case "authPassword": {
+        const deviceName = call.deviceName ?? prefs.deviceName(inner.data) ?? brand.name();
+        return Effect.map(inner.accounts.passwordSignIn(call.email, call.password, deviceName), (account) => ({ account }));
+      }
       case "authComplete":
         return Effect.map(inner.accounts.completeSignIn(call.query), ([account, returnTo]) => ({ account, return_to: returnTo }));
       case "wake": {

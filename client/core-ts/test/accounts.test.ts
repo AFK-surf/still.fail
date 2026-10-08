@@ -56,6 +56,25 @@ test("begin_sign_in_stores_pkce_and_builds_url", async () => {
   assert.equal(q.name, "still.fail 网页版 · Chrome");
 });
 
+test("password_sign_in_keeps_the_account_or_says_the_password_is_wrong", async () => {
+  const host = new FakeHost();
+  const expires = now(host) + 3600;
+  host.onFetch((req) => {
+    if (req.url === "https://stillfail.test/v1/auth/password") return body(req).password === "right" ? jsonResponse(200, tokens("acc", "ref", expires)) : jsonResponse(401, { error: "invalid_credentials" });
+    if (req.url === "https://stillfail.test/v1/me") return jsonResponse(200, { user: {} });
+    throw new Error(`unexpected ${req.url}`);
+  });
+  const accounts = await run(Accounts.load(host));
+  const wrong = await Effect.runPromise(Effect.flip(accounts.passwordSignIn("a@x.com", "wrong", "iPhone")));
+  assert.equal(wrong.code, "login_wrong_password");
+  assert.deepEqual(accounts.list(), []);
+  const v = await run(accounts.passwordSignIn("a@x.com", "right", "iPhone"));
+  assert.deepEqual(v, { sub: "sub1", email: "a@x.com", name: "阿一", picture: "" });
+  assert.deepEqual(body(host.requests[1]), { email: "a@x.com", password: "right", name: "iPhone" });
+  assert.deepEqual(accounts.list(), [v]);
+  assert.equal((stored(host, STORAGE_KEY) as StoredAccount[])[0].refresh, "ref");
+});
+
 test("sign_in_happy_path", async () => {
   const host = new FakeHost();
   const expires = now(host) + 3600;

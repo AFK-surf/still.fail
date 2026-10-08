@@ -2,7 +2,9 @@
 // avatars, the sign-in page and where a sign-in comes back to.
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "../ui.tsx";
-import { completeSignIn, useSignIn } from "./accounts.ts";
+import { completeSignIn, passwordSignIn, useSignIn } from "./accounts.ts";
+import { useDoing } from "../doing.ts";
+import * as controlsCss from "../styles/controls.css.ts";
 import { Illustration } from "../brand.tsx";
 import * as cloudCss from "../styles/cloud.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
@@ -26,7 +28,30 @@ export function SignInPage({ title = t("web-pages.signIn.title", { name: NAME })
       <h1>{title}</h1>
       <p>{lead ?? t("web-pages.signIn.lead")}</p>
       <Button variant="primary" busy={signIn.busy} onClick={() => void signIn.signIn()}>{t("web-pages.signIn.google")}</Button>
+      <PasswordSignIn />
     </div>
+  );
+}
+
+/** Signing in with an email and a password, for the accounts set up for it (App Store review's): folded away under a link. */
+function PasswordSignIn() {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const busy = useDoing("auth.password");
+  if (!open) return <button type="button" className={css.passwordLink} onClick={() => setOpen(true)}>{t("web-pages.signIn.password")}</button>;
+  return (
+    <form className={css.passwordForm} onSubmit={(e) => {
+      e.preventDefault();
+      setError(null);
+      passwordSignIn(email.trim(), password).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    }}>
+      <input className={controlsCss.input} type="email" autoComplete="username" autoFocus placeholder={t("web-pages.signIn.email")} aria-label={t("web-pages.signIn.email")} value={email} onChange={(e) => setEmail(e.target.value)} />
+      <input className={controlsCss.input} type="password" autoComplete="current-password" placeholder={t("web-pages.signIn.passwordField")} aria-label={t("web-pages.signIn.passwordField")} value={password} onChange={(e) => setPassword(e.target.value)} />
+      {error && <p className={controlsCss.fieldError} role="alert">{error}</p>}
+      <Button type="submit" variant="secondary" busy={busy} disabled={!email.trim() || !password}>{t("web-pages.signIn.passwordSubmit")}</Button>
+    </form>
   );
 }
 

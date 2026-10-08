@@ -43,6 +43,8 @@ export async function harness(
     port?: number;
     signingKey?: string;
     noGoogle?: boolean;
+    /** REVIEW_ACCOUNTS: who signs in with a password (password.ts). */
+    reviewAccounts?: string;
     relayUrl?: string;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
@@ -148,6 +150,7 @@ export async function harness(
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
+        ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
         ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),
       },
       r2Buckets: ["RELEASES"],
