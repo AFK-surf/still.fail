@@ -3,7 +3,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 
-export const entry = style({ width: "100%", border: "0", background: "none", textAlign: "left", font: "inherit", cursor: "pointer", selectors: { '&[data-state="open"]': { background: vars.hover } } });
+export const entry = style({ width: "100%", border: "0", background: "none", textAlign: "left", fontFamily: "inherit", cursor: "pointer", selectors: { '&[data-state="open"]': { background: vars.hover } } });
 export const name = style({ flex: "1", color: vars.text });
 /** How many came since the viewer looked: a small red count, as the Dock's. */
 export const count = style({

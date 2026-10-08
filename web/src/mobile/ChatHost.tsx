@@ -3,6 +3,8 @@
 // (the shell keeps a page that is replaced by another, app.tsx). What the composer writes to is the page's: it says so
 // (`useHost().use`), and the composer asks it when a message goes.
 import { ArchiveNotice } from "../ArchiveNotice.tsx";
+import { WaitingBar } from "../Chat.tsx";
+import type { ChatWaiting } from "../core/shapes.ts";
 import { createContext, useContext, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
@@ -30,6 +32,8 @@ export interface HostComposer {
   /** Nothing can be sent (its station offline), and it says why. */
   offline: boolean;
   archived?: boolean;
+  /** What an agent waits on the viewer for with no card to say it (the chat's `waiting`), on top of the capsule. */
+  waiting?: { thread: number; waiting: ChatWaiting } | null;
   restore?(): Promise<unknown>;
   /** Sends what the draft holds now (given at the moment it is sent: never a draft from an earlier render). */
   send(draft: Draft): void;
@@ -55,7 +59,8 @@ export function draftKeyOf(station: string, chat: string): string {
   return `${station}:${openedAs(chat)}`;
 }
 
-type Shown = Pick<HostComposer, "station" | "session" | "placeholder" | "offline" | "archived">;
+type Shown = Pick<HostComposer, "station" | "session" | "placeholder" | "offline" | "archived" | "waiting">;
+const sameWaiting = (a: HostComposer["waiting"], b: HostComposer["waiting"]) => (a ?? null) === (b ?? null) || (!!a && !!b && a.thread === b.thread && a.waiting.seq === b.waiting.seq && a.waiting.text === b.waiting.text);
 
 export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const { station: id, chat } = useParams();
@@ -64,8 +69,8 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const [shown, setShown] = useState<Shown | null>(null);
   const use = (spec: HostComposer) => {
     latest.current = spec;
-    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.archived === spec.archived ? was
-      : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
+    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.archived === spec.archived && sameWaiting(was.waiting, spec.waiting) ? was
+      : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, waiting: spec.waiting ?? null, ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
   };
   const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
   // The host is outside the chat's StationContext: what it writes goes to the station the page says (a new chat's, as
@@ -130,6 +135,7 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, uplo
   return (
     <div className={`${inline ? css.mInlineComposer : `${css.mComposer} ${css.mHostComposer}`} ${rootCss.wide}`} ref={capsule}>
       {menu}
+      {shown.waiting && <div className={css.mComposerAbove}><WaitingBar station={shown.station} thread={shown.waiting.thread} waiting={shown.waiting.waiting} /></div>}
       {/* Files dropped in go with the message, as ＋ adds them (pasted ones, the text box takes); offline, nothing goes to the station. */}
       <div ref={frame} className={`${pagesCss.mFloating} ${css.mComposerCapsule}`} data-made-composer onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) e.preventDefault(); }}

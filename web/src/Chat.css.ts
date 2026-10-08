@@ -617,7 +617,7 @@ export const archiveCheck = style({
   selectors: { "&[data-failed]": { color: vars.red } },
 });
 
-/** What an agent needs of the viewer (Chat.tsx WaitingBar): a line after the last message, in the list's flow. */
+/** What an agent needs of the viewer (Chat.tsx WaitingBar): a line on top of the composer (composerAbove). */
 export const waitingBar = style({
   display: "flex", alignItems: "center", gap: "8px", padding: "6px 6px 6px 12px", borderRadius: "10px",
   background: vars.amberBg, color: vars.text, fontSize: vars.textUi,
@@ -634,3 +634,6 @@ export const waitingDismiss = style({
   flex: "none", padding: "3px 8px", border: "0", borderRadius: "7px", background: "none", color: vars.muted, font: "inherit",
   fontSize: vars.textMeta, cursor: "pointer", selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
+
+/** What is said right on top of the composer's box (ComposerProps `above`): as wide as it, a little inset. */
+export const composerAbove = style({ margin: "0 12px 6px" });
