@@ -700,16 +700,18 @@ internal fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
 /**
  * Where the chat stands, in its last message's place (the core's `stateText`): a decision waiting for the viewer
  * (奏 · …) in ink with its 奏 bold; anything else in the secondary colour. A lead said as an icon (要你帮忙 a bell, in
- * ink; 在等 an open arc and dots, 做完了 a check) sits where the title's mark does, what follows where the title starts.
+ * ink; 在等 an open arc and dots, 监控中 the arc before its words, 做完了 a check) sits where the title's mark does, what follows where the title starts.
  */
 @Composable
 private fun StateLine(state: String, modifier: Modifier = Modifier) {
     val need = needLead.find(state)
     val done = if (need == null) fail.still.android.ui.doneLead.find(state) else null
     val wait = if (need == null && done == null) fail.still.android.ui.waitLead.find(state) else null
-    val iconLead = need ?: done ?: wait
+    val watch = if (need == null && done == null && wait == null) watchLead.find(state) else null
+    val iconLead = need ?: done ?: wait ?: watch
     if (iconLead != null) {
-        val rest = state.substring(iconLead.value.length)
+        // Watching keeps its words after the arc: the arc alone says waiting.
+        val rest = if (watch != null) state else state.substring(iconLead.value.length)
         val tint = if (need != null) C.ink else C.muted
         val icon = if (need != null) Icons.Bell else if (done != null) Icons.Check else Icons.Wait
         Row(modifier.semantics(mergeDescendants = true) { contentDescription = state }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -741,6 +743,9 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
 
 /** The core's words for an agent needing the viewer, in either language, with what follows them. */
 private val needLead = Regex("^(?:要你帮忙|Needs you)(?:[：:]\\s*|$)")
+
+/** The core's words for an agent waiting on a watch of its own (present.ts), in either language. */
+private val watchLead = Regex("^(?:监控中|Watching)(?:：|: |$)")
 
 /** The last thing said, on one line, in the secondary colour (the row's picture says who is in it). */
 @Composable

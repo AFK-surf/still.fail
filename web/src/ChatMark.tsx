@@ -68,17 +68,19 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
 /**
  * A row's second line from where its chat stands (the core's `stateText`; a core before it: its decision's `decision.text`):
  * 奏 · … (Decision · …) in ink, its lead bold; 要你帮忙：… (Needs you: …) in ink too (it wants the viewer); 出问题：…, 在等：…, 做完了 as quiet as the
- * last message would be. `slot` (every chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check)
+ * last message would be. `slot` (every chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check; 监控中 the arc before its words)
  * stands in the title's mark's column, centred under it, and what follows starts where the title does.
  */
 export function WaitingText({ text, className, slot = false }: { text: string; className: string; slot?: boolean }) {
   const need = slot ? /^(?:要你帮忙|Needs you)(?:[：:]\s*|$)/.exec(text) : null;
   const lead = /^(?:奏|Decision)(?: · |$)/.test(text) ? text.split(" · ")[0]! : "";
   const turn = lead !== "" || /^(?:要你帮忙|Needs you:)/.test(text);
-  const icon = slot ? need ?? DONE.exec(text) ?? WAIT.exec(text) : null;
+  const watch = slot && !need ? WATCH.exec(text) : null;
+  const icon = slot ? need ?? DONE.exec(text) ?? WAIT.exec(text) ?? watch : null;
   if (icon) {
     const label = t(need ? "web-main.chatMark.alert" : DONE.test(text) ? "web-main.status.done" : "web-main.status.waiting");
-    const rest = text.slice(icon[0].length);
+    // Watching keeps its words after the arc: the arc alone says waiting.
+    const rest = watch ? text : text.slice(icon[0].length);
     return (
       <span className={`${className} ${css.leadLine}`} data-turn={turn || undefined} data-state-line="" aria-label={text}>
         <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label}>
@@ -98,6 +100,8 @@ export function WaitingText({ text, className, slot = false }: { text: string; c
 /** The core's done and waiting leads, in either language (as ui.tsx StatusText reads them). */
 const DONE = /^(?:做完了(?:：|$)|Done(?:: |$))/;
 const WAIT = /^(?:在等：|等待中$|Waiting(?:: |$))/;
+/** The core's watching (an agent waiting on a watch of its own, present.ts): 监控中, Watching. */
+const WATCH = /^(?:监控中|Watching)(?:：|: |$)/;
 
 /**
  * A row pressed on its state line (WaitingText) when the core says which message the state is about (`stateAbout`):
