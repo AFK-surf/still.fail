@@ -572,14 +572,15 @@ test("a_link_moves_to_the_relay_its_requests_go_quicker_through_far_from_the_dev
   rb.kill();
 });
 
-/// Judged by what it chooses, again: b answers sooner than a but brings a reply slowly (the device 60 ms away each way
-/// on a 256 KiB/s line, as Hong Kong's back to the mainland). Its speed not known, the link goes there; a large reply
+/// Judged by what it chooses, again: b answers sooner than a but brings a reply slowly (the device 40 ms away each way
+/// on a 256 KiB/s line, as Hong Kong's back to the mainland; 40 against a's 100 clears MOVE_GAIN by more than a busy
+/// machine's jitter, which 60 did not: on the Mac Studio at load 26, 3 runs in 16 stayed on a, at 136 ms against 207). Its speed not known, the link goes there; a large reply
 /// through it shows how slow it is, and the link goes back to a, where the same reply comes sooner.
 test("a_link_leaves_a_relay_found_slow_for_one_that_brings_replies_sooner", { skip: noRelay }, async () => {
   const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
   const station = await Station.on(b, await slowed(a, 100, 1));
   const id = station.id();
-  const slowB = await slowed(b, 60, 0, 256 * 1024);
+  const slowB = await slowed(b, 40, 0, 256 * 1024);
   const e = env(new FakeHost(), new Wakes(), quickClock(new Map()));
   const mesh = await e.runner.run(Mesh.make(e, [a]));
   const runner = e.runner;
