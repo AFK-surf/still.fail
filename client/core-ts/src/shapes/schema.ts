@@ -43,6 +43,7 @@ export const SHAPES: Record<string, Shape> = {
     ["shown", opt("PersonShown"), { doc: "As the core names them." }],
   ], { doc: "Who started a session or chat, or added a connect: an email, or \"slack:<connect>:<user>\"; \"local\" in records from\na station's own page, before it went." }),
   TurnSummary: struct([
+    ["id", opt("String"), { doc: "The turn's (as a session's turns list it): a summary's last turn put in place there. A station from before says\nnone." }],
     ["kind", "String"],
     ["outcome", opt("String")],
     ["declared", opt("String")],

@@ -596,10 +596,20 @@ test("session_events_update_in_place", async () => {
   assert.deepEqual(list().map((s) => s.key), ["c", "a", "b"]);
   assert.equal(list()[1].title, "新名字");
   assert.equal(sessionOf(core, "a").session.title, "新名字");
-  // The turn ended: the detail's turns are read again.
+  // The turn ended, said by a station from before (its last turn named by no id): the detail's turns are read again.
   push("session", { ...renamed, lastTurn: { ...renamed.lastTurn, endedAt: 2 } });
   await host.settle();
   assert.equal(gets(host, "/admin/api/sessions/a"), 2);
+  // Said with its id: the turn put in place, then one more, as they go on; nothing read.
+  push("session", { ...renamed, lastTurn: { ...turn, endedAt: 3 } });
+  push("session", { ...renamed, turns: 2, lastTurn: { ...turn, id: "t2", startedAt: 4 } });
+  await host.settle();
+  assert.equal(gets(host, "/admin/api/sessions/a"), 2);
+  assert.deepEqual(sessionOf(core, "a").turns.map((t: J) => [t.id, t.endedAt]), [["t1", 3], ["t2", null]]);
+  // Turns it did not hear of (two at once): read again.
+  push("session", { ...renamed, turns: 4, lastTurn: { ...turn, id: "t4", startedAt: 9 } });
+  await host.settle();
+  assert.equal(gets(host, "/admin/api/sessions/a"), 3);
   // Archived: gone from the list. Removed: gone, and its topic says so.
   push("session", { ...summary("b", 0), archivedAt: 5 });
   push("session-removed", { key: "a" });

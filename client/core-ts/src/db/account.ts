@@ -878,8 +878,11 @@ export class AccountDb {
       const json = JSON.stringify(summary);
       const detail = r && r[3] !== null ? parse(r[3]) : undefined;
       again = detail === undefined || !sameTurns(get(detail, "turns"), summary);
+      // One more turn, or the last one gone on, as the summary says it: put in place, not all its turns read again.
+      const placed = again && detail !== undefined && placeTurn(detail, summary);
+      if (placed) again = false;
       // Its detail shows it as it is now too.
-      if (detail !== undefined && JSON.stringify(detail.session) !== json) {
+      if (detail !== undefined && (placed || JSON.stringify(detail.session) !== json)) {
         detail.session = summary;
         this.#run("UPDATE session SET detail = ? WHERE station = ? AND key = ?", [JSON.stringify(detail), station, key]);
         this.#tellSession(station, key);
@@ -1607,6 +1610,19 @@ export class AccountDb {
   static isSqlError(e: unknown): e is SqlError {
     return e instanceof SqlError;
   }
+}
+
+/// A session detail's turns brought to what its summary says, where that is one more turn or the last one gone on (the
+/// summary's last turn, with its id); whether they were. A station from before names no last turn: they are read again.
+export function placeTurn(detail: J, summary: unknown): boolean {
+  const list = Array.isArray(detail?.turns) ? (detail.turns as unknown[]) : null;
+  const last = get(summary, "lastTurn");
+  const n = get(summary, "turns");
+  if (list === null || !isObject(last) || typeof last.id !== "string" || typeof n !== "number") return false;
+  if (n === list.length + 1 && !list.some((t) => get(t, "id") === last.id)) list.push(last);
+  else if (n === list.length && list.length > 0 && get(list[list.length - 1], "id") === last.id) list[list.length - 1] = last;
+  else return false;
+  return true;
 }
 
 /// Whether the turns a session detail lists still end as its summary says.

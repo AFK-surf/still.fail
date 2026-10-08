@@ -598,6 +598,9 @@ data class TurnAbout (
 
 @Serializable
 data class TurnSummary (
+	/// The turn's (as a session's turns list it): a summary's last turn put in place there. A station from before says
+	/// none.
+	val id: String? = null,
 	val kind: String,
 	val outcome: String? = null,
 	val declared: String? = null,

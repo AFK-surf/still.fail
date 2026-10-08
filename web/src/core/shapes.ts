@@ -574,6 +574,11 @@ export interface TurnAbout {
 }
 
 export interface TurnSummary {
+	/**
+	 * The turn's (as a session's turns list it): a summary's last turn put in place there. A station from before says
+	 * none.
+	 */
+	id?: string;
 	kind: string;
 	outcome?: string;
 	declared?: string;
