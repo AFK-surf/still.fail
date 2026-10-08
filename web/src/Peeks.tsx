@@ -1,9 +1,9 @@
 // What a message names, while it is pointed at: a web link (its page's title and icon; a GitHub pull request's or
 // issue's state, author, size and checks) and a file on the station by its path (a few of its lines, its picture, a
-// directory's entries), each as a small card (Hover.css.ts, Cue's card language). Read from the station the first time
-// a card opens (`link.preview`, `file.peek`), and kept, so it shows at once when opened again. A file's chip opens the
-// file itself over the window (`file.open`, FilePreview).
-import { createContext, useContext, useEffect, useState, type ReactElement, type ReactNode } from "react";
+// directory's entries), each as a small card (Hover.css.ts, Cue's card language). Read from the station as soon as
+// its link is pointed at (`link.preview`, `file.peek`), and kept: shown at once when opened again, and read again
+// behind it once a minute old. A file's chip opens the file itself over the window (`file.open`, FilePreview).
+import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactElement, type ReactNode } from "react";
 import { HoverCard } from "radix-ui";
 import { stationApi, useStationCall } from "./api.ts";
 import type { Attachment } from "./core/shapes.ts";
@@ -24,10 +24,11 @@ let openCards = 0;
 let lastClosed = 0;
 
 /**
- * A card over `children` (the link, the chip) while it is pointed at: `content` is mounted only while the card shows,
- * so nothing is read until it first opens. `tile`: a narrower card.
+ * A card over `children` (the link, the chip) while it is pointed at: `content` is mounted only while the card shows.
+ * `warm`: what it reads, asked for as soon as the pointer comes onto it (during the card's delay), so the card mostly
+ * opens with it already there. `tile`: a narrower card.
  */
-export function Hover({ children, content, tile = false }: { children: ReactElement; content: ReactNode; tile?: boolean }) {
+export function Hover({ children, content, tile = false, warm }: { children: ReactElement; content: ReactNode; tile?: boolean; warm?: (() => void) | undefined }) {
   const [instant, setInstant] = useState(false);
   return (
     <HoverCard.Root openDelay={320} closeDelay={120} onOpenChange={(open) => {
@@ -39,7 +40,7 @@ export function Hover({ children, content, tile = false }: { children: ReactElem
         lastClosed = Date.now();
       }
     }}>
-      <HoverCard.Trigger asChild>{children}</HoverCard.Trigger>
+      <HoverCard.Trigger asChild onPointerEnter={warm} onFocus={warm}>{children}</HoverCard.Trigger>
       <HoverCard.Portal>
         <HoverCard.Content className={`${css.card}${tile ? ` ${css.cardTile}` : ""}`} data-instant={instant || undefined} side="bottom" align="start" sideOffset={6} collisionPadding={8}>
           {content}
@@ -73,30 +74,56 @@ export function ago(at: number | null | undefined): string | null {
   return new Date(at).toLocaleDateString(lang() === "zh" ? "zh-CN" : "en", { year: new Date(at).getFullYear() === new Date().getFullYear() ? undefined : "numeric", month: "short", day: "numeric" });
 }
 
-// ---- what is read, kept ----
+// ---- what is read, kept (stale while it is read again) ----
 
 type Read<T> = { state: "loading" } | { state: "ready"; value: T } | { state: "error"; message: string };
-/** What cards read, by what they read: kept a few minutes (a pull request's state moves), the latest 300. */
-const kept = new Map<string, { at: number; value: Promise<unknown> }>();
-const KEEP_MS = 3 * 60 * 1000;
+/**
+ * What cards read, by what they read, the latest 300: what was read shows at once, every time; once it is a minute
+ * old (a pull request's state moves, a file changes) it is read again behind it and the card follows. A failed read
+ * is tried again the next time.
+ */
+type Entry = { value?: unknown; has: boolean; error?: string | undefined; at: number; reading: boolean; version: number };
+const entries = new Map<string, Entry>();
+const watchers = new Map<string, Set<() => void>>();
+const FRESH_MS = 60 * 1000;
+
+function changed(key: string, e: Entry) {
+  e.version++;
+  for (const w of watchers.get(key) ?? []) w();
+}
+
+/** Reads `key` (with `read`) unless it is read already, or was within the minute (a failure: within a few seconds). */
+export function warm(key: string, read: () => Promise<unknown>): void {
+  let e = entries.get(key);
+  if (e && (e.reading || Date.now() - e.at < (e.error !== undefined && !e.has ? 3000 : FRESH_MS))) return;
+  if (!e) {
+    e = { has: false, at: 0, reading: false, version: 0 };
+    entries.set(key, e);
+    while (entries.size > 300) entries.delete(entries.keys().next().value!);
+  }
+  const entry = e;
+  entry.reading = true;
+  read().then(
+    (value) => { entry.value = value; entry.has = true; entry.error = undefined; },
+    (err: unknown) => { entry.error = failure(err); },
+  ).finally(() => { entry.at = Date.now(); entry.reading = false; changed(key, entry); });
+}
 
 function useRead<T>(key: string, read: () => Promise<T>): Read<T> {
-  const [state, setState] = useState<{ key: string; read: Read<T> }>({ key, read: { state: "loading" } });
-  useEffect(() => {
-    let p = kept.get(key);
-    if (!p || Date.now() - p.at > KEEP_MS) {
-      p = { at: Date.now(), value: read() };
-      kept.delete(key);
-      kept.set(key, p);
-      while (kept.size > 300) kept.delete(kept.keys().next().value!);
-      p.value.catch(() => kept.delete(key));
-    }
-    let live = true;
-    p.value.then((value) => { if (live) setState({ key, read: { state: "ready", value: value as T } }); },
-      (e: unknown) => { if (live) setState({ key, read: { state: "error", message: failure(e) } }); });
-    return () => { live = false; };
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
-  return state.key === key ? state.read : { state: "loading" };
+  useSyncExternalStore(
+    useCallback((on: () => void) => {
+      let set = watchers.get(key);
+      if (!set) watchers.set(key, (set = new Set()));
+      set.add(on);
+      return () => { set.delete(on); if (set.size === 0) watchers.delete(key); };
+    }, [key]),
+    () => entries.get(key)?.version ?? -1,
+  );
+  useEffect(() => warm(key, read), [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const e = entries.get(key);
+  if (e?.has) return { state: "ready", value: e.value as T };
+  if (e?.error !== undefined && !e.reading) return { state: "error", message: e.error };
+  return { state: "loading" };
 }
 
 // ---- web links ----
@@ -130,13 +157,19 @@ const RICH = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|issues)\/\d+(?:[
 
 /** A web link in a message, and its card. */
 export function LinkHover({ href, label, children }: { href: string; label: string; children: ReactElement }) {
-  return <Hover tile={!RICH.test(href)} content={<LinkCard href={href} label={label} />}>{children}</Hover>;
+  const station = useStation();
+  const api = stationApi(useStationCall(station.address));
+  const read = () => api.linkPreview<LinkPreview>(href);
+  return <Hover tile={!RICH.test(href)} warm={() => warm(linkKey(station.address, href), read)} content={<LinkCard href={href} label={label} />}>{children}</Hover>;
 }
+
+const linkKey = (station: string, href: string) => `link ${station} ${href}`;
+const peekKey = (station: string, session: string, path: string, line: number | null) => `peek ${station} ${session} ${path} ${line ?? ""}`;
 
 function LinkCard({ href, label }: { href: string; label: string }) {
   const station = useStation();
   const api = stationApi(useStationCall(station.address));
-  const read = useRead<LinkPreview>(`link ${station.address} ${href}`, () => api.linkPreview<LinkPreview>(href));
+  const read = useRead<LinkPreview>(linkKey(station.address, href), () => api.linkPreview<LinkPreview>(href));
   if (read.state === "loading" && RICH.test(href)) return <CardSkeleton />;
   const preview = read.state === "ready" ? read.value : null;
   if (preview?.kind === "github_pull_request") return <PullRequestCard preview={preview} />;
@@ -261,7 +294,7 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
   };
   return (
     <>
-      <Hover content={<FileCard session={session} path={path} line={line} />}>
+      <Hover warm={() => warm(peekKey(station.address, session, path, line), () => api.filePeek<Peek>(session, path, line))} content={<FileCard session={session} path={path} line={line} />}>
         <button type="button" className={css.fileChip} onClick={open} data-dir={dir || undefined}>
           <FileIcon size={12} className={css.fileChipIcon} />
           <span className={css.fileChipName}>{words ?? (dir ? `${name}/` : name)}</span>
@@ -276,7 +309,7 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
 function FileCard({ session, path, line }: { session: string; path: string; line: number | null }) {
   const station = useStation();
   const api = stationApi(useStationCall(station.address));
-  const read = useRead<Peek>(`peek ${station.address} ${session} ${path} ${line ?? ""}`, () => api.filePeek<Peek>(session, path, line));
+  const read = useRead<Peek>(peekKey(station.address, session, path, line), () => api.filePeek<Peek>(session, path, line));
   if (read.state === "loading") return <CardSkeleton />;
   if (read.state === "error") return (
     <div className={css.rich}>
