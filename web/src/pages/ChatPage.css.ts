@@ -12,6 +12,12 @@ export const agentMarkBtn = style({
     "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "2px" },
   },
 });
+/** The machine it runs on, beside the title: a quiet tag. */
+export const chatStation = style({
+  flex: "none", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  padding: "1px 7px", border: `1px solid ${vars.line}`, borderRadius: "999px",
+  color: vars.muted, fontSize: vars.textMeta, lineHeight: vars.leadingMeta, cursor: "default",
+});
 export const pageBarActions = style({
   gridColumn: "3", justifySelf: "end", display: "flex", gap: "2px",
   selectors: {

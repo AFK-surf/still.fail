@@ -13,7 +13,7 @@ import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from
 import { PENDING } from "../lastChat.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
 import type { ChatJobsView } from "../core/shapes.ts";
-import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
+import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, useStations, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
@@ -337,6 +337,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
             : <ChatTitle station={station.address} session={keeper} title={chat.title} onRename={renamable ? () => setRenaming(true) : undefined} />}
           <StationUpdate station={station.address} notice={chat.stationUpdate} />
+          <ChatStation />
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a) => (
             <Tip key={a.session.key} label={`${a.session.agentText}${a.session.badgeText ? ` · ${a.session.badgeText}` : ""} · ${t("web-pages.chat.history")}`}>
@@ -611,6 +612,20 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
         )}
       </div>
     </div>
+  );
+}
+
+/** The machine the chat runs on, beside its title, once the workspace has more than one; its load in the tip. */
+function ChatStation() {
+  const station = useStation();
+  const stations = useStations(scopeOf(station.address)).value;
+  const host = useHost(station.address).value;
+  if (!stations || stations.length < 2) return null;
+  const name = station.name || host?.hostname || t("web-pages.chat.thisMachine");
+  return (
+    <Tip label={host ? `${host.hostname} · ${host.summary}` : name}>
+      <span className={css.chatStation}>{name}</span>
+    </Tip>
   );
 }
 
