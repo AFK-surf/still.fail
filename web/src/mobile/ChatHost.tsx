@@ -88,7 +88,7 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const composer = shown && <MobileComposer shown={shown} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} />;
   return (
     <HostContext.Provider value={{ draft, use }}>
-      <div className={css.mChatHost} ref={root}>
+      <div className={css.mChatHost} ref={root} data-new={id === undefined || undefined}>
         {body}
         {/* Once shown, it stays (the page above changing hands it on); in its station (the chats its @ offers). */}
         {writesTo ? <StationContext.Provider value={writesTo}>{composer}</StationContext.Provider> : composer}

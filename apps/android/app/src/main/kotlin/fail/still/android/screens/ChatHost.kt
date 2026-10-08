@@ -22,6 +22,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -439,9 +440,11 @@ fun ChatHost(current: WorkspaceEntry, screen: Screen) {
     CompositionLocalProvider(LocalSendTextWidth provides host.fieldWidth) {
       Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
         if (chat != null) key(chat.id) { ChatScreen(chat.station, chat.of, host) }
+        // A new chat keeps a column in the middle of a wide screen (Wide.kt), its composer too; a chat is the screen's width.
+        val column = if (LocalWide.current && chat == null) NewChatColumn else Modifier
         // A new chat's scene stays over its chat while it leaves.
-        if (chat == null || host.leaving) key("new") { NewChatScreen(current, host, leaving = chat != null) }
-        HostComposer(host, Modifier.align(Alignment.BottomCenter))
+        if (chat == null || host.leaving) key("new") { Box(Modifier.align(Alignment.TopCenter).fillMaxHeight().then(if (LocalWide.current) NewChatColumn else Modifier)) { NewChatScreen(current, host, leaving = chat != null) } }
+        HostComposer(host, Modifier.align(Alignment.BottomCenter).then(column), besideRecent = LocalWide.current && chat != null)
         FlightLayer(host)
       }
     }
@@ -457,7 +460,7 @@ fun ChatHost(current: WorkspaceEntry, screen: Screen) {
 internal const val SCENE_LEAVE_MS = 140
 
 @Composable
-internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean = true) {
+internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean = true, besideRecent: Boolean = LocalWide.current) {
     val spec = host.spec ?: return
     val draft = spec.draft
     val density = LocalDensity.current
@@ -471,7 +474,7 @@ internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean =
         ChatRefMenu(draft, spec.station, spec.here, host.haze, Modifier.padding(horizontal = 10.dp))
         // A capsule floating over the page, which runs on around it.
         // On a wide screen beside the latest chats' button (Wide.kt), which is level with it.
-        Box(Modifier.fillMaxWidth().onSizeChanged { host.composerHeight = it.height }.padding(start = if (LocalWide.current) BesideRecent else 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp)) {
+        Box(Modifier.fillMaxWidth().onSizeChanged { host.composerHeight = it.height }.padding(start = if (besideRecent) BesideRecent else 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp)) {
             Column(
                 Modifier.fillMaxWidth().onGloballyPositioned { host.capsule = it }
                     .then(if (overContent) Modifier.floating(host.haze, RoundedCornerShape(ComposerCorner)) else Modifier.floatingStill(RoundedCornerShape(ComposerCorner)))
