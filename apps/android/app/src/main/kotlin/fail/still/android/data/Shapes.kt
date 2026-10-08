@@ -1518,6 +1518,9 @@ data class ChatView (
 	val pinned: Boolean? = null,
 	val me: Me,
 	val thread: ChatThread? = null,
+	/// Its agent has no chat yet, here or in Slack, and is not archived: its page opens its execution history beside
+	/// it. Absent otherwise, and while its detail is not read.
+	val noChat: Boolean? = null,
 	val title: String,
 	/// Where a Slack chat is (#channel, 私信), and its link in Slack while its connect is signed in.
 	val place: String? = null,

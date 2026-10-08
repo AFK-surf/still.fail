@@ -1510,6 +1510,11 @@ export interface ChatView {
 	pinned?: boolean;
 	me: Me;
 	thread?: ChatThread;
+	/**
+	 * Its agent has no chat yet, here or in Slack, and is not archived: its page opens its execution history beside
+	 * it. Absent otherwise, and while its detail is not read.
+	 */
+	noChat?: boolean;
 	title: string;
 	/** Where a Slack chat is (#channel, 私信), and its link in Slack while its connect is signed in. */
 	place?: string;

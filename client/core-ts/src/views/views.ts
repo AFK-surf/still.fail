@@ -1386,10 +1386,14 @@ export class Views implements Owner {
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: ofAddress(station) }), "members"));
     const bot = agent.connect !== undefined ? present.botOf(agent.connect) : null;
     const elsewhere = this.#sentElsewhere(station, null, [agent], [], false, false, { members: members_, bots: bot === null ? [] : [bot] });
+    // No chat at all, as its detail says: none here, none in Slack (a Slack thread has no chat here either), not archived.
+    const detail = this.value({ topic: "session", station, key });
+    const noChat = !archived && detail !== undefined && "ok" in detail && arr(get(detail.ok, "threads")).length === 0;
     return {
       ok: {
         me: this.me(ofAddress(station)),
         thread: null,
+        ...(noChat ? { noChat: true } : {}),
         title: row !== undefined && row.title !== undefined ? row.title : t("core-views.no_messages"),
         people: [],
         archived,

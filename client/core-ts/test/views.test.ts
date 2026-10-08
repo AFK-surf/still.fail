@@ -1174,10 +1174,12 @@ test("an_agent_without_a_chat_is_its_page_with_no_messages", async () => {
   assert.deepEqual([v.agents.length, a.session.key, a.connect.name, a.status], [1, "k", "Slack", "idle"]);
   assert.deepEqual([a.turns[0].id, a.threads[0].id], ["t1", 3]);
   assert.deepEqual(v.me, { id: "Me@x.com", email: "Me@x.com" });
+  assert.equal(v.noChat, undefined, "its Slack thread is its chat: the page does not open its history by itself");
   for (const archived of [42, null]) {
     t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { archivedAt: archived }), threads: [], turns: [] });
     await t.read(u, 1);
     assert.equal(u.value.archived, archived !== null);
+    assert.equal(u.value.noChat, archived === null ? true : undefined);
   }
   t.fail(sessionOf("ws/a", "k"), new CoreError("http_404", "这个会话已经删除了", 404));
   await t.read(u, 1);

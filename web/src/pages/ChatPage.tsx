@@ -100,14 +100,14 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const lives = useLives(station.address, agents.map((a) => a.session.key));
   // One history tab per agent, by session key; each can be closed, and with none open the panel goes away.
   // Each chat keeps its own tabs. One not opened before opens none (its agents' histories open from them when wanted),
-  // except an agent with no chat yet: its page shows its history. Where the panel would lie over the chat (the styles'
-  // `max-width: 1100px`), none opens by itself: the chat comes first.
+  // except an agent with no chat yet, here or in Slack (the core's `noChat`): its page shows its history. Where the
+  // panel would lie over the chat (the styles' `max-width: 1100px`), none opens by itself: the chat comes first.
   const chatKey = `${station.address}:${"thread" in of ? of.thread : of.session}`;
   const [kept] = useState(() => keptTabs(chatKey));
   const [chosen, setTabs] = useState<string[] | null>(() => kept?.tabs ?? null);
   const [folded] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const view = chatView.value;
-  const tabs = chosen ?? (view && !view.thread && !view.pending && !folded && "session" in of ? [of.session] : []);
+  const tabs = chosen ?? (view?.noChat && !folded && "session" in of ? [of.session] : []);
   const [active, setActiveState] = useState<string | null>(kept?.active ?? null);
   // The tabs as last left while the agents are not known yet: the panel holds its place instead of coming in later.
   // Its agents' background jobs; a service's tab (`service:<job>`) is the chat's own while one of them has it.

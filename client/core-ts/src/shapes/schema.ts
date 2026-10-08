@@ -1500,6 +1500,7 @@ export const SHAPES: Record<string, Shape> = {
     ["pinned", opt("bool"), { doc: "Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned)." }],
     ["me", "Me"],
     ["thread", opt("ChatThread")],
+    ["noChat", opt("bool"), { doc: "Its agent has no chat yet, here or in Slack, and is not archived: its page opens its execution history beside\nit. Absent otherwise, and while its detail is not read." }],
     ["title", "String"],
     ["place", opt("String"), { doc: "Where a Slack chat is (#channel, 私信), and its link in Slack while its connect is signed in." }],
     ["slackUrl", opt("String")],
