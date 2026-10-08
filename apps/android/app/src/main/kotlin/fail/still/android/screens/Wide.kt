@@ -1,7 +1,6 @@
 // A screen wider than a phone (an opened foldable, a phone on its side), as web mobile/app.tsx WIDE draws it: the pages
-// keep a column up to 680 wide with at least 72 of room either side; at the screen's bottom left, level with the
-// composer and as tall, a button raises the latest chats over the page; Home's new-chat button is at the screen's
-// corner, not the column's.
+// the screen's whole width; at its bottom left, level with the composer and as tall, a button raises the latest chats
+// over the page (the composer starts beside it); Home's new-chat button is at its bottom right.
 package fail.still.android.screens
 
 import fail.still.android.data.t
@@ -50,7 +49,6 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
@@ -66,16 +64,16 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.floatingStill
 
-/** Whether the pages are in a column (App.kt Pages): Home leaves its new-chat button to the screen's corner then. */
+/** Whether the screen is wide (App.kt Pages): Home leaves its new-chat button to WideCorners then, the composer room for Recent. */
 val LocalWide = androidx.compose.runtime.staticCompositionLocalOf { false }
 
-/** Wider than this, the pages keep a column (web: styles/root.css.ts, app.tsx WIDE). */
+/** Wider than this, the screen is wide (web: app.tsx WIDE). */
 val WideAt = 680.dp
 
-/** The column's width on a screen `width` wide: up to 680, with at least 72 of room either side. */
-fun columnWidth(width: Dp): Dp = minOf(680.dp, width - 144.dp)
+/** Where the composer starts on a wide screen: beside the latest chats' button (10 + 52 + 10). */
+val BesideRecent = 72.dp
 
-/** What is at the screen's bottom corners, over the column (Home draws its own new-chat button only when not wide). */
+/** What is at the screen's bottom corners, over the page (Home draws its own new-chat button only when not wide). */
 @Composable
 fun BoxScope.WideCorners(current: WorkspaceEntry, top: Screen) {
     val app = LocalApp.current

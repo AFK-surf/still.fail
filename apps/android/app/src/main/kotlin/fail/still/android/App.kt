@@ -646,13 +646,8 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     // a little behind (web mobile/app.tsx's own edge swipe); let go, it goes on from there, or back if the system says so.
     var swiped by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    // The page's own width: a wide screen's column (screens/Wide.kt), so the page follows the finger there too.
-    val window = LocalWindowInfo.current.containerSize.width
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val width = with(density) {
-        val dp = window.toDp()
-        if (dp >= fail.still.android.screens.WideAt) fail.still.android.screens.columnWidth(dp).toPx() else window.toFloat()
-    }
+    // The page's own width: the screen's.
+    val width = LocalWindowInfo.current.containerSize.width.toFloat()
     // What is over the pages takes back first: its own handlers were added before this one (they are there from the
     // splash; the pages only once the workspaces are read), and the last added is asked first, so this one steps aside.
     PredictiveBackHandler(enabled = app.stack.size > 1 && app.sheet == null && app.menu == null && app.reader == null && !fail.still.android.screens.FileViewers.open) { progress ->
@@ -719,11 +714,9 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         pages.animateTo(top, if (swiped) tween(300, easing = FastOutSlowInEasing) else null)
         swiped = false
     }
-    // Wider than a phone (screens/Wide.kt): the pages in a column, the latest chats and the new-chat button at the screen's corners.
+    // Wider than a phone (screens/Wide.kt): the pages the screen's whole width, the latest chats and the new-chat button at its corners.
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
     val wide = maxWidth >= fail.still.android.screens.WideAt
-    // Each page is the screen's whole width with its column in the middle, so the room either side moves with it as it slides.
-    val column = if (wide) Modifier.width(fail.still.android.screens.columnWidth(maxWidth)) else Modifier.fillMaxWidth()
     Box(Modifier.fillMaxSize()) {
     CompositionLocalProvider(fail.still.android.screens.LocalWide provides wide) {
     transition.AnimatedContent(
@@ -754,7 +747,6 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         saved.SaveableStateProvider(app.pageOf(screen)) { CompositionLocalProvider(fail.still.android.data.LocalPageTopics provides topics) {
             // A message's page draws its own ground, coming in over its chat (Annotate.kt).
             Box(Modifier.fillMaxSize().then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
-                Box(Modifier.align(androidx.compose.ui.Alignment.TopCenter).fillMaxHeight().then(column)) {
                 when (screen) {
                     Screen.Home -> HomeScreen(current)
                     is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)
@@ -793,7 +785,6 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.Annotate -> CompositionLocalProvider(fail.still.android.screens.LocalPageTransition provides pageScope.transition) {
                         fail.still.android.screens.AnnotateScreen(screen.station, screen.of, screen.ts)
                     }
-                }
                 }
                 // The page scrolls under the status bar; it keeps the paper behind its icons, moving with its page (the
                 // list and a chat have frosted bars there instead, which show what runs under them).

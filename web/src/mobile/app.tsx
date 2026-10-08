@@ -5,8 +5,8 @@
 // link work as the desktop's do; pages under the top one stay as they were left (their scroll, what was typed). What
 // lies over a page (a sheet, the menu, the reader) is closed by back first.
 //
-// Wider (WIDE: an opened foldable, a phone on its side), the pages keep a column with a little room at either side, and
-// a button at the bottom left of the screen, level with the composer, opens the latest chats over the page: another chat
+// Wider (WIDE: an opened foldable, a phone on its side), the pages are the screen's whole width, and a button at its
+// bottom left, level with the composer (which starts beside it), opens the latest chats over the page: another chat
 // from there takes the place of the one open.
 import { transitionTo } from "../ui.tsx";
 import { said, ToastTo } from "../toast.tsx";
@@ -222,7 +222,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
             return (
               <div key={p.key} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
                 data-swiping={(swipe !== null && isTop) || undefined} style={style}>
-                <div className={css.mColumn}>{routes(p.location)}</div>
+                {routes(p.location)}
               </div>
             );
           })}
