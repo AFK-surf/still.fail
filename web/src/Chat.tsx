@@ -11,6 +11,7 @@ import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as Activ
 import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
+import { PathSession } from "./Peeks.tsx";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
@@ -940,7 +941,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
       <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
       {m.authorKind === "person"
         ? <>{m.text && <PersonWords text={m.text} />}<Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} /></>
-        : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} />}
+        : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
       {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
       {check && <p className={css.archiveCheck} data-failed={check.failed || undefined}>{check.text}</p>}
@@ -1198,12 +1199,12 @@ function QuoteCard({ quote, onJump, comment, onRemove, picture }: { quote: Quote
 // ── files ───────────────────────────────────────────────────────────────
 
 /** An agent's Markdown with its files: those its text names shown there, the rest below it. */
-function ProseWithFiles({ owner, text, files }: { owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined }) {
+function ProseWithFiles({ owner, text, files, session = null }: { owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined; /** Its agent's: the files its paths name are that session's (Peeks.tsx). */ session?: string | null }) {
   const { placed, rest } = useMemo(() => placeFiles(text, files), [text, files]);
   return (
     <>
       <div className={conversationCss.markdown}>
-        <Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />}>{text}</Prose>
+        <PathSession.Provider value={session}><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />}>{text}</Prose></PathSession.Provider>
       </div>
       <Files owner={owner} files={rest} />
     </>
@@ -1565,7 +1566,20 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     e.preventDefault();
     const el = e.currentTarget;
     const [start, end, before] = [el.selectionStart, el.selectionEnd, el.value];
-    const marks = found.map(({ m, chat }) => core().call("chat.ref", { station: chat.station, id: chat.id, title: m[1], base }).then((answer) => (answer as { mark: string }).mark, () => m[0]));
+    const marks = found.map(async ({ m, chat }) => {
+      try {
+        const { mark } = (await core().call("chat.ref", { station: chat.station, id: chat.id, title: m[1], base })) as { mark: string };
+        // A link to its execution history: the mark kept as that link, not the chat's.
+        if (chat.history) {
+          const at = chat.station.indexOf("/");
+          const page = `${base}/w/${chat.station.slice(0, at)}/s/${chat.station.slice(at + 1)}/chats/${encodeURIComponent(chat.id)}${chat.history}`;
+          await core().call("chat.refs", { links: [[mark.slice(2, -1), page]] });
+        }
+        return mark;
+      } catch {
+        return m[0];
+      }
+    });
     void Promise.all(marks).then((made) => {
       let text = "", at = 0;
       found.forEach(({ m }, i) => { text += pasted.slice(at, m.index) + made[i]; at = m.index + m[0].length; });

@@ -17,6 +17,9 @@ export interface OperationParams {
   "chats.archived": {  };
   "chat.forSession": { session?: string | null | undefined };
   "widget.state": { key: string; path: string };
+  "file.peek": { key: string; path: string; line?: number | null | undefined };
+  "file.open": { key: string; path: string };
+  "link.preview": { url: string };
   "widget.setState": { key: string; path?: string | null | undefined; state?: unknown };
   "machineSessions.list": {  };
   "machineSessions.read": { runtime: string; id: string; limit?: number | null | undefined };
@@ -98,7 +101,7 @@ export interface OperationParams {
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
-export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "job.get", "job.log", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
+export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "file.open", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
 
 type Call = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -121,6 +124,9 @@ export function bindStationOperations(call: Call) {
     chatsArchived: <T = unknown>(params: OperationParams["chats.archived"] = {}) => call("chats.archived", params) as Promise<T>,
     chatForSession: <T = unknown>(params: OperationParams["chat.forSession"] = {}) => call("chat.forSession", params) as Promise<T>,
     widgetState: <T = unknown>(params: OperationParams["widget.state"]) => call("widget.state", params) as Promise<T>,
+    filePeek: <T = unknown>(params: OperationParams["file.peek"]) => call("file.peek", params) as Promise<T>,
+    fileOpen: <T = unknown>(params: OperationParams["file.open"]) => call("file.open", params) as Promise<T>,
+    linkPreview: <T = unknown>(params: OperationParams["link.preview"]) => call("link.preview", params) as Promise<T>,
     widgetSetState: <T = unknown>(params: OperationParams["widget.setState"]) => call("widget.setState", params) as Promise<T>,
     machineSessionsList: <T = unknown>(params: OperationParams["machineSessions.list"] = {}) => call("machineSessions.list", params) as Promise<T>,
     machineSessionsRead: <T = unknown>(params: OperationParams["machineSessions.read"]) => call("machineSessions.read", params) as Promise<T>,

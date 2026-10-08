@@ -350,6 +350,12 @@ export function stationApi(t: StationCall) {
       ops.connectBindSession<{ session: string }>({ connect, session, ...(title ? { title } : {}) }),
     /** Starts the session's runtime ahead of a message. */
     warm: (key: string) => ops.sessionWarm<{ ok: true }>({ key }),
+    /** A file a message names by its path, for its card (Previews.tsx): what it is, a few lines or a thumbnail. */
+    filePeek: <T>(key: string, path: string, line: number | null) => ops.filePeek<T>({ key, path, ...(line !== null ? { line } : {}) }),
+    /** That file whole, for the preview over the window. */
+    fileOpen: <T>(key: string, path: string) => ops.fileOpen<T>({ key, path }),
+    /** What a web link in a message is, as the station finds it (Previews.tsx). */
+    linkPreview: <T>(url: string) => ops.linkPreview<T>({ url }),
     /** What an inline visualization (Viz.tsx) kept: by the session that sent its file and the file's path. */
     widgetState: (key: string, path: string) => ops.widgetState<{ state: unknown }>({ key, path }),
     setWidgetState: (key: string, path: string, state: unknown) => ops.widgetSetState<{ ok: true }>({ key, path, state }),

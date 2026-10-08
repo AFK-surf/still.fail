@@ -14,6 +14,7 @@ import { routes as accounts } from "./routes/accounts.ts";
 import { routes as slack } from "./routes/slack.ts";
 import { routes as hub } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
+import { routes as links } from "./routes/links.ts";
 import type { AgentsParts } from "../sessions/agents.ts";
 import type { Store } from "../store/store.ts";
 import type { Events } from "./events.ts";
@@ -88,7 +89,7 @@ export class Admin {
       store: deps.store,
       agents: deps.agents,
     };
-    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
+    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...links(), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
       ...(deps.agents?.slack && deps.store
         ? slack({
             slack: deps.agents.slack,

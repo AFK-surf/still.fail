@@ -25,6 +25,7 @@ export const refItem = style({
   },
 });
 export const refLogo = style({ display: "grid", placeItems: "center" });
+export const refTitleCell = style({ display: "flex", alignItems: "baseline", minWidth: "0" });
 export const refTitle = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const refTime = style({ fontSize: vars.textXs, color: vars.muted });
 
@@ -50,3 +51,14 @@ export const refChip = style({
   },
 });
 export const refChipHash = style({ marginRight: "1px", opacity: ".7" });
+/**
+ * The station a reference to another station's chat is on, after its title: quieter than it, on the same baseline as
+ * the text around (an inline block's baseline is its text's), not underlined with the title when pointed at (an inline
+ * block takes no decoration from around it), its icon set down to sit with the letters.
+ */
+export const refChipStation = style({
+  display: "inline-block", marginLeft: "4px", padding: "1px 6px", borderRadius: "999px", fontSize: vars.textXs, color: vars.muted, background: vars.hover,
+  whiteSpace: "nowrap", flexShrink: "0",
+});
+export const refChipStationIcon = style({ verticalAlign: "-1px", marginRight: "2px" });
+

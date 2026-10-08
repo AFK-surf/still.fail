@@ -3,7 +3,7 @@
 // Grammars load on demand, one chunk per language, with Shiki's JavaScript
 // regex engine so no wasm is fetched.
 import { Check, Copy } from "./icons.tsx";
-import { isValidElement, memo, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { isValidElement, memo, useEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { HighlighterCore } from "shiki/core";
@@ -12,6 +12,7 @@ import { inlineFile, inlineFiles } from "./Prose.css.ts";
 import * as css from "./Prose.css.ts";
 import { RefChip } from "./ChatRef.tsx";
 import { isChatLink } from "./chatRefs.ts";
+import { FileRef, LinkHover, pathIn } from "./Peeks.tsx";
 import { Tip } from "./ui.tsx";
 import { failure, useToast } from "./toast.tsx";
 import { Mermaid } from "./Viz.tsx";
@@ -101,8 +102,32 @@ const components: Components = {
   pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   // A table wider than the message scrolls sideways within it, its cells keeping their words whole.
   table: ({ node: _, ...props }) => <div className={css.tableScroll}><table {...props} /></div>,
-  // A link to another chat: a reference to it, drawn as the composer showed it.
-  a: ({ node: _, ...props }) => (isChatLink(props.href) ? <RefChip title={props.children} href={props.href!} /> : <Tip label={props.title}><a {...props} title={undefined} /></Tip>),
+  // A link to another chat: a reference to it, drawn as the composer showed it; a web link, with its card on hover; a
+  // file on the station by its path, its chip (Peeks.tsx).
+  a: ({ node: _, ...props }) => link(props),
+  // Inline code that is a file's path: its chip (a block of code is CodeBlock's, never drawn as this).
+  code: ({ node: _, className, children, ...props }) => {
+    const found = className ? null : pathIn(textOf(children));
+    return found ? <FileRef path={found.path} line={found.line}>{children}</FileRef> : <code className={className} {...props}>{children}</code>;
+  },
+};
+
+/** A link in a message as it is drawn (but one naming the message's own files, which Prose places). */
+function link(props: ComponentProps<"a">) {
+  const href = props.href ?? "";
+  if (isChatLink(href)) return <RefChip title={props.children} href={href} />;
+  if (/^https?:\/\//i.test(href)) return <LinkHover href={href} label={textOf(props.children)}><a {...props} title={undefined} /></LinkHover>;
+  const file = /^[a-z][\w+.-]*:/i.test(href) ? null : pathIn(safeDecode(href));
+  if (file) return <FileRef path={file.path} line={file.line} words={props.children}>{props.children}</FileRef>;
+  return <Tip label={props.title}><a {...props} title={undefined} /></Tip>;
+}
+
+const safeDecode = (s: string) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
 };
 
 /** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`. */
@@ -166,7 +191,7 @@ export const Prose = memo(function Prose({ children, files, file }: { children: 
         return <p {...props}>{children}</p>;
       },
       img: ({ node: _, ...props }) => { const f = at(props.src); return f ? <span className={inlineFile}>{draw(f, "shown")}</span> : <Tip label={props.title}><img {...props} title={undefined} /></Tip>; },
-      a: ({ node: _, ...props }) => { const f = at(props.href); return f ? draw(f, "link", props.children) : isChatLink(props.href) ? <RefChip title={props.children} href={props.href!} /> : <Tip label={props.title}><a {...props} title={undefined} /></Tip>; },
+      a: ({ node: _, ...props }) => { const f = at(props.href); return f ? draw(f, "link", props.children) : link(props); },
     };
   }, [placing]);
   // Links to the files are kept as written (the default would empty a file:// one); any other goes through the default.

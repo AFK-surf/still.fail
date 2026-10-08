@@ -3,12 +3,16 @@
 // The agent reads that chat by the link (the station's chat_read and session_history tools).
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { useHref } from "react-router";
-import { useChatSearch, type ChatItem } from "./api.ts";
+import { useChats, useChatSearch, useStations, type ChatItem } from "./api.ts";
+import { ChatMark, stateLine } from "./ChatMark.tsx";
+import { Server } from "./icons.tsx";
 import { scopeOf, useStation } from "./station.tsx";
 import { ModelLogo, Time } from "./ui.tsx";
-import { copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy } from "./chatRefs.ts";
+import { chatOfLink, copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy, stationOfLink } from "./chatRefs.ts";
 import { failure } from "./toast.tsx";
 import * as css from "./ChatRef.css.ts";
+import * as hover from "./Hover.css.ts";
+import { CardSkeleton, Hover } from "./Peeks.tsx";
 
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
@@ -21,10 +25,61 @@ export function refAt(text: string, caret: number): { start: number; query: stri
   return m ? { start: caret - m[1]!.length - 1, query: m[1]! } : null;
 }
 
-/** A reference in a message: a chip that opens the chat (ChatPage opens its link in the page). */
+/**
+ * A reference in a message: a chip that opens the chat (ChatPage opens its link in the page); one on another station of
+ * the workspace says which after its title.
+ */
 export function RefChip({ title, href }: { title: ReactNode; href: string }) {
-  return <a className={css.refChip} href={href}><span className={css.refChipHash}>@</span>{title}</a>;
+  const here = useStation().address;
+  const there = stationOfLink(href);
+  const elsewhere = there !== null && here.includes("/") && there !== here;
+  const stations = useStations(scopeOf(here)).value;
+  const name = elsewhere ? (stations?.find((s) => s.station === there)?.name ?? there.slice(there.indexOf("/") + 1, there.indexOf("/") + 9)) : null;
+  return (
+    <Hover content={<RefPreview href={href} here={here} station={name} />}>
+      <a className={css.refChip} href={href}>
+        <span className={css.refChipHash}>@</span>{title}
+        {name && <span className={css.refChipStation}><Server size={11} className={css.refChipStationIcon} />{name}</span>}
+      </a>
+    </Hover>
+  );
 }
+
+/**
+ * What a reference's chat is, while it is pointed at: its title and state, where and when it was last active, and the
+ * last thing said (or where it stands) — from the workspace's list, so a chat not in it (archived, or not this
+ * workspace's) says only that.
+ */
+function RefPreview({ href, here, station }: { href: string; here: string; station: string | null }) {
+  const relative = /\/chats\/([^/?#\s]+)/.exec(href);
+  const of = chatOfLink(href) ?? (relative ? { station: here, id: safeDecode(relative[1]!), history: /[?&]history=/.test(href) ? "?" : "" } : null);
+  const chats = useChats(scopeOf(here), false).value;
+  const item = of && chats?.days.flatMap((d) => d.items).find((i) => i.station === of.station && (i.id === of.id || i.session === of.id));
+  if (!item) return chats ? <p className={hover.note}>{t("web-main.chatRef.previewGone")}</p> : <CardSkeleton />;
+  const state = stateLine(item);
+  return (
+    <div className={hover.rich}>
+      <div className={hover.meta}>
+        <ChatMark item={item} inline />
+        <span className={hover.ref}>
+          {station && <><Server size={11} className={hover.refIcon} />{station}{of?.history ? " · " : ""}</>}
+          {of?.history ? t("web-main.chatRef.previewHistory") : ""}
+        </span>
+        <Time className={hover.time} stamp={item.time?.lastActiveAt} fixed />
+      </div>
+      <span className={hover.title}>{item.title}</span>
+      {(state ?? item.last?.preview) && <p className={hover.excerpt}>{state ?? item.last?.preview}</p>}
+    </div>
+  );
+}
+
+const safeDecode = (s: string) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
 
 /** Plain text with its references (links to chats) drawn as chips. */
 export function WithRefs({ text }: { text: string }) {
@@ -60,7 +115,9 @@ export function markBefore(text: string, caret: number): number | null {
 export function useCopyChatLink(toast: (text: string) => void) {
   const root = useHref("/");
   return (item: Pick<ChatItem, "station" | "session" | "id" | "title">, history = false) => {
-    void copyChatLink(item.title, shareLink(item, root, history)).then(
+    // Its history named as such: pasted, its reference is told from the chat's own.
+    const title = history ? t("web-main.chat.historyRefTitle", { title: item.title }) : item.title;
+    void copyChatLink(title, shareLink(item, root, history)).then(
       () => toast(t(history ? "web-main.chat.historyLinkCopied" : "web-main.chat.linkCopied")),
       (e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })),
     );
@@ -93,8 +150,11 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
             <button type="button" key={item.id} className={css.refItem} role="option" aria-selected={i === active} data-active={i === active || undefined}
               onClick={(e) => { e.stopPropagation(); onPick(item); }}>
               <span className={css.refLogo}>{agent && <ModelLogo maker={agent.maker} runtime={agent.runtime} size={14} />}</span>
-              <span className={css.refTitle}>{item.title}</span>
-              {item.station !== station.address && <span className={css.refTime}>{item.stationName}</span>}
+              {/* Another station's: its name after the title, as a reference to it shows it (the row keeps its three columns). */}
+              <span className={css.refTitleCell}>
+                <span className={css.refTitle}>{item.title}</span>
+                {item.station !== station.address && <span className={css.refChipStation}><Server size={11} className={css.refChipStationIcon} />{item.stationName}</span>}
+              </span>
               <Time className={css.refTime} stamp={item.time?.lastActiveAt} fixed />
             </button>
           );
