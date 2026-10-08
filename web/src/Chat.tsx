@@ -941,7 +941,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
       <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
       {m.authorKind === "person"
         ? <>{m.text && <PersonWords text={m.text} />}<Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} /></>
-        : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} />}
+        : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
       {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
       {check && <p className={css.archiveCheck} data-failed={check.failed || undefined}>{check.text}</p>}
@@ -1199,12 +1199,23 @@ function QuoteCard({ quote, onJump, comment, onRemove, picture }: { quote: Quote
 // ── files ───────────────────────────────────────────────────────────────
 
 /** An agent's Markdown with its files: those its text names shown there, the rest below it. */
-function ProseWithFiles({ owner, text, files, session = null }: { owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined; /** Its agent's: the files its paths name are that session's (Peeks.tsx). */ session?: string | null }) {
+function ProseWithFiles({ owner, text, files, session = null, from }: {
+  owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined;
+  /** Its agent's: the files its paths name are that session's (Peeks.tsx). */ session?: string | null;
+  /** Another chat's agent wrote it (session_send): its link, whose session (and station) the paths are of. */ from?: string | undefined;
+}) {
   const { placed, rest } = useMemo(() => placeFiles(text, files), [text, files]);
+  const here = useStation().address;
+  const paths = useMemo(() => {
+    if (session !== null) return { key: session };
+    const of = from ? chatOfLink(from) : null;
+    // A local page knows only its own station: the link's station is taken to be it.
+    return of ? { key: of.id, ...(here.includes("/") && of.station !== here ? { station: of.station } : {}) } : null;
+  }, [session, from, here]);
   return (
     <>
       <div className={conversationCss.markdown}>
-        <PathSession.Provider value={session}><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />}>{text}</Prose></PathSession.Provider>
+        <PathSession.Provider value={paths}><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />}>{text}</Prose></PathSession.Provider>
       </div>
       <Files owner={owner} files={rest} />
     </>

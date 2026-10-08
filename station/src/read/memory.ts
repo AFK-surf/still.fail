@@ -35,6 +35,11 @@ function agentHome(raw: Json, dataDir: string): string {
   return joined(dataDir, typeof raw?.agentHome === "string" ? raw.agentHome : "agent");
 }
 
+/// The agents' home of the station whose data is in `dataDir`: their shared memory and skills.
+export function agentHomeOf(dataDir: string): string {
+  return agentHome(readJson(joined(dataDir, "config.json")), dataDir);
+}
+
 /// What a skill's sharing is (share/index.ts): shared from here (config.json `sharedSkills`), a copy of another
 /// front: a SKILL.md's frontmatter field (`key: value`), if it has one.
 function front(text: string, key: string): string | null {

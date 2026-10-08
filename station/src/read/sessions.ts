@@ -21,6 +21,7 @@ import { readTimeline, transcriptPaths } from "./transcript.ts";
 import { HttpError, messageView } from "./views.ts";
 import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../sessions/thumbs.ts";
 import { parseUsize } from "./jobs.ts";
+import { agentHomeOf } from "./memory.ts";
 import { shown } from "./jobs.ts";
 
 /// The connect of the station's own chats (chat/internal.rs).
@@ -372,7 +373,8 @@ export function ioMessage(e: NodeJS.ErrnoException): string {
 
 /// GET /sessions/:key/peek and /open (src/api/routes/sessions.ts): a file or directory a message names by its path, for
 /// its preview: absolute (`~/` the home), or under the session's working directory. Only within the session's own
-/// directories (its workspace, the directory it was continued in) and the station's repositories (<data>/repos), its
+/// directories (its workspace, the directory it was continued in), the station's repositories (<data>/repos) and the
+/// agents' home (their memory and skills, which they name as much as their own files), its
 /// links followed first: a page reads what the session works on, not the rest of the machine. What it is, for the
 /// route to read.
 export function sessionPlace(s: Store, key: string, given: string, lang: Lang): Json {
@@ -386,7 +388,7 @@ export function sessionPlace(s: Store, key: string, given: string, lang: Lang): 
   const full = asked.startsWith("~/") && home !== "" ? join(home, asked.slice(2)) : isAbsolute(asked) ? asked : join(base, asked);
   const path = canonical(clean(full));
   if (path === null) throw notFound();
-  const roots = [row.workspace, row.cwd, join(s.dataDir, "repos")].flatMap((r) => (r ? [canonical(r)] : [])).filter((r): r is string => r !== null);
+  const roots = [row.workspace, row.cwd, join(s.dataDir, "repos"), agentHomeOf(s.dataDir)].flatMap((r) => (r ? [canonical(r)] : [])).filter((r): r is string => r !== null);
   if (!roots.some((r) => within(path, r))) throw new HttpError(403, tr("station.files.outside"));
   let st;
   try {

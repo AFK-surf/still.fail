@@ -259,8 +259,11 @@ function GitHubMark({ size }: { size: number }) {
 
 // ---- files named by their path ----
 
-/** The session whose files a message's paths name (its agent's), for its file chips; null: none, they stay code. */
-export const PathSession = createContext<string | null>(null);
+/**
+ * The session whose files a message's paths name (its agent's, or another chat's agent that wrote here), and its
+ * station's address when that is not this page's; null: none, they stay code.
+ */
+export const PathSession = createContext<{ key: string; station?: string } | null>(null);
 
 type Peek = {
   path: string; name: string; size: number; mtime: number; type: string;
@@ -273,8 +276,10 @@ type Opened = { name: string; path: string; type: string; size: number; bytes: s
 
 /** A file a message names by its path: a chip with its icon and name, its card on hover, the file itself on a click. */
 export function FileRef({ path, line, children, words }: { path: string; line: number | null; children: ReactNode; /** A link's own words, shown instead of the file's name. */ words?: ReactNode }) {
-  const session = useContext(PathSession);
-  const station = useStation();
+  const owner = useContext(PathSession);
+  const session = owner?.key ?? null;
+  const here = useStation().address;
+  const station = { address: owner?.station ?? here };
   const api = stationApi(useStationCall(station.address));
   const toast = useToast();
   const [opened, setOpened] = useState<{ file: Attachment; local: LocalFile } | null>(null);
@@ -294,7 +299,7 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
   };
   return (
     <>
-      <Hover warm={() => warm(peekKey(station.address, session, path, line), () => api.filePeek<Peek>(session, path, line))} content={<FileCard session={session} path={path} line={line} />}>
+      <Hover warm={() => warm(peekKey(station.address, session, path, line), () => api.filePeek<Peek>(session, path, line))} content={<FileCard session={session} station={station.address} path={path} line={line} />}>
         <button type="button" className={css.fileChip} onClick={open} data-dir={dir || undefined}>
           <FileIcon size={12} className={css.fileChipIcon} />
           <span className={css.fileChipName}>{words ?? (dir ? `${name}/` : name)}</span>
@@ -306,10 +311,9 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
   );
 }
 
-function FileCard({ session, path, line }: { session: string; path: string; line: number | null }) {
-  const station = useStation();
-  const api = stationApi(useStationCall(station.address));
-  const read = useRead<Peek>(peekKey(station.address, session, path, line), () => api.filePeek<Peek>(session, path, line));
+function FileCard({ session, station, path, line }: { session: string; station: string; path: string; line: number | null }) {
+  const api = stationApi(useStationCall(station));
+  const read = useRead<Peek>(peekKey(station, session, path, line), () => api.filePeek<Peek>(session, path, line));
   if (read.state === "loading") return <CardSkeleton />;
   if (read.state === "error") return (
     <div className={css.rich}>
