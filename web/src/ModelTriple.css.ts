@@ -22,14 +22,31 @@ export const poolSeriesHead = style({ display: "flex", alignItems: "center", gap
 globalStyle(`${poolSeriesHead} h4`, { margin: 0, fontSize: vars.textMeta, fontWeight: 500, color: vars.muted });
 
 export const runOptionText = style({ display: "grid", gap: "1px", flex: "1", minWidth: "0" });
-export const runPickerPanel = style({ padding: "6px" });
-export const runPicker = style({ display: "flex", gap: "4px", maxHeight: "420px" });
+/** The panel's lines: a tint of the text, seen in either theme (the page's line is lost on dark). */
+const rule = `1px solid color-mix(in srgb, ${vars.text} 10%, transparent)`;
+/** The panel: the filter across its top, the columns side by side under it with a line between, the foot under a line. */
+export const runPickerPanel = style({ padding: "0", overflow: "hidden" });
+export const runPickerAccountsPanel = style({ padding: "6px" });
+export const runPickerSearch = style({
+  display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", borderBottom: rule, color: vars.subtle,
+  cursor: "text",
+});
+globalStyle(`${runPickerSearch} input`, {
+  flex: "1", minWidth: "0", border: "0", outline: "none", background: "none", color: vars.text, font: "inherit", fontSize: vars.textUi,
+});
+globalStyle(`${runPickerSearch} input::placeholder`, { color: vars.subtle });
+export const runPicker = style({ display: "flex", maxHeight: "360px" });
 export const runPickerFoot = style({
-  display: "flex", justifyContent: "flex-end", gap: "6px", marginTop: "6px", padding: "8px 4px 2px",
+  display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "8px", padding: "8px 10px",
+  borderTop: rule,
 });
+/** A column: only the models' scrolls (the others are short); each after the first has a line before it. */
 export const runPickerColumn = style({
-  display: "flex", flexDirection: "column", gap: "1px", minWidth: "110px", overflowY: "auto",
+  display: "flex", flexDirection: "column", gap: "1px", minWidth: "120px", padding: "6px", overflowX: "hidden",
+  selectors: { "& + &": { borderLeft: rule } },
 });
+/** What is picked: a mark at its row's end (none on the others). */
+export const runCheck = style({ marginLeft: "auto", flex: "none", color: vars.accent, visibility: "hidden" });
 /** The accounts, in a panel beside the model control's. */
 export const runPickerAccounts = style({
   display: "flex", flexDirection: "column", gap: "1px", minWidth: "220px", maxWidth: "320px", maxHeight: "420px", overflowY: "auto",
@@ -52,21 +69,24 @@ export const runPickerWho = style({
     "&[data-level=amber]": { color: vars.amber }, "&[data-level=red]": { color: vars.red },
   },
 });
+export const runPickerWhoLead = style({ flex: "none", color: vars.subtle });
+globalStyle(`${runPickerWho}:not([data-level]) > ${runPickerWhoLead} + *`, { color: vars.text, fontWeight: "500" });
 export const runPickerWhoChevron = style({
   flex: "none",
 });
-export const runPickerEfforts = style({ minWidth: "80px" });
+export const runPickerEfforts = style({ minWidth: "136px" });
 export const runPickerOption = style({
   display: "flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: "4px 8px", border: "0",
   borderRadius: `calc(6px * ${vars.cornerScale})`, background: "none", color: vars.text, font: "inherit",
   fontSize: vars.textUi, textAlign: "left", cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover },
-    "&[aria-pressed=\"true\"]": { background: vars.hover, fontWeight: "600" },
+    "&[aria-pressed=\"true\"]": { background: vars.hover, fontWeight: "500" },
   },
 });
+globalStyle(`${runPickerOption}[aria-pressed="true"] > ${runCheck}, ${runPickerOption}[aria-pressed="true"] ${runCheck}`, { visibility: "visible" });
 export const runPickerNote = style({ margin: "0 8px 6px", fontSize: vars.textMeta, color: vars.amber });
-export const btnSm = style({ height: "28px", padding: "0 10px", fontSize: vars.textMeta });
+export const btnSm = style({ height: "28px", padding: "0 12px", fontSize: vars.textUi });
 export const modelTriple = style({
   display: "inline-flex", alignItems: "center", gap: "6px", maxWidth: "100%", justifySelf: "start", alignSelf: "start",
   width: "max-content", height: "30px", padding: "0 10px", border: "1px solid transparent",
@@ -137,10 +157,9 @@ export const tripleEffort = style({
 });
 export const runPickerSpent = style({ fontSize: vars.textMeta, color: vars.amber });
 /** As wide as its models when the panel opens, within bounds (100–280px); a filter then leaves it as it is (ModelTriple keeps it). */
-export const runPickerModels = style({ minWidth: "100px", maxWidth: "280px", flex: "none" });
+export const runPickerModels = style({ minWidth: "200px", maxWidth: "300px", flex: "1 1 auto", overflowY: "auto" });
 /** A model's name too long for the column is cut short. */
 export const runOptionName = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const runPickerFilter = style({ height: "30px", margin: "0 4px 6px", fontSize: vars.textUi });
 export const runPickerGroup = style({});
 export const runPickerEmpty = style({ margin: "4px 8px", fontSize: vars.textMeta });
 globalStyle(`${runOptionText} ${muted}`, { fontSize: vars.textMeta, whiteSpace: "normal", maxWidth: "260px" });
