@@ -81,8 +81,14 @@ Inside a trace:
   ending when the whole answer is read — an event stream's when it is open
   (`ember.stream`); `station.connect` for the events stream a view asked for;
   `mesh.connect` when a request has to open the link first (credential, iroh
-  connection), with the still.fail cloud requests it made; still.fail cloud requests
-  made inside the trace (`/v1/me`, credentials, workspaces).
+  connection; every way dialled at once, `stillfail.via` the relay of the one
+  that came through first), with the still.fail cloud requests it made; still.fail
+  cloud requests made inside the trace (`/v1/me`, credentials, workspaces).
+- **core, on its own**: `mesh.route` when a station's requests move to another
+  way (`stillfail.why`: `better` by its pings, `asked`, `lost`), with
+  `stillfail.from`/`stillfail.to` (the relay, or `direct`) and their scores in
+  ms (`.score`: round trip, a typical reply at the speed seen, twice the
+  deviation).
 - **still.fail cloud**: a span of each `/v1/*` call that carries a recorded
   `traceparent`.
 - **ember-mesh**: a span per request stream, from the stream accepted to the
