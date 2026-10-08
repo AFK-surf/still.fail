@@ -89,7 +89,8 @@ export function message(chat: DemoChat, by: Who, text: string, at?: number): Cha
 }
 
 export function step(name: string, hint: string, call: object, result?: string, meta = "", failed = false): HistoryStep {
-  return { name, hint, meta, failed, call: JSON.stringify(call, null, 2), ...(result === undefined ? {} : { result }) };
+  // Whole: the demo's steps open to what they did at once.
+  return { name, hint, meta, failed, call: JSON.stringify(call, null, 2), ...(result === undefined ? {} : { result }), entries: [], brief: false };
 }
 
 export function groupOf(steps: HistoryStep[], pending: number): HistoryItem["body"] {
