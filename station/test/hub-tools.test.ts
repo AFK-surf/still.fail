@@ -4,14 +4,15 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { test } from "node:test";
 import { cardArg, optionsArg } from "../src/sessions/args.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer } from "../src/sessions/messages.ts";
 import { forPeer } from "../src/sessions/others.ts";
+import { FETCHED, fileForPeer, putForPeer } from "../src/sessions/peer-files.ts";
 import { Refused } from "../src/sessions/neighbours.ts";
 import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { review, reviewUndecided } from "../src/sessions/review.ts";
@@ -713,6 +714,74 @@ test("a chat on another station of the workspace is read there, by its link", as
   assert.equal(steps.text, `Session ${keyA} has no execution history yet.`);
   await assert.rejects(forPeer(r.hub, "far", { method: "session.read", session: "s:1", tool: "chat_post", args: { chat: keyA } }));
   await assert.rejects(forPeer(r.hub, "far", { method: "session.read", session: "s:1", tool: "chat_read", args: {} }));
+  await r.close();
+});
+
+test("files go between stations: a chat's attachments come with reading it, and a message takes its files along", async () => {
+  const r = new Rig({ link: true });
+  const [a, b] = [say("<@UBOT> draw it"), say("<@UBOT> what did it draw?")];
+  await r.accept(a);
+  await r.accept(b);
+  await settle();
+  const [keyA, keyB] = [sessionKey("cl", "C1", a.threadTs), sessionKey("cl", "C1", b.threadTs)];
+  // Station "far" is this one again, answering as it would over the transport.
+  const asked: string[] = [];
+  r.hub.onPeer(async (_station, request) => {
+    asked.push(request.method);
+    if (request.method === "session.read") return forPeer(r.hub, "near", request);
+    if (request.method === "session.file") return fileForPeer(r.hub, request);
+    if (request.method === "session.put") return putForPeer(r.hub, "near", request);
+    return fromPeer(r.hub, "near", request);
+  });
+  const workspaceA = r.session(keyA).workspace;
+  writeFileSync(join(workspaceA, "pose.png"), "pixels");
+  const big = Buffer.alloc(FETCHED + 1, 7);
+  writeFileSync(join(workspaceA, "take.mp4"), big);
+  await r.call(keyA, "chat_post", { to: `C1/${a.threadTs}`, text: "drawn", files: ["pose.png", "take.mp4"] });
+  const [pose, take] = r.said(r.thread("C1", a.threadTs).id).at(-1)!.attachments;
+  const chat = `https://ember.test/o/ws/far/${keyA.replaceAll(":", "%3A")}`;
+  const read = await r.call(keyB, "chat_read", { chat });
+  const here = join(r.session(keyB).workspace, "uploads", "far");
+  assert.ok(read.includes(`- ${join(here, basename(pose!.path))} (pose.png`), read);
+  assert.equal(readFileSync(join(here, basename(pose!.path)), "utf8"), "pixels");
+  assert.ok(read.includes(`- ${take!.path} (take.mp4`) && read.includes("fetch one with chat_read fetch=") && read.includes(`${take!.path} (${big.length} bytes)`), "a large one is left there");
+  const fetched = await r.call(keyB, "chat_read", { chat, fetch: [take!.path] });
+  assert.ok(fetched.includes(`- ${join(here, basename(take!.path))} (take.mp4`) && !fetched.includes("fetch one"), fetched);
+  assert.ok(readFileSync(join(here, basename(take!.path))).equals(big));
+  // Only a chat's own files: not another path, not out of its uploads.
+  await assert.rejects(fileForPeer(r.hub, { chat, path: join(workspaceA, "pose.png") }), /not a file of that chat/);
+  await assert.rejects(fileForPeer(r.hub, { chat, path: join(workspaceA, "uploads", "..", "pose.png") }), /not a file of that chat/);
+  await assert.rejects(fileForPeer(r.hub, { chat: keyB, path: pose!.path }), /not a file of that chat/);
+  // A station from before files: the read still comes, its files are said to be left.
+  r.hub.onPeer(async (_station, request) => {
+    if (request.method === "session.read") return forPeer(r.hub, "near", request);
+    throw new Refused("session and task key are required (at most 256 / 128 bytes)");
+  });
+  rmSync(here, { recursive: true });
+  const old = await r.call(keyB, "chat_read", { chat });
+  assert.ok(old.includes("not updated yet to give files") && old.includes("drawn"), old);
+  // A message takes its files along: sent ahead, then kept with it in the chat there.
+  r.hub.onPeer(async (_station, request) => {
+    asked.push(request.method);
+    if (request.method === "session.put") return putForPeer(r.hub, "near", request);
+    return fromPeer(r.hub, "near", request);
+  });
+  asked.length = 0;
+  writeFileSync(join(r.session(keyB).workspace, "answer.txt"), "seen it");
+  await r.call(keyB, "session_send", { to: chat, text: "here is mine", files: ["answer.txt"] });
+  assert.deepEqual(asked, ["session.put", "session.message"]);
+  const got = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
+  assert.deepEqual([got.author, got.attachments.map((f) => f.name)], [`near/${keyB}`, ["answer.txt"]]);
+  assert.ok(got.attachments[0]!.path.startsWith(join(workspaceA, "uploads")));
+  assert.equal(readFileSync(got.attachments[0]!.path, "utf8"), "seen it");
+  assert.deepEqual(r.chat.files.at(-1), ["answer.txt"]);
+  // A file that did not all arrive is not posted.
+  await assert.rejects(fromPeer(r.hub, "near", { session: keyB, to: keyA, text: "again", files: [{ id: "nope", name: "x.txt" }] }), /did not all arrive/);
+  // On this station too: copied into the uploads of the chat it goes to.
+  await r.call(keyB, "session_send", { to: keyA, text: "and again", files: ["answer.txt"] });
+  const local = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
+  assert.ok(local.attachments[0]!.path.startsWith(join(workspaceA, "uploads")) && local.text.endsWith("and again"));
+  assert.ok((await r.refused(keyB, "session_send", { to: chat, text: "x", files: ["missing.txt"] })).includes("no such file"));
   await r.close();
 });
 

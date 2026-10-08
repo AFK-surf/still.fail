@@ -275,6 +275,13 @@ export const CHAT_READ = {
         "minimum": 1,
         "maximum": 200,
         "description": "Default 30."
+      },
+      "fetch": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "A chat on another station: its attachments to fetch here although large, by the paths listed there. Those up to 16 MB come by themselves, their paths replaced with where they are here."
       }
     },
     "required": [
@@ -297,7 +304,14 @@ export const SESSION_SEND = {
       },
       "text": {
         "type": "string",
-        "description": "The message, standing on its own: what you need or found, with what the other agent needs to act on it. Markdown; to a Slack thread, mrkdwn. Files: name their paths (same station) or move them with station_file."
+        "description": "The message, standing on its own: what you need or found, with what the other agent needs to act on it. Markdown; to a Slack thread, mrkdwn."
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Absolute local paths of files to attach (at most 10, each up to 50 MB): they are copied to that chat, on this station or another, and its agent gets their paths there."
       }
     },
     "required": [

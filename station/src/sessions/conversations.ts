@@ -56,13 +56,14 @@ export function target(hub: Hub, key: string, to: Json): SessionThread {
   return thread;
 }
 
-/// Copies files the agent attaches into the session's uploads, so the message keeps them even if the originals
-/// change, and measures images so pages can hold their place.
-function attach(hub: Hub, key: string, paths: string[]): Attachment[] {
+/// Copies files the agent attaches into the session's uploads (`into`'s, when it sends them to that session), so the
+/// message keeps them even if the originals change, and measures images so pages can hold their place.
+export function attach(hub: Hub, key: string, paths: string[], into: string = key): Attachment[] {
   const row = hub.store.getSession(key);
-  if (!row) throw new Error("unknown session");
+  const target = into === key ? row : hub.store.getSession(into);
+  if (!row || !target) throw new Error("unknown session");
   if (paths.length > 10) throw new Error("at most 10 files per message");
-  const dir = join(row.workspace, "uploads");
+  const dir = join(target.workspace, "uploads");
   mkdirSync(dir, { recursive: true });
   return paths.map((given) => {
     const path = isAbsolute(given) ? given : join(row.workspace, given);
@@ -247,8 +248,9 @@ export async function chatHistory(hub: Hub, key: string, args: Args): Promise<st
 }
 
 /// A thread's messages as chat_history and chat_read give them: `before` (a message ts) and `limit` from `args`,
-/// people named through `connect`, `key`'s own posts as "you". `named`: the thread as the agent named it.
-export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, connect: string, named: string, args: Args): Promise<string> {
+/// people named through `connect`, `key`'s own posts as "you". `named`: the thread as the agent named it. `seen` gets the
+/// attachments of the messages given.
+export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, connect: string, named: string, args: Args, seen?: Attachment[]): Promise<string> {
   const given = args.limit === undefined ? null : jsNumber(args.limit);
   const limit = given !== null && given !== 0 ? (Number.isNaN(given) ? 0 : Math.trunc(Math.min(200, Math.max(1, given)))) : 30;
   const before = typeof args.before === "string" && args.before !== "" ? args.before : null;
@@ -260,6 +262,7 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
   }
   const messages = hub.store.messagesBefore(thread.id, from, limit);
   if (messages.length === 0) return "No earlier messages.";
+  seen?.push(...messages.flatMap((m) => m.attachments));
   const chat = hub.chatOf(connect);
   const names = new Map<string, string>();
   for (const m of messages.filter((m) => m.authorKind === "person")) {

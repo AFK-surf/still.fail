@@ -126,7 +126,12 @@ describe("remote", { concurrency: true }, () => {
     assert.equal(answer.thread, "EMBER/1.1");
     const [peer, request] = got.pop()!;
     assert.deepEqual([peer, request.to, request.text], ["peer-c", "k", "hi"]);
+    for (const method of ["session.file", "session.put"]) {
+      await call(r, "peer-c", method, { to: "k" });
+      assert.equal(got.pop()![1].method, method, "a chat's files and a message's go where messages go");
+    }
     assert.equal((await call(r, "peer-c", "describe")).messages, true);
+    assert.equal((await call(r, "peer-c", "describe")).files, true);
     await assert.rejects(call(r, "peer-c", "task.list"), Error, "tasks still need remoteTasks.allow");
   });
 
