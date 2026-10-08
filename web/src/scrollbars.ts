@@ -5,7 +5,8 @@ import * as css from "./scrollbars.css.ts";
 // A thumb is put beside the pane it is for (in the pane's parent), so it is layered as the pane is: a menu, a popover
 // or a dialog over the pane is over its bar too.
 // A pane with something floating over its foot (a chat's composer) or its top (the sidebar's frosted bands) says so with
-// `scroll-padding-bottom` / `scroll-padding-top`, and its bar stays clear of it.
+// `scroll-padding-bottom` / `scroll-padding-top`, and its bar stays clear of it; a rounded pane's bar stays clear of its
+// corners.
 
 type Axis = "y" | "x";
 
@@ -14,19 +15,35 @@ const MIN_THUMB = 28;
 const INSET = 2;
 const SIZE = 3;
 
-/** How much of the pane's height, at its bottom, the vertical track leaves free: what floats over it there. */
+/** A corner's radius in px (one given in % is left as none). */
+function radius(value: string): number {
+  return value.includes("%") ? 0 : parseFloat(value) || 0;
+}
+/** How much of the pane's height, at its bottom, the vertical track leaves free: what floats over it there, or the
+ * rounding of its corner (a rounded menu's bar stays inside its curve). */
 function endOf(el: Element): number {
-  return el === document.scrollingElement ? 0 : parseFloat(getComputedStyle(el).scrollPaddingBottom) || 0;
+  if (el === document.scrollingElement) return 0;
+  const s = getComputedStyle(el);
+  return Math.max(parseFloat(s.scrollPaddingBottom) || 0, radius(s.borderBottomRightRadius));
 }
 /** How much of it, at its top, the vertical track leaves free. */
 function startOf(el: Element): number {
-  return el === document.scrollingElement ? 0 : parseFloat(getComputedStyle(el).scrollPaddingTop) || 0;
+  if (el === document.scrollingElement) return 0;
+  const s = getComputedStyle(el);
+  return Math.max(parseFloat(s.scrollPaddingTop) || 0, radius(s.borderTopRightRadius));
+}
+/** How much of the pane's width the horizontal track leaves free at its left and right: the rounding of those corners. */
+function sidesOf(el: Element): [number, number] {
+  if (el === document.scrollingElement) return [0, 0];
+  const s = getComputedStyle(el);
+  return [radius(s.borderBottomLeftRadius), radius(s.borderBottomRightRadius)];
 }
 /** Where a thumb runs along the pane, and how long it is: always inside the pane (between what floats over its top and
- * foot while that leaves room for a thumb, over them in a pane too short for that). */
+ * foot, and clear of rounded corners, while that leaves room for a thumb, over them in a pane too short for that). */
 function trackOf(el: Element, axis: Axis, size: number, content: number): { start: number; track: number; length: number } {
-  let start = axis === "y" ? startOf(el) : 0;
-  let track = axis === "y" ? size - start - endOf(el) : size;
+  const [left, right] = axis === "x" ? sidesOf(el) : [0, 0];
+  let start = axis === "y" ? startOf(el) : left;
+  let track = axis === "y" ? size - start - endOf(el) : size - left - right;
   if (track < MIN_THUMB * 2) { start = 0; track = size; }
   const length = Math.min(track, Math.max(MIN_THUMB, (track * size) / content)) - INSET * 2;
   return { start, track, length };
