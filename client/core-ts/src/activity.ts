@@ -81,8 +81,27 @@ export function args(text: string): Record<string, J> | null {
   }
   // A long call is kept to its first characters, then `… (n more characters)`: read what is there.
   const at = text.lastIndexOf("\n… (");
-  if (at >= 0 && text.endsWith(" more characters)")) return parseObject(close(text.slice(0, at)));
-  return text.trimStart().startsWith("{") ? parseObject(close(text)) : null;
+  if (at >= 0 && text.endsWith(" more characters)")) return cutShort(text.slice(0, at));
+  return text.trimStart().startsWith("{") ? cutShort(text) : null;
+}
+
+/// JSON cut short, read as far as it goes: closed where it stops, or (cut in a key, `{"a":"x","descr`) at the field before.
+function cutShort(json: string): Record<string, J> | null {
+  const whole = parseObject(close(json));
+  if (whole) return whole;
+  let quoted = false;
+  let escaped = false;
+  let comma = -1;
+  for (let i = 0; i < json.length; i++) {
+    const c = json[i];
+    if (escaped) escaped = false;
+    else if (quoted) {
+      if (c === "\\") escaped = true;
+      else if (c === '"') quoted = false;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") comma = i;
+  }
+  return comma < 0 ? null : parseObject(close(json.slice(0, comma)));
 }
 
 /// JSON cut short, closed where it stops: the string it was in ends with an ellipsis, and what was open is closed.
