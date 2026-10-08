@@ -46,6 +46,7 @@ import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast, useAct } from "./toast.tsx";
 import { MessageDecision } from "./Decisions.tsx";
+import { AgentHover, ChatAgents } from "./AgentCard.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
 import { jumped, jumpTo, jumpWords, useJump } from "./jumpTo.ts";
@@ -207,7 +208,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
   for (const s of chat.elsewhere ?? []) sentAfter.set(s.after, [...(sentAfter.get(s.after) ?? []), s]);
   const sent = (after: number) => sentAfter.get(after)?.map((s) => <SentElsewhere key={s.key} sent={s} agentHere={here(s.by.agent ?? undefined)} onOpenHistory={onOpenHistory} />);
   return (
-    <>
+    <ChatAgents.Provider value={chat.agents}>
       {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
       {messages.length === 0 && chat.outbox.length === 0 && !chat.elsewhere?.length && (
         <div className={css.chatEmpty}>
@@ -237,7 +238,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
       {shown.map(({ agent, leaving }) => (
         <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
       ))}
-    </>
+    </ChatAgents.Provider>
   );
 }
 
@@ -960,7 +961,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   return (
     <OthersMessage data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
       data-enter={enter} data-caught={caught} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
-      avatar={<MessageAvatar message={m} name={who} />} time={m.time?.createdAt}
+      avatar={<MessageAvatar message={m} name={who} agent={agent} />} time={m.time?.createdAt}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{who}</button>
         // Another chat's agent: its name opens that chat (its link, as the chat pages open still.fail's links).
@@ -994,7 +995,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s, agentHere, onOpenHi
     <OthersMessage data-role={received ? "person" : "agent"} data-author={s.by.name} data-elsewhere="" time={s.time?.createdAt}
       avatar={received
         ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><SlackLogo size={9} /></span></span>
-        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack />}
+        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack agent={agent} />}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{s.by.name}</button>
         : <span className={css.msgName}>{s.by.name}</span>}>
@@ -1124,14 +1125,17 @@ export function OthersMessage({ avatar, name, time, children, ...data }: Data & 
   );
 }
 
-/** An agent's picture in a chat: its model's maker, in the agents' ground. */
-export function AgentAvatar({ maker, runtime, slack }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean }) {
+/** An agent's picture in a chat: its model's maker, in the agents' ground. One of the chat's (`agent`, its session's key)
+ * has its card while it is pointed at (AgentCard.tsx). */
+export function AgentAvatar({ maker, runtime, slack, agent }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean; agent?: string | undefined }) {
   return (
-    <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`} data-slack={slack || undefined}>
-      {runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
-      {/* What it said went to Slack, not here: Slack's mark on its corner. */}
-      {slack && <span className={css.msgAvatarSlack}><SlackLogo size={9} /></span>}
-    </span>
+    <AgentHover agent={agent}>
+      <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`} data-slack={slack || undefined}>
+        {runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
+        {/* What it said went to Slack, not here: Slack's mark on its corner. */}
+        {slack && <span className={css.msgAvatarSlack}><SlackLogo size={9} /></span>}
+      </span>
+    </AgentHover>
   );
 }
 
@@ -1145,8 +1149,8 @@ export function MessageName({ children }: { children: ReactNode }) {
   return <span className={css.msgName}>{children}</span>;
 }
 
-function MessageAvatar({ message, name }: { message: ChatMessage; name: string }) {
-  if (message.authorKind === "agent") return <AgentAvatar maker={message.by.maker} runtime={message.by.runtime} />;
+function MessageAvatar({ message, name, agent }: { message: ChatMessage; name: string; agent: string | undefined }) {
+  if (message.authorKind === "agent") return <AgentAvatar maker={message.by.maker} runtime={message.by.runtime} agent={agent} />;
   if ((message.authorKind === "ember" || message.authorKind === "stillfail")) return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><Mark size={12} /></span>;
   const picture = message.by.picture;
   return picture
