@@ -50,11 +50,21 @@ export function RefChip({ title, href }: { title: ReactNode; href: string }) {
  * last thing said (or where it stands) — from the workspace's list, so a chat not in it (archived, or not this
  * workspace's) says only that.
  */
+/** The chats references' cards last showed, by link. */
+const seenChats = new Map<string, ChatItem>();
+
 function RefPreview({ href, here, station }: { href: string; here: string; station: string | null }) {
   const relative = /\/chats\/([^/?#\s]+)/.exec(href);
   const of = chatOfLink(href) ?? (relative ? { station: here, id: safeDecode(relative[1]!), history: /[?&]history=/.test(href) ? "?" : "" } : null);
   const chats = useChats(scopeOf(here), false).value;
-  const item = of && chats?.days.flatMap((d) => d.items).find((i) => i.station === of.station && (i.id === of.id || i.session === of.id));
+  const found = of && chats?.days.flatMap((d) => d.items).find((i) => i.station === of.station && (i.id === of.id || i.session === of.id));
+  if (found) {
+    seenChats.delete(href);
+    seenChats.set(href, found);
+    if (seenChats.size > 200) seenChats.delete(seenChats.keys().next().value!);
+  }
+  // While the list comes (the card opened again), the chat as last seen: no bars each time.
+  const item = found ?? (chats ? undefined : seenChats.get(href));
   if (!item) return chats ? <p className={hover.note}>{t("web-main.chatRef.previewGone")}</p> : <CardSkeleton />;
   const state = stateLine(item);
   return (
