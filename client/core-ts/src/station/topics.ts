@@ -111,8 +111,10 @@ export class StationTopics implements Owner {
     } catch {
       return;
     }
+    // What a UI has open (a chat's messages, its agent, a history): ahead of what is kept current around it, and in the
+    // room a station's lane keeps for the urgent (scheduler.ts URGENT_ROOM), so a slow read of a list never holds it up.
     const urgent = this.#urgent(topic);
-    if (urgent) this.#core.scheduler.prioritize(topicKey(topic), urgent, Priority.shown);
+    if (urgent) this.#core.scheduler.prioritize(topicKey(topic), urgent, Priority.focused);
     if (topic.topic === "thread") {
       const id = topic.thread as number;
       // Opened: the most recently used, kept while shown. Let go for room before, or a chat no list has (opened from an

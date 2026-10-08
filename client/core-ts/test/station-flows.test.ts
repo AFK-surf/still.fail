@@ -733,7 +733,7 @@ test("answers_come_deflated_as_asked_and_are_read_as_they_were", async () => {
 });
 
 test("what_a_person_waits_on_is_not_held_up_by_reads_that_take_long", async () => {
-  const { host, core } = await started();
+  const { host, core } = await started({ ...base(), "GET /threads/9/entries?limit=50": { last: 1, entries: [entry(1, "m1")] } });
   const sync = core.inner.stations;
   // A slow link: the station read again, its first two reads taking all the time there is.
   const release = [host.hold("/admin/api/overview"), host.hold("/admin/api/sessions")];
@@ -748,6 +748,11 @@ test("what_a_person_waits_on_is_not_held_up_by_reads_that_take_long", async () =
   // What a person waits on and the chat open run at once; the rest waits its turn.
   assert.deepEqual(ran.sort(), ["asked", "focused"]);
   await asked;
+  // A chat opened as they hang: its messages read at once.
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "thread", station: ST, thread: 9 });
+  await host.settle();
+  assert.equal(gets(host, "/admin/api/threads/9/entries?limit=50"), 1);
   release.forEach((r) => r());
   await host.settle();
   assert.ok(ran.includes("shown"));
