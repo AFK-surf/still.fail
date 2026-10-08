@@ -32,8 +32,6 @@ struct Words: Codable, Equatable {
   var read = "已读"
   var later = "稍后"
   var empty = "都看过了"
-  var next = "滚动看下一条"
-  var last = "已经是最后一条"
   var waiting = "等你"
   var hide = "隐藏浮窗"
   var locale = "zh-Hans"
@@ -41,8 +39,8 @@ struct Words: Codable, Equatable {
 
 enum Phase { case collapsed, peek, card }
 
-/// Everything the views show. The phases (docs/desktop-dock.md): collapsed, a half circle on the edge with the marks;
-/// peek, a new one stretched out of it, staying until it is seen; card, one message to read and act on.
+/// Everything the views show. The phases (docs/desktop-dock.md): collapsed, a sliver on the edge (nothing when nothing
+/// waits); peek, a new one stretched out of it, staying until it is seen; card, the messages to read and act on.
 @Observable final class DockModel {
   var items: [Item] = []
   var words = Words()
@@ -52,8 +50,6 @@ enum Phase { case collapsed, peek, card }
   var unseen = 0
   /// The card shown, as an index into `items`.
   var current = 0
-  /// Which way the last flip went, for the card's content to come from that side.
-  var flipDown = true
   /// The handle's centre from the top of the screen, where it was last put.
   var handleY: CGFloat = UserDefaults.standard.object(forKey: "handleY") as? CGFloat ?? 0 {
     didSet { UserDefaults.standard.set(handleY, forKey: "handleY") }
@@ -75,9 +71,6 @@ enum Phase { case collapsed, peek, card }
       return ra != rb ? ra < rb : a.at > b.at
     }
   }
-
-  /// The handle's marks: the loudest first, at most four.
-  var marks: [String] { Array(items.prefix(4).map(\.tone)) }
 
   func update(_ list: [Item]) {
     let shownID = phase == .card && items.indices.contains(current) ? items[current].id : nil
@@ -111,15 +104,7 @@ enum Phase { case collapsed, peek, card }
   /// The card for what the peek shows, else the first.
   func openCard() {
     current = peeking.flatMap { p in items.firstIndex(where: { $0.id == p.id }) } ?? 0
-    flipDown = true
     phase = .card
-  }
-
-  func flip(_ by: Int) {
-    let next = max(0, min(items.count - 1, current + by))
-    guard next != current else { return }
-    flipDown = by > 0
-    current = next
   }
 
   /// One dealt with (answered, read, opened): out of the list here at once; the app's next list agrees.

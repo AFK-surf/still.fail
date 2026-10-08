@@ -41,9 +41,6 @@ final class Dock: NSObject, NSApplicationDelegate {
   var suppressed = false
   var swipedAt = Date.distantPast
   var swipe: CGFloat = 0
-  var flippedAt = Date.distantPast
-  var flipAccumulated: CGFloat = 0
-  var scrolledAt = Date.distantPast
 
   /// How long the mouse rests on the handle before the card opens (longer on a peek, so a swipe on it can start), and
   /// how long it is off the glass before the card closes.
@@ -88,14 +85,17 @@ final class Dock: NSObject, NSApplicationDelegate {
     // With the card out, the gap between it and the handle counts too, so crossing it does not close the card.
     let over = model.phase == .card && card != .zero ? handle.union(card.insetBy(dx: -slack, dy: -slack)) : handle
     let now = Date()
-    let isIn = model.dragging || over.contains(mouse)
+    // The screen's right edge, anywhere along it, opens what waits (nothing waiting, there is nothing to open).
+    let screen = panel.screen?.frame ?? panel.frame
+    let atEdge = !model.items.isEmpty && mouse.x >= screen.maxX - 2 && mouse.y >= screen.minY && mouse.y <= screen.maxY
+    let isIn = model.dragging || over.contains(mouse) || (atEdge && model.phase != .card)
     panel.ignoresMouseEvents = !isIn
     if isIn != inside { inside = isIn; since = now }
     if !inside { suppressed = false }
     switch model.phase {
     case .collapsed, .peek:
       let delay = model.phase == .peek ? peekOpenDelay : openDelay
-      if inside, !suppressed, !model.dragging, now.timeIntervalSince(since) >= delay, now.timeIntervalSince(swipedAt) > 0.5 {
+      if inside, !model.items.isEmpty, !suppressed, !model.dragging, now.timeIntervalSince(since) >= delay, now.timeIntervalSince(swipedAt) > 0.5 {
         withAnimation(spring) { model.openCard() }
       }
     case .card:
@@ -104,23 +104,13 @@ final class Dock: NSObject, NSApplicationDelegate {
     }
   }
 
-  /// Two fingers on the card go through the messages; sideways on the peek push it back in.
+  /// Two fingers sideways on the peek push it back in.
   func scrolled(_ event: NSEvent) -> NSEvent? {
     guard event.window === panel else { return event }
     switch model.phase {
     case .card:
-      guard abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX) else { return nil }
-      // One gesture, one card: its momentum after a flip is let go, and a pause starts the next.
-      if Date().timeIntervalSince(scrolledAt) > 0.25 { flipAccumulated = 0 }
-      scrolledAt = Date()
-      flipAccumulated += event.scrollingDeltaY
-      if abs(flipAccumulated) > 24, Date().timeIntervalSince(flippedAt) > 0.35 {
-        // Scrolling on through a page (the delta below zero) is the next one.
-        withAnimation(spring) { model.flip(flipAccumulated < 0 ? 1 : -1) }
-        flipAccumulated = 0
-        flippedAt = Date()
-      }
-      return nil
+      // The card's own scroll view goes through the messages.
+      return event
     case .peek:
       if event.phase == .began { swipe = 0 }
       swipe += event.scrollingDeltaX

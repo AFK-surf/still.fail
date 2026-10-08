@@ -246,7 +246,7 @@ let dock: Dock | null = null;
 
 function dockWords(): Record<string, string> {
   const words: Record<string, string> = {};
-  for (const name of ["open", "read", "later", "empty", "next", "last", "waiting", "hide"]) words[name] = t(`desktop.dock.${name}`);
+  for (const name of ["open", "read", "later", "empty", "waiting", "hide"]) words[name] = t(`desktop.dock.${name}`);
   words.locale = (chosenLang ?? langOf(app.getLocale())) === "zh" ? "zh-Hans" : "en";
   return words;
 }

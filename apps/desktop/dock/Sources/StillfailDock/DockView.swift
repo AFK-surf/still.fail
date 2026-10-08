@@ -2,6 +2,8 @@ import SwiftUI
 
 enum Size {
   static let handle: CGFloat = 26
+  /// The edge's sliver while something waits: thin, the loudest mark's colour in its glass.
+  static let sliver = CGSize(width: 7, height: 72)
   static let peek = CGSize(width: 320, height: 64)
   static let card: CGFloat = 340
   /// Between the card and the handle at rest: wider than the glass's blending distance, so the two stand apart.
@@ -50,7 +52,8 @@ struct DockView: View {
           }
           handle
             .glass(UnevenRoundedRectangle(topLeadingRadius: handleRadius, bottomLeadingRadius: handleRadius,
-                                          bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous), clear: true)
+                                          bottomTrailingRadius: 0, topTrailingRadius: 0, style: .continuous), clear: true, tint: sliverTint)
+            .opacity(handleSize.width > 0 ? 1 : 0)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { model.handleRect = $0 }
             .position(x: width - handleSize.width / 2, y: handleY)
             .gesture(drag(height: height))
@@ -65,19 +68,24 @@ struct DockView: View {
   }
 
   private var peeking: Bool { model.phase == .peek && model.peeking != nil }
+  /// Nothing waiting: no glass at all. Something: a sliver on the edge. A peek: the capsule it stretches into.
   private var handleSize: CGSize {
-    peeking ? Size.peek : CGSize(width: Size.handle, height: max(56, CGFloat(model.marks.count) * 16 + 22))
+    peeking ? Size.peek : model.items.isEmpty ? CGSize(width: 0, height: Size.sliver.height) : Size.sliver
   }
-  private var handleRadius: CGFloat { peeking ? Size.peek.height / 2 : Size.handle / 2 + 2 }
+  private var handleRadius: CGFloat { peeking ? Size.peek.height / 2 : Size.sliver.width / 2 }
+  private var sliverTint: Color? {
+    guard !peeking, let loudest = model.items.first?.tone else { return nil }
+    return loudest == "alert" ? MarkView.red : MarkView.blue
+  }
   /// The card's shape before it comes out and after it goes back: the peek's it came from, or the handle's.
-  @State private var closedCard = CGSize(width: Size.handle, height: 56)
+  @State private var closedCard = Size.sliver
 
   private func clampY(_ y: CGFloat, half: CGFloat, height: CGFloat) -> CGFloat {
     min(max(y, half + Size.margin), height - half - Size.margin)
   }
 
   private func open(from old: Phase) {
-    closedCard = old == .peek ? Size.peek : CGSize(width: Size.handle, height: handleSize.height)
+    closedCard = old == .peek ? Size.peek : Size.sliver
     cardShown = true
     // A frame later, so it starts from the closed shape.
     DispatchQueue.main.async {
@@ -86,7 +94,7 @@ struct DockView: View {
   }
 
   private func close() {
-    closedCard = CGSize(width: Size.handle, height: handleSize.height)
+    closedCard = Size.sliver
     withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) { cardOut = false } completion: {
       if model.phase != .card { cardShown = false; model.cardRect = .zero }
     }
@@ -113,13 +121,6 @@ struct DockView: View {
         }
         .padding(.leading, 20).padding(.trailing, 14)
         .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .trailing)))
-      } else {
-        VStack(spacing: 7) {
-          if model.marks.isEmpty { Circle().fill(.secondary.opacity(0.45)).frame(width: 5, height: 5) }
-          ForEach(Array(model.marks.enumerated()), id: \.offset) { _, tone in MarkView(tone: tone) }
-        }
-        .padding(.leading, 2)
-        .transition(.opacity)
       }
     }
     .frame(width: handleSize.width, height: handleSize.height)
@@ -144,27 +145,45 @@ struct DockView: View {
   }
 }
 
-/// One message, and what can be done with it right here.
+/// The messages one under another, scrolled as any list is and settling on one at a time (the system's scrolling,
+/// aligned to each); the card is as tall as the one it settled on.
 struct CardView: View {
-  var model: DockModel
+  @Bindable var model: DockModel
   var send: (Outgoing) -> Void
+  @State private var heights: [String: CGFloat] = [:]
+  @State private var position: String?
 
   var body: some View {
-    Group {
-      if model.items.indices.contains(model.current) {
-        let item = model.items[model.current]
-        content(item)
-          .id(item.id)
-          .transition(.asymmetric(insertion: .move(edge: model.flipDown ? .bottom : .top).combined(with: .opacity),
-                                  removal: .opacity))
-      } else {
-        Text(model.words.empty).font(.system(size: 13)).foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity).padding(.vertical, 26)
+    if model.items.isEmpty {
+      Text(model.words.empty).font(.system(size: 13)).foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity).padding(.vertical, 26)
+    } else {
+      let shown = model.items.indices.contains(model.current) ? model.items[model.current].id : model.items[0].id
+      ScrollView(.vertical) {
+        VStack(spacing: 0) {
+          ForEach(Array(model.items.enumerated()), id: \.element.id) { index, item in
+            content(item, index: index)
+              .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights[item.id] = $0 }
+              .id(item.id)
+          }
+        }
+        .scrollTargetLayout()
+      }
+      .scrollTargetBehavior(.viewAligned)
+      .scrollPosition(id: $position, anchor: .top)
+      .scrollIndicators(.never)
+      .frame(height: heights[shown] ?? 200)
+      .animation(.spring(response: 0.35, dampingFraction: 0.8), value: heights[shown])
+      .onAppear { position = shown }
+      // One dealt with leaves the list: settle on what is now in its place.
+      .onChange(of: model.items.map(\.id)) { position = shown }
+      .onChange(of: position) { _, id in
+        if let id, let index = model.items.firstIndex(where: { $0.id == id }) { model.current = index }
       }
     }
   }
 
-  private func content(_ item: Item) -> some View {
+  private func content(_ item: Item, index: Int) -> some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(spacing: 8) {
         MarkView(tone: item.tone).frame(width: 10)
@@ -172,7 +191,7 @@ struct CardView: View {
         Text("\(item.station) · \(ago(item.at))").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
         Spacer(minLength: 4)
         if model.items.count > 1 {
-          Text("\(model.current + 1) / \(model.items.count)").font(.system(size: 11)).monospacedDigit().foregroundStyle(.secondary)
+          Text("\(index + 1) / \(model.items.count)").font(.system(size: 11)).monospacedDigit().foregroundStyle(.secondary)
         }
       }
       VStack(alignment: .leading, spacing: 3) {
@@ -183,10 +202,6 @@ struct CardView: View {
         Text(ask).font(.system(size: 13, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
       }
       actions(item)
-      if model.items.count > 1 {
-        Text(model.current < model.items.count - 1 ? model.words.next : model.words.last)
-          .font(.system(size: 11)).foregroundStyle(.secondary).frame(maxWidth: .infinity)
-      }
     }
     .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 12)
   }
@@ -253,11 +268,11 @@ struct MarkView: View {
 extension View {
   /// Liquid Glass on macOS 26: clear (the most see-through, for the handle) or regular (for the card's text); a
   /// material before it.
-  @ViewBuilder func glass<S: Shape>(_ shape: S, clear: Bool) -> some View {
+  @ViewBuilder func glass<S: Shape>(_ shape: S, clear: Bool, tint: Color? = nil) -> some View {
     if #available(macOS 26, *) {
-      glassEffect(clear ? .clear.interactive() : .regular, in: shape)
+      glassEffect((clear ? Glass.clear : .regular).tint(tint?.opacity(0.55)).interactive(clear), in: shape)
     } else {
-      background(.ultraThinMaterial, in: shape)
+      background(tint.map { AnyShapeStyle($0.opacity(0.5)) } ?? AnyShapeStyle(.ultraThinMaterial), in: shape)
     }
   }
 

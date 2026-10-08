@@ -3,7 +3,7 @@
 On a Mac (14 or later, Apple silicon), the desktop app keeps the chats that want the person on the right edge of the
 screen, also with no window open: a half circle of Liquid Glass (macOS 26; a material before it) drawn by a SwiftUI
 helper, `apps/desktop/dock`, which the app starts and feeds (`apps/desktop/src/dock.mts`). The app menu's 「桌面浮窗」
-turns it off and on (`userData/dock.json`); so does the half circle's own right-click menu.
+turns it off and on (`userData/dock.json`); so does the sliver's own right-click menu.
 
 ## What it shows
 
@@ -18,15 +18,18 @@ Chats read, at work, and cards waiting on someone else are not shown: the sideba
 
 User-decided (2026-10-08, chat EMBER/1791405826.815000):
 
-- **Collapsed:** a half circle flush with the edge, the marks of the first four inside (blue ring waiting, red failed,
-  blue dot unread). It can be dragged along the edge; it stays where it was put.
-- **Peek:** something new (a message key the dock had not had) stretches the half circle into a capsule with its title,
+- **Collapsed:** nothing on the screen while nothing waits. With something waiting, a thin sliver of glass on the
+  edge, tinted as the loudest mark (red failed, else blue); it can be dragged along the edge and stays where it was
+  put. The mouse touching the screen's right edge anywhere along it opens what waits (2026-10-08: the always-there half
+  circle was 「不太合理」).
+- **Peek:** something new (a message key the dock had not had) stretches the sliver into a capsule with its title,
   station and one line. It does not go away by itself: only once it has been seen.
-- **Card:** the mouse resting on the peek (on the half circle with no peek) pours the card out of it: that one message,
-  its question and options when it is a card, and what can be done right there (an option, 打开, 已读, 稍后). Scrolling
-  on it goes through the others one by one, the loudest first (waiting, failed, unread; newest first in each).
-- **Seen is enough:** once the card has been open, the mouse leaving it (or 稍后) draws everything back into the half
-  circle; what it showed stays unread there. 打开 brings the app's window up on the chat. Pushing the peek back to the
+- **Card:** the mouse resting on the peek (or on the edge with no peek) pours the card out of it: the messages one
+  under another, the loudest first (waiting, failed, unread; newest first in each), opened at the peek's. It scrolls
+  as any list does and settles on one message at a time (the system's scrolling; the card as tall as that one; a
+  jump a scroll at a time was 「切换消息太怪了」). Each has what can be done right there: an option, 打开, 已读, 稍后.
+- **Seen is enough:** once the card has been open, the mouse leaving it (or 稍后) draws everything back into the sliver;
+  what it showed stays unread there. 打开 brings the app's window up on the chat. Pushing the peek back to the
   edge (dragging it right, two fingers sideways) also puts it away.
 
 ## How it is made
