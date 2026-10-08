@@ -360,6 +360,15 @@ Changes within one turn of the event loop are gathered: one `session` event
 per session, one `overview`, one round of sidebar items. Per-session live steps stay on
 `/sessions/:key/live`.
 
+Each event has an `id:` of the station's run and its number in it
+(`<run>.<n>`; one number for an event told to everyone, whichever streams
+it went to). What is told to everyone is kept two minutes (at most 4000), so
+a client's stream that takes over from another (the client opens a new one
+whenever what it follows changes, and lets the old one go once the new one is
+open) asks `/events?since=<the last id the old one gave>` and is told first
+what came after it, as it was; or `missed` (`{}`) when that is not all kept,
+or was another run's, and the client reads the station again.
+
 Timers that remain on the station and why: host sampling (above), quota
 refresh every five minutes while some `/events` stream is open (the provider
 cannot notify), an idle process's eviction deadline (a timer per process, set

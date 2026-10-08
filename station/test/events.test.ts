@@ -1,5 +1,6 @@
 // GET /events as admin/events.rs has it: sidebar rows told by what changed, one `session` event per burst, `read`
-// only to its viewer, job logs as they grow; and each event with its sequence number.
+// only to its viewer, job logs as they grow; and each event with its id (the station's run, its number), what was told
+// to everyone told again to a stream that takes over from another (`since`).
 import type { Clock } from "effect";
 import assert from "node:assert/strict";
 import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -50,7 +51,7 @@ function reader(body: AsyncIterable<Buffer>) {
         const next = await it.next();
         if (next.done) return;
         const raw = next.value.toString();
-        const m = /^(?:id: (\d+)\n)?event: (.+)\ndata: (.*)\n\n$/.exec(raw);
+        const m = /^(?:id: ([0-9a-f]+\.\d+)\n)?event: (.+)\ndata: (.*)\n\n$/.exec(raw);
         got.push(m ? { id: m[1], event: m[2], data: JSON.parse(m[3]!), raw } : { raw });
       }
     })());
@@ -79,9 +80,12 @@ test("changes are told as events, rows by what changed, read only to its viewer"
   const ofB = b.got.filter((e) => e.event).map((e) => [e.event, e.data]);
   assert.deepEqual(ofB, [["read", { viewer: "b@x", thread: 3, n: 9 }], ["session", { key: "s" }]]);
   assert.equal(reads.filter((r) => r === "summary").length, 1);
-  // Sequence numbers go up across the station.
-  const ids = [...a.got, ...b.got].filter((e) => e.id).map((e) => Number(e.id)).sort((x, y) => x - y);
-  assert.equal(new Set(ids).size, ids.length);
+  // Ids go up on each stream, of one run of the station; what is told to everyone has one id on all streams.
+  const numbers = (got: { id?: string }[]) => got.filter((e) => e.id).map((e) => Number(e.id!.split(".")[1]));
+  for (const got of [a.got, b.got]) assert.deepEqual(numbers(got), [...numbers(got)].sort((x, y) => x - y));
+  assert.equal(new Set([...a.got, ...b.got].filter((e) => e.id).map((e) => e.id!.split(".")[0])).size, 1);
+  const sessionIds = [a, b].map((s) => s.got.find((e) => e.event === "session")!.id);
+  assert.equal(sessionIds[0], sessionIds[1]);
   rows["a@x"] = [{ id: "2", title: "two" }];
   change({ type: "threadRemoved", id: 1 });
   await settle();
@@ -92,6 +96,61 @@ test("changes are told as events, rows by what changed, read only to its viewer"
   await a.close();
   await b.close();
   assert.equal(events.inUse(), false);
+});
+
+test("a stream that takes over is told first what was told to everyone after the last id its predecessor gave", async () => {
+  const time = testClock();
+  const { events, change } = setup(time.clock);
+  const old = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  change({ type: "session", key: "s1" });
+  await settle();
+  const heard = old.got.find((e) => e.event === "session")!.id!;
+  // Told while the new stream is asked for (it is not the station's yet): only the old one has them.
+  change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
+  change({ type: "read", viewer: "b@x", thread: 3, n: 9 });
+  change({ type: "read", viewer: "a@x", thread: 3, n: 9 });
+  await settle();
+  const fresh = reader((await events.open(viewer("a@x"), "zh", false, [], [], heard)).body as AsyncIterable<Buffer>);
+  await settle();
+  const told = (got: typeof old.got) => got.filter((e) => e.event === "thread" || e.event === "read").map((e) => [e.id, e.event]);
+  // Again, with the ids they had, and only what is this viewer's (not b@x's read).
+  assert.deepEqual(told(fresh.got), told(old.got));
+  assert.deepEqual(told(fresh.got).map(([, event]) => event).sort(), ["read", "thread"]);
+  // From then on, as to everyone.
+  change({ type: "thread", id: 5, entries: [{ n: 1 } as any] });
+  await settle();
+  assert.deepEqual(fresh.got.filter((e) => e.event === "thread").map((e) => e.data.id), [4, 5]);
+  await old.close();
+  await fresh.close();
+});
+
+test("a stream that takes over from what is not kept any more, or another run's, is told it missed it", async () => {
+  const time = testClock();
+  const { events, change } = setup(time.clock);
+  const old = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  change({ type: "thread", id: 3, entries: [{ n: 1 } as any] });
+  await settle();
+  change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
+  await settle();
+  const [three, four] = old.got.filter((e) => e.event === "thread").map((e) => e.id!);
+  const told = async (since: string) => {
+    const s = reader((await events.open(viewer("a@x"), "zh", false, [], [], since)).body as AsyncIterable<Buffer>);
+    await settle();
+    await s.close();
+    return s.got.filter((e) => e.event).map((e) => (e.event === "thread" ? e.data.id : e.event));
+  };
+  assert.deepEqual(await told(`${"0a0a0a0a"}.1`), ["missed"], "another run's");
+  // Two minutes on, more told: 3 and 4 are let go.
+  await time.adjust(121_000);
+  change({ type: "thread", id: 5, entries: [{ n: 1 } as any] });
+  await settle();
+  change({ type: "thread", id: 6, entries: [{ n: 1 } as any] });
+  await settle();
+  assert.deepEqual(await told(three!), ["missed"], "4 came after it, and is not kept any more");
+  // After the last let go, or later: all that came after is kept, told again.
+  assert.deepEqual(await told(four!), [5, 6]);
+  assert.deepEqual(await told(old.got.filter((e) => e.event === "thread").at(-2)!.id!), [6]);
+  await old.close();
 });
 
 test("a job's log is told now and as it grows", async () => {

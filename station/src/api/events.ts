@@ -1,11 +1,18 @@
 // GET /events (the Rust station's admin/events.rs): what changed, as it changes, pushed. Changes that come in a burst go out
 // as one event per session, and one round of sidebar rows; a thread's entries go out as they are written; `host` adds
 // host samples, `job` a job's output as it grows, `live` sessions as they run. Keepalives and host samples only while
-// someone follows. The same event names and data as the Rust station's; each event now also carries an `id:` (its
-// sequence number): clients from before ignore it.
+// someone follows. The same event names and data as the Rust station's; each event now also carries an `id:`: this run of
+// the station's, and its number in it (`<run>.<n>`), clients from before ignore it.
+//
+// A client's stream is replaced by another whenever what it follows changes (a session starts or stops running): what
+// was told to everyone between the new one being asked for and its being here went only to the old one, and was lost
+// where the client let go of the old one before it had read that. So what is told to everyone is kept a while, and a
+// stream asked for `since` the last id its predecessor gave is first told again what came after it (the same ids), or
+// `missed` when that is not kept any more (or was another run's): the client then reads the station again.
 //
 // Where the Rust re-read a job's log every second, a log is watched (fs.watch); the sidebar rows of a viewer are read
 // once per round for all their streams, off the main thread (the readers).
+import { randomBytes } from "node:crypto";
 import { type FSWatcher, existsSync, statSync, watch } from "node:fs";
 import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
@@ -18,6 +25,9 @@ import { Fibers } from "../ops/fibers.ts";
 
 const PING_MS = 25_000;
 const HOST_MS = 10_000;
+/// What was told to everyone is kept this long, and at most this many, for a stream that takes over (`since`).
+const KEPT_MS = 120_000;
+const KEPT_MOST = 4_000;
 
 /// What the events need of the rest of the station.
 export type EventsDeps = {
@@ -43,6 +53,9 @@ export type EventsDeps = {
   followed?(): void;
 };
 
+/// An event told to everyone (`to` chose whom): its number, and as it went out.
+type Told = { n: number; to: (c: Client) => boolean; text: string; at: number };
+
 type Client = {
   id: number;
   viewer: Viewer;
@@ -60,6 +73,11 @@ export class Events {
   private clients: Client[] = [];
   private next = 1;
   private seq = 0;
+  /// This run of the station, in each event's id: a number of another run says nothing here.
+  private readonly run = randomBytes(4).toString("hex");
+  /// What was told to everyone lately (KEPT_MS, KEPT_MOST), oldest first, and the number of the last let go.
+  private told: Told[] = [];
+  private forgotten = 0;
   private deps: EventsDeps;
   private dirty = { sessions: new Set<string>(), rowsAll: false, rows: new Set<string>(), overview: false };
   /// The process state last told per session.
@@ -97,8 +115,9 @@ export class Events {
     this.wake();
   }
 
-  /// Opens a stream for `viewer`: the sidebar as it is now is remembered, so later changes are told against it.
-  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][]): Promise<Answer> {
+  /// Opens a stream for `viewer`: the sidebar as it is now is remembered, so later changes are told against it. `since`:
+  /// the last id the stream it takes over from gave (`<run>.<n>`), what was told to everyone after it is told first.
+  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null): Promise<Answer> {
     const queue: string[] = [];
     let wakeReader: (() => void) | null = null;
     let closed = false;
@@ -113,7 +132,7 @@ export class Events {
       lang,
       host,
       rows: new Map(),
-      send: (event, data) => push(`id: ${++this.seq}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+      send: (event, data) => push(`id: ${this.run}.${++this.seq}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
       raw: push,
       stops: [],
     };
@@ -133,6 +152,8 @@ export class Events {
     for (const [id, lines] of logs) client.stops.push(this.followLog(client, id, lines));
     if (host) void this.deps.host().then((info) => client.send("host", info), () => {});
     this.clients.push(client);
+    // In the same turn as it joins: what was told since is told again, and what is told from now comes as to the rest.
+    if (since !== null) this.replay(client, since);
     if (this.clients.length === 1) {
       this.startTimers();
       this.deps.followed?.();
@@ -240,8 +261,31 @@ export class Events {
     this.lastHost = "";
   }
 
+  /// Tells everyone `to` chooses: one id for all of them, kept for a stream that takes over from one of them.
   private emit(event: string, data: unknown, to: (c: Client) => boolean = () => true) {
-    for (const c of this.clients) if (to(c)) c.send(event, data);
+    const n = ++this.seq;
+    const text = `id: ${this.run}.${n}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    const now = this.time.now();
+    this.told.push({ n, to, text, at: now });
+    let gone = 0;
+    while (gone < this.told.length && (this.told.length - gone > KEPT_MOST || now - this.told[gone]!.at > KEPT_MS)) gone++;
+    if (gone > 0) {
+      this.forgotten = this.told[gone - 1]!.n;
+      this.told = this.told.slice(gone);
+    }
+    for (const c of this.clients) if (to(c)) c.raw(text);
+  }
+
+  /// What was told to everyone after `since` (`<run>.<n>`) and would have been told to `client`, again, as it was; or
+  /// `missed`, when it was another run's or some of it is not kept any more.
+  private replay(client: Client, since: string) {
+    const m = /^([0-9a-f]+)\.(\d+)$/.exec(since);
+    const n = m && m[1] === this.run ? Number(m[2]) : null;
+    if (n === null || n < this.forgotten) {
+      client.send("missed", {});
+      return;
+    }
+    for (const t of this.told) if (t.n > n && t.to(client)) client.raw(t.text);
   }
 
   private storeChanged(change: StoreChange) {
