@@ -846,9 +846,9 @@ function followNotices(): void {
   link.port.postMessage({ id, subscribe: { topic: "notify" } });
 }
 
-// The count on the Dock's icon (macOS): the chats that want the person (failed, or waiting on them), in every workspace,
-// as the workspace switcher counts them (the core's `workspaceMarks`, client/core-ts/src/views/marks.ts). Unread ones
-// are not counted: the badge is what waits for the person, as the 奏 page.
+// The count on the Dock's icon (macOS): the core's `badge` (client/core-ts/src/views/marks.ts), every workspace's: the
+// cards waiting for the person (奏) and the chats of theirs that went wrong, or as the notifications page chose; the same
+// number, and the chats it is made of, as the sidebar's 需要你. A core from before it: failed or waiting, added up.
 let badgeHeld: number | null = null;
 
 interface Mark { alert?: number; wait?: number }
@@ -860,8 +860,9 @@ function followBadge(): void {
   link.topics.set(id, {
     value: undefined,
     onValue: (value) => {
-      const marks = Object.values((value as { workspaces?: Record<string, Mark> } | undefined)?.workspaces ?? {});
-      app.setBadgeCount(marks.reduce((n, m) => n + (m.alert ?? 0) + (m.wait ?? 0), 0));
+      const view = value as { workspaces?: Record<string, Mark>; badge?: number } | undefined;
+      const marks = Object.values(view?.workspaces ?? {});
+      app.setBadgeCount(typeof view?.badge === "number" ? view.badge : marks.reduce((n, m) => n + (m.alert ?? 0) + (m.wait ?? 0), 0));
     },
   });
   badgeHeld = id;

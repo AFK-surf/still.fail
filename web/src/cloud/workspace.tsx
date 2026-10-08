@@ -14,7 +14,8 @@ import { useTopics } from "../core/react.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
-import { ChatList, DecisionsEntry, StationTrouble, useGlassBands } from "../Sidebar.tsx";
+import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
+import { AttentionEntry } from "../Attention.tsx";
 import { DecisionDeskProvider, DecisionPage } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
 import { OpenJobs } from "../OpenJobs.tsx";
@@ -222,16 +223,15 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** Under the sidebar's lists: workspace controls, and 奏 to go to while the sidebar shows another list. */
+/** Under the sidebar's lists: workspace controls, and what wants the viewer (奏 among it). */
 function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {
-  const [mode] = useSidebarMode();
-  const decisions = mode === "decisions";
   return (
       <div className={nav.navFoot}>
         <WebUpdate />
         <ChangelogNews to={`/w/${entry.id}/settings/changelog`} />
         <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
-        {!decisions && <DecisionsEntry scope={entry.id} to={`/w/${entry.id}/decisions`} />}
+        {/* What the badge counts, every workspace's, and which chats (奏 among them, the failed ones of theirs). */}
+        <AttentionEntry scope={entry.id} />
         <WorkspaceOpenJobs scope={entry.id} />
         <div className={nav.navFootRow}>
           <WorkspaceSwitcher current={entry} />

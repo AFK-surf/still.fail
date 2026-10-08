@@ -7,7 +7,7 @@ import { Core } from "../src/core.ts";
 import { Doing } from "../src/doing.ts";
 import { conformTy } from "../src/conform.ts";
 import { merge } from "../src/entries.ts";
-import { Counts, lastChat, rowTone } from "../src/views/marks.ts";
+import { badgeOf, Counts, lastChat, rowTone } from "../src/views/marks.ts";
 import { FakeHost } from "../src/testing.ts";
 import "./helpers.ts";
 
@@ -121,14 +121,27 @@ test("keeps_what_is_under_way_with_its_plain_params", () => {
 const agentIn = (status: string): J => (status === "running" ? { key: "k", process: "running" } : status === "blocked" ? { key: "k", lastTurn: { declared: "block" } } : { key: "k" });
 
 test("only_a_row_its_person_takes_part_in_wants_them", () => {
-  assert.equal(rowTone({ mine: true, agents: [agentIn("blocked")] }), "wait", "need_help: it waits for them, nothing went wrong");
-  assert.equal(rowTone({ mine: true, agents: [{ key: "k", lastTurn: { outcome: "failed" } }] }), "alert");
-  assert.equal(rowTone({ mine: false, agents: [agentIn("blocked")] }), null);
+  const me = { id: "me@x.com", email: "me@x.com" };
+  const failed = { key: "k", lastTurn: { outcome: "failed" } };
+  // Waiting is counted by whom it waits for (decisions.forViewer), not by the agent's state.
+  assert.equal(rowTone({ mine: true, agents: [agentIn("blocked")] }), null);
+  assert.equal(rowTone({ mine: true, unread: true, agents: [agentIn("blocked")] }), null);
+  assert.equal(rowTone({ mine: true, agents: [failed] }), "alert");
+  assert.equal(rowTone({ mine: true, agents: [failed], creator: { email: "ME@x.com" } }, me), "alert");
+  assert.equal(rowTone({ mine: true, agents: [failed], creator: { email: "other@x.com" } }, me), null, "someone else's chat went wrong: theirs");
+  assert.equal(rowTone({ mine: false, agents: [failed] }), null);
   assert.equal(rowTone({ mine: true, unread: true, agents: [] }), "done");
   assert.equal(rowTone({ mine: false, unread: true, agents: [] }), null);
   assert.equal(rowTone({ mine: true, unread: true, agents: [agentIn("running")] }), null);
   assert.equal(rowTone({ mine: true, agents: [] }), null);
-  assert.equal(rowTone({ mine: true, agents: [agentIn("blocked")], decision: { seq: 4 } }), "wait");
+});
+
+test("the_badge_counts_as_the_prefs_say", () => {
+  const c = new Counts(1, 2, 4);
+  assert.equal(badgeOf({}, c), 3);
+  assert.equal(badgeOf(null, c), 3);
+  assert.equal(badgeOf({ badge: "decisions" }, c), 2);
+  assert.equal(badgeOf({ badge: "all" }, c), 7);
 });
 
 test("the_chat_last_open_is_the_cores_else_the_path_a_page_kept", () => {
@@ -147,15 +160,15 @@ test("marks_say_how_many_and_how_urgent", () => {
   assert.equal(counts(0, 1, 3).tone(), "wait");
   assert.equal(counts(0, 0, 3).tone(), "done");
   assert.equal(counts(0, 0, 0).tone(), null);
-  assert.equal(counts(2, 0, 3).label(), "2 个需要处理 · 3 个有新消息");
+  assert.equal(counts(2, 0, 3).label(), "2 个出错了 · 3 个有新消息");
   assert.equal(counts(0, 1, 1).label(), "1 个在等你 · 1 个有新消息");
   assert.equal(counts(0, 0, 1).label(), "1 个有新消息");
 });
 
 test("marks_are_said_in_english_too", () => {
   const counts = (alert: number, wait: number, unread: number) => new Counts(alert, wait, unread);
-  assert.equal(counts(2, 1, 1).labelIn("en"), "2 need attention · 1 waiting for you · 1 unread");
-  assert.equal(counts(1, 0, 3).labelIn("en"), "1 needs attention · 3 unread");
+  assert.equal(counts(2, 1, 1).labelIn("en"), "2 went wrong · 1 waiting for you · 1 unread");
+  assert.equal(counts(1, 0, 3).labelIn("en"), "1 went wrong · 3 unread");
   assert.equal(counts(0, 0, 1).labelIn("zh"), "1 个有新消息");
 });
 

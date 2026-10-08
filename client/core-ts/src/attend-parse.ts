@@ -12,9 +12,9 @@ export type FocusCall = { visible: boolean | null; focused: boolean | null; chat
 
 export type AttendCall =
   | { kind: "focus"; focus: FocusCall }
-  | { kind: "set"; on: boolean | null; asked: boolean | null }
+  | { kind: "set"; on: boolean | null; asked: boolean | null; kinds: unknown }
   | { kind: "claim"; id: string }
-  | { kind: "pushed"; workspace: string | null };
+  | { kind: "pushed"; workspace: string | null; notice: string | null };
 
 function chatOf(v: unknown): ChatOf {
   const p = read(v, [
@@ -46,13 +46,17 @@ export function parseAttend(name: string, params: unknown): AttendCall | null {
       const f = read(p, [
         ["on", "bool", "opt"],
         ["asked", "bool", "opt"],
+        ["kinds", "value", "opt"],
       ]);
-      return { kind: "set", on: f.on as boolean | null, asked: f.asked as boolean | null };
+      if (f.kinds !== null && !isObject(f.kinds)) throw CoreError.invalid(t("core-misc.params.not_object"));
+      return { kind: "set", on: f.on as boolean | null, asked: f.asked as boolean | null, kinds: f.kinds ?? null };
     }
     case "notice.claim":
       return { kind: "claim", id: read(p, [["id", "string", "req"]]).id as string };
-    case "notice.pushed":
-      return { kind: "pushed", workspace: read(p, [["workspace", "string", "opt"]]).workspace as string | null };
+    case "notice.pushed": {
+      const f = read(p, [["workspace", "string", "opt"], ["kind", "string", "opt"]]);
+      return { kind: "pushed", workspace: f.workspace as string | null, notice: f.kind as string | null };
+    }
     default:
       return null;
   }

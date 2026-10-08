@@ -168,8 +168,8 @@
   "core-views.list_separator": ", ",
   "core-views.local_author": "Local",
   "core-views.marks.alert": {
-    "one": "1 needs attention",
-    "other": "{n} need attention"
+    "one": "1 went wrong",
+    "other": "{n} went wrong"
   },
   "core-views.marks.others": "Other workspaces: {label}",
   "core-views.marks.unread": "{n} unread",

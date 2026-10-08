@@ -121,7 +121,7 @@ export class Attention implements Owner {
           });
         case "set":
           return Effect.gen(function* () {
-            yield* attend.set(c.on, c.asked);
+            yield* attend.set(c.on, c.asked, c.kinds);
             store.invalidateAll((t) => t.topic === "notify");
             if (c.on === false && handlers.pushUnregister) yield* handlers.pushUnregister(core, { kind: "pushUnregister" }, progress, at, ctx);
             return attend.value(null);
@@ -133,7 +133,7 @@ export class Attention implements Owner {
             return { show };
           });
         case "pushed":
-          return Effect.succeed({ show: attend.pushed(c.workspace) });
+          return Effect.succeed({ show: attend.pushed(c.workspace, c.notice) });
       }
     };
     handlers.pushRegister = (_inner, call) => {

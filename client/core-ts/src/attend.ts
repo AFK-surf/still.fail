@@ -17,7 +17,19 @@ const KEY = "notify";
 /// A notice no page took this long is not shown any more.
 const SHOW_FOR_MS = 30_000;
 
-type Settings = { on: boolean; asked: boolean };
+/// Which notices are shown (docs/notifications.md): a card or an agent needing them (wait, block), something gone
+/// wrong, a turn done (never, only while no page of the app is in front, or always), someone else saying something.
+export type Kinds = { wait: boolean; failed: boolean; done: "off" | "away" | "always"; message: boolean };
+export const ALL_KINDS: Kinds = { wait: true, failed: true, done: "away", message: true };
+
+type Settings = { on: boolean; asked: boolean; kinds: Kinds };
+
+/// Kinds as given (or kept): what is not given stays as `base` has it.
+export function kindsOf(v: J, base: Kinds = ALL_KINDS): Kinds {
+  const k = v !== null && typeof v === "object" ? v : {};
+  const flag = (name: "wait" | "failed" | "message") => (typeof k[name] === "boolean" ? k[name] : base[name]);
+  return { wait: flag("wait"), failed: flag("failed"), done: ["off", "away", "always"].includes(k.done) ? k.done : base.done, message: flag("message") };
+}
 
 function is(c: ChatOf, station: string, thread: number | null, session: string | null): boolean {
   return c.station === station && ((thread !== null && c.thread === thread) || (session !== null && c.session === session));
@@ -63,7 +75,7 @@ export class Attend {
   static load(host: Host): Effect.Effect<Attend> {
     return Effect.map(Effect.orElseSucceed(host.storageGet(KEY), () => null), (bytes) => {
       const kept = parseJson(bytes) as J;
-      const settings = kept && typeof kept.on === "boolean" ? { on: kept.on, asked: kept.asked === true } : { on: true, asked: false };
+      const settings = kept && typeof kept.on === "boolean" ? { on: kept.on, asked: kept.asked === true, kinds: kindsOf(kept.kinds) } : { on: true, asked: false, kinds: { ...ALL_KINDS } };
       return new Attend(host, settings);
     });
   }
@@ -76,12 +88,12 @@ export class Attend {
   value(workspace: string | null): J {
     const now = this.#host.nowMs();
     const show = this.#show.filter(([n, at]) => now - at < SHOW_FOR_MS && (workspace === null || of(n) === workspace)).map(([n]) => structuredClone(n));
-    return { on: this.#settings.on, asked: this.#settings.asked, push: this.#settings.on, show };
+    return { on: this.#settings.on, asked: this.#settings.asked, push: this.#settings.on, kinds: { ...this.#settings.kinds }, show };
   }
 
   /// Changes the settings and keeps them.
-  set(on: boolean | null, asked: boolean | null): Effect.Effect<void> {
-    const s = { on: on ?? this.#settings.on, asked: asked ?? this.#settings.asked };
+  set(on: boolean | null, asked: boolean | null, kinds: J = null): Effect.Effect<void> {
+    const s = { on: on ?? this.#settings.on, asked: asked ?? this.#settings.asked, kinds: kinds === null ? this.#settings.kinds : kindsOf(kinds, this.#settings.kinds) };
     this.#settings = s;
     if (!s.on) this.#show = [];
     return Effect.ignore(this.#host.storageSet(KEY, toJsonBytes(s)));
@@ -94,6 +106,21 @@ export class Attend {
   /// Any page in view.
   seen(): boolean {
     return [...this.#focus.values()].some((f) => f.visible);
+  }
+
+  /// Whether a notice of this kind is shown at all; `inFront`: a page of the app is in front (a turn done is shown
+  /// then only with `done: always`).
+  wants(kind: unknown, inFront: boolean): boolean {
+    const k = this.#settings.kinds;
+    if (kind === "wait" || kind === "block") return k.wait;
+    if (kind === "failed") return k.failed;
+    if (kind === "message") return k.message;
+    return k.done === "always" || (k.done === "away" && !inFront);
+  }
+
+  /// Any page in front: shown and focused.
+  #inFront(): boolean {
+    return [...this.#focus.values()].some((f) => f.visible && f.focused);
   }
 
   /// The workspaces the viewer is in; null while no UI says.
@@ -224,7 +251,7 @@ export class Attend {
     this.#show = this.#show.filter(([, at]) => now - at < SHOW_FOR_MS);
     const before = this.#show.length;
     for (const n of added) {
-      if (!this.#currentHas(of(n))) continue;
+      if (!this.#currentHas(of(n)) || !this.wants(n.kind, this.#inFront())) continue;
       const station = typeof n.station === "string" ? n.station : "";
       const looking = this.#showing(station, typeof n.thread === "number" ? n.thread : null, typeof n.session === "string" ? n.session : null).some((f) => f.visible && f.focused);
       if (!looking) this.#show.push([structuredClone(n), now]);
@@ -240,8 +267,8 @@ export class Attend {
   }
 
   /// A push came: shown unless notifications are off, a page is in view, or it is of another workspace.
-  pushed(workspace: string | null): boolean {
-    return this.on() && !this.seen() && (workspace === null || this.#currentHas(workspace));
+  pushed(workspace: string | null, kind: string | null = null): boolean {
+    return this.on() && !this.seen() && (kind === null || this.wants(kind, false)) && (workspace === null || this.#currentHas(workspace));
   }
 }
 

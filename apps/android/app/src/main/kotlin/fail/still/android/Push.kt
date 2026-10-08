@@ -98,7 +98,7 @@ class PushService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
-        if (data["type"] != "notice" || !shown(data["workspace"])) return
+        if (data["type"] != "notice" || !shown(data["workspace"], data["kind"])) return
         val tag = data["tag"] ?: return
         val url = data["url"] ?: return
         Notifier.show(this, tag, data["title"].orEmpty(), data["body"].orEmpty(), url)
@@ -106,12 +106,12 @@ class PushService : FirebaseMessagingService() {
 
     /**
      * Whether the core has a push shown: not with notifications off, nor with the app in front (it shows its own), nor
-     * of another workspace than the one the app is in.
+     * of another workspace than the one the app is in, nor of a kind turned off (`notify.set` `kinds`).
      */
-    private fun shown(workspace: String?): Boolean = runBlocking {
+    private fun shown(workspace: String?, kind: String?): Boolean = runBlocking {
         withTimeoutOrNull(5_000) {
             try {
-                val answer = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA).call("notice.pushed", buildJsonObject { workspace?.let { put("workspace", it) } })
+                val answer = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA).call("notice.pushed", buildJsonObject { workspace?.let { put("workspace", it) }; kind?.let { put("kind", it) } })
                 (answer as? JsonObject)?.get("show")?.jsonPrimitive?.booleanOrNull
             } catch (_: CoreException) {
                 null

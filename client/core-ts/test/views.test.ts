@@ -410,6 +410,10 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   const m = marks.value;
   assert.equal(m.workspaces.ws.decisions, 2);
   assert.deepEqual([m.workspaces.ws.wait, m.workspaces.ws.alert, m.workspaces.ws.label], [2, 0, "2 个在等你"]);
+  // The badge is what the list under it shows: the cards waiting for them, no more.
+  assert.deepEqual([m.badge, m.badgeCounts, m.workspaces.ws.badge], [2, "attention", 2]);
+  assert.deepEqual(m.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq, i.stationName]), [["wait", "k1", 5, "studio"], ["wait", "k3", 4, "studio"]]);
+  assert.equal(m.workspaces.ws.items[0].text, "奏 · k1 要合吗？", "its row's line");
 });
 
 function typing(id: string, th: number, seq: number, at: number): J {

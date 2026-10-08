@@ -173,9 +173,36 @@ test("notices_show_unless_off_looked_at_or_left_to_a_push_and_each_once", async 
   assert.ok(!attend.noticed([n("n6")], true));
   assert.deepEqual(shown(attend), []);
   const again = await run(Attend.load(host));
-  assert.deepEqual(again.value(null), { on: false, asked: true, push: false, show: [] });
+  assert.deepEqual(again.value(null), { on: false, asked: true, push: false, kinds: { wait: true, failed: true, done: "away", message: true }, show: [] });
   attend.gone(2);
   assert.ok(!attend.seen());
+});
+
+test("only_the_kinds_turned_on_are_shown_a_turn_done_by_default_only_while_the_app_is_not_in_front", async () => {
+  const host = new FakeHost();
+  const attend = await run(Attend.load(host));
+  const n = (id: string, kind: string) => ({ id, kind, station: "ws/st", session: "k1", thread: 7 });
+  const shown = () => attend.value(null).show.map((x: J) => x.id);
+  attend.focus(1, focus({ visible: true, focused: true, chat: { station: "ws/st", thread: 9 } }));
+  attend.noticed([n("d1", "done"), n("w1", "wait"), n("b1", "block"), n("m1", "message")], true);
+  assert.deepEqual(shown(), ["w1", "b1", "m1"], "in front: a turn done is not told");
+  for (const id of shown()) attend.claim(id);
+  attend.focus(1, focus({ focused: false }));
+  attend.noticed([n("d2", "done")], true);
+  assert.deepEqual(shown(), ["d2"]);
+  attend.claim("d2");
+  await run(attend.set(null, null, { done: "off", message: false }));
+  attend.noticed([n("d3", "done"), n("m2", "message"), n("f1", "failed")], true);
+  assert.deepEqual(shown(), ["f1"]);
+  attend.claim("f1");
+  await run(attend.set(null, null, { wait: false }));
+  assert.deepEqual(attend.value(null).kinds, { wait: false, failed: true, done: "off", message: false }, "each given one changes, the rest stay");
+  attend.focus(1, focus({ visible: false }));
+  assert.ok(!attend.pushed(null, "block"));
+  assert.ok(attend.pushed(null, "failed"));
+  assert.ok(attend.pushed(null));
+  const again = await run(Attend.load(host));
+  assert.deepEqual(again.value(null).kinds, { wait: false, failed: true, done: "off", message: false });
 });
 
 test("only_the_workspace_the_viewer_is_in_is_heard_of", async () => {

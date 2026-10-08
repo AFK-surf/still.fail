@@ -2349,6 +2349,24 @@ export interface MachineLogin {
 	offered?: boolean;
 }
 
+/** A chat the badge counts (`WorkspaceMark.items`). */
+export interface MarkItem {
+	/** alert (an agent of a chat they started went wrong) | wait (a card or need waiting for them) */
+	kind: string;
+	workspace: string;
+	workspaceName: string;
+	station: string;
+	stationName: string;
+	session?: string;
+	thread?: number;
+	title: string;
+	/** Its row's state line: 奏 · …, 要你帮忙：…, 出问题：… */
+	text: string;
+	/** The waiting card's post (`decision.dismiss`), for `wait`. */
+	seq?: number;
+	at: number;
+}
+
 export interface MemoryFile {
 	path: string;
 	text: string;
@@ -2627,6 +2645,17 @@ export interface NoticesView {
 	items: Notice[];
 }
 
+/** Which notices this device shows (`notify.set` `kinds`); what is not given is on (`done`: away). */
+export interface NotifyKinds {
+	/** A card waits for them, or an agent needs them (wait, block). */
+	wait?: boolean;
+	failed?: boolean;
+	/** off | away (only while no page of the app is in front) | always */
+	done?: string;
+	/** Someone else said something. */
+	message?: boolean;
+}
+
 /**
  * Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
  * system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
@@ -2636,6 +2665,7 @@ export interface NotifyView {
 	on: boolean;
 	asked: boolean;
 	push: boolean;
+	kinds?: NotifyKinds;
 	show: Notice[];
 }
 
@@ -2704,6 +2734,11 @@ export interface PrefsView {
 	resume?: Record<string, string>;
 	/** Versions dismissed on this device, by workspace/station. */
 	stationUpdatesDismissed?: Record<string, string>;
+	/**
+	 * What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of
+	 * theirs that went wrong; none: this), all (those and the unread).
+	 */
+	badge?: string;
 	/** The invite code a page was opened with, kept through signing in until a workspace is made with it. */
 	invite?: string;
 	device?: DeviceView;
@@ -3008,9 +3043,18 @@ export interface WorkspaceMark {
 	/** How many cards wait in it for them in all (奏 N). Absent for 0. */
 	decisions?: number;
 	tone?: string;
-	/** 2 个需要处理 · 1 个在等你 · 3 个有新消息 */
+	/** 1 个出错了 · 2 个在等你 · 3 个有新消息 */
 	label?: string;
 	chat?: OpenChat;
+	/**
+	 * What it adds to the badge, as the prefs' `badge` counts: `wait` (decisions), and `alert` (attention, the
+	 * default), and `unread` (all).
+	 */
+	badge?: number;
+	/** The chats `alert` and `wait` count, the failed first, the latest first within: what the badge is made of. */
+	items?: MarkItem[];
+	/** Chats they take part in whose agent waits for someone else (not counted). Absent for 0. */
+	elsewhere?: number;
 }
 
 /**
@@ -3021,7 +3065,11 @@ export interface WorkspaceMarksView {
 	workspaces: Record<string, WorkspaceMark>;
 	/** alert | wait | done: the others' mark; none when nothing there wants anyone. */
 	others?: string;
-	/** 其他 workspace：1 个需要处理 · 2 个有新消息 */
+	/** 其他 workspace：1 个出错了 · 2 个有新消息 */
 	othersLabel?: string;
+	/** What the app's badge says (the Dock's): every workspace's `badge`. */
+	badge?: number;
+	/** What the badge counts, as the prefs' `badge` has it: decisions | attention | all. */
+	badgeCounts?: string;
 }
 

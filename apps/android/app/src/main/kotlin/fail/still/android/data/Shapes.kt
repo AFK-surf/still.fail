@@ -2390,6 +2390,25 @@ data class MachineLogin (
 	val offered: Boolean? = null
 )
 
+/// A chat the badge counts (`WorkspaceMark.items`).
+@Serializable
+data class MarkItem (
+	/// alert (an agent of a chat they started went wrong) | wait (a card or need waiting for them)
+	val kind: String,
+	val workspace: String,
+	val workspaceName: String,
+	val station: String,
+	val stationName: String,
+	val session: String? = null,
+	val thread: ULong? = null,
+	val title: String,
+	/// Its row's state line: 奏 · …, 要你帮忙：…, 出问题：…
+	val text: String,
+	/// The waiting card's post (`decision.dismiss`), for `wait`.
+	val seq: ULong? = null,
+	val at: Long
+)
+
 @Serializable
 data class MemoryFile (
 	val path: String,
@@ -2655,6 +2674,18 @@ data class NoticesView (
 	val items: List<Notice>
 )
 
+/// Which notices this device shows (`notify.set` `kinds`); what is not given is on (`done`: away).
+@Serializable
+data class NotifyKinds (
+	/// A card waits for them, or an agent needs them (wait, block).
+	val wait: Boolean? = null,
+	val failed: Boolean? = null,
+	/// off | away (only while no page of the app is in front) | always
+	val done: String? = null,
+	/// Someone else said something.
+	val message: Boolean? = null
+)
+
 /// Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
 /// system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
 /// show now, each taken by one page (`notice.claim`).
@@ -2663,6 +2694,7 @@ data class NotifyView (
 	val on: Boolean,
 	val asked: Boolean,
 	val push: Boolean,
+	val kinds: NotifyKinds? = null,
 	val show: List<Notice>
 )
 
@@ -2721,6 +2753,9 @@ data class PrefsView (
 	val resume: Map<String, String>? = null,
 	/// Versions dismissed on this device, by workspace/station.
 	val stationUpdatesDismissed: Map<String, String>? = null,
+	/// What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of
+	/// theirs that went wrong; none: this), all (those and the unread).
+	val badge: String? = null,
 	/// The invite code a page was opened with, kept through signing in until a workspace is made with it.
 	val invite: String? = null,
 	val device: DeviceView? = null
@@ -3031,9 +3066,16 @@ data class WorkspaceMark (
 	/// How many cards wait in it for them in all (奏 N). Absent for 0.
 	val decisions: UInt? = null,
 	val tone: String? = null,
-	/// 2 个需要处理 · 1 个在等你 · 3 个有新消息
+	/// 1 个出错了 · 2 个在等你 · 3 个有新消息
 	val label: String? = null,
-	val chat: OpenChat? = null
+	val chat: OpenChat? = null,
+	/// What it adds to the badge, as the prefs' `badge` counts: `wait` (decisions), and `alert` (attention, the
+	/// default), and `unread` (all).
+	val badge: UInt? = null,
+	/// The chats `alert` and `wait` count, the failed first, the latest first within: what the badge is made of.
+	val items: List<MarkItem>? = null,
+	/// Chats they take part in whose agent waits for someone else (not counted). Absent for 0.
+	val elsewhere: UInt? = null
 )
 
 /// What each workspace has waiting for its person, for where workspaces are switched (the `workspaceMarks` view):
@@ -3043,7 +3085,11 @@ data class WorkspaceMarksView (
 	val workspaces: Map<String, WorkspaceMark>,
 	/// alert | wait | done: the others' mark; none when nothing there wants anyone.
 	val others: String? = null,
-	/// 其他 workspace：1 个需要处理 · 2 个有新消息
-	val othersLabel: String? = null
+	/// 其他 workspace：1 个出错了 · 2 个有新消息
+	val othersLabel: String? = null,
+	/// What the app's badge says (the Dock's): every workspace's `badge`.
+	val badge: UInt? = null,
+	/// What the badge counts, as the prefs' `badge` has it: decisions | attention | all.
+	val badgeCounts: String? = null
 )
 
