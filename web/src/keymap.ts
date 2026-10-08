@@ -233,6 +233,38 @@ export function useShortcut(action: Action, handler: Handler | null): void {
     const entry: Handler = (e) => latest.current?.(e);
     const stack = handlers.get(action) ?? [];
     handlers.set(action, [...stack, entry]);
-    return () => { handlers.set(action, (handlers.get(action) ?? []).filter((h) => h !== entry)); };
+    tellMenu();
+    return () => {
+      handlers.set(action, (handlers.get(action) ?? []).filter((h) => h !== entry));
+      tellMenu();
+    };
   }, [action, on]);
+}
+
+// The desktop app's menu bar offers the actions too (apps/desktop/src/main.ts, setMenu): it is told the keys each is
+// bound to and which can be done now, and a menu item chosen does the action as its key would.
+const menu = window.stillfailDesktop?.menu;
+let telling = false;
+
+/** Tells the menu bar the actions as they are now, once for the changes made together. */
+function tellMenu(): void {
+  if (!menu || telling) return;
+  telling = true;
+  setTimeout(() => {
+    telling = false;
+    const actions = Object.keys(ACTIONS) as Action[];
+    menu.state({
+      keys: Object.fromEntries(actions.map((a) => [a, keysOf(a)[0] ?? null])),
+      on: actions.filter((a) => handlers.get(a)?.length),
+    });
+  }, 50);
+}
+
+if (menu) {
+  onPrefs(tellMenu);
+  tellMenu();
+  menu.onAction((action) => {
+    if (!(action in ACTIONS)) return;
+    void handlers.get(action as Action)?.at(-1)?.(new KeyboardEvent("keydown"));
+  });
 }

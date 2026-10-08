@@ -46,6 +46,15 @@ const desktop = {
     get: (): Promise<boolean | null> => ipcRenderer.invoke("notify:get"),
     set: (on: boolean): Promise<void> => ipcRenderer.invoke("notify:set", on),
   },
+  /** The menu bar's items for the page's actions (main.ts setMenu, web/src/keymap.ts): their keys and which can be done now, and one chosen. */
+  menu: {
+    state: (state: unknown) => ipcRenderer.send("menu:state", state),
+    onAction: (listener: (action: string) => void): (() => void) => {
+      const on = (_event: unknown, action: string) => listener(action);
+      ipcRenderer.on("menu:action", on);
+      return () => ipcRenderer.off("menu:action", on);
+    },
+  },
   /** The computer woke from sleep after `away` ms (main.ts): the page's core gives up what is under way (client.ts). */
   onResume: (listener: (away: number) => void): (() => void) => {
     const on = (_event: unknown, away: number) => listener(away);
