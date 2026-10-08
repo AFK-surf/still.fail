@@ -445,7 +445,7 @@ private fun Group(g: HistoryGroup) {
                 when (row) {
                     is HistoryRow.Step -> StepRow(row.content)
                     is HistoryRow.Thought ->
-                        if (!calls) Text(row.content.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted)
+                        if (!calls) Whole(row.content.brief, row.content.entries) { Text(row.content.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
                         else Folding(t("android-chat.history.thinking"), row.content.first, null, false) {
                             Whole(row.content.brief, row.content.entries) { Text(row.content.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
                         }
@@ -463,17 +463,33 @@ private fun StepRow(step: HistoryStep) {
     }
 }
 
-/** What an opened step or thought holds: in brief (only what names it came), read whole now, saying so till it comes. */
+/** How long what was read whole has to show before what is held is taken for all there is (it came back in brief). */
+private const val SETTLE_MS = 1000L
+
+/**
+ * What a step or thought holds, as it shows: in brief (only what names it came), read whole now (and again when it is in
+ * brief anew: its result came, in brief), saying so till it comes; read and in brief still a moment later, what is held
+ * is all there is.
+ */
 @Composable
 private fun Whole(brief: Boolean, entries: List<Long>, body: @Composable () -> Unit) {
     if (!brief) return body()
     val detail = LocalDetail.current
     var error by remember(entries) { mutableStateOf<String?>(null) }
+    var settled by remember(entries) { mutableStateOf(false) }
     LaunchedEffect(entries) {
         error = null
-        try { detail(entries) } catch (e: CoreException) { error = errorText(e) }
+        settled = false
+        try {
+            detail(entries)
+            delay(SETTLE_MS)
+            settled = true
+        } catch (e: CoreException) {
+            error = errorText(e)
+        }
     }
-    Text(error?.let { t("android-chat.history.stepUnread", "error" to it) } ?: t("android-chat.history.stepReading"), fontSize = 13.sp, color = C.muted)
+    if (settled) body()
+    else Text(error?.let { t("android-chat.history.stepUnread", "error" to it) } ?: t("android-chat.history.stepReading"), fontSize = 13.sp, color = C.muted)
 }
 
 /** A line that opens to what is behind it. */

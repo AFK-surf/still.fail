@@ -617,5 +617,7 @@
   "web-mobile.home.searchChats": "对话",
   "web-mobile.home.searchMessages": "消息",
   "web-mobile.home.searchNone": "没有找到对话或消息",
-  "web-mobile.home.searchUpdate": "更新后才能搜索"
+  "web-mobile.home.searchUpdate": "更新后才能搜索",
+  "web-mobile.history.stepReading": "正在读取…",
+  "web-mobile.history.stepUnread": "没读到：{error}"
 }

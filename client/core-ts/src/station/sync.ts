@@ -640,11 +640,12 @@ export class StationsSync {
   }
 
   /// A session's transcript entries `from` to `to` whole, in place of what is held of them in brief (`history.detail`):
-  /// never pushed, read when a history's step is opened, behind what is shown in brief (Priority.detail).
+  /// never pushed, read when a history's step is opened, behind what is shown in brief (Priority.detail). Asked for by
+  /// someone waiting on it, it is tried while the station seems away too: what went wrong is theirs to see.
   detail(address: string, key: string, from: number, to: number): Effect.Effect<void, CoreError> {
     const work = Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
-      if (!link || !this.reachable(address)) return;
+      if (!link) return;
       const page = yield* this.requests.call(link.addr, "GET", `/sessions/${encode(key)}/timeline?from=${from}&to=${to}`, null, { quiet: true });
       const start = u64(get(page, "start")) ?? from;
       const items = (get(page, "entries") as unknown[] | undefined) ?? [];

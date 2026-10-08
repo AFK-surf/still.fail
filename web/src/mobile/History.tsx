@@ -7,7 +7,7 @@ import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "../motion.ts";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { stationApi, useChat, useHistory, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
+import { stationApi, useChat, useHistory, useHistoryDetail, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
 import { ArrowRight, Check, ChevronDown, Copy, ChevronRight, Wait, Received, Send, Stop, Unplug } from "../icons.tsx";
 import { optionOf } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
@@ -35,6 +35,7 @@ import * as chatPageCss from "../pages/ChatPage.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+import { ReadWhole, useWhole } from "../brief.ts";
 /** Opens an agent's execution history over the item's page it belongs to; `entry`: the transcript entry to open at. */
 export function openHistory(app: MobileApp, station: string, chat: string, key: string, entry?: number) {
   app.sheet(null);
@@ -125,6 +126,8 @@ function Steps({ station, chat, agent, history, entry }: { station: string; chat
   // Only its latest entries come first: the pages before them load as the reader nears the top.
   const older = useHistoryOlder(station, agent.session.key);
   useOlderOnScroll(list, history?.more ?? false, items[0]?.key, older);
+  // The steps' and thoughts' whole words: read only as one is opened (the core has them in brief till then).
+  const detail = useHistoryDetail(station, agent.session.key);
   // Opened at an entry (an activity row): that item, near the top, for a moment marked. One before what is loaded: the
   // pages before come first.
   const placed = useRef(false);
@@ -152,16 +155,18 @@ function Steps({ station, chat, agent, history, entry }: { station: string; chat
   if (!history) return <Edge text={t("web-mobile.history.reading")} />;
   if (history.empty) return <Edge text={history.edge} />;
   return (
-    <div className={css.mHSteps} ref={list}>
-      <Edge text={history.edge} />
-      {items.map((item, i) => (
-        <div key={item.key} className={`m-h-line ${css.mHItem}`} data-item={i} data-marked={item.key === marked || undefined}>
-          <Item item={item} station={station} chat={chat} agent={agent} />
-        </div>
-      ))}
-      {history.live.map((step) => <div key={`live/${step.id}`} className={`m-h-line ${css.mHLive}`}>{step.text}</div>)}
-      {history.phase && <div className="m-h-line"><PhaseLine phase={history.phase} /></div>}
-    </div>
+    <ReadWhole.Provider value={detail}>
+      <div className={css.mHSteps} ref={list}>
+        <Edge text={history.edge} />
+        {items.map((item, i) => (
+          <div key={item.key} className={`m-h-line ${css.mHItem}`} data-item={i} data-marked={item.key === marked || undefined}>
+            <Item item={item} station={station} chat={chat} agent={agent} />
+          </div>
+        ))}
+        {history.live.map((step) => <div key={`live/${step.id}`} className={`m-h-line ${css.mHLive}`}>{step.text}</div>)}
+        {history.phase && <div className="m-h-line"><PhaseLine phase={history.phase} /></div>}
+      </div>
+    </ReadWhole.Provider>
   );
 }
 
@@ -268,8 +273,12 @@ function Group({ g }: { g: HistoryGroup }) {
           {g.rows.map((row, i) => row.kind === "step"
             ? <StepRow key={i} step={row.content} />
             : calls
-              ? <Folding key={i} name={t("web-mobile.history.thinking")} hint={row.content.first} meta={null} failed={false}><p className={css.mHThought}>{row.content.text}</p></Folding>
-              : <p key={i} className={css.mHThought}>{row.content.text}</p>)}
+              ? (
+                <Folding key={i} name={t("web-mobile.history.thinking")} hint={row.content.first} meta={null} failed={false}>
+                  <Whole brief={row.content.brief} entries={row.content.entries}><p className={css.mHThought}>{row.content.text}</p></Whole>
+                </Folding>
+              )
+              : <Whole key={i} brief={row.content.brief} entries={row.content.entries}><p className={css.mHThought}>{row.content.text}</p></Whole>)}
         </div>
       )}
     </div>
@@ -279,12 +288,21 @@ function Group({ g }: { g: HistoryGroup }) {
 function StepRow({ step }: { step: HistoryStep }) {
   return (
     <Folding name={step.said ?? step.name} hint={step.said === undefined ? step.hint : null} meta={step.meta} failed={step.failed}>
-      <div className={toolCss.body}>
-        <div className={toolCss.section}><ToolCall name={step.name} call={step.call} said={step.said !== undefined} /></div>
-        {step.result !== undefined && <ToolResult name={step.name} call={step.call} result={step.result} failed={step.failed} />}
-      </div>
+      <Whole brief={step.brief} entries={step.entries}>
+        <div className={toolCss.body}>
+          <div className={toolCss.section}><ToolCall name={step.name} call={step.call} said={step.said !== undefined} /></div>
+          {step.result !== undefined && <ToolResult name={step.name} call={step.call} result={step.result} failed={step.failed} />}
+        </div>
+      </Whole>
     </Folding>
   );
+}
+
+/** What a step or thought holds, as it shows: in brief, read whole now, saying so till it comes (or why it did not). */
+function Whole({ brief, entries, children }: { brief: boolean; entries: number[]; children: ReactNode }) {
+  const reading = useWhole(brief, entries);
+  if (reading === null) return <>{children}</>;
+  return <p className={css.mHThought}>{reading.error === null ? t("web-mobile.history.stepReading") : t("web-mobile.history.stepUnread", { error: reading.error })}</p>;
 }
 
 /** A line that opens to what is behind it. */

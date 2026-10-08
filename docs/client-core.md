@@ -231,7 +231,13 @@ that only notifications change it:
   keeping what comes: the station sends no more than the last 200 entries, so
   a timeline message past what it has (or before it: the transcript written
   anew) starts the timeline there. `history.older` brings the pages before, from
-  what is kept, else `GET /sessions/:key/timeline?before=&limit=`.
+  what is kept, else `GET /sessions/:key/timeline?before=&limit=`. Both ask
+  `brief=1`: what is pushed and paged is what a history shows before a step is
+  opened (docs/station-storage.md, Reading); a step or thought in brief says
+  so (`brief`, with its `entries`), and `history.detail` reads those entries
+  whole as it is opened (`?from=&to=`), never pushed, behind what is shown
+  (`Priority.detail`, above `background`, below `shown`). A station from
+  before it passes over `brief=1` and sends everything whole.
 - `jobLog` reads `GET /jobs/:id/log?lines=<n>` once and follows it on
   `/events?job=<id>&lines=<n>`: the station sends `job-log` (`id`, `lines`,
   `text`, `outputAt`) at once and whenever the log's size or time changes
@@ -396,6 +402,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `chat.latest` | `station`, `thread` | — ; the chat's latest page in place of its window (the reader goes to its end); sending from a window short of its end does it too |
 | `chat.place` | `station`, `thread`, `seq?` | — ; where the reader leaves the chat: the entry at the top of what shows, short of its end, or none at its end. It opens there next while nothing is unread (held while the core runs) |
 | `history.older` | `station`, `key` | `{ more }`: loads the page (200 entries) of the session's transcript before its `live` topic's `first` into it — from what is kept, else from the station — so the `history` view's `items` grow in front (`more` in the view: there are older ones) |
+| `history.detail` | `station`, `key`, `from`, `to` | — ; reads the session's transcript entries `from` to `to` whole in place of what is kept of them in brief, as a history's step or thought in brief (`brief`, its `entries`) is opened: the `history` view shows it whole once they are in. Behind what is shown (`Priority.detail`); tried while the station seems away too, failing as the request does |
 | `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to entry `seq` (`PUT /threads/:id/read {n}`); nothing is sent when it is read that far already. `unread` in `chats` follows. The clients no longer call it: the core reads a chat up to its newest message while a UI shows its end on a page in view (`client.focus`, attend.ts) |
 | `client.focus` | `visible?`, `focused?`, `chat?`, `left?`, `workspace?` | — ; where this UI's attention is (docs/notifications.md): what is read, a chat's `unreadLine` (held for the visit, older pages loaded first while `unreadAbove`) and which notices show follow from it; `workspace`, the one it is in (else its chat's) |
 | `station.upload` | `station`, `key`, `name`, `bytes` | the attachment (into that session's workspace; a message may carry uploads of any session in its chat) |

@@ -6,7 +6,7 @@ import { failure, useToast } from "./toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { ChevronDown, ChevronRight, Copy, Wait, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
-import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
 import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryStep, type HistoryView, type Place } from "./api.ts";
@@ -28,9 +28,7 @@ import * as additionsCss from "./styles/additions.css.ts";
 
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
-
-/** Reads whole what a step or thought in brief holds, as it is opened (`history.detail`): its history's. */
-const Detail = createContext<(entries: number[]) => Promise<unknown>>(() => Promise.resolve());
+import { ReadWhole, useWhole } from "./brief.ts";
 /**
  * The session as it ran: the main view of a session. `summary` says who it is (in the head), `actions` what can be done
  * to it right now (stop a turn, release the process), `details` unfolds under the head. With its chat's `title`, each
@@ -62,10 +60,7 @@ export function History({ station, sessionKey, summary, actions, details, focus,
   const [usageOpen, setUsageOpen] = useState(false);
   const copyLink = useCopyChatLink(useToast());
   // The steps' and thoughts' whole words: read only as one is opened (the core has them in brief till then).
-  const readDetail = useHistoryDetail(station, sessionKey);
-  const detailOf = useRef(readDetail);
-  detailOf.current = readDetail;
-  const [detail] = useState(() => (entries: number[]) => detailOf.current(entries));
+  const detail = useHistoryDetail(station, sessionKey);
   const body = useRef<HTMLDivElement>(null);
   // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
   useStickToBottom(body, `.${css.hItem}, .live-tail, .${css.hText}`);
@@ -100,7 +95,7 @@ export function History({ station, sessionKey, summary, actions, details, focus,
   return (
     // The paths its agent writes are its session's files (Peeks.tsx).
     <PathSession.Provider value={paths}>
-    <Detail.Provider value={detail}>
+    <ReadWhole.Provider value={detail}>
     <section className={css.history} aria-label={t("web-main.history.label")}>
       <header className={css.historyHead}>
         <div className={css.historyIdentity}>{summary}</div>
@@ -138,7 +133,7 @@ export function History({ station, sessionKey, summary, actions, details, focus,
         )}
       </div>
     </section>
-    </Detail.Provider>
+    </ReadWhole.Provider>
     </PathSession.Provider>
   );
 }
@@ -233,7 +228,9 @@ function Group({ group }: { group: HistoryGroup }) {
               summary={<><span className={css.hStepName}>{t("web-main.history.thinking")}</span><span className={css.hStepHint}>{row.content.first}</span></>}>
               <div className={`${css.hStepBody} ${shellCss.muted}`}>{row.content.text}</div>
             </Opened>
-          ) : <div key={i} className={css.hThinking}>{row.content.text}</div>) : (
+          ) : (
+            <Whole key={i} brief={row.content.brief} entries={row.content.entries}><div className={css.hThinking}>{row.content.text}</div></Whole>
+          )) : (
             <Step key={i} step={row.content} />
           ))}
         </div>
@@ -261,29 +258,25 @@ function Step({ step }: { step: HistoryStep }) {
 
 /**
  * A line of a group that opens to what is behind it. In brief (what is behind it not here: only what names it came), it
- * is read whole as it is opened, and says so till it comes (or why it did not).
+ * is read whole as it is opened.
  */
 function Opened({ className, failed, brief, entries, summary, children }: {
   className: string; failed?: boolean; brief: boolean; entries: number[]; summary: ReactNode; children: ReactNode;
 }) {
-  const detail = useContext(Detail);
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   return (
-    <details className={className} data-failed={failed} onToggle={(e) => {
-      const opened = e.currentTarget.open;
-      setOpen(opened);
-      if (opened && brief) {
-        setError(null);
-        detail(entries).catch((err: unknown) => setError(failure(err)));
-      }
-    }}>
+    <details className={className} data-failed={failed} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>{summary}</summary>
-      {open && brief
-        ? <div className={`${css.hStepBody} ${shellCss.muted}`}>{error === null ? t("web-main.history.stepReading") : t("web-main.history.stepUnread", { error })}</div>
-        : children}
+      {open && <Whole brief={brief} entries={entries}>{children}</Whole>}
     </details>
   );
+}
+
+/** What a step or thought holds, as it shows: in brief, read whole now, saying so till it comes (or why it did not). */
+function Whole({ brief, entries, children }: { brief: boolean; entries: number[]; children: ReactNode }) {
+  const reading = useWhole(brief, entries);
+  if (reading === null) return <>{children}</>;
+  return <div className={`${css.hStepBody} ${shellCss.muted}`}>{reading.error === null ? t("web-main.history.stepReading") : t("web-main.history.stepUnread", { error: reading.error })}</div>;
 }
 
 /**

@@ -650,5 +650,7 @@
   "web-mobile.home.searchChats": "Chats",
   "web-mobile.home.searchMessages": "Messages",
   "web-mobile.home.searchNone": "No chats or messages found",
-  "web-mobile.home.searchUpdate": "Update to search"
+  "web-mobile.home.searchUpdate": "Update to search",
+  "web-mobile.history.stepReading": "Loading…",
+  "web-mobile.history.stepUnread": "Couldn't load: {error}"
 }
