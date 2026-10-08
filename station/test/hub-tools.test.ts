@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { test } from "node:test";
 import { cardArg, optionsArg } from "../src/sessions/args.ts";
@@ -13,6 +13,8 @@ import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer } from "../src/sessions/messages.ts";
 import { forPeer } from "../src/sessions/others.ts";
 import { FETCHED, fileForPeer, putForPeer } from "../src/sessions/peer-files.ts";
+import { packWorkspaceIf } from "../src/sessions/archive.ts";
+import { roomOf } from "../src/sessions/footprint.ts";
 import { Refused } from "../src/sessions/neighbours.ts";
 import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { review, reviewUndecided } from "../src/sessions/review.ts";
@@ -782,6 +784,18 @@ test("files go between stations: a chat's attachments come with reading it, and 
   const local = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
   assert.ok(local.attachments[0]!.path.startsWith(join(workspaceA, "uploads")) && local.text.endsWith("and again"));
   assert.ok((await r.refused(keyB, "session_send", { to: chat, text: "x", files: ["missing.txt"] })).includes("no such file"));
+  // Packed with its archived workspace: read out once, every chunk after from what was read out.
+  const room = roomOf(r.config.dataDir, workspaceA)!;
+  await packWorkspaceIf(room, () => true);
+  assert.ok(!existsSync(take!.path));
+  const chunks: Buffer[] = [];
+  for (let offset = 0, eof = false; !eof; ) {
+    const got = await fileForPeer(r.hub, { chat, path: take!.path, offset });
+    chunks.push(Buffer.from(got.data, "base64"));
+    offset += chunks.at(-1)!.length;
+    eof = got.eof;
+  }
+  assert.ok(Buffer.concat(chunks).equals(big));
   await r.close();
 });
 
