@@ -159,6 +159,8 @@
   "web-main.chatRef.none": "这台 station 上没有别的对话",
   "web-main.chatRef.title": "引用对话",
   "web-main.chatRef.update": "更新 {app} 后才能引用对话",
+  "web-main.chatRef.previewGone": "这个会话不在列表里（可能已归档）",
+  "web-main.chatRef.previewHistory": "执行记录",
   "web-main.combos.label": "常用搭配",
   "web-main.combos.short": "常用",
   "web-main.composer.attach": "发送文件",

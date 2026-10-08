@@ -3,11 +3,13 @@
 // The agent reads that chat by the link (the station's chat_read and session_history tools).
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { useHref } from "react-router";
-import { useChatSearch, useStations, type ChatItem } from "./api.ts";
+import { HoverCard } from "radix-ui";
+import { useChats, useChatSearch, useStations, type ChatItem } from "./api.ts";
+import { ChatMark, stateLine } from "./ChatMark.tsx";
 import { Server } from "./icons.tsx";
 import { scopeOf, useStation } from "./station.tsx";
 import { ModelLogo, Time } from "./ui.tsx";
-import { copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy, stationOfLink } from "./chatRefs.ts";
+import { chatOfLink, copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy, stationOfLink } from "./chatRefs.ts";
 import { failure } from "./toast.tsx";
 import * as css from "./ChatRef.css.ts";
 
@@ -33,12 +35,54 @@ export function RefChip({ title, href }: { title: ReactNode; href: string }) {
   const stations = useStations(scopeOf(here)).value;
   const name = elsewhere ? (stations?.find((s) => s.station === there)?.name ?? there.slice(there.indexOf("/") + 1, there.indexOf("/") + 9)) : null;
   return (
-    <a className={css.refChip} href={href}>
-      <span className={css.refChipHash}>@</span>{title}
-      {name && <span className={css.refChipStation}><Server size={11} className={css.refChipStationIcon} />{name}</span>}
-    </a>
+    <HoverCard.Root openDelay={350} closeDelay={100}>
+      <HoverCard.Trigger asChild>
+        <a className={css.refChip} href={href}>
+          <span className={css.refChipHash}>@</span>{title}
+          {name && <span className={css.refChipStation}><Server size={11} className={css.refChipStationIcon} />{name}</span>}
+        </a>
+      </HoverCard.Trigger>
+      <HoverCard.Portal>
+        <HoverCard.Content className={css.refPreview} side="top" align="start" sideOffset={6} collisionPadding={8}>
+          <RefPreview href={href} here={here} station={name} />
+        </HoverCard.Content>
+      </HoverCard.Portal>
+    </HoverCard.Root>
   );
 }
+
+/**
+ * What a reference's chat is, while it is pointed at: its title and state, where and when it was last active, and the
+ * last thing said (or where it stands) — from the workspace's list, so a chat not in it (archived, or not this
+ * workspace's) says only that.
+ */
+function RefPreview({ href, here, station }: { href: string; here: string; station: string | null }) {
+  const relative = /\/chats\/([^/?#\s]+)/.exec(href);
+  const of = chatOfLink(href) ?? (relative ? { station: here, id: safeDecode(relative[1]!), history: /[?&]history=/.test(href) ? "?" : "" } : null);
+  const chats = useChats(scopeOf(here), false).value;
+  const item = of && chats?.days.flatMap((d) => d.items).find((i) => i.station === of.station && (i.id === of.id || i.session === of.id));
+  if (!item) return <p className={css.refPreviewNote}>{chats ? t("web-main.chatRef.previewGone") : t("web-main.reading")}</p>;
+  const state = stateLine(item);
+  return (
+    <>
+      <div className={css.refPreviewHead}><ChatMark item={item} inline /><span className={css.refPreviewTitle}>{item.title}</span></div>
+      <div className={css.refPreviewMeta}>
+        {station && <><Server size={11} className={css.refChipStationIcon} />{station} · </>}
+        {of?.history ? `${t("web-main.chatRef.previewHistory")} · ` : ""}
+        <Time stamp={item.time?.lastActiveAt} fixed />
+      </div>
+      {(state ?? item.last?.preview) && <p className={css.refPreviewLast}>{state ?? item.last?.preview}</p>}
+    </>
+  );
+}
+
+const safeDecode = (s: string) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
 
 /** Plain text with its references (links to chats) drawn as chips. */
 export function WithRefs({ text }: { text: string }) {
@@ -109,8 +153,11 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
             <button type="button" key={item.id} className={css.refItem} role="option" aria-selected={i === active} data-active={i === active || undefined}
               onClick={(e) => { e.stopPropagation(); onPick(item); }}>
               <span className={css.refLogo}>{agent && <ModelLogo maker={agent.maker} runtime={agent.runtime} size={14} />}</span>
-              <span className={css.refTitle}>{item.title}</span>
-              {item.station !== station.address && <span className={css.refTime}>{item.stationName}</span>}
+              {/* Another station's: its name after the title, as a reference to it shows it (the row keeps its three columns). */}
+              <span className={css.refTitleCell}>
+                <span className={css.refTitle}>{item.title}</span>
+                {item.station !== station.address && <span className={css.refChipStation}><Server size={11} className={css.refChipStationIcon} />{item.stationName}</span>}
+              </span>
               <Time className={css.refTime} stamp={item.time?.lastActiveAt} fixed />
             </button>
           );

@@ -177,6 +177,8 @@
   "web-main.chatRef.none": "No other chats on this station",
   "web-main.chatRef.title": "Link a chat",
   "web-main.chatRef.update": "Update {app} to link chats",
+  "web-main.chatRef.previewGone": "This chat isn't in the list (it may be archived)",
+  "web-main.chatRef.previewHistory": "Execution history",
   "web-main.combos.label": "Frequent picks",
   "web-main.combos.short": "Frequent",
   "web-main.composer.attach": "Attach file",
