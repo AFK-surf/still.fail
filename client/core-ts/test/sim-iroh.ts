@@ -513,7 +513,7 @@ export class SimEndpoint {
   #goOnto(relay: string): Promise<void> {
     let on = this.#on.get(relay);
     if (!on) {
-      this.net.onto(this.id(), relay);
+      this.net.onto(this, relay);
       const leg = this.net.leg(relay, this.side);
       on = this.net.sleep(4 * leg.ms);
       this.#on.set(relay, on);
@@ -543,7 +543,7 @@ export class SimEndpoint {
       if (relay === null) return NEVER;
       // iroh sends its first packets on every path it knows of, going onto each relay of them: those it was told of, and
       // those its lookups found (the relays the other end is at home on).
-      for (const r of new Set([...told, ...(this.lookup ? there.relays : [])])) this.net.onto(this.id(), r);
+      for (const r of new Set([...told, ...(this.lookup ? there.relays : [])])) this.net.onto(this, r);
       await this.#goOnto(relay);
     }
     const way = new Way(this.net, relay, [this.side, there.side]);
@@ -567,6 +567,10 @@ export class SimEndpoint {
     this.conns.push(mine);
     there.#arrived(theirs);
     return mine;
+  }
+
+  isClosed(): boolean {
+    return this.#closed;
   }
 
   addAddr(addr: IrohAddr): void {
@@ -628,8 +632,8 @@ export class SimNet {
   readonly #relays = new Map<string, { device: Leg; station: Leg }>();
   /// Entries (cloud relays.ts RELAY_ENTRIES): a URL on one relay's machine taking what comes to it on to another relay.
   readonly #entries = new Map<string, string>();
-  /// Who went onto each relay, and through which URLs: by relay (the one an entry goes on to), then endpoint id.
-  readonly #onto = new Map<string, Map<string, Set<string>>>();
+  /// Where each endpoint went: by endpoint, then relay (the one an entry goes on to), the URLs it went there through.
+  readonly #onto = new Map<SimEndpoint, Map<string, Set<string>>>();
   readonly #down = new Map<string, number>();
   readonly #conns: SimConnection[] = [];
   /// What befell it, as a failure says: the run's events in order (`note`).
@@ -682,21 +686,24 @@ export class SimNet {
     return this.#entries.get(at) ?? at;
   }
 
-  /// The endpoint `id` went onto a relay through `url`.
-  onto(id: string, url: string): void {
+  /// `endpoint` went onto a relay through `url`.
+  onto(endpoint: SimEndpoint, url: string): void {
+    let on = this.#onto.get(endpoint);
+    if (!on) this.#onto.set(endpoint, (on = new Map()));
     const server = this.server(url);
-    let on = this.#onto.get(server);
-    if (!on) this.#onto.set(server, (on = new Map()));
-    let urls = on.get(id);
-    if (!urls) on.set(id, (urls = new Set()));
+    let urls = on.get(server);
+    if (!urls) on.set(server, (urls = new Set()));
     urls.add(href(url));
   }
 
-  /// Each endpoint that went onto one relay through two URLs or more: one key there twice, which iroh-relay takes as one
-  /// connection taking the other's place, back and forth.
-  twice(): string[] {
+  /// Each endpoint that went onto one relay through two URLs or more (`open`: of those still open): one key there twice,
+  /// which iroh-relay takes as one connection taking the other's place, back and forth.
+  twice(open = false): string[] {
     const out: string[] = [];
-    for (const [server, on] of this.#onto) for (const [id, urls] of on) if (urls.size > 1) out.push(`${id.slice(0, 8)} on ${server} through ${[...urls].join(" and ")}`);
+    for (const [endpoint, on] of this.#onto) {
+      if (open && endpoint.isClosed()) continue;
+      for (const [server, urls] of on) if (urls.size > 1) out.push(`${endpoint.id().slice(0, 8)} on ${server} through ${[...urls].join(" and ")}`);
+    }
     return out;
   }
 

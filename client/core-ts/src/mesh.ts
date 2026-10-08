@@ -465,12 +465,12 @@ export type MeshEnv = { host: Host; runner: Runner; tracer: Tracer; iroh: Iroh; 
 
 export class Mesh {
   readonly #env: MeshEnv;
-  readonly relays: string[];
+  relays: string[];
   /// Ways into a relay through another relay's machine (cloud relays.ts `relay_entries`): each dialled on an endpoint
   /// of its own and through it alone, never on the main endpoint. An entry is a relay already reached under another URL:
   /// on both, one key is on that relay twice, the connection made last taking the other's place, back and forth
   /// (2026-10-08: with the entries among their relays, phones' connects to any station failed one in five).
-  readonly entries: string[];
+  entries: string[];
   #endpoint: IrohEndpoint;
   #secret: Uint8Array;
   readonly #links = new Map<string, Opening>();
@@ -701,11 +701,11 @@ export class Mesh {
     return this.#openLinks().length > 0;
   }
 
-  /// The endpoint bound anew with the same key, the old one closed: at most once in REBIND_MS.
-  #rebind(): Effect.Effect<IrohEndpoint> {
+  /// The endpoint bound anew with the same key, the old one closed: at most once in REBIND_MS (`always`: whenever).
+  #rebind(always = false): Effect.Effect<IrohEndpoint> {
     return Effect.gen({ self: this }, function* () {
       const now = this.#env.host.nowMs();
-      if (now - this.#reboundAt < REBIND_MS) return this.#endpoint;
+      if (!always && now - this.#reboundAt < REBIND_MS) return this.#endpoint;
       this.#reboundAt = now;
       const bound = yield* Effect.result(Mesh.#bind(this.#env.iroh, this.#secret, this.relays));
       if (bound._tag === "Failure") return this.#endpoint;
@@ -717,6 +717,20 @@ export class Mesh {
       this.#env.runner.fork(old.close());
       return endpoint;
     });
+  }
+
+  /// Told the relays and entries anew: the first `/v1/me` of a run, after the mesh came up on those it kept from the last
+  /// (a cloud from before `relay_entries` had the entries among the relays). Dialled as told from now on; the endpoint
+  /// is bound anew on the new relays if its were others, the links on it closed (an entry among its relays would keep it
+  /// on that entry's relay twice).
+  retune(relays: string[], entries: string[]): void {
+    const same = (a: string[], b: string[]) => a.length === b.length && a.every((r, i) => sameRelay(r, b[i]!));
+    const fresh = entries.filter((e) => !relays.some((r) => sameRelay(r, e)));
+    if (this.#closed || (same(this.relays, relays) && same(this.entries, fresh))) return;
+    const rebind = !same(this.relays, relays);
+    this.relays = relays;
+    this.entries = fresh;
+    if (rebind) this.#env.runner.fork(Effect.asVoid(this.#rebind(true)));
   }
 
   /// The relays a station is dialled and measured on: still.fail's, then its workspace's own. The endpoint stays bound
@@ -1611,8 +1625,12 @@ export function meshWire(inner: Inner): StationWire {
           const made = yield* Effect.result(
             Effect.flatMap(inner.cloudSync.relaysNow(), (relays) => Mesh.make({ host: inner.host, runner: inner.runner, tracer: inner.tracer, iroh, wakes: inner.wakes }, relays, inner.cloudSync.entriesNow())),
           );
-          if (made._tag === "Success") up = made.success;
-          else mesh = null;
+          if (made._tag === "Success") {
+            up = made.success;
+            // This run's `/v1/me` may have come while it came up on the relays kept from the last.
+            const told = inner.cloudSync.relays;
+            if (told !== null) up.retune(told, inner.cloudSync.entriesNow());
+          } else mesh = null;
           Deferred.doneUnsafe(d, made._tag === "Success" ? Effect.succeed(made.success) : Effect.fail(made.failure));
         }),
       );
@@ -1620,6 +1638,7 @@ export function meshWire(inner: Inner): StationWire {
     });
   inner.mesh = get;
   inner.meshNow = () => up;
+  inner.cloudSync.onRelays = (relays, entries) => up?.retune(relays, entries);
   return new MeshWire({
     mesh: get,
     meshNow: () => up,

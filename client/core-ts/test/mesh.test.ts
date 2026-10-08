@@ -509,6 +509,33 @@ sim("an_entry_is_dialled_on_its_own_endpoint_and_no_key_is_on_a_relay_twice", as
   await close(s, station, mesh);
 });
 
+/// A run whose mesh came up on the relays kept from the last, from a cloud that had the entries among them: its first
+/// `/v1/me` tells them apart (`retune`). The endpoint is bound anew on the relays alone, and from then on no key is on a
+/// relay twice; the station is reached through the entry, its own endpoint's.
+sim("told_the_entries_apart_the_mesh_binds_anew_on_the_relays_alone", async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 5 }, station: { ms: 70, loss: 0.35 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 60 }, station: { ms: 30 } });
+  const entry = s.net.entry("https://a.relay.test:8443/", b, { device: { ms: 5 }, station: { ms: 40 } });
+  const station = await s.stationOn(b, a);
+  const id = station.id();
+  const mesh = await s.run(Mesh.make(env(s), [a, b, entry]));
+  assert.notDeepEqual(s.net.twice(true), [], "kept from before, the entry among the relays: on b twice");
+  const before = mesh.endpoint();
+  mesh.retune([a, b], [entry]);
+  await s.until(() => mesh.endpoint() !== before);
+  assert.deepEqual([mesh.relays, mesh.entries], [[a, b], [entry]]);
+  await reach(s, mesh, id);
+  await s.time.pass(5 * 60_000);
+  assert.equal(via(mesh, id), entry, JSON.stringify(mesh.measured(id)));
+  assert.deepEqual(s.net.twice(true), []);
+  // Told the same again: nothing changes.
+  const now = mesh.endpoint();
+  mesh.retune([a, b], [entry]);
+  await s.time.pass(TICK_MS);
+  assert.equal(mesh.endpoint(), now);
+  await close(s, station, mesh);
+});
+
 /// A way that turns bad under requests (its relay's line to the station starts losing packets): they move to another
 /// within a minute, not at the next measuring minutes later.
 sim("requests_leave_a_way_that_turns_bad", async (s) => {

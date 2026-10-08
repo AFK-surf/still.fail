@@ -39,8 +39,8 @@ export class CloudSync {
   readonly #sockets = new Map<string, Fiber.Fiber<void, never>>();
   /// The relays the mesh uses, as the first `/v1/me` of this run or the kept one said.
   relays: string[] | null = null;
-  /// Told when the relays are first known: the mesh comes up (station links).
-  onRelays: (() => void) | null = null;
+  /// Told the relays and entries the first `/v1/me` of this run names (the mesh may be up on those kept from the last).
+  onRelays: ((relays: string[], entries: string[]) => void) | null = null;
   /// Told when the stations each account reaches may have changed (the station sync follows).
   onReach: (() => void) | null = null;
   /// Whose operator lists are synced (as `admin.me` answered).
@@ -156,11 +156,10 @@ export class CloudSync {
       if (!core.accounts.list().some((a) => a.sub === sub)) return;
       if (answer._tag === "Success") {
         const relays = relaysOf(answer.success);
-        if (relays && this.relays === null) {
-          this.relays = relays;
-          this.onRelays?.();
-        }
+        const first = relays !== null && this.relays === null;
+        if (first) this.relays = relays;
         core.data.put("me", sub, answer.success);
+        if (first) this.onRelays?.(relays, entriesOf(answer.success));
         this.mes.set(sub, null);
       } else {
         // A beta app the account may not use: what it reached is not reached through this app.
