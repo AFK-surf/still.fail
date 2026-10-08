@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
-import { glass } from "./glass.ts";
+import { glass, solid } from "./glass.ts";
 import { popKeyframes } from "./keyframes.css.ts";
 import { inputRow } from "./additions.css.ts";
 import { command, field, skeletonRow } from "../ui.css.ts";
@@ -82,6 +82,10 @@ export const popover = style({
   boxShadow: `0 12px 32px ${vars.shadow}`, transformOrigin: "var(--radix-popper-transform-origin, top)",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`, cornerShape: vars.cornerShape,
 });
+/** A popover on the solid ground rather than the glass (the sidebar's menus: styles/glass.ts \`solid\`). */
+export const popoverSolid = style({});
+// Doubled, to win over the popover's glass whatever order the sheets load in.
+globalStyle(`${popoverSolid}${popoverSolid}`, solid);
 export const menuList = style({ minWidth: "180px" });
 export const menuItem = style({
   display: "flex", alignItems: "center", gap: "8px", width: "100%", minHeight: "34px", padding: "7px 10px", lineHeight: "20px",

@@ -283,7 +283,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
       <ContextMenu.Root modal={false}>
         <ContextMenu.Trigger asChild disabled={editing}>{row}</ContextMenu.Trigger>
         <ContextMenu.Portal>
-          <ContextMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} collisionPadding={8} onCloseAutoFocus={(e) => e.preventDefault()}>
+          <ContextMenu.Content className={`${controlsCss.popover} ${controlsCss.popoverSolid} ${controlsCss.menuList}`} collisionPadding={8} onCloseAutoFocus={(e) => e.preventDefault()}>
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
             {item.pinned != null && <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => void pin()}><Pin size={14} />{item.pinned ? t("web-main.chat.unpin") : t("web-main.chat.pin")}</ContextMenu.Item>}
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setEditing(true)}><Edit size={14} />{t("web-main.chat.rename")}</ContextMenu.Item>

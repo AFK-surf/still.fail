@@ -96,7 +96,7 @@ export function OpenJobsChip({ scope }: { scope: string }) {
         <button type="button" className={css.openJobsChip} aria-label={t("web-main.jobs.long")}><span className={css.openJobsChipDot} />{t("web-main.jobs.chip", { n })}</button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className={`${controlsCss.popover} ${css.openJobsPop}`} side="top" align="end" sideOffset={6} collisionPadding={8}>
+        <Popover.Content className={`${controlsCss.popover} ${controlsCss.popoverSolid} ${css.openJobsPop}`} side="top" align="end" sideOffset={6} collisionPadding={8}>
           <OpenJobs scope={scope} />
         </Popover.Content>
       </Popover.Portal>

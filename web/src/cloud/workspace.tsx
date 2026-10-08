@@ -282,7 +282,7 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.accountMenu}`} side="top" align="start" sideOffset={6}>
+          <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.popoverSolid} ${controlsCss.menuList} ${css.accountMenu}`} side="top" align="start" sideOffset={6}>
             {/* The workspace in use first, as what the menu is about (as on the phone): its settings open from it. */}
             {shown && (
               <DropdownMenu.Item className={`${controlsCss.menuItem} ${css.menuCurrent}`} onSelect={() => navigate(`/w/${current.id}/settings/workspace`)}>
