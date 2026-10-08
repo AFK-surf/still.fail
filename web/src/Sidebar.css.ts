@@ -108,7 +108,7 @@ export const navText = style(ellipsis);
 export const navNew = style({ display: "flex", alignItems: "center", gap: 4, padding: "6px 8px 2px" });
 globalStyle(`${navNew} > ${navRow}`, { flex: 1, minWidth: 0 });
 /** 待处理, under 新建对话 (cloud/workspace.tsx): as inset as it; nothing when there is nothing to do. */
-export const navTodo = style({ padding: "0 8px 2px", selectors: { "&:empty": { display: "none" } } });
+export const navTodo = style({ padding: "2px 8px 8px", selectors: { "&:empty": { display: "none" } } });
 // Align the compose icon with the 14px completion check below.
 globalStyle(`${navNew} > ${navRow} > svg`, { transform: "translateX(-1px)" });
 
