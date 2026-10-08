@@ -32,8 +32,16 @@ asks the network. One sync scheduler
 (`src/sync/scheduler.ts`; `src/sync/cloud.ts`, `src/station/sync.ts`) owns all
 traffic to still.fail cloud and the stations, keeps everything current by itself
 whatever the UI shows, and takes the UI's attention (`client.focus`, a topic
-shown) only as priority. Stations and still.fail cloud push what changes
-(events, sockets); nothing is read again on a timer.
+shown) only as priority. A station's requests run two at a time, and two more
+of what a UI has open or a person waits on (`URGENT_ROOM`): on a slow link a
+read can take a minute, and the chat opened does not wait behind it. Stations
+and still.fail cloud push what changes (events, sockets); nothing is read again
+on a timer. Every request to a station asks its answer deflated
+(`accept-encoding: deflate-raw`, an event stream flushed event by event,
+station/src/mesh/deflate.ts), and it is inflated as it comes (fflate, the same
+on every host); a station from before sends it as it is. The one exception to
+keeping everything current: what a station's agents spent (`stationUsage`) is
+read only while a page shows it.
 
 Topics are keyed collections (`src/collections.ts`): a change to a record
 recomputes only the items that read it, and a subscription that says `keyed`
@@ -146,7 +154,7 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `chatRows` | `station` | `/chats`: the viewer's sidebar rows as the station puts them together (`ChatRow`; docs/station-storage.md, The sidebar) |
 | `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns, jobs }` (no messages, no transcript) |
 | `jobs` | `station` | `/jobs`: its background jobs still up (running, or a service being started again), newest first, each with the `chat` it is in as the viewer's sidebar has it |
-| `stationUsage` | `station` | `/usage?from=&tz=`: what its agents spent from this device's midnight 29 days ago, days as its clock has them (`rows` added up by day, thread, person, profile and model, each with `cost` at the model's API prices; the `threads`, `people` and `profiles` they name; `since`, the earliest call recorded; `reading` while the transcripts are read for the first time). Read again on its `usage` event (it recorded more, about once a minute while agents work); a station from before it answers 404 |
+| `stationUsage` | `station` | `/usage?from=&tz=`: what its agents spent from this device's midnight 29 days ago, days as its clock has them (`rows` added up by day, thread, person, profile and model, each with `cost` at the model's API prices; the `threads`, `people` and `profiles` they name; `since`, the earliest call recorded; `reading` while the transcripts are read for the first time). Read only while a page shows it (some 200 KB, changing with every model call): on its `usage` event (it recorded more, about every 15 s while agents work) while shown, else marked to be read as it is next shown; a station from before it answers 404 |
 | `job` | `station`, `id` | `/jobs/:id` as it is now, with what the clients show of it (jobs.ts): kept current by its events, read again each half minute (every 4 s from a station too old to say whose it is) |
 | `jobLog` | `station`, `job` (id), `lines` | `{ text, outputAt, last, said }`: the job's last `lines` lines of output and when it last grew (below); `last` its last line, `said` (最后输出 · 3 分钟前) goes out fresh as it changes (jobs.ts) |
 | `thread` | `station`, `thread` (id) | `{ first, last, caught, end, entries, thread }`: a window of the thread's entries `first ..= last` (`EntryView`s, never changed once read), at most 150 (`WINDOW`). It opens where the chat is to be read — the page before the first entry not read and the page from it while something is unread, else where it was left (`chat.place`), else the latest page — and its first value is whole: from what is kept when all of it is and it is current (the station's `threads` say how far each goes), else read first. `chat.older` / `chat.newer` bring in the page before / after (a page is kept ahead either way), as many going at the other end; `end`: it reaches the thread's latest entry, so what is said joins it; short of it, what is said waits on the device. `caught`: its last entry read rather than told as it was said. `thread` is its summary |
@@ -191,13 +199,19 @@ that only notifications change it:
 - Station topics: while any topic of a station is live, the station's
   `/events` stream is held open, with `?host=1` while a `host` topic is live
   (the stream is opened anew when that changes, and when the sessions it
-  follows do; the old one closes once the new one is open). What the station
-  told the old one as the new one was asked for comes again on the new one:
-  it asks `since=<the last id the old one gave>` (an id is the station's run
-  and the event's number in it, `<run>.<n>`), and the station, which keeps
-  what it told everyone for two minutes, tells that first, with the same ids;
-  when it cannot (more than that ago, or another run's), it says `missed`
-  and the station is read again. Events go into the topics
+  follows do; the old one closes once the new one is open). Every stream
+  after the first asks `since=<the last event id heard>` (an id is the
+  station's run and the event's number in it, `<run>.<n>`): one taking over
+  from a stream still open, and one coming back after its link went (on a
+  weak link that is every minute or so: the link moves to a better way, or
+  loses its way). The station keeps what it told for ten minutes (while
+  nobody follows too, for one coming back) and tells what came after first,
+  with the same ids, then the viewer's sidebar rows and overview as they
+  changed meanwhile, and answers `stillfail-resumed: 1`: nothing is read
+  again. When it cannot (more than that ago, or another run's), it says
+  `missed` and the station is read again, once; a station from before
+  resuming does not answer so, and a stream coming back reads it again as
+  before (one taking over only on `missed`). Events go into the topics
   as they come: `session` replaces the summary in `sessions` (an archived one
   leaves the list) and in its `session` topic (whose `turns` are read again
   only when the summary's `turns` or `lastTurn` differ from them);
@@ -218,9 +232,9 @@ that only notifications change it:
   `jobs` (or goes in front), and in `jobs` while it is up (one not listed there
   yet reads `jobs` again, for its chat; one no longer up leaves); `overview`
   and `host` are the whole values. After the stream
-  was down, every live topic of the station is read once when it reopens
-  (`thread` topics only what came after them: `?after=<last>`); `link` says
-  how the stream is.
+  was down and could not be resumed, every live topic of the station is read
+  once when it reopens (`thread` topics only what came after them:
+  `?after=<last>`); `link` says how the stream is.
 - `thread` shows what is kept on the device of the thread (its latest page)
   at once, then reads `?after=<last>`; with nothing kept it reads the latest
   page. What it reads is kept (docs/station-storage.md, In the client core),

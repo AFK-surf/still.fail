@@ -20,9 +20,9 @@ import { GONE, NETWORK } from "../wake.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { activity as historyActivity } from "../history.ts";
 import { StationAddr } from "./addr.ts";
-import { IDEMPOTENCY_KEY, Requests, httpError } from "./requests.ts";
+import { IDEMPOTENCY_KEY, RESUMED, Requests, httpError } from "./requests.ts";
 import { SseParser } from "./sse.ts";
-import { readAll, type StationWire } from "./wire.ts";
+import { readAll, replyHeader, type StationWire } from "./wire.ts";
 
 /// How long a failed or ended stream waits before it is opened again; a station not reached is tried again at
 /// RECONNECT_MS, doubling up to RECONNECT_MAX_MS.
@@ -119,6 +119,8 @@ export class Link {
   readonly memory = new Map<string, unknown>();
   /// When the host sample was last written down (HOST_KEY).
   hostSaved = 0;
+  /// Whether the usage held is as the station has it: read since it last said its usage changed.
+  usageCurrent = false;
 
   constructor(address: string, addr: StationAddr, scoped: Scoped) {
     this.address = address;
@@ -321,9 +323,10 @@ export class StationsSync {
         // Each try in a scope of its own: the stream closes with it.
         const ended = yield* Effect.scoped(
           Effect.gen(function* () {
-            // Asked anew each time: a session is followed from what is held of it by then. Taking over from a stream
-            // still open: what that one is yet to give (said before this one is the station's) comes on this one.
-            const path = self.#path(address, wants, handing ? link.lastEvent : null);
+            // Asked anew each time: a session is followed from what is held of it by then. From the last event heard
+            // (taking over from a stream still open, or coming back after one went): what came after it comes first.
+            const since = link.lastEvent;
+            const path = self.#path(address, wants, since);
             const sent = core.host.nowMs();
             const races = self.wire.races?.() ?? false;
             // Still opening as the UI comes back from being away since before: tried anew.
@@ -366,10 +369,15 @@ export class StationsSync {
             reached = true;
             link.heard = core.host.nowMs();
             self.setLink(address, { state: "online" });
+            // Told what came after the last event heard (RESUMED): nothing is read again. Otherwise (the first stream,
+            // one that could not be resumed, a station from before) what the station holds is read now, in the trace of
+            // its connecting; unless this stream took over from one still open (a station from before resuming says
+            // `missed` when it cannot tell all it missed).
+            const resumed = since !== null && replyHeader(opened.success, RESUMED) === "1";
+            span.set("stillfail.resumed", resumed);
             span.end();
-            // Nothing is replayed: what the station holds is read now, in the trace of its connecting (unless this
-            // stream took over from one still open).
-            if (!handing) self.snapshot(address, span.context);
+            let snapshotted = !handing && !resumed;
+            if (snapshotted) self.snapshot(address, span.context);
             handing = false;
             const parser = new SseParser();
             const openedAt = core.host.nowMs();
@@ -402,7 +410,11 @@ export class StationsSync {
               heard = core.host.nowMs();
               link.heard = heard;
               for (const [name, data, id] of parser.feed(chunk)) {
-                self.onEvent(address, name, data);
+                // Not all that was missed could be told: read again (once for this stream).
+                if (name === "missed") {
+                  if (!snapshotted) self.snapshot(address);
+                  snapshotted = true;
+                } else self.onEvent(address, name, data);
                 if (id !== undefined) heardEvent(link, id);
               }
             }
@@ -444,7 +456,7 @@ export class StationsSync {
       this.#enqueue(address, "archived", Priority.background, read({ topic: "archivedRows", station: address }, "/chats?archived=1")),
       this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, "/jobs")),
       this.#enqueue(address, "footprint", Priority.background, read({ topic: "footprint", station: address }, "/footprint")),
-      this.#enqueue(address, "usage", Priority.background, this.#usage(address, ctx)),
+      ...this.#usageChanged(address, ctx),
       ...this.#slackConnects(address).map((id) => this.#enqueue(address, `slackApp/${id}`, Priority.background, read({ topic: "slackApp", station: address, connect: id }, `/connects/${encode(id)}/slack-app`))),
     ];
     this.#core.runner.fork(Effect.ensuring(Effect.ignore(Effect.all(done.map((d) => Deferred.await(d)), { mode: "result" })), Effect.sync(() => span.end())));
@@ -514,9 +526,28 @@ export class StationsSync {
     });
   }
 
-  /// What the station's agents spent over the last 30 days, days as this device's clock has them.
+  /// The station's usage changed (or may have: read again): read while a page shows it, else only marked to be read once
+  /// one does. It is some 200 KB and changes with every model call an agent makes: read on each whatever was shown, it
+  /// was most of what a slow link carried. The read asked for, if any.
+  #usageChanged(address: string, ctx: SpanContext | null = null): Deferred.Deferred<void, CoreError>[] {
+    const link = this.#links.get(address);
+    if (link) link.usageCurrent = false;
+    if (!this.#core.store.subscribed({ topic: "stationUsage", station: address })) return [];
+    return [this.#enqueue(address, "usage", Priority.background, this.#usage(address, ctx))];
+  }
+
+  /// A page shows the station's usage: read, unless what is held is as the station has it.
+  usageShown(address: string): void {
+    const link = this.#links.get(address);
+    if (link && !link.usageCurrent) this.#enqueue(address, "usage", Priority.shown, this.#usage(address));
+  }
+
+  /// What the station's agents spent over the last 30 days, days as this device's clock has them. Current from when it is
+  /// asked: a change said meanwhile has it read again.
   #usage(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
+      const link = this.#links.get(address);
+      if (link) link.usageCurrent = true;
       const now = this.#core.host.nowMs();
       const offset = this.#core.host.utcOffsetMin(now);
       const day = 86_400_000;
@@ -761,7 +792,7 @@ export class StationsSync {
         return;
       }
       case "usage":
-        this.#enqueue(address, "usage", Priority.background, this.#usage(address));
+        this.#usageChanged(address);
         return;
       case "footprint":
         core.data.set({ topic: "footprint", station: address }, data);

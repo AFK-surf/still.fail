@@ -1,20 +1,29 @@
 // Requests to a station's admin API over its wire (station/transport.rs): each a span of the trace it is made in, with
 // what it is waited on as (status.ts), its write key, its language; files, uploads and previews.
 import { Effect, Scope } from "effect";
+import { Inflate } from "fflate";
 import type { Inner } from "../core.ts";
-import { CoreError, asCoreError } from "../error.ts";
+import { CoreError, HostError, asCoreError } from "../error.ts";
+import type { Pull } from "../host.ts";
 import { current, t } from "../i18n.ts";
 import { encode } from "../ops.ts";
 import { stationWhat } from "../status.ts";
 import { Kind, route, type Span, type SpanContext } from "../trace.ts";
 import { get, hex, isObject, parseJson, toJsonBytes } from "../util.ts";
 import type { StationAddr } from "./addr.ts";
-import { readAll, replyHeader, type RequestHead, type StationWire, type WireReply, type WireSocket } from "./wire.ts";
+import { concat, readAll, replyHeader, type RequestHead, type StationWire, type WireReply, type WireSocket } from "./wire.ts";
 
 export const IDEMPOTENCY_KEY = "idempotency-key";
 export const IDEMPOTENT = "stillfail-idempotent";
 export const LANG_HEADER = "stillfail-lang";
 export const EVENT_STREAM = "text/event-stream";
+/// An events stream's answer when the station told first what came after the `since` it was asked (station/src/api/
+/// events.ts RESUMED): nothing is read again.
+export const RESUMED = "stillfail-resumed";
+/// What every request asks its answer deflated as (`accept-encoding`), but a preview's (its page reads what the service
+/// sent): raw deflate, an event stream flushed after each event (station/src/mesh/deflate.ts). On a slow link the bytes
+/// are the wait, and JSON goes to a fifth or less. A station from before sends every answer as it is.
+export const DEFLATE = "deflate-raw";
 /// The most a station from before uploads in parts takes in one (station/src/api/routes/hub.ts MAX_UPLOAD).
 export const UPLOAD_WHOLE_MAX = 50 * 1024 * 1024;
 /// How long a preview's WebSocket may take to open.
@@ -39,6 +48,34 @@ export function answered(span: Span, reply: WireReply): void {
 }
 
 const empty = new Uint8Array();
+
+/// A reply's body as the station wrote it: inflated as it comes when it came deflated, each piece as soon as it is whole
+/// (an event stream's, event by event).
+function plain(reply: WireReply): Pull<Uint8Array> {
+  if (replyHeader(reply, "content-encoding") !== DEFLATE) return reply.body;
+  const inflate = new Inflate();
+  const out: Uint8Array[] = [];
+  inflate.ondata = (data) => {
+    if (data.length > 0) out.push(data);
+  };
+  let ended = false;
+  const take: Effect.Effect<Uint8Array | null, HostError> = Effect.gen(function* () {
+    for (;;) {
+      if (out.length > 0) return out.length === 1 ? out.shift()! : concat(out.splice(0));
+      if (ended) return null;
+      const chunk = yield* reply.body.take;
+      ended = chunk === null;
+      try {
+        inflate.push(chunk ?? empty, ended);
+      } catch (error) {
+        // Cut off short of its end (a stream let go of): what came is all there is.
+        if (ended) continue;
+        return yield* Effect.fail(new HostError(t("core-logic.mesh.read_failed", { error: (error as Error).message })));
+      }
+    }
+  });
+  return { take };
+}
 
 /// A station's answer to a path it has no route for (`no route GET /…`): a station from before that route.
 function isNoRoute(body: Uint8Array): boolean {
@@ -68,6 +105,7 @@ export class Requests {
     span.set("stillfail.station", station.station);
     if (bodySize > 0) span.set("http.request.body.size", bodySize);
     const h: [string, string][] = [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]];
+    if (!path.startsWith("/preview/") && !headers.some(([k]) => k.toLowerCase() === "accept-encoding")) h.push(["accept-encoding", DEFLATE]);
     // A write carries a key of its own: a station that keeps writes to once does it once however often it arrives.
     const m = method.toUpperCase();
     if (m !== "GET" && m !== "HEAD" && !h.some(([k]) => k.toLowerCase() === IDEMPOTENCY_KEY)) {
@@ -89,8 +127,12 @@ export class Requests {
           Effect.gen({ self: this }, function* () {
             const reply = yield* this.wire.request(station, head, body);
             answered(span, reply);
-            const bytes = yield* readAll(reply.body, (chunk) => (waiting ? waiting.received(chunk.length) : status.received(null, chunk.length)));
-            span.set("http.response.body.size", bytes.length);
+            // What came over the link is counted (and said in the span); what it says, inflated.
+            let came = 0;
+            const counted = { ...reply, body: { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && ((came += chunk.length), waiting ? waiting.received(chunk.length) : status.received(null, chunk.length)))) } };
+            const bytes = yield* readAll(plain(counted));
+            span.set("http.response.body.size", came);
+            if (came !== bytes.length) span.set("stillfail.body.inflated", bytes.length);
             return { status: reply.status, headers: reply.headers, body: bytes };
           }).pipe(Effect.ensuring(Effect.sync(() => waiting?.end()))),
         );
@@ -135,13 +177,13 @@ export class Requests {
       answered(span, reply);
       span.end();
       if (reply.status < 200 || reply.status >= 300) {
-        const bytes = yield* Effect.orElseSucceed(readAll(reply.body), () => empty);
+        const bytes = yield* Effect.orElseSucceed(readAll(plain(reply)), () => empty);
         const data = parseJson(bytes);
         return yield* Effect.fail(httpError(reply.status, data === undefined ? {} : data));
       }
-      // What comes on it is no longer waited on, only counted.
+      // What comes on it is no longer waited on, only counted (as it came over the link), and inflated.
       const body = { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && status.received(null, chunk.length))) };
-      return { ...reply, body };
+      return { ...reply, body: plain({ ...reply, body }) };
     });
   }
 
@@ -214,8 +256,8 @@ export class Requests {
             progress(0, total);
             let loaded = 0;
             let told = 0;
-            const bytes = yield* readAll(reply.body, (chunk) => {
-              waiting.received(chunk.length);
+            const counted = { ...reply, body: { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && waiting.received(chunk.length))) } };
+            const bytes = yield* readAll(plain(counted), (chunk) => {
               loaded += chunk.length;
               if (loaded - told >= step) {
                 progress(loaded, total);

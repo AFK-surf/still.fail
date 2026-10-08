@@ -123,6 +123,8 @@ export class StationTopics implements Owner {
     }
     if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.syncTranscript(station, topic.key as string, Priority.shown);
     if (topic.topic === "net") this.#sampleNet(topic);
+    // What the agents spent: read as a page shows it, not with each model call while none does.
+    if (topic.topic === "stationUsage") this.#sync.usageShown(station);
     // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
     if (topic.topic === "jobLog") this.#sync.readLog(station, topic.job as string, topic.lines as number);
     if (["host", "live", "jobLog"].includes(topic.topic)) this.#sync.openEvents(station, false);

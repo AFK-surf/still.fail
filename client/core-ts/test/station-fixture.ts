@@ -1,8 +1,9 @@
 // A station for the core's tests (station.test.ts, core-flows.test.ts): `ws/st` answering its admin API from a table
 // ("GET /path" → JSON) over the host's fetch, its events stream fed by `push`.
 import { Effect, Queue } from "effect";
+import { constants, deflateRawSync } from "node:zlib";
 import { Core } from "../src/core.ts";
-import type { HttpRequest, Pull } from "../src/host.ts";
+import type { HttpRequest, HttpResponse, Pull } from "../src/host.ts";
 import { HostWire, type StationWire } from "../src/station/wire.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { HostError } from "../src/error.ts";
@@ -28,11 +29,21 @@ export function stationReplies(host: FakeHost, reply: (req: HttpRequest) => unkn
   replies.set(host, reply);
 }
 
+/// Whether a request asks its answer deflated, as the core's do (requests.ts DEFLATE).
+const asksDeflated = (req: HttpRequest) => req.headers.some(([k, v]) => k.toLowerCase() === "accept-encoding" && v.split(",").some((e) => e.trim() === "deflate-raw"));
+
+/// An answer as the station sends it to a core that asks (station/src/mesh/deflate.ts): JSON from 512 bytes deflated.
+function deflatedFor(req: HttpRequest, res: HttpResponse): HttpResponse {
+  if (!asksDeflated(req) || res.body.length < 512) return res;
+  return { ...res, headers: [...res.headers, ["content-encoding", "deflate-raw"]], body: new Uint8Array(deflateRawSync(res.body)) };
+}
+
 export function stationHost(answers: Answers) {
   const host = new FakeHost();
   signIn(host);
   const streams: { path: string; queue: Queue.Queue<Uint8Array | null>; closed: boolean }[] = [];
-  host.onFetch((req: HttpRequest) => {
+  host.onFetch((req: HttpRequest) => deflatedFor(req, answer(req)));
+  const answer = (req: HttpRequest): HttpResponse => {
     const path = req.url.replace("https://stillfail.test", "");
     if (path === "/v1/me") return jsonResponse(200, { workspaces: [{ id: "ws", name: "W" }], invitations: [], relay_url: null });
     if (path === "/v1/workspaces/ws") return jsonResponse(200, { id: "ws", stations: [{ id: "st", name: "studio", online: true, last_seen: null }] });
@@ -43,10 +54,10 @@ export function stationHost(answers: Answers) {
     if (key in answers) return answers[key] instanceof Status ? jsonResponse((answers[key] as Status).code, (answers[key] as Status).body) : jsonResponse(200, answers[key]);
     if (path.startsWith("/admin/api/threads/") && path.includes("/entries")) return jsonResponse(200, { last: 0, entries: [] });
     return jsonResponse(404, { error: "no" });
-  });
+  };
   // How its events stream answers: opens, fails (the station is not reached), hangs (a try that takes long), or a
-  // status of its own.
-  const gate: { stream: "open" | "fail" | "hang" | number } = { stream: "open" };
+  // status of its own; `resumes`: one asked `since` an event says it was told first what came after it.
+  const gate: { stream: "open" | "fail" | "hang" | number; resumes: boolean } = { stream: "open", resumes: false };
   host.onFetchStream((req) =>
     Effect.gen(function* () {
       if (gate.stream === "fail") return yield* Effect.fail(new HostError("连不上"));
@@ -61,8 +72,11 @@ export function stationHost(answers: Answers) {
       const open = { path, queue, closed: false };
       yield* Effect.addFinalizer(() => Effect.sync(() => (open.closed = true)));
       streams.push(open);
-      const body: Pull<Uint8Array> = { take: Queue.take(queue) };
-      return { status: 200, headers: [], body };
+      // Asked deflated: each chunk as it comes, flushed (on its own: a stream of such pieces inflates as one).
+      const deflates = asksDeflated(req);
+      const body: Pull<Uint8Array> = { take: Effect.map(Queue.take(queue), (c) => (c && deflates ? new Uint8Array(deflateRawSync(c, { finishFlush: constants.Z_SYNC_FLUSH })) : c)) };
+      const headers: [string, string][] = [...(gate.resumes && path.includes("since=") ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(deflates ? [["content-encoding", "deflate-raw"] as [string, string]] : [])];
+      return { status: 200, headers, body };
     }),
   );
   /// Sends an event on the newest open stream.

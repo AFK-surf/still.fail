@@ -30,7 +30,11 @@ type Waiting = {
   done: Deferred.Deferred<void, CoreError>;
 };
 
-/// One lane: its tasks, run `width` at a time.
+/// Past a lane's width, how many more may run of what a UI has open or a person waits on (Priority.focused and up): on
+/// a slow link a read can take a minute (every thread, the sidebar), and two of them would hold up the chat opened.
+export const URGENT_ROOM = 2;
+
+/// One lane: its tasks, run `width` at a time (and URGENT_ROOM more of the urgent).
 class Lane {
   readonly waiting: Waiting[] = [];
   readonly running = new Map<string, Waiting>();
@@ -90,7 +94,7 @@ export class Scheduler {
   }
 
   #pump(lane: Lane): void {
-    while (lane.running.size < lane.width) {
+    for (;;) {
       // The most urgent, then the oldest; one already running for its key waits for that run.
       let best = -1;
       for (let i = 0; i < lane.waiting.length; i++) {
@@ -99,6 +103,9 @@ export class Scheduler {
         if (best < 0 || w.priority > lane.waiting[best].priority || (w.priority === lane.waiting[best].priority && w.seq < lane.waiting[best].seq)) best = i;
       }
       if (best < 0) return;
+      // The lane full: only the urgent go on, into the room kept for them.
+      const busy = lane.running.size;
+      if (busy >= lane.width && (lane.waiting[best].priority < Priority.focused || busy >= lane.width + URGENT_ROOM)) return;
       const [task] = lane.waiting.splice(best, 1);
       lane.running.set(task.key, task);
       this.#runner.fork(
