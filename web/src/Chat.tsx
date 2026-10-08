@@ -44,7 +44,7 @@ import { sendingHere, toMadeChat as toMadeChatOf } from "./madeChat.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast, useAct } from "./toast.tsx";
-import { MessageDecision } from "./Decisions.tsx";
+import { askOf, MessageDecision } from "./Decisions.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
 import { jumped, jumpWords, useJump } from "./jumpTo.ts";
@@ -928,8 +928,9 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   if (m.system) return <SystemNotice text={m.text} profile={m.profile} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = agentHere ? m.by.agent : undefined;
+  const ask = askOf(m);
   return (
-    <OthersMessage data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
+    <OthersMessage ask={ask} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
       data-enter={enter} data-caught={caught} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
       avatar={<MessageAvatar message={m} name={who} />} time={m.time?.createdAt}
       name={agent
@@ -1079,15 +1080,19 @@ function SystemNotice({ text, profile, time, ts, enter, caught }: { text: string
   );
 }
 
-/** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says. */
-export function OthersMessage({ avatar, name, time, children, ...data }: Data & { avatar: ReactNode; name: ReactNode; time: Stamp | undefined; children: ReactNode }) {
+/**
+ * Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says. A post that asks
+ * (`ask`, Decisions.tsx askOf) says whose reply it waits on after them, and the viewer's has the accent's bar.
+ */
+export function OthersMessage({ avatar, name, time, ask, children, ...data }: Data & { avatar: ReactNode; name: ReactNode; time: Stamp | undefined; ask?: { yours: boolean; tag: string } | null; children: ReactNode }) {
   return (
     <div className={`${conversationCss.msg} ${css.msgRow}`} {...data}>
       {avatar}
-      <div className={css.msgMain}>
+      <div className={`${css.msgMain}${ask?.yours ? ` ${decisionsCss.askBar}` : ""}`}>
         <div className={conversationCss.msgHead}>
           {name}
           <Time className={conversationCss.msgTime} stamp={time} />
+          {ask && <span className={decisionsCss.askTag} data-yours={ask.yours || undefined}>{ask.tag}</span>}
         </div>
         {children}
       </div>

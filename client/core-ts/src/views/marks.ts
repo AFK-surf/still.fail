@@ -1,8 +1,8 @@
-// What each workspace has waiting for its person, for where workspaces are switched (views/marks.rs): of the chats
-// they take part in, those that want them and those with something unread; the chat last open in it. Only how many
-// and how urgent goes past a workspace.
+// What each workspace has waiting for its person, for where workspaces are switched and the Dock's count (views/marks.rs):
+// the asks open for them (the 奏 page's), of the chats they take part in those that failed and those with something
+// unread (奏's 有新消息), each chat counted once; the chat last open in it. Only how many and how urgent goes past a
+// workspace.
 import { decodeComponent } from "../accounts.ts";
-import * as decisions from "../decisions.ts";
 import { tr, current, type Lang } from "../i18n.ts";
 import * as present from "../present.ts";
 import type { Value } from "../store.ts";
@@ -22,13 +22,21 @@ export function workspaceIds(workspaces: J): string[] {
     .flatMap((w) => (typeof get(w, "id") === "string" ? [w.id as string] : []));
 }
 
-/// What a chat's row asks of its person.
+/// What a chat's row asks of its person, short of an ask (`rowMark`): its agent failed, or something new in it with its
+/// agents done. An agent needing them (need_help) asks only through the row's card or need.
 export function rowTone(row: J): string | null {
   if (get(row, "mine") !== true) return null;
   const state = present.rowState(arr(get(row, "agents")));
   if (state === "failed") return "alert";
-  if (state === "block") return "wait";
   return get(row, "unread") === true && state !== "run" ? "done" : null;
+}
+
+/// Where a chat's row stands for the person, the one group it counts in: an ask open for them (`open`: Views.openAsk,
+/// 奏's 要你决定 and 稍后), its agent failed, or something unread (奏's 有新消息); else none.
+export function rowMark(row: J, open: boolean): "decision" | "alert" | "unread" | null {
+  if (open) return "decision";
+  const tone = rowTone(row);
+  return tone === "alert" ? "alert" : tone === "done" ? "unread" : null;
 }
 
 /// The chat last open in a workspace, from the prefs.
@@ -77,19 +85,15 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
   const others = new Counts();
   for (const id of workspaceIds(views.ok({ topic: "workspaces" }))) {
     const counts = new Counts();
-    let waiting = 0;
     // Only the rows that ask something or are unread count (db/account.ts: found by their columns, not loaded whole).
     const stations = (views.stations(id) ?? []).map((s) => s.address);
+    const me = views.me(id);
     for (const [address, row] of views.marked(stations)) {
       if (local.beingArchived(address, row)) continue;
-      const d = decisions.forViewer(row, views.me(id));
-      const thread = get(row, "thread");
-      const waits = d !== null && !(typeof thread === "number" && local.answered(address, thread, typeof d.seq === "number" ? d.seq : 0));
-      if (waits) waiting++;
-      const tone = rowTone(row);
-      if (tone === "alert") counts.alert++;
-      else if (tone === "wait" || waits) counts.wait++;
-      else if (tone !== null) counts.unread++;
+      const mark = rowMark(row, views.openAsk(address, row, me) !== null);
+      if (mark === "decision") counts.wait++;
+      else if (mark === "alert") counts.alert++;
+      else if (mark === "unread") counts.unread++;
     }
     if (currentWorkspace !== id) {
       others.alert += counts.alert;
@@ -97,8 +101,10 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       others.unread += counts.unread;
     }
     const mark: J = { alert: counts.alert, unread: counts.unread };
-    if (counts.wait > 0) mark.wait = counts.wait;
-    if (waiting > 0) mark.decisions = waiting;
+    if (counts.wait > 0) {
+      mark.wait = counts.wait;
+      mark.decisions = counts.wait;
+    }
     const tone = counts.tone();
     if (tone !== null) {
       mark.tone = tone;

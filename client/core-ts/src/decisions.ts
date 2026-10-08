@@ -56,7 +56,7 @@ export function ofMessage(m: J): J | null {
 /// A card as the clients show it (`MessageCard`).
 export function cardShown(card: J): J {
   const v: J = { type: kind(card) };
-  for (const field of ["assignee", "assigneeText"]) if (get(card, field) !== undefined) v[field] = card[field];
+  for (const field of ["assignee", "assigneeText", "yours", "deciderName"]) if (get(card, field) !== undefined) v[field] = card[field];
   if (kind(card) === "options") v.options = optionsShown(get(card, "options"));
   else if (kind(card) === "text") {
     const p = trimmed(get(card, "placeholder"));
@@ -87,14 +87,22 @@ export function asked(row: J): J | null {
   return v;
 }
 
+/// Who decides a card, for the viewer: in words (`assigneeText`), whether it is theirs (`yours`), else that person's
+/// name (`deciderName`; none when no one is set to).
 export function labelAssignee(card: J, me: J, members: J[], creator: J): void {
   const who = decider(card, creator);
   let text: string;
+  delete card.yours;
+  delete card.deciderName;
   if (who !== null) {
-    if (present.isViewer(me, who, [])) text = t("core-logic.decisions.assignee.you");
-    else {
+    if (present.isViewer(me, who, [])) {
+      text = t("core-logic.decisions.assignee.you");
+      card.yours = true;
+    } else {
       const started = creator !== undefined && creator !== null && typeof get(card, "assignee") !== "string" ? str(get(creator, "name")) || null : null;
-      text = t("core-logic.decisions.assignee", { name: present.memberName(members, who) ?? started ?? who });
+      const name = present.memberName(members, who) ?? started ?? who;
+      text = t("core-logic.decisions.assignee", { name });
+      card.deciderName = name;
     }
   } else text = t("core-logic.decisions.assignee.none");
   card.assigneeText = text;

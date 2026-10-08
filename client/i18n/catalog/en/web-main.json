@@ -215,6 +215,13 @@
     "one": "Decisions: 1 waiting",
     "other": "Decisions: {n} waiting"
   },
+  "web-main.decisions.entryUnread": {
+    "one": "New messages: 1 chat",
+    "other": "New messages: {n} chats"
+  },
+  "web-main.decisions.group.asks": "Your call",
+  "web-main.decisions.group.later": "Later",
+  "web-main.decisions.group.unread": "New messages",
   "web-main.decisions.idle.answered": "Answered",
   "web-main.decisions.idle.answeredTitle": "Answered today",
   "web-main.decisions.idle.note": "New ones show up here",
@@ -225,6 +232,10 @@
   "web-main.decisions.openChat": "Open chat",
   "web-main.decisions.options": "Options",
   "web-main.decisions.replyWhat": "reply",
+  "web-main.decisions.replyTo": "Reply to {name}…",
+  "web-main.decisions.tag.none": "Awaiting reply",
+  "web-main.decisions.tag.other": "Waiting on {name}",
+  "web-main.decisions.tag.yours": "Your reply",
   "web-main.decisions.title": "Decisions",
   "web-main.doing.failed": "Failed",
   "web-main.doing.failedWhy": "Failed: {error}",

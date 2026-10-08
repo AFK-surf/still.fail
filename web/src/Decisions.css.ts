@@ -47,6 +47,23 @@ export const decision = style({ position: "relative" });
 /** Answered (or replaced), in the chat: who did what, quiet, where the options were. */
 export const settledLine = style({ margin: "2px 0 0", fontSize: vars.textXs, lineHeight: "18px", color: vars.subtle });
 
+/** Whose reply a post that asks waits on, after its author and time (Decisions.tsx askOf): the viewer's in the accent. */
+export const askTag = style({
+  display: "inline-flex", alignItems: "center", height: 18, padding: "0 7px", borderRadius: 999, flex: "none",
+  fontSize: "11px", fontWeight: 500, whiteSpace: "nowrap", background: vars.neutralBg, color: vars.muted,
+  selectors: { "&[data-yours]": { background: vars.accentBg, color: vars.accentText } },
+});
+/** The viewer's to answer: a bar in the accent down the post's left, its words a little in from it. */
+export const askBar = style({ paddingLeft: 10, boxShadow: `inset 3px 0 0 ${vars.accent}` });
+
+/** Over the composer, at its end: what else can be done with it (the wide screen's 待定 and 不再提醒), small and quiet. */
+export const callActions = style({ display: "flex", justifyContent: "flex-end", gap: 2, marginBottom: 6 });
+export const callButton = style({
+  height: 24, padding: "0 8px", border: 0, borderRadius: 6, background: "none", color: vars.subtle, fontFamily: "inherit",
+  fontSize: vars.textXs, cursor: "pointer", transition: `background ${vars.dur} ${vars.easeOut}, color ${vars.dur} ${vars.easeOut}`,
+  selectors: { "&:hover:not(:disabled)": { background: vars.hover, color: vars.text }, "&:disabled": { opacity: 0.4, cursor: "default" } },
+});
+
 // ── the decisions page ────────────────────────────────────────────────
 
 /** The page's body under its bar: what a swipe shows under the decision, and the decision over it. */
@@ -153,6 +170,11 @@ export const arriving = style({
 export const sideEntry = style({ marginBottom: "4px", color: vars.text });
 export const sideEntryLead = style({ width: "16px", flex: "none", textAlign: "center", fontWeight: "600" });
 export const sideEntryCount = style({ flex: "1", color: vars.muted, fontVariantNumeric: "tabular-nums" });
+/** How many of the viewer's chats have something new: a blue dot and the number, at the row's end. */
+export const sideEntryUnread = style({
+  display: "inline-flex", alignItems: "center", gap: 5, flex: "none", color: vars.muted, fontSize: vars.textXs,
+  fontVariantNumeric: "tabular-nums",
+});
 
 /** The wide screen's page (pages/Decisions.tsx): its bar, then the decision filling the pane. */
 export const page = style({ flex: "1", minHeight: "0", display: "flex", flexDirection: "column", background: vars.canvas });

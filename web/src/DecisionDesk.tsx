@@ -1,7 +1,8 @@
 // 奏 on the wide screen: one of the sidebar's lists (beside 全部, 我参与的 and 监控中, sliding to it as they do), every
 // decision waiting for the viewer, those set aside (待定) last; the one picked fills the 奏 page as the phone's card
 // does, its options under its post and the chat's composer floating at its foot. The sidebar stays on 奏 while another page is open (a new
-// chat). ⌥↑ ⌥↓ go up and down the list (the chats' keys); 待定 and 不再提醒 are in the bar.
+// chat). ⌥↑ ⌥↓ go up and down the list (the chats' keys); 待定 and 不再提醒 are over the composer, the bar
+// keeping the chat's own buttons. With the asks, the list has the viewer's chats with something new (有新消息).
 //
 // How it moves: opened from 奏 in the sidebar's foot, the list comes out of that row (each row drawn where it rests,
 // moved back there first). Answered, the decision is drawn in and pulled up and the next is under it (flyOff, as on the
@@ -18,6 +19,7 @@ import { useShortcut } from "./keymap.ts";
 import { useListMotion } from "./listMotion.ts";
 import { LOCAL_MS, MOVE, reducedMotion } from "./motion.ts";
 import { Time } from "./ui.tsx";
+import { ChatBarActionsFor } from "./pages/ChatPage.tsx";
 import * as css from "./DecisionDesk.css.ts";
 import * as deckCss from "./Decisions.css.ts";
 import * as nav from "./Sidebar.css.ts";
@@ -115,15 +117,17 @@ function useDesk(workspace: string) {
 }
 
 /**
- * 奏 as one of the sidebar's lists (Sidebar.tsx ChatList), beside the chats': every decision waiting for the viewer,
- * those set aside last. Picking one shows it on the 奏 page (`page`), going there from another; while it is the list in
- * view (`active`), ⌥↑ ⌥↓ go up and down it.
+ * 奏 as one of the sidebar's lists (Sidebar.tsx ChatList), beside the chats': the viewer's inbox in the workspace. Every
+ * ask open for them (要你决定), then their chats with something new and nothing to decide (有新消息), then the asks set
+ * aside (稍后). Picking an ask shows it on the 奏 page (`page`), going there from another; a chat with something new
+ * opens as itself. While it is the list in view (`active`), ⌥↑ ⌥↓ go up and down the asks.
  */
 export function DecisionRows({ active, page }: { active: boolean; page: string }) {
   const { queue, items, d, pick, step } = useDeskContext();
   const { view } = queue;
   const navigate = useNavigate();
-  const here = useLocation().pathname === page;
+  const path = useLocation().pathname;
+  const here = path === page;
   const list = useRef<HTMLDivElement>(null);
   useListMotion(list);
   useOpening(list, active);
@@ -133,23 +137,45 @@ export function DecisionRows({ active, page }: { active: boolean; page: string }
   };
   useShortcut("chat.prev", active ? () => { if (!step(-1)) return false; if (!here) navigate(page); } : null);
   useShortcut("chat.next", active ? () => { if (!step(1)) return false; if (!here) navigate(page); } : null);
-  const firstAside = items.findIndex((x) => queue.isAside(x));
+  const asks = items.filter((x) => !queue.isAside(x));
+  const later = items.filter((x) => queue.isAside(x));
+  const unread = view.value?.unread ?? [];
+  // A group's heading only with another group beside it: alone, the asks are the list.
+  const headed = unread.length > 0 || later.length > 0;
+  const ask = (x: DecisionItem, i: number, heading: string | null) => (
+    <div key={keyOf(x)} data-flip={keyOf(x)} role="listitem" className={css.item}>
+      {i === 0 && heading && <div className={css.group}>{heading}</div>}
+      <button type="button" className={css.row} aria-current={(here && x === d) || undefined} data-aside={queue.isAside(x) || undefined}
+        onMouseDown={(e) => e.preventDefault()} onClick={() => choose(x)}>
+        <span className={css.question}>{question(x)}</span>
+        <span className={css.meta}>
+          <span className={css.metaWhere}>{x.title} · {x.stationName}</span>
+          <Time className={css.metaTime} stamp={x.message.time?.createdAt} fixed />
+        </span>
+      </button>
+    </div>
+  );
   return (
     <div ref={list} className={nav.navScroll} role="list" aria-label={t("web-main.decisions.title")} aria-hidden={!active || undefined} inert={!active || undefined}>
-      {items.map((x, i) => (
-        <div key={keyOf(x)} data-flip={keyOf(x)} role="listitem" className={css.item}>
-          {i === firstAside && <div className={css.group}>{t("web-main.decisions.defer")}</div>}
-          <button type="button" className={css.row} aria-current={(here && x === d) || undefined} data-aside={queue.isAside(x) || undefined}
-            onMouseDown={(e) => e.preventDefault()} onClick={() => choose(x)}>
-            <span className={css.question}>{question(x)}</span>
-            <span className={css.meta}>
-              <span className={css.metaWhere}>{x.title} · {x.stationName}</span>
-              <Time className={css.metaTime} stamp={x.message.time?.createdAt} fixed />
-            </span>
-          </button>
-        </div>
-      ))}
-      {view.value && items.length === 0 && <div className={css.emptyList}>{t("web-main.decisions.empty")}</div>}
+      {asks.map((x, i) => ask(x, i, headed ? t("web-main.decisions.group.asks") : null))}
+      {unread.map((x, i) => {
+        const to = `${stationBase(x.station)}/chats/${encodeURIComponent(x.session)}`;
+        return (
+          <div key={`unread:${x.station}/${x.session}`} data-flip={`unread:${x.station}/${x.session}`} role="listitem" className={css.item}>
+            {i === 0 && <div className={css.group}>{t("web-main.decisions.group.unread")}</div>}
+            <button type="button" className={css.row} aria-current={decodeURIComponent(path) === decodeURIComponent(to) || undefined}
+              onMouseDown={(e) => e.preventDefault()} onClick={() => navigate(to)}>
+              <span className={css.question}>{x.title}</span>
+              <span className={css.meta}>
+                <span className={css.metaWhere}>{x.line || x.stationName}</span>
+                <Time className={css.metaTime} stamp={x.time?.lastActiveAt} fixed />
+              </span>
+            </button>
+          </div>
+        );
+      })}
+      {later.map((x, i) => ask(x, i, t("web-main.decisions.group.later")))}
+      {view.value && items.length === 0 && unread.length === 0 && <div className={css.emptyList}>{t("web-main.decisions.empty")}</div>}
     </div>
   );
 }
@@ -177,12 +203,8 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
             <span className={css.barStation}>{d.stationName}</span>
           </>}
         </div>
-        <div className={css.barActions}>
-          {d && <>
-            <button type="button" className={css.barButton} onClick={defer} disabled={!!replying}>{t("web-main.decisions.defer")}</button>
-            <button type="button" className={css.barButton} onClick={dismiss} disabled={!!replying}>{t("web-main.decisions.dismiss")}</button>
-          </>}
-        </div>
+        {/* The chat's own buttons, as its page has them. */}
+        {d && <StationContext.Provider value={queue.station(d)}><ChatBarActionsFor key={keyOf(d)} session={d.session} onOpen={onOpen} /></StationContext.Provider>}
       </header>
       <div ref={host} className={deckCss.deck}>
         {d ? (
@@ -196,6 +218,11 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
               </div>
               <DecisionFoot>
                 <div className={deckCss.footColumn}>
+                  {/* Over the composer: what else to do with it than answer. */}
+                  <div className={deckCss.callActions}>
+                    <button type="button" className={deckCss.callButton} onClick={defer} disabled={!!replying}>{t("web-main.decisions.defer")}</button>
+                    <button type="button" className={deckCss.callButton} onClick={dismiss} disabled={!!replying}>{t("web-main.decisions.dismiss")}</button>
+                  </div>
                   <DecisionAnswer d={d} mobile={false} onAnswered={() => answered(d)} onReplying={(sending) => setReplying(sending ? d : null)} />
                 </div>
               </DecisionFoot>

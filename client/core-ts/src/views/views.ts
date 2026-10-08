@@ -47,8 +47,9 @@ export const HEAD_FROM = 500;
 
 const VIEW_TOPICS = new Set(["chats", "chatSearch", "stations", "profiles", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
 
-/// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
-/// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
+/// What a chat row's columns say that the views find rows by (db/account.ts): whether it failed or has something new for
+/// its person (workspace marks, 奏's 有新消息), whether it asks something (of anyone: whose it is the views see), whether
+/// the 奏 page lists it.
 export const chatDerive: Derive = {
   tone: marks.rowTone,
   asks: (row) => {
@@ -607,6 +608,16 @@ export class Views implements Owner {
   /// The rows of these stations that ask something of their person or are unread (views/marks.ts).
   marked(stations: string[]): [string, J][] {
     return this.#core.data.marked(stations);
+  }
+
+  /// The ask a chat's row has open for the viewer, the one rule the chat, the 奏 page and the marks go by: its card, or
+  /// the need its agent ended need_help with (a text card), not dismissed, theirs to decide (decisions.forViewer), and
+  /// not answered from here yet (a message sent after it, still on its way: local.answered).
+  openAsk(station: string, row: J, me: J): J | null {
+    const d = decisions.forViewer(row, me);
+    const thread = u64(get(row, "thread"));
+    if (d === null || thread === null) return null;
+    return this.local.answered(station, thread, u64(d.seq) ?? 0) ? null : d;
   }
 
   /// The chat an agent's item has: the still.fail chat bound to it, as the station's items say, or its threads do.
@@ -1175,11 +1186,19 @@ export class Views implements Owner {
     const slackUrl = slack && workspaceUrl !== null ? `${workspaceUrl}archives/${channel}/p${strOf(thread, "threadTs").replaceAll(".", "")}` : null;
     const found = this.#row(station, { thread: id });
     const row = found ?? undefined;
-    const open = (d: J) => !this.local.answered(station, id, u64(d.seq) ?? 0);
+    // What the row asks (its card, or its agent's need), whoever decides it, until answered from here.
+    const asked = row !== undefined ? decisions.asked(row) : null;
+    const pending = asked !== null && !this.local.answered(station, id, u64(asked.seq) ?? 0) ? asked : null;
     let pendingCard: [number, boolean] | null | undefined;
-    if (found !== undefined) {
-      const d = row !== undefined ? decisions.ofRow(row) : null;
-      pendingCard = d !== null && open(d) ? [u64(d.seq) ?? 0, decisions.dismissed(d)] : null;
+    if (found !== undefined) pendingCard = pending !== null ? [u64(pending.seq) ?? 0, decisions.dismissed(pending)] : null;
+    // A need without a card: its post is a text card while it waits, as the 奏 page draws it (answered in the composer).
+    if (pending !== null && !decisions.dismissed(pending) && decisions.ofRow(row) === null) {
+      const m = messages.find((x) => x.seq === pending.seq);
+      if (m !== undefined && decisions.ofMessage(m) === null) {
+        const card: J = { type: "text" };
+        decisions.labelAssignee(card, viewer, members_, thread.creator);
+        m.card = card;
+      }
     }
     decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed"));
     const elsewhere = this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots });
@@ -1210,8 +1229,8 @@ export class Views implements Owner {
     const sessions = arr(view.agents).flatMap((a) => (a.session !== undefined ? [a.session] : []));
     const watch = present.rowWatch(sessions);
     if (watch !== null) view.watch = watch;
-    const card = row !== undefined ? decisions.ofRow(row) : null;
-    if (card !== null && open(card)) view.decision = decisions.shown(card);
+    const open = row !== undefined ? this.openAsk(station, row, viewer) : null;
+    if (open !== null) view.decision = decisions.shown(open);
     if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
     const check = row !== undefined && view.archived !== true ? present.archiveCheck(row.archiveCheck) : null;
     if (check !== null) view.archiveCheck = check;
@@ -1446,10 +1465,15 @@ export class Views implements Owner {
     const items: [J, number, number | null][] = [];
     const answered: J[] = [];
     const working: J[] = [];
-    // Only the rows the 奏 page lists (found by their column, not loaded whole: db/account.ts).
+    const unread: J[] = [];
+    // Only the rows the 奏 page lists, and those asking something or unread (found by their columns, not loaded whole:
+    // db/account.ts).
     const data = this.#core.data;
+    const addresses = stations.map((s) => s.address);
     const desk = new Map<string, J[]>();
-    for (const [station, row] of data.desk(stations.map((s) => s.address))) desk.set(station, [...(desk.get(station) ?? []), row]);
+    for (const [station, row] of data.desk(addresses)) desk.set(station, [...(desk.get(station) ?? []), row]);
+    const marked = new Map<string, J[]>();
+    for (const [station, row] of data.marked(addresses)) marked.set(station, [...(marked.get(station) ?? []), row]);
     for (const s of stations) {
       if (!data.listed(s.address, "chats")) {
         const v = this.value({ topic: "chatRows", station: s.address });
@@ -1457,6 +1481,23 @@ export class Views implements Owner {
         continue;
       }
       this.local.settle(s.address, data.rowsRev(s.address));
+      // 有新消息: the viewer's chats with something unread and nothing open for them to decide (marks.rowMark, as the
+      // workspace's marks count them).
+      for (const raw of marked.get(s.address) ?? []) {
+        if (this.local.beingArchived(s.address, raw)) continue;
+        const row = this.local.asChanging(s.address, raw);
+        if (marks.rowMark(row, this.openAsk(s.address, row, me) !== null) !== "unread") continue;
+        const text = format.cleanText(str(get(row.last, "text")) ?? "");
+        unread.push({
+          station: s.address,
+          stationName: s.name,
+          session: row.id ?? null,
+          thread: u64(row.thread),
+          title: row.title ?? "",
+          line: text === "" && isObject(row.last) ? t("core-views.file") : text,
+          lastActiveAt: row.lastActiveAt ?? null,
+        });
+      }
       const slackUsers = arr(get(this.ok({ topic: "overview", station: s.address }), "slackUsers")).filter((u): u is string => typeof u === "string");
       for (const raw of desk.get(s.address) ?? []) {
         if (this.local.beingArchived(s.address, raw)) continue;
@@ -1472,12 +1513,11 @@ export class Views implements Owner {
           const line = present.workingLine(row);
           if (line !== null) working.push({ ...place(), line, lastActiveAt: row.lastActiveAt ?? null });
         }
-        const d = decisions.forViewer(row, me);
+        const d = this.openAsk(s.address, row, me);
         if (d === null) continue;
         const thread = u64(row.thread);
         const seq = u64(d.seq);
         if (thread === null || seq === null) continue;
-        if (this.local.answered(s.address, thread, seq)) continue;
         const agents = arr(row.agents).map((a) => {
           const c = structuredClone(a);
           present.session(c);
@@ -1526,7 +1566,8 @@ export class Views implements Owner {
     const at = (v: J, k: string) => (typeof v[k] === "number" ? v[k] : 0);
     answered.sort((a, b) => at(b, "answeredAt") - at(a, "answeredAt"));
     working.sort((a, b) => at(b, "lastActiveAt") - at(a, "lastActiveAt"));
-    return { ok: { items: items.map((i) => i[0]), count: items.length, loading, answered, working } };
+    unread.sort((a, b) => at(b, "lastActiveAt") - at(a, "lastActiveAt"));
+    return { ok: { items: items.map((i) => i[0]), count: items.length, loading, answered, working, unread } };
   }
 
   // ── workspace marks ──

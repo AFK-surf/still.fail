@@ -7,7 +7,7 @@ import { Core } from "../src/core.ts";
 import { Doing } from "../src/doing.ts";
 import { conformTy } from "../src/conform.ts";
 import { merge } from "../src/entries.ts";
-import { Counts, lastChat, rowTone } from "../src/views/marks.ts";
+import { Counts, lastChat, rowMark, rowTone } from "../src/views/marks.ts";
 import { FakeHost } from "../src/testing.ts";
 import "./helpers.ts";
 
@@ -121,14 +121,18 @@ test("keeps_what_is_under_way_with_its_plain_params", () => {
 const agentIn = (status: string): J => (status === "running" ? { key: "k", process: "running" } : status === "blocked" ? { key: "k", lastTurn: { declared: "block" } } : { key: "k" });
 
 test("only_a_row_its_person_takes_part_in_wants_them", () => {
-  assert.equal(rowTone({ mine: true, agents: [agentIn("blocked")] }), "wait", "need_help: it waits for them, nothing went wrong");
+  // need_help alone asks nothing: an ask is the row's card or need, the viewer's by rowMark (Views.openAsk).
+  assert.equal(rowTone({ mine: true, agents: [agentIn("blocked")] }), null, "need_help: nothing went wrong");
+  assert.equal(rowTone({ mine: true, unread: true, agents: [agentIn("blocked")] }), "done");
   assert.equal(rowTone({ mine: true, agents: [{ key: "k", lastTurn: { outcome: "failed" } }] }), "alert");
   assert.equal(rowTone({ mine: false, agents: [agentIn("blocked")] }), null);
   assert.equal(rowTone({ mine: true, unread: true, agents: [] }), "done");
   assert.equal(rowTone({ mine: false, unread: true, agents: [] }), null);
   assert.equal(rowTone({ mine: true, unread: true, agents: [agentIn("running")] }), null);
   assert.equal(rowTone({ mine: true, agents: [] }), null);
-  assert.equal(rowTone({ mine: true, agents: [agentIn("blocked")], decision: { seq: 4 } }), "wait");
+  const asking = { mine: true, unread: true, agents: [agentIn("blocked")], decision: { seq: 4 } };
+  assert.deepEqual([rowMark(asking, true), rowMark(asking, false)], ["decision", "unread"]);
+  assert.deepEqual([rowMark({ mine: true, unread: true, agents: [{ key: "k", lastTurn: { outcome: "failed" } }] }, false), rowMark({ mine: true, agents: [] }, false)], ["alert", null]);
 });
 
 test("the_chat_last_open_is_the_cores_else_the_path_a_page_kept", () => {
