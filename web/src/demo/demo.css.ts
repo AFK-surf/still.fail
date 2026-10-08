@@ -10,7 +10,7 @@ globalStyle("#demo", {
   // What the app places fixed (the buddy by its logo, overlays) is placed within the demo, not the window.
   position: "relative", overflow: "hidden", textAlign: "left", transform: "translateZ(0)",
   background: vars.canvas, color: vars.text, font: `400 ${vars.textBody}/1.55 ${vars.fontBody}`,
-  fontFeatureSettings: "\"cv11\", \"ss01\"", lineBreak: "strict", textWrap: "pretty",
+  fontFeatureSettings: "\"cv11\", \"ss01\"", lineBreak: "strict",
 });
 globalStyle(`#demo ${shell}`, { height: "100%" });
 // The app's lists keep a scroll that reaches their end to themselves (it is the whole page there); here a finger that

@@ -162,10 +162,13 @@ globalStyle(":root[data-theme=\"dark\"]", {
 });
 globalStyle("*, *::before, *::after", { boxSizing: "border-box" });
 globalStyle("html, body, #app", { height: "100%", margin: "0" });
+/**
+ * Lines break the usual way, not `text-wrap: pretty`: Safari's (iOS's every browser) breaks Chinese in a narrow box
+ * after every character (a 64px label: 缓/存/命/中/率), and a line of 5 to 30 characters in one a character wide.
+ */
 globalStyle("body", {
   background: vars.canvas, color: vars.text, font: `400 ${vars.textBody}/1.55 ${vars.fontBody}`,
   fontFeatureSettings: "\"cv11\", \"ss01\"", WebkitFontSmoothing: "antialiased", lineBreak: "strict",
-  textWrap: "pretty",
 });
 /**
  * Headings and the short lines under them break evenly, never one long line and a stub, and only where the words

@@ -79,7 +79,7 @@ globalStyle(list, { listStyle: "none", margin: "0 -12px", padding: "0", display:
 globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: "max(-12px, calc(50% - 392px))", marginRight: "max(-12px, calc(50% - 392px))" });
 /** Why a dialog's action did not work, just above its buttons. */
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
-globalStyle(dialogError, { margin: "12px 0 0", fontSize: vars.textUi, color: vars.red, textWrap: "pretty" });
+globalStyle(dialogError, { margin: "12px 0 0", fontSize: vars.textUi, color: vars.red });
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
 globalStyle(tooltip, {
   zIndex: "70", padding: "5px 10px", borderRadius: `calc(8px * ${vars.cornerScale})`, background: vars.primary,

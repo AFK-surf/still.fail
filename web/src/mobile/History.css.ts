@@ -98,8 +98,14 @@ export const mRunRow = style({
   padding: "10px 12px", border: "1px solid var(--m-line)", borderRadius: "10px", background: "none", textAlign: "left",
   cursor: "pointer",
 });
-export const mHFacts = style({ display: "flex", flexDirection: "column", gap: "8px", padding: "12px 0 10px" });
-export const mHDetail = style({ display: "flex", gap: "16px", fontSize: vars.textUi });
+/**
+ * Label and value in two columns, the labels' as wide as the longest (at least six characters, so the station's facts
+ * below line up): a label is never broken.
+ */
+export const mHFacts = style({
+  display: "grid", gridTemplateColumns: "minmax(6em, max-content) minmax(0, 1fr)", gap: "8px 16px", padding: "12px 0 10px",
+});
+export const mHDetail = style({ display: "contents", fontSize: vars.textUi });
 export const mHRings = style({ display: "flex", gap: "18px", padding: "10px 0" });
 /** Changing how it runs. */
 export const mRunSummary = style({
@@ -160,7 +166,7 @@ globalStyle(`${mRunRow} span`, {
   whiteSpace: "nowrap",
 });
 globalStyle(`${mRunRow} svg:last-child`, { flex: "none", color: "var(--m-muted)" });
-globalStyle(`${mHDetail} > span:first-child`, { width: "64px", flex: "none", color: "var(--m-muted)" });
+globalStyle(`${mHDetail} > span:first-child`, { whiteSpace: "nowrap", color: "var(--m-muted)" });
 globalStyle(`${mRunLine} svg`, { flex: "none" });
 globalStyle(`${mSettingRow} > svg:last-child`, { flex: "none", color: "var(--m-muted)" });
 globalStyle(`${mPickLine} ${mGrow}`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
