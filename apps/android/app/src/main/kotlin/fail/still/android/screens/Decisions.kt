@@ -60,6 +60,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -123,41 +127,83 @@ import kotlinx.coroutines.launch
 
 // ── the options ────────────────────────────────────────────────────────
 
+/** Each option's number, drawn (scripts/option-digits.py: in the middle of its circle at any size); past six, set. */
+private val Digits = listOf(Icons.Option1, Icons.Option2, Icons.Option3, Icons.Option4, Icons.Option5, Icons.Option6)
+
 /**
- * A decision's options, one per line, full width: the label (medium) and its detail under it, small and quiet; the
- * recommended one (last, as the core orders them) filled in the accent with white words, the others in the
- * chip colour. `busy`: the label of the one being sent (a spinner on it, none pressed meanwhile).
+ * A decision's options (web Decisions.tsx DecisionOptions): one card, full width, a row each — its number in a circle,
+ * the label (medium) and its detail under it, small and quiet, a hairline between two. The recommended one (last, as
+ * the core orders them) has its number in the accent and 推荐 after its label. `busy`: the label of the one being sent
+ * (a spinner on it, none pressed meanwhile).
  */
 @Composable
-internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier, enabled: Boolean = true, busy: String? = null, failed: String? = null, onPick: (DecisionOption) -> Unit) {
-    val still = reducedMotion()
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        options.forEach { o ->
+internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier, enabled: Boolean = true, busy: String? = null, onPick: (DecisionOption) -> Unit) {
+    val hairline = C.ink.copy(alpha = 0.07f)
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.chip).padding(vertical = 4.dp)) {
+        options.forEachIndexed { i, o ->
             val strong = o.recommended == true
-            val ink = if (strong) Color.White else C.ink
             val free = enabled && busy == null
-            val touch = remember(o.label) { MutableInteractionSource() }
-            val pressed by touch.collectIsPressedAsState()
-            val scale by animateFloatAsState(
-                if (pressed && !still) 0.97f else 1f,
-                tween(if (still) 0 else if (pressed) 80 else 180, easing = Ease.Out), label = "decision press",
-            )
+            if (i > 0) Box(Modifier.padding(start = 48.dp, end = 18.dp).fillMaxWidth().height(1.dp).background(hairline))
             Row(
-                Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }
-                    .clip(RoundedCornerShape(12.dp)).background(if (strong) C.accent else C.chip)
-                    .alpha(if (enabled) 1f else 0.5f)
-                    .clickable(enabled = free, interactionSource = touch, indication = ripple(color = ink)) { onPick(o) }
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.5f)
+                    .clickable(enabled = free, interactionSource = remember(o.label) { MutableInteractionSource() }, indication = ripple(color = C.ink)) { onPick(o) }
+                    .padding(start = 14.dp, end = 18.dp, top = 10.dp, bottom = 10.dp)
                     .semantics(mergeDescendants = true) {},
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text(o.label, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = ink)
-                    o.detail?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = if (strong) Color.White.copy(alpha = 0.78f) else C.muted) }
+                // As tall as the label's line, a little lower, where Chinese sits.
+                Box(
+                    Modifier.padding(top = 0.5.dp).size(22.dp).clip(CircleShape).background(if (strong) C.accent else C.ink.copy(alpha = 0.09f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val ink = if (strong) Color.White else C.muted
+                    Digits.getOrNull(i)?.let { IconIn(it, 22.dp, ink) }
+                        ?: Text("${i + 1}", fontSize = 12.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = ink)
                 }
-                if (busy == o.label || failed != null) DoingMark(busy == o.label, failed, 14.dp)
+                Column(Modifier.weight(1f)) {
+                    val recommended = t("common.recommended")
+                    val accent = C.accentInk
+                    val label = remember(o.label, strong, recommended, accent) {
+                        buildAnnotatedString {
+                            append(o.label)
+                            if (strong) withStyle(SpanStyle(color = accent, fontSize = 13.sp)) { append("  $recommended") }
+                        }
+                    }
+                    Text(label, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.ink)
+                    o.detail?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted) }
+                }
+                if (busy == o.label) DoingMark(true, null, 14.dp)
             }
         }
+    }
+}
+
+/**
+ * A button as wide as it is given (留着 / 归档这个 chat under a post that ended all done, Chat.kt ArchiveUnder): the
+ * label in medium, in the accent with white words when `strong`, the chip colour otherwise; a spinner while `busy`,
+ * a mark when `failed`.
+ */
+@Composable
+internal fun OptionButton(label: String, modifier: Modifier = Modifier, strong: Boolean = false, enabled: Boolean = true, busy: Boolean = false, failed: String? = null, onPick: () -> Unit) {
+    val still = reducedMotion()
+    val ink = if (strong) Color.White else C.ink
+    val touch = remember(label) { MutableInteractionSource() }
+    val pressed by touch.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        if (pressed && !still) 0.97f else 1f,
+        tween(if (still) 0 else if (pressed) 80 else 180, easing = Ease.Out), label = "option press",
+    )
+    Row(
+        modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(12.dp)).background(if (strong) C.accent else C.chip)
+            .alpha(if (enabled) 1f else 0.5f)
+            .clickable(enabled = enabled && !busy, interactionSource = touch, indication = ripple(color = ink)) { onPick() }
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(label, Modifier.weight(1f), fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = ink)
+        if (busy || failed != null) DoingMark(busy, failed, 14.dp)
     }
 }
 

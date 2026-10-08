@@ -5,15 +5,64 @@ import { spinner } from "./styles/waiting.css.ts";
 import { glass } from "./styles/glass.ts";
 
 // A decision's options (Decisions.tsx): under the message that asks it in a chat, and at the foot of the decisions
-// page. One per line, as wide as the message's column; the recommended one last, in the accent. The phone's page colours
-// (`--m-*`) where they are set, the wide screen's otherwise.
+// page. One card, a row each, numbered in a circle; the recommended one last, its number in the accent and 推荐 after its
+// label. The phone's page colours (`--m-*`) where they are set, the wide screen's otherwise.
 const ground = `var(--m-bg, ${vars.canvas})`;
 const accent = `var(--m-accent, ${vars.accent})`;
 const chip = `var(--m-chip, color-mix(in srgb, ${vars.text} 7%, transparent))`;
 
-export const options = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "6px", marginTop: "6px" });
+export const options = style({
+  display: "flex", flexDirection: "column", width: "fit-content", minWidth: "min(100%, 460px)", maxWidth: "100%",
+  boxSizing: "border-box", marginTop: "8px", padding: "4px 0", overflow: "hidden", borderRadius: vars.rCard,
+  cornerShape: vars.cornerShape, background: `var(--m-chip, color-mix(in srgb, ${vars.text} 5%, transparent))`,
+});
 
-export const archiveOptions = style([options, { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }]);
+/** One option: its number, then its label (and 推荐) over its detail. */
+export const choice = style({
+  position: "relative", display: "grid", gridTemplateColumns: "20px minmax(0, 1fr)", columnGap: "12px", width: "100%",
+  boxSizing: "border-box", padding: "10px 18px 10px 14px", border: "0", background: "none", color: vars.text,
+  fontFamily: "inherit", textAlign: "left", cursor: "pointer", WebkitTapHighlightColor: "transparent",
+  transition: `background-color ${vars.dur}, opacity ${vars.dur}`,
+  selectors: {
+    "&:hover:not(:disabled)": { background: vars.hover },
+    // A hairline between two, from the labels' edge.
+    "& + &::before": {
+      content: '""', position: "absolute", top: "0", left: "46px", right: "18px", height: "1px",
+      background: `color-mix(in srgb, ${vars.text} 7%, transparent)`,
+    },
+    // Not over the one under the pointer, nor under it.
+    "&:hover:not(:disabled)::before, &:hover:not(:disabled) + &::before": { opacity: "0" },
+    "&:disabled": { cursor: "default" },
+    // Another one of them is being sent: the rest step back.
+    "&:disabled:not([data-busy])": { opacity: ".5" },
+  },
+});
+/**
+ * Its number: a circle as tall as the label's line (a pixel lower, where Chinese sits), the digit drawn (icons
+ * Option1…6, scripts/option-digits.py) rather than set, so that it is in the middle at any scale.
+ */
+export const choiceNumber = style({
+  gridRow: "1 / span 2", alignSelf: "start", display: "grid", placeItems: "center", width: "20px", height: "20px",
+  marginTop: "1px", borderRadius: "50%", background: `color-mix(in srgb, ${vars.text} 9%, transparent)`,
+  color: vars.muted, fontSize: vars.textCaption, fontWeight: "600", lineHeight: "20px", fontVariantNumeric: "tabular-nums",
+  selectors: { [`${choice}[data-recommended] &`]: { background: accent, color: "#fff" } },
+});
+globalStyle(`${choiceNumber} > svg`, { display: "block" });
+export const choiceLabel = style({
+  gridColumn: "2", fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500", overflowWrap: "anywhere",
+  selectors: { [`${choice}[data-busy] &`]: { paddingRight: "22px" } },
+});
+/** 推荐, after the recommended one's label. */
+// Its own line height, the type's: the label's 20px around a smaller type would make the line a pixel taller.
+export const choiceRecommended = style({ marginLeft: "8px", color: vars.accentText, fontSize: vars.textMeta, lineHeight: "1", fontWeight: "500" });
+/** Being sent: a small ring at the option's right, level with its label. */
+export const choiceSpinner = style({ position: "absolute", right: "18px", top: "14px" });
+globalStyle(`${choiceSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
+export const choiceDetail = style({ gridColumn: "2", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere" });
+
+// 留着 and 归档这个 chat under an agent's post that said it is all done (Chat.tsx ArchiveOption): two buttons side by
+// side, the second in the accent.
+export const archiveOptions = style({ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "6px", marginTop: "6px" });
 
 export const option = style({
   position: "relative", display: "grid", gap: "0", width: "100%", boxSizing: "border-box", padding: "9px 14px",
@@ -25,17 +74,13 @@ export const option = style({
     "&[data-recommended]": { background: accent, color: "#fff" },
     "&[data-recommended]:hover:not(:disabled)": { filter: "none", opacity: ".88" },
     "&:disabled": { cursor: "default" },
-    // Another one of them is being sent: the rest step back.
+    // The other one is under way: this one steps back.
     "&:disabled:not([data-busy])": { opacity: ".5" },
   },
 });
 export const optionLabel = style({
   fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500", overflowWrap: "anywhere",
   selectors: { [`${option}[data-busy] &`]: { paddingRight: "22px" } },
-});
-export const optionDetail = style({
-  fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere",
-  selectors: { [`${option}[data-recommended] &`]: { color: "rgba(255, 255, 255, .78)" } },
 });
 /** Being sent: a small ring at the button's right. */
 export const optionSpinner = style({ position: "absolute", right: "14px", top: "12px" });

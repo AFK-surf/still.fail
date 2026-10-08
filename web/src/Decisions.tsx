@@ -1,6 +1,6 @@
 // Decisions an agent left to people (a block post with options, client/core-ts/src/decisions.ts), as both screens draw
-// them. In a chat: the post is a message like any other, its options right under it, one per line, the recommended one
-// last; once answered (or replaced), a quiet line saying how. On the decisions page (奏): one at a time, the post and
+// them. In a chat: the post is a message like any other, its options right under it in one card, numbered, the
+// recommended one last; once answered (or replaced), a quiet line saying how. On the decisions page (奏): one at a time, the post and
 // what came just before it drawn as the chat draws them, its options under the post and the chat's composer floating
 // over them at the foot; 待定 puts it at the back of the
 // queue on this device, 不再提醒 stops asking this viewer. The phone swipes for those two (left, right); the wide
@@ -27,12 +27,16 @@ import * as css from "./Decisions.css.ts";
 import * as chatCss from "./Chat.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import { t } from "./i18n.ts";
+import { Option1, Option2, Option3, Option4, Option5, Option6 } from "./icons.tsx";
 
 /** How far (of its width) the decision is swiped before letting go takes it, and how fast a fling has to be (px/ms). */
 const TAKES = 0.35;
 const FLING = 0.6;
 
-/** The options of one decision, one per line; pressing one answers with it (its label, quoting the post). */
+/** Each option's number, drawn (a card has at most six; past that, set as text). */
+const DIGITS = [Option1, Option2, Option3, Option4, Option5, Option6];
+
+/** The options of one decision, in one card, numbered; pressing one answers with it (its label, quoting the post). */
 export function DecisionOptions({ station, thread, seq, options, onPick, className }: {
   station: string; thread: number; seq: number; options: DecisionOption[];
   /** Before the answer goes: the decisions page sends the decision on its way. */
@@ -50,14 +54,19 @@ export function DecisionOptions({ station, thread, seq, options, onPick, classNa
   };
   return (
     <div className={`${css.options} ${className ?? ""}`} role="group" aria-label={t("web-main.decisions.options")}>
-      {options.map((o) => {
+      {options.map((o, i) => {
         const busy = sending?.params.option === o.label;
+        const Digit = DIGITS[i];
         return (
-          <button key={o.label} type="button" className={css.option} data-recommended={o.recommended || undefined} data-busy={busy || undefined}
+          <button key={o.label} type="button" className={css.choice} data-recommended={o.recommended || undefined} data-busy={busy || undefined}
             disabled={!!sending} aria-busy={busy || undefined} onClick={() => pick(o)}>
-            <span className={css.optionLabel}>{o.label}</span>
-            {o.detail && <span className={css.optionDetail}>{o.detail}</span>}
-            {busy && <span className={`${waitingCss.spinner} ${css.optionSpinner}`} aria-hidden="true" />}
+            <span className={css.choiceNumber} aria-hidden="true">{Digit ? <Digit size={20} /> : i + 1}</span>
+            <span className={css.choiceLabel}>
+              {o.label}
+              {o.recommended && <span className={css.choiceRecommended}>{t("common.recommended")}</span>}
+            </span>
+            {o.detail && <span className={css.choiceDetail}>{o.detail}</span>}
+            {busy && <span className={`${waitingCss.spinner} ${css.choiceSpinner}`} aria-hidden="true" />}
           </button>
         );
       })}

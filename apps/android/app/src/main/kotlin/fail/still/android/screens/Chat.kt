@@ -1164,7 +1164,7 @@ private fun archiveChat(app: fail.still.android.AppState, station: String, view:
 
 /**
  * 归档这个 chat, full width under the agent's latest post that ended its turn all done, while nothing is left in the
- * chat (the core's `archivable`): drawn as a decision's recommended option (Decisions.kt), a spinner on it meanwhile.
+ * chat (the core's `archivable`): drawn as buttons (Decisions.kt OptionButton), this one in the accent, a spinner on it meanwhile.
  */
 @Composable
 private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
@@ -1176,14 +1176,14 @@ private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
     val keep = t("android-chat.chat.keep")
     val keeping = app.isDoing("chat.keep", "station" to ctx.station, "thread" to thread)
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        DecisionOptions(
-            listOf(fail.still.android.data.DecisionOption(keep)), Modifier.weight(1f),
-            enabled = enabled && !ctx.view.offline && !busy, busy = if (keeping) keep else null,
+        OptionButton(
+            keep, Modifier.weight(1f),
+            enabled = enabled && !ctx.view.offline && !busy, busy = keeping,
             failed = app.failedOf("chat.keep", "station" to ctx.station, "thread" to thread),
         ) { app.act(t("android-chat.chat.keep.verb")) { app.api(ctx.station).keepChat(thread); app.toast = t("android-chat.chat.kept") } }
-        DecisionOptions(
-            listOf(fail.still.android.data.DecisionOption(label, recommended = true)), Modifier.weight(1f),
-            enabled = enabled && !ctx.view.offline && !keeping, busy = if (busy) label else null,
+        OptionButton(
+            label, Modifier.weight(1f), strong = true,
+            enabled = enabled && !ctx.view.offline && !keeping, busy = busy,
         ) { archiveChat(app, ctx.station, ctx.view, session) }
     }
 }
