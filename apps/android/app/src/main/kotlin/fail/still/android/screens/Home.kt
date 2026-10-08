@@ -700,7 +700,7 @@ internal fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
 /**
  * Where the chat stands, in its last message's place (the core's `stateText`): a decision waiting for the viewer
  * (奏 · …) in ink with its 奏 bold; anything else in the secondary colour. A lead said as an icon (要你帮忙 a bell, in
- * ink; 在等 an open arc and dots, 监控中 the arc before its words, 做完了 a check) sits where the title's mark does, what follows where the title starts.
+ * ink; 在等 an open arc and dots, 监控中 an eye before its words, 做完了 a check) sits where the title's mark does, what follows where the title starts.
  */
 @Composable
 private fun StateLine(state: String, modifier: Modifier = Modifier) {
@@ -710,10 +710,10 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
     val watch = if (need == null && done == null && wait == null) watchLead.find(state) else null
     val iconLead = need ?: done ?: wait ?: watch
     if (iconLead != null) {
-        // Watching keeps its words after the arc: the arc alone says waiting.
+        // Watching keeps its words after its eye.
         val rest = if (watch != null) state else state.substring(iconLead.value.length)
         val tint = if (need != null) C.ink else C.muted
-        val icon = if (need != null) Icons.Bell else if (done != null) Icons.Check else Icons.Wait
+        val icon = if (need != null) Icons.Bell else if (done != null) Icons.Check else if (watch != null) Icons.Eye else Icons.Wait
         Row(modifier.semantics(mergeDescendants = true) { contentDescription = state }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // The title's mark's place (ChatMark, 10dp then 8dp): centred under a mark, at the title's start with none,
             // so what follows starts where the title does in a marked row, every row's icon in the same column.
