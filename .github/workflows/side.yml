@@ -1,0 +1,34 @@
+# The side run (scripts/side.sh, docs/development.md "Tests"): the tests that are not the same every run (real time,
+# real processes and sockets, networks made up at random), on main every four hours and on demand, blocking nothing.
+# On mini1, CI's own Mac, each part on a runner of its own (the station's native parts are darwin's, the launcher's
+# tests run a Mac's Node), not on a machine people and agents share (on the Mac Studio, another agent load-testing it
+# made the real relays' round trips slow enough to fail, 2026-10-08). A failure is for an agent to reproduce as a test
+# CI runs and fix; one it cannot reproduce is let be.
+name: side
+on:
+  schedule:
+    - cron: "17 */4 * * *"
+  workflow_dispatch:
+concurrency:
+  group: side
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  side:
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [core-ts, station, rust]
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/natives
+      - if: matrix.part == 'core-ts'
+        run: pnpm install --frozen-lockfile && cd client/core-ts && pnpm install --frozen-lockfile
+      - if: matrix.part == 'station'
+        run: pnpm install --frozen-lockfile && cd station && pnpm install --frozen-lockfile
+      - name: side (${{ matrix.part }})
+        run: sh scripts/side.sh ${{ matrix.part }}
