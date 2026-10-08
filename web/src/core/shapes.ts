@@ -2081,10 +2081,11 @@ export type HistoryBody =
 	| { kind: "mark", content: HistoryMark }
 	| { kind: "group", content: HistoryGroup };
 
-/** One item of an execution history, and the transcript entries it draws (`entries`: first, last). */
+/** One item of an execution history, its transcript entries (`entries`: first, last), and when its first entry was written (`at`, epoch ms, when known). */
 export interface HistoryItem {
 	key: string;
 	entries: number[];
+	at?: number;
 	body: HistoryBody;
 }
 

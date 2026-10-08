@@ -62,7 +62,7 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
       { kind: "tool_call", tool: "Read", text: '{"file_path":"/a.ts"}', callId: "b" },
       { kind: "tool_call", tool: "Bash", text: '{"command":"ls","description":"看看目录"}', callId: "c" },
       { kind: "tool_result", callId: "c", ok: false, text: "no" },
-      { kind: "tool_call", tool: "mcp__ember__chat_post", text: '{"to":"C1/1.0","text":"done","kind":"block"}', callId: "d" },
+      { kind: "tool_call", tool: "mcp__ember__chat_post", text: '{"to":"C1/1.0","text":"done","kind":"block"}', callId: "d", at: "2026-09-27T00:00:05.000Z" },
       { kind: "tool_call", tool: "mcp__ember__chat_state", text: '{"kind":"final"}' },
       { kind: "assistant", text: "ok" },
     ],
@@ -85,6 +85,8 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.equal(g.rows[2].content.meta, "进行中");
   assert.deepEqual(items[1].entries, [1, 6]);
   assert.deepEqual([items[2].body.content.block, items[2].body.content.place.name], [true, "#ops"]);
+  assert.equal(items[2].at, 1790467205000);
+  assert.equal(items[0].at, null);
   assert.equal(items[3].body.content.text, "标记为做完了");
   const waits = (a: string, next: string | null) => {
     const timeline: J[] = [{ kind: "tool_call", tool: "mcp__ember__chat_state", text: a, at: "2026-09-27T00:00:00.000Z" }];

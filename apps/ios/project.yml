@@ -1,0 +1,143 @@
+name: StillFail
+options:
+  bundleIdPrefix: fail.still
+  deploymentTarget:
+    iOS: '26.0'
+  createIntermediateGroups: true
+  developmentLanguage: zh-Hans
+packages:
+  MarkdownView:
+    url: https://github.com/Lakr233/MarkdownView.git
+    exactVersion: 4.6.5
+  Litext:
+    url: https://github.com/Lakr233/Litext.git
+    exactVersion: 3.3.2
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    IPHONEOS_DEPLOYMENT_TARGET: '26.0'
+    TARGETED_DEVICE_FAMILY: '1,2'
+    SUPPORTS_MACCATALYST: NO
+    SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+    ARCHS: arm64
+    DEVELOPMENT_TEAM: D9AAN3VJK8
+    CURRENT_PROJECT_VERSION: '1'
+    MARKETING_VERSION: '0.1.0'
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    CLANG_ENABLE_MODULES: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+    STILLFAIL_SOURCE_ROOT: '$(SRCROOT)/../..'
+    LIBRARY_SEARCH_PATHS: '$(inherited) "$(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core"'
+    OTHER_LDFLAGS: '$(inherited) -lstillfail_shell -framework Security -framework SystemConfiguration -lresolv'
+targets:
+  StillFail:
+    type: application
+    platform: iOS
+    sources:
+      - path: StillFail
+      - path: Shared
+      - path: ../../.airbuild/generated/core/stillfail-core.js
+        buildPhase: resources
+    preBuildScripts:
+      - name: Prepare shared TypeScript core and native IO shell
+        shell: /bin/bash
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/stillfail-core.js
+          - $(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/libstillfail_shell.a
+        script: |
+          set -e -o pipefail
+          cd "$STILLFAIL_SOURCE_ROOT"
+          export PATH="$PWD/.airbuild/cargo/bin:$PATH:/opt/homebrew/bin"
+          /bin/bash apps/ios/bootstrap-rust.sh
+          /bin/bash apps/ios/build-core.sh
+    settings:
+      base:
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        SWIFT_OBJC_BRIDGING_HEADER: '$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail/Core/Shell.h'
+        PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone
+        PRODUCT_NAME: StillFail
+        INFOPLIST_FILE: '$(STILLFAIL_SOURCE_ROOT)/apps/ios/Info.plist'
+        CODE_SIGN_ENTITLEMENTS: '$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail.entitlements'
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - package: MarkdownView
+        product: MarkdownView
+      - package: MarkdownView
+        product: MarkdownParser
+      - package: Litext
+        product: Litext
+      - sdk: JavaScriptCore.framework
+      - sdk: AuthenticationServices.framework
+      - sdk: Security.framework
+      - sdk: PhotosUI.framework
+      - sdk: UniformTypeIdentifiers.framework
+      - sdk: WidgetKit.framework
+      - target: StillFailWidgets
+        embed: true
+  # Home-screen widgets. They read the snapshot the app writes into the shared App
+  # Group (Shared/WidgetSnapshot.swift); they never start the client core.
+  StillFailWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: StillFailWidgets
+        excludes:
+          - Info.plist
+          - StillFailWidgets.entitlements
+      - path: Shared
+      - path: StillFail/Localizable.xcstrings
+    info:
+      path: StillFailWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: still.fail
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations: [en, zh-Hans, zh-Hant, ja, ko, es]
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: StillFailWidgets/StillFailWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.fail.still.iphone]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone.widgets
+        PRODUCT_NAME: StillFailWidgets
+        SKIP_INSTALL: YES
+        SWIFT_EMIT_LOC_STRINGS: NO
+        # The project links the native shell into every target; the widgets need none of it.
+        OTHER_LDFLAGS: ''
+        LD_RUNPATH_SEARCH_PATHS: '$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks'
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+  StillFailTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: StillFailTests
+    dependencies:
+      - target: StillFail
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone.tests
+        GENERATE_INFOPLIST_FILE: YES
+        OTHER_LDFLAGS: '$(inherited)'
+schemes:
+  StillFail:
+    build:
+      targets:
+        StillFail: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+    test:
+      config: Debug
+      targets:
+        - StillFailTests

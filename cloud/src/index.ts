@@ -7,7 +7,8 @@
 import { installScript, releaseType } from "./install.ts";
 import { requestLang, tr } from "./i18n.ts";
 import { latestDownload, serveRelease } from "./releases.ts";
-import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
+import { appleConfigured } from "./apple";
+import { authConfigured, sessionConfigured, randomSecret, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
@@ -89,7 +90,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
   const onConsole = adminOrigins(env).includes(url.origin);
   if (path.startsWith("/v1/")) {
     if (!onPublic && !onConsole && !onBeta) return reply({ error: "invalid_origin" }, 421);
-    if (path.startsWith("/v1/auth/") && !authConfigured(env)) return reply({ error: "login_not_configured" }, 503);
+    if (path.startsWith("/v1/auth/apple/") && !appleConfigured(env)) return reply({ error: "apple_not_configured" }, 503);
+    const googlePath = path.startsWith("/v1/auth/google/") || path.startsWith("/v1/auth/device") || path === "/v1/auth/token";
+    if (googlePath && !authConfigured(env)) return reply({ error: "login_not_configured" }, 503);
+    if (path.startsWith("/v1/auth/") && !sessionConfigured(env)) return reply({ error: "login_not_configured" }, 503);
     // Signing in, refreshing and signing out stay open to it, so a login completes and the page or app can be told.
     const ofBeta = onBeta || header(request, "channel") === "beta";
     if (ofBeta && !path.startsWith("/v1/auth/") && (await notBeta(request, env))) return notBetaReply(env, request);
@@ -101,6 +105,20 @@ async function handle(request: Request, env: Env): Promise<Response> {
   }
   // A browser signing in on an old host, or on the test channel's, goes on to the new one, which Google calls back.
   if (url.origin !== env.PUBLIC_ORIGIN && request.method === "GET" && (path === "/v1/auth/google/start" || /^\/v1\/auth\/device\/[A-Za-z0-9_-]{43}$/.test(path))) return toPublic(env, url);
+  if (path === "/v1/auth/apple/challenge" && request.method === "POST") {
+    if (!(await consumeLoginRate(env, request))) return reply({ error: "rate_limited" }, 429, { "retry-after": "60" });
+    const id = randomSecret();
+    return env.LOGINS.getByName(id).appleBegin(id);
+  }
+  if (path === "/v1/auth/apple/token" && request.method === "POST") {
+    try {
+      const body = await readJson(request);
+      if (!validSecret(body.attempt) || !validSecret(body.state) || typeof body.identityToken !== "string" || !body.identityToken || body.identityToken.length > 4096 ||
+          typeof body.authorizationCode !== "string" || !body.authorizationCode || body.authorizationCode.length > 4096 ||
+          (body.name !== undefined && (typeof body.name !== "string" || body.name.length > 120))) return reply({ error: "invalid_request" }, 400);
+      return env.LOGINS.getByName(body.attempt).appleComplete({ identityToken: body.identityToken, authorizationCode: body.authorizationCode, state: body.state, name: body.name as string | undefined });
+    } catch { return reply({ error: "invalid_request" }, 400); }
+  }
   if (path === "/v1/auth/google/start" && request.method === "GET") {
     return googleStart(env, request);
   }
@@ -185,7 +203,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
   }
   const handled = await api(request, env, url);
   if (handled) return handled;
-  if (path === "/v1/auth/session" || path === "/v1/auth/sessions" || /^\/v1\/auth\/sessions\/[^/]+$/.test(path)) {
+  if (path === "/v1/auth/deletion-summary" || path === "/v1/auth/delete-account" || path === "/v1/auth/session" || path === "/v1/auth/sessions" || /^\/v1\/auth\/sessions\/[^/]+$/.test(path)) {
     const token = bearerToken(request);
     const claims = token ? await verifyToken(env, token, "access") : null;
     if (!claims) return denied();

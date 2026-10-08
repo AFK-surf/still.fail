@@ -371,7 +371,8 @@ export function presentHistory(live: J, cx: Context): J {
     }
     const kind = v.kind ?? null;
     delete v.kind;
-    return { key: `e${base + first}`, entries: [base + first, base + last], body: { kind, content: v } };
+    const at = typeof timeline[first]?.at === "string" ? Date.parse(timeline[first].at) : NaN;
+    return { key: `e${base + first}`, entries: [base + first, base + last], at: Number.isFinite(at) ? at : null, body: { kind, content: v } };
   });
 
   const liveSteps = (Array.isArray(live?.steps) ? live.steps : [])
