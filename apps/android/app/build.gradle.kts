@@ -101,11 +101,10 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.browser)
-    // Markdown as the web reads it (GFM: tables, strikethrough, autolinks, task lists).
+    // Markdown as the web reads it (GFM: tables, strikethrough, task lists; a bare URL stays text, as on the web).
     implementation(libs.commonmark)
     implementation(libs.commonmark.ext.gfm.tables)
     implementation(libs.commonmark.ext.gfm.strikethrough)
-    implementation(libs.commonmark.ext.autolink)
     implementation(libs.commonmark.ext.task.list.items)
     // Frosted bars: what scrolls under them shows through, blurred (Android 12+; tinted glass before).
     implementation(libs.haze)

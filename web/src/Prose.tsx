@@ -18,6 +18,21 @@ import { failure, useToast } from "./toast.tsx";
 import { Mermaid } from "./Viz.tsx";
 import { t } from "./i18n.ts";
 
+/** GFM's links found in bare text end only at a space, so in Chinese they swallow the words after them
+ * (`（https://…/2854）已改到`); a link is one written as [label](url) or <url>, and a bare one stays text. */
+function noBareLinks() {
+  type Node = { type: string; children?: Node[]; position?: { start: { offset?: number } } };
+  return (tree: Node, file: { value: unknown }) => {
+    const source = String(file.value);
+    const unwrap = (nodes: Node[]): Node[] => nodes.flatMap((n) => {
+      if (n.type === "link" && !"[<".includes(source[n.position?.start.offset ?? -1] ?? "[")) return unwrap(n.children ?? []);
+      if (n.children) n.children = unwrap(n.children);
+      return [n];
+    });
+    if (tree.children) tree.children = unwrap(tree.children);
+  };
+}
+
 let highlighter: Promise<HighlighterCore> | null = null;
 /** Light and dark at once (Shiki's dual themes): light inline, dark as `--shiki-dark` vars the dark page picks (Prose.css.ts). */
 const THEMES = { light: "vitesse-light", dark: "vitesse-dark" } as const;
@@ -196,5 +211,5 @@ export const Prose = memo(function Prose({ children, files, file }: { children: 
   }, [placing]);
   // Links to the files are kept as written (the default would empty a file:// one); any other goes through the default.
   const url = (u: string) => (files?.has(nameOf(u)) ? u : defaultUrlTransform(u));
-  return <Markdown remarkPlugins={[remarkGfm]} components={withFiles} urlTransform={url}>{children}</Markdown>;
+  return <Markdown remarkPlugins={[remarkGfm, noBareLinks]} components={withFiles} urlTransform={url}>{children}</Markdown>;
 });

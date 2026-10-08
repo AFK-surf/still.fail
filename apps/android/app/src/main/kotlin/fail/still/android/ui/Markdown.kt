@@ -71,7 +71,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fail.still.android.data.Attachment
 import kotlinx.coroutines.delay
-import org.commonmark.ext.autolink.AutolinkExtension
 import org.commonmark.ext.gfm.strikethrough.Strikethrough
 import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
 import org.commonmark.ext.gfm.tables.TableBlock
@@ -109,7 +108,7 @@ import kotlin.math.roundToInt
 import fail.still.android.data.t
 
 private fun markdownParser(): Parser = Parser.builder()
-    .extensions(listOf(TablesExtension.create(), StrikethroughExtension.create(), AutolinkExtension.create(), TaskListItemsExtension.create()))
+    .extensions(listOf(TablesExtension.create(), StrikethroughExtension.create(), TaskListItemsExtension.create()))
     .build()
 
 /** A table's delimiter row: `|---|:--:|`, or `--- | ---` without the outer pipes. */

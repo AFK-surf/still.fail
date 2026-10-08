@@ -29,6 +29,7 @@ export const NOTES: [number, string][] = [
   [22, "A skill may now be shared between the workspace's stations: one from another station shows in skills/ like the others, and what you write to it reaches that station (an edit made on an older copy is kept beside it as SKILL.conflict-<station>.md: merge it into SKILL.md when you see one)."],
   [23, "Archive recommendations now follow an editable archive policy (words plus options, each counted as archive or not); new tool archive_policy reads and changes it. When someone says a recommendation is wrong, fix the policy if it causes it."],
   [24, "Before ending a turn waiting, make sure something watches the work and brings you back when it ends or fails (background command or agent, job, a loop polling CI that exits on the first failure); never wait on a guessed duration alone. Only when the work truly cannot be watched, give seconds as the shortest it could take. While it runs, do whatever does not depend on it; wait only when nothing else is left."],
+  [25, "In still.fail chats a bare URL is no longer turned into a link: write every link as [label](url)."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
