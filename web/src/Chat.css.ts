@@ -327,7 +327,7 @@ export const quotePop = style({
 });
 export const activityLine = style({
   selectors: {
-    [`${chatList} &`]: { marginLeft: "-31px" },
+    [`${chatList} &`]: { marginLeft: "-35px" },
     "&:hover": { color: vars.text },
   },
   "@media": {
@@ -524,8 +524,8 @@ globalStyle(`${fileCard} svg`, { flex: "none", color: vars.muted });
 globalStyle(`${msgImage} img`, { display: "block", maxWidth: "100%", maxHeight: "300px", width: "auto", height: "auto" });
 globalStyle(`${msgAvatarAgent} img`, { width: "14px", height: "14px" });
 globalStyle(`${msgAvatarAgent} img`, { width: "12px", height: "12px" });
-/** Out in the list's 32px padding, as far from its edge as from the name: 7px + 18px + 7px. */
-globalStyle(`${msgRow} > ${msgAvatar}`, { marginLeft: "-25px" });
+/** Out in the list's 40px padding, as far from its edge as from the name: 11px + 18px + 11px. */
+globalStyle(`${msgRow} > ${msgAvatar}`, { marginLeft: "-29px" });
 globalStyle(`${msgRow} > ${msgAvatar}`, {
   "@media": {
     "(max-width: 700px)": {
