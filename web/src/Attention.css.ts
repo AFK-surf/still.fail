@@ -13,11 +13,14 @@ export const count = style({
 /** Only ones looked at: how many, quiet. */
 export const quiet = style({ color: vars.muted, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums" });
 
+/** Solid, not the menus' frosted glass: over the dense list behind it, the rows would read through. */
 export const panel = style({
   width: "var(--radix-popover-trigger-width)", minWidth: "240px", maxWidth: "calc(100vw - 16px)", maxHeight: "min(480px, 70vh)",
   overflowY: "auto", display: "flex", flexDirection: "column", gap: "2px",
 });
 export const group = style({ display: "flex", flexDirection: "column", gap: "1px", selectors: { "& + &": { marginTop: "6px" } } });
+// Doubled, to win over the popover's glass whatever order the sheets load in.
+globalStyle(`${panel}${panel}`, { background: vars.canvas, WebkitBackdropFilter: "none", backdropFilter: "none", border: `1px solid ${vars.line}` });
 export const groupName = style({ padding: "4px 8px 2px", fontSize: vars.textMeta, color: vars.muted });
 export const item = style({
   display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "6px 8px", borderRadius: vars.rOption,
@@ -40,7 +43,7 @@ export const dismiss = style({
   font: "inherit", fontSize: vars.textMeta, cursor: "pointer", visibility: "hidden",
   selectors: { "&:hover": { color: vars.text, background: vars.hover } },
 });
-globalStyle(`${item}:hover ${dismiss}, ${item}:focus-within ${dismiss}`, { visibility: "visible" });
+globalStyle(`${item}:hover ${dismiss}, ${item}:focus-visible ${dismiss}, ${dismiss}:focus-visible`, { visibility: "visible" });
 export const foot = style({ display: "flex", gap: "12px", padding: "8px 8px 4px", marginTop: "4px", borderTop: `1px solid ${vars.line}`, fontSize: vars.textMeta });
 export const link = style({ color: vars.muted, textDecoration: "none", selectors: { "&:hover": { color: vars.text } } });
 export const empty = style({ padding: "10px 8px", fontSize: vars.textUi, color: vars.muted });
