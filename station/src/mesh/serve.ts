@@ -13,6 +13,7 @@ import type { Accepted } from "../cloud/provider.ts";
 import { type Admitted, readOnly, revoked, verifyMember } from "./credential.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerAdb, type Shares } from "./adb.ts";
+import { deflated } from "./deflate.ts";
 import { Traces, parseParent, route } from "./traces.ts";
 import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
 
@@ -279,7 +280,7 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   if (!m.up()) return answer(502, { error: "station unreachable: not started" });
   const rest = path.slice("/admin/api".length);
   const at = rest.indexOf("?");
-  const response = await m.admin.handle({
+  const handled = await m.admin.handle({
     method,
     path: at < 0 ? rest : rest.slice(0, at),
     query: at < 0 ? [] : queryPairs(rest.slice(at + 1)),
@@ -289,6 +290,8 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     viewer,
     lang: langOfCore(headers),
   });
+  // Deflated, for a client that asks so (deflate.ts).
+  const response = await deflated(handled, headers, rest);
   await writeLine(stream, { status: response.status, headers: response.headers });
   if (Buffer.isBuffer(response.body)) await stream.write(response.body);
   else {

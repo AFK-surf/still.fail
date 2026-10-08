@@ -370,12 +370,29 @@ per session, one `overview`, one round of sidebar items. Per-session live steps 
 
 Each event has an `id:` of the station's run and its number in it
 (`<run>.<n>`; one number for an event told to everyone, whichever streams
-it went to). What is told to everyone is kept two minutes (at most 4000), so
-a client's stream that takes over from another (the client opens a new one
+it went to). What is told is kept ten minutes (at most 4000 events and 8 MB),
+so a client's stream that takes over from another (the client opens a new one
 whenever what it follows changes, and lets the old one go once the new one is
-open) asks `/events?since=<the last id the old one gave>` and is told first
-what came after it, as it was; or `missed` (`{}`) when that is not all kept,
-or was another run's, and the client reads the station again.
+open), or comes back after its link went, asks `/events?since=<the last id it
+heard>` and is told first what came after it, as it was, then its viewer's
+sidebar rows and overview where they changed meanwhile, and the answer says
+`stillfail-resumed: 1` (the client reads nothing again); or `missed` (`{}`)
+when that is not all kept, or was another run's, and the client reads the
+station again. So that one coming back misses nothing, what is told is still
+made and kept for ten minutes after the last stream went; past that, nothing
+before can be resumed. A viewer's sidebar rows and overview are told against
+what their streams were told last (one telling, in each language, for all
+their streams, kept like the rest); a stream that starts afresh reads their
+sidebar before it answers, and is what their changes are told against from
+then on.
+
+Over the mesh, an answer is deflated for a client that asks
+(`accept-encoding: deflate-raw`; station/src/mesh/deflate.ts): JSON and text
+from 512 bytes, raw deflate, an event stream flushed after each event (each
+comes out whole as it arrives, deflated against those before it: an event
+like the last is a few bytes). Nothing of a preview (its page reads what the
+service sent), and no `content-length` then. A client from before asks
+nothing and gets every answer as it is.
 
 Timers that remain on the station and why: host sampling (above), quota
 refresh every five minutes while some `/events` stream is open (the provider
