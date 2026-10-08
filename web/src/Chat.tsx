@@ -148,8 +148,8 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
 }
 
 /**
- * What an agent needs of the viewer in this chat with no card for it (the core's `waiting`), on top of the composer: in a
- * line, leading to the post it is about; 忽略 lets it go (`decision.dismiss`). A card says so on its post already.
+ * What an agent needs of the viewer in this chat with no card for it (the core's `waiting`), on top of the composer: all
+ * of it, wrapped, leading to the post it is about; 忽略 lets it go (`decision.dismiss`). A card says so on its post already.
  */
 export function WaitingBar({ station, thread, waiting }: { station: string; thread: number; waiting: ChatWaiting }) {
   const call = useCall();
@@ -160,7 +160,7 @@ export function WaitingBar({ station, thread, waiting }: { station: string; thre
   return (
     <div className={css.waitingBar} role="status">
       <button type="button" className={css.waitingText} title={t("web-main.chat.waiting.go")} onClick={() => jumpTo({ station, thread, seq: waiting.seq })}>
-        <Bell size={14} /><b>{lead}</b>{waiting.text && <span>{waiting.text}</span>}
+        <Bell size={14} /><span><b>{lead}</b>{waiting.text && <span>{waiting.text}</span>}</span>
       </button>
       <button type="button" className={css.waitingDismiss} onClick={() => {
         setGone(waiting.seq);

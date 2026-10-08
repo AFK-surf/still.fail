@@ -617,21 +617,20 @@ export const archiveCheck = style({
   selectors: { "&[data-failed]": { color: vars.red } },
 });
 
-/** What an agent needs of the viewer (Chat.tsx WaitingBar): a line on top of the composer (composerAbove). */
+/** What an agent needs of the viewer (Chat.tsx WaitingBar): on top of the composer (composerAbove), all of it, wrapped. */
 export const waitingBar = style({
-  display: "flex", alignItems: "center", gap: "8px", padding: "6px 6px 6px 12px", borderRadius: "10px",
-  background: vars.amberBg, color: vars.text, fontSize: vars.textUi,
+  display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 6px 6px 12px", borderRadius: "10px",
+  background: vars.amberBg, color: vars.text, fontSize: vars.textUi, lineHeight: vars.leadingUi,
 });
 export const waitingText = style({
-  flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "6px", padding: "0", border: "0", background: "none",
-  color: "inherit", font: "inherit", textAlign: "left", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden",
+  flex: "1", minWidth: "0", display: "flex", alignItems: "flex-start", gap: "6px", padding: "0", border: "0", background: "none",
+  color: "inherit", font: "inherit", textAlign: "left", cursor: "pointer", overflowWrap: "anywhere",
 });
-globalStyle(`${waitingText} > svg`, { flex: "none", color: vars.amber });
-globalStyle(`${waitingText} > b`, { flex: "none", fontWeight: "600" });
-globalStyle(`${waitingText} > span`, { overflow: "hidden", textOverflow: "ellipsis", color: vars.text });
-globalStyle(`${waitingText}:hover > span`, { textDecoration: "underline" });
+globalStyle(`${waitingText} > svg`, { flex: "none", marginTop: "3px", color: vars.amber });
+globalStyle(`${waitingText} b`, { marginRight: "6px", fontWeight: "600" });
+globalStyle(`${waitingText}:hover > span > span`, { textDecoration: "underline" });
 export const waitingDismiss = style({
-  flex: "none", padding: "3px 8px", border: "0", borderRadius: "7px", background: "none", color: vars.muted, font: "inherit",
+  flex: "none", padding: "0 8px", lineHeight: vars.leadingUi, border: "0", borderRadius: "7px", background: "none", color: vars.muted, font: "inherit",
   fontSize: vars.textMeta, cursor: "pointer", selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
 
