@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
 import type { Request } from "../src/api/request.ts";
@@ -354,6 +354,11 @@ test("a file a message names by its path: its peek and the file whole, only with
     assert.equal((await peek(join(workspace, "src", "a.ts")))[1].lines.start, 1);
     assert.deepEqual((await peek("src"))[1].entries, ["a.ts"]);
     assert.equal((await peek("bin.dat"))[1].kind, "binary");
+    // The agents' home too: their skills and memory.
+    const skill = join(r.data, "agent", "skills", "x", "SKILL.md");
+    mkdirSync(dirname(skill), { recursive: true });
+    writeFileSync(skill, "---\nname: x\n---\n");
+    assert.deepEqual((await peek(skill))[1].lines.text[1], "name: x");
     // Nothing outside, however named; nothing that is not there.
     assert.deepEqual(await peek("../../../../stillfail.db"), [403, { error: en("station.files.outside") }]);
     assert.deepEqual(await peek("/etc/hosts"), [403, { error: en("station.files.outside") }]);

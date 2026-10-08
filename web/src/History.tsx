@@ -6,7 +6,7 @@ import { failure, useToast } from "./toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { ChevronDown, ChevronRight, Wait, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
 import { useApi, useHistory, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryStep, type HistoryView, type Place } from "./api.ts";
@@ -37,6 +37,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
   focus?: { entry: number; n: number } | null;
 }) {
   const history = useHistory(station, sessionKey).value;
+  const paths = useMemo(() => ({ key: sessionKey, station }), [sessionKey, station]);
   const link = useLink();
   // A place as its platform's mark and its name; a still.fail chat opens its agent's page.
   const where = (place: Place | null): ReactNode => {
@@ -87,7 +88,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
 
   return (
     // The paths its agent writes are its session's files (Peeks.tsx).
-    <PathSession.Provider value={sessionKey}>
+    <PathSession.Provider value={paths}>
     <section className={css.history} aria-label={t("web-main.history.label")}>
       <header className={css.historyHead}>
         <div className={css.historyIdentity}>{summary}</div>

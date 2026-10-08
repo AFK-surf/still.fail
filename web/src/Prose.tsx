@@ -124,7 +124,10 @@ const components: Components = {
   a: ({ node: _, ...props }) => link(props),
   // Inline code that is a file's path: its chip (a block of code is CodeBlock's, never drawn as this).
   code: ({ node: _, className, children, ...props }) => {
-    const found = className ? null : pathIn(textOf(children));
+    const text = className ? "" : textOf(children).trim();
+    // A web address alone in code is a link too: the code's ends are the link's, so nothing after it is swallowed.
+    if (/^https?:\/\/\S+$/i.test(text)) return link({ href: text, children: <code {...props}>{children}</code> });
+    const found = className ? null : pathIn(text);
     return found ? <FileRef path={found.path} line={found.line}>{children}</FileRef> : <code className={className} {...props}>{children}</code>;
   },
 };

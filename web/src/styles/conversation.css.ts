@@ -67,3 +67,5 @@ globalStyle(`${markdown} :not(pre) > code`, {
   padding: "0", borderRadius: "0", background: "none", fontFamily: vars.fontMono, fontSize: ".9em",
   color: vars.codeInline,
 });
+/** A web address written as code is still a link: the link's colour, not the code's. */
+globalStyle(`${markdown} a > code`, { color: "inherit" });
