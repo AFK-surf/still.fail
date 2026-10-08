@@ -30,6 +30,7 @@ export const NOTES: [number, string][] = [
   [23, "Archive recommendations now follow an editable archive policy (words plus options, each counted as archive or not); new tool archive_policy reads and changes it. When someone says a recommendation is wrong, fix the policy if it causes it."],
   [24, "Before ending a turn waiting, make sure something watches the work and brings you back when it ends or fails (background command or agent, job, a loop polling CI that exits on the first failure); never wait on a guessed duration alone. Only when the work truly cannot be watched, give seconds as the shortest it could take. While it runs, do whatever does not depend on it; wait only when nothing else is left."],
   [25, "In still.fail chats a bare URL is no longer turned into a link: write every link as [label](url)."],
+  [26, "The formatting rules for Slack (mrkdwn) and still.fail chats (Markdown) are now one side-by-side table in your instructions (Formatting): check it when unsure, and never mix the two."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
