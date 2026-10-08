@@ -252,7 +252,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
       <span className={nav.navSessionText}>
         {/* Where the chat happens sits at the title's end, top right. */}
         <span className={nav.navSessionHead}>
-          <ChatMark item={item} inline />
+          <span className={nav.navMarkSlot}><ChatMark item={item} inline /></span>
           {editing
             ? <TitleInput value={item.title} onDone={(title) => { setEditing(false); rename(item, title); }} />
             : <span className={nav.navSessionTitle}>{renamingTo ?? item.title}</span>}
@@ -268,7 +268,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         {/* The last thing said, who is in the chat, and when (in their place while pointed at). */}
         <span className={nav.navSessionMeta}>
           {/* Where it stands, when the core has words for it (奏 · …, 要你帮忙：…, 做完了), instead. */}
-          {stateLine(item) ? <WaitingText compactNeed text={stateLine(item)!} className={nav.navSessionLast} />
+          {stateLine(item) ? <WaitingText slot text={stateLine(item)!} className={nav.navSessionLast} />
             : item.last ? <LastMessage item={item} /> : <span className={nav.navSessionLast} />}
           <RowAside item={item} lead={lead} size={16} className={nav.rowAside} />
           <Time className={nav.navTime} stamp={item.time?.lastActiveAt} fixed />

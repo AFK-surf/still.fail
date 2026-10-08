@@ -67,15 +67,11 @@ export const markCount = style({ display: "inline-flex", alignItems: "center", g
 export const waitingLead = style({ fontWeight: 600 });
 
 /**
- * Compact needs-you prefix in the desktop sidebar; the explanation keeps the remaining line. Pulled 2px left so the
- * bell (drawn centred in its 14px box) stands under the 10px ring of the title line above, centre on centre.
- */
-/**
  * A state line led by an icon in the title's mark's column (ChatMark.tsx WaitingText `slot`): the icon (14px, its ink
- * narrower) centred in the mark's 10px, then what follows 8px on, where the title starts.
+ * narrower) centred in the mark's 10px, then what follows where the title starts (`--lead-gap` on, the gap after the title's
+ * mark: 8px on phones). Not clipped: the icon stands 2px out of its column on each side; what follows ellipsizes itself.
  */
-export const leadLine = style({ display: "flex", alignItems: "center", gap: 8 });
+export const leadLine = style({ display: "flex", alignItems: "center", gap: "var(--lead-gap, 8px)", selectors: { "&&": { overflow: "visible" } } });
 export const leadSlot = style({ display: "flex", flex: "none", width: 10, height: 14, alignItems: "center", justifyContent: "center", overflow: "visible" });
 globalStyle(`${leadSlot} svg`, { flex: "none" });
 export const leadRest = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const needMark = style({ display: "inline-flex", width: 14, height: 14, marginLeft: -2, verticalAlign: "-2px", alignItems: "center", justifyContent: "center" });

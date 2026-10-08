@@ -148,6 +148,8 @@ export const navSessionHead = style({
   display: "flex", alignItems: "center", gap: 6, minWidth: 0, height: 20, lineHeight: "20px",
   selectors: { [`${navSessionWrap}:hover &`]: { paddingRight: 24 } },
 });
+/** The title's mark in a 10px column, the state line's icon (ChatMark.tsx WaitingText `slot`) centred under it; none, no column. */
+export const navMarkSlot = style({ display: "flex", flex: "none", width: 10, justifyContent: "center", selectors: { "&:empty": { display: "none" } } });
 export const navSessionTitle = style({
   flex: 1, ...ellipsis,
   selectors: {
@@ -161,6 +163,8 @@ export const navSessionMeta = style({
   // message ellipsizes itself.
   // Every row is two lines high, message or not, so a row that gains its first message does not grow.
   height: 18, lineHeight: "18px",
+  // A state line's icon in the mark's column: what follows starts where the title does, the head's gap on.
+  vars: { "--lead-gap": "6px" },
   selectors: { [`${navSession}[data-offline] &`]: { opacity: 0.5 } },
 });
 export const navSessionLast = style({
