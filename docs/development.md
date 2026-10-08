@@ -104,7 +104,8 @@ Where a seed decides what a simulated run leaves open (jitter, how writes are cu
 
 What cannot be made the same every run (real processes and signals, the native addon and iroh-relay over real
 sockets, networks made up at random) is the side run's: `sh scripts/side.sh` (each package's `side/`; Rust's
-`#[ignore = "side: …"]`), every few hours on the Mac Studio, blocking nothing. A side failure goes to an agent, which
+`#[ignore = "side: …"]`), every four hours on main in CI (`.github/workflows/side.yml`, on mini1, each part on a runner of
+its own; run it by hand with `gh workflow run side`), blocking nothing. A side failure goes to an agent, which
 reproduces it as a test CI runs, failing the same way every time, and fixes it; one it cannot reproduce is let be.
 Never a retry, a longer deadline or a looser bound to make a test pass.
 

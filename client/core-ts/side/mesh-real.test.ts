@@ -532,11 +532,12 @@ test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, 
 /// not a number with room for a slow machine.
 test("a_link_moves_to_the_relay_its_requests_go_quicker_through_far_from_the_device_or_not", { skip: noRelay }, async () => {
   const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
-  // a: the device at once, the station 100 ms each way (200 ms a round trip); b: the device 60 ms each way (getting
-  // onto it as well), the station at once (120 ms).
+  // a: the device at once, the station 100 ms each way (200 ms a round trip); b: the device 40 ms each way (getting
+  // onto it as well), the station at once (80 ms). Not 60: what two relays on one machine add made b's 120 ms 155
+  // against a's 205 on a Linux runner (2026-10-08), under MOVE_GAIN's 30%.
   const station = await Station.on(b, await slowed(a, 100, 1));
   const id = station.id();
-  const farB = await slowed(b, 60);
+  const farB = await slowed(b, 40);
   const e = env(new FakeHost(), new Wakes(), quickClock(new Map()));
   const mesh = await e.runner.run(Mesh.make(e, [a]));
   const runner = e.runner;
@@ -603,7 +604,7 @@ test("a_link_leaves_a_relay_found_slow_for_one_that_brings_replies_sooner", { sk
   };
   (mesh.relays as string[]).push(slowB);
   await runner.run(mesh.remeasure(id));
-  assert.ok(sameRelay(mesh.current(id)!.via(), slowB), `${mesh.current(id)!.via()}`);
+  assert.ok(sameRelay(mesh.current(id)!.via(), slowB), `still through ${mesh.current(id)!.via()}: ${JSON.stringify(mesh.measured(id))}`);
   const throughB = await big();
   assert.ok(mesh.speed(id, slowB) !== null, "how fast b is, seen");
   // Measured again, as the core does every few minutes. Once on Linux CI (2026-10-06) it stayed on b after one
