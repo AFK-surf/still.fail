@@ -1,6 +1,6 @@
 // GET /events as admin/events.rs has it: sidebar rows told by what changed, one `session` event per burst, `read`
 // only to its viewer, job logs as they grow; and each event with its id (the station's run, its number), what was told
-// to everyone told again to a stream that takes over from another (`since`).
+// told again to a stream that takes over from another or comes back after its link went (`since`).
 import type { Clock } from "effect";
 import assert from "node:assert/strict";
 import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -16,6 +16,7 @@ const viewer = (email: string) => ({ sub: email, email, name: email, role: "memb
 function setup(clock?: Clock.Clock) {
   let listener: (c: StoreChange) => void = () => {};
   const rows: Record<string, any[]> = { "a@x": [{ id: "1", title: "one" }], "b@x": [] };
+  const overview = { running: 0 };
   const reads: string[] = [];
   const readers: any = {
     read: async (op: string, args: any) => {
@@ -37,7 +38,8 @@ function setup(clock?: Clock.Clock) {
     sessionExists: (key) => key !== "gone",
     clock,
   });
-  return { events, rows, reads, change: (c: StoreChange) => listener(c), dir };
+  events.follow({ overview: async () => ({ ...overview }) });
+  return { events, rows, reads, overview, change: (c: StoreChange) => listener(c), dir };
 }
 
 /// Reads a stream's events as they come.
@@ -137,11 +139,11 @@ test("a stream that takes over from what is not kept any more, or another run's,
     const s = reader((await events.open(viewer("a@x"), "zh", false, [], [], since)).body as AsyncIterable<Buffer>);
     await settle();
     await s.close();
-    return s.got.filter((e) => e.event).map((e) => (e.event === "thread" ? e.data.id : e.event));
+    return s.got.filter((e) => e.event === "thread" || e.event === "missed").map((e) => (e.event === "thread" ? e.data.id : e.event));
   };
   assert.deepEqual(await told(`${"0a0a0a0a"}.1`), ["missed"], "another run's");
-  // Two minutes on, more told: 3 and 4 are let go.
-  await time.adjust(121_000);
+  // Ten minutes on, more told: 3 and 4 are let go.
+  await time.adjust(601_000);
   change({ type: "thread", id: 5, entries: [{ n: 1 } as any] });
   await settle();
   change({ type: "thread", id: 6, entries: [{ n: 1 } as any] });
@@ -151,6 +153,53 @@ test("a stream that takes over from what is not kept any more, or another run's,
   assert.deepEqual(await told(four!), [5, 6]);
   assert.deepEqual(await told(old.got.filter((e) => e.event === "thread").at(-2)!.id!), [6]);
   await old.close();
+});
+
+test("a stream that comes back after its link went is told what was told meanwhile and how its sidebar stands", async () => {
+  const time = testClock();
+  const { events, rows, overview, change } = setup(time.clock);
+  const open = async (since?: string) => {
+    const answer = await events.open(viewer("a@x"), "zh", false, [], [], since ?? null);
+    return { resumed: (answer.headers as Record<string, string>)["stillfail-resumed"] === "1", ...reader(answer.body as AsyncIterable<Buffer>) };
+  };
+  const lost = await open();
+  change({ type: "session", key: "s1" });
+  await settle();
+  const heard = lost.got.findLast((e) => e.id)!.id!;
+  await lost.close();
+  assert.equal(events.inUse(), false);
+  // Nobody follows: what is told is still made and kept a while, for one coming back.
+  change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
+  change({ type: "processes" } as StoreChange);
+  rows["a@x"] = [{ id: "1", title: "one, renamed" }, { id: "2", title: "two" }];
+  overview.running = 1;
+  change({ type: "session", key: "s2" });
+  await settle();
+  await time.adjust(60_000);
+  const back = await open(heard);
+  await settle();
+  assert.equal(back.resumed, true);
+  const told = back.got.filter((e) => e.event).map((e) => [e.event, e.event === "thread" ? e.data.id : e.event === "session" ? e.data.key : e.data]);
+  assert.deepEqual(told, [
+    ["thread", 4],
+    ["session", "s2"],
+    // Its sidebar and overview, as they changed while none of its viewer's streams was there to be told.
+    ["overview", { running: 1 }],
+    ["chat", { id: "1", title: "one, renamed" }],
+    ["chat", { id: "2", title: "two" }],
+  ]);
+  // Its overview again only as it changes.
+  change({ type: "processes" } as StoreChange);
+  await settle();
+  assert.equal(back.got.filter((e) => e.event === "overview").length, 1);
+  await back.close();
+  // Past KEPT_MS with nobody: what was told is let go, and one coming back from before reads the station again.
+  await time.adjust(601_000);
+  const late = await open(back.got.findLast((e) => e.id)!.id!);
+  await settle();
+  assert.equal(late.resumed, false);
+  assert.deepEqual(late.got.filter((e) => e.event).map((e) => e.event), ["missed"]);
+  await late.close();
 });
 
 test("a job's log is told now and as it grows", async () => {
