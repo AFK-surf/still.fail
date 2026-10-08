@@ -204,7 +204,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
         // One line that fits the width, no scrolling: where it runs, and what it runs on as one control (web/src/ModelTriple.tsx),
         // cut short rather than pushed off the edge. Room above and below for the chips' shadows.
         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Chooser(haze, { IconIn(Icons.Server, 14.dp, C.ink) }, view.name, Modifier.widthIn(max = 128.dp)) { pickStation(app, stations, view.station, onStation) }
+            Chooser(haze, { val e = view.emoji; if (e != null) Text(e, fontSize = 13.sp, lineHeight = 14.sp) else IconIn(Icons.Server, 14.dp, C.ink) }, view.name, Modifier.widthIn(max = 128.dp)) { pickStation(app, stations, view.station, onStation) }
             val p = choice.pick
             if (runtime == null || model == null || p == null || p.options.isEmpty()) {
                 // Nothing to choose from: the chooser leads to where models are enabled.
@@ -269,7 +269,7 @@ private fun pickStation(app: AppState, stations: List<StationView>, current: Str
         SheetHead(t("android-chat.new.station.pick"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             stations.forEach { s ->
-                PickRow(s.name, s.summary, checked = s.station == current, leading = { Buddy(s, 36) }) { onPick(s.id); app.sheet = null }
+                PickRow(s.emoji?.let { "$it ${s.name}" } ?: s.name, s.summary, checked = s.station == current, leading = { Buddy(s, 36) }) { onPick(s.id); app.sheet = null }
             }
         }
     }

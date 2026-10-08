@@ -108,6 +108,8 @@ export const mChatTitle = style({
     [`${mChatRow}[data-offline] &`]: { opacity: ".45" },
   },
 });
+/** The emoji of the station a chat runs on, after its title. */
+export const mChatStation = style({ flex: "none", fontSize: vars.textMeta, lineHeight: "1" });
 export const mChatMark = style({
   display: "grid", placeItems: "center", width: "14px", flex: "none",
   selectors: {

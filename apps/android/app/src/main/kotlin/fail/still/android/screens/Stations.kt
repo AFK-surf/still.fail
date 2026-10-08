@@ -121,7 +121,7 @@ fun StationsScreen(current: WorkspaceEntry) {
                         Buddy(s)
                         Column(Modifier.weight(1f)) {
                             // Line heights set: a line in Chinese is otherwise a little taller than one in Latin.
-                            Text(s.name, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(s.emoji?.let { "$it ${s.name}" } ?: s.name, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(s.summary, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         if (s.reconnecting == true) Reconnecting()

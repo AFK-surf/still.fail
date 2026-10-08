@@ -7,14 +7,17 @@ import { UpdateSummary, Versions } from "../Versions.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
 import * as css from "./StationCards.css.ts";
+import { EmojiPick } from "./EmojiPick.tsx";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "./words.tsx";
 
-/** `manager`: may update a station and its runtimes (a workspace owner or admin). */
-export function StationList({ stations, menu, manager = false }: { stations: StationView[]; menu(s: StationView): ReactNode; manager?: boolean }) {
-  return <div className={css.cards}>{stations.map((s) => <StationCard key={s.id} s={s} menu={menu(s)} manager={manager} />)}</div>;
+/** `manager`: may update a station and its runtimes (a workspace owner or admin); `onEmoji`: may give it an emoji. */
+export function StationList({ stations, menu, manager = false, onEmoji, emojiBusy }: {
+  stations: StationView[]; menu(s: StationView): ReactNode; manager?: boolean; onEmoji?: ((s: StationView, emoji: string) => void) | undefined; emojiBusy?: ((s: StationView) => boolean) | undefined;
+}) {
+  return <div className={css.cards}>{stations.map((s) => <StationCard key={s.id} s={s} menu={menu(s)} manager={manager} onEmoji={onEmoji} emojiBusy={emojiBusy?.(s) ?? false} />)}</div>;
 }
 
 /** Whether its agents are at work, or when it was last seen. */
@@ -96,7 +99,7 @@ function useLong(waiting: boolean, ms: number): boolean {
   return waiting && long;
 }
 
-function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; manager: boolean }) {
+function StationCard({ s, menu, manager, onEmoji, emojiBusy }: { s: StationView; menu: ReactNode; manager: boolean; onEmoji: ((s: StationView, emoji: string) => void) | undefined; emojiBusy: boolean }) {
   const [details, setDetails] = useState(false);
   const silent = useLong(s.online && !s.host, 15_000);
   const wrong = problems(s, silent);
@@ -104,6 +107,7 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
     <div className={css.card} data-online={s.online || undefined}>
       <div className={css.cardHead}>
         <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />
+        <EmojiPick emoji={s.emoji} name={s.name} editable={onEmoji !== undefined} busy={emojiBusy} onPick={(e) => onEmoji?.(s, e)} />
         <span className={css.cardTitle}>
           <button type="button" className={css.name} onClick={() => setDetails(true)} aria-label={t("web-pages.stations.details", { name: s.name })}>{s.name}</button>
           <span className={css.state}>{state(s)}</span>

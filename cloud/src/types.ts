@@ -7,7 +7,7 @@ export interface MeView extends UserView { beta?: true }
 /** `relays`: the workspace's own relays, used besides still.fail's (absent from a cloud from before them). */
 export interface WorkspaceSummary { id: string; name: string; role: Role; created_at: number; stations: number; members: number; relays?: string[] }
 /** last_seen: when it last connected to still.fail cloud or left it (whether it is up, each device finds out over the mesh). */
-export interface StationView { id: string; name: string; enrolled_at: number; enrolled_by: string; last_seen: number | null; version: string | null }
+export interface StationView { id: string; name: string; emoji: string | null; enrolled_at: number; enrolled_by: string; last_seen: number | null; version: string | null }
 export interface MemberView extends UserView { role: Role; added_at: number }
 export interface InvitationView { id: string; role: Role; email: string | null; created_by: string; expires_at: number }
 /** An invitation waiting for the signed-in account's email. */

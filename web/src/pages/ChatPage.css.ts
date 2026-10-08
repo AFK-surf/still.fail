@@ -14,6 +14,7 @@ export const agentMarkBtn = style({
 });
 /** The machine it runs on, beside the title: a quiet tag. */
 export const chatStation = style({
+  display: "inline-flex", alignItems: "center", gap: "4px",
   flex: "none", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   padding: "1px 7px", border: `1px solid ${vars.line}`, borderRadius: "999px",
   color: vars.muted, fontSize: vars.textMeta, lineHeight: vars.leadingMeta, cursor: "default",

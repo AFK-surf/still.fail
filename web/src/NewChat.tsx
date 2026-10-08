@@ -1,7 +1,8 @@
 // A new chat, after Zork's: say what to do, having picked where it runs
 // (station), on what (runtime and model) and how hard it thinks. The first
 // message (or file) makes the chat and its agent's session on that station.
-import { Key, Plus, Server } from "./icons.tsx";
+import { Key, Plus } from "./icons.tsx";
+import { StationMark } from "./StationMark.tsx";
 import { Link, useNavigate } from "react-router";
 import { useMemo, useRef, useState } from "react";
 import type { RuntimeKind, StationView } from "./api.ts";
@@ -86,8 +87,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
   const toolbar = useMemo(() => (
     <>
       {station.name && (
-        <Chooser side="top" label={<><Server size={14} />{station.name}</>}>
-          {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={14} />{s.name}</Item>)}
+        <Chooser side="top" label={<><StationMark emoji={stations.find((s) => s.station === station.address)?.emoji} />{station.name}</>}>
+          {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><StationMark emoji={s.emoji} />{s.name}</Item>)}
         </Chooser>
       )}
       {!runtime || !model ? (
@@ -133,8 +134,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
               ? <Button variant="primary" icon={Plus} onClick={() => navigate(addProfilePath(workspace, station.address))}>{t("web-main.newChat.addProfile")}</Button>
               : <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} to={profilesPage(station)}>{t("web-main.newChat.goPickModels")}</Link>}
             {stations.length > 1 && (
-              <Chooser side="bottom" label={<><Server size={14} />{station.name}</>}>
-                {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={14} />{s.name}</Item>)}
+              <Chooser side="bottom" label={<><StationMark emoji={stations.find((s) => s.station === station.address)?.emoji} />{station.name}</>}>
+                {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><StationMark emoji={s.emoji} />{s.name}</Item>)}
               </Chooser>
             )}
             {blocked === "profile" && <MachineLoginOffers logins={view.overview?.machineLogins} onAdd={(c) => navigate(addProfilePath(workspace, station.address, c === "claude-sub" ? "anthropic" : "openai", "plan"))} />}

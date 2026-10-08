@@ -101,7 +101,7 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
             <ChatPicture item={item} />
             <span className={css.title} data-unread={item.unread || undefined}>{item.title}</span>
             <span className={css.meta}>
-              <span>{item.stationName}</span>
+              <span>{item.stationEmoji ? `${item.stationEmoji} ` : ""}{item.stationName}</span>
               <Time stamp={item.time?.lastActiveAt} fixed />
             </span>
           </div>

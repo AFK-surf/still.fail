@@ -374,6 +374,8 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         {/* The mark in a 10px column (its dots are 8px, its rings 10), the one the state line's icon stands in. */}
         {chatTone(item) && <span className={css.mMarkSlot}><ChatMark item={item} inline /></span>}
         <span className={css.mChatTitle} data-unread={item.unread || undefined}>{item.title}</span>
+        {/* The station it runs on, by its emoji (the core gives one only with several stations). */}
+        {item.stationEmoji && <span className={css.mChatStation} aria-label={item.stationName}>{item.stationEmoji}</span>}
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
         {busy ? <span className={css.mChatMark} aria-label={t("web-mobile.home.busy")}><Spinner size={12} /></span>
           : failed !== undefined ? <span className={css.mChatMark}><FailedMark error={failed} size={12} /></span>

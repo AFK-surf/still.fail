@@ -65,6 +65,8 @@ export const cloud = {
   removeMember: (sub: string, id: string, member: string) => operations(sub).workspaceRemoveMember<{ ok: true }>({ workspace: id, member }),
   enroll: (sub: string, id: string, name: string) => operations(sub).workspaceEnroll<{ token: string; expires_at: number; install: string; command: string }>({ workspace: id, name }),
   renameStation: (sub: string, id: string, station: string, name: string) => operations(sub).workspaceRenameStation<WorkspaceView>({ workspace: id, station, name }),
+  /** "" takes it away. */
+  setStationEmoji: (sub: string, id: string, station: string, emoji: string) => operations(sub).workspaceRenameStation<WorkspaceView>({ workspace: id, station, emoji }),
   removeStation: (sub: string, id: string, station: string) => operations(sub).workspaceRemoveStation<{ ok: true }>({ workspace: id, station }),
   revokeLoginSession: (sub: string, id: string) => operations(sub).loginSessionRevoke<{ ok: true }>({ id }),
 };

@@ -229,6 +229,7 @@ export const SHAPES: Record<string, Shape> = {
   DecisionAnswered: struct([
     ["station", "String"],
     ["stationName", "String"],
+    ["stationEmoji", opt("String"), { doc: "Its station's emoji, when its workspace gave it one." }],
     ["session", "String"],
     ["thread", "i64", { client: "I54" }],
     ["title", "String"],
@@ -240,6 +241,7 @@ export const SHAPES: Record<string, Shape> = {
   DecisionWorking: struct([
     ["station", "String"],
     ["stationName", "String"],
+    ["stationEmoji", opt("String"), { doc: "Its station's emoji, when its workspace gave it one." }],
     ["session", "String"],
     ["thread", "i64", { client: "I54" }],
     ["title", "String"],
@@ -254,6 +256,7 @@ export const SHAPES: Record<string, Shape> = {
   DecisionItem: struct([
     ["station", "String"],
     ["stationName", "String"],
+    ["stationEmoji", opt("String"), { doc: "Its station's emoji, when its workspace gave it one." }],
     ["session", "String", { doc: "Its chat's item id (its session's key): what its page opens by." }],
     ["thread", "i64", { client: "I54" }],
     ["title", "String", { doc: "Its chat's title." }],
@@ -1188,6 +1191,7 @@ export const SHAPES: Record<string, Shape> = {
     ["origin", opt("Origin")],
     ["station", "String"],
     ["stationName", "String"],
+    ["stationEmoji", opt("String"), { doc: "Its station's emoji, when its workspace gave it one and has more stations than it." }],
     ["state", opt("Badge"), { doc: "block | run | failed" }],
     ["originText", opt("String"), { doc: "Where it came from (Slack · workspace · #channel), for a Slack chat." }],
     ["offline", opt("String"), { doc: "Its station is offline, in words (\"Studio 离线\"): the row is shown greyed and marked. Absent while online." }],
@@ -1555,6 +1559,7 @@ export const SHAPES: Record<string, Shape> = {
     ["station", "String"],
     ["id", "String"],
     ["name", "String"],
+    ["emoji", opt("String"), { doc: "The one its workspace gave it (the settings), shown where it is named; none when none." }],
     ["summary", "String", { doc: "Its line in a list: offline since when, or what it is and whether its agents work." }],
     ["face", opt("String"), { doc: "Its buddy's face: offline | working | idle; and what it is under its name (its processor, else 在线/离线)." }],
     ["line", opt("String")],
