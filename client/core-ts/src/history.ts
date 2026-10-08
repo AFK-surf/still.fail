@@ -5,6 +5,7 @@ import { epochMs, kindOf, toolName } from "./activity.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as present from "./present.ts";
+import { money } from "./views/usage.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -396,6 +397,18 @@ export function presentHistory(live: J, cx: Context): J {
   const u = live?.usage;
   const isUsage = u !== null && typeof u === "object" && !Array.isArray(u);
   const n = (k: string): number => (isUsage && typeof u[k] === "number" ? u[k] : 0);
+  // The context and the cost come from stations since; an older one's usage has neither.
+  const has = (k: string): boolean => isUsage && typeof u[k] === "number";
+  const context = has("contextTokens") && n("modelCalls") > 0
+    ? n("contextWindow") > 0
+      ? t("core-logic.history.usage.context.of", { n: format.compactNumber(n("contextTokens")), window: format.compactNumber(n("contextWindow")), percent: format.round((n("contextTokens") / n("contextWindow")) * 100) })
+      : format.compactNumber(n("contextTokens"))
+    : null;
+  const cost = has("cost") && n("modelCalls") > 0
+    ? n("unpricedCalls") >= n("modelCalls")
+      ? t("core-logic.history.usage.cost.unpriced")
+      : `${n("unpricedCalls") > 0 ? "≥" : ""}${money(n("cost"))}`
+    : null;
   const usage = isUsage
     ? (() => {
         const input = n("inputTokens");
@@ -407,6 +420,8 @@ export function presentHistory(live: J, cx: Context): J {
           { label: t("core-logic.history.usage.cached"), value: format.compactNumber(cached) },
           { label: t("core-logic.history.usage.output"), value: format.compactNumber(n("outputTokens")) },
           { label: t("core-logic.history.usage.hit_rate"), value: rate },
+          ...(context !== null ? [{ label: t("core-logic.history.usage.context"), value: context }] : []),
+          ...(cost !== null ? [{ label: t("core-logic.history.usage.cost"), value: cost }] : []),
         ];
       })()
     : null;
@@ -415,7 +430,12 @@ export function presentHistory(live: J, cx: Context): J {
         const input = n("inputTokens");
         const cached = n("cachedTokens");
         const rate = input > 0 ? t("core-logic.history.usage.line.rate", { rate: format.round((cached / input) * 100) }) : "";
-        return t("core-logic.history.usage.line", { n: n("modelCalls"), input: format.compactNumber(input), rate, output: format.compactNumber(n("outputTokens")) });
+        const line = t("core-logic.history.usage.line", { n: n("modelCalls"), input: format.compactNumber(input), rate, output: format.compactNumber(n("outputTokens")) });
+        const more = [
+          ...(has("contextTokens") && n("modelCalls") > 0 ? [t("core-logic.history.usage.line.context", { n: format.compactNumber(n("contextTokens")) })] : []),
+          ...(cost !== null ? [t("core-logic.history.usage.line.cost", { cost })] : []),
+        ];
+        return [line, ...more].join(" · ");
       })()
     : null;
   const loaded = flag(live, "loaded");

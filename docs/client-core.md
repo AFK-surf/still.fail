@@ -164,7 +164,7 @@ notices are only of the workspace the viewer is in (attend.ts).
   "loaded": true,             // the stream has sent the transcript it had; until then `timeline` may be partial
   "first": 800,               // where `timeline` starts in the transcript: its latest page first, `history.older` loads those before
   "timeline": [ … ],          // TimelineEntry: the transcript from entry `first`, appended as it grows
-  "usage": { "modelCalls": 3, "inputTokens": 1200, "cachedTokens": 900, "outputTokens": 80, "model": "claude-…" } | null,
+  "usage": { "modelCalls": 3, "inputTokens": 1200, "cachedTokens": 900, "outputTokens": 80, "model": "claude-…", "contextTokens": 420, "contextWindow": null, "cost": 0.0123, "unpricedCalls": 0 } | null,
   "steps": [ … ],             // steps in flight (LiveStep; an ended one keeps "ended": true until the entry that records it arrives)
   "phase": { "phase": "requesting", "since": 1790000000000 } | null
 }
