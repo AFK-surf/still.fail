@@ -128,6 +128,23 @@ export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffse
   }));
 }
 
+/// A session's calls, added up by model (its day, thread, person and profile left empty): what its execution details
+/// show of it.
+export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] {
+  return (
+    db
+      .prepare(
+        `SELECT runtime, model, fast, COUNT(*) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read,
+           SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
+         FROM usage WHERE session = ?1 GROUP BY runtime, model, fast`,
+      )
+      .all(session) as Json[]
+  ).map((r) => ({
+    day: "", session, thread: null, person: null, profile: null, runtime: r.runtime, model: r.model, fast: r.fast !== 0 && r.fast !== null,
+    calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write, cacheWriteLong: r.cache_write_long, output: r.output,
+  }));
+}
+
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(db: DatabaseSync): number | null {
   return (db.prepare("SELECT MIN(at) AS at FROM usage").get() as Json).at ?? null;

@@ -103,6 +103,23 @@ export function cost(g: UsageGroup): number | null {
   return (tokens / 1e6) * (g.fast ? 2.0 : 1.0);
 }
 
+/// A session's calls as counted, added up by model (store `usageOfSession`), put together for its execution details:
+/// the tokens as the live usage counts them (input with what was read from and written to the cache) and what they
+/// would cost, those of a model without a price apart.
+export function sessionUsage(groups: UsageGroup[]) {
+  const out = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, cost: 0, unpricedCalls: 0 };
+  for (const g of groups) {
+    out.modelCalls += g.calls;
+    out.inputTokens += g.input + g.cacheRead + g.cacheWrite + g.cacheWriteLong;
+    out.cachedTokens += g.cacheRead;
+    out.outputTokens += g.output;
+    const c = cost(g);
+    if (c === null) out.unpricedCalls += g.calls;
+    else out.cost += c;
+  }
+  return out;
+}
+
 /// Usage::summary: every day's calls from `from` until `to`, by thread, person, profile and model (UsageRow).
 function summary(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint): Json[] {
   return usageGroups(s, from, to, utcOffsetMin).map((g) => ({

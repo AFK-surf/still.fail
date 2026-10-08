@@ -1348,6 +1348,11 @@ export class Store {
     return usage.usageGroups(this.db, from, to, utcOffsetMin);
   }
 
+  /// A session's calls, added up by model.
+  usageOfSession(session: string): usage.UsageGroup[] {
+    return usage.usageOfSession(this.db, session);
+  }
+
   /// The threads usage names, each with the first thing a person said in it (for its title; none where its archive
   /// cannot be read). Those gone are left out.
   usageThreads(ids: number[]): [ThreadRow, string | null][] {

@@ -108,7 +108,7 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   // A station since tells the context and the cost too.
   const more = (usage: J) => presentHistory({ ...live, usage: { ...live.usage, ...usage } }, cx(threads, members, slack));
   const now2 = more({ contextTokens: 86_000, cost: 3.214, unpricedCalls: 0 });
-  assert.deepEqual(now2.usage.slice(5), [{ label: "当前上下文", value: "86K" }, { label: "API 费用估算", value: "$3.21" }]);
+  assert.deepEqual(now2.usage.slice(5), [{ label: "上下文", value: "86K" }, { label: "费用估算", value: "$3.21" }]);
   assert.equal(now2.usageLine, "调用 3 次 · 输入 2K（缓存 50%） · 输出 50 · 上下文 86K · 约 $3.21");
   assert.equal(more({ contextTokens: 86_000, contextWindow: 258_000, cost: 1, unpricedCalls: 1 }).usage[5].value, "86K / 258K（33%）");
   assert.equal(more({ contextTokens: 1, cost: 1, unpricedCalls: 1 }).usage[6].value, "≥$1.00");
