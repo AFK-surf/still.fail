@@ -32,7 +32,10 @@ export const tileThumb = style({
 });
 export const tileIcon = style({ width: "20px", height: "20px", objectFit: "contain" });
 export const tileBody = style({ display: "flex", flexDirection: "column", gap: "1px", minWidth: "0" });
-export const tileTitle = style({ fontWeight: "560", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** The title in two lines at most (a commit's or a page's is often longer than the tile), then an ellipsis. */
+export const tileTitle = style({
+  fontWeight: "560", overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: "2", overflowWrap: "anywhere",
+});
 export const tileUrl = style({ fontSize: vars.textLabel, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 
 // ---- the rich card: state and reference with the time at the right; the title; who, and a few facts ----
