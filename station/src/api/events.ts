@@ -41,8 +41,9 @@ export type EventsDeps = {
   jobLog(id: string): string | null;
   tail(path: string, lines: number): string;
   outputAt(path: string): number | null;
-  /// A session's live steps, from `from`, to `send`, until the returned function is called (live.rs).
-  live?(key: string, from: number, last: number | null, send: (message: unknown) => void): () => void;
+  /// A session's live steps, from `from`, to `send`, until the returned function is called (live.rs); its transcript
+  /// entries in brief (`brief`, read/transcript.ts) for a client that asks so.
+  live?(key: string, from: number, last: number | null, send: (message: unknown) => void, brief: boolean): () => void;
   /// Whether a session is still there (a summary is told only of one that is).
   sessionExists(key: string): boolean;
   /// The overview as `viewer` sees it, in `lang` (GET /overview); none until the agents' side is up.
@@ -117,7 +118,8 @@ export class Events {
 
   /// Opens a stream for `viewer`: the sidebar as it is now is remembered, so later changes are told against it. `since`:
   /// the last id the stream it takes over from gave (`<run>.<n>`), what was told to everyone after it is told first.
-  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null): Promise<Answer> {
+  /// `brief`: the sessions followed have their transcript entries in brief (read/transcript.ts `brief`).
+  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null, brief = false): Promise<Answer> {
     const queue: string[] = [];
     let wakeReader: (() => void) | null = null;
     let closed = false;
@@ -145,7 +147,7 @@ export class Events {
     }
     // Those sessions as they run, on this same stream: each message a `live` event with its key.
     for (const [key, from, last] of live) {
-      const stop = this.deps.live?.(key, from, last, (message) => client.send("live", { ...(message as object), key }));
+      const stop = this.deps.live?.(key, from, last, (message) => client.send("live", { ...(message as object), key }), brief);
       if (stop) client.stops.push(stop);
     }
     // Those jobs' last lines: a `job-log` event now, and again each time the log changes, until the stream goes.

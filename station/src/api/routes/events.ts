@@ -29,8 +29,9 @@ export const routes = ({ events, sessionExists }: Tools): Route[] => [
       // `job=<id>&lines=<n>`, repeated: those jobs' last `n` lines of output, now and as they grow.
       const lines = all(r, "lines");
       const logs = all(r, "job").map((id, i): [string, number] => [id, Math.min(1000, Math.max(1, usize(lines[i]) ?? 200))]);
-      // `since=<id>`: the last id of the stream this one takes over from; what came after it is told first.
-      return events.open(r.viewer, r.lang, param(r, "host") === "1", live, logs, param(r, "since") ?? null);
+      // `since=<id>`: the last id of the stream this one takes over from; what came after it is told first. `brief=1`: the
+      // sessions' transcript entries in brief (what a history shows unopened).
+      return events.open(r.viewer, r.lang, param(r, "host") === "1", live, logs, param(r, "since") ?? null, param(r, "brief") === "1");
     },
   },
 ];
