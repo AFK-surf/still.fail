@@ -4,6 +4,13 @@ import { style } from "@vanilla-extract/css";
 export const mChatHost = style({
   position: "absolute", inset: "0",
   vars: { "--m-bottom": "72px", "--m-composer-room": "max(var(--m-bottom), calc(110px + var(--m-foot)))" },
+  "@media": {
+    // Wider (app.tsx WIDE): a new chat keeps a column up to 680 wide in the middle, with at least 72 of room either
+    // side, its composer too; a chat is the screen's width.
+    "(min-width: 680px)": {
+      selectors: { "&[data-new]": { left: "max(72px, calc(50% - 340px))", right: "max(72px, calc(50% - 340px))" } },
+    },
+  },
 });
 /** The composer: a capsule floating over the list, which runs on around it. */
 export const mComposer = style({
@@ -11,7 +18,11 @@ export const mComposer = style({
   padding: "8px 10px calc(10px + var(--m-foot))",
   "@media": {
     // Wider (app.tsx WIDE): beside the latest chats' button, which is level with it (app.css.ts mRecentButton: 10 + 52 + 10).
-    "(min-width: 680px)": { paddingLeft: "72px" },
+    "(min-width: 680px)": {
+      paddingLeft: "72px",
+      // A new chat's column is clear of it already.
+      selectors: { [`${mChatHost}[data-new] &`]: { paddingLeft: "10px" } },
+    },
   },
 });
 /** The same composer, in the decisions page's footer rather than over a chat (wider, clear of the latest chats' button too). */

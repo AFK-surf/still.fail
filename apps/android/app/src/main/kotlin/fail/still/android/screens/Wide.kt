@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -69,6 +70,9 @@ val LocalWide = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 /** Wider than this, the screen is wide (web: app.tsx WIDE). */
 val WideAt = 680.dp
+
+/** A new chat on a wide screen: a column up to 680 wide in the middle, with at least 72 of room either side. */
+val NewChatColumn: Modifier = Modifier.padding(horizontal = 72.dp).widthIn(max = 680.dp)
 
 /** Where the composer starts on a wide screen: beside the latest chats' button (10 + 52 + 10). */
 val BesideRecent = 72.dp
