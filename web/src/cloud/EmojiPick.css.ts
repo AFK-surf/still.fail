@@ -15,14 +15,20 @@ export const slot = style({
 });
 /** Only what it has, for those who may not change it. */
 export const shown = style({ flex: "none", fontSize: vars.textTitle, lineHeight: "1" });
-export const pick = style({ width: "272px", display: "grid", gap: "8px", padding: "8px" });
-export const grid = style({ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "2px" });
+export const pick = style({ width: "272px", padding: "8px" });
+export const grid = style({ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "2px", alignItems: "center" });
 export const choice = style({
   aspectRatio: "1", display: "grid", placeItems: "center", padding: "0", border: "0", borderRadius: vars.rOption,
-  background: "none", fontSize: vars.textTitle, lineHeight: "1", cursor: "pointer", cornerShape: vars.cornerShape,
+  background: "none", color: vars.muted, fontSize: vars.textTitle, lineHeight: "1", cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover, &[aria-pressed=true]": { background: vars.hover },
     "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "-2px" },
   },
 });
-export const row = style({ display: "flex", alignItems: "center", gap: "6px" });
+/** The field: the last row but its last cell (the clearing's), or all of it with nothing to clear; a line apart from the emoji. */
+export const field = style({
+  gridColumn: "1 / 8", marginTop: "6px", minWidth: "0",
+  selectors: { "&[data-alone]": { gridColumn: "1 / -1" } },
+});
+/** The clearing, in the field's row: as far below the emoji as the field. */
+export const clear = style({ marginTop: "6px" });

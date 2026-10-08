@@ -2,8 +2,8 @@
 // one pasted or typed, and a way to have none. Those who may not change it see only the one it has.
 import { useState } from "react";
 import { Popover } from "radix-ui";
-import { Plus } from "../icons.tsx";
-import { Button } from "../ui.tsx";
+import { Close, Plus } from "../icons.tsx";
+import { Tip } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import * as controlsCss from "../styles/controls.css.ts";
 import * as css from "./EmojiPick.css.ts";
@@ -30,13 +30,12 @@ export function EmojiPick({ emoji, name, editable, busy, onPick }: { emoji: stri
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${controlsCss.popoverSolid} ${css.pick}`} align="start" sideOffset={6} collisionPadding={8}>
-          <div className={css.grid}>
+          {/* One grid, the field and its clearing in its last row: the field spans the columns the button leaves. */}
+          <form className={css.grid} onSubmit={(ev) => { ev.preventDefault(); const one = first(typed); if (one) choose(one); }}>
             {CHOICES.map((e) => <button key={e} type="button" className={css.choice} aria-pressed={e === emoji} onClick={() => choose(e)}>{e}</button>)}
-          </div>
-          <form className={css.row} onSubmit={(ev) => { ev.preventDefault(); const one = first(typed); if (one) choose(one); }}>
-            <input className={controlsCss.input} value={typed} placeholder={t("web-pages.stations.emoji.paste")} aria-label={t("web-pages.stations.emoji.paste")}
+            <input className={`${controlsCss.input} ${css.field}`} data-alone={emoji ? undefined : ""} value={typed} placeholder={t("web-pages.stations.emoji.paste")} aria-label={t("web-pages.stations.emoji.paste")}
               onChange={(ev) => { setTyped(ev.target.value); const one = first(ev.target.value); if (one) choose(one); }} />
-            {emoji && <Button type="button" variant="ghost" onClick={() => choose("")}>{t("web-pages.stations.emoji.clear")}</Button>}
+            {emoji && <Tip label={t("web-pages.stations.emoji.clear")}><button type="button" className={`${css.choice} ${css.clear}`} aria-label={t("web-pages.stations.emoji.clear")} onClick={() => choose("")}><Close size={16} /></button></Tip>}
           </form>
         </Popover.Content>
       </Popover.Portal>
