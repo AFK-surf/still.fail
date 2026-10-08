@@ -6,6 +6,7 @@
 import { execFile } from "node:child_process";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { wall } from "../ops/fibers.ts";
 
 type Json = any;
 
@@ -53,7 +54,7 @@ const KEPT = 300;
 const kept = new Map<string, { at: number; value: Promise<LinkPreview | null> }>();
 
 /// The preview of `href`, null when there is none to give (not a page, not reachable, not allowed).
-export function linkPreview(href: string, now = Date.now()): Promise<LinkPreview | null> {
+export function linkPreview(href: string, now = wall.now()): Promise<LinkPreview | null> {
   const known = kept.get(href);
   if (known && now - known.at < KEEP_MS) return known.value;
   const value = find(href).catch(() => null);
