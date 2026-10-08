@@ -81,6 +81,14 @@ export function applyStep(view: LiveView, event: unknown, now: number): void {
   }
 }
 
+/// An event's id heard on a link's stream: the station's run and its number in it (`<run>.<n>`), kept the latest of.
+function heardEvent(link: Link, id: string): void {
+  const m = /^([0-9a-f]+)\.(\d+)$/.exec(id);
+  if (!m) return;
+  const n = Number(m[2]);
+  if (link.lastEvent === null || link.lastEvent.run !== m[1] || n > link.lastEvent.n) link.lastEvent = { run: m[1]!, n };
+}
+
 /// One station's link and what is held of it beyond the records.
 export class Link {
   readonly address: string;
@@ -95,6 +103,9 @@ export class Link {
   replaced: Fiber.Fiber<void, never> | null = null;
   /// When the open stream last gave anything; null while none is open.
   heard: number | null = null;
+  /// The last event its streams gave, by its id: the station's run and its number in it (a station from before has
+  /// none). A stream taking over from another asks for what came after it (`since`).
+  lastEvent: { run: string; n: number } | null = null;
   /// Sessions at work as their stream says (steps, phase, rate, usage).
   readonly lives = new Map<string, LiveView>();
   /// Threads whose summaries are read again once a burst of events is over.
@@ -269,8 +280,9 @@ export class StationsSync {
     link.events = { fiber, wants };
   }
 
-  /// The stream's path for `wants`, each session asked for from the transcript items held.
-  #path(address: string, wants: EventsFor): string {
+  /// The stream's path for `wants`, each session asked for from the transcript items held; `since`: the last event the
+  /// stream it takes over from gave (what was told after it comes first, else `missed`).
+  #path(address: string, wants: EventsFor, since: Link["lastEvent"] = null): string {
     const query: string[] = [];
     if (wants.host) query.push("host=1");
     for (const key of wants.live) {
@@ -279,6 +291,7 @@ export class StationsSync {
       query.push(`live=${encode(key)}&from=${from}&last=${TRANSCRIPT_PAGE}`);
     }
     for (const [job, lines] of wants.logs) query.push(`job=${encode(job)}&lines=${lines}`);
+    if (since !== null) query.push(`since=${encode(`${since.run}.${since.n}`)}`);
     return query.length === 0 ? "/events" : `/events?${query.join("&")}`;
   }
 
@@ -306,8 +319,9 @@ export class StationsSync {
         // Each try in a scope of its own: the stream closes with it.
         const ended = yield* Effect.scoped(
           Effect.gen(function* () {
-            // Asked anew each time: a session is followed from what is held of it by then.
-            const path = self.#path(address, wants);
+            // Asked anew each time: a session is followed from what is held of it by then. Taking over from a stream
+            // still open: what that one is yet to give (said before this one is the station's) comes on this one.
+            const path = self.#path(address, wants, handing ? link.lastEvent : null);
             const sent = core.host.nowMs();
             const races = self.wire.races?.() ?? false;
             // Still opening as the UI comes back from being away since before: tried anew.
@@ -385,7 +399,10 @@ export class StationsSync {
               if (chunk === null) break;
               heard = core.host.nowMs();
               link.heard = heard;
-              for (const [name, data] of parser.feed(chunk)) self.onEvent(address, name, data);
+              for (const [name, data, id] of parser.feed(chunk)) {
+                self.onEvent(address, name, data);
+                if (id !== undefined) heardEvent(link, id);
+              }
             }
             if (link.generation !== generation) return { done: true } as const;
             link.heard = null;
@@ -710,6 +727,9 @@ export class StationsSync {
       case "overview":
         core.data.set({ topic: "overview", station: address }, data);
         return;
+      // The stream that took over could not be told all that came since the last its predecessor gave: read again.
+      case "missed":
+        return this.snapshot(address);
       case "host": {
         const link = this.#links.get(address);
         if (link) {

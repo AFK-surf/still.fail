@@ -636,6 +636,38 @@ test("overview_and_host_come_from_events", async () => {
   core.close();
 });
 
+test("a_stream_taking_over_asks_for_what_came_after_the_last_event_its_predecessor_gave", async () => {
+  const { host, core, streams } = await started();
+  const ui = core.connect();
+  const open = () => streams.filter((s) => !s.closed).map((s) => s.path);
+  assert.deepEqual(open(), ["/events"]);
+  // Events with ids (a station of this run, numbered); one from before ids had a run says nothing.
+  const said = (id: string, name: string, data: unknown) =>
+    Queue.offerUnsafe(streams.at(-1)!.queue, new TextEncoder().encode(`id: ${id}\nevent: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
+  said("1f2e3d4c.6", "overview", { connects: [] });
+  said("1f2e3d4c.9", "overview", { connects: [1] });
+  said("12", "overview", { connects: [2] });
+  await host.settle();
+  // Something more is wanted of it: the stream taking over asks for what came after 9 (the one it replaces may be let
+  // go before it gives what was said as this one was asked for).
+  subscribe(core, ui, 1, { topic: "host", station: ST });
+  await host.settle();
+  await host.settle();
+  assert.deepEqual(open(), [`/events?host=1&since=${encodeURIComponent("1f2e3d4c.9")}`]);
+  assert.equal(gets(host, "/admin/api/overview"), 1, "a handover reads nothing again");
+  core.close();
+});
+
+test("a_stream_told_it_missed_what_came_since_reads_the_station_again", async () => {
+  const { host, core, push } = await started();
+  const reads = () => ["/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats"].map((p) => gets(host, p));
+  const before = reads();
+  push("missed", {});
+  await host.settle();
+  assert.deepEqual(reads(), before.map((n) => n + 1));
+  core.close();
+});
+
 test("a_thread_opens_from_what_is_kept_and_asks_only_for_what_came_after", async () => {
   const answers: J = {
     ...base(),

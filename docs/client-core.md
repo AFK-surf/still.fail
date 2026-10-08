@@ -190,8 +190,14 @@ that only notifications change it:
   does not.
 - Station topics: while any topic of a station is live, the station's
   `/events` stream is held open, with `?host=1` while a `host` topic is live
-  (the stream is opened anew when that changes; the old one closes once the
-  new one is open, so nothing falls between them). Events go into the topics
+  (the stream is opened anew when that changes, and when the sessions it
+  follows do; the old one closes once the new one is open). What the station
+  told the old one as the new one was asked for comes again on the new one:
+  it asks `since=<the last id the old one gave>` (an id is the station's run
+  and the event's number in it, `<run>.<n>`), and the station, which keeps
+  what it told everyone for two minutes, tells that first, with the same ids;
+  when it cannot (more than that ago, or another run's), it says `missed`
+  and the station is read again. Events go into the topics
   as they come: `session` replaces the summary in `sessions` (an archived one
   leaves the list) and in its `session` topic (whose `turns` are read again
   only when the summary's `turns` or `lastTurn` differ from them);
