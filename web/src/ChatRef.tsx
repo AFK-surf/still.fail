@@ -60,7 +60,9 @@ export function markBefore(text: string, caret: number): number | null {
 export function useCopyChatLink(toast: (text: string) => void) {
   const root = useHref("/");
   return (item: Pick<ChatItem, "station" | "session" | "id" | "title">, history = false) => {
-    void copyChatLink(item.title, shareLink(item, root, history)).then(
+    // Its history named as such: pasted, its reference is told from the chat's own.
+    const title = history ? t("web-main.chat.historyRefTitle", { title: item.title }) : item.title;
+    void copyChatLink(title, shareLink(item, root, history)).then(
       () => toast(t(history ? "web-main.chat.historyLinkCopied" : "web-main.chat.linkCopied")),
       (e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })),
     );

@@ -117,6 +117,7 @@
   "web-main.chat.archiveFailed": "没能归档：{error}",
   "web-main.chat.copyLink": "复制会话链接",
   "web-main.chat.copyHistoryLink": "复制执行记录链接",
+  "web-main.chat.historyRefTitle": "执行记录：{title}",
   "web-main.chat.linkCopied": "已复制：粘贴到另一个会话，那里的 agent 就能读到这个会话",
   "web-main.chat.historyLinkCopied": "已复制：粘贴到另一个会话，那里的 agent 就能读到这里 agent 做过的事",
   "web-main.chat.copyFailed": "没能复制：{error}",

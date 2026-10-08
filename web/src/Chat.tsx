@@ -1565,7 +1565,20 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     e.preventDefault();
     const el = e.currentTarget;
     const [start, end, before] = [el.selectionStart, el.selectionEnd, el.value];
-    const marks = found.map(({ m, chat }) => core().call("chat.ref", { station: chat.station, id: chat.id, title: m[1], base }).then((answer) => (answer as { mark: string }).mark, () => m[0]));
+    const marks = found.map(async ({ m, chat }) => {
+      try {
+        const { mark } = (await core().call("chat.ref", { station: chat.station, id: chat.id, title: m[1], base })) as { mark: string };
+        // A link to its execution history: the mark kept as that link, not the chat's.
+        if (chat.history) {
+          const at = chat.station.indexOf("/");
+          const page = `${base}/w/${chat.station.slice(0, at)}/s/${chat.station.slice(at + 1)}/chats/${encodeURIComponent(chat.id)}${chat.history}`;
+          await core().call("chat.refs", { links: [[mark.slice(2, -1), page]] });
+        }
+        return mark;
+      } catch {
+        return m[0];
+      }
+    });
     void Promise.all(marks).then((made) => {
       let text = "", at = 0;
       found.forEach(({ m }, i) => { text += pasted.slice(at, m.index) + made[i]; at = m.index + m[0].length; });

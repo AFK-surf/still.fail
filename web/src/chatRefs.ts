@@ -4,8 +4,8 @@
 
 /** A reference as the composer holds it. */
 export const REF_MARK = /@\[([^\]\n]{1,120})\]/g;
-/** A reference as sent: a link to a chat's page. */
-export const REF_LINK = /\[([^\]\n]{1,120})\]\((\S*?\/chats\/[^\s)]+)\)/g;
+/** A reference as sent: a link to a chat's page, or its still.fail link (…/o/<workspace>/<station>/<key>, as copied). */
+export const REF_LINK = /\[([^\]\n]{1,120})\]\((\S*?(?:\/chats\/|\/o\/[^/\s)]+\/[^/\s)]+\/)[^\s)]+)\)/g;
 
 /** Text split into its plain runs and the parts `pattern` finds (with its groups). */
 export function splitBy(text: string, pattern: RegExp): (string | RegExpExecArray)[] {
@@ -22,7 +22,7 @@ export function splitBy(text: string, pattern: RegExp): (string | RegExpExecArra
 
 /** A link to a chat's page (…/chats/<key>, or still.fail cloud's /o/<workspace>/<station>/<key>). */
 export function isChatLink(href: string | undefined): boolean {
-  return !!href && (/\/chats\/[^/?#\s]+\/?(?:[?#]|$)/.test(href) || /^https?:\/\/[^/]+\/o\/[^/]+\/[^/]+\/[^/?#]+\/?(?:#|$)/.test(href));
+  return !!href && (/\/chats\/[^/?#\s]+\/?(?:[?#]|$)/.test(href) || /^https?:\/\/[^/]+\/o\/[^/]+\/[^/]+\/[^/?#]+\/?(?:[?#]|$)/.test(href));
 }
 
 /**
@@ -55,14 +55,16 @@ export function copyChatLink(title: string, link: string): Promise<void> {
 }
 
 /**
- * The chat a link names, when it is one of a workspace's chats as a whole (not one entry of its history): a still.fail
- * link (`…/o/<workspace>/<station>/<session>`) or its page (`…/w/<workspace>/s/<station>/chats/<id>`). Null otherwise.
+ * The chat a link names, when it is one of a workspace's chats: a still.fail link (`…/o/<workspace>/<station>/<session>`)
+ * or its page (`…/w/<workspace>/s/<station>/chats/<id>`), and what follows it when that is its agent's execution
+ * history (`?history=<session>`, maybe `&entry=<n>`; else ""). Null otherwise.
  */
-export function chatOfLink(href: string): { station: string; id: string } | null {
-  const m = /\/o\/([^/?#\s]+)\/([^/?#\s]+)\/([^/?#\s]+)\/?$/.exec(href) ?? /\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/chats\/([^/?#\s]+)\/?$/.exec(href);
+export function chatOfLink(href: string): { station: string; id: string; history: string } | null {
+  const m = /\/o\/([^/?#\s]+)\/([^/?#\s]+)\/([^/?#\s]+)\/?(\?history=[^&#\s]+(?:&entry=\d+)?)?$/.exec(href)
+    ?? /\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/chats\/([^/?#\s]+)\/?(\?history=[^&#\s]+(?:&entry=\d+)?)?$/.exec(href);
   if (!m) return null;
   try {
-    return { station: `${m[1]}/${m[2]}`, id: decodeURIComponent(m[3]!) };
+    return { station: `${m[1]}/${m[2]}`, id: decodeURIComponent(m[3]!), history: m[4] ?? "" };
   } catch {
     return null;
   }
