@@ -80,13 +80,18 @@ export class Account extends DurableObject<Env> {
     };
   }
 
-  async create(identity: Identity, id: string, name: string): Promise<Response> {
+  /** `shared`: an account several people sign in to (App Store review's, password.ts): a new session ends its oldest
+   * when there are as many as it may have, rather than being refused. */
+  async create(identity: Identity, id: string, name: string, shared = false): Promise<Response> {
     return this.ctx.blockConcurrencyWhile(async () => {
       const now = nowSeconds();
       const data = this.data() ?? { ...identity, blocked: false, sessions: [] };
       if (data.sub !== identity.sub || !validId(id) || name.length > 80) return denied();
       if (data.blocked) return reply({ error: "account_blocked" }, 403);
       this.prune(data);
+      if (shared)
+        for (const old of [...data.sessions].sort((a, b) => a.created - b.created).slice(0, Math.max(0, data.sessions.length - LIMITS.sessions + 1)))
+          await this.revoke(data, old.id, "removed");
       if (data.sessions.length >= LIMITS.sessions || !this.charge()) return limited();
       data.email = identity.email;
       data.name = identity.name;

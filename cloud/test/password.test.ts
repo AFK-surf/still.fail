@@ -10,7 +10,10 @@ const json = { "content-type": "application/json" };
 test("a review account signs in with its password and gets a session like any other", { timeout: 20000 }, async () => {
   const h = await harness({ reviewAccounts: REVIEW });
   try {
-    const signIn = (email: string, password: string) => h.fetch("/v1/auth/password", { method: "POST", headers: json, body: JSON.stringify({ email, password, name: "iPhone" }) });
+    // From one address each (the login rate limit is per address).
+    let address = 0;
+    const signIn = (email: string, password: string) =>
+      h.fetch("/v1/auth/password", { method: "POST", headers: { ...json, "cf-connecting-ip": `10.0.0.${++address}` }, body: JSON.stringify({ email, password, name: "iPhone" }) });
     assert.equal((await signIn("review@example.test", "correct horse batter")).status, 401, "a wrong password");
     assert.equal((await signIn("someone@example.test", "correct horse battery")).status, 401, "an email not set up");
     const answer = await signIn(" review@EXAMPLE.test ", "correct horse battery");
@@ -25,6 +28,9 @@ test("a review account signs in with its password and gets a session like any ot
     assert.equal(((await sessions.json()) as { sessions: unknown[] }).sessions.length, 2);
     const refreshed = await h.fetch("/v1/auth/refresh", { method: "POST", headers: { ...json, authorization: "Bearer " + tokens.refresh_token }, body: JSON.stringify({ request_id: ulid() }) });
     assert.equal(refreshed.status, 200);
+    // Shared by everyone who reviews: past the account's 16 sessions, the oldest ends instead of the sign-in failing.
+    for (let i = 0; i < 16; i++) assert.equal((await signIn("review@example.test", "correct horse battery")).status, 200);
+    assert.equal((await h.fetch("/v1/auth/session", { headers: { authorization: "Bearer " + tokens.access_token } })).status, 401, "the first session ended");
   } finally {
     await h.close();
   }

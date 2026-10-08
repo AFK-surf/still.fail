@@ -45,5 +45,5 @@ export async function passwordSignIn(env: Env, request: Request): Promise<Respon
   // Digests compared, as the admin token is: the time it takes says nothing of how much of the password was right.
   if (!account || (await digest(body.password)) !== (await digest(account.password))) return refused();
   const identity = await passwordIdentity(account);
-  return env.ACCOUNTS.getByName(identity.sub).create(identity, ulid(), ((body.name as string | undefined) ?? "still.fail").trim() || "still.fail");
+  return env.ACCOUNTS.getByName(identity.sub).create(identity, ulid(), ((body.name as string | undefined) ?? "still.fail").trim() || "still.fail", true);
 }
