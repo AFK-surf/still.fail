@@ -13,7 +13,7 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
-import { type Counted, type LiveMessage, LiveHub, TranscriptTail, briefInput } from "../src/sessions/live.ts";
+import { type Counted, type LiveMessage, LiveHub, TranscriptTail, briefInput, inBrief } from "../src/sessions/live.ts";
 import { prepare } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
 import { availableEfforts, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
@@ -128,7 +128,7 @@ test("in brief, a history's entries say only what names them; what is short, pos
       record([{ type: "tool_use", id: "r", name: "Read", input: { file_path: "/w/a.ts" } }]) +
       result("r", "short") +
       record([{ type: "tool_use", id: "s", name: "mcp__stillfail__slack_api", input: { method: "chat.postMessage", params: { channel: "C1", text: "嗨".repeat(400) } } }]) +
-      result("s", JSON.stringify({ ok: true, ts: "1.2", message: { text: "嗨".repeat(400) } })) +
+      result("s", JSON.stringify({ ok: true, ts: "1.2", message: { text: "嗨".repeat(800) } })) +
       record([{ type: "text", text: "说完了".repeat(300) }]),
   );
   const whole = readTimeline("claude", path);
@@ -254,6 +254,28 @@ test("a watcher gets what it lacks, the steps in flight, then new entries as the
   hub.turnEnded("s");
   assert.ok(got.some((m) => m.type === "clear"));
   hub.unsubscribe("s", id);
+  hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a watcher in brief is told the entries in brief, those it lacks and those written since", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const bash = (id: string, n: number) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-05T00:00:00Z", message: { id, content: [{ type: "tool_use", id, name: "Bash", input: { command: "true && ".repeat(n), description: `Step ${id}` } }] } })}\n`;
+  writeFileSync(path, bash("a", 200));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const got: LiveMessage[] = [];
+  hub.subscribe("s", 0, null, inBrief((m) => void got.push(m)));
+  appendFileSync(path, bash("b", 300));
+  watched(hub, "s");
+  await settle();
+  await time.adjust(40);
+  await settle();
+  const told = got.flatMap((m) => (m.type === "timeline" ? m.entries : []));
+  // Each by what says what it does: the description that came after its long command too.
+  assert.deepEqual(told.map((e) => [e.brief, JSON.parse(e.text).description]), [[true, "Step a"], [true, "Step b"]]);
+  assert.ok(told.every((e) => Array.from(e.text).length < 400));
   hub.close();
   rmSync(dir, { recursive: true, force: true });
 });

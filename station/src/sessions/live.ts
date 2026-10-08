@@ -10,7 +10,7 @@ import { closeSync, existsSync, type FSWatcher, openSync, readFileSync, readSync
 import { zstdDecompressSync } from "node:zlib";
 import type { LiveEvent } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
-import { type ReadState, type TimelineEntry, timelineOf } from "../read/transcript.ts";
+import { type ReadState, type TimelineEntry, brief, timelineOf } from "../read/transcript.ts";
 
 type Json = any;
 type Phase = Extract<LiveEvent, { kind: "phase" }>["phase"];
@@ -42,6 +42,10 @@ export type LiveMessage =
   | { type: "clear" };
 
 export type Listener = (message: LiveMessage) => void;
+
+/// A listener told the transcript's entries in brief (read/transcript.ts `brief`): what an execution history shows before
+/// a step is opened, the rest read whole as it is.
+export const inBrief = (listener: Listener): Listener => (m) => listener(m.type === "timeline" ? { ...m, entries: m.entries.map(brief) } : m);
 
 /// How much of a tool's input a step carries: enough to say what it runs.
 const INPUT_CHARS = 300;

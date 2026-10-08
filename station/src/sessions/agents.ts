@@ -38,8 +38,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { type Updates, makeUpdates } from "../updates/updates.ts";
 import { hubConfig } from "./config.ts";
-import type { LiveMessage } from "./live.ts";
-import { brief } from "../read/transcript.ts";
+import { inBrief } from "./live.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
@@ -295,10 +294,8 @@ export const AgentsLive = (control: Control) =>
       readers.processes = () => hub.processes();
       readers.clientKeys = () => hub.clientKeys();
       events.follow({
-        live: (key, from, last, send, short) => {
-          // In brief, its transcript entries are what a history shows before they are opened (read again as they are).
-          const told = short ? (m: LiveMessage) => send(m.type === "timeline" ? { ...m, entries: m.entries.map(brief) } : m) : send;
-          const id = hub.live.subscribe(key, from, last, told);
+        live: (key, from, last, send, brief) => {
+          const id = hub.live.subscribe(key, from, last, brief ? inBrief(send) : send);
           return () => hub.live.unsubscribe(key, id);
         },
         overview: view,

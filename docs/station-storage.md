@@ -201,11 +201,19 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   (the key the asking client shows the chat by until it is made) is said by
   the chat's sidebar item for ten minutes (in memory only): its `chat` event
   can reach the client before the answer does.
-- A session's transcript comes only from `/sessions/:key/live?from=N` (entries
-  from index N — and the usage so far, even when N is all of them — then as
-  they are written; a watcher asking past the end is told where it ends); the
-  station keeps each watched transcript parsed incrementally instead of
-  re-reading the file per request.
+- A session's transcript comes from `/events?live=<key>&from=N&last=200`
+  (entries from index N, no more than the last 200 — and the usage so far,
+  even when N is all of them — then as they are written; a watcher asking past
+  the end is told where it ends) and `GET /sessions/:key/timeline?before=&limit=`
+  (the pages before); the station keeps each watched transcript parsed
+  incrementally instead of re-reading the file per request. With `brief=1` on
+  either, entries come in brief, as an execution history shows them before a
+  step is opened (`read/transcript.ts` `brief`, marked `brief: true`): a call
+  longer than 600 characters by the fields of its input that say what it does
+  (`description`, `command`, `file_path`, … each at most 300; posts, states
+  and Slack calls whole), a result without what it gave (Slack's answer kept to
+  `ok` and `ts`), a thought by its first line. `?from=a&to=b` reads entries a
+  to b whole (both included, at most 1000), as such a step is opened.
 - `GET /chats` — the viewer's sidebar items (The sidebar, below).
 - `PUT /me/slack/:user` / `DELETE /me/slack/:user` — the viewer says a Slack
   user is them ("这是我"), or no longer ("不是我"); nothing checks it. The
