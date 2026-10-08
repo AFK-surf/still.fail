@@ -289,6 +289,7 @@ jobs:
           VAPID_JSON: ${{ secrets.VAPID_JSON }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
           APPLE_JSON: ${{ secrets.APPLE_JSON }}
+          REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: sh .github/deploy.sh api
 
