@@ -822,13 +822,13 @@ test("notifications_are_on_until_turned_off_and_kept_so_with_no_pushes", async (
   subscribe(core, ui, 1, { topic: "notify" });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1), { on: true, asked: false, push: true, show: [] });
+  assert.deepEqual(v(values, 1), { on: true, asked: false, push: true, kinds: { wait: true, failed: true, done: "away", message: true }, show: [] });
   // Off (and asked, as Android moves its old settings over): pushes go, and are not taken while off.
   call(core, ui, 2, "notify.set", { on: false, asked: true });
   call(core, ui, 3, "push.register", { kind: "fcm", token: "t" });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1), { on: false, asked: true, push: false, show: [] });
+  assert.deepEqual(v(values, 1), { on: false, asked: true, push: false, kinds: { wait: true, failed: true, done: "away", message: true }, show: [] });
   assert.equal(host.stored(PUSH_KEY), undefined);
   // Kept across a restart.
   core.close();

@@ -8,7 +8,7 @@ import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite", "badge"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "resume"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
@@ -64,6 +64,7 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
     byUse.sort((a, b) => a[0] - b[0]);
     for (const [, key] of byUse.slice(0, byUse.length - TABS_KEPT)) delete tabs[key];
   }
+  if ("badge" in prefs && !["decisions", "attention", "all"].includes(prefs.badge as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badge" }));
   if ("language" in prefs && !(prefs.language === "zh" || prefs.language === "en")) throw CoreError.invalid(t("core-misc.params.language"));
   withLang(prefs);
   const shaped = conform("PrefsView", prefs);

@@ -140,7 +140,7 @@
   "core-views.flow.wait": "请等当前操作完成",
   "core-views.list_separator": "、",
   "core-views.local_author": "本机",
-  "core-views.marks.alert": "{n} 个需要处理",
+  "core-views.marks.alert": "{n} 个出错了",
   "core-views.marks.others": "其他 workspace：{label}",
   "core-views.marks.unread": "{n} 个有新消息",
   "core-views.marks.wait": "{n} 个在等你",

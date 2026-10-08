@@ -78,10 +78,10 @@ Calls:
 | `push.key` | — | `{ vapid }`: still.fail cloud's VAPID public key (base64url), to subscribe a browser |
 | `push.register` | `{ kind: "web", endpoint, keys: { p256dh, auth } }` or `{ kind: "fcm", token }` | — ; registers this device with every signed-in account, and again with each account signed in later (kept in storage) |
 | `push.unregister` | — | — ; takes this device's registration off every account |
-| `notify.set` | `on?`, `asked?` | the `notify` value; kept on the device. Off also takes this device's registration off every account, and `push.register` does nothing while off |
+| `notify.set` | `on?`, `asked?`, `kinds?` | the `notify` value; kept on the device. `kinds` (`{ wait, failed, done, message }`, each given one changing) says which notices are shown: `wait` covers `wait` and `block`; `done` is `off`, `away` (only while no page of the app is in front: shown and focused; the default) or `always`. Off also takes this device's registration off every account, and `push.register` does nothing while off |
 | `client.focus` | `visible?`, `focused?`, `chat?` (`{ station, thread?, session?, end? }` or null), `left?` (a chat), `workspace?` | — ; where this UI's attention is (each field given changes; `left`: that chat is not shown any more, if it is the one; `workspace`: the one it is in, else its chat's) |
 | `notice.claim` | `id` | `{ show }`: true for the first page that takes a notice of `notify.show` |
-| `notice.pushed` | `workspace?` | `{ show }`: whether a push that came is shown (on, no page in view, and of the workspace the viewer is in) |
+| `notice.pushed` | `workspace?`, `kind?` | `{ show }`: whether a push that came is shown (on, its kind on, no page in view, and of the workspace the viewer is in) |
 
 `notify` (no params, attend.ts) is what the clients show from: `{ on, asked, push, show }`. `on` and `asked` (the
 system asked to allow them, once) are kept on the device, on by default. `push`: this device should hold a push
