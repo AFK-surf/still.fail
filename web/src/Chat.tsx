@@ -121,8 +121,8 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       <div className={`${sessionCss.chatList} ${css.chatMessages}`} ref={list} {...quoting.listProps}
         onClick={(e) => {
           const to = historyLinkClicked(e);
-          // At the entry it names (else its start); opened, not toggled.
-          if (to) { e.preventDefault(); onOpenHistory(to.key, to.entry); }
+          // At the entry it names (else its start); opened, not toggled. Another chat's agent's opens with its chat (ChatPage).
+          if (to && chat.agents.some((a) => a.session.key === to.key)) { e.preventDefault(); onOpenHistory(to.key, to.entry); }
         }}>
         <DraftKey.Provider value={draftKey}>
           <ChatRows chat={chat} rows={rows} to={to} owners={ownersOf(chat)} owner={stable.owner} onOpenHistory={stable.open} onArchive={onArchive ? stable.archive : undefined} />

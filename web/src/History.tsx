@@ -4,13 +4,14 @@
 import { PathSession } from "./Peeks.tsx";
 import { failure, useToast } from "./toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
-import { ChevronDown, ChevronRight, Wait, Received as ReceivedIcon, Send } from "./icons.tsx";
+import { ChevronDown, ChevronRight, Copy, Wait, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
 import { useApi, useHistory, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryStep, type HistoryView, type Place } from "./api.ts";
-import { ICON, Pill, SlackLogo, Tip } from "./ui.tsx";
+import { ICON, IconButton, Pill, SlackLogo, Tip } from "./ui.tsx";
+import { useCopyChatLink } from "./ChatRef.tsx";
 import { useLink, useStation } from "./station.tsx";
 import { Link } from "react-router";
 import { Prose } from "./Prose.tsx";
@@ -29,10 +30,11 @@ import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 /**
  * The session as it ran: the main view of a session. `summary` says who it is (in the head), `actions` what can be done
- * to it right now (stop a turn, release the process), `details` unfolds under the head.
+ * to it right now (stop a turn, release the process), `details` unfolds under the head. With its chat's `title`, each
+ * item offers its link (opening the history there), to paste into another chat.
  */
-export function History({ station, sessionKey, summary, actions, details, focus }: {
-  station: string; sessionKey: string; summary?: ReactNode; actions?: ReactNode; details?: ReactNode;
+export function History({ station, sessionKey, summary, actions, details, focus, title }: {
+  station: string; sessionKey: string; summary?: ReactNode; actions?: ReactNode; details?: ReactNode; title?: string | undefined;
   /** An entry to bring into view (n changes each time it is asked for). */
   focus?: { entry: number; n: number } | null;
 }) {
@@ -54,6 +56,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
   latest.current = where;
   const [stableWhere] = useState(() => (place: Place | null) => latest.current(place));
   const [usageOpen, setUsageOpen] = useState(false);
+  const copyLink = useCopyChatLink(useToast());
   const body = useRef<HTMLDivElement>(null);
   // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
   useStickToBottom(body, `.${css.hItem}, .live-tail, .${css.hText}`);
@@ -112,6 +115,10 @@ export function History({ station, sessionKey, summary, actions, details, focus 
               // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
               <div key={item.key} className={css.hItem} data-item={i} data-enter={(item.entries[0] ?? 0) > seen.current && item.body.kind !== "text" ? true : undefined}>
                 <HistoryItemView item={item} where={stableWhere} />
+                {title !== undefined && item.entries[0] !== undefined && (
+                  <IconButton className={css.hItemLink} label={t("web-main.history.copyLink")} icon={Copy}
+                    onClick={() => copyLink({ station, session: sessionKey, id: sessionKey, title }, { key: sessionKey, entry: item.entries[0] })} />
+                )}
               </div>
             ))}
             {/* Only thinking and the reply stream here; a tool call shows once it is done, from the transcript. */}

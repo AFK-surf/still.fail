@@ -9,7 +9,7 @@ import type { FoundMessage } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
 import { Marked } from "../Marked.tsx";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Bot, Check, Copy, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Search, Settings, Unplug, Zou } from "../icons.tsx";
+import { Archive, Check, Copy, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Search, Settings, Unplug, Zou } from "../icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
@@ -536,7 +536,6 @@ function useRowMenu(item: ChatItem, busy: boolean) {
       run: (title) => api.rename(item, title),
     }) },
     { label: t("web-main.chat.copyLink"), icon: <Copy size={16} />, action: () => copyLink(item) },
-    { label: t("web-main.chat.copyHistoryLink"), icon: <Bot size={16} />, action: () => copyLink(item, true) },
     // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
     { label: t("web-mobile.home.archive"), icon: <Archive size={16} />, action: () => {
       const archive = () => api.archive(item, true).then(() => app.toast(t("web-mobile.home.archived")));

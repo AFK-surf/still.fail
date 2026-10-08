@@ -153,11 +153,18 @@ export const hPhase = style({
 export const hPhaseTime = style({ fontVariantNumeric: "tabular-nums", color: vars.subtle });
 /** An entry an activity row opened the history at: shown for a moment, then back to the page. */
 export const hItem = style({
-  display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "14px", minWidth: "0",
+  position: "relative", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "14px", minWidth: "0",
   borderRadius: `calc(8px * ${vars.cornerScale})`, transition: `background-color 900ms ${vars.easeOut}`,
   cornerShape: vars.cornerShape,
   selectors: {
     "&[data-focus]": { background: `color-mix(in srgb, ${vars.accent} 10%, transparent)`, transition: "none" },
+  },
+});
+/** An item's link, copied from its top-right corner: shown while the item is pointed at (or the button focused). */
+export const hItemLink = style({
+  position: "absolute", top: "-4px", right: "0", opacity: "0", background: vars.canvas,
+  selectors: {
+    [`${hItem}:hover > &, &:focus-visible`]: { opacity: "1" },
   },
 });
 export const hPhaseText = style({ animation: `${fadeInKeyframes} 180ms ${vars.easeOut}` });

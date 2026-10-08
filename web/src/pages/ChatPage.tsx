@@ -211,6 +211,15 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     setSearch((now) => { now.delete("service"); return now; }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
+  // A link to one of its agents' execution history (`?history=<session>&entry=<n>`, copied from it): opened there.
+  const askedHistory = search.get("history");
+  useEffect(() => {
+    if (!askedHistory) return;
+    const entry = Number(search.get("entry"));
+    openHistory(askedHistory, Number.isSafeInteger(entry) && entry >= 0 ? entry : 0);
+    setSearch((now) => { now.delete("history"); now.delete("entry"); return now; }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedHistory]);
   // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them): one of this chat's agents' web services
   // opens beside the chat; another session of the workspace opens here, in the page, not through the desktop app. In
   // the desktop app (at app://ember) still.fail cloud's links are its own too.
@@ -443,7 +452,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               if (!a) return <Tabs.Content key={key} className={css.sideContent} value={key} />;
               return (
                 <Tabs.Content key={key} className={css.sideContent} value={key}>
-                  <History station={station.address} sessionKey={key} actions={<SessionActions session={a.session} status={a.status} />}
+                  <History station={station.address} sessionKey={key} title={view?.title} actions={<SessionActions session={a.session} status={a.status} />}
                     focus={focus?.key === key ? focus : null}
                     summary={<HistorySummary agent={a} />}
                     details={<SessionDetails agent={a} />} />
