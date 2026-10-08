@@ -26,9 +26,6 @@ function start(id: string, step: Step, tool?: string, input?: string, subagent?:
   return event;
 }
 
-/// The most of a call's input kept as it streams in (a file written whole can be large; past this it is cut short).
-const INPUT_MOST = 256 * 1024;
-
 type Block = { id: string; step: Step; tool?: string; input?: string; subagent?: string };
 export type ClaudeLiveState = { message: string; blocks: [number, Block][]; tools: string[] };
 
@@ -92,9 +89,8 @@ export class LiveFromClaude {
         } else if (type === "input_json_delta") {
           const partial = nonEmpty(d.partial_json);
           if (partial !== undefined) {
-            // A call's input streams in after it starts; kept whole (its start, a moment before, came without it), for
-            // what says what it runs may come after a long command (sessions/live.ts briefInput).
-            if (block.input !== undefined && block.input.length < INPUT_MOST) block.input += partial;
+            // A call's input streams in after it starts; kept (its start, a moment before, came without it).
+            if (block.input !== undefined && block.input.length < 4096) block.input += partial;
             out.push({ kind: "delta", id: block.id, field: "input", text: partial });
           }
         }

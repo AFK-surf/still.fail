@@ -171,7 +171,9 @@ export function epochMs(at: string): number | null {
   return (((days * 24 + hh!) * 60 + mm!) * 60 + ss!) * 1000 + ms;
 }
 
-/// What the agent does now.
+/// What the agent does now: the call its execution history shows running (the transcript's, said by `doing`), else
+/// what its live steps and phase say (thinking, writing, replying). The live steps' own copy of a call's input is not
+/// read: the transcript is the one record of what a call runs.
 export function present(live: unknown): unknown {
   const steps = (get(live, "steps") as unknown[] | undefined) ?? [];
   const s = (v: unknown, k: string) => {
@@ -182,18 +184,31 @@ export function present(live: unknown): unknown {
   let call: [string, string] | null = null;
   let replying = false;
   let thinking = false;
+  // This turn's calls with no result yet, as the execution history pairs them (history.ts present): a result by its
+  // call's id, or one without an id the latest call before it.
+  const timeline = (get(live, "timeline") as unknown[] | undefined) ?? [];
+  const running: [string, number][] = [];
+  (Array.isArray(timeline) ? timeline : []).forEach((e, i) => {
+    const kind = s(e, "kind");
+    if (kind === "user") running.length = 0;
+    else if (kind === "tool_call" && !flag(e, "subagent")) running.push([s(e, "callId"), i]);
+    else if (kind === "tool_result" && !flag(e, "subagent")) {
+      const id = s(e, "callId");
+      const at = id !== "" ? running.findIndex(([c]) => c === id) : running.length - 1;
+      if (at >= 0) running.splice(at, 1);
+    }
+  });
+  for (const [id, i] of running) {
+    const e = timeline[i];
+    const name = toolName(s(e, "tool"));
+    if (name === "chat_post") replying = true;
+    else if (name !== "chat_state") call = [id !== "" ? id : `call:${i}`, doing(s(e, "tool"), s(e, "text"))];
+  }
   for (const step of Array.isArray(steps) ? steps : []) {
     if (flag(step, "ended") || flag(step, "subagent")) continue;
     const kind = s(step, "step");
     if (kind === "thinking") thinking = true;
-    else if (kind === "tool") {
-      const tool = s(step, "tool");
-      const name = toolName(tool);
-      if (name === "chat_post") replying = true;
-      else if (name === "chat_state") {
-      } else if (s(step, "input").trim() === "" && kindOf(tool) !== "other") {
-      } else call = [s(step, "id"), doing(tool, s(step, "input"))];
-    }
+    else if (kind === "tool" && toolName(s(step, "tool")) === "chat_post") replying = true;
   }
   const r = get(live, "rate");
   const rate = typeof r === "number" && Number.isInteger(r) && r >= 0 ? r : 0;

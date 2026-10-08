@@ -52,14 +52,20 @@ const now = (live: J): [string, string] => {
 };
 
 test("it_says_the_call_it_runs_or_its_reply_or_where_the_turn_stands", () => {
-  // The newest call it runs, by its step: the same call keeps its key.
-  const steps = [
-    { id: "s0", step: "tool", tool: "Read", input: '{"file_path":"/w/a.ts"}', ended: true },
-    { id: "s1", step: "thinking" },
-    { id: "s2", step: "tool", tool: "Bash", input: '{"command":"cargo test --workspace","descr' },
-    { id: "s3", step: "tool", tool: "Grep", input: '{"pattern":"TODO"}', subagent: true },
+  // The call its execution history shows running (this turn's, with no result yet), said as the history says it: the
+  // same call keeps its key. A step's own copy of a call's input is not read.
+  const timeline = [
+    { kind: "tool_call", tool: "Bash", text: '{"command":"old"}', callId: "s9" },
+    { kind: "user", text: "next" },
+    { kind: "tool_call", tool: "Read", text: '{"file_path":"/w/a.ts"}', callId: "s0" },
+    { kind: "tool_result", callId: "s0", ok: true, text: "x" },
+    { kind: "thinking", text: "plan" },
+    { kind: "tool_call", tool: "Bash", text: '{"command":"cargo test --workspace","description":"Run the tests"}', callId: "s2" },
+    { kind: "tool_call", tool: "Grep", text: '{"pattern":"TODO"}', callId: "s3", subagent: true },
   ];
-  assert.deepEqual(now({ steps, phase: { phase: "working" } }), ["s2", "运行 cargo test --workspace"]);
+  const steps = [{ id: "s2", step: "tool", tool: "Bash", input: '{"command":"other"}' }];
+  assert.deepEqual(now({ timeline, steps, phase: { phase: "working" } }), ["s2", "Run the tests"]);
+  assert.deepEqual(now({ timeline: timeline.slice(0, 5), phase: { phase: "thinking" } }), ["think", "思考中"], "nothing of this turn runs");
   // Writing its reply (chat_post's input streaming in); chat_state says nothing of its own.
   assert.deepEqual(now({ steps: [{ id: "p", step: "tool", tool: "mcp__ember__chat_post", input: '{"to' }] }), ["reply", "正在回复"]);
   assert.deepEqual(now({ steps: [{ id: "p", step: "tool", tool: "mcp__stillfail__chat_post", input: '{"to' }] }), ["reply", "正在回复"]);
@@ -72,9 +78,8 @@ test("it_says_the_call_it_runs_or_its_reply_or_where_the_turn_stands", () => {
   assert.deepEqual(now({}), ["busy", "处理中"]);
   // Writing its reply, at its rate.
   assert.deepEqual(now({ steps: [{ id: "p", step: "tool", tool: "mcp__ember__chat_post", input: '{"to' }], rate: 55 }), ["reply", "正在回复 · ≈ 55 token/s"]);
-  // A call whose input has not come yet changes nothing: what the turn was doing still shows, until it says what it runs.
-  assert.deepEqual(now({ steps: [{ id: "b", step: "tool", tool: "Bash", input: "" }], phase: { phase: "thinking" } }), ["think", "思考中"]);
-  assert.deepEqual(now({ steps: [{ id: "b", step: "tool", tool: "Bash", input: '{"command":"ls"}' }] }), ["b", "运行 ls"]);
+  // A call not in its transcript yet changes nothing: what the turn was doing still shows, until the history has it.
+  assert.deepEqual(now({ steps: [{ id: "b", step: "tool", tool: "Bash", input: '{"command":"ls"}' }], phase: { phase: "thinking" } }), ["think", "思考中"]);
   // A call's own description says it best.
   assert.equal(doing("Bash", '{"command":"npm i","description":"安装依赖"}'), "安装依赖");
   assert.equal(doing("Read", '{"file_path":"/w/web/src/Chat.tsx"}'), "读取 Chat.tsx");
