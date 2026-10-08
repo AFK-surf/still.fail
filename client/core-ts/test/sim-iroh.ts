@@ -487,16 +487,19 @@ export class SimEndpoint {
   readonly key: Uint8Array;
   readonly relays: string[];
   readonly relayOnly: boolean;
+  /// It looks other endpoints up (the DHT, mDNS): it finds the relays they are at home on.
+  readonly lookup: boolean;
   /// A station's ALPNs, and whether it is at an address on this machine.
   readonly alpns: Uint8Array[];
   readonly direct: boolean;
 
-  constructor(net: SimNet, side: "device" | "station", key: Uint8Array, relays: string[], relayOnly: boolean, alpns: Uint8Array[], direct: boolean) {
+  constructor(net: SimNet, side: "device" | "station", key: Uint8Array, relays: string[], relayOnly: boolean, alpns: Uint8Array[], direct: boolean, lookup = false) {
     this.net = net;
     this.side = side;
     this.key = key;
     this.relays = relays;
     this.relayOnly = relayOnly;
+    this.lookup = lookup;
     this.alpns = alpns;
     this.direct = direct;
     for (const r of relays) this.#goOnto(r);
@@ -510,6 +513,7 @@ export class SimEndpoint {
   #goOnto(relay: string): Promise<void> {
     let on = this.#on.get(relay);
     if (!on) {
+      this.net.onto(this.id(), relay);
       const leg = this.net.leg(relay, this.side);
       on = this.net.sleep(4 * leg.ms);
       this.#on.set(relay, on);
@@ -517,9 +521,10 @@ export class SimEndpoint {
     return on;
   }
 
-  /// Whether a connection can come to it through `relay`.
+  /// Whether a connection can come to it through `relay` (an entry: through the relay it goes on to).
   reachableOn(relay: string): boolean {
-    return !this.#closed && (this.relays.includes(relay) || this.#keeps.includes(relay));
+    const to = this.net.server(relay);
+    return !this.#closed && [...this.relays, ...this.#keeps].some((r) => this.net.server(r) === to);
   }
 
   // ── what the core calls (BoundEndpoint) ──
@@ -533,8 +538,12 @@ export class SimEndpoint {
     const started = this.net.now();
     let relay: string | null = null;
     if (this.relayOnly || !there.direct || (known?.ips?.length ?? 0) === 0) {
-      relay = [...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href).find((r) => there.reachableOn(r)) ?? null;
+      const told = [...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href);
+      relay = told.find((r) => there.reachableOn(r)) ?? null;
       if (relay === null) return NEVER;
+      // iroh sends its first packets on every path it knows of, going onto each relay of them: those it was told of, and
+      // those its lookups found (the relays the other end is at home on).
+      for (const r of new Set([...told, ...(this.lookup ? there.relays : [])])) this.net.onto(this.id(), r);
       await this.#goOnto(relay);
     }
     const way = new Way(this.net, relay, [this.side, there.side]);
@@ -617,6 +626,10 @@ export class SimNet {
   /// A direct way between two endpoints on this machine.
   direct: Leg = { ms: 1 };
   readonly #relays = new Map<string, { device: Leg; station: Leg }>();
+  /// Entries (cloud relays.ts RELAY_ENTRIES): a URL on one relay's machine taking what comes to it on to another relay.
+  readonly #entries = new Map<string, string>();
+  /// Who went onto each relay, and through which URLs: by relay (the one an entry goes on to), then endpoint id.
+  readonly #onto = new Map<string, Map<string, Set<string>>>();
   readonly #down = new Map<string, number>();
   readonly #conns: SimConnection[] = [];
   /// What befell it, as a failure says: the run's events in order (`note`).
@@ -653,6 +666,38 @@ export class SimNet {
     this.#relays.set(at, { device: spec.device ?? { ms: 0 }, station: spec.station ?? { ms: 0 } });
     if (was) this.note(`${at} now ${this.#legs(at)}`);
     return at;
+  }
+
+  /// An entry at `url` into the relay at `to`: who goes onto it is on that relay. Its lines as given: the device's to the
+  /// entry's machine, the station's through the relay it goes on to.
+  entry(url: string, to: string, spec: RelaySpec = {}): string {
+    const at = this.relay(url, spec);
+    this.#entries.set(at, href(to));
+    return at;
+  }
+
+  /// The relay one is on through `url`: the one an entry goes on to, or its own.
+  server(url: string): string {
+    const at = href(url);
+    return this.#entries.get(at) ?? at;
+  }
+
+  /// The endpoint `id` went onto a relay through `url`.
+  onto(id: string, url: string): void {
+    const server = this.server(url);
+    let on = this.#onto.get(server);
+    if (!on) this.#onto.set(server, (on = new Map()));
+    let urls = on.get(id);
+    if (!urls) on.set(id, (urls = new Set()));
+    urls.add(href(url));
+  }
+
+  /// Each endpoint that went onto one relay through two URLs or more: one key there twice, which iroh-relay takes as one
+  /// connection taking the other's place, back and forth.
+  twice(): string[] {
+    const out: string[] = [];
+    for (const [server, on] of this.#onto) for (const [id, urls] of on) if (urls.size > 1) out.push(`${id.slice(0, 8)} on ${server} through ${[...urls].join(" and ")}`);
+    return out;
   }
 
   /// The relay at `url` answers nothing for `ms`: what is sent through it is lost, and its connections that stay quiet
@@ -703,7 +748,7 @@ export class SimNet {
   /// The device's iroh, as a host gives the core.
   iroh(): Iroh {
     return wrapIroh(
-      async (o) => this.#add(new SimEndpoint(this, "device", o.secretKey, o.relayUrls.map(href), o.relayOnly, [], false)) as never,
+      async (o) => this.#add(new SimEndpoint(this, "device", o.secretKey, o.relayUrls.map(href), o.relayOnly, [], false, o.lookup)) as never,
       (b) => b,
     );
   }

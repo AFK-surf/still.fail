@@ -6,7 +6,7 @@
 import { Effect, Exit, Fiber, Scope } from "effect";
 import type { AccountView } from "../accounts.ts";
 import { NOT_BETA, notBetaText, readCredential, type Credential } from "../cloud.ts";
-import { CREDENTIAL_FOR_S, CREDENTIAL_KEY, CREDENTIAL_OTHERS, CREDENTIAL_OTHERS_KEPT, PUSH_KEY, relaysOf, type Inner } from "../core.ts";
+import { CREDENTIAL_FOR_S, CREDENTIAL_KEY, CREDENTIAL_OTHERS, CREDENTIAL_OTHERS_KEPT, entriesOf, PUSH_KEY, relaysOf, type Inner } from "../core.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import type { Pull } from "../host.ts";
 import { current, t } from "../i18n.ts";
@@ -331,6 +331,15 @@ export class CloudSync {
       }
       return yield* Effect.fail(last);
     });
+  }
+
+  /// The relay entries any account's `/v1/me` named, as held now (`entriesOf`); none from a cloud from before them.
+  entriesNow(): string[] {
+    for (const account of this.#core.accounts.list()) {
+      const entries = entriesOf(this.#core.data.record("me", account.sub));
+      if (entries.length > 0) return entries;
+    }
+    return [];
   }
 
   /// A workspace's own relays, as its members' `/v1/me` name them: used besides still.fail's for its stations alone.

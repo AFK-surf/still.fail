@@ -483,6 +483,32 @@ sim("a_device_whose_own_relay_loses_the_station_is_linked_through_the_others", a
   assert.equal(s.net.open().length, 0, s.net.open().map((c) => `${c.endpoint.side} ${c.way.relay} ${c.reason?.kind ?? "open"} peer ${c.peer.reason?.kind ?? "open"}`).join("; "));
 });
 
+/// 2026-10-08, bft and phones in the mainland again: Beijing's machine took a way on into Hong Kong's relay (an entry,
+/// cloud relays.ts), handed to devices among their relays. Their main endpoint went onto Hong Kong's relay straight and
+/// through the entry under one key, and their endpoints of a relay of their own, looking the station up, onto its home
+/// relay besides: one key on a relay twice, each connection taking the other's place there, and a phone's connects to
+/// any station failed one in five. An entry is dialled on an endpoint of its own, relay-only, and through it alone: no
+/// key is on a relay twice, and the station is reached through the entry, its best way.
+sim("an_entry_is_dialled_on_its_own_endpoint_and_no_key_is_on_a_relay_twice", async (s) => {
+  // a: next to the device, its line to the station losing a third (Beijing); b: the device's line to it long (Hong
+  // Kong's back to the mainland); the entry: on a's machine, on to b over a good line.
+  const a = s.relay("https://a.relay.test/", { device: { ms: 5 }, station: { ms: 70, loss: 0.35 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 60 }, station: { ms: 30 } });
+  const entry = s.net.entry("https://a.relay.test:8443/", b, { device: { ms: 5 }, station: { ms: 40 } });
+  const station = await s.stationOn(b, a);
+  const id = station.id();
+  const mesh = await s.run(Mesh.make(env(s), [a, b], [entry]));
+  await reach(s, mesh, id);
+  await s.time.pass(5 * 60_000);
+  assert.equal(via(mesh, id), entry, JSON.stringify(mesh.measured(id)));
+  // Dialled again on every way past EXPLORE_MS, and let go of: no key went onto a relay twice meanwhile.
+  await s.time.pass(EXPLORE_MS + 60_000);
+  assert.equal(via(mesh, id), entry, JSON.stringify(mesh.measured(id)));
+  assert.deepEqual(s.net.twice(), []);
+  assert.deepEqual(mesh.relays, [a, b]);
+  await close(s, station, mesh);
+});
+
 /// A way that turns bad under requests (its relay's line to the station starts losing packets): they move to another
 /// within a minute, not at the next measuring minutes later.
 sim("requests_leave_a_way_that_turns_bad", async (s) => {

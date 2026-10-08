@@ -95,9 +95,11 @@ function relayKey(relay: string): string {
   }
 }
 
+/// A relay as people see it named (views.ts relayName): its host, with its port when that is not the default one, so an
+/// entry on a relay's machine (`https://39.105.157.122:8443`) is not taken for that relay.
 function relayHost(relay: string): string {
   try {
-    return new URL(relay).hostname || relay;
+    return new URL(relay).host || relay;
   } catch {
     return relay;
   }
@@ -464,6 +466,11 @@ export type MeshEnv = { host: Host; runner: Runner; tracer: Tracer; iroh: Iroh; 
 export class Mesh {
   readonly #env: MeshEnv;
   readonly relays: string[];
+  /// Ways into a relay through another relay's machine (cloud relays.ts `relay_entries`): each dialled on an endpoint
+  /// of its own and through it alone, never on the main endpoint. An entry is a relay already reached under another URL:
+  /// on both, one key is on that relay twice, the connection made last taking the other's place, back and forth
+  /// (2026-10-08: with the entries among their relays, phones' connects to any station failed one in five).
+  readonly entries: string[];
   #endpoint: IrohEndpoint;
   #secret: Uint8Array;
   readonly #links = new Map<string, Opening>();
@@ -496,9 +503,10 @@ export class Mesh {
   /// By station, then relay (`relayKey`): how fast replies came that way.
   readonly #speeds: Record<string, Record<string, Speed>>;
 
-  private constructor(env: MeshEnv, relays: string[], endpoint: IrohEndpoint, secret: Uint8Array, days: Record<string, Day>, speeds: Record<string, Record<string, Speed>>) {
+  private constructor(env: MeshEnv, relays: string[], entries: string[], endpoint: IrohEndpoint, secret: Uint8Array, days: Record<string, Day>, speeds: Record<string, Record<string, Speed>>) {
     this.#env = env;
     this.relays = relays;
+    this.entries = entries;
     this.#endpoint = endpoint;
     this.#secret = secret;
     this.#days = days;
@@ -506,7 +514,7 @@ export class Mesh {
   }
 
   /// Binds the endpoint with the stored device key (made and stored the first time). No relays binds without one.
-  static make(env: MeshEnv, relays: string[]): Effect.Effect<Mesh, CoreError> {
+  static make(env: MeshEnv, relays: string[], entries: string[] = []): Effect.Effect<Mesh, CoreError> {
     return Effect.gen(function* () {
       const host = env.host;
       const stored = yield* Effect.mapError(host.storageGet(DEVICE_KEY), asCoreError);
@@ -522,7 +530,7 @@ export class Mesh {
       const speedsRaw = parseJson(yield* Effect.orElseSucceed(host.storageGet(SPEED_KEY), () => null)) as J;
       const speeds: Record<string, Record<string, Speed>> = speedsRaw !== null && typeof speedsRaw === "object" && !Array.isArray(speedsRaw) ? speedsRaw : {};
       const endpoint = yield* Mesh.#bind(env.iroh, secret, relays);
-      const mesh = new Mesh(env, relays, endpoint, secret, days, speeds);
+      const mesh = new Mesh(env, relays, entries.filter((e) => !relays.some((r) => sameRelay(r, e))), endpoint, secret, days, speeds);
       env.runner.fork(mesh.#watch());
       env.runner.fork(mesh.#tally());
       return mesh;
@@ -719,6 +727,12 @@ export class Mesh {
     return [...this.relays, ...theirs.filter((r) => !this.relays.some((o) => sameRelay(o, r)))];
   }
 
+  /// Every way a station is dialled through: its relays (`relaysFor`), then the entries (`entries`).
+  #waysFor(stationId: string): string[] {
+    const relays = this.relaysFor(stationId);
+    return [...relays, ...this.entries.filter((e) => !relays.some((r) => sameRelay(r, e)))];
+  }
+
   /// The link to a station, opening it (or opening again a closed one) with a credential from `credentials`; `theirs`:
   /// the relays its workspace has of its own.
   link(stationId: string, credentials: CredentialSource, theirs?: readonly string[]): Effect.Effect<Link, CoreError> {
@@ -906,17 +920,17 @@ export class Mesh {
     });
   }
 
-  /// The relays a station is dialled on each on an endpoint of its own: all of them but still.fail's own (the first, on
-  /// Cloudflare), which the main endpoint reaches already. It holds few connections, each a cost: one more a device
-  /// filled it (2026-10-08: 429 to bft's keeper and to devices). None while there is a relay or none at all.
+  /// The ways a station is dialled on each on an endpoint of its own: every relay and entry but still.fail's own relay
+  /// (the first, on Cloudflare), which the main endpoint reaches already. It holds few connections, each a cost: one
+  /// more a device filled it (2026-10-08: 429 to bft's keeper and to devices). None while there is one way or none.
   #pinnable(stationId: string): string[] {
-    const relays = this.relaysFor(stationId);
-    if (relays.length < 2) return [];
+    const ways = this.#waysFor(stationId);
+    if (ways.length < 2) return [];
     const own = this.relays[0];
-    return relays.filter((r) => own === undefined || !sameRelay(own, r));
+    return ways.filter((r) => own === undefined || !sameRelay(own, r));
   }
 
-  /// A link through `relay` alone, on that relay's own endpoint.
+  /// A link through `relay` alone, on that relay's own endpoint (`#pinnedEndpoint`).
   #dialPinned(stationId: string, relay: string, credentials: CredentialSource, fresh: boolean, ctx: unknown): Effect.Effect<Link, CoreError> {
     return Effect.suspend(() => {
       this.#dialing++;
@@ -936,7 +950,7 @@ export class Mesh {
     if (ways.some((w) => w.link === link)) return;
     this.#ways.set(stationId, [...ways, new Way(link)]);
     // One way there is all it has (no relays, or one): nothing to choose between.
-    if (!this.#steering.has(stationId) && this.relaysFor(stationId).length >= 2) {
+    if (!this.#steering.has(stationId) && this.#waysFor(stationId).length >= 2) {
       this.#steering.add(stationId);
       this.#env.runner.fork(this.#steer(stationId));
     }
@@ -1166,7 +1180,7 @@ export class Mesh {
       const via = w.link.via();
       relays.push([via !== null ? relayHost(via) : "direct", Math.round(w.srtt)]);
     }
-    for (const r of this.relaysFor(stationId)) if (!seen.has(relayKey(r))) relays.push([relayHost(r), null]);
+    for (const r of this.#waysFor(stationId)) if (!seen.has(relayKey(r))) relays.push([relayHost(r), null]);
     return { measuring, relays, moved: this.#moved.get(stationId) ?? null };
   }
 
@@ -1183,13 +1197,16 @@ export class Mesh {
     });
   }
 
+  /// The endpoint on `relay` alone: relay-only, no lookups, no IP transports. With lookups it found where a station was
+  /// at home and went onto that relay too, and with an entry that was the same relay under two URLs, one key on it twice
+  /// (2026-10-08); with IP transports, a way said to go through a relay went direct.
   #pinnedEndpoint(relay: string): Effect.Effect<IrohEndpoint | null> {
     return Effect.gen({ self: this }, function* () {
       const existing = this.#pinned.get(relay);
       if (existing) return yield* Deferred.await(existing);
       const d = Deferred.makeUnsafe<IrohEndpoint | null>();
       this.#pinned.set(relay, d);
-      const bound = yield* Effect.result(Mesh.#bind(this.#env.iroh, pinnedKey(this.#secret, relay), [relay]));
+      const bound = yield* Effect.result(Mesh.#bind(this.#env.iroh, pinnedKey(this.#secret, relay), [relay], true));
       const endpoint = bound._tag === "Success" ? bound.success : null;
       Deferred.doneUnsafe(d, Effect.succeed(endpoint));
       if (endpoint === null) this.#pinned.delete(relay);
@@ -1591,7 +1608,9 @@ export function meshWire(inner: Inner): StationWire {
       mesh = d;
       inner.runner.fork(
         Effect.gen(function* () {
-          const made = yield* Effect.result(Effect.flatMap(inner.cloudSync.relaysNow(), (relays) => Mesh.make({ host: inner.host, runner: inner.runner, tracer: inner.tracer, iroh, wakes: inner.wakes }, relays)));
+          const made = yield* Effect.result(
+            Effect.flatMap(inner.cloudSync.relaysNow(), (relays) => Mesh.make({ host: inner.host, runner: inner.runner, tracer: inner.tracer, iroh, wakes: inner.wakes }, relays, inner.cloudSync.entriesNow())),
+          );
           if (made._tag === "Success") up = made.success;
           else mesh = null;
           Deferred.doneUnsafe(d, made._tag === "Success" ? Effect.succeed(made.success) : Effect.fail(made.failure));

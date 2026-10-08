@@ -102,10 +102,14 @@ test("the relays handed out: still.fail's first, then RELAY_URLS, each once", ()
   assert.deepEqual(relays(env), { relay_url: "https://app.still.fail", relay_urls: ["https://app.still.fail"], relay_names: {} });
   assert.deepEqual(relays({ ...env, RELAY_URLS: " https://39.105.157.122 ,,https://app.still.fail" }), { relay_url: "https://app.still.fail", relay_urls: ["https://app.still.fail", "https://39.105.157.122"], relay_names: {} });
   assert.deepEqual(relays({ ...env, RELAY_URL: "https://relay.example" }).relay_urls, ["https://relay.example"]);
-  // The entries: for a device, after the relays; never for a station.
+  // The entries: for a device, apart from the relays (one among them would put an endpoint on its relay twice); never
+  // for a station.
   const entered = { ...env, RELAY_URLS: "https://39.105.157.122", RELAY_ENTRIES: "https://39.105.157.122:8443, https://39.105.157.122" };
-  assert.deepEqual(relays(entered).relay_urls, ["https://app.still.fail", "https://39.105.157.122"]);
-  assert.deepEqual(relays(entered, true).relay_urls, ["https://app.still.fail", "https://39.105.157.122", "https://39.105.157.122:8443"]);
+  assert.deepEqual(relays(entered), { relay_url: "https://app.still.fail", relay_urls: ["https://app.still.fail", "https://39.105.157.122"], relay_names: {} });
+  assert.deepEqual(relays(entered, true).relay_urls, ["https://app.still.fail", "https://39.105.157.122"]);
+  assert.deepEqual(relays(entered, true).relay_entries, ["https://39.105.157.122:8443"]);
+  assert.deepEqual(relays(env, true).relay_entries, []);
+  assert.deepEqual(relays({ ...entered, RELAY_NAMES: { "https://39.105.157.122:8443": "北京转香港" } }, true).relay_names, { "https://39.105.157.122:8443": "北京转香港" });
   // Named as RELAY_NAMES says, only those handed out.
   const named = { ...env, RELAY_URLS: "https://39.105.157.122", RELAY_NAMES: { "https://39.105.157.122": "北京", "https://gone.example": "旧的" } };
   assert.deepEqual(relays(named).relay_names, { "https://39.105.157.122": "北京" });

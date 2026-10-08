@@ -10,17 +10,18 @@ export const relayUrls = (env: { PUBLIC_ORIGIN: string; RELAY_URL?: string; RELA
 type RelayEnv = { PUBLIC_ORIGIN: string; RELAY_URL?: string; RELAY_URLS?: string; RELAY_ENTRIES?: string; RELAY_NAMES?: Record<string, string> };
 
 /** What a station or a device is told about the relays: the one, as before, all of them, and the names of those named.
- * A device (`device`) is told of RELAY_ENTRIES as well, after them: another way into a relay, through a machine its
- * own line reaches well and whose line to that relay is good (Beijing's to Hong Kong's: a phone in the mainland reaches
- * Beijing well, a station in Tokyo Hong Kong; 2026-10-08, bft). A device dials and measures every way it is told of
- * and keeps to the quickest (client/core-ts mesh.ts). A station is not: on the same relay twice under one key, the
- * connection made last takes the other's place there, and through the entry it may be the one on the worse line. */
-export function relays(env: RelayEnv, device = false): { relay_url: string; relay_urls: string[]; relay_names: Record<string, string> } {
+ * A device (`device`) is told of RELAY_ENTRIES as well, as `relay_entries`: another way into a relay, through a machine
+ * its own line reaches well and whose line to that relay is good (Beijing's to Hong Kong's: a phone in the mainland
+ * reaches Beijing well, a station in Tokyo Hong Kong; 2026-10-08, bft). A device dials an entry on an endpoint of its
+ * own, on that entry alone (client/core-ts mesh.ts). Never among `relay_urls`: an entry is a relay already there under
+ * another URL, and an endpoint on both is on that relay twice under one key, the connection made last taking the
+ * other's place, back and forth. Devices that had entries among their relays lost a fifth of their connects to every
+ * station that way (2026-10-08); a station is not told of them for the same reason. */
+export function relays(env: RelayEnv, device = false): { relay_url: string; relay_urls: string[]; relay_names: Record<string, string>; relay_entries?: string[] } {
   const own = relayUrls(env);
   const entries = device ? originList("", env.RELAY_ENTRIES).filter((u) => !own.map(sameUrl).includes(sameUrl(u))) : [];
-  const all = [...own, ...entries];
-  const names = Object.fromEntries(all.flatMap((url) => (env.RELAY_NAMES?.[url] ? [[url, env.RELAY_NAMES[url]]] : [])));
-  return { relay_url: all[0], relay_urls: all, relay_names: names };
+  const names = Object.fromEntries([...own, ...entries].flatMap((url) => (env.RELAY_NAMES?.[url] ? [[url, env.RELAY_NAMES[url]]] : [])));
+  return { relay_url: own[0], relay_urls: own, relay_names: names, ...(device ? { relay_entries: entries } : {}) };
 }
 
 /** At most this many relays of a workspace's own (directory.ts setRelays). */

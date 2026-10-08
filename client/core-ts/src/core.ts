@@ -426,6 +426,13 @@ export function relaysOf(me: unknown): string[] | null {
   return typeof me.relay_url === "string" ? [me.relay_url] : null;
 }
 
+/// The relay entries a `/v1/me` names (`relay_entries`, cloud relays.ts): each dialled on an endpoint of its own, never
+/// among the relays (mesh.ts `entries`).
+export function entriesOf(me: unknown): string[] {
+  if (!isObject(me) || !Array.isArray(me.relay_entries)) return [];
+  return me.relay_entries.filter((v): v is string => typeof v === "string");
+}
+
 export function gone(): CoreError {
   return new CoreError("closed", t("core-misc.core.closed"));
 }

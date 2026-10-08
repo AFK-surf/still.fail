@@ -310,7 +310,7 @@ export function envOf(core: Inner): ViewsEnv {
         if (!isObject(names)) continue;
         for (const [url, name] of Object.entries(names)) {
           try {
-            if (new URL(url).hostname === host && typeof name === "string") return name;
+            if (new URL(url).host === host && typeof name === "string") return name;
           } catch {
             // Not an address.
           }
