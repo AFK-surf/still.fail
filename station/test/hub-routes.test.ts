@@ -336,3 +336,32 @@ test("without the agents' side: the hub's routes answer that the station is star
     await r.close();
   }
 });
+
+test("a file a message names by its path: its peek and the file whole, only within the session's own directories", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });
+    const key = encodeURIComponent(made.key);
+    const workspace = r.store.getSession(made.key)!.workspace;
+    mkdirSync(join(workspace, "src"), { recursive: true });
+    writeFileSync(join(workspace, "src", "a.ts"), Array.from({ length: 40 }, (_, i) => `line ${i + 1}`).join("\n"));
+    writeFileSync(join(workspace, "bin.dat"), Buffer.from([1, 0, 2]));
+    const peek = (path: string, line?: string) => r.ask("GET", `/sessions/${key}/peek`, undefined, [["path", path], ...(line ? [["line", line] as [string, string]] : [])]);
+    // Relative to its working directory, and absolute; lines around the one named.
+    const [status, a] = await peek("src/a.ts", "20");
+    assert.equal(status, 200);
+    assert.deepEqual([a.kind, a.name, a.lines.start, a.lines.at, a.lines.text[0], a.lines.text.length], ["text", "a.ts", 17, 20, "line 17", 12]);
+    assert.equal((await peek(join(workspace, "src", "a.ts")))[1].lines.start, 1);
+    assert.deepEqual((await peek("src"))[1].entries, ["a.ts"]);
+    assert.equal((await peek("bin.dat"))[1].kind, "binary");
+    // Nothing outside, however named; nothing that is not there.
+    assert.deepEqual(await peek("../../../../stillfail.db"), [403, { error: en("station.files.outside") }]);
+    assert.deepEqual(await peek("/etc/hosts"), [403, { error: en("station.files.outside") }]);
+    assert.deepEqual(await peek("src/nope.ts"), [404, { error: en("station.files.notFound") }]);
+    const [, whole] = await r.ask("GET", `/sessions/${key}/open`, undefined, [["path", "src/a.ts"]]);
+    assert.equal(Buffer.from(whole.bytes, "base64").toString("utf8").split("\n").length, 40);
+    assert.equal(whole.name, "a.ts");
+  } finally {
+    await r.close();
+  }
+});

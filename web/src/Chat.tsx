@@ -11,6 +11,7 @@ import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as Activ
 import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
+import { PathSession } from "./Peeks.tsx";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
@@ -940,7 +941,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
       <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
       {m.authorKind === "person"
         ? <>{m.text && <PersonWords text={m.text} />}<Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} /></>
-        : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} />}
+        : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
       {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
       {check && <p className={css.archiveCheck} data-failed={check.failed || undefined}>{check.text}</p>}
@@ -1198,12 +1199,12 @@ function QuoteCard({ quote, onJump, comment, onRemove, picture }: { quote: Quote
 // ── files ───────────────────────────────────────────────────────────────
 
 /** An agent's Markdown with its files: those its text names shown there, the rest below it. */
-function ProseWithFiles({ owner, text, files }: { owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined }) {
+function ProseWithFiles({ owner, text, files, session = null }: { owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined; /** Its agent's: the files its paths name are that session's (Peeks.tsx). */ session?: string | null }) {
   const { placed, rest } = useMemo(() => placeFiles(text, files), [text, files]);
   return (
     <>
       <div className={conversationCss.markdown}>
-        <Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />}>{text}</Prose>
+        <PathSession.Provider value={session}><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />}>{text}</Prose></PathSession.Provider>
       </div>
       <Files owner={owner} files={rest} />
     </>

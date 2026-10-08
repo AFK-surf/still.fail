@@ -115,6 +115,7 @@
   "station.decisions.failed": "Check failed",
   "station.decisions.keep": "kept",
   "station.files.notFound": "No such file",
+  "station.files.outside": "That file is outside the session's directories, so it can't be previewed",
   "station.files.notUploaded": "Attachment isn't in uploads",
   "station.files.tooLarge": "File too large (max 50 MB)",
   "station.files.tooLargeParts": "File too large (max 1 GB)",

@@ -1,6 +1,7 @@
 // Execution history, after Zork's: a readable account of what actually ran. The core puts it together
 // (client/core-ts/src/history.ts): messages in and out, state marks and the agent's words stand alone; the tool calls and
 // thinking between them fold into one group. Here it is only drawn.
+import { PathSession } from "./Peeks.tsx";
 import { failure, useToast } from "./toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { ChevronDown, ChevronRight, Wait, Received as ReceivedIcon, Send } from "./icons.tsx";
@@ -85,6 +86,8 @@ export function History({ station, sessionKey, summary, actions, details, focus 
   const usage = history?.usage;
 
   return (
+    // The paths its agent writes are its session's files (Peeks.tsx).
+    <PathSession.Provider value={sessionKey}>
     <section className={css.history} aria-label={t("web-main.history.label")}>
       <header className={css.historyHead}>
         <div className={css.historyIdentity}>{summary}</div>
@@ -118,6 +121,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
         )}
       </div>
     </section>
+    </PathSession.Provider>
   );
 }
 

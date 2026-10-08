@@ -556,5 +556,22 @@
   "web-main.memory.share.switch": "分享给其他 station",
   "web-main.memory.share.from": "来自 {station}",
   "web-main.memory.share.shared": "已分享",
-  "web-main.memory.share.conflict": "两台同时改了，有冲突的改动"
+  "web-main.memory.share.conflict": "两台同时改了，有冲突的改动",
+  "web-main.preview.pr.open": "开启",
+  "web-main.preview.pr.merged": "已合并",
+  "web-main.preview.pr.closed": "已关闭",
+  "web-main.preview.pr.draft": "草稿",
+  "web-main.preview.issue.open": "开启",
+  "web-main.preview.issue.completed": "已完成",
+  "web-main.preview.issue.notPlanned": "不处理",
+  "web-main.preview.issue.closed": "已关闭",
+  "web-main.preview.files": "{count} 个文件",
+  "web-main.preview.comments": "{count} 条评论",
+  "web-main.preview.checks.passed": "检查通过 {count}",
+  "web-main.preview.checks.failed": "检查失败 {count}",
+  "web-main.preview.checks.pending": "检查中 {count}",
+  "web-main.preview.openFailed": "没能打开 {name}：{error}",
+  "web-main.preview.more": "还有 {count} 项",
+  "web-main.preview.binary": "二进制文件",
+  "web-main.preview.clickToOpen": "点击打开"
 }

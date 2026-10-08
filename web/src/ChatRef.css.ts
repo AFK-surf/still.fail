@@ -2,7 +2,6 @@ import { style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { popKeyframes } from "./styles/keyframes.css.ts";
 import { glass } from "./styles/glass.ts";
-import { popover } from "./styles/controls.css.ts";
 
 /** Where the menu hangs from: the composer's top edge. */
 export const refAnchor = style({ position: "relative", height: "0" });
@@ -63,15 +62,3 @@ export const refChipStation = style({
 });
 export const refChipStationIcon = style({ verticalAlign: "-1px", marginRight: "2px" });
 
-/** A reference's chat, while it is pointed at (ChatRef.tsx RefPreview): a small card over it. */
-export const refPreview = style([popover, {
-  width: "300px", maxWidth: "calc(100vw - 16px)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: "4px",
-}]);
-export const refPreviewHead = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
-export const refPreviewTitle = style({ fontSize: vars.textSm, fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const refPreviewMeta = style({ fontSize: vars.textXs, color: vars.muted });
-export const refPreviewLast = style({
-  margin: "2px 0 0", fontSize: vars.textSm, color: vars.text, lineHeight: "1.45",
-  display: "-webkit-box", WebkitLineClamp: "3", WebkitBoxOrient: "vertical", overflow: "hidden",
-});
-export const refPreviewNote = style({ margin: "0", fontSize: vars.textSm, color: vars.muted });

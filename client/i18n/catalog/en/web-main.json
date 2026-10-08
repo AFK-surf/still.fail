@@ -613,5 +613,28 @@
   "web-main.memory.share.switch": "Share with other stations",
   "web-main.memory.share.from": "From {station}",
   "web-main.memory.share.shared": "Shared",
-  "web-main.memory.share.conflict": "Changed on two stations at once; a conflicting edit is kept"
+  "web-main.memory.share.conflict": "Changed on two stations at once; a conflicting edit is kept",
+  "web-main.preview.pr.open": "Open",
+  "web-main.preview.pr.merged": "Merged",
+  "web-main.preview.pr.closed": "Closed",
+  "web-main.preview.pr.draft": "Draft",
+  "web-main.preview.issue.open": "Open",
+  "web-main.preview.issue.completed": "Completed",
+  "web-main.preview.issue.notPlanned": "Not planned",
+  "web-main.preview.issue.closed": "Closed",
+  "web-main.preview.files": {
+    "one": "{count} file",
+    "other": "{count} files"
+  },
+  "web-main.preview.comments": {
+    "one": "{count} comment",
+    "other": "{count} comments"
+  },
+  "web-main.preview.checks.passed": "{count} checks passed",
+  "web-main.preview.checks.failed": "{count} checks failed",
+  "web-main.preview.checks.pending": "{count} checks running",
+  "web-main.preview.openFailed": "Couldn't open {name}: {error}",
+  "web-main.preview.more": "{count} more",
+  "web-main.preview.binary": "Binary file",
+  "web-main.preview.clickToOpen": "Click to open"
 }

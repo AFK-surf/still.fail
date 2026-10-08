@@ -115,6 +115,7 @@
   "station.decisions.failed": "没检查成",
   "station.decisions.keep": "不推荐",
   "station.files.notFound": "没有这个文件",
+  "station.files.outside": "这个文件不在会话的工作目录里，不能预览",
   "station.files.notUploaded": "附件不在上传目录里",
   "station.files.tooLarge": "文件太大了，最多 50 MB",
   "station.files.tooLargeParts": "文件太大了，最多 1 GB",
