@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { vars } from "../styles/tokens.css.ts";
 
 /** A new chat and a chat: one page, what is above and one composer at the foot (ChatHost.tsx; --m-bottom is its height). */
 export const mChatHost = style({
@@ -41,5 +42,5 @@ export const mComposerCapsule = style({
   viewTransitionName: "composer", display: "flex", flexDirection: "column", gap: "8px", padding: "8px",
   borderRadius: "26px",
 });
-export const mComposerOffline = style({ margin: "0", padding: "2px 8px", fontSize: "13px", color: "var(--m-muted)" });
-export const mComposerError = style({ margin: "0", padding: "0 6px", fontSize: "12px" });
+export const mComposerOffline = style({ margin: "0", padding: "2px 8px", fontSize: vars.textSecondary, color: "var(--m-muted)" });
+export const mComposerError = style({ margin: "0", padding: "0 6px", fontSize: vars.textLabel });

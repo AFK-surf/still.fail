@@ -40,13 +40,13 @@ export const codeBar = style({
   },
 });
 export const codeLang = style({
-  padding: "0 6px", fontFamily: "var(--font-sans, inherit)", fontSize: "10px", letterSpacing: ".02em",
+  padding: "0 6px", fontFamily: "var(--font-sans, inherit)", fontSize: vars.textMicro, letterSpacing: ".02em",
   color: vars.subtle,
 });
 export const codeCopy = style({
   display: "inline-flex", alignItems: "center", gap: "4px", border: "0",
   borderRadius: `calc(6px * ${vars.cornerScale})`, color: vars.muted, cursor: "pointer", cornerShape: vars.cornerShape,
-  height: "24px", padding: "0 7px", fontSize: "11px",
+  height: "24px", padding: "0 7px", fontSize: vars.textCaption,
   background: `color-mix(in srgb, ${vars.canvas} 80%, transparent)`,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
@@ -65,10 +65,10 @@ globalStyle(`${tableScroll}:last-child`, { marginBottom: "0" });
 globalStyle(`${tableScroll} > table`, { margin: "0" });
 globalStyle(`${tableScroll} th, ${tableScroll} td`, { overflowWrap: "normal", minWidth: "4em" });
 globalStyle(`${markdown} ${codeBlock} pre`, {
-  margin: "0", padding: "10px 12px", borderRadius: "0", background: "none", fontSize: "12px", lineHeight: "1.55",
+  margin: "0", padding: "10px 12px", borderRadius: "0", background: "none", fontSize: vars.textLabel, lineHeight: "1.55",
 });
 globalStyle(`${codeShiki} pre.shiki`, {
-  margin: "0", padding: "10px 12px", background: "none !important", overflow: "auto", fontSize: "12px",
+  margin: "0", padding: "10px 12px", background: "none !important", overflow: "auto", fontSize: vars.textLabel,
   lineHeight: "1.55",
 });
 // Dark: vitesse-dark's colours, which Shiki puts in `--shiki-dark` beside the light ones it writes inline.
@@ -78,4 +78,4 @@ globalStyle(`:root:not([data-theme="light"]) ${codeShiki} .shiki, :root:not([dat
   "@media": { "(prefers-color-scheme: dark)": shikiDark },
 });
 globalStyle(`${codeShiki} pre.shiki code`, { fontFamily: vars.fontMono, padding: "0", background: "none" });
-globalStyle(`${markdown} ${codeBlock} pre, ${codeShiki} pre.shiki`, { padding: "12px 14px", fontSize: "12.5px", lineHeight: "1.6" });
+globalStyle(`${markdown} ${codeBlock} pre, ${codeShiki} pre.shiki`, { padding: "12px 14px", fontSize: vars.textLabel, lineHeight: "1.6" });

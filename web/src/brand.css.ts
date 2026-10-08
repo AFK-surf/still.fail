@@ -35,7 +35,7 @@ export const sidebarBuddy = style({
 export const sidebarUpdate = style({
   position: "fixed", zIndex: "40", top: "18px", left: "calc(var(--sidebar-w, 240px) - 36px)",
   transform: "translateX(-100%)", height: "22px", padding: "0 9px", border: "0", borderRadius: "999px",
-  font: "inherit", fontSize: vars.textXs, fontWeight: "500", whiteSpace: "nowrap", background: vars.accentBg,
+  font: "inherit", fontSize: vars.textLabel, fontWeight: "500", whiteSpace: "nowrap", background: vars.accentBg,
   color: vars.accentText, cursor: "pointer", WebkitAppRegion: "no-drag",
   selectors: {
     "&:hover:not(:disabled)": { filter: "brightness(.96)" },
@@ -79,20 +79,20 @@ globalStyle(list, { listStyle: "none", margin: "0 -12px", padding: "0", display:
 globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: "max(-12px, calc(50% - 392px))", marginRight: "max(-12px, calc(50% - 392px))" });
 /** Why a dialog's action did not work, just above its buttons. */
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
-globalStyle(dialogError, { margin: "12px 0 0", fontSize: vars.textSm, color: vars.red, textWrap: "pretty" });
+globalStyle(dialogError, { margin: "12px 0 0", fontSize: vars.textSecondary, color: vars.red, textWrap: "pretty" });
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
 globalStyle(tooltip, {
   zIndex: "70", padding: "5px 10px", borderRadius: `calc(8px * ${vars.cornerScale})`, background: vars.primary,
-  color: vars.onPrimary, fontSize: vars.textXs, lineHeight: "1.4", boxShadow: `0 4px 12px ${vars.shadow}`,
+  color: vars.onPrimary, fontSize: vars.textLabel, lineHeight: "1.4", boxShadow: `0 4px 12px ${vars.shadow}`,
   animation: `${fadeKeyframes} 120ms ${vars.easeOut}`, cornerShape: vars.cornerShape, width: "max-content",
   maxWidth: "min(300px, calc(100vw - 16px))", textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere",
 });
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
 globalStyle(dialogTitle, {
-  display: "flex", alignItems: "baseline", gap: "10px", margin: "0", fontSize: "20px", fontWeight: "650",
+  display: "flex", alignItems: "baseline", gap: "10px", margin: "0", fontSize: vars.textHeading, fontWeight: "650",
 });
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
-globalStyle(dialogLead, { margin: "6px 32px 0", fontSize: vars.textSm, color: vars.muted });
+globalStyle(dialogLead, { margin: "6px 32px 0", fontSize: vars.textSecondary, color: vars.muted });
 globalStyle(`${sidebarBuddy}[data-pose="hop"] img`, { animation: `${buddyHopKeyframes} 380ms ${vars.easeOut}` });
 globalStyle(`${sidebarBuddy}[data-pose="hop"] img`, {
   "@media": {

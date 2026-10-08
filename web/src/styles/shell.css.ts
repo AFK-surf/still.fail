@@ -31,5 +31,5 @@ export const gate = style({
 });
 export const muted = style({ color: vars.muted });
 export const mono = style({ fontFamily: vars.fontMono });
-globalStyle(`${gate} h1`, { margin: "8px 0 0", fontSize: vars.textMd });
+globalStyle(`${gate} h1`, { margin: "8px 0 0", fontSize: vars.textTitle });
 globalStyle(`${gate} p`, { margin: "0", color: vars.muted, maxWidth: "36em" });

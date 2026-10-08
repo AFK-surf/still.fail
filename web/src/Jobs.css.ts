@@ -44,11 +44,11 @@ export const jobRow = style({
 export const jobFold = style({});
 export const jobText = style({ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "1px" });
 export const jobName = style({
-  fontSize: vars.textSm, fontWeight: "500", lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis",
+  fontSize: vars.textSecondary, fontWeight: "500", lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
 export const jobMeta = style({
-  fontSize: vars.textXs, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: vars.textLabel, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   fontVariantNumeric: "tabular-nums",
 });
 export const jobWord = style({
@@ -69,21 +69,21 @@ export const jobEnd = style({
   },
 });
 export const jobNotices = style({
-  listStyle: "none", margin: "0", padding: "0", display: "grid", gap: "6px", fontSize: vars.textXs,
+  listStyle: "none", margin: "0", padding: "0", display: "grid", gap: "6px", fontSize: vars.textLabel,
   selectors: {
-    "&[data-clock]": { gap: "12px", fontSize: vars.textSm },
+    "&[data-clock]": { gap: "12px", fontSize: vars.textSecondary },
   },
 });
-export const jobNoticesNone = style({ margin: "0", fontSize: vars.textXs, color: vars.muted });
+export const jobNoticesNone = style({ margin: "0", fontSize: vars.textLabel, color: vars.muted });
 export const jobLast = style({
-  display: "flex", flexDirection: "column", gap: "2px", marginTop: "10px", fontSize: "11px", color: vars.subtle,
+  display: "flex", flexDirection: "column", gap: "2px", marginTop: "10px", fontSize: vars.textCaption, color: vars.subtle,
   minWidth: "0",
 });
 export const jobActions = style({ display: "flex", gap: "2px", margin: "6px 0 0 -8px" });
 export const jobAction = style({
   display: "inline-flex", alignItems: "center", gap: "5px", height: "26px", padding: "0 8px", border: "0",
   borderRadius: `calc(8px * ${vars.cornerScale})`, background: "none", color: vars.muted, font: "inherit",
-  fontSize: vars.textXs, cursor: "pointer", cornerShape: vars.cornerShape,
+  fontSize: vars.textLabel, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover:not(:disabled)": { background: vars.selected, color: vars.text },
     "&:disabled": { cursor: "progress" },
@@ -92,7 +92,7 @@ export const jobAction = style({
 /** A stop or a clear under way: a small ring in place of its icon. */
 export const jobSpinner = style({});
 export const jobsHead = style({
-  display: "flex", alignItems: "baseline", gap: "6px", padding: "8px 12px 4px", fontSize: vars.textXs,
+  display: "flex", alignItems: "baseline", gap: "6px", padding: "8px 12px 4px", fontSize: vars.textLabel,
   fontWeight: "500", color: vars.muted,
 });
 export const jobFoldBody = style({
@@ -105,14 +105,14 @@ export const jobsFoot = style({ display: "flex", alignItems: "center", gap: "4px
 export const jobsAll = style({
   display: "flex", alignItems: "center", gap: "10px", flex: "1", minWidth: "0", height: "38px",
   padding: "0 12px 0 32px", border: "0", borderRadius: vars.rOption, background: "none", color: vars.muted,
-  font: "inherit", fontSize: vars.textSm, cursor: "pointer", cornerShape: vars.cornerShape,
+  font: "inherit", fontSize: vars.textSecondary, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
   },
 });
 export const jobsClear = style({
   flex: "none", alignSelf: "flex-start", height: "38px", padding: "0 12px", border: "0", borderRadius: vars.rOption,
-  background: "none", color: vars.muted, font: "inherit", fontSize: vars.textSm, whiteSpace: "nowrap", cursor: "pointer",
+  background: "none", color: vars.muted, font: "inherit", fontSize: vars.textSecondary, whiteSpace: "nowrap", cursor: "pointer",
   cornerShape: vars.cornerShape,
   display: "inline-flex", alignItems: "center", gap: "6px",
   selectors: {
@@ -120,10 +120,10 @@ export const jobsClear = style({
     "&:disabled": { cursor: "progress" },
   },
 });
-export const jobsQuiet = style({ margin: "8px 12px 0 32px", fontSize: vars.textSm, color: vars.muted });
+export const jobsQuiet = style({ margin: "8px 12px 0 32px", fontSize: vars.textSecondary, color: vars.muted });
 export const jobsEmpty = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", padding: "26px 20px",
-  textAlign: "center", color: vars.muted, fontSize: vars.textXs,
+  textAlign: "center", color: vars.muted, fontSize: vars.textLabel,
 });
 /** The 任务 tab: everything listed, a job picked shows what it said or its output. */
 export const jobsTab = style({ flex: "1", minHeight: "0", display: "flex", flexDirection: "column" });
@@ -135,9 +135,9 @@ export const jobDetail = style({
   borderRadius: vars.rField, background: vars.paper, cornerShape: vars.cornerShape,
 });
 export const jobDetailHead = style({
-  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", fontSize: vars.textSm,
+  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", fontSize: vars.textSecondary,
 });
-export const jobDetailState = style({ fontSize: vars.textXs, color: vars.muted, whiteSpace: "nowrap" });
+export const jobDetailState = style({ fontSize: vars.textLabel, color: vars.muted, whiteSpace: "nowrap" });
 export const jobDetailGrow = style({ flex: "1" });
 export const jobDetailStop = style({ width: "28px", height: "28px" });
 export const jobDetailCommand = style({
@@ -157,7 +157,7 @@ globalStyle(`${jobRow} > ${jobDot}`, { marginTop: "5.5px" });
 globalStyle(`${jobNotices} li`, { display: "grid", gridTemplateColumns: "5.6em 1fr", gap: "8px" });
 globalStyle(`${jobNotices} time`, { color: vars.subtle, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" });
 globalStyle(`${jobNotices}[data-clock] li`, { gridTemplateColumns: "3.4em 1fr" });
-globalStyle(`${jobNotices}[data-clock] time`, { fontSize: vars.textSm });
+globalStyle(`${jobNotices}[data-clock] time`, { fontSize: vars.textSecondary });
 globalStyle(`${jobNoticesNone} code`, { font: `11.5px ${vars.fontMono}` });
 globalStyle(`${jobLast} code`, {
   font: `11.5px/1.5 ${vars.fontMono}`, color: vars.muted, whiteSpace: "nowrap", overflow: "hidden",
@@ -165,15 +165,15 @@ globalStyle(`${jobLast} code`, {
 });
 globalStyle(`${jobsHead} span`, { fontWeight: "400", color: vars.subtle });
 globalStyle(`${jobFold}[data-open] > ${jobRow}`, { borderEndStartRadius: "0", borderEndEndRadius: "0" });
-globalStyle(`${jobsAll} span`, { marginLeft: "auto", fontSize: vars.textXs, color: vars.subtle });
-globalStyle(`${jobsEmpty} b`, { color: vars.text, fontSize: vars.textSm, fontWeight: "500" });
+globalStyle(`${jobsAll} span`, { marginLeft: "auto", fontSize: vars.textLabel, color: vars.subtle });
+globalStyle(`${jobsEmpty} b`, { color: vars.text, fontSize: vars.textSecondary, fontWeight: "500" });
 globalStyle(`${jobsTabList} section + section`, { marginTop: "6px" });
 globalStyle(`${jobDetailHead} b`, { fontWeight: "600", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
 globalStyle(`${jobDetailHead} ${segmented}`, {
   width: "120px", flex: "none",
   vars: { "--pad": "2px" },
 });
-globalStyle(`${jobDetailHead} ${segmentedOption}`, { height: "24px", fontSize: vars.textXs });
+globalStyle(`${jobDetailHead} ${segmentedOption}`, { height: "24px", fontSize: vars.textLabel });
 globalStyle(`${jobDetail} > ${jobLast}`, { margin: "8px 0 12px" });
 /** Here rather than with its class: it comes after .job-notices li, and wins over it. */
 globalStyle(`${detailsList} li`, { display: "grid", gap: "2px" });
@@ -225,7 +225,7 @@ globalStyle(composerThumb, {
 /** Here rather than with its class: it comes after .job-notices li, and wins over it. */
 globalStyle(`${tokenGuide} li`, {
   counterIncrement: "guide", display: "grid", gap: "4px", paddingLeft: "36px", position: "relative",
-  fontSize: vars.textSm,
+  fontSize: vars.textSecondary,
 });
 /** A message its agents have not taken yet says so only after a second (most are taken before). */
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */

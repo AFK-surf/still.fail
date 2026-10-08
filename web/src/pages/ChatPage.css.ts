@@ -48,7 +48,7 @@ export const detailsList = style({
 });
 /** The history's line of what is worth a look now (a quota running out, the disk filling up, an account). */
 export const attention = style({
-  display: "inline-flex", alignItems: "center", gap: "5px", fontSize: vars.textXs, color: vars.muted,
+  display: "inline-flex", alignItems: "center", gap: "5px", fontSize: vars.textLabel, color: vars.muted,
   selectors: {
     "&[data-tone=\"amber\"]": { color: vars.amber },
     "&[data-tone=\"red\"]": { color: vars.red },
@@ -59,7 +59,7 @@ export const attentionQuota = style({});
 export const sessionDetails = style({
   overflowY: "auto", padding: "16px", display: "grid", gap: "20px", alignContent: "start",
 });
-export const runUsage = style({ margin: "0", fontSize: vars.textXs });
+export const runUsage = style({ margin: "0", fontSize: vars.textLabel });
 export const runStation = style({});
 export const resourceRings = style({
   display: "flex", alignItems: "center", gap: "10px",
@@ -92,7 +92,7 @@ export const sideTabList = style({
 });
 export const sideTab = style({
   display: "inline-flex", alignItems: "center", height: "30px", padding: "0 12px", border: "0",
-  borderRadius: `calc(10px * ${vars.cornerScale})`, background: "none", color: vars.muted, fontSize: vars.textSm,
+  borderRadius: `calc(10px * ${vars.cornerScale})`, background: "none", color: vars.muted, fontSize: vars.textSecondary,
   cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { color: vars.text, background: vars.hover },
@@ -124,7 +124,7 @@ export const jobsTrigger = style({
 });
 export const details = style({});
 export const detailRow = style({
-  display: "grid", gridTemplateColumns: "6em minmax(0, 1fr)", gap: "12px", fontSize: vars.textSm, alignItems: "center",
+  display: "grid", gridTemplateColumns: "6em minmax(0, 1fr)", gap: "12px", fontSize: vars.textSecondary, alignItems: "center",
 });
 export const detailInline = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 export const detailLink = style({
@@ -155,12 +155,12 @@ export const sideBar = style({
   flex: "none",
 });
 globalStyle(`${attentionQuota} ${quotaRing}`, { flex: "none" });
-globalStyle(`${attentionQuota} ${quotaRingNumber}`, { fontSize: "8px" });
-globalStyle(`${runStation} p`, { margin: "0", fontSize: vars.textXs });
+globalStyle(`${attentionQuota} ${quotaRingNumber}`, { fontSize: vars.textMicro });
+globalStyle(`${runStation} p`, { margin: "0", fontSize: vars.textLabel });
 globalStyle(`${jobsPanel} section`, { display: "flex", flexDirection: "column" });
 globalStyle(`${jobsPanel} section + section`, { marginTop: "6px" });
 globalStyle(`${detailRow} dt`, { color: vars.muted });
-globalStyle(`${detailsList} ${muted}`, { fontSize: vars.textXs });
+globalStyle(`${detailsList} ${muted}`, { fontSize: vars.textLabel });
 globalStyle(`${sideTabWrap} ${sideTab}`, { background: "none !important", paddingRight: "4px" });
 globalStyle(`${sidePanel} ${resizeHandle}`, {
   "@media": {

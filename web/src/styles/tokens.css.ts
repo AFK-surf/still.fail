@@ -14,7 +14,10 @@ const names = [
   "red", "red-bg", "neutral-bg", "overlay", "shadow", "primary", "primary-hover", "on-primary", "field-hover",
   "field-focus", "online",
   "r-field", "r-card", "r-dialog", "r-nav", "r-menu", "r-option",
-  "text-xs", "text-sm", "text-body", "text-md", "text-lg",
+  // Type sizes, by what the text is (global.css.ts gives them their values; the phone's are its own, mobile/styles/root.css.ts).
+  // A style says one of these, never a size of its own (scripts/check.sh).
+  "text-micro", "text-caption", "text-label", "text-secondary", "text-control", "text-body", "text-input", "text-title",
+  "text-heading", "text-display",
   "dur", "ease-out", "corner-shape", "corner-scale",
   // Set by the page as it runs: the sidebar's dragged width (ui.tsx's ResizeHandle).
   "sidebar-w",

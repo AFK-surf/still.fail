@@ -17,7 +17,7 @@ export const button = style({
 });
 globalStyle(`${button} svg`, { flex: "none" });
 export const buttonText = style({
-  display: "inline-flex", gap: "6px", fontSize: vars.textXs, fontWeight: "500", whiteSpace: "nowrap",
+  display: "inline-flex", gap: "6px", fontSize: vars.textLabel, fontWeight: "500", whiteSpace: "nowrap",
   fontVariantNumeric: "tabular-nums",
 });
 export const buttonScale = style({ color: vars.muted, fontWeight: "400" });
@@ -42,13 +42,13 @@ export const sheet = style({
 export const sheetGrab = style({
   display: "block", width: "36px", height: "5px", margin: "0 auto 10px", borderRadius: "3px", background: vars.lineStrong,
 });
-export const sheetTitle = style({ margin: "0 8px 8px", fontSize: vars.textMd, fontWeight: "600" });
+export const sheetTitle = style({ margin: "0 8px 8px", fontSize: vars.textTitle, fontWeight: "600" });
 
 export const panel = style({ display: "flex", flexDirection: "column" });
 export const option = style({
   display: "flex", alignItems: "center", gap: "8px", width: "100%", height: "34px", padding: "0 10px 0 8px",
   border: "0", borderRadius: vars.rOption, cornerShape: vars.cornerShape, background: "none", color: vars.text,
-  font: "inherit", fontSize: vars.textSm, textAlign: "left", cursor: "pointer", outline: "none",
+  font: "inherit", fontSize: vars.textSecondary, textAlign: "left", cursor: "pointer", outline: "none",
   selectors: {
     "&:hover, &:focus-visible": { background: vars.hover },
     [`${panel}[data-touch] &`]: { height: "46px", fontSize: vars.textBody },
@@ -56,26 +56,26 @@ export const option = style({
 });
 export const check = style({ display: "grid", placeItems: "center", width: "16px", flex: "none", color: vars.accent });
 export const optionName = style({ flex: "1" });
-export const optionNote = style({ color: vars.muted, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums" });
+export const optionNote = style({ color: vars.muted, fontSize: vars.textLabel, fontVariantNumeric: "tabular-nums" });
 export const sep = style({ height: "1px", margin: "6px 4px", background: vars.line });
 export const row = style({
   display: "flex", alignItems: "center", gap: "8px", minHeight: "36px", padding: "0 4px 0 32px",
   selectors: { [`${panel}[data-touch] &`]: { minHeight: "52px" } },
 });
-export const label = style({ flex: "1", fontSize: vars.textSm, color: vars.text });
+export const label = style({ flex: "1", fontSize: vars.textSecondary, color: vars.text });
 export const fields = style({ display: "flex", alignItems: "center", gap: "4px" });
 export const field = style({
   width: "52px", height: "28px", padding: "0 6px", border: "0", borderRadius: vars.rField, cornerShape: vars.cornerShape,
-  background: vars.neutralBg, color: vars.text, font: "inherit", fontSize: vars.textSm, textAlign: "center",
+  background: vars.neutralBg, color: vars.text, font: "inherit", fontSize: vars.textSecondary, textAlign: "center",
   fontVariantNumeric: "tabular-nums", outline: "none",
   transition: `box-shadow ${vars.dur} ${vars.easeOut}, background ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&::placeholder": { color: vars.subtle },
     "&:focus": { background: vars.canvas, boxShadow: `0 0 0 1.5px ${vars.fieldFocus}` },
-    [`${panel}[data-touch] &`]: { width: "68px", height: "38px", fontSize: "16px" },
+    [`${panel}[data-touch] &`]: { width: "68px", height: "38px", fontSize: vars.textTitle },
   },
 });
-export const times = style({ color: vars.subtle, fontSize: vars.textXs });
+export const times = style({ color: vars.subtle, fontSize: vars.textLabel });
 export const turn = style({
   display: "grid", placeItems: "center", width: "28px", height: "28px", border: "0", borderRadius: "50%",
   background: "none", color: vars.muted, cursor: "pointer",
@@ -88,18 +88,18 @@ export const turn = style({
 /** Zooming: out, how much, in. */
 export const zoom = style({ display: "flex", alignItems: "center", gap: "2px" });
 export const zoomValue = style({
-  minWidth: "42px", textAlign: "center", fontSize: vars.textXs, color: vars.text, fontVariantNumeric: "tabular-nums",
+  minWidth: "42px", textAlign: "center", fontSize: vars.textLabel, color: vars.text, fontVariantNumeric: "tabular-nums",
 });
 /** Back to fitted: a quiet text button. */
 export const fit = style({
   height: "26px", padding: "0 10px", border: "0", borderRadius: "999px", background: vars.neutralBg, color: vars.text,
-  font: "inherit", fontSize: vars.textXs, cursor: "pointer",
+  font: "inherit", fontSize: vars.textLabel, cursor: "pointer",
   selectors: {
     "&:hover:not(:disabled)": { background: vars.hover },
     "&:disabled": { color: vars.subtle, cursor: "default", background: "none" },
   },
 });
-export const hint = style({ margin: "2px 8px 4px 32px", fontSize: vars.textXs, lineHeight: "1.5", color: vars.muted });
+export const hint = style({ margin: "2px 8px 4px 32px", fontSize: vars.textLabel, lineHeight: "1.5", color: vars.muted });
 /** The bar's turn, beside the size. */
 export const turnBar = style({
   flex: "none", display: "grid", placeItems: "center", width: "28px", height: "28px", border: "0", borderRadius: "50%",

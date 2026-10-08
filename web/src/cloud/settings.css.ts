@@ -21,23 +21,23 @@ export const enrollWait = style({
 });
 /** A first profile to add, station by station (cloud/settings.tsx): where it goes is part of adding it. */
 export const firstStations = style({ width: "100%", display: "grid", gap: "28px", textAlign: "left" });
-export const firstStationRow = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textSm });
+export const firstStationRow = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textSecondary });
 export const firstStationName = style({
   flex: "1", minWidth: "0", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const firstStation = style({});
 export const memoryStation = style({});
-export const memoryStationName = style({ margin: "0 0 8px", fontSize: vars.textMd, fontWeight: "600" });
+export const memoryStationName = style({ margin: "0 0 8px", fontSize: vars.textTitle, fontWeight: "600" });
 globalStyle(`${groupHead} ${runtimeLogo}`, { alignSelf: "center" });
 /** As tall as the field beside it. */
 globalStyle(`${onboardingRow} ${btn}`, { height: "auto" });
 globalStyle(`${onboardingCard} ${command}`, { marginTop: "8px" });
 globalStyle(`${enrollWait} strong`, { fontWeight: "600" });
-globalStyle(`${enrollWait} ${muted}`, { fontSize: vars.textXs });
+globalStyle(`${enrollWait} ${muted}`, { fontSize: vars.textLabel });
 globalStyle(`${firstStation} ${machineLogins}`, { marginTop: "14px" });
 
 /** A shared profile nobody can use now (the station signed in to its subscription is away): dimmed, its state said. */
 export const profileAway = style({ opacity: ".55" });
 
 /** An account's state on its page: its pill, what its check said. */
-export const accountState = style({ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "12px", fontSize: vars.textSm });
+export const accountState = style({ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "12px", fontSize: vars.textSecondary });

@@ -19,7 +19,7 @@ export const series = style({ display: "flex", flexDirection: "column", gap: 1 }
 /** A series in a profile's list of models to enable: its name, a toggle for all of it, its models under. */
 export const poolSeries = style({ display: "grid", gap: 2, selectors: { "& + &": { marginTop: 10 } } });
 export const poolSeriesHead = style({ display: "flex", alignItems: "center", gap: 10, padding: "0 8px" });
-globalStyle(`${poolSeriesHead} h4`, { margin: 0, fontSize: vars.textXs, fontWeight: 500, color: vars.muted });
+globalStyle(`${poolSeriesHead} h4`, { margin: 0, fontSize: vars.textLabel, fontWeight: 500, color: vars.muted });
 
 export const runOptionText = style({ display: "grid", gap: "1px", flex: "1", minWidth: "0" });
 export const runPickerPanel = style({ padding: "6px" });
@@ -34,10 +34,10 @@ export const runPickerColumn = style({
 export const runPickerAccounts = style({
   display: "flex", flexDirection: "column", gap: "1px", minWidth: "220px", maxWidth: "320px", maxHeight: "420px", overflowY: "auto",
 });
-globalStyle(`${runPickerAccounts} h4`, { margin: "4px 8px 6px", fontSize: vars.textXs, lineHeight: "18px", fontWeight: "500", color: vars.muted });
+globalStyle(`${runPickerAccounts} h4`, { margin: "4px 8px 6px", fontSize: vars.textLabel, lineHeight: "18px", fontWeight: "500", color: vars.muted });
 /** Under an account's name: what is left of it, gray unless running low. */
 export const runAccountNote = style({
-  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textXs, fontWeight: 400, color: vars.muted,
+  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textLabel, fontWeight: 400, color: vars.muted,
   selectors: { "&[data-level=amber]": { color: vars.amber }, "&[data-level=red]": { color: vars.red } },
 });
 /** The room the foot's line has: what the columns leave beside the buttons, never more. */
@@ -46,7 +46,7 @@ export const runPickerWhoRoom = style({ flex: "1 1 0", width: 0, minWidth: 0, di
 export const runPickerWho = style({
   display: "inline-flex", alignItems: "center", gap: "4px", minWidth: 0, maxWidth: "100%", height: "28px", padding: "0 8px",
   border: 0, borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none",
-  color: vars.muted, font: "inherit", fontSize: vars.textXs, cursor: "pointer",
+  color: vars.muted, font: "inherit", fontSize: vars.textLabel, cursor: "pointer",
   selectors: {
     "&:hover, &[data-state=open]": { background: vars.hover, color: vars.text },
     "&[data-level=amber]": { color: vars.amber }, "&[data-level=red]": { color: vars.red },
@@ -59,24 +59,24 @@ export const runPickerEfforts = style({ minWidth: "80px" });
 export const runPickerOption = style({
   display: "flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: "4px 8px", border: "0",
   borderRadius: `calc(6px * ${vars.cornerScale})`, background: "none", color: vars.text, font: "inherit",
-  fontSize: vars.textSm, textAlign: "left", cursor: "pointer", cornerShape: vars.cornerShape,
+  fontSize: vars.textSecondary, textAlign: "left", cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover },
     "&[aria-pressed=\"true\"]": { background: vars.hover, fontWeight: "600" },
   },
 });
-export const runPickerNote = style({ margin: "0 8px 6px", fontSize: vars.textXs, color: vars.amber });
-export const btnSm = style({ height: "28px", padding: "0 10px", fontSize: vars.textXs });
+export const runPickerNote = style({ margin: "0 8px 6px", fontSize: vars.textLabel, color: vars.amber });
+export const btnSm = style({ height: "28px", padding: "0 10px", fontSize: vars.textLabel });
 export const modelTriple = style({
   display: "inline-flex", alignItems: "center", gap: "6px", maxWidth: "100%", justifySelf: "start", alignSelf: "start",
   width: "max-content", height: "30px", padding: "0 10px", border: "1px solid transparent",
   borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", color: vars.text,
-  font: "inherit", fontSize: vars.textSm, lineHeight: "20px", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden",
+  font: "inherit", fontSize: vars.textSecondary, lineHeight: "20px", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden",
   selectors: {
     "&:hover": { background: vars.hover },
     "&[data-state=\"open\"]": { background: vars.hover },
     "&:disabled": { color: vars.muted, cursor: "default" },
-    [`${newChat} &`]: { height: "28px", fontSize: vars.textXs },
+    [`${newChat} &`]: { height: "28px", fontSize: vars.textLabel },
   },
 });
 /**
@@ -135,16 +135,16 @@ export const tripleEffort = style({
     [`${modelTriple}[data-drop~="effort"] &`]: { display: "none" },
   },
 });
-export const runPickerSpent = style({ fontSize: vars.textXs, color: vars.amber });
+export const runPickerSpent = style({ fontSize: vars.textLabel, color: vars.amber });
 /** As wide as its models when the panel opens, within bounds (100–280px); a filter then leaves it as it is (ModelTriple keeps it). */
 export const runPickerModels = style({ minWidth: "100px", maxWidth: "280px", flex: "none" });
 /** A model's name too long for the column is cut short. */
 export const runOptionName = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const runPickerFilter = style({ height: "30px", margin: "0 4px 6px", fontSize: vars.textSm });
+export const runPickerFilter = style({ height: "30px", margin: "0 4px 6px", fontSize: vars.textSecondary });
 export const runPickerGroup = style({});
-export const runPickerEmpty = style({ margin: "4px 8px", fontSize: vars.textXs });
-globalStyle(`${runOptionText} ${muted}`, { fontSize: vars.textXs, whiteSpace: "normal", maxWidth: "260px" });
-globalStyle(`${runPickerColumn} h4`, { margin: "4px 8px 6px", fontSize: vars.textXs, lineHeight: "18px", fontWeight: "500", color: vars.muted });
+export const runPickerEmpty = style({ margin: "4px 8px", fontSize: vars.textLabel });
+globalStyle(`${runOptionText} ${muted}`, { fontSize: vars.textLabel, whiteSpace: "normal", maxWidth: "260px" });
+globalStyle(`${runPickerColumn} h4`, { margin: "4px 8px 6px", fontSize: vars.textLabel, lineHeight: "18px", fontWeight: "500", color: vars.muted });
 globalStyle(`${runPickerOption} ${quotaChips}`, { marginLeft: "auto", paddingLeft: "12px" });
 /** The model control takes the room left beside the other choices, and fits itself in it (.model-triple-fit). */
 globalStyle(`${composerChoices} > :not(${modelTripleFit})`, { flex: "none" });
@@ -153,7 +153,7 @@ globalStyle(`${modelPoolItem} ${mono}`, { minWidth: "0", overflow: "hidden", tex
 globalStyle(`${modelTriple} ${quotaChips}`, { marginLeft: "2px" });
 globalStyle(`${modelTriple} ${chooserChevron}`, { color: vars.muted, flex: "none" });
 globalStyle(`${modelTriple} ${quotaRingNumber}`, { display: "none" });
-globalStyle(`${runPickerGroup} h5`, { margin: "8px 8px 2px", fontSize: vars.textXs, lineHeight: "18px", fontWeight: "500", color: vars.subtle });
+globalStyle(`${runPickerGroup} h5`, { margin: "8px 8px 2px", fontSize: vars.textLabel, lineHeight: "18px", fontWeight: "500", color: vars.subtle });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */
 globalStyle(`${runCardRow} > ${modelTripleFit}`, { flex: "1 1 auto", marginTop: "-5px" });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */

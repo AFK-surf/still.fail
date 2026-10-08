@@ -27,7 +27,7 @@ export const outline = style({
 export const pin = style({
   position: "absolute", transform: "translate(-2px, -22px)", transformOrigin: "2px 22px", pointerEvents: "auto", width: "24px",
   height: "24px", display: "grid", placeItems: "center", padding: "0", border: "2px solid #fff", borderRadius: "12px 12px 12px 3px",
-  background: vars.accent, color: "#fff", fontSize: "11px", fontWeight: "650", fontVariantNumeric: "tabular-nums",
+  background: vars.accent, color: "#fff", fontSize: vars.textCaption, fontWeight: "650", fontVariantNumeric: "tabular-nums",
   boxShadow: "0 2px 6px rgb(0 0 0 / .22)", cursor: "pointer", animation: `${popKeyframes} 160ms ${vars.easeOut}`,
   transition: `transform ${vars.dur} ${vars.easeOut}`,
   selectors: {
@@ -38,7 +38,7 @@ export const pin = style({
 /** What was said about it, one line beside the pin; a click opens it again. */
 export const said = style({
   ...glass, position: "absolute", pointerEvents: "auto", height: "26px", padding: "0 10px", border: "0",
-  borderRadius: "13px", color: vars.text, font: "inherit", fontSize: vars.textXs, lineHeight: "26px", whiteSpace: "nowrap",
+  borderRadius: "13px", color: vars.text, font: "inherit", fontSize: vars.textLabel, lineHeight: "26px", whiteSpace: "nowrap",
   overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer", boxSizing: "border-box",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`,
 });
@@ -51,10 +51,10 @@ export const note = style({
 });
 export const noteInput = style({
   flex: "1", minWidth: "0", border: "0", padding: "0", background: "none", color: vars.text, font: "inherit",
-  fontSize: vars.textSm,
+  fontSize: vars.textSecondary,
   selectors: { "&:focus": { outline: "none" }, "&::placeholder": { color: vars.muted } },
 });
-export const noteKey = style({ flex: "none", color: vars.muted, fontSize: vars.textXs, opacity: ".7" });
+export const noteKey = style({ flex: "none", color: vars.muted, fontSize: vars.textLabel, opacity: ".7" });
 export const noteRemove = style({
   flex: "none", width: "28px", height: "28px", display: "grid", placeItems: "center", border: "0", borderRadius: "14px",
   background: "none", color: vars.muted, cursor: "pointer",
@@ -65,7 +65,7 @@ export const noteRemove = style({
 export const mode = style({
   flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "8px", height: "30px", margin: "0 4px",
   padding: "0 3px 0 12px", borderRadius: "999px", background: `color-mix(in srgb, ${vars.accent} 10%, ${vars.neutralBg})`,
-  fontSize: vars.textSm, color: vars.text, whiteSpace: "nowrap",
+  fontSize: vars.textSecondary, color: vars.text, whiteSpace: "nowrap",
 });
 export const modeDot = style({
   flex: "none", width: "7px", height: "7px", borderRadius: "50%", background: vars.muted,
@@ -82,7 +82,7 @@ export const modeBtn = style({
 export const modeSend = style({
   flex: "none", display: "inline-flex", alignItems: "center", gap: "5px", height: "24px", padding: "0 10px",
   border: "0", borderRadius: "12px", background: vars.primary, color: vars.onPrimary, font: "inherit",
-  fontSize: vars.textXs, fontWeight: "500", cursor: "pointer",
+  fontSize: vars.textLabel, fontWeight: "500", cursor: "pointer",
   selectors: {
     "&:hover:not(:disabled)": { background: vars.primaryHover },
     "&:disabled": { opacity: ".4", cursor: "default" },

@@ -10,7 +10,7 @@ import { btn } from "./styles/controls.css.ts";
  */
 export const profileCard = style({
   containerType: "inline-size", display: "block", padding: "10px 12px", borderRadius: vars.rField,
-  cornerShape: vars.cornerShape, fontSize: vars.textSm, color: "inherit", textDecoration: "none",
+  cornerShape: vars.cornerShape, fontSize: vars.textSecondary, color: "inherit", textDecoration: "none",
   selectors: {
     // Standing alone (not a row of a list): its text lines up with what is around it.
     "&[data-framed]": { margin: "0 -12px" },
@@ -33,7 +33,7 @@ export const profileCardTitle = style({
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** What it is wraps rather than cutting off (an account's long address would hide its plan). */
-export const profileCardSub = style({ color: vars.muted, fontSize: vars.textXs, lineHeight: "18px", overflowWrap: "anywhere" });
+export const profileCardSub = style({ color: vars.muted, fontSize: vars.textLabel, lineHeight: "18px", overflowWrap: "anywhere" });
 export const profileCardEmail = style({
   display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });

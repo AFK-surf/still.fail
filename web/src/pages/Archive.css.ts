@@ -3,7 +3,7 @@ import { vars } from "../styles/tokens.css.ts";
 
 // The archive: one row a chat, its title with when (and where) at the end of its line, its last message the whole
 // line under it; what can be done with it in when's place while it is pointed at. No lines between.
-export const archiveHeading = style({ margin: "18px 10px 4px", fontSize: vars.textXs, color: vars.muted });
+export const archiveHeading = style({ margin: "18px 10px 4px", fontSize: vars.textLabel, color: vars.muted });
 export const archiveRow = style({
   display: "grid", gap: "2px", padding: "8px 10px", borderRadius: vars.rNav, cornerShape: vars.cornerShape,
   selectors: {
@@ -12,13 +12,13 @@ export const archiveRow = style({
 });
 export const archiveHead = style({ display: "flex", alignItems: "baseline", gap: "12px", minWidth: "0" });
 export const archiveTitle = style({
-  flex: "1", fontSize: vars.textSm, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  flex: "1", fontSize: vars.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const archiveMeta = style({
-  fontSize: vars.textXs, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: vars.textLabel, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const archiveWhen = style({
-  display: "flex", gap: "8px", flex: "none", fontSize: vars.textXs, color: vars.muted, fontVariantNumeric: "tabular-nums",
+  display: "flex", gap: "8px", flex: "none", fontSize: vars.textLabel, color: vars.muted, fontVariantNumeric: "tabular-nums",
   selectors: { [`${archiveRow}:is(:hover, :focus-within) &`]: { display: "none" } },
 });
 /** In the title's line without making it taller. */

@@ -1,9 +1,10 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "../styles/tokens.css.ts";
 import { jobDot } from "../Jobs.css.ts";
 import { mChat, mMessages } from "./styles/chat.css.ts";
 
 export const mCenter = style({
-  flex: "1", display: "grid", placeItems: "center", padding: "32px", textAlign: "center", fontSize: "14px",
+  flex: "1", display: "grid", placeItems: "center", padding: "32px", textAlign: "center", fontSize: vars.textControl,
 });
 export const mInfoLabel = style({ width: "72px", flex: "none", color: "var(--m-muted)" });
 export const mInfoName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" });
@@ -58,7 +59,7 @@ export const mPlus = style({
 });
 export const mComposerField = style({
   flex: "1", minWidth: "0", minHeight: "36px", boxSizing: "border-box", margin: "0", padding: "7px 14px 7px 0",
-  border: "0", background: "transparent", color: "var(--m-ink)", font: "inherit", fontSize: "16px", lineHeight: "21px",
+  border: "0", background: "transparent", color: "var(--m-ink)", font: "inherit", fontSize: vars.textInput, lineHeight: "21px",
   resize: "none", outline: "none", textWrap: "wrap",
   selectors: {
     "&::placeholder": { color: "var(--m-subtle)" },
@@ -83,23 +84,23 @@ export const mJob = style({
 export const mJobText = style({ display: "flex", flexDirection: "column", gap: "1px", minWidth: "0" });
 export const mJobHead = style({ display: "flex", alignItems: "flex-start", gap: "12px", padding: "4px 22px 14px" });
 export const mJobBody = style({});
-export const mJobNotices = style({ display: "grid", gap: "12px", fontSize: "14px", overflowY: "auto" });
+export const mJobNotices = style({ display: "grid", gap: "12px", fontSize: vars.textControl, overflowY: "auto" });
 export const mJobOutput = style({
   margin: "0", padding: "12px 14px", maxHeight: "50vh", overflow: "auto", borderRadius: "16px",
   background: "color-mix(in srgb, var(--m-ink) 5%, transparent)",
-  font: "11.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
+  font: `${vars.textCaption}/1.6 ui-monospace, SFMono-Regular, Menlo, monospace`, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
 });
 export const mJobLast = style({
-  display: "flex", flexDirection: "column", gap: "2px", fontSize: "11px", color: "var(--m-subtle)",
+  display: "flex", flexDirection: "column", gap: "2px", fontSize: vars.textCaption, color: "var(--m-subtle)",
 });
 export const mJobStop = style({
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "46px", border: "0",
   borderRadius: "999px", background: "color-mix(in srgb, var(--m-red) 12%, transparent)", color: "var(--m-red)",
-  font: "inherit", fontSize: "15px", fontWeight: "500", cursor: "pointer",
+  font: "inherit", fontSize: vars.textBody, fontWeight: "500", cursor: "pointer",
   selectors: { "&:disabled": { cursor: "default" } },
 });
 export const mJobCommand = style({
-  font: "11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace", color: "var(--m-muted)", overflowWrap: "anywhere",
+  font: `${vars.textCaption}/1.5 ui-monospace, SFMono-Regular, Menlo, monospace`, color: "var(--m-muted)", overflowWrap: "anywhere",
 });
 /** The chat bar's button for its services and jobs: a small dot on it when one died lately (red) or a service restarts (amber). */
 export const mJobsTrigger = style({ position: "relative" });
@@ -112,11 +113,11 @@ export const mJobsAlarm = style({
   },
 });
 export const mJobsEmpty = style({
-  display: "flex", flexDirection: "column", gap: "4px", padding: "12px 2px", fontSize: "13px", color: "var(--m-muted)",
+  display: "flex", flexDirection: "column", gap: "4px", padding: "12px 2px", fontSize: vars.textSecondary, color: "var(--m-muted)",
 });
 export const mJobsAll = style({
   display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "2px", marginTop: "14px",
-  padding: "6px 2px", border: "0", background: "none", color: "var(--m-accent)", font: "inherit", fontSize: "14px",
+  padding: "6px 2px", border: "0", background: "none", color: "var(--m-accent)", font: "inherit", fontSize: vars.textControl,
   textAlign: "left", cursor: "pointer",
   selectors: { "&:disabled": { cursor: "default" } },
 });
@@ -131,13 +132,13 @@ globalStyle(`${mAttach} button`, {
 // The dot on the name's 21px line, half a pixel up for CJK ink (rounded to a whole pixel).
 globalStyle(`${mJob} > ${jobDot}`, { marginTop: "6px" });
 globalStyle(`${mJobHead} span > span`, {
-  fontSize: "12.5px", color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: vars.textLabel, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 globalStyle(`${mJobHead} > ${jobDot}`, { marginTop: "7px" });
 globalStyle(`${mJobNotices} p`, { margin: "0", display: "grid", gridTemplateColumns: "3.4em 1fr", gap: "10px" });
 globalStyle(`${mJobNotices} time`, { color: "var(--m-subtle)", fontVariantNumeric: "tabular-nums" });
 // The phone's buttons take the page's font (root.css.ts), stronger than a class alone: the count's size is set as strongly.
-globalStyle(`${mChat} button${mJump}[data-count]`, { fontSize: "14px" });
+globalStyle(`${mChat} button${mJump}[data-count]`, { fontSize: vars.textControl });
 
 /**
  * What waits to be decided (../Asks.tsx), over the composer: its foot 10px over the capsule (8px of the composer's own

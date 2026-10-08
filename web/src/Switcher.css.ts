@@ -24,13 +24,13 @@ export const switcher = style({
 export const hidden = style({ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" });
 export const search = style({
   flex: "none", height: 48, padding: "0 12px", border: 0, outline: "none", background: "none", color: vars.text,
-  fontSize: vars.textMd,
+  fontSize: vars.textTitle,
   selectors: { "&::placeholder": { color: vars.subtle } },
 });
 export const results = style({ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0" });
 export const row = style({
   display: "flex", alignItems: "center", gap: 10, minHeight: 38, padding: "8px 12px", borderRadius: vars.rOption,
-  fontSize: vars.textSm, cursor: "pointer", userSelect: "none", cornerShape: vars.cornerShape,
+  fontSize: vars.textSecondary, cursor: "pointer", userSelect: "none", cornerShape: vars.cornerShape,
   // A shade of the text over the glass, not a colour of its own: the glass still shows through it.
   selectors: { '&[aria-selected="true"]': { background: `color-mix(in srgb, ${vars.text} 7%, transparent)` } },
 });
@@ -39,11 +39,11 @@ export const title = style({
   flex: 1, ...ellipsis,
   selectors: { "&[data-unread]": { fontWeight: 600 } },
 });
-export const meta = style({ flex: "none", display: "flex", gap: 8, fontSize: vars.textXs, color: vars.muted });
-export const none = style({ margin: "14px 12px", fontSize: vars.textSm, color: vars.muted });
+export const meta = style({ flex: "none", display: "flex", gap: 8, fontSize: vars.textLabel, color: vars.muted });
+export const none = style({ margin: "14px 12px", fontSize: vars.textSecondary, color: vars.muted });
 // The messages found, under the chats: a few words over them, then each as its chat and who said it when, over the
 // line that has the words, those drawn out (the text's colour and weight, the rest muted).
-export const section = style({ margin: "10px 12px 4px", fontSize: vars.textXs, color: vars.muted });
+export const section = style({ margin: "10px 12px 4px", fontSize: vars.textLabel, color: vars.muted });
 export const said = style({ alignItems: "flex-start" });
 export const saidBody = style({ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 });
 export const saidHead = style({ display: "flex", alignItems: "center", gap: 10, minWidth: 0 });

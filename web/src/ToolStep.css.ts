@@ -16,15 +16,15 @@ globalStyle(`${block} > *`, { margin: "0", maxHeight: "360px", overflow: "auto" 
 globalStyle(`${block} ${codeBar}`, { opacity: "0" });
 globalStyle(`${block}:hover ${codeBar}, ${block} ${codeBar}:focus-within`, { opacity: "1" });
 globalStyle(`${block} ${codeLang}`, { display: "none" });
-globalStyle(`${block} pre`, { padding: "8px 12px !important", fontSize: "12px !important", lineHeight: "1.55 !important", whiteSpace: "pre-wrap", overflowWrap: "anywhere" });
+globalStyle(`${block} pre`, { padding: "8px 12px !important", fontSize: `${vars.textLabel} !important`, lineHeight: "1.55 !important", whiteSpace: "pre-wrap", overflowWrap: "anywhere" });
 
 export const prose = style({
-  ...box, font: "inherit", fontSize: vars.textXs, lineHeight: "1.6", whiteSpace: "normal", padding: "8px 12px",
+  ...box, font: "inherit", fontSize: vars.textLabel, lineHeight: "1.6", whiteSpace: "normal", padding: "8px 12px",
 });
 globalStyle(`${prose} > :first-child`, { marginTop: "0" });
 globalStyle(`${prose} > :last-child`, { marginBottom: "0" });
 
-export const facts = style({ display: "flex", flexWrap: "wrap", gap: "4px 10px", fontSize: "11px", color: vars.subtle, padding: "0 2px" });
+export const facts = style({ display: "flex", flexWrap: "wrap", gap: "4px 10px", fontSize: vars.textCaption, color: vars.subtle, padding: "0 2px" });
 export const fact = style({});
 globalStyle(`${fact} b`, { fontWeight: "500", color: vars.muted, fontFamily: vars.fontMono });
 
@@ -32,7 +32,7 @@ export const path = style({
   display: "flex", alignItems: "baseline", gap: "8px", minWidth: "0", padding: "0 2px",
   font: `12px/1.5 ${vars.fontMono}`, color: vars.text, overflowWrap: "anywhere",
 });
-export const pathExtra = style({ flex: "none", fontFamily: vars.fontBody, fontSize: "11px", color: vars.subtle });
+export const pathExtra = style({ flex: "none", fontFamily: vars.fontBody, fontSize: vars.textCaption, color: vars.subtle });
 
 export const lead = style({ padding: "0 2px", font: `12px/1.5 ${vars.fontMono}`, color: vars.text, overflowWrap: "anywhere" });
 
@@ -49,19 +49,19 @@ export const diffLine = style({
   },
 });
 
-export const plan = style({ display: "grid", gap: "2px", margin: "0", padding: "0 2px", listStyle: "none", fontSize: vars.textXs });
+export const plan = style({ display: "grid", gap: "2px", margin: "0", padding: "0 2px", listStyle: "none", fontSize: vars.textLabel });
 export const planMark = style({ display: "inline-block", width: "16px", color: vars.subtle });
 globalStyle(`${plan} li[data-status="completed"]`, { color: vars.muted, textDecoration: "line-through", textDecorationColor: vars.subtle });
 globalStyle(`${plan} li[data-status="completed"] ${planMark}`, { color: vars.green, textDecoration: "none" });
 globalStyle(`${plan} li[data-status="in_progress"]`, { fontWeight: "600" });
 globalStyle(`${plan} li[data-status="in_progress"] ${planMark}`, { color: vars.accent });
 
-export const fields = style({ display: "grid", gap: "4px", margin: "0", padding: "0 2px", fontSize: vars.textXs });
+export const fields = style({ display: "grid", gap: "4px", margin: "0", padding: "0 2px", fontSize: vars.textLabel });
 export const field = style({ display: "grid", gridTemplateColumns: "minmax(64px, max-content) minmax(0, 1fr)", gap: "12px", alignItems: "baseline" });
-globalStyle(`${field} dt`, { color: vars.subtle, fontSize: "11px" });
+globalStyle(`${field} dt`, { color: vars.subtle, fontSize: vars.textCaption });
 globalStyle(`${field} dd`, { margin: "0", minWidth: "0" });
-export const value = style({ fontFamily: vars.fontMono, fontSize: "12px", overflowWrap: "anywhere" });
-export const long = style({ ...box, fontFamily: vars.fontBody, fontSize: vars.textXs, lineHeight: "1.6", maxHeight: "240px" });
+export const value = style({ fontFamily: vars.fontMono, fontSize: vars.textLabel, overflowWrap: "anywhere" });
+export const long = style({ ...box, fontFamily: vars.fontBody, fontSize: vars.textLabel, lineHeight: "1.6", maxHeight: "240px" });
 export const json = style({ ...box, maxHeight: "240px" });
 
 /** What came back: a little apart from the call. */
@@ -72,7 +72,7 @@ export const output = style({
     [`${result}[data-failed] &`]: { background: vars.redBg, color: vars.text },
   },
 });
-export const none = style({ padding: "0 2px", fontSize: "11px", color: vars.subtle });
+export const none = style({ padding: "0 2px", fontSize: vars.textCaption, color: vars.subtle });
 
 /** A step opened: the call, then what came back. */
 export const body = style({ display: "grid", gap: "8px", minWidth: "0", padding: "4px 6px 10px 6px" });

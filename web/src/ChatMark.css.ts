@@ -60,7 +60,7 @@ export const chatMarkInline = style({
 });
 
 /** A workspace's counts (ChatMark.tsx MarkCounts): each dot with its number, small and quiet beside its name. */
-export const markCounts = style({ display: "inline-flex", alignItems: "center", gap: 10, flex: "none", fontSize: 12, lineHeight: 1, fontVariantNumeric: "tabular-nums" });
+export const markCounts = style({ display: "inline-flex", alignItems: "center", gap: 10, flex: "none", fontSize: vars.textLabel, lineHeight: 1, fontVariantNumeric: "tabular-nums" });
 /** The dot at full colour, its number quiet. */
 export const markCount = style({ display: "inline-flex", alignItems: "center", gap: 5, color: "color-mix(in srgb, currentColor 65%, transparent)" });
 /** A row's waiting line's 等你 (ChatMark.tsx WaitingText). */

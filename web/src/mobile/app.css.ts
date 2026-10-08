@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "../styles/tokens.css.ts";
 import { mFromLeftKeyframes, mFromRightKeyframes, mRiseInKeyframes, mRiseOutKeyframes, mToLeftKeyframes, mToRightKeyframes } from "../styles/keyframes.css.ts";
 
 export const mPage = style({
@@ -119,7 +120,7 @@ export const mMenu = style({
 });
 export const mToast = style({
   position: "fixed", left: "50%", bottom: "calc(90px + var(--m-foot))", zIndex: "70", maxWidth: "calc(100% - 48px)",
-  padding: "10px 16px", borderRadius: "18px", background: "var(--m-ink)", color: "var(--m-bg)", fontSize: "14px",
+  padding: "10px 16px", borderRadius: "18px", background: "var(--m-ink)", color: "var(--m-bg)", fontSize: vars.textControl,
   transform: "translateX(-50%)", opacity: "0", transition: "opacity 200ms", pointerEvents: "none",
   selectors: {
     "&[data-open]": { opacity: "1" },
@@ -142,10 +143,10 @@ export const mReaderBody = style({
   flex: "1", minHeight: "0", overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px",
   padding: "0 20px calc(30px + var(--m-foot))",
 });
-export const mReaderLabel = style({ display: "flex", alignItems: "center", fontSize: "13px", color: "var(--m-muted)" });
+export const mReaderLabel = style({ display: "flex", alignItems: "center", fontSize: vars.textSecondary, color: "var(--m-muted)" });
 globalStyle(`${mGrab} span`, { width: "38px", height: "5px", borderRadius: "3px", background: "var(--m-line)" });
 globalStyle(`${mMenu} button`, {
   display: "flex", alignItems: "center", justifyContent: "space-between", boxSizing: "border-box", width: "100%",
-  minHeight: "46px", padding: "12px 16px", border: "0", background: "none", color: "var(--m-ink)", fontSize: "15px !important",
+  minHeight: "46px", padding: "12px 16px", border: "0", background: "none", color: "var(--m-ink)", fontSize: `${vars.textBody} !important`,
   cursor: "pointer",
 });
