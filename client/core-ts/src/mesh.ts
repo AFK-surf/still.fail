@@ -884,7 +884,7 @@ export class Mesh {
       this.#exploredAt.set(stationId, this.now());
       const relays = this.relaysFor(stationId);
       const main = open(this.#env, endpoint, relays, stationId, credentials, fresh, null, ctx);
-      const pinned = relays.length >= 2 ? relays.map((r) => this.#dialPinned(stationId, r, credentials, fresh, ctx)) : [];
+      const pinned = this.#pinnable(stationId).map((r) => this.#dialPinned(stationId, r, credentials, fresh, ctx));
       const self = this;
       const won = Deferred.makeUnsafe<Link, CoreError>();
       let left = 1 + pinned.length;
@@ -904,6 +904,16 @@ export class Mesh {
       );
       return Deferred.await(won);
     });
+  }
+
+  /// The relays a station is dialled on each on an endpoint of its own: all of them but still.fail's own (the first, on
+  /// Cloudflare), which the main endpoint reaches already. It holds few connections, each a cost: one more a device
+  /// filled it (2026-10-08: 429 to bft's keeper and to devices). None while there is a relay or none at all.
+  #pinnable(stationId: string): string[] {
+    const relays = this.relaysFor(stationId);
+    if (relays.length < 2) return [];
+    const own = this.relays[0];
+    return relays.filter((r) => own === undefined || !sameRelay(own, r));
   }
 
   /// A link through `relay` alone, on that relay's own endpoint.
@@ -1090,7 +1100,7 @@ export class Mesh {
       const relays = this.relaysFor(stationId);
       const tries: Effect.Effect<Link, CoreError>[] = [];
       if (!have.has("main")) tries.push(open(this.#env, this.#endpoint, relays, stationId, credentials, false, null, undefined));
-      if (relays.length >= 2) for (const r of relays) if (!have.has(r)) tries.push(this.#dialPinned(stationId, r, credentials, false, undefined));
+      for (const r of this.#pinnable(stationId)) if (!have.has(r)) tries.push(this.#dialPinned(stationId, r, credentials, false, undefined));
       yield* Effect.all(
         tries.map((attempt) => Effect.map(Effect.result(attempt), (r) => (r._tag === "Success" ? this.#adopt(stationId, r.success) : undefined))),
         { concurrency: "unbounded" },
