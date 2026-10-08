@@ -13,6 +13,8 @@ import { run } from "./run.ts";
 holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
+// A changelog that says nothing of any build.
+const nothing = () => Effect.succeed([] as string[]);
 
 test("still_fail_links_open_in_the_app_and_others_do_not", () => {
   const cloud = "https://app.still.fail";
@@ -40,7 +42,7 @@ test("a_newer_app_is_asked_for_at_most_hourly_and_a_picture_once", async () => {
     if (req.url === "https://p.test/a.png") return { status: 200, headers: [["content-type", "image/png"]], body: new Uint8Array([1, 2, 3]) };
     return jsonResponse(404, {});
   });
-  const asks = new Asks(host);
+  const asks = new Asks(host, nothing);
   const asked = () => host.requests.filter((r) => r.url.endsWith("latest.json")).length;
   const newer = await run(asks.update("android", 1100, false, false));
   assert.deepEqual([newer.versionCode, newer.file, newer.extra], [1200, "android/stillfail-1200.apk", undefined]);
@@ -60,6 +62,17 @@ test("a_newer_app_is_asked_for_at_most_hourly_and_a_picture_once", async () => {
   await assert.rejects(run(asks.picture("file:///etc/passwd")));
 });
 
+test("a_newer_build_comes_with_what_it_brings_the_app", async () => {
+  const host = new FakeHost();
+  host.onFetch(() => jsonResponse(200, { versionCode: 1200, versionName: "0.1.1200", file: "android/stillfail-1200.apk", sha256: "ab", size: 9 }));
+  const asked: [string, number, number][] = [];
+  const asks = new Asks(host, (app, from, to) => Effect.sync(() => (asked.push([app, from, to]), from < 1150 ? ["修复：一件事"] : [])));
+  assert.deepEqual((await run(asks.update("android", 1100, false, false))).news, ["修复：一件事"]);
+  assert.deepEqual((await run(asks.update("android", 1150, false, false))).news, []);
+  assert.equal(await run(asks.update("android", 1200, false, false)), null);
+  assert.deepEqual(asked, [["android", 1100, 1200], ["android", 1150, 1200]]);
+});
+
 test("an_explicit_update_gets_the_newest_build_or_fails_instead_of_using_the_cached_one", async () => {
   const host = new FakeHost();
   let served = 1200;
@@ -69,7 +82,7 @@ test("an_explicit_update_gets_the_newest_build_or_fails_instead_of_using_the_cac
     if (served === 2) return jsonResponse(200, { invalid: true });
     return jsonResponse(200, { versionCode: served, versionName: `0.1.${served}`, file: `android/stillfail-${served}.apk`, sha256: "ab", size: 9 });
   });
-  const asks = new Asks(host);
+  const asks = new Asks(host, nothing);
   assert.equal((await run(asks.update("android", 1100, false, false))).versionCode, 1200);
   served = 1300;
   assert.equal((await run(asks.update("android", 1100, false, false))).versionCode, 1200);
@@ -94,14 +107,14 @@ test("a_beta_app_takes_its_builds_from_the_beta_feed", async () => {
         : jsonResponse(404, {});
   let host = new FakeHost();
   host.onFetch(feeds);
-  let asks = new Asks(host);
+  let asks = new Asks(host, nothing);
   let accounts = await run(Accounts.load(host));
   assert.equal(((await run(asks.run({ kind: "appUpdate", platform: "android", version: 1100, now: false }, accounts))) as J).versionCode, 1200);
   assert.ok(host.requests.every((r) => !r.url.includes("/beta/")));
   host = new FakeHost();
   host.isBeta = true;
   host.onFetch(feeds);
-  asks = new Asks(host);
+  asks = new Asks(host, nothing);
   accounts = await run(Accounts.load(host));
   const newer = (await run(asks.run({ kind: "appUpdate", platform: "android", version: 1100, now: false }, accounts))) as J;
   assert.deepEqual([newer.versionCode, newer.file], [1250, "android/stillfail-1250.apk"]);

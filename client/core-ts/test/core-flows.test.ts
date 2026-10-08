@@ -1116,6 +1116,38 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   core.close();
 });
 
+test("a_newer_build_says_what_it_brings_this_app_the_changelog_read_again_when_it_came_after", async () => {
+  const host = new FakeHost();
+  const now = Math.round(host.nowMs() / 1000);
+  const entry = (version: number, parts: string[], text: string) => ({ version, commit: "c", at: now, text: [text], fixes: [], parts });
+  let out = 1335;
+  let entries = [entry(1330, ["android", "web"], "修复：列表跳动"), entry(1325, ["station"], "修复：station 的"), entry(1322, ["desktop"], "新功能：桌面的")];
+  host.onFetch((req) => {
+    const path = req.url.replace("https://stillfail.test", "");
+    if (path === "/v1/changelog") return jsonResponse(200, { entries, released: { android: out, web: out, station: 1320, desktop: 1322 } });
+    if (path === "/releases/android/latest.json") return jsonResponse(200, { versionCode: out, versionName: `0.1.${out}`, file: `android/stillfail-${out}.apk`, sha256: "ab", size: 9 });
+    return jsonResponse(404, {});
+  });
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  await host.settle();
+  const reads = () => host.requests.filter((r) => r.url.endsWith("/v1/changelog")).length;
+  // From 1320, 1335 brings Android one line (the station's and the desktop's are not the app's).
+  let newer = await ask(host, core, ui, 1, "app.update", { platform: "android", versionCode: 1320 });
+  assert.deepEqual([newer.versionCode, newer.news], [1335, ["修复：列表跳动"]]);
+  // From 1330, nothing: the home screen does not offer it.
+  newer = await ask(host, core, ui, 2, "app.update", { platform: "android", versionCode: 1330 });
+  assert.deepEqual([newer.versionCode, newer.news], [1335, []]);
+  assert.equal(reads(), 1, "the changelog read at the start knew 1335");
+  // A build out after the changelog kept was read: it is read again first, and the build's lines are known with it.
+  out = 1340;
+  entries = [entry(1338, ["android"], "新功能：新的"), ...entries];
+  newer = await ask(host, core, ui, 3, "app.update", { platform: "android", versionCode: 1330, now: true });
+  assert.deepEqual([newer.versionCode, newer.news], [1340, ["新功能：新的"]]);
+  assert.equal(reads(), 2);
+  core.close();
+});
+
 const connectTopic = (form: string) => ({ topic: "connectFlow", station: "ws/st", form });
 
 test("connect_wizard_owns_steps_tokens_and_submission_on_all_clients", async () => {

@@ -20,13 +20,18 @@ const PICTURES = 256;
 
 type Picture = Deferred.Deferred<[string, Uint8Array], CoreError>;
 
+/// What build `to` brings an app at build `from`: the changelog's lines for it (Changelog.brings).
+export type Brings = (app: string, from: number, to: number) => Effect.Effect<string[]>;
+
 export class Asks {
   readonly #host: Host;
+  readonly #brings: Brings;
   readonly #releases = new Map<string, [number, J]>();
   readonly #pictures = new Map<string, Picture>();
 
-  constructor(host: Host) {
+  constructor(host: Host, brings: Brings) {
     this.#host = host;
+    this.#brings = brings;
   }
 
   run(ask: Ask, accounts: AccountSessions): Effect.Effect<unknown, CoreError> {
@@ -53,8 +58,15 @@ export class Asks {
     }
   }
 
-  /// The newest build of `platform`'s feed when newer than `version`.
+  /// The newest build of `platform`'s feed when newer than `version`, with what it brings this app (`news`: the
+  /// changelog's lines for it after `version`; the app's home offers a build only with some).
   update(platform: string, version: number, now: boolean, beta: boolean): Effect.Effect<J, CoreError> {
+    return Effect.flatMap(this.#newest(platform, version, now, beta), (release) =>
+      release === null ? Effect.succeed(null) : Effect.map(this.#brings(platform, version, release.versionCode), (news) => ({ ...release, news })),
+    );
+  }
+
+  #newest(platform: string, version: number, now: boolean, beta: boolean): Effect.Effect<J, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const feed = beta ? `${platform}/beta` : platform;
       const newer = (release: J) => (release !== null && release !== undefined && typeof release.versionCode === "number" && release.versionCode > version ? release : null);

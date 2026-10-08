@@ -119,7 +119,10 @@ data class AppRelease (
 	val versionName: String,
 	val file: String,
 	val sha256: String,
-	val size: Long
+	val size: Long,
+	/// What it brings this app: the changelog's lines for it after the build asking, newest first (the core's; the feed
+	/// has none). The home screen offers the build only with some; the settings offer any.
+	val news: List<String>? = null
 )
 
 /// What the archive check made of a chat as it stands, under its agent's all-done post.

@@ -199,9 +199,10 @@ fun HomeScreen(current: WorkspaceEntry) {
                 else if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = t("android-chat.home.invited") })
                 IconIn(Icons.ChevronDown, 16.dp, C.muted)
             }
-            // A newer build of the app: tapped, it is downloaded and handed to the installer (Updates.kt).
+            // A newer build of the app that brings something the changelog says (one that does not waits in the settings
+            // until one does): tapped, it is downloaded and handed to the installer (Updates.kt).
             val updates = app.updates
-            if (updates.available != null) {
+            if (updates.progress != null || updates.available?.news.orEmpty().isNotEmpty()) {
                 // Quiet like the bar's other buttons: the icon with a dot; while it downloads, how far it is instead.
                 val progress = updates.progress
                 if (progress != null) {

@@ -811,6 +811,7 @@ export const SHAPES: Record<string, Shape> = {
     ["file", "String"],
     ["sha256", "String"],
     ["size", "i64", { client: "I54" }],
+    ["news", vec("String"), { default: true, doc: "What it brings this app: the changelog's lines for it after the build asking, newest first (the core's; the feed\nhas none). The home screen offers the build only with some; the settings offer any." }],
   ], { doc: "A build of the app on still.fail cloud (`app.update`; scripts/release.sh puts it in /releases/<platform>/latest.json):\n`file` is under /releases/.", keepNone: true }),
   Buddy: struct([
     ["id", "String"],

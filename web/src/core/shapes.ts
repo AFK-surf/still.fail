@@ -115,6 +115,11 @@ export interface AppRelease {
 	file: string;
 	sha256: string;
 	size: number;
+	/**
+	 * What it brings this app: the changelog's lines for it after the build asking, newest first (the core's; the feed
+	 * has none). The home screen offers the build only with some; the settings offer any.
+	 */
+	news?: string[];
 }
 
 /** What the archive check made of a chat as it stands, under its agent's all-done post. */

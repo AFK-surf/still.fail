@@ -1,7 +1,8 @@
 // What changed in still.fail, for people (changelog.rs; the `changelog` topic, docs/changelog.md): still.fail cloud's
 // changelog with what each part has out on this app's channel, by day, newest first; and what this app got since it
 // was last shown here (`news`, until `changelog.seen`). Kept on the device (table `changelog`). The sync reads it as
-// the core starts and each time still.fail cloud's events socket opens (rule 6: never because it is shown).
+// the core starts and each time still.fail cloud's events socket opens (rule 6: never because it is shown); `app.update`
+// reads it too when it finds a build of this app the changelog kept was read before (`brings`).
 import { Effect } from "effect";
 import { channelHeader } from "./cloud.ts";
 import type { Data } from "./data.ts";
@@ -117,6 +118,21 @@ export class Changelog implements Owner {
         this.#data.put(TABLE, "feed", feed);
       } else this.#failed = true;
       this.#changed();
+    });
+  }
+
+  /// What build `to` brings `app` at build `from`: the lines of its changes after `from`, up to `to`, newest first. The
+  /// changelog kept is read again first when it was read before `to` was out, so a build is known with its lines.
+  brings(app: string, from: number, to: number): Effect.Effect<string[]> {
+    return Effect.gen({ self: this }, function* () {
+      const known = (feed: J) => partsOf(app).every((part) => (int(get(get(feed, "released"), part)) ?? -Infinity) >= to);
+      if (!known(this.#data.record(TABLE, "feed"))) yield* this.read();
+      const feed = this.#data.record(TABLE, "feed") as J;
+      const released = get(feed, "released") ?? null;
+      return arr(get(feed, "entries"))
+        .map((entry) => item(entry, app, from, released))
+        .filter((it) => it !== null && it.mine && it.version > from && it.version <= to)
+        .flatMap((it) => it.text as string[]);
     });
   }
 
