@@ -621,5 +621,5 @@ private fun DecisionComposer(item: DecisionItem, host: Host, placeholder: String
         // between them and the composer.
         room.intValue = if (draft.composerExpanded) 0 else 4.dp.roundToPx() + 36.dp.roundToPx()
         layout(composer.width, composer.height) { composer.place(0, 0) }
-    })
+    }, besideRecent = false)
 }

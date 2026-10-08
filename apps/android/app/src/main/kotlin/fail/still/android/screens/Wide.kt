@@ -95,6 +95,8 @@ fun BoxScope.WideCorners(current: WorkspaceEntry, top: Screen) {
         }
         // A message's page is the chat's own, over it (Annotate.kt).
         is Screen.Annotate -> {}
+        // The decisions: one at a time, back to the list; their foot is theirs.
+        Screen.Decisions -> {}
         else -> Recent(current, top, foot)
     }
 }
