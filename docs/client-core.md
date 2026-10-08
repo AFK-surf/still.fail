@@ -36,10 +36,12 @@ shown) only as priority. A station's requests run two at a time, and two more
 of what a UI has open or a person waits on (`URGENT_ROOM`): on a slow link a
 read can take a minute, and the chat opened does not wait behind it. Stations
 and still.fail cloud push what changes (events, sockets); nothing is read again
-on a timer. Every request to a station asks its answer deflated
-(`accept-encoding: deflate-raw`, an event stream flushed event by event,
-station/src/mesh/deflate.ts), and it is inflated as it comes (fflate, the same
-on every host); a station from before sends it as it is. The one exception to
+on a timer. Every request to a station but a preview's asks its answer
+compressed (`accept-encoding: zstd`; an event stream flushed event by event and
+compressed against its last megabyte, station/src/mesh/compress.ts), and it is
+decompressed as it comes (fzstd, the same on every host: the browser and
+Hermes have no zstd of their own); a station from before sends it as it is.
+The one exception to
 keeping everything current: what a station's agents spent (`stationUsage`) is
 read only while a page shows it.
 

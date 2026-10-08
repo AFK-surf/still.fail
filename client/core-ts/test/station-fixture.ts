@@ -1,7 +1,7 @@
 // A station for the core's tests (station.test.ts, core-flows.test.ts): `ws/st` answering its admin API from a table
 // ("GET /path" → JSON) over the host's fetch, its events stream fed by `push`.
 import { Effect, Queue } from "effect";
-import { constants, deflateRawSync } from "node:zlib";
+import { zstdCompressSync } from "node:zlib";
 import { Core } from "../src/core.ts";
 import type { HttpRequest, HttpResponse, Pull } from "../src/host.ts";
 import { HostWire, type StationWire } from "../src/station/wire.ts";
@@ -29,20 +29,36 @@ export function stationReplies(host: FakeHost, reply: (req: HttpRequest) => unkn
   replies.set(host, reply);
 }
 
-/// Whether a request asks its answer deflated, as the core's do (requests.ts DEFLATE).
-const asksDeflated = (req: HttpRequest) => req.headers.some(([k, v]) => k.toLowerCase() === "accept-encoding" && v.split(",").some((e) => e.trim() === "deflate-raw"));
+/// Whether a request asks its answer compressed, as the core's do (requests.ts ZSTD).
+const asksCompressed = (req: HttpRequest) => req.headers.some(([k, v]) => k.toLowerCase() === "accept-encoding" && v.split(",").some((e) => e.trim() === "zstd"));
 
-/// An answer as the station sends it to a core that asks (station/src/mesh/deflate.ts): JSON from 512 bytes deflated.
-function deflatedFor(req: HttpRequest, res: HttpResponse): HttpResponse {
-  if (!asksDeflated(req) || res.body.length < 512) return res;
-  return { ...res, headers: [...res.headers, ["content-encoding", "deflate-raw"]], body: new Uint8Array(deflateRawSync(res.body)) };
+/// An answer as the station sends it to a core that asks (station/src/mesh/compress.ts): JSON from 512 bytes compressed.
+function compressedFor(req: HttpRequest, res: HttpResponse): HttpResponse {
+  if (!asksCompressed(req) || res.body.length < 512) return res;
+  return { ...res, headers: [...res.headers, ["content-encoding", "zstd"]], body: new Uint8Array(zstdCompressSync(res.body)) };
+}
+
+/// A stream's chunks as zstd, made at once (the clock here does not wait on a compressor): one frame, each chunk a raw
+/// block of it, so it is read as it comes as the station's is (station/test/compress.test.ts compresses it for real).
+function zstdBlocks(): (chunk: Uint8Array) => Uint8Array {
+  let started = false;
+  return (chunk) => {
+    const parts: Uint8Array[] = started ? [] : [new Uint8Array([0x28, 0xb5, 0x2f, 0xfd, 0x00, 0x50])];
+    started = true;
+    for (let at = 0; at < chunk.length; at += 128 * 1024) {
+      const data = chunk.subarray(at, at + 128 * 1024);
+      const head = data.length << 3;
+      parts.push(new Uint8Array([head & 255, (head >> 8) & 255, (head >> 16) & 255]), data);
+    }
+    return new Uint8Array(Buffer.concat(parts));
+  };
 }
 
 export function stationHost(answers: Answers) {
   const host = new FakeHost();
   signIn(host);
   const streams: { path: string; queue: Queue.Queue<Uint8Array | null>; closed: boolean }[] = [];
-  host.onFetch((req: HttpRequest) => deflatedFor(req, answer(req)));
+  host.onFetch((req: HttpRequest) => compressedFor(req, answer(req)));
   const answer = (req: HttpRequest): HttpResponse => {
     const path = req.url.replace("https://stillfail.test", "");
     if (path === "/v1/me") return jsonResponse(200, { workspaces: [{ id: "ws", name: "W" }], invitations: [], relay_url: null });
@@ -72,10 +88,12 @@ export function stationHost(answers: Answers) {
       const open = { path, queue, closed: false };
       yield* Effect.addFinalizer(() => Effect.sync(() => (open.closed = true)));
       streams.push(open);
-      // Asked deflated: each chunk as it comes, flushed (on its own: a stream of such pieces inflates as one).
-      const deflates = asksDeflated(req);
-      const body: Pull<Uint8Array> = { take: Effect.map(Queue.take(queue), (c) => (c && deflates ? new Uint8Array(deflateRawSync(c, { finishFlush: constants.Z_SYNC_FLUSH })) : c)) };
-      const headers: [string, string][] = [...(gate.resumes && path.includes("since=") ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(deflates ? [["content-encoding", "deflate-raw"] as [string, string]] : [])];
+      // It opens as the station's does (a reader of zstd starts once it has 18 bytes), and asked compressed, each chunk
+      // goes as it comes.
+      Queue.offerUnsafe(queue, new TextEncoder().encode("retry: 3000\n\n"));
+      const compress = asksCompressed(req) ? zstdBlocks() : null;
+      const body: Pull<Uint8Array> = { take: Effect.map(Queue.take(queue), (c) => (c && compress ? compress(c) : c)) };
+      const headers: [string, string][] = [...(gate.resumes && path.includes("since=") ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(compress ? [["content-encoding", "zstd"] as [string, string]] : [])];
       return { status: 200, headers, body };
     }),
   );

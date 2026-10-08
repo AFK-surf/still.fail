@@ -718,17 +718,17 @@ test("a_stream_taking_over_told_it_missed_what_came_since_reads_the_station_agai
   core.close();
 });
 
-test("answers_come_deflated_as_asked_and_are_read_as_they_were", async () => {
+test("answers_come_compressed_as_asked_and_are_read_as_they_were", async () => {
   const many = Array.from({ length: 300 }, (_, i) => threadView(i + 1, 3));
   const answers = { ...base(), "GET /threads": many };
   const { host, core, push } = await started(answers);
   const asked = host.requests.find((r) => r.url.endsWith("/admin/api/threads"))!;
-  assert.ok(asked.headers.some(([k, v]) => k === "accept-encoding" && v === "deflate-raw"));
+  assert.ok(asked.headers.some(([k, v]) => k === "accept-encoding" && v === "zstd"));
   assert.equal((core.inner.data.get({ topic: "threads", station: ST }) as J[]).length, 300);
   // The stream too, event by event.
-  push("overview", { connects: ["deflated"] });
+  push("overview", { connects: ["compressed"] });
   await host.settle();
-  assert.deepEqual(core.inner.data.get({ topic: "overview", station: ST }), { connects: ["deflated"] });
+  assert.deepEqual(core.inner.data.get({ topic: "overview", station: ST }), { connects: ["compressed"] });
   core.close();
 });
 

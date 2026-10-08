@@ -1,7 +1,7 @@
 // Requests to a station's admin API over its wire (station/transport.rs): each a span of the trace it is made in, with
 // what it is waited on as (status.ts), its write key, its language; files, uploads and previews.
 import { Effect, Scope } from "effect";
-import { Inflate } from "fflate";
+import { Decompress } from "fzstd";
 import type { Inner } from "../core.ts";
 import { CoreError, HostError, asCoreError } from "../error.ts";
 import type { Pull } from "../host.ts";
@@ -20,10 +20,11 @@ export const EVENT_STREAM = "text/event-stream";
 /// An events stream's answer when the station told first what came after the `since` it was asked (station/src/api/
 /// events.ts RESUMED): nothing is read again.
 export const RESUMED = "stillfail-resumed";
-/// What every request asks its answer deflated as (`accept-encoding`), but a preview's (its page reads what the service
-/// sent): raw deflate, an event stream flushed after each event (station/src/mesh/deflate.ts). On a slow link the bytes
-/// are the wait, and JSON goes to a fifth or less. A station from before sends every answer as it is.
-export const DEFLATE = "deflate-raw";
+/// What every request asks its answer compressed as (`accept-encoding`), but a preview's (its page reads what the service
+/// sent): zstd, an event stream flushed after each event and compressed against the last megabyte of it (station/src/mesh/
+/// compress.ts). On a slow link the bytes are the wait: JSON goes to a fifth or less, an events stream to a tenth. A
+/// station from before sends every answer as it is.
+export const ZSTD = "zstd";
 /// The most a station from before uploads in parts takes in one (station/src/api/routes/hub.ts MAX_UPLOAD).
 export const UPLOAD_WHOLE_MAX = 50 * 1024 * 1024;
 /// How long a preview's WebSocket may take to open.
@@ -49,15 +50,14 @@ export function answered(span: Span, reply: WireReply): void {
 
 const empty = new Uint8Array();
 
-/// A reply's body as the station wrote it: inflated as it comes when it came deflated, each piece as soon as it is whole
-/// (an event stream's, event by event).
+/// A reply's body as the station wrote it: decompressed as it comes when it came compressed (fzstd, the same on every
+/// host), each piece as soon as it is whole (an event stream's, event by event).
 function plain(reply: WireReply): Pull<Uint8Array> {
-  if (replyHeader(reply, "content-encoding") !== DEFLATE) return reply.body;
-  const inflate = new Inflate();
+  if (replyHeader(reply, "content-encoding") !== ZSTD) return reply.body;
   const out: Uint8Array[] = [];
-  inflate.ondata = (data) => {
+  const decompress = new Decompress((data) => {
     if (data.length > 0) out.push(data);
-  };
+  });
   let ended = false;
   const take: Effect.Effect<Uint8Array | null, HostError> = Effect.gen(function* () {
     for (;;) {
@@ -66,7 +66,7 @@ function plain(reply: WireReply): Pull<Uint8Array> {
       const chunk = yield* reply.body.take;
       ended = chunk === null;
       try {
-        inflate.push(chunk ?? empty, ended);
+        decompress.push(chunk ?? empty, ended);
       } catch (error) {
         // Cut off short of its end (a stream let go of): what came is all there is.
         if (ended) continue;
@@ -105,7 +105,7 @@ export class Requests {
     span.set("stillfail.station", station.station);
     if (bodySize > 0) span.set("http.request.body.size", bodySize);
     const h: [string, string][] = [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]];
-    if (!path.startsWith("/preview/") && !headers.some(([k]) => k.toLowerCase() === "accept-encoding")) h.push(["accept-encoding", DEFLATE]);
+    if (!path.startsWith("/preview/") && !headers.some(([k]) => k.toLowerCase() === "accept-encoding")) h.push(["accept-encoding", ZSTD]);
     // A write carries a key of its own: a station that keeps writes to once does it once however often it arrives.
     const m = method.toUpperCase();
     if (m !== "GET" && m !== "HEAD" && !h.some(([k]) => k.toLowerCase() === IDEMPOTENCY_KEY)) {
@@ -127,12 +127,12 @@ export class Requests {
           Effect.gen({ self: this }, function* () {
             const reply = yield* this.wire.request(station, head, body);
             answered(span, reply);
-            // What came over the link is counted (and said in the span); what it says, inflated.
+            // What came over the link is counted (and said in the span); what it says, decompressed.
             let came = 0;
             const counted = { ...reply, body: { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && ((came += chunk.length), waiting ? waiting.received(chunk.length) : status.received(null, chunk.length)))) } };
             const bytes = yield* readAll(plain(counted));
             span.set("http.response.body.size", came);
-            if (came !== bytes.length) span.set("stillfail.body.inflated", bytes.length);
+            if (came !== bytes.length) span.set("stillfail.body.decompressed", bytes.length);
             return { status: reply.status, headers: reply.headers, body: bytes };
           }).pipe(Effect.ensuring(Effect.sync(() => waiting?.end()))),
         );
@@ -181,7 +181,7 @@ export class Requests {
         const data = parseJson(bytes);
         return yield* Effect.fail(httpError(reply.status, data === undefined ? {} : data));
       }
-      // What comes on it is no longer waited on, only counted (as it came over the link), and inflated.
+      // What comes on it is no longer waited on, only counted (as it came over the link), and decompressed.
       const body = { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && status.received(null, chunk.length))) };
       return { ...reply, body: plain({ ...reply, body }) };
     });
