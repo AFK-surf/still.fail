@@ -427,12 +427,12 @@ function inRepositories(dirs: (string | null)[], given: string): string | null {
   let best: string | null = null;
   for (const repo of repos) {
     let seen = listed.get(repo);
-    if (!seen || Date.now() - seen.at > 60_000) {
+    if (!seen || store.nowMs() - seen.at > 60_000) {
       try {
         const out = execFileSync("git", ["-C", repo, "ls-files", "-z"], { maxBuffer: 64 << 20, timeout: 5000, stdio: ["ignore", "pipe", "ignore"] });
-        seen = { at: Date.now(), files: out.toString("utf8").split("\0").filter(Boolean) };
+        seen = { at: store.nowMs(), files: out.toString("utf8").split("\0").filter(Boolean) };
       } catch {
-        seen = { at: Date.now(), files: [] };
+        seen = { at: store.nowMs(), files: [] };
       }
       listed.set(repo, seen);
     }
