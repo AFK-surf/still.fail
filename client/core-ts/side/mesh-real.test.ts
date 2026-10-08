@@ -501,7 +501,7 @@ test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, 
   assert.notEqual(device, mesh.deviceId());
   const shown = mesh.measured(id)!;
   assert.equal(shown.measuring, false);
-  assert.equal(shown.moved, new URL(b).hostname);
+  assert.equal(shown.moved, new URL(b).host);
   assert.equal(shown.relays.length, 2);
   assert.ok(shown.relays.every(([, ms]) => ms !== null), JSON.stringify(shown));
   // Measured again, as a person asks: it stays, nothing is quicker than where it is. What is let go after it goes soon:
