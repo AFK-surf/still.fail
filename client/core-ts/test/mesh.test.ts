@@ -6,6 +6,7 @@
 // The native addon itself, the few things only it can show, at the end ("over the addon"): what it answers, never how
 // long it takes.
 import assert from "node:assert/strict";
+import { createSocket } from "node:dgram";
 import { suite, test as register, type TestOptions } from "node:test";
 import { Effect, Queue } from "effect";
 import type { Credential } from "../src/cloud.ts";
@@ -770,6 +771,39 @@ test("over_the_addon_opens_requests_and_streams_the_reply", { skip: noAddon }, a
   await station.close();
   await runner.run(mesh.close());
   runner.shutdown();
+});
+
+/// A device gone half way through its handshake (its app updating, a phone out of signal) holds up no other: the
+/// station takes the next device while the first is still unanswered. Taken one at a time, every connection behind it
+/// waited until it timed out, half a minute (2026-10-08). The first goes through a hole that lets its packets on and
+/// drops the station's answers.
+test("over_the_addon_a_handshake_left_hanging_holds_up_no_other", { skip: noAddon }, async () => {
+  const station = await Station.start();
+  const [host, port] = station.addr().ips[0].split(":");
+  const hole = createSocket("udp4");
+  await new Promise<void>((r) => hole.bind(0, "127.0.0.1", r));
+  let answered = false;
+  hole.on("message", (msg, from) => {
+    if (from.port === Number(port)) answered = true;
+    else hole.send(msg, Number(port), host);
+  });
+  const gone = await addon.bind({ secretKey: Buffer.alloc(32, 41), alpns: [], relayUrls: [], discovery: false });
+  let goneSettled = false;
+  const dialled = gone.connect({ id: station.id(), ips: [`127.0.0.1:${hole.address().port}`] }, Buffer.from(ALPN)).then(
+    () => (goneSettled = true),
+    () => (goneSettled = true),
+  );
+  // The station is on its handshake: it answered, into the hole.
+  while (!answered) await new Promise((r) => setTimeout(r, 10));
+  const next = await addon.bind({ secretKey: Buffer.alloc(32, 42), alpns: [], relayUrls: [], discovery: false });
+  const conn = await next.connect(station.addr(), Buffer.from(ALPN));
+  assert.equal(conn.remoteId(), station.id());
+  assert.equal(goneSettled, false, "the first handshake is still left hanging");
+  await gone.close();
+  await dialled;
+  await next.close();
+  await station.close();
+  hole.close();
 });
 
 test("over_the_addon_relay_probes_disable_ip_without_disabling_live_hole_punching", { skip: noAddon }, async () => {
