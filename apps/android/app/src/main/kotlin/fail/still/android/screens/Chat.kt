@@ -889,7 +889,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
 @Composable
 private fun Flyer(motion: ChatMotion, atWork: List<AgentAtWork>) {
     val turn = motion.current ?: return
-    if (turn.pose == ChatMotion.Pose.Fold) return
     val agent = atWork.firstOrNull { it.key == turn.agent } ?: return
     val density = LocalDensity.current
     val ring = with(density) { 3.dp.toPx() }
