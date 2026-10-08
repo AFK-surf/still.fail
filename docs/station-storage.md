@@ -386,13 +386,15 @@ their streams, kept like the rest); a stream that starts afresh reads their
 sidebar before it answers, and is what their changes are told against from
 then on.
 
-Over the mesh, an answer is deflated for a client that asks
-(`accept-encoding: deflate-raw`; station/src/mesh/deflate.ts): JSON and text
-from 512 bytes, raw deflate, an event stream flushed after each event (each
-comes out whole as it arrives, deflated against those before it: an event
-like the last is a few bytes). Nothing of a preview (its page reads what the
-service sent), and no `content-length` then. A client from before asks
-nothing and gets every answer as it is.
+Over the mesh, an answer is compressed for a client that asks
+(`accept-encoding: zstd`; station/src/mesh/compress.ts): JSON and text from
+512 bytes, zstd at its fast level, an event stream flushed after each event
+(each comes out whole as it arrives) and compressed against the last
+megabyte of it, so what a stream tells again (a session's summary, a sidebar
+row, the overview) is a few bytes the next time: of a real station's stream
+7% of it, where deflate, looking back 32 KB only, left 24%. Nothing of a
+preview (its page reads what the service sent), and no `content-length` then.
+A client from before asks nothing and gets every answer as it is.
 
 Timers that remain on the station and why: host sampling (above), quota
 refresh every five minutes while some `/events` stream is open (the provider

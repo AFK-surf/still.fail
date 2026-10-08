@@ -54,7 +54,7 @@ Google OAuth（`openid email profile`），access token 5 分钟，refresh token
 - **吊销**：成员被移除或改角色（`sub`）、登录会话被注销（`sid`）时，still.fail cloud 通过 station 的控制通道推一条吊销（`revoke` 帧，`state` 帧里也带着最近 31 天的吊销）；station 拒绝签发时间不晚于吊销时间的凭证，已连着的最迟 5 秒内断开。station 不在线时错过的吊销，下次连上 still.fail cloud 时从 `state` 里补上。
 - still.fail cloud 下线时：已登录过的设备凭缓存的凭证照常连 station（局域网直连或 relay）；只有新登录、新成员需要它。
 
-连接上优先用 ALPN `stillfail/admin/1`，兼容旧版 `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。请求带 `accept-encoding: deflate-raw` 时，512 字节以上的 JSON 和文本回应用 raw deflate 压缩，回应头带 `content-encoding: deflate-raw`，SSE 每个事件后 flush 一次（station/src/mesh/deflate.ts）；preview 的回应原样转发。
+连接上优先用 ALPN `stillfail/admin/1`，兼容旧版 `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。请求带 `accept-encoding: zstd` 时，512 字节以上的 JSON 和文本回应用 zstd 压缩，回应头带 `content-encoding: zstd`，SSE 每个事件后 flush 一次、窗口 1 MB（station/src/mesh/compress.ts）；preview 的回应原样转发。
 
 station 端由 station 自己负责（station/src/mesh/serve.ts，iroh 1.0.3 在它的 Node 插件 station/native/mesh 里）：把 mesh 上来的请求交给 station 的管理 API，带上已验证的用户身份；station 据此记录「谁」做了操作、在管理页对话里说了话。
 

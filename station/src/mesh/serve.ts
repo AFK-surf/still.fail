@@ -13,7 +13,7 @@ import type { Accepted } from "../cloud/provider.ts";
 import { type Admitted, readOnly, revoked, verifyMember } from "./credential.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerAdb, type Shares } from "./adb.ts";
-import { deflated } from "./deflate.ts";
+import { compressed } from "./compress.ts";
 import { Traces, parseParent, route } from "./traces.ts";
 import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
 
@@ -290,8 +290,8 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     viewer,
     lang: langOfCore(headers),
   });
-  // Deflated, for a client that asks so (deflate.ts).
-  const response = await deflated(handled, headers, rest);
+  // Compressed, for a client that asks so (compress.ts).
+  const response = await compressed(handled, headers, rest);
   await writeLine(stream, { status: response.status, headers: response.headers });
   if (Buffer.isBuffer(response.body)) await stream.write(response.body);
   else {
