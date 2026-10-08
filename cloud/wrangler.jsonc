@@ -54,8 +54,12 @@
     // stations and devices in mainland China, where Cloudflare's is slow or out of reach; one in Hong Kong (Alibaba
     // Cloud, on a line tuned for the mainland), near enough to both the mainland and abroad.
     "RELAY_URLS": "https://39.105.157.122,https://47.76.247.168",
+    // Ways into those two for devices alone (src/relays.ts): Beijing's machine forwarding to Hong Kong's relay, and
+    // Hong Kong's to Beijing's (nginx on :8443, each with its own certificate), so a phone in the mainland reaches a
+    // station abroad (bft in Tokyo, whose line to Beijing loses packets) through Beijing and Hong Kong's good line.
+    "RELAY_ENTRIES": "https://39.105.157.122:8443,https://47.76.247.168:8443",
     // What they are called on a station's card (经中继北京).
-    "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港" },
+    "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港", "https://39.105.157.122:8443": "北京转香港", "https://47.76.247.168:8443": "香港转北京" },
     "GOOGLE_CLIENT_ID": "",
     // The operator console's one Google account (src/admin.ts); replace it when deploying your own.
     "ADMIN_EMAIL": "zuozijian1994@gmail.com",

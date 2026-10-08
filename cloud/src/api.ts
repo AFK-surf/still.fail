@@ -165,7 +165,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   const role = (): Role => (ROLES.includes(input.role as Role) ? (input.role as Role) : "member");
 
   if (path === "/v1/me" && method === "GET") {
-    return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), ...relays(env) }));
+    return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), ...relays(env, true) }));
   }
   const byId = /^\/v1\/invitations\/([0-9A-HJKMNP-TV-Z]{26})\/(accept|decline)$/.exec(path);
   if (byId && method === "POST") {
@@ -210,7 +210,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return directory(async () => {
       const role = await dir.memberRole(sub, ws);
       const signed = await signCredential(env, { sub, email: claims.email, name: claims.name ?? "", ws, role, device: input.device as string, sid: claims.sid });
-      return { ...signed, ...relays(env) };
+      return { ...signed, ...relays(env, true) };
     });
   }
   if (kind === "stations" && target && validKeyHex(target)) {

@@ -28,6 +28,9 @@ export interface Env {
   RELAY_URL?: string;
   /** More relays beside it (comma-separated), for where it is slow or out of reach (relays.ts). */
   RELAY_URLS?: string;
+  /** Ways into the relays for devices alone (comma-separated): one relay machine's address forwarding to another's relay
+   * (relays.ts). */
+  RELAY_ENTRIES?: string;
   /** What the relays are called (by their URL) where people see which one a connection goes through (relays.ts). */
   RELAY_NAMES?: Record<string, string>;
   GOOGLE_CLIENT_ID: string;
