@@ -43,6 +43,12 @@ export type LiveMessage =
 
 export type Listener = (message: LiveMessage) => void;
 
+/// How much of a tool's input a step carries: enough to say what it runs.
+const INPUT_CHARS = 300;
+/// The fields of a call's input that say what it runs. A client core before 0.1.2301 says what a running call does by
+/// them (its activity.ts callText); a newer one says it by the call's transcript entry alone and reads none of them, but
+/// a step without them showed only 处理中 in an older one: they stay until no client that old is about.
+const SAYING = ["description", "command", "cmd", "file_path", "path", "pattern", "url", "query", "prompt"];
 /// The output rate is told at most this often, over this window (bytes / 4 ≈ tokens).
 const RATE_EVERY_MS = 1_000;
 const RATE_WINDOW_MS = 2_000;
@@ -50,6 +56,28 @@ const RATE_FIRST_MS = 500;
 /// While a watched session works, the usage counter is asked to count it at most this often (it counts once a turn ends).
 const ASK_MS = 15_000;
 
+const takeChars = (text: string, n: number) => Array.from(text).slice(0, n).join("");
+/**
+ * A call's input as a step carries it: of a JSON object, only the fields that say what it runs, each cut short, so a
+ * long command before it does not cut its description off (it showed as "Run the tests 3 times with new m"); anything
+ * else cut short as it is.
+ */
+export function briefInput(input: string): string {
+  let args: unknown;
+  try {
+    args = JSON.parse(input);
+  } catch {
+    return takeChars(input, INPUT_CHARS);
+  }
+  if (typeof args !== "object" || args === null || Array.isArray(args)) return takeChars(input, INPUT_CHARS);
+  const kept: Record<string, string | string[]> = {};
+  for (const name of SAYING) {
+    const v = (args as Record<string, unknown>)[name];
+    if (typeof v === "string") kept[name] = takeChars(v, INPUT_CHARS);
+    else if (Array.isArray(v)) kept[name] = v.filter((p): p is string => typeof p === "string").map((p) => takeChars(p, INPUT_CHARS));
+  }
+  return JSON.stringify(kept);
+}
 
 /// Reads a transcript as it grows (transcript.rs TranscriptTail): each read gives the timeline entries of the lines
 /// written since the last one, and the usage so far. Everything read is kept, so watchers joining later are served from
@@ -333,23 +361,22 @@ export class LiveHub {
         this.counted(key, Buffer.byteLength(event.text));
         break;
       case "start": {
+        const input = briefInput(event.input ?? "");
         const steps = this.steps.get(key) ?? [];
-        // Started again with its input (Claude Code streams it after the start): nothing new to tell.
-        if (steps.some((s) => s.id === event.id)) break;
-        const startedAt = this.time.now();
-        const kept = steps;
+        // Started again with its input (Claude Code streams it after the start): it keeps when it started.
+        const startedAt = steps.find((s) => s.id === event.id)?.startedAt ?? this.time.now();
+        const kept = steps.filter((s) => s.id !== event.id);
         const step = { id: event.id, step: event.step } as LiveStep;
         if (event.tool !== undefined) step.tool = event.tool;
         if (event.subagent === true) step.subagent = true;
         if (event.parent !== undefined) step.parent = event.parent;
-        // What a call runs is told once, by its transcript entry (the execution history's): a step says only that it runs.
-        step.input = "";
+        step.input = input;
         step.startedAt = startedAt;
         kept.push(step);
         this.steps.set(key, kept);
         const told: LiveEvent = { kind: "start", id: event.id, step: event.step };
         if (event.tool !== undefined) told.tool = event.tool;
-        told.input = "";
+        told.input = input;
         if (event.subagent !== undefined) told.subagent = event.subagent;
         if (event.parent !== undefined) told.parent = event.parent;
         this.emit(key, { type: "step", event: told });

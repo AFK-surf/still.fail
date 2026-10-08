@@ -13,7 +13,7 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
-import { type Counted, type LiveMessage, LiveHub, TranscriptTail } from "../src/sessions/live.ts";
+import { type Counted, type LiveMessage, LiveHub, TranscriptTail, briefInput } from "../src/sessions/live.ts";
 import { prepare } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
 import { availableEfforts, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
@@ -310,14 +310,19 @@ test("how fast the model writes is told once half a second of it has come", asyn
   await settle(1);
 });
 
-test("a call's step says only that it runs: what it runs is told by its transcript entry", () => {
+// For client cores before 0.1.2301, which say what a running call does by its step (a newer one: by its transcript entry).
+test("a call's step carries what says what it runs, whole, however long the command before it", () => {
+  const description = "Run account-proxy tests 3 times with new mock clock";
+  const command = `cd station && ${"node --test test/account-proxy.test.ts && ".repeat(8)}true`;
   const hub = new LiveHub(() => null);
   const got: LiveMessage[] = [];
   hub.subscribe("s", 0, null, (m) => void got.push(m));
-  hub.event("s", { kind: "start", id: "t", step: "tool", tool: "Bash" });
-  hub.event("s", { kind: "start", id: "t", step: "tool", tool: "Bash", input: JSON.stringify({ command: "ls", description: "看看目录" }) });
-  const told = got.flatMap((m) => (m.type === "step" && m.event.kind === "start" ? [m.event] : []));
-  assert.deepEqual(told, [{ kind: "start", id: "t", step: "tool", tool: "Bash", input: "" }], "told once, without its input");
+  hub.event("s", { kind: "start", id: "t", step: "tool", tool: "Bash", input: JSON.stringify({ command, description, timeout: 600000 }) });
+  const told = got.flatMap((m) => (m.type === "step" && m.event.kind === "start" ? [m.event.input] : []));
+  assert.deepEqual(JSON.parse(told[0]!), { command: [...command].slice(0, 300).join(""), description });
+  assert.equal(briefInput("ls -la"), "ls -la", "a runtime's plain input stays as it is");
+  assert.equal(briefInput("x".repeat(400)), "x".repeat(300));
+  assert.equal(briefInput('{"command": "echo hi", "descrip'), '{"command": "echo hi", "descrip', "an input cut short stays cut short");
   hub.close();
 });
 
