@@ -4,7 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { sentImage, sentImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
-import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
+import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
@@ -29,11 +29,11 @@ import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import type { ArchiveCheck, ChatSentElsewhere } from "./core/shapes.ts";
+import type { ArchiveCheck, ChatSentElsewhere, ChatWaiting } from "./core/shapes.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
-import { core } from "./core/react.ts";
+import { core, useCall } from "./core/react.ts";
 import { ChatRefMenu, markBefore, refAt, RefMirror, WithRefs } from "./ChatRef.tsx";
 import { useMorph } from "./morph.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -48,7 +48,7 @@ import { failure, useToast, useAct } from "./toast.tsx";
 import { MessageDecision } from "./Decisions.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
-import { jumped, jumpWords, useJump } from "./jumpTo.ts";
+import { jumped, jumpTo, jumpWords, useJump } from "./jumpTo.ts";
 import { t } from "./i18n.ts";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
@@ -134,11 +134,36 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {quoting.pop}
       {askedFile}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
+      {chat.waiting && !chat.archived && id !== null && <WaitingBar station={station.address} thread={id} waiting={chat.waiting} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused}
         locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
+  );
+}
+
+/**
+ * What waits for the viewer in this chat (the core's `waiting`: a card for them, or an agent needing them), above the
+ * composer: in a line, leading to the post it is about; 不用了 lets it go (`decision.dismiss`). A need has no card in
+ * the chat, so this is where it shows.
+ */
+function WaitingBar({ station, thread, waiting }: { station: string; thread: number; waiting: ChatWaiting }) {
+  const call = useCall();
+  const act = useAct();
+  const [gone, setGone] = useState<number | null>(null);
+  if (gone === waiting.seq) return null;
+  const lead = waiting.card ? t("web-main.chat.waiting.card") : t("web-main.chat.waiting.lead");
+  return (
+    <div className={css.waitingBar} role="status">
+      <button type="button" className={css.waitingText} title={t("web-main.chat.waiting.go")} onClick={() => jumpTo({ station, thread, seq: waiting.seq })}>
+        <Bell size={14} /><b>{lead}</b>{waiting.text && <span>{waiting.text}</span>}
+      </button>
+      <button type="button" className={css.waitingDismiss} onClick={() => {
+        setGone(waiting.seq);
+        act(call("decision.dismiss", { station, thread, seq: waiting.seq }).catch((e: unknown) => { setGone(null); throw e; }), t("web-main.decisions.dismissWhat"));
+      }}>{t("web-main.chat.waiting.dismiss")}</button>
+    </div>
   );
 }
 

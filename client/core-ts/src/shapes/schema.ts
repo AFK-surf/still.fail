@@ -978,6 +978,7 @@ export const SHAPES: Record<string, Shape> = {
     ["title", "String"],
     ["text", "String", { doc: "Its row's state line: 奏 · …, 要你帮忙：…, 出问题：…" }],
     ["seq", opt("u64"), { doc: "The waiting card's post (`decision.dismiss`), for `wait`." }],
+    ["seen", "bool", { default: true, doc: "Looked at since it came to want them: listed, not counted in the badge." }],
     ["at", "i64"],
   ], { doc: "A chat the badge counts (`WorkspaceMark.items`)." }),
   NewChatView: struct([
@@ -1523,9 +1524,15 @@ export const SHAPES: Record<string, Shape> = {
     ["connection", opt("LinkShown"), { doc: "Its link while it is down or coming back, in words; absent while it is up (and from a core before it)." }],
     ["stationUpdate", opt("StationUpdateNotice"), { doc: "Station update availability or progress, including the local outbox while reconnecting." }],
     ["decision", opt("RowDecision"), { doc: "The card it waits on, as its row has it. Absent when there is none." }],
+    ["waiting", opt("ChatWaiting"), { doc: "What waits for the viewer in it (a card for them, or an agent needing them), for the bar above the\ncomposer. Absent when nothing does." }],
     ["archivable", opt("bool"), { doc: "Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap\n(`chat.archive`). Absent otherwise." }],
     ["archiveCheck", opt("ArchiveCheck"), { default: true, doc: "What the archive check made of it as it stands (the option picked, or a failure). Absent when none did." }],
   ], { doc: "An item's page: its chat (with the viewer's read position), or its agent before it has one." }),
+  ChatWaiting: struct([
+    ["seq", "u64", { doc: "The post it is about (`decision.dismiss`, and where the bar jumps to)." }],
+    ["card", "bool", { doc: "A card: its options are on that post." }],
+    ["text", "String", { doc: "What is wanted, in a line: the agent's need as it said it, else the post's first line." }],
+  ], { doc: "What waits for the viewer in a chat (`ChatView.waiting`)." }),
   RuntimeModels: struct([
     ["runtime", "RuntimeKind"],
     ["models", vec("String")],

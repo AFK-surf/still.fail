@@ -398,6 +398,7 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   const blocked = deciding("k1", 7, 5, now - 1000, false);
   blocked.agents[0].lastTurn = { kind: "message", declared: "block", ending: "need_decision", outcome: "completed", startedAt: 1, endedAt: 1 };
   blocked.mine = true;
+  blocked.unread = true;
   const others = deciding("other", 11, 7, now - 4000, false);
   others.decision.card.assignee = "other@x.com";
   t.set(rows("ws/st"), [blocked, deciding("k2", 8, 3, now - 2000, true), deciding("k3", 9, 4, now - 3000, false), others]);
@@ -410,9 +411,9 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   const m = marks.value;
   assert.equal(m.workspaces.ws.decisions, 2);
   assert.deepEqual([m.workspaces.ws.wait, m.workspaces.ws.alert, m.workspaces.ws.label], [2, 0, "2 个在等你"]);
-  // The badge is what the list under it shows: the cards waiting for them, no more.
-  assert.deepEqual([m.badge, m.badgeCounts, m.workspaces.ws.badge], [2, "attention", 2]);
-  assert.deepEqual(m.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq, i.stationName]), [["wait", "k1", 5, "studio"], ["wait", "k3", 4, "studio"]]);
+  // The list under the badge is the cards waiting for them, no more; the badge counts those not looked at since.
+  assert.deepEqual([m.badge, m.badgeCounts, m.workspaces.ws.badge], [1, "attention", 1]);
+  assert.deepEqual(m.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq, i.stationName, i.seen ?? false]), [["wait", "k1", 5, "studio", false], ["wait", "k3", 4, "studio", true]]);
   assert.equal(m.workspaces.ws.items[0].text, "奏 · k1 要合吗？", "its row's line");
 });
 

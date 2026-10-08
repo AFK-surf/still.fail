@@ -49,8 +49,9 @@ function stateText(row: J): string {
 
 const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
 
-/// What the badge counts (the prefs' `badge`): the cards waiting for the person (decisions), those and the chats of
-/// theirs that went wrong (attention, the default), or those and the unread too (all).
+/// What the badge counts (the prefs' `badge`), of what came since the person last looked (`c`): the cards waiting for
+/// them (decisions), those and the chats of theirs that went wrong (attention, the default), or those and the unread too
+/// (all). A chat looked at stays on the list (`items`, `seen`) but is not counted until it wants them anew.
 export function badgeOf(prefs: J, c: Counts): number {
   const by = get(prefs, "badge");
   if (by === "decisions") return c.wait;
@@ -107,6 +108,8 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
   for (const a of arr(views.ok({ topic: "workspaces" }))) for (const w of arr(get(a, "workspaces"))) if (typeof get(w, "id") === "string") names.set(w.id, str(get(w, "name")) ?? w.id);
   for (const id of workspaceIds(views.ok({ topic: "workspaces" }))) {
     const counts = new Counts();
+    // Of those, the ones not looked at since they came to want them: what the badge counts.
+    const fresh = new Counts();
     let waiting = 0;
     let elsewhere = 0;
     const items: J[] = [];
@@ -121,9 +124,11 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       const waits = d !== null && !(typeof thread === "number" && local.answered(address, thread, typeof d.seq === "number" ? d.seq : 0));
       const tone = waits ? "wait" : rowTone(row, me);
       if (waits) waiting++;
+      const seen = get(row, "unread") !== true;
       if (tone === "alert") counts.alert++;
       else if (tone === "wait") counts.wait++;
       else if (tone === "done") counts.unread++;
+      if (!seen && (tone === "alert" || tone === "wait" || tone === "done")) fresh[tone === "done" ? "unread" : tone]++;
       else if (get(row, "mine") === true && present.rowState(arr(get(row, "agents"))) === "block") elsewhere++;
       if (tone === "alert" || tone === "wait") {
         const item: J = {
@@ -139,6 +144,7 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
           at: typeof get(row, "lastActiveAt") === "number" ? row.lastActiveAt : 0,
         };
         if (waits && typeof d.seq === "number") item.seq = d.seq;
+        if (seen) item.seen = true;
         items.push(item);
       }
     }
@@ -149,7 +155,7 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       others.wait += counts.wait;
       others.unread += counts.unread;
     }
-    const badge = badgeOf(prefs, counts);
+    const badge = badgeOf(prefs, fresh);
     total += badge;
     const mark: J = { alert: counts.alert, unread: counts.unread, badge, items };
     if (counts.wait > 0) mark.wait = counts.wait;

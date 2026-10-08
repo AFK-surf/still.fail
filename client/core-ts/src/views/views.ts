@@ -1212,6 +1212,10 @@ export class Views implements Owner {
     if (watch !== null) view.watch = watch;
     const card = row !== undefined ? decisions.ofRow(row) : null;
     if (card !== null && open(card)) view.decision = decisions.shown(card);
+    // What waits for the viewer here (a card, or an agent needing them), said above the composer with 不用了: a need
+    // has no card to show it in the chat.
+    const forMe = row !== undefined && view.archived !== true ? decisions.forViewer(row, view.me) : null;
+    if (forMe !== null && u64(forMe.seq) !== null && open(forMe)) view.waiting = decisions.waitingOf(row, forMe);
     if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
     const check = row !== undefined && view.archived !== true ? present.archiveCheck(row.archiveCheck) : null;
     if (check !== null) view.archiveCheck = check;
