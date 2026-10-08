@@ -3,7 +3,7 @@
 // transport in chunks, as task files do (jobs/remote.ts), with no more trust than the chats' pages need: a chat's
 // attachments are what any member of the workspace sees on its page.
 import { randomUUID } from "node:crypto";
-import { closeSync, constants, copyFileSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
+import { closeSync, constants, copyFileSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { iso } from "../read/transcript.ts";
 import type { Attachment } from "../store/store.ts";
@@ -92,13 +92,30 @@ export async function fileForPeer(hub: Hub, request: Json): Promise<Json> {
       closeSync(fd);
     }
   }
-  // Packed with its archived workspace: read out of the archive, under its lock (as the pages read it).
-  const room = roomOf(hub.config().dataDir, row.workspace);
-  const bytes = room === null ? null : await withLock(room, async () => workspaceFile(room, `uploads/${base}`));
-  if (bytes === null) throw new Error(`${given} is gone from that chat`);
-  if (offset > bytes.length) throw new Error("offset past end");
-  const part = bytes.subarray(offset, offset + CHUNK);
-  return { data: part.toString("base64"), size: bytes.length, eof: offset + part.length >= bytes.length };
+  // Packed with its archived workspace: read out of the archive once, under its lock (as the pages read it), and kept
+  // a while for the chunks after the first, which would each go through the archive again.
+  const dir = join(hub.config().dataDir, "remote", "served");
+  const kept = join(dir, hash([path]));
+  if (offset === 0 || !existsSync(kept)) {
+    const room = roomOf(hub.config().dataDir, row.workspace);
+    const bytes = room === null ? null : await withLock(room, async () => workspaceFile(room, `uploads/${base}`));
+    if (bytes === null) throw new Error(`${given} is gone from that chat`);
+    mkdirSync(dir, { recursive: true });
+    sweep(hub, dir);
+    const part = `${kept}.part-${randomUUID().slice(0, 8)}`;
+    writeFileSync(part, bytes);
+    renameSync(part, kept);
+  }
+  const fd = openSync(kept, constants.O_RDONLY);
+  try {
+    const size = fstatSync(fd).size;
+    if (offset > size) throw new Error("offset past end");
+    const buffer = Buffer.alloc(CHUNK);
+    const n = readSync(fd, buffer, 0, CHUNK, offset);
+    return { data: buffer.subarray(0, n).toString("base64"), size, eof: offset + n >= size };
+  } finally {
+    closeSync(fd);
+  }
 }
 
 /// A chat's attachment as another station lists it (chat_read's answer there).
@@ -255,7 +272,7 @@ export function putForPeer(hub: Hub, peer: string, request: Json): Json {
   return { bytes: data.length };
 }
 
-/// Files sent along that no message claimed in a day.
+/// Files sent along that no message claimed in a day; archived attachments read out a day ago.
 function sweep(hub: Hub, dir: string) {
   for (const name of readdirSync(dir)) {
     const path = join(dir, name);
