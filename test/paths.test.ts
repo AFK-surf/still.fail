@@ -16,7 +16,7 @@ test("inline code that names a file: paths, with the line they point at", () => 
     ["web/src/", "web/src/", null],
   ];
   for (const [code, path, line] of yes) assert.deepEqual(pathIn(code), { path, line }, code);
-  for (const no of ["origin/main", "/admin/api", "node.js", "Next.js", "https://x.y/a.ts", "a b.ts", "pnpm test", "1.2.3", "v1/api", "foo()", "/", "--flag=a.ts", "x.ts:abc", "web-main.chat.copyLink"]) {
+  for (const no of ["origin/main", "/admin/api", "node.js", "Next.js", "https://x.y/a.ts", "a b.ts", "pnpm test", "1.2.3", "v1/api", "foo()", "/", "--flag=a.ts", "x.ts:abc", "web-main.chat.copyLink", "~/.stillfail/agent/...", "src/…", "~/a/…/b.md"]) {
     assert.equal(pathIn(no), null, no);
   }
 });

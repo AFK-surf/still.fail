@@ -21,7 +21,7 @@ export const card = style({
   "@media": { "(prefers-reduced-motion: reduce)": { animation: "none !important" } },
 });
 /** A card that only names where a link goes (no page read): narrower. */
-export const cardTile = style({ width: "auto", minWidth: "220px" });
+export const cardTile = style({ width: "auto", minWidth: "220px", maxWidth: "min(420px, calc(100vw - 16px))" });
 
 // ---- the generic card: a tile with the site's mark, the link's words, where it goes ----
 

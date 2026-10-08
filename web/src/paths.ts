@@ -16,7 +16,8 @@ export function pathIn(code: string): { path: string; line: number | null } | nu
   const m = /^(.*?)(?::(\d+)(?::\d+)?|#L(\d+)(?:-L?\d+)?)?$/.exec(text)!;
   const path = m[1]!;
   const line = m[2] ?? m[3];
-  if (path === "" || path.includes(":")) return null;
+  // `~/.stillfail/agent/...`, `src/…`: a place left out, not a file.
+  if (path === "" || path.includes(":") || /(?:^|\/)(?:\.{3,}|…)$/.test(path) || path.includes("…")) return null;
   const last = path.replace(/\/$/, "").split("/").at(-1) ?? "";
   const ext = /\.[A-Za-z0-9]{1,10}$/.test(last) && !/^\.+$/.test(last);
   const ok =

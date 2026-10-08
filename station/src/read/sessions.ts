@@ -9,7 +9,8 @@
 //   goes by their id, with no email);
 // - the cloud's names: those of the members who asked since the station started (`Store.names`).
 import { knownChannel, knownPerson, slackCreator } from "./slack-known.ts";
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join, isAbsolute } from "node:path";
 import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
@@ -385,8 +386,10 @@ export function sessionPlace(s: Store, key: string, given: string, lang: Lang): 
   if (asked === "" || asked.includes("\0")) throw notFound();
   const base = row.cwd ?? row.workspace;
   const home = process.env.HOME ?? "";
-  const full = asked.startsWith("~/") && home !== "" ? join(home, asked.slice(2)) : isAbsolute(asked) ? asked : join(base, asked);
-  const path = canonical(clean(full));
+  const tilde = asked.startsWith("~/") && home !== "";
+  const relative = !tilde && !isAbsolute(asked);
+  const full = tilde ? join(home, asked.slice(2)) : relative ? join(base, asked) : asked;
+  const path = canonical(clean(full)) ?? (relative ? inRepositories([row.workspace, row.cwd], asked) : null);
   if (path === null) throw notFound();
   const roots = [row.workspace, row.cwd, join(s.dataDir, "repos"), agentHomeOf(s.dataDir)].flatMap((r) => (r ? [canonical(r)] : [])).filter((r): r is string => r !== null);
   if (!roots.some((r) => within(path, r))) throw new HttpError(403, tr("station.files.outside"));
@@ -397,6 +400,47 @@ export function sessionPlace(s: Store, key: string, given: string, lang: Lang): 
     throw notFound();
   }
   return { path, name: basename(path), dir: st.isDirectory(), size: st.size, mtime: Math.round(st.mtimeMs), contentType: mime(path) };
+}
+
+/// The files git has of each repository, by its directory, as last listed (kept a minute).
+const listed = new Map<string, { at: number; files: string[] }>();
+
+/// A relative path not under the working directory, as agents write one from inside a repository (`ifc/a.ex` for
+/// `<workspace>/cue/apps/x/lib/ifc/a.ex`): the file of a repository in `dirs` (one of them, or two levels below)
+/// whose path ends with it; the shortest, when several do. Null when none does.
+function inRepositories(dirs: (string | null)[], given: string): string | null {
+  const tail = clean(given).slice(1);
+  if (tail === "" || tail.endsWith("/")) return null;
+  const repos = new Set<string>();
+  const look = (dir: string, depth: number) => {
+    if (existsSync(join(dir, ".git"))) return void repos.add(dir);
+    if (depth === 0) return;
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) if (e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules") look(join(dir, e.name), depth - 1);
+  };
+  for (const dir of dirs) if (dir) look(dir, 2);
+  let best: string | null = null;
+  for (const repo of repos) {
+    let seen = listed.get(repo);
+    if (!seen || Date.now() - seen.at > 60_000) {
+      try {
+        const out = execFileSync("git", ["-C", repo, "ls-files", "-z"], { maxBuffer: 64 << 20, timeout: 5000, stdio: ["ignore", "pipe", "ignore"] });
+        seen = { at: Date.now(), files: out.toString("utf8").split("\0").filter(Boolean) };
+      } catch {
+        seen = { at: Date.now(), files: [] };
+      }
+      listed.set(repo, seen);
+    }
+    for (const f of seen.files) {
+      if ((f === tail || f.endsWith(`/${tail}`)) && (best === null || repo.length + f.length < best.length)) best = join(repo, f);
+    }
+  }
+  return best === null ? null : canonical(best);
 }
 
 /// GET /sessions/:key/files?name&thumb=1 (files.rs `session_file`): a file sent to the session, for previews: only from
