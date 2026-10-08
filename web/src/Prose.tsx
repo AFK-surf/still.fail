@@ -25,7 +25,9 @@ function noBareLinks() {
   return (tree: Node, file: { value: unknown }) => {
     const source = String(file.value);
     const unwrap = (nodes: Node[]): Node[] => nodes.flatMap((n) => {
-      if (n.type === "link" && !"[<".includes(source[n.position?.start.offset ?? -1] ?? "[")) return unwrap(n.children ?? []);
+      // Bare ones come from GFM without a position (www.…) or start at the URL itself.
+      const start = n.position?.start.offset;
+      if (n.type === "link" && (start === undefined || (source[start] !== "[" && source[start] !== "<"))) return unwrap(n.children ?? []);
       if (n.children) n.children = unwrap(n.children);
       return [n];
     });
