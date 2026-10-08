@@ -4,9 +4,10 @@ import { describe, test } from "node:test";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { claudeOAuthToken, RefreshLock } from "../src/accounts/oauth.ts";
+import { readClaudeCredentials } from "../src/agents/machine-logins.ts";
 import { URLS } from "../src/accounts/profiles.ts";
 import { at, claudeUsage, claudeWithRefresh, codexQuota, codexUsage, codexWindows, windowLabel } from "../src/accounts/quota.ts";
-import { provider, script, temp, until } from "./accounts-fakes.ts";
+import { machine, provider, script, temp, until } from "./accounts-fakes.ts";
 
 describe("allowances and renewing", { concurrency: true }, () => {
   test("an account its provider refuses is blocked, a sign-in no longer good is not", async () => {
@@ -168,6 +169,63 @@ describe("allowances and renewing", { concurrency: true }, () => {
     rmdirSync(lock);
     const [token] = await renewed;
     assert.equal(token, "cli-won");
+  });
+
+  test("a keychain read failure never replays a stale file's refresh token", { skip: process.platform !== "darwin" }, async () => {
+    const m = machine({ security: "exit 36" }); // errSecInteractionNotAllowed, not errSecItemNotFound (44)
+    mkdirSync(join(m.home, ".claude"));
+    const file = join(m.home, ".claude", ".credentials.json");
+    const stale = JSON.stringify(credentials(1));
+    writeFileSync(file, stale);
+    const p = await oauthProvider(200);
+    try {
+      await assert.rejects(claudeOAuthToken(m.env, null, null, p.base, "en"), /keychain/i);
+      assert.equal(p.asked.length, 0, "no stale refresh token leaves the machine");
+      assert.equal(readFileSync(file, "utf8"), stale);
+    } finally {
+      await p.close();
+    }
+  });
+
+  test("a keychain failure on the locked reread cannot switch to the file", { skip: process.platform !== "darwin" }, async () => {
+    const m = machine({ security: `if [ -f "$HOME/read-once" ]; then exit 36; fi
+: > "$HOME/read-once"
+/bin/cat "$HOME/keychain"` });
+    mkdirSync(join(m.home, ".claude"));
+    const original = JSON.stringify(credentials(1));
+    writeFileSync(join(m.home, "keychain"), original);
+    const file = join(m.home, ".claude", ".credentials.json");
+    writeFileSync(file, original);
+    const p = await oauthProvider(200);
+    try {
+      await assert.rejects(claudeOAuthToken(m.env, null, null, p.base, "en"), /keychain/i);
+      assert.equal(p.asked.length, 0);
+      assert.equal(readFileSync(file, "utf8"), original);
+      assert.equal(readFileSync(join(m.home, "keychain"), "utf8"), original);
+      assert.equal(existsSync(join(m.home, ".claude", ".oauth_refresh.lock")), false);
+      assert.equal(existsSync(`${realpathSync(join(m.home, ".claude"))}.lock`), false);
+    } finally {
+      await p.close();
+    }
+  });
+
+  test("machine credential discovery does not fall back on keychain errors or malformed entries", { skip: process.platform !== "darwin" }, async () => {
+    for (const security of ["exit 36", "printf 'not-json'", "printf '{}'", "kill -TERM $$", "missing-executable"]) {
+      const m = machine({ security });
+      if (security === "missing-executable") m.env.PATH = join(m.home, "missing-bin");
+      mkdirSync(join(m.home, ".claude"));
+      writeFileSync(join(m.home, ".claude", ".credentials.json"), JSON.stringify(credentials(Date.now() + 3_600_000)));
+      assert.equal(await readClaudeCredentials(m.env), undefined, security);
+    }
+  });
+
+  test("a missing keychain item still permits a file-only machine login", { skip: process.platform !== "darwin" }, async () => {
+    const m = machine(); // security exits 44: item not found
+    mkdirSync(join(m.home, ".claude"));
+    const data = credentials(Date.now() + 3_600_000);
+    writeFileSync(join(m.home, ".claude", ".credentials.json"), JSON.stringify(data));
+    assert.equal((await readClaudeCredentials(m.env))?.token, "old");
+    assert.equal((await claudeOAuthToken(m.env, null, null, "http://127.0.0.1:1"))[0], "old");
   });
 
   test("the machine's login renews in the keychain and never uses the stale file", { skip: process.platform !== "darwin" }, async () => {

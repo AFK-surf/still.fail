@@ -5,7 +5,7 @@
 import { execFile, spawn } from "node:child_process";
 import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, realpathSync, rmdirSync, statSync, futimesSync } from "node:fs";
 import { join } from "node:path";
-import type { Env } from "../agents/machine-logins.ts";
+import { type Env, readClaudeKeychain } from "../agents/machine-logins.ts";
 import { writePrivate } from "../agents/no-keychain.ts";
 import { wall } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
@@ -62,11 +62,12 @@ function run(command: string, args: string[], env: Env, input?: string): Promise
 
 async function read(env: Env, home: string, machine: boolean, lang: Lang): Promise<Credentials> {
   if (machine && process.platform === "darwin") {
-    const found = await run("security", ["find-generic-password", "-w", "-s", ITEM], env);
-    if (found?.ok) {
+    const found = await readClaudeKeychain(env);
+    if (found.kind === "unreadable") throw new Error(tr(lang, "station.claudeAuth.keychainUnreadable"));
+    if (found.kind === "found") {
       // An unreadable keychain entry must not be replaced with a stale file's login.
       try {
-        return { data: JSON.parse(found.stdout), keychain: true };
+        return { data: JSON.parse(found.text), keychain: true };
       } catch {
         throw new Error(tr(lang, "station.claudeAuth.keychainUnreadable"));
       }

@@ -25,6 +25,21 @@ export const codexAuthFile = (env: Env) => join(codexHome(env), "auth.json");
 /// The keychain item Claude Code keeps the machine's login in on macOS (no CLAUDE_CONFIG_DIR, so no suffix).
 const CLAUDE_KEYCHAIN_ITEM = "Claude Code-credentials";
 
+type KeychainRead = { kind: "found"; text: string } | { kind: "missing" } | { kind: "unreadable" };
+
+/// Only errSecItemNotFound (security's exit 44) permits a file fallback. A locked keychain, denied access,
+/// timeout or missing executable says nothing about whether its login exists; using a stale file can replay a
+/// refresh token already rotated by the CLI. Shared by discovery and the refresh path so they choose the same store.
+export function readClaudeKeychain(env: Env): Promise<KeychainRead> {
+  return new Promise((resolve) => {
+    execFile("security", ["find-generic-password", "-w", "-s", CLAUDE_KEYCHAIN_ITEM], { env, timeout: 10_000, killSignal: "SIGKILL" }, (error, stdout) => {
+      if (!error) resolve({ kind: "found", text: String(stdout) });
+      else if (error.code === 44 && !error.killed && !error.signal) resolve({ kind: "missing" });
+      else resolve({ kind: "unreadable" });
+    });
+  });
+}
+
 export function parseClaudeCredentials(text: string): MachineToken | undefined {
   try {
     const oauth = JSON.parse(text)?.claudeAiOauth;
@@ -39,13 +54,9 @@ export function parseClaudeCredentials(text: string): MachineToken | undefined {
 /// The machine's Claude Code login where claude reads it: on macOS the keychain first, then the file.
 export async function readClaudeCredentials(env: Env): Promise<MachineToken | undefined> {
   if (process.platform === "darwin") {
-    const found = await new Promise<string | undefined>((resolve) =>
-      execFile("security", ["find-generic-password", "-w", "-s", CLAUDE_KEYCHAIN_ITEM], { env, timeout: 10_000 }, (error, stdout) =>
-        resolve(error ? undefined : String(stdout).trim()),
-      ),
-    );
-    const parsed = found === undefined ? undefined : parseClaudeCredentials(found);
-    if (parsed) return parsed;
+    const found = await readClaudeKeychain(env);
+    if (found.kind === "found") return parseClaudeCredentials(found.text);
+    if (found.kind === "unreadable") return undefined;
   }
   try {
     return parseClaudeCredentials(readFileSync(claudeCredentialsFile(env), "utf8"));
