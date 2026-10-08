@@ -21,19 +21,19 @@ export const deviceCodeValue = style({
 export const modelChips = style({});
 export const modelChip = style({
   display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", borderRadius: "999px",
-  background: vars.hover, fontSize: vars.textSecondary, lineHeight: "20px",
+  background: vars.hover, fontSize: vars.textUi, lineHeight: "20px",
 });
 /** A profile's state under its name: the check, when, and checking again. */
 export const profileState = style({ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" });
 export const modelPoolFilter = style({ maxWidth: "240px", height: "30px" });
-export const modelPoolGone = style({ fontSize: vars.textLabel });
+export const modelPoolGone = style({ fontSize: vars.textMeta });
 /** The machine's own logins, offered where a first profile is asked for (pages/Accounts.tsx's MachineLoginOffers). */
 export const machineLogins = style({ width: "100%", marginTop: "20px", display: "grid", gap: "4px", textAlign: "left" });
-export const machineLoginsHead = style({ margin: "0", fontSize: vars.textLabel, color: vars.muted });
-globalStyle(`${deviceCode} p`, { margin: "0", fontSize: vars.textSecondary });
+export const machineLoginsHead = style({ margin: "0", fontSize: vars.textMeta, color: vars.muted });
+globalStyle(`${deviceCode} p`, { margin: "0", fontSize: vars.textUi });
 
 /** A value beside its name in the share card (a station, the stations): muted, the button after it. */
-export const shareValue = style({ display: "inline-flex", alignItems: "center", gap: "6px", color: vars.muted, fontSize: vars.textSecondary });
+export const shareValue = style({ display: "inline-flex", alignItems: "center", gap: "6px", color: vars.muted, fontSize: vars.textUi });
 /** A station to pick in a dialog: a list row that is a button (no button look of its own). */
 export const pickRow = style({
   width: "100%", border: "0", background: "none", font: "inherit", color: "inherit", textAlign: "left", cursor: "pointer",

@@ -15,7 +15,7 @@ export const mCommand = style({
 /** Asking: a destructive action's button in red; a command with its copy button. */
 globalStyle(`${mDangerButton}[data-danger] ${mButton}`, { background: "var(--m-red)", color: "#fff !important" });
 globalStyle(`${mCommand} code`, {
-  flex: "1", minWidth: "0", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: vars.textLabel,
+  flex: "1", minWidth: "0", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: vars.textCaption,
   lineHeight: "18px", overflowWrap: "anywhere", userSelect: "all",
 });
 globalStyle(`${mCommand} button`, {

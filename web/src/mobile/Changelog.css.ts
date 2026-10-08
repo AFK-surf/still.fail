@@ -6,12 +6,12 @@ const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", wh
 // The changelog on a narrow screen: each change on its day's card, its lines, then where it is and whether this app
 // has it (grey but for an update that would bring it).
 export const mNote = style({
-  display: "flex", alignItems: "center", gap: "8px", margin: "8px 24px", fontSize: vars.textSecondary, color: "var(--m-muted)",
+  display: "flex", alignItems: "center", gap: "8px", margin: "8px 24px", fontSize: vars.textMeta, color: "var(--m-muted)",
   selectors: { "&[data-error]": { color: "var(--m-red)" } },
 });
 export const mChange = style({ display: "flex", flexDirection: "column", gap: "2px", padding: "10px 16px" });
 export const mLine = style({ fontSize: vars.textBody, lineHeight: "21px", color: "var(--m-ink)" });
-export const mMeta = style({ display: "flex", flexWrap: "wrap", gap: "0 10px", fontSize: vars.textSecondary, lineHeight: "18px", color: "var(--m-muted)" });
+export const mMeta = style({ display: "flex", flexWrap: "wrap", gap: "0 10px", fontSize: vars.textMeta, lineHeight: "18px", color: "var(--m-muted)" });
 // What an update would bring, said in the accent.
 globalStyle(`${mMeta} [data-has="false"]`, { color: "var(--m-accent-ink)" });
 
@@ -24,10 +24,10 @@ export const mNewsBody = style({
   selectors: { "&:active": { background: "var(--m-chip)" } },
 });
 export const mNewsHead = style({ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px", fontSize: vars.textBody, fontWeight: 600, color: "var(--m-ink)" });
-export const mNewsLine = style({ ...ellipsis, fontSize: vars.textSecondary, lineHeight: "18px", color: "var(--m-muted)" });
+export const mNewsLine = style({ ...ellipsis, fontSize: vars.textMeta, lineHeight: "18px", color: "var(--m-muted)" });
 export const mNewsClose = style({
   position: "absolute", top: "6px", right: "6px", display: "grid", placeItems: "center", width: "32px", height: "32px",
   padding: "0", border: "0", borderRadius: "50%", background: "none", color: "var(--m-muted)", cursor: "pointer",
 });
-globalStyle(`${mNews} button${mNewsBody}`, { fontSize: vars.textSecondary, color: "var(--m-muted)" });
+globalStyle(`${mNews} button${mNewsBody}`, { fontSize: vars.textMeta, color: "var(--m-muted)" });
 globalStyle(`${mNews} button${mNewsClose}`, { color: "var(--m-muted)" });

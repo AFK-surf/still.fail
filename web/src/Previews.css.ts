@@ -84,7 +84,7 @@ export const name = style({
   ...glass,
   position: "absolute", left: "8px", bottom: "8px", display: "flex", alignItems: "center", gap: "6px",
   maxWidth: "calc(100% - 16px)", height: "24px", padding: "0 10px 0 9px", borderRadius: "999px", color: vars.text,
-  fontSize: vars.textLabel, fontWeight: "500", boxShadow: "0 1px 4px rgb(0 0 0 / .08)",
+  fontSize: vars.textMeta, fontWeight: "500", boxShadow: "0 1px 4px rgb(0 0 0 / .08)",
 });
 /** Behind the front one (at rest): its page's edge alone. */
 globalStyle(`${layer}:not([data-spread]) ${card}[data-front=false] > *`, { visibility: "hidden" });
@@ -114,7 +114,7 @@ export const capsule = style({
   ...glass,
   position: "fixed", right: "16px", bottom: "16px", zIndex: "30", display: "flex", alignItems: "center", gap: "7px",
   height: "34px", padding: "0 15px 0 13px", border: "0", borderRadius: "999px", color: vars.text, font: "inherit",
-  fontSize: vars.textSecondary, fontWeight: "500", cursor: "pointer", pointerEvents: "auto",
+  fontSize: vars.textUi, fontWeight: "500", cursor: "pointer", pointerEvents: "auto",
   boxShadow: "var(--pv-shadow)",
   animation: `${fadeInKeyframes} 160ms ${vars.easeOut}`,
 });

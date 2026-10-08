@@ -13,13 +13,13 @@ export const refMenu = style({
   boxShadow: "0 4px 12px rgb(0 0 0 / .07), 0 1px 3px rgb(0 0 0 / .05)",
   transformOrigin: "bottom", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
 });
-export const refHead = style({ display: "flex", gap: "6px", padding: "0 12px 6px", fontSize: vars.textLabel, color: vars.muted });
+export const refHead = style({ display: "flex", gap: "6px", padding: "0 12px 6px", fontSize: vars.textMeta, color: vars.muted });
 export const refQuery = style({ color: vars.text });
-export const refEmpty = style({ margin: "0", padding: "6px 12px 4px", fontSize: vars.textSecondary, color: vars.muted });
+export const refEmpty = style({ margin: "0", padding: "6px 12px 4px", fontSize: vars.textUi, color: vars.muted });
 export const refItem = style({
   display: "grid", gridTemplateColumns: "16px minmax(0, 1fr) auto", alignItems: "center", gap: "10px", width: "100%",
   minHeight: "38px", padding: "8px 12px", border: "0", borderRadius: `calc(20px * ${vars.cornerScale})`, background: "none", color: vars.text,
-  textAlign: "left", fontSize: vars.textSecondary, cursor: "pointer", cornerShape: vars.cornerShape,
+  textAlign: "left", fontSize: vars.textUi, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&[data-active]": { background: vars.hover },
   },
@@ -27,7 +27,7 @@ export const refItem = style({
 export const refLogo = style({ display: "grid", placeItems: "center" });
 export const refTitleCell = style({ display: "flex", alignItems: "baseline", minWidth: "0" });
 export const refTitle = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const refTime = style({ fontSize: vars.textLabel, color: vars.muted });
+export const refTime = style({ fontSize: vars.textMeta, color: vars.muted });
 
 /** The composer: its mirror is placed in it. */
 export const refHost = style({ position: "relative" });
@@ -57,7 +57,7 @@ export const refChipHash = style({ marginRight: "1px", opacity: ".7" });
  * block takes no decoration from around it), its icon set down to sit with the letters.
  */
 export const refChipStation = style({
-  display: "inline-block", marginLeft: "4px", padding: "1px 6px", borderRadius: "999px", fontSize: vars.textLabel, color: vars.muted, background: vars.hover,
+  display: "inline-block", marginLeft: "4px", padding: "1px 6px", borderRadius: "999px", fontSize: vars.textMeta, color: vars.muted, background: vars.hover,
   whiteSpace: "nowrap", flexShrink: "0",
 });
 export const refChipStationIcon = style({ verticalAlign: "-1px", marginRight: "2px" });

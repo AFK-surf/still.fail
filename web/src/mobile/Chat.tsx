@@ -13,7 +13,7 @@ import { OpenFile } from "../Viz.tsx";
 import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
-import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
+import { ChatRows, WaitingBar, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { LoadingPill, PlaceholderMessages } from "./Loading.tsx";
@@ -217,6 +217,8 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
         <DraftKey.Provider value={draftKeyOf(here.station, here.key)}>
           <ChatRows chat={view} rows={rows} to={to} owners={ownersOf(view)} owner={stable.owner} onOpenHistory={stable.open} onArchive={view.thread ? stable.archive : undefined} />
         </DraftKey.Provider>
+        {/* What an agent needs of the viewer with no card for it, after the last message (as the wide screen's). */}
+        {view.waiting && !view.waiting.card && !view.archived && view.thread && <WaitingBar station={here.station} thread={view.thread.id} waiting={view.waiting} />}
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
       </Gallery.Provider>

@@ -13,7 +13,7 @@ import { card } from "./pages.css.ts";
 export const btn = style({
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "36px",
   padding: "0 16px", borderRadius: "999px", border: `1px solid ${vars.lineStrong}`, background: vars.canvas,
-  color: vars.text, fontSize: vars.textSecondary, fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer",
+  color: vars.text, fontSize: vars.textUi, fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer",
   transition: `background ${vars.dur} ${vars.easeOut}, border-color ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&:hover:not(:disabled)": { background: vars.hover },
@@ -56,16 +56,16 @@ globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid}):hover:not(:dis
 });
 export const textToggle = style({
   display: "inline-flex", alignItems: "center", gap: "2px", border: "0", background: "none", padding: "2px 4px",
-  color: vars.muted, fontSize: vars.textLabel, lineHeight: "18px", cursor: "pointer",
+  color: vars.muted, fontSize: vars.textMeta, lineHeight: "18px", cursor: "pointer",
   selectors: {
     "&:hover": { color: vars.text },
   },
 });
-export const cardFoot = style({ margin: "0", fontSize: vars.textLabel });
-export const fieldError = style({ fontSize: vars.textLabel, color: vars.red, margin: "0" });
+export const cardFoot = style({ margin: "0", fontSize: vars.textMeta });
+export const fieldError = style({ fontSize: vars.textMeta, color: vars.red, margin: "0" });
 export const input = style({
   width: "100%", minHeight: "36px", padding: "7px 12px", border: `1px solid ${vars.lineStrong}`,
-  borderRadius: vars.rField, background: vars.canvas, fontSize: vars.textSecondary,
+  borderRadius: vars.rField, background: vars.canvas, fontSize: vars.textInput,
   transition: `border-color ${vars.dur} ${vars.easeOut}`, cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { borderColor: vars.fieldHover },
@@ -85,7 +85,7 @@ export const popover = style({
 export const menuList = style({ minWidth: "180px" });
 export const menuItem = style({
   display: "flex", alignItems: "center", gap: "8px", width: "100%", minHeight: "34px", padding: "7px 10px", lineHeight: "20px",
-  border: "0", borderRadius: vars.rOption, background: "none", textAlign: "left", fontSize: vars.textSecondary,
+  border: "0", borderRadius: vars.rOption, background: "none", textAlign: "left", fontSize: vars.textUi,
   cursor: "pointer", outline: "none", userSelect: "none", cornerShape: vars.cornerShape,
   selectors: {
     "&[data-highlighted]": { background: vars.hover },
@@ -96,15 +96,15 @@ export const menuItem = style({
 // Menus float on glass lighter than the page, so the page's line would read as a dark groove there; a tint of the
 // text instead is lighter than the glass in dark and darker in light.
 export const menuSep = style({ height: "1px", margin: "6px 4px", background: `color-mix(in srgb, ${vars.text} 12%, transparent)` });
-export const menuLabel = style({ padding: "6px 10px 4px", fontSize: vars.textLabel, color: vars.muted });
+export const menuLabel = style({ padding: "6px 10px 4px", fontSize: vars.textMeta, color: vars.muted });
 export const steps = style({
-  margin: "0", paddingLeft: "20px", display: "grid", gap: "8px", fontSize: vars.textSecondary,
+  margin: "0", paddingLeft: "20px", display: "grid", gap: "8px", fontSize: vars.textUi,
   selectors: {
     [`${signIn} &`]: { gap: "14px" },
   },
 });
 export const verifyOk = style({
-  display: "inline-flex", alignItems: "center", gap: "6px", color: vars.green, fontSize: vars.textSecondary,
+  display: "inline-flex", alignItems: "center", gap: "6px", color: vars.green, fontSize: vars.textUi,
 });
 globalStyle(`${menuItem} svg`, { color: vars.muted, flex: "none" });
 globalStyle(`${menuItem}[data-disabled] svg`, { color: vars.subtle });
@@ -122,4 +122,4 @@ globalStyle(`${skeletonRow} span:first-child`, { width: "80%" });
 /** Here rather than with its class: it comes after .steps li > .btn, and wins over it. */
 globalStyle(`${skeletonRow} span:last-child`, { width: "45%", height: "8px" });
 /** Here rather than with its class: it comes after .field-error, and wins over it. */
-globalStyle(newChatStatus, { minHeight: "1.5em", margin: "0", fontSize: vars.textLabel, color: vars.muted });
+globalStyle(newChatStatus, { minHeight: "1.5em", margin: "0", fontSize: vars.textMeta, color: vars.muted });

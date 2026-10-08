@@ -4,7 +4,7 @@ import { jobDot } from "../Jobs.css.ts";
 import { mChat, mMessages } from "./styles/chat.css.ts";
 
 export const mCenter = style({
-  flex: "1", display: "grid", placeItems: "center", padding: "32px", textAlign: "center", fontSize: vars.textControl,
+  flex: "1", display: "grid", placeItems: "center", padding: "32px", textAlign: "center", fontSize: vars.textUi,
 });
 export const mInfoLabel = style({ width: "72px", flex: "none", color: "var(--m-muted)" });
 export const mInfoName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" });
@@ -84,7 +84,7 @@ export const mJob = style({
 export const mJobText = style({ display: "flex", flexDirection: "column", gap: "1px", minWidth: "0" });
 export const mJobHead = style({ display: "flex", alignItems: "flex-start", gap: "12px", padding: "4px 22px 14px" });
 export const mJobBody = style({});
-export const mJobNotices = style({ display: "grid", gap: "12px", fontSize: vars.textControl, overflowY: "auto" });
+export const mJobNotices = style({ display: "grid", gap: "12px", fontSize: vars.textUi, overflowY: "auto" });
 export const mJobOutput = style({
   margin: "0", padding: "12px 14px", maxHeight: "50vh", overflow: "auto", borderRadius: "16px",
   background: "color-mix(in srgb, var(--m-ink) 5%, transparent)",
@@ -113,11 +113,11 @@ export const mJobsAlarm = style({
   },
 });
 export const mJobsEmpty = style({
-  display: "flex", flexDirection: "column", gap: "4px", padding: "12px 2px", fontSize: vars.textSecondary, color: "var(--m-muted)",
+  display: "flex", flexDirection: "column", gap: "4px", padding: "12px 2px", fontSize: vars.textMeta, color: "var(--m-muted)",
 });
 export const mJobsAll = style({
   display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "2px", marginTop: "14px",
-  padding: "6px 2px", border: "0", background: "none", color: "var(--m-accent)", font: "inherit", fontSize: vars.textControl,
+  padding: "6px 2px", border: "0", background: "none", color: "var(--m-accent)", font: "inherit", fontSize: vars.textUi,
   textAlign: "left", cursor: "pointer",
   selectors: { "&:disabled": { cursor: "default" } },
 });
@@ -132,13 +132,13 @@ globalStyle(`${mAttach} button`, {
 // The dot on the name's 21px line, half a pixel up for CJK ink (rounded to a whole pixel).
 globalStyle(`${mJob} > ${jobDot}`, { marginTop: "6px" });
 globalStyle(`${mJobHead} span > span`, {
-  fontSize: vars.textLabel, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: vars.textCaption, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 globalStyle(`${mJobHead} > ${jobDot}`, { marginTop: "7px" });
 globalStyle(`${mJobNotices} p`, { margin: "0", display: "grid", gridTemplateColumns: "3.4em 1fr", gap: "10px" });
 globalStyle(`${mJobNotices} time`, { color: "var(--m-subtle)", fontVariantNumeric: "tabular-nums" });
 // The phone's buttons take the page's font (root.css.ts), stronger than a class alone: the count's size is set as strongly.
-globalStyle(`${mChat} button${mJump}[data-count]`, { fontSize: vars.textControl });
+globalStyle(`${mChat} button${mJump}[data-count]`, { fontSize: vars.textUi });
 
 /**
  * What waits to be decided (../Asks.tsx), over the composer: its foot 10px over the capsule (8px of the composer's own

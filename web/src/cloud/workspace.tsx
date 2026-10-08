@@ -18,7 +18,7 @@ import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
 import { AttentionEntry } from "../Attention.tsx";
 import { DecisionDeskProvider, DecisionPage } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
-import { OpenJobs } from "../OpenJobs.tsx";
+import { OpenJobsChip } from "../OpenJobs.tsx";
 import { GlobalShortcuts } from "../Switcher.tsx";
 import { ShortcutsPage } from "../Shortcuts.tsx";
 import { CHANGEABLE } from "../keymap.ts";
@@ -217,7 +217,8 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
     <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.workspace.navigation")}>
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} />
-      <ChatList top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>} scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} decisions={`/w/${entry.id}/decisions`} />
+      <ChatList top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>} scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} decisions={`/w/${entry.id}/decisions`}
+        below={<div className={nav.navTodo}><AttentionEntry scope={entry.id} /></div>} />
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
   );
@@ -229,21 +230,17 @@ function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {
       <div className={nav.navFoot}>
         <WebUpdate />
         <ChangelogNews to={`/w/${entry.id}/settings/changelog`} />
-        <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
-        {/* What the badge counts, every workspace's, and which chats (奏 among them, the failed ones of theirs). */}
-        <AttentionEntry scope={entry.id} />
-        <WorkspaceOpenJobs scope={entry.id} />
+        {/* How the stations are, and the services left up long, in one line; what wants the viewer is at the top. */}
+        <div className={nav.navFootStatus}>
+          <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
+          <OpenJobsChip scope={entry.id} />
+        </div>
         <div className={nav.navFootRow}>
           <WorkspaceSwitcher current={entry} />
           <Tip label={t("web-pages.settings.title")} side="top"><NavLink className={pagesCss.iconBtn} to={`/w/${entry.id}/settings`} aria-label={t("web-pages.settings.title")}><Settings {...ICON} /></NavLink></Tip>
         </div>
       </div>
   );
-}
-
-/** The services and jobs left up a long while on the workspace's stations that are up, each marked with its station's name when there are several. */
-function WorkspaceOpenJobs({ scope }: { scope: string }) {
-  return <OpenJobs scope={scope} />;
 }
 
 /** At the sidebar's foot: the workspace in view, which account it belongs to, and the others. */

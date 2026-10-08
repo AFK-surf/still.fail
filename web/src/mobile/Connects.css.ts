@@ -30,13 +30,13 @@ export const mSwitch = style({
 });
 export const mGreen = style({ color: "var(--m-green)" });
 export const mStepsList = style({
-  margin: "0", paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "8px", fontSize: vars.textControl,
+  margin: "0", paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "8px", fontSize: vars.textUi,
   lineHeight: "1.55",
 });
 globalStyle(`${mChoice} b`, { fontSize: vars.textBody, fontWeight: "600" });
-globalStyle(`${mChoice} span, ${mSwitchRow} ${mGrow} span`, { fontSize: vars.textSecondary, color: "var(--m-muted)" });
+globalStyle(`${mChoice} span, ${mSwitchRow} ${mGrow} span`, { fontSize: vars.textMeta, color: "var(--m-muted)" });
 globalStyle(`${mSwitchRow} ${mGrow}`, { display: "flex", flexDirection: "column" });
-globalStyle(`${mSwitchRow} b`, { fontSize: vars.textControl, fontWeight: "600" });
+globalStyle(`${mSwitchRow} b`, { fontSize: vars.textUi, fontWeight: "600" });
 globalStyle(`${mStepsList} a, ${mStepsList} ${mLink}`, { color: "var(--m-accent)" });
 /** Here rather than with its class: it comes after .m-choice b, and wins over it. */
 globalStyle(`${mJobText} b`, {
@@ -45,13 +45,13 @@ globalStyle(`${mJobText} b`, {
 });
 /** Here rather than with its class: it comes after .m-choice span, and wins over it. */
 globalStyle(`${mJobText} > span`, {
-  fontSize: vars.textLabel, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: vars.textCaption, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** Here rather than with its class: it comes after .m-choice b, and wins over it. */
 globalStyle(`${mJobHead} b`, { fontSize: vars.textTitle, fontWeight: "600", lineHeight: "23px" });
 /** Here rather than with its class: it comes after .m-switch-row b, and wins over it. */
 globalStyle(`${mJobsEmpty} b`, { fontSize: vars.textBody, fontWeight: "600", color: "var(--m-ink)" });
 /** Here rather than with its class: it comes after .m-choice span, and wins over it. */
-globalStyle(`${mJobsAll} span`, { fontSize: vars.textLabel, color: "var(--m-muted)" });
+globalStyle(`${mJobsAll} span`, { fontSize: vars.textCaption, color: "var(--m-muted)" });
 /** 全部 or 我建的, over the list of every station's connects. */
 export const mListSeg = style({ padding: "4px 16px 2px" });

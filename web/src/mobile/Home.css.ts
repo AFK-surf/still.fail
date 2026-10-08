@@ -100,10 +100,10 @@ export const mRowAside = style({
 export const mChatLine1 = style({ display: "flex", alignItems: "center", gap: "8px", height: "22px" });
 export const mMarkSlot = style({ display: "flex", flex: "none", width: 10, justifyContent: "center" });
 export const mChatTitle = style({
-  flex: "1", minWidth: "0", fontSize: vars.textTitle, lineHeight: "22px", overflow: "hidden", textOverflow: "ellipsis",
+  flex: "1", minWidth: "0", fontSize: vars.textUi, lineHeight: "22px", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
   selectors: {
-    "&[data-unread]": { fontWeight: "600" },
+    "&[data-unread]": { fontWeight: "500" },
     // Its station offline: greyed, and marked where a Slack chat's mark goes.
     [`${mChatRow}[data-offline] &`]: { opacity: ".45" },
   },
@@ -119,7 +119,7 @@ globalStyle(`${mChatMark} > span`, { display: "grid" });
 export const mChatLine2 = style({ display: "flex", alignItems: "center", gap: "8px", height: "20px" });
 export const mChatLast = style({ flex: "1", minWidth: "0", display: "flex" });
 export const mChatTime = style({
-  display: "none", fontSize: vars.textLabel, color: "var(--m-subtle)", whiteSpace: "nowrap",
+  display: "none", fontSize: vars.textCaption, color: "var(--m-subtle)", whiteSpace: "nowrap",
   selectors: {
     "&[data-shown]": { display: "inline" },
   },
@@ -138,13 +138,13 @@ export const mLast = style({
   },
 });
 export const mLastText = style({
-  minWidth: "0", fontSize: vars.textSecondary, lineHeight: "20px", color: "var(--m-muted)", overflow: "hidden",
+  minWidth: "0", fontSize: vars.textMeta, lineHeight: "20px", color: "var(--m-muted)", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
   // Its turn (something waits on the viewer, ../ChatMark.tsx WaitingText): in ink.
   selectors: { "&[data-turn]": { color: "var(--m-ink)" } },
 });
 globalStyle(`${mHomeWorkspace} svg`, { flex: "none", color: "var(--m-muted)" });
-globalStyle(`${mEmpty} p`, { fontSize: vars.textSecondary, color: "var(--m-muted)" });
+globalStyle(`${mEmpty} p`, { fontSize: vars.textMeta, color: "var(--m-muted)" });
 
 /** The latest chats (Home.tsx Recent): a head, a few rows, the way to them all. */
 export const mRecentHead = style({
@@ -155,7 +155,7 @@ export const mRecentRows = style({ flex: "1", minHeight: "0", overflowY: "auto",
 export const mRecentAll = style({
   display: "flex", alignItems: "center", justifyContent: "space-between", flex: "none", width: "100%", boxSizing: "border-box",
   padding: "12px 16px 12px 18px", border: "0", borderTop: "0.5px solid var(--m-line)", background: "none",
-  color: "var(--m-accent-ink) !important", fontSize: `${vars.textControl} !important`, cursor: "pointer",
+  color: "var(--m-accent-ink) !important", fontSize: `${vars.textUi} !important`, cursor: "pointer",
 });
 globalStyle(`${mRecentRows} ${mChatRow}`, { height: "60px", padding: "0 12px 0 14px", borderRadius: "14px" });
 globalStyle(`${mRecentRows} ${mChatRow}[data-open]`, { background: "var(--m-accent-bg)" });
@@ -181,7 +181,7 @@ export const mRowArchive = style({
   selectors: { "&:disabled": { opacity: ".4" }, "&:active:not(:disabled)": { filter: "brightness(.94)" } },
 });
 // The phone's buttons take their page's font (root.css.ts): its size and colour, as strong as that.
-globalStyle(`${mChatRowWrap} button${mRowArchive}`, { color: "var(--m-ink)", fontSize: vars.textSecondary, lineHeight: "28px", fontWeight: "500" });
+globalStyle(`${mChatRowWrap} button${mRowArchive}`, { color: "var(--m-ink)", fontSize: vars.textMeta, lineHeight: "28px", fontWeight: "500" });
 /** What a row swiped left uncovers, as wide as it has gone: 归档, in ink. */
 export const mSwipeUnder = style({
   position: "absolute", top: "0", bottom: "0", right: "0", width: "0", display: "flex", alignItems: "center",
@@ -233,7 +233,7 @@ globalStyle(`${mSearchPage}[data-leaving] ${mSearchCancel}`, { opacity: "0", tra
 export const mFoundChat = style({
   flex: "1", minWidth: "0", fontSize: vars.textBody, lineHeight: "22px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
-export const mFoundMeta = style({ flex: "none", fontSize: vars.textLabel, color: "var(--m-muted)", whiteSpace: "nowrap" });
+export const mFoundMeta = style({ flex: "none", fontSize: vars.textCaption, color: "var(--m-muted)", whiteSpace: "nowrap" });
 /** The words found, in a found message's line: in ink, bold (the rest of the line muted). */
 export const mFoundHit = style({ background: "none", color: "var(--m-ink)", fontWeight: "600" });
 // Over the page's own buttons' ink.

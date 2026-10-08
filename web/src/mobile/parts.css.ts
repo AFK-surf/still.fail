@@ -37,7 +37,7 @@ export const mSpinner = style({ display: "inline-block", flex: "none", boxSizing
 /** What was asked failed a moment ago (FailedMark): a small red round "!", tapped to say why. */
 export const mFailed = style({
   display: "inline-grid", placeItems: "center", flex: "none", alignSelf: "center", boxSizing: "border-box", borderRadius: "50%",
-  background: "var(--m-red)", color: "#fff", fontWeight: "700", lineHeight: "1", cursor: "pointer",
+  background: "var(--m-red)", color: "#fff", fontWeight: "600", lineHeight: "1", cursor: "pointer",
 });
 /** A segmented choice: a track that tints what it sits on, and a thumb that slides to the chosen option. */
 export const mSeg = style({
@@ -48,10 +48,10 @@ export const mSeg = style({
 });
 export const mSegRow = style({ position: "relative", display: "flex", height: "100%" });
 export const mSegOption = style({
-  border: "0", background: "none", padding: "0 10px", fontSize: `${vars.textSecondary} !important`, color: "var(--m-muted) !important",
+  border: "0", background: "none", padding: "0 10px", fontSize: `${vars.textMeta} !important`, color: "var(--m-muted) !important",
   whiteSpace: "nowrap", cursor: "pointer", position: "relative",
   selectors: {
-    [`${mSeg}[data-fill] &`]: { flex: "1", padding: "0 12px", fontSize: `${vars.textControl} !important` },
+    [`${mSeg}[data-fill] &`]: { flex: "1", padding: "0 12px", fontSize: `${vars.textUi} !important` },
     "&[data-on]": { color: "var(--m-ink) !important" },
     [`${mSeg}:not([data-track]) &[data-on]`]: { fontWeight: "600" },
   },
@@ -138,7 +138,7 @@ export const mInfoList = style({
 export const mButton = style({
   display: "inline-flex", alignItems: "center", gap: "8px", flex: "none", height: "38px", padding: "0 16px",
   border: "0", borderRadius: "19px", background: "var(--m-chip)", color: "var(--m-ink) !important",
-  fontSize: `${vars.textControl} !important`, fontWeight: "600", whiteSpace: "nowrap", cursor: "pointer",
+  fontSize: `${vars.textUi} !important`, fontWeight: "600", whiteSpace: "nowrap", cursor: "pointer",
   selectors: {
     "&[data-primary]": { background: "var(--m-ink)", color: "var(--m-bg) !important" },
     [`&[data-primary]:disabled:not(:has(${mSpinner}))`]: { background: "var(--m-line)" },
@@ -146,7 +146,7 @@ export const mButton = style({
   },
 });
 export const mLoading = style({
-  flex: "1", display: "grid", placeItems: "center", padding: "32px", fontSize: vars.textSecondary, color: "var(--m-muted)",
+  flex: "1", display: "grid", placeItems: "center", padding: "32px", fontSize: vars.textMeta, color: "var(--m-muted)",
   textAlign: "center",
 });
 globalStyle(`${mAvatar} img`, { width: "100%", height: "100%", objectFit: "cover" });
@@ -154,30 +154,30 @@ globalStyle(`${mNavbarTitle} b`, {
   maxWidth: "100%", fontSize: vars.textTitle, fontWeight: "600", lineHeight: "30px", marginBottom: "2px", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
-globalStyle(`${mLargeTitle} span`, { fontSize: vars.textSecondary, color: "var(--m-muted)" });
+globalStyle(`${mLargeTitle} span`, { fontSize: vars.textMeta, color: "var(--m-muted)" });
 globalStyle(`${mLargeTitle} h1`, {
-  margin: "0", fontSize: vars.textDisplay, fontWeight: "700", letterSpacing: "-0.6px", lineHeight: "1.25",
+  margin: "0", fontSize: vars.textDisplay, fontWeight: "600", letterSpacing: "-0.6px", lineHeight: "1.25",
 });
 globalStyle(`${mSection} b`, { fontSize: vars.textBody, fontWeight: "600" });
-globalStyle(`${mSection} span`, { marginLeft: "auto", fontSize: vars.textSecondary, color: "var(--m-muted)" });
+globalStyle(`${mSection} span`, { marginLeft: "auto", fontSize: vars.textMeta, color: "var(--m-muted)" });
 globalStyle(`${mPickText} > span`, { fontSize: vars.textBody });
-globalStyle(`${mPickText} small`, { fontSize: vars.textLabel, color: "var(--m-muted)" });
+globalStyle(`${mPickText} small`, { fontSize: vars.textCaption, color: "var(--m-muted)" });
 /** Here rather than with its class: it comes after .m-navbar-title b, and wins over it. */
 globalStyle(`${mInfoAgent} b`, {
   fontSize: vars.textBody, fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** Here rather than with its class: it comes after .m-large-title span, and wins over it. */
 globalStyle(`${mInfoAgent} span`, {
-  display: "flex", alignItems: "center", gap: "4px", fontSize: vars.textLabel, color: "var(--m-muted)", overflow: "hidden",
+  display: "flex", alignItems: "center", gap: "4px", fontSize: vars.textCaption, color: "var(--m-muted)", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */
 globalStyle(`${mHomeWorkspace} b`, {
-  minWidth: "0", fontSize: vars.textDisplay, lineHeight: "34px", fontWeight: "700", letterSpacing: "-0.4px", overflow: "hidden",
+  minWidth: "0", fontSize: vars.textDisplay, lineHeight: "34px", fontWeight: "600", letterSpacing: "-0.4px", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */
-globalStyle(`${mSheetHead} b`, { flex: "1", fontSize: vars.textTitle, fontWeight: "700" });
+globalStyle(`${mSheetHead} b`, { flex: "1", fontSize: vars.textTitle, fontWeight: "600" });
 /** Here rather than with its class: it comes after .m-section b, and wins over it. */
 globalStyle(`${mChatBarTitle} b`, {
   flex: "0 1 auto", minWidth: "0", fontSize: vars.textTitle, fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis",
@@ -186,10 +186,10 @@ globalStyle(`${mChatBarTitle} b`, {
 /** Here rather than with its class: it comes after .m-loading, and wins over it. */
 globalStyle(`${mMessages} > *`, { flex: "none" });
 /** Here rather than with its class: it comes after .m-pick-text > span, and wins over it. */
-globalStyle(`${mAttach} span`, { fontSize: vars.textSecondary });
+globalStyle(`${mAttach} span`, { fontSize: vars.textMeta });
 globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar})`, { WebkitAppRegion: "drag" });
 globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar}) :is(button, a)`, { WebkitAppRegion: "no-drag" });
-globalStyle(`${mListRow} ${mRunLabel}`, { width: "32px", flex: "none", fontSize: vars.textSecondary, color: "var(--m-muted)" });
+globalStyle(`${mListRow} ${mRunLabel}`, { width: "32px", flex: "none", fontSize: vars.textMeta, color: "var(--m-muted)" });
 /** Here rather than with its class: it comes after .m-quote-source > span, and wins over it. */
 globalStyle(`${mJobHead} span`, { display: "flex", flexDirection: "column", minWidth: "0" });
 /** A link's button: its spinner before its words while what it asked is under way. */

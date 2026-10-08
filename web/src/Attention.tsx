@@ -11,13 +11,14 @@ import { stationBase } from "./station.tsx";
 import { useAct } from "./toast.tsx";
 import { useWorkspaceMarks } from "./lastChat.ts";
 import { Bell } from "./icons.tsx";
+import { ICON } from "./ui.tsx";
 import * as nav from "./Sidebar.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as css from "./Attention.css.ts";
 import { t } from "./i18n.ts";
 
 /** Its state line without its lead (要你帮忙：, 出问题：, 奏 · ): the dot before it says that. */
-const line = (i: MarkItem) => i.text.replace(/^(?:要你帮忙|出问题|Needs you|Went wrong)[：:]\s*|^(?:奏|Decision) · /, "") || i.stationName;
+const line = (i: MarkItem) => i.text.replace(/^(?:要你帮忙|出问题|Needs you|Went wrong|Failed)[：:]\s*|^(?:奏|Decision) · /, "") || i.stationName;
 
 const keyOf = (i: MarkItem) => `${i.station}/${i.session ?? i.thread}`;
 
@@ -63,13 +64,13 @@ export function AttentionEntry({ scope }: { scope: string }) {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button type="button" className={`${nav.navRow} ${css.entry}`} aria-label={n > 0 ? t("web-main.attention.label", { n }) : t("web-main.attention.entry")}>
-          <span className={css.lead}><Bell size={14} /></span>
+          <Bell {...ICON} />
           <span className={css.name}>{t("web-main.attention.entry")}</span>
           {n > 0 ? <span className={css.count}>{n}</span> : <span className={css.quiet}>{all.length}</span>}
         </button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className={`${controlsCss.popover} ${css.panel}`} side="top" align="start" sideOffset={6} collisionPadding={8}>
+        <Popover.Content className={`${controlsCss.popover} ${css.panel}`} side="bottom" align="start" sideOffset={6} collisionPadding={8}>
           {all.length === 0 && <div className={css.empty}>{t("web-main.attention.empty")}</div>}
           {listed.map((g) => (
             <div key={g.workspace} className={css.group}>

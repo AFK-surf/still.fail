@@ -82,14 +82,14 @@ globalStyle(`${navFootRow} > ${iconBtn}, ${navFootRow} > * > ${iconBtn}`, { flex
 
 export const navHeading = style({
   display: "flex", alignItems: "center", justifyContent: "space-between", margin: "14px 8px 4px",
-  fontSize: vars.textLabel, lineHeight: "18px", color: vars.muted,
+  fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted,
 });
-export const navEmpty = style({ margin: "16px 10px", fontSize: vars.textSecondary, color: vars.muted });
+export const navEmpty = style({ margin: "16px 10px", fontSize: vars.textUi, color: vars.muted });
 export const navError = style({ color: vars.red });
 
 export const navRow = style({
   display: "flex", alignItems: "center", gap: 8, minHeight: 32, padding: "6px 10px", lineHeight: "20px", borderRadius: vars.rNav,
-  fontSize: vars.textSecondary, color: vars.text, transition: `background ${vars.dur} ${vars.easeOut}`, cornerShape: vars.cornerShape,
+  fontSize: vars.textUi, color: vars.text, transition: `background ${vars.dur} ${vars.easeOut}`, cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover },
     '&[aria-current="page"]': { background: vars.selected },
@@ -107,6 +107,8 @@ export const navText = style(ellipsis);
 /** 新建对话, with the filter beside it. */
 export const navNew = style({ display: "flex", alignItems: "center", gap: 4, padding: "6px 8px 2px" });
 globalStyle(`${navNew} > ${navRow}`, { flex: 1, minWidth: 0 });
+/** 待处理, under 新建对话 (cloud/workspace.tsx): as inset as it; nothing when there is nothing to do. */
+export const navTodo = style({ padding: "0 8px 2px", selectors: { "&:empty": { display: "none" } } });
 // Align the compose icon with the 14px completion check below.
 globalStyle(`${navNew} > ${navRow} > svg`, { transform: "translateX(-1px)" });
 
@@ -149,12 +151,12 @@ export const navSessionHead = style({
 export const navSessionTitle = style({
   flex: 1, ...ellipsis,
   selectors: {
-    [`${navSession}[data-unread] &`]: { fontWeight: 600, color: vars.text },
+    [`${navSession}[data-unread] &`]: { fontWeight: 500, color: vars.text },
     [`${navSession}[data-offline] &`]: { opacity: 0.5 },
   },
 });
 export const navSessionMeta = style({
-  display: "flex", alignItems: "center", gap: 6, fontSize: vars.textLabel, color: vars.muted, whiteSpace: "nowrap",
+  display: "flex", alignItems: "center", gap: 6, fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap",
   // Not clipped: the starter's ring (RowPicture.css.ts) stands 2px out of its 16px face, past this 18px line. The last
   // message ellipsizes itself.
   // Every row is two lines high, message or not, so a row that gains its first message does not grow.
@@ -162,13 +164,13 @@ export const navSessionMeta = style({
   selectors: { [`${navSession}[data-offline] &`]: { opacity: 0.5 } },
 });
 export const navSessionLast = style({
-  flex: 1, ...ellipsis, fontSize: vars.textLabel, color: vars.muted,
+  flex: 1, ...ellipsis, fontSize: vars.textMeta, color: vars.muted,
   // Its turn (something waits on the viewer, ChatMark.tsx WaitingText): in ink.
   selectors: { "&[data-turn]": { color: vars.text } },
 });
 /** When is rarely what one looks for in the list: it shows on hover (and keyboard focus), giving its room to the message otherwise. */
 export const navTime = style({
-  marginLeft: "auto", flex: "none", color: vars.subtle, fontVariantNumeric: "tabular-nums",
+  marginLeft: "auto", flex: "none", color: vars.subtle, fontSize: vars.textCaption, fontVariantNumeric: "tabular-nums",
   selectors: {
     [`${navSession} &`]: { display: "none" },
     [`${navSessionWrap}:hover &, ${navSession}:focus-visible &`]: { display: "inline" },
@@ -195,7 +197,7 @@ export const rowArchive = style({
 export const rowArchiveChip = style({
   position: "absolute", top: 7, right: 8, height: 20, padding: "0 8px", border: 0, borderRadius: 10,
   background: `color-mix(in srgb, ${vars.text} 8%, transparent)`, color: vars.text, fontFamily: "inherit",
-  fontSize: vars.textLabel, lineHeight: "20px", fontWeight: 500, cursor: "pointer", opacity: 0, pointerEvents: "none",
+  fontSize: vars.textMeta, lineHeight: "20px", fontWeight: 500, cursor: "pointer", opacity: 0, pointerEvents: "none",
   selectors: {
     [`${navSessionWrap}:hover &, &:focus-visible`]: { opacity: 1, pointerEvents: "auto" },
     "&:hover": { background: `color-mix(in srgb, ${vars.text} 13%, transparent)` },
@@ -223,7 +225,7 @@ globalStyle(`${stationRow} > ${stationTrouble}`, { marginBottom: 0 });
 globalStyle(`${stationRow} > ${stationTrouble}[data-retry]`, { paddingRight: 64 });
 export const waitingRetry = style({
   flex: "none", height: 22, padding: "0 10px", marginRight: -4, borderRadius: 999, border: 0, cursor: "pointer",
-  background: vars.hover, color: vars.text, fontSize: vars.textSecondary, display: "inline-flex", alignItems: "center", gap: 5,
+  background: vars.hover, color: vars.text, fontSize: vars.textUi, display: "inline-flex", alignItems: "center", gap: 5,
   selectors: {
     "&:hover:not(:disabled)": { background: vars.line },
     "&:disabled": { cursor: "progress" },
@@ -234,4 +236,8 @@ export const waitingItems = style({ display: "grid", gap: 6, maxWidth: 320 });
 export const waitingItem = style({ display: "grid", gap: 1 });
 export const waitingDetail = style({ opacity: 0.7 });
 /** Under a page's "loading…": quiet. */
-export const statusLine = style({ display: "block", marginTop: 4, fontSize: vars.textLabel, color: vars.muted });
+export const statusLine = style({ display: "block", marginTop: 4, fontSize: vars.textMeta, color: vars.muted });
+
+/** The foot's status line: the stations, and the services left up long beside them (cloud/workspace.tsx). */
+export const navFootStatus = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 });
+globalStyle(`${navFootStatus} > :first-child`, { flex: "1", minWidth: 0 });

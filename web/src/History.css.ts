@@ -22,7 +22,7 @@ export const historyHead = style({
   padding: "0 8px 1px 16px",
 });
 export const historyIdentity = style({
-  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontSize: vars.textSecondary, color: vars.muted,
+  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontSize: vars.textUi, color: vars.muted,
   whiteSpace: "nowrap", overflow: "hidden",
 });
 export const historyTools = style({ display: "flex", alignItems: "center", gap: "2px", flex: "none" });
@@ -39,11 +39,11 @@ export const hSteps = style({
   minWidth: "0", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", margin: "4px 0 0 6px",
   paddingLeft: "10px", borderLeft: `1px solid ${vars.line}`,
 });
-export const historyEdge = style({ margin: "4px 0", textAlign: "center", fontSize: vars.textLabel, color: vars.muted });
+export const historyEdge = style({ margin: "4px 0", textAlign: "center", fontSize: vars.textMeta, color: vars.muted });
 export const hReceived = style({ display: "grid", gap: "6px" });
 /** What does not fit goes to the next line, and a long place is cut short, rather than squeezing the words. */
 export const hLabel = style({
-  display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 6px", minWidth: "0", fontSize: vars.textLabel,
+  display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 6px", minWidth: "0", fontSize: vars.textMeta,
   color: vars.muted,
 });
 /** A Slack user's name: a button that says whether it is the viewer. */
@@ -67,7 +67,7 @@ export const hPlace = style({
   },
 });
 export const hQuote = style({
-  margin: "0", paddingLeft: "12px", borderLeft: `2px solid ${vars.lineStrong}`, fontSize: vars.textSecondary,
+  margin: "0", paddingLeft: "12px", borderLeft: `2px solid ${vars.lineStrong}`, fontSize: vars.textUi,
   whiteSpace: "pre-wrap", overflowWrap: "anywhere",
   selectors: {
     "&[data-clamped=\"true\"]": {
@@ -79,7 +79,7 @@ export const hQuote = style({
 /** A sent message's words are Markdown: the bar of a received one, without its plain-text wrapping. */
 export const hQuoteMd = style({ whiteSpace: "normal" });
 export const hMark = style({
-  display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textLabel, color: vars.muted,
+  display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textMeta, color: vars.muted,
   selectors: {
     "&::before": { content: "\"\"", flex: "1", height: "1px", background: vars.line },
     "&::after": { content: "\"\"", flex: "1", height: "1px", background: vars.line },
@@ -90,7 +90,7 @@ export const hSub = style({ paddingLeft: "14px", borderLeft: `2px dashed ${vars.
 export const hGroup = style({ borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape });
 export const hGroupHead = style({
   display: "flex", alignItems: "center", gap: "6px", width: "100%", padding: "6px 8px", margin: "0 -8px", border: "0",
-  borderRadius: `calc(10px * ${vars.cornerScale})`, background: "none", color: vars.muted, fontSize: vars.textLabel,
+  borderRadius: `calc(10px * ${vars.cornerScale})`, background: "none", color: vars.muted, fontSize: vars.textMeta,
   lineHeight: "18px", textAlign: "left", cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
@@ -114,10 +114,10 @@ export const hStepMeta = style({
   },
 });
 export const hStepBody = style({
-  padding: "4px 6px 8px", fontSize: vars.textLabel, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
+  padding: "4px 6px 8px", fontSize: vars.textMeta, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
 });
 export const hThinking = style({
-  padding: "2px 0 6px 6px", fontSize: vars.textLabel, color: vars.muted, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
+  padding: "2px 0 6px 6px", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
 });
 export const historyDetails = style({ borderBottom: `1px solid ${vars.line}`, background: vars.list });
 export const flip = style({
@@ -127,7 +127,7 @@ export const flip = style({
 });
 export const hPlaceName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
 export const hLiveThinking = style({
-  display: "grid", gap: "4px", fontSize: vars.textLabel, color: vars.muted, whiteSpace: "nowrap", overflow: "hidden",
+  display: "grid", gap: "4px", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap", overflow: "hidden",
   textOverflow: "ellipsis",
 });
 /** Long history text folds to five lines. */
@@ -145,7 +145,7 @@ export const foldBody = style({
 export const foldToggle = style({ justifySelf: "start" });
 /** A message the agent sent: no frame of its own (its code blocks keep theirs), a rule in the accent down the side. */
 export const hPhase = style({
-  display: "flex", alignItems: "center", gap: "6px", fontSize: vars.textLabel, color: vars.muted, minHeight: "20px",
+  display: "flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, color: vars.muted, minHeight: "20px",
   selectors: {
     "&[data-phase=\"responding\"]": { color: vars.text },
   },
@@ -171,9 +171,9 @@ export const hPhaseText = style({ animation: `${fadeInKeyframes} 180ms ${vars.ea
 export const hStepSaid = style({
   minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: vars.text,
 });
-globalStyle(`${usage} dt`, { fontSize: vars.textLabel, color: vars.muted });
+globalStyle(`${usage} dt`, { fontSize: vars.textMeta, color: vars.muted });
 globalStyle(`${usage} dd`, {
-  margin: "2px 0 0", fontSize: vars.textSecondary, fontWeight: "600", fontVariantNumeric: "tabular-nums",
+  margin: "2px 0 0", fontSize: vars.textUi, fontWeight: "600", fontVariantNumeric: "tabular-nums",
 });
 globalStyle(`${historyBody} > *`, { minWidth: "0" });
 globalStyle(`${hLabel} strong`, { color: vars.text, fontWeight: "600" });
@@ -185,7 +185,7 @@ globalStyle(`${hGroupHead} > span:first-of-type`, {
 });
 globalStyle(`${hStep} summary`, {
   display: "flex", alignItems: "baseline", gap: "8px", padding: "5px 6px",
-  borderRadius: `calc(8px * ${vars.cornerScale})`, listStyle: "none", cursor: "pointer", fontSize: vars.textLabel,
+  borderRadius: `calc(8px * ${vars.cornerScale})`, listStyle: "none", cursor: "pointer", fontSize: vars.textMeta,
   cornerShape: vars.cornerShape,
 });
 globalStyle(`${hStep} summary::-webkit-details-marker`, { display: "none" });
@@ -198,7 +198,7 @@ globalStyle(accountMenu, { minWidth: "260px" });
 globalStyle(mineFilterBtn, {
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", flex: "none", height: "32px",
   minWidth: "32px", padding: "0 8px", border: "0", borderRadius: vars.rNav,
-  cornerShape: vars.cornerShape, background: "none", color: vars.muted, font: "inherit", fontSize: vars.textSecondary,
+  cornerShape: vars.cornerShape, background: "none", color: vars.muted, font: "inherit", fontSize: vars.textUi,
   cursor: "pointer",
 });
 /** Here rather than with its class: it comes after .mine-filter-btn, and wins over it. */
@@ -211,7 +211,7 @@ globalStyle(`${historyDetails} + ${usage}`, { background: vars.list });
 globalStyle(`${historyDetails} ${sessionDetails}`, { gap: "10px", padding: "10px 14px" });
 globalStyle(`${historyDetails} ${details}`, { gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "4px 16px" });
 globalStyle(`${historyDetails} ${detailRow}`, {
-  gridTemplateColumns: "4.5em minmax(0, 1fr)", gap: "8px", fontSize: vars.textLabel, minHeight: "22px",
+  gridTemplateColumns: "4.5em minmax(0, 1fr)", gap: "8px", fontSize: vars.textMeta, minHeight: "22px",
 });
 globalStyle(`${historyDetails} ${detailRow} dd`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${hPlace} > svg`, { flex: "none" });

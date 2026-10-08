@@ -204,6 +204,8 @@ if part ts; then
   # Type sizes are the tokens' (styles/tokens.css.ts: text-micro … text-display), never a style's own (an em, relative to its text, may be).
   if touches '^web/src/'; then
     step "type sizes from tokens" sh -c '! git grep -nE "fontSize: *(\"[0-9.]+(px|rem)|[0-9])|font: *\"[^\"]*[0-9.]+px" -- "web/src/*.css.ts"'
+    # Three weights: 400, 500 to stand out, 600 for titles (the official site's hero aside).
+    step "three type weights" sh -c '! git grep -nE "fontWeight: *\"?(100|200|300|[5-6][1-9]0|[5-6][0-9][1-9]|7[0-9]{2}|8[0-9]{2}|9[0-9]{2}|bold|bolder|lighter)\b" -- "web/src/*.css.ts" ":!web/src/site/"'
   fi
   # Core tests also run for Rust-only client changes. A fresh CI checkout needs both
   # their JS dependencies and the real wasm package even when no TS file changed.

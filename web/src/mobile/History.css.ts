@@ -21,14 +21,14 @@ export const mHAct = style({
   },
 });
 export const mHSummary = style({
-  display: "flex", alignItems: "center", gap: "10px", padding: "6px 18px 8px", fontSize: vars.textLabel,
+  display: "flex", alignItems: "center", gap: "10px", padding: "6px 18px 8px", fontSize: vars.textCaption,
 });
 export const mHBody = style({ position: "relative", flex: "1", minHeight: "0" });
 export const mHSteps = style({
   position: "absolute", inset: "0", display: "flex", flexDirection: "column", gap: "10px", overflowY: "auto",
   overscrollBehavior: "contain", padding: "0 18px 24px",
 });
-export const mHEdge = style({ padding: "10px 0", fontSize: vars.textLabel, color: "var(--m-subtle)", textAlign: "center" });
+export const mHEdge = style({ padding: "10px 0", fontSize: vars.textCaption, color: "var(--m-subtle)", textAlign: "center" });
 export const mHItem = style({
   borderRadius: "8px", transition: "background 900ms",
   selectors: {
@@ -36,22 +36,22 @@ export const mHItem = style({
   },
 });
 export const mHLive = style({
-  fontSize: vars.textSecondary, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: vars.textMeta, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const mHReceived = style({ display: "flex", flexDirection: "column", gap: "10px" });
 export const mHMessage = style({ display: "flex", flexDirection: "column", gap: "5px" });
 export const mHLabel = style({
-  display: "flex", alignItems: "center", flexWrap: "wrap", fontSize: vars.textSecondary, color: "var(--m-muted)", minWidth: "0",
+  display: "flex", alignItems: "center", flexWrap: "wrap", fontSize: vars.textMeta, color: "var(--m-muted)", minWidth: "0",
 });
 export const mHQuote = style({ paddingLeft: "10px", borderLeft: "2px solid var(--m-line)" });
 export const mHBrief = style({
   display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical", overflow: "hidden",
   boxSizing: "border-box", width: "100%", padding: "0", border: "0", borderRadius: "6px", background: "none",
-  color: "var(--m-ink) !important", fontSize: `${vars.textControl} !important`, lineHeight: "21px", textAlign: "left",
+  color: "var(--m-ink) !important", fontSize: `${vars.textUi} !important`, lineHeight: "21px", textAlign: "left",
   cursor: "pointer",
 });
 export const mHSub = style({ paddingLeft: "12px" });
-export const mHMark = style({ display: "flex", alignItems: "center", gap: "6px", fontSize: vars.textSecondary, color: "var(--m-muted)" });
+export const mHMark = style({ display: "flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, color: "var(--m-muted)" });
 export const mHPlace = style({
   display: "inline-flex", alignItems: "center", gap: "3px", maxWidth: "100%", minWidth: "0", padding: "0", border: "0",
   borderRadius: "4px", background: "none", verticalAlign: "middle",
@@ -65,14 +65,14 @@ export const mHGroupHead = style({
   cursor: "pointer",
 });
 export const mHGroupBody = style({ display: "flex", flexDirection: "column", gap: "6px", padding: "4px 0 4px 19px" });
-export const mHThought = style({ fontSize: vars.textSecondary, lineHeight: "20px", color: "var(--m-muted)", whiteSpace: "pre-wrap" });
+export const mHThought = style({ fontSize: vars.textMeta, lineHeight: "20px", color: "var(--m-muted)", whiteSpace: "pre-wrap" });
 export const mHFold = style({ display: "flex", flexDirection: "column", gap: "4px" });
 export const mHFoldHead = style({
   display: "flex", alignItems: "center", gap: "8px", boxSizing: "border-box", width: "100%", padding: "3px 0",
   border: "0", background: "none", textAlign: "left", cursor: "pointer",
 });
 export const mHFoldName = style({
-  fontSize: vars.textSecondary, color: "var(--m-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: vars.textMeta, color: "var(--m-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   selectors: {
     "&[data-hint]": { fontWeight: "500", flex: "none", maxWidth: "50%" },
     "&:not([data-hint])": { flex: "1" },
@@ -80,7 +80,7 @@ export const mHFoldName = style({
   },
 });
 export const mHFoldHint = style({
-  flex: "1", minWidth: "0", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: vars.textLabel,
+  flex: "1", minWidth: "0", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: vars.textCaption,
   color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const mHFoldMeta = style({
@@ -89,7 +89,7 @@ export const mHFoldMeta = style({
     [`${mHFoldHead}[data-failed] &`]: { color: "var(--m-red)" },
   },
 });
-export const mHPhase = style({ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: vars.textSecondary });
+export const mHPhase = style({ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: vars.textMeta });
 export const mHDetails = style({
   position: "absolute", inset: "0", overflowY: "auto", overscrollBehavior: "contain", padding: "0 18px 30px",
 });
@@ -99,7 +99,7 @@ export const mRunRow = style({
   cursor: "pointer",
 });
 export const mHFacts = style({ display: "flex", flexDirection: "column", gap: "8px", padding: "12px 0 10px" });
-export const mHDetail = style({ display: "flex", gap: "16px", fontSize: vars.textControl });
+export const mHDetail = style({ display: "flex", gap: "16px", fontSize: vars.textUi });
 export const mHRings = style({ display: "flex", gap: "18px", padding: "10px 0" });
 /** Changing how it runs. */
 export const mRunSummary = style({
@@ -108,13 +108,13 @@ export const mRunSummary = style({
 });
 export const mRunLine = style({ display: "flex", alignItems: "center", gap: "8px" });
 export const mRunWas = style({
-  flex: "1", minWidth: "0", fontSize: vars.textControl, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  flex: "1", minWidth: "0", fontSize: vars.textUi, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   selectors: {
     "&[data-moved]": { flex: "0 1 auto", color: "var(--m-muted)" },
   },
 });
 export const mRunBecomes = style({
-  flex: "1", minWidth: "0", fontSize: vars.textControl, fontWeight: "600", color: "var(--m-accent)", overflow: "hidden",
+  flex: "1", minWidth: "0", fontSize: vars.textUi, fontWeight: "600", color: "var(--m-accent)", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const mSettingRow = style({
@@ -134,19 +134,19 @@ export const mPickCheck = style({
 export const mFilter = style({ margin: "8px 0 4px" });
 export const mAccountNote = style({ padding: "8px 0 4px" });
 globalStyle(`${mHHead} > b`, {
-  flex: "1", minWidth: "0", fontSize: vars.textTitle, fontWeight: "700", overflow: "hidden", textOverflow: "ellipsis",
+  flex: "1", minWidth: "0", fontSize: vars.textTitle, fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
 globalStyle(`${mHSteps} > *`, { flex: "none" });
 globalStyle(`${mHLabel} > svg`, { flex: "none", marginRight: "5px" });
 globalStyle(`${mHLabel} b`, { color: "var(--m-ink)", fontWeight: "600" });
 globalStyle(`${mHPlace} b`, {
-  fontSize: vars.textSecondary, fontWeight: "600", color: "var(--m-ink)", overflow: "hidden", textOverflow: "ellipsis",
+  fontSize: vars.textMeta, fontWeight: "600", color: "var(--m-ink)", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
 globalStyle(`${mHPlace}[data-link] b`, { color: "var(--m-accent-ink)" });
 globalStyle(`${mHGroupHead} > span:not(${mPill})`, {
-  flex: "0 1 auto", minWidth: "0", fontSize: vars.textSecondary, color: "var(--m-muted)", overflow: "hidden",
+  flex: "0 1 auto", minWidth: "0", fontSize: vars.textMeta, color: "var(--m-muted)", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 globalStyle(`${mHGroupHead} > span[data-open]`, {
@@ -154,9 +154,9 @@ globalStyle(`${mHGroupHead} > span[data-open]`, {
 });
 globalStyle(`${mHGroupHead} > span[data-failed]`, { color: "var(--m-red)" });
 globalStyle(`${mHPhase} i`, { width: "7px", height: "7px", borderRadius: "50%", background: "var(--m-accent)" });
-globalStyle(`${mRunRow} b`, { flex: "none", fontSize: vars.textControl, fontWeight: "400", whiteSpace: "nowrap" });
+globalStyle(`${mRunRow} b`, { flex: "none", fontSize: vars.textUi, fontWeight: "400", whiteSpace: "nowrap" });
 globalStyle(`${mRunRow} span`, {
-  flex: "1", minWidth: "0", fontSize: vars.textSecondary, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis",
+  flex: "1", minWidth: "0", fontSize: vars.textMeta, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
 globalStyle(`${mRunRow} svg:last-child`, { flex: "none", color: "var(--m-muted)" });
@@ -172,9 +172,9 @@ globalStyle(mNewNone, {
 /** Here rather than with its class: it comes after .m-h-head > b, and wins over it. */
 globalStyle(`${mNewNone} b`, { fontSize: vars.textTitle, fontWeight: "600" });
 /** Here rather than with its class: it comes after .m-run-row span, and wins over it. */
-globalStyle(`${mStationOffline} span`, { fontSize: vars.textSecondary, color: "var(--m-muted)" });
+globalStyle(`${mStationOffline} span`, { fontSize: vars.textMeta, color: "var(--m-muted)" });
 /** Here rather than with its class: it comes after .m-h-label b, and wins over it. */
-globalStyle(`${mMe} b`, { display: "block", fontSize: vars.textTitle, fontWeight: "700" });
+globalStyle(`${mMe} b`, { display: "block", fontSize: vars.textTitle, fontWeight: "600" });
 globalStyle(`${m} :is(${mNavButton}, ${mPlus}, ${mSend}, ${mChatBack}, ${mHAct}, ${mBarAgent})`, {
   "@media": {
     "(pointer: coarse)": {

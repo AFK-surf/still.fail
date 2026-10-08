@@ -21,7 +21,7 @@ export const previewAddress = style({
     "&:focus-within": { background: vars.canvas, boxShadow: `0 0 0 1.5px ${vars.fieldFocus}` },
   },
 });
-export const previewHost = style({ fontSize: vars.textSecondary, fontWeight: "500", color: vars.text, whiteSpace: "nowrap" });
+export const previewHost = style({ fontSize: vars.textUi, fontWeight: "500", color: vars.text, whiteSpace: "nowrap" });
 export const previewPage = style({
   position: "fixed", inset: "0", display: "flex", flexDirection: "column", background: vars.canvas,
 });
@@ -30,7 +30,7 @@ export const previewMissing = style({ alignItems: "center", justifyContent: "cen
 export const previewRestart = style({
   position: "absolute", left: "50%", bottom: "18px", transform: "translateX(-50%)", display: "flex",
   alignItems: "center", gap: "12px", padding: "10px 18px 10px 16px", borderRadius: "999px", ...glass,
-  boxShadow: `0 8px 24px ${vars.shadow}`, fontSize: vars.textSecondary, lineHeight: "1.35", whiteSpace: "nowrap",
+  boxShadow: `0 8px 24px ${vars.shadow}`, fontSize: vars.textUi, lineHeight: "1.35", whiteSpace: "nowrap",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`,
 });
 export const previewRestartDot = style({
@@ -44,7 +44,7 @@ export const previewRestartDot = style({
 });
 export const previewPath = style({
   flex: "1", minWidth: "0", padding: "0", border: "0", background: "none", color: vars.muted, font: "inherit",
-  fontSize: vars.textSecondary,
+  fontSize: vars.textUi,
   selectors: {
     "&:focus": { outline: "none", color: vars.text },
   },
@@ -54,7 +54,7 @@ globalStyle(`${previewBar} ${iconBtn}`, { width: "28px", height: "28px" });
 globalStyle(`${previewBar} ${iconBtn}:disabled`, { opacity: "0.35", cursor: "default", background: "none" });
 globalStyle(`${previewAddress} svg`, { flex: "none" });
 globalStyle(`${previewRestart} > span:last-child`, { display: "flex", flexDirection: "column" });
-globalStyle(`${previewRestart} > span:last-child span`, { fontSize: vars.textLabel, color: vars.muted });
+globalStyle(`${previewRestart} > span:last-child span`, { fontSize: vars.textMeta, color: vars.muted });
 /** A message that did not go: faded, with a short note (why is in its tip) and what to do about it, under it. */
 /** Here rather than with its class: it comes after .preview-bar .icon-btn:disabled, and wins over it. */
 globalStyle(`${msg}[data-unsent] > :not(${msgUnsent})`, { opacity: "0.55" });
@@ -69,20 +69,20 @@ globalStyle(`[data-enter], ${hPhaseText}, ${composerQuote}, ${sidePanel}`, {
   },
 });
 /** Here rather than with its class: it comes after .preview-restart > span:last-child, and wins over it. */
-globalStyle(`${enrollWait} > span:last-child`, { display: "grid", gap: "2px", fontSize: vars.textSecondary });
+globalStyle(`${enrollWait} > span:last-child`, { display: "grid", gap: "2px", fontSize: vars.textUi });
 
 export const loadRing = style({ color: vars.muted, flex: "none", selectors: { '&[data-failed]': { color: vars.red } } });
 export const loadDetails = style({
   zIndex: 1000, width: "min(420px, calc(100vw - 24px))", padding: "14px", borderRadius: vars.rCard,
   ...glass, color: vars.text,
-  boxShadow: `0 2px 8px ${vars.shadow}`, fontSize: vars.textSecondary,
+  boxShadow: `0 2px 8px ${vars.shadow}`, fontSize: vars.textUi,
 });
 export const loadHeading = style({ fontWeight: "500", marginBottom: "4px" });
-export const loadHint = style({ color: vars.muted, fontSize: vars.textLabel });
+export const loadHint = style({ color: vars.muted, fontSize: vars.textMeta });
 export const loadList = style({ maxHeight: "min(320px, 55vh)", overflowY: "auto", marginTop: "10px" });
 export const loadRow = style({
   display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "4px 12px", padding: "5px 0", fontVariantNumeric: "tabular-nums", color: vars.muted,
   selectors: { '&[data-failed]': { color: vars.red } },
 });
 export const loadPath = style({ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", textAlign: "left" });
-export const loadError = style({ gridColumn: "1 / -1", overflowWrap: "anywhere", fontSize: vars.textLabel });
+export const loadError = style({ gridColumn: "1 / -1", overflowWrap: "anywhere", fontSize: vars.textMeta });

@@ -38,7 +38,7 @@ import { t } from "./i18n.ts";
  * filter's menu beside it. With no station its empty state leads to `stationsPage` (the page itself, where stations are
  * added: nothing is appended to it).
  */
-export function ChatList({ scope, newChat, stationsPage, archive, decisions, top }: { scope: string; newChat: string; stationsPage: string; archive: string; decisions: string; top?: ReactNode }) {
+export function ChatList({ scope, newChat, stationsPage, archive, decisions, top, below }: { scope: string; newChat: string; stationsPage: string; archive: string; decisions: string; top?: ReactNode; below?: ReactNode }) {
   const [mode] = useSidebarMode();
   useShortcut("chat.prev", () => goToNeighbour(-1));
   useShortcut("chat.next", () => goToNeighbour(1));
@@ -62,6 +62,7 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
         {top}
         <SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`}
           showFilter={!(all.value && !all.value.loading && all.value.stations.length === 0)} />
+        {below}
       </div>
       <div className={nav.navSlider}>
         <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined}>

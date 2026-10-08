@@ -16,10 +16,10 @@ globalStyle(`${block} > *`, { margin: "0", maxHeight: "360px", overflow: "auto" 
 globalStyle(`${block} ${codeBar}`, { opacity: "0" });
 globalStyle(`${block}:hover ${codeBar}, ${block} ${codeBar}:focus-within`, { opacity: "1" });
 globalStyle(`${block} ${codeLang}`, { display: "none" });
-globalStyle(`${block} pre`, { padding: "8px 12px !important", fontSize: `${vars.textLabel} !important`, lineHeight: "1.55 !important", whiteSpace: "pre-wrap", overflowWrap: "anywhere" });
+globalStyle(`${block} pre`, { padding: "8px 12px !important", fontSize: `${vars.textMeta} !important`, lineHeight: "1.55 !important", whiteSpace: "pre-wrap", overflowWrap: "anywhere" });
 
 export const prose = style({
-  ...box, font: "inherit", fontSize: vars.textLabel, lineHeight: "1.6", whiteSpace: "normal", padding: "8px 12px",
+  ...box, font: "inherit", fontSize: vars.textMeta, lineHeight: "1.6", whiteSpace: "normal", padding: "8px 12px",
 });
 globalStyle(`${prose} > :first-child`, { marginTop: "0" });
 globalStyle(`${prose} > :last-child`, { marginBottom: "0" });
@@ -49,19 +49,19 @@ export const diffLine = style({
   },
 });
 
-export const plan = style({ display: "grid", gap: "2px", margin: "0", padding: "0 2px", listStyle: "none", fontSize: vars.textLabel });
+export const plan = style({ display: "grid", gap: "2px", margin: "0", padding: "0 2px", listStyle: "none", fontSize: vars.textMeta });
 export const planMark = style({ display: "inline-block", width: "16px", color: vars.subtle });
 globalStyle(`${plan} li[data-status="completed"]`, { color: vars.muted, textDecoration: "line-through", textDecorationColor: vars.subtle });
 globalStyle(`${plan} li[data-status="completed"] ${planMark}`, { color: vars.green, textDecoration: "none" });
 globalStyle(`${plan} li[data-status="in_progress"]`, { fontWeight: "600" });
 globalStyle(`${plan} li[data-status="in_progress"] ${planMark}`, { color: vars.accent });
 
-export const fields = style({ display: "grid", gap: "4px", margin: "0", padding: "0 2px", fontSize: vars.textLabel });
+export const fields = style({ display: "grid", gap: "4px", margin: "0", padding: "0 2px", fontSize: vars.textMeta });
 export const field = style({ display: "grid", gridTemplateColumns: "minmax(64px, max-content) minmax(0, 1fr)", gap: "12px", alignItems: "baseline" });
 globalStyle(`${field} dt`, { color: vars.subtle, fontSize: vars.textCaption });
 globalStyle(`${field} dd`, { margin: "0", minWidth: "0" });
-export const value = style({ fontFamily: vars.fontMono, fontSize: vars.textLabel, overflowWrap: "anywhere" });
-export const long = style({ ...box, fontFamily: vars.fontBody, fontSize: vars.textLabel, lineHeight: "1.6", maxHeight: "240px" });
+export const value = style({ fontFamily: vars.fontMono, fontSize: vars.textMeta, overflowWrap: "anywhere" });
+export const long = style({ ...box, fontFamily: vars.fontBody, fontSize: vars.textMeta, lineHeight: "1.6", maxHeight: "240px" });
 export const json = style({ ...box, maxHeight: "240px" });
 
 /** What came back: a little apart from the call. */

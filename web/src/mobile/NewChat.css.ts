@@ -7,14 +7,14 @@ export const mNewBody = style({
   gap: "6px", padding: "30px 30px 10px", textAlign: "center",
 });
 export const mNewProblem = style({
-  marginTop: "6px !important", fontSize: `${vars.textSecondary} !important`, color: "var(--m-red)",
+  marginTop: "6px !important", fontSize: `${vars.textMeta} !important`, color: "var(--m-red)",
   selectors: {
     "&[data-wait]": { color: "var(--m-muted)" },
   },
 });
 export const mNewSpent = style({
   margin: "0 12px", padding: "8px 12px", borderRadius: "12px",
-  background: "color-mix(in srgb, var(--m-warn) 12%, transparent)", fontSize: vars.textSecondary,
+  background: "color-mix(in srgb, var(--m-warn) 12%, transparent)", fontSize: vars.textMeta,
 });
 export const mNewBottom = style({
   display: "flex", flexDirection: "column", gap: "4px", flex: "none", padding: "8px 10px 0",
@@ -27,8 +27,8 @@ export const mChoosers = style({
 });
 export const mChooser = style({
   display: "inline-flex", alignItems: "center", gap: "6px", flex: "none", height: "30px", boxSizing: "border-box",
-  padding: "0 11px", borderRadius: "15px", fontSize: `${vars.textSecondary} !important`, whiteSpace: "nowrap", cursor: "pointer",
+  padding: "0 11px", borderRadius: "15px", fontSize: `${vars.textMeta} !important`, whiteSpace: "nowrap", cursor: "pointer",
 });
-globalStyle(`${mNewBody} h2`, { margin: "6px 0 0", fontSize: vars.textHeading, fontWeight: "700" });
-globalStyle(`${mNewBody} > p`, { fontSize: vars.textControl });
+globalStyle(`${mNewBody} h2`, { margin: "6px 0 0", fontSize: vars.textHeading, fontWeight: "600" });
+globalStyle(`${mNewBody} > p`, { fontSize: vars.textUi });
 

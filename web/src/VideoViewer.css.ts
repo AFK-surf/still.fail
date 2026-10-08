@@ -32,7 +32,7 @@ export const vvGroup = style({ flex: "none", display: "flex", alignItems: "cente
 
 export const vvInfo = style({
   flex: "1", minWidth: "0", display: "flex", alignItems: "baseline", gap: "16px", overflow: "hidden", whiteSpace: "nowrap",
-  fontFamily: vars.fontMono, fontSize: vars.textLabel, fontVariantNumeric: "tabular-nums", color: vars.text,
+  fontFamily: vars.fontMono, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums", color: vars.text,
 });
 export const vvFact = style({
   flex: "none",
@@ -48,7 +48,7 @@ export const vvDim = style({ color: vars.muted });
 export const vvPixel = style({
   ...glass,
   position: "fixed", zIndex: "70", display: "flex", alignItems: "center", gap: "8px", padding: "4px 8px",
-  borderRadius: "8px", pointerEvents: "none", color: vars.text, fontFamily: vars.fontMono, fontSize: vars.textLabel,
+  borderRadius: "8px", pointerEvents: "none", color: vars.text, fontFamily: vars.fontMono, fontSize: vars.textMeta,
   fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
 });
 export const vvSwatch = style({
@@ -56,7 +56,7 @@ export const vvSwatch = style({
 });
 export const vvRate = style({
   height: "28px", minWidth: "46px", padding: "0 8px", border: "0", borderRadius: `calc(10px * ${vars.cornerScale})`,
-  background: "rgba(255, 255, 255, .1)", color: vars.text, fontFamily: vars.fontMono, fontSize: vars.textLabel, fontWeight: "600",
+  background: "rgba(255, 255, 255, .1)", color: vars.text, fontFamily: vars.fontMono, fontSize: vars.textMeta, fontWeight: "600",
   cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: "rgba(255, 255, 255, .18)" },

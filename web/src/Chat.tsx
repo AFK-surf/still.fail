@@ -127,6 +127,8 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
         <DraftKey.Provider value={draftKey}>
           <ChatRows chat={chat} rows={rows} to={to} owners={ownersOf(chat)} owner={stable.owner} onOpenHistory={stable.open} onArchive={onArchive ? stable.archive : undefined} />
         </DraftKey.Provider>
+        {/* What it waits on the viewer for, after its last message: a card says it on its post already. */}
+        {chat.waiting && !chat.waiting.card && !chat.archived && id !== null && <WaitingBar station={station.address} thread={id} waiting={chat.waiting} />}
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
       </Gallery.Provider>
@@ -134,7 +136,6 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {quoting.pop}
       {askedFile}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
-      {chat.waiting && !chat.archived && id !== null && <WaitingBar station={station.address} thread={id} waiting={chat.waiting} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused}
@@ -144,11 +145,10 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
 }
 
 /**
- * What waits for the viewer in this chat (the core's `waiting`: a card for them, or an agent needing them), above the
- * composer: in a line, leading to the post it is about; 忽略 lets it go (`decision.dismiss`). A need has no card in
- * the chat, so this is where it shows.
+ * What an agent needs of the viewer in this chat with no card for it (the core's `waiting`), after the last message: in a
+ * line, leading to the post it is about; 忽略 lets it go (`decision.dismiss`). A card says so on its post already.
  */
-function WaitingBar({ station, thread, waiting }: { station: string; thread: number; waiting: ChatWaiting }) {
+export function WaitingBar({ station, thread, waiting }: { station: string; thread: number; waiting: ChatWaiting }) {
   const call = useCall();
   const act = useAct();
   const [gone, setGone] = useState<number | null>(null);
