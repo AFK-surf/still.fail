@@ -60,9 +60,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -161,15 +158,11 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
                         ?: Text("${i + 1}", fontSize = 12.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = ink)
                 }
                 Column(Modifier.weight(1f)) {
-                    val recommended = t("common.recommended")
-                    val accent = C.accentInk
-                    val label = remember(o.label, strong, recommended, accent) {
-                        buildAnnotatedString {
-                            append(o.label)
-                            if (strong) withStyle(SpanStyle(color = accent, fontSize = 13.sp)) { append("  $recommended") }
-                        }
+                    // The label a text of its own (what it is found by), 推荐 beside its first line.
+                    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(o.label, Modifier.weight(1f, fill = false), fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.ink)
+                        if (strong) Text(t("common.recommended"), fontSize = 13.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
                     }
-                    Text(label, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.ink)
                     o.detail?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted) }
                 }
                 if (busy == o.label) DoingMark(true, null, 14.dp)
