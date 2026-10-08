@@ -2271,6 +2271,13 @@ export interface TranscriptUsage {
 	cachedTokens: number;
 	outputTokens: number;
 	model?: string;
+	/** The prompt the last call sent: the context the session carries on with. */
+	contextTokens?: number;
+	/** The model's context window, when the runtime tells it (Codex). */
+	contextWindow?: number;
+	/** What the calls would cost at API list prices, in dollars; those of unpriced models left out. */
+	cost?: number;
+	unpricedCalls?: number;
 }
 
 /** A step in flight; an ended one stays until the transcript entry that records it arrives. */

@@ -13,7 +13,7 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
-import { type LiveMessage, LiveHub } from "../src/sessions/live.ts";
+import { type LiveMessage, LiveHub, TranscriptTail } from "../src/sessions/live.ts";
 import { prepare } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
 import { availableEfforts, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
@@ -132,6 +132,37 @@ test("steps are numbered and cut", () => {
 });
 
 const line = (text: string, id: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-09-26T00:00:00Z", message: { id, content: [{ type: "text", text }], usage: { input_tokens: 10, output_tokens: 2 } } })}\n`;
+
+test("a transcript's usage says its context now and what its calls would cost", () => {
+  const dir = temp();
+  const claude = join(dir, "c.jsonl");
+  const call = (id: string, usage: object, more: object = {}) => `${JSON.stringify({ type: "assistant", ...more, message: { id, model: "claude-opus-5-5", content: [], usage } })}\n`;
+  writeFileSync(claude,
+    call("m1", { input_tokens: 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 1000, output_tokens: 5 }) +
+    // A response's later line counts its output at its fullest.
+    call("m1", { input_tokens: 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 1000, output_tokens: 100 }) +
+    call("m2", { input_tokens: 20, cache_read_input_tokens: 1000, cache_creation_input_tokens: 200, cache_creation: { ephemeral_1h_input_tokens: 200 }, output_tokens: 50 }) +
+    // A subagent's call costs, but is not the session's context.
+    call("m3", { input_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 10 }, { isSidechain: true }));
+  const tail = new TranscriptTail("claude", claude);
+  tail.read();
+  assert.deepEqual([tail.usage.modelCalls, tail.usage.outputTokens, tail.usage.contextTokens, tail.usage.unpricedCalls], [3, 160, 1220, 0]);
+  // Opus 5.5: $4 in, $20 out, $0.2 read; written 1.25× (5 minutes) or 2× (an hour).
+  const cost = (10 * 4 + 1000 * 5 + 100 * 20) + (20 * 4 + 1000 * 0.2 + 200 * 8 + 50 * 20) + (5 * 4 + 10 * 20);
+  assert.ok(Math.abs(tail.usage.cost - cost / 1e6) < 1e-12, `${tail.usage.cost}`);
+  const codex = join(dir, "x.jsonl");
+  const count = (total: number, input: number) => `${JSON.stringify({ type: "event_msg", payload: { type: "token_count", info: { total_token_usage: { total_tokens: total }, last_token_usage: { input_tokens: input, cached_input_tokens: 1000, output_tokens: 10 }, model_context_window: 258000 } } })}\n`;
+  writeFileSync(codex, `${JSON.stringify({ type: "turn_context", payload: { model: "gpt-6-sol" } })}\n` + count(2000, 1500) + count(2000, 1500) + count(5000, 3000));
+  const x = new TranscriptTail("codex", codex);
+  x.read();
+  assert.deepEqual([x.usage.modelCalls, x.usage.contextTokens, x.usage.contextWindow], [2, 3000, 258000], "a repeated count is one call");
+  assert.ok(Math.abs(x.usage.cost - (500 * 2 + 1000 * 0.2 + 10 * 10 + 2000 * 2 + 1000 * 0.2 + 10 * 10) / 1e6) < 1e-12);
+  writeFileSync(join(dir, "u.jsonl"), call("m1", { input_tokens: 10, output_tokens: 1 }).replace("claude-opus-5-5", "someone-else"));
+  const other = new TranscriptTail("claude", join(dir, "u.jsonl"));
+  other.read();
+  assert.deepEqual([other.usage.cost, other.usage.unpricedCalls], [0, 1]);
+  rmSync(dir, { recursive: true, force: true });
+});
 
 /// What a LiveHub's watch on a transcript does when the file changes.
 const watched = (hub: LiveHub, key: string) => (hub as any).soon(key);

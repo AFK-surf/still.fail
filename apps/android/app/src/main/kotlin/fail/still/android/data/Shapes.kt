@@ -2309,7 +2309,14 @@ data class TranscriptUsage (
 	val inputTokens: Long,
 	val cachedTokens: Long,
 	val outputTokens: Long,
-	val model: String? = null
+	val model: String? = null,
+	/// The prompt the last call sent: the context the session carries on with.
+	val contextTokens: Long? = null,
+	/// The model's context window, when the runtime tells it (Codex).
+	val contextWindow: Long? = null,
+	/// What the calls would cost at API list prices, in dollars; those of unpriced models left out.
+	val cost: Double? = null,
+	val unpricedCalls: Long? = null
 )
 
 /// A step in flight; an ended one stays until the transcript entry that records it arrives.

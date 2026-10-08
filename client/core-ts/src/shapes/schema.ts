@@ -700,6 +700,10 @@ export const SHAPES: Record<string, Shape> = {
     ["cachedTokens", "i64", { client: "I54" }],
     ["outputTokens", "i64", { client: "I54" }],
     ["model", opt("String")],
+    ["contextTokens", opt("i64"), { client: opt("I54"), doc: "The prompt the last call sent: the context the session carries on with." }],
+    ["contextWindow", opt("i64"), { client: opt("I54"), doc: "The model's context window, when the runtime tells it (Codex)." }],
+    ["cost", opt("f64"), { doc: "What the calls would cost at API list prices, in dollars; those of unpriced models left out." }],
+    ["unpricedCalls", opt("i64"), { client: opt("I54") }],
   ]),
   LiveStep: struct([
     ["id", "String"],

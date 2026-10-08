@@ -321,12 +321,18 @@
   "core-logic.history.usage.cached": "Cached",
   "core-logic.history.usage.calls": "Model calls",
   "core-logic.history.usage.calls.value": "{n}",
+  "core-logic.history.usage.context": "Current context",
+  "core-logic.history.usage.context.of": "{n} / {window} ({percent}%)",
+  "core-logic.history.usage.cost": "Est. API cost",
+  "core-logic.history.usage.cost.unpriced": "Model not priced",
   "core-logic.history.usage.hit_rate": "Cache hit rate",
   "core-logic.history.usage.input": "Input",
   "core-logic.history.usage.line": {
     "one": "1 call · input {input}{rate} · output {output}",
     "other": "{n} calls · input {input}{rate} · output {output}"
   },
+  "core-logic.history.usage.line.context": "context {n}",
+  "core-logic.history.usage.line.cost": "≈{cost}",
   "core-logic.history.usage.line.rate": " ({rate}% cached)",
   "core-logic.history.usage.output": "Output",
   "core-logic.history.usage.unreported": "Not reported",

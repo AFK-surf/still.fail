@@ -11,6 +11,7 @@ import { zstdDecompressSync } from "node:zlib";
 import type { LiveEvent } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { type ReadState, type TimelineEntry, timelineOf } from "../read/transcript.ts";
+import { price } from "../read/usage.ts";
 
 type Json = any;
 type Phase = Extract<LiveEvent, { kind: "phase" }>["phase"];
@@ -18,7 +19,17 @@ type Phase = Extract<LiveEvent, { kind: "phase" }>["phase"];
 /// A step in flight: what it is, not what it has written so far.
 export type LiveStep = { id: string; step: "text" | "thinking" | "tool"; tool?: string; subagent?: boolean; parent?: string; input: string; startedAt: number };
 
-export type TranscriptUsage = { modelCalls: number; inputTokens: number; cachedTokens: number; outputTokens: number; model: string | null };
+/// What a session's calls used, and since later: the prompt its last call sent (the context it carries on with), the
+/// model's window when the runtime tells it (Codex), and what the calls would cost at API prices (usage.ts `cost`),
+/// those of a model without a price apart.
+export type TranscriptUsage = {
+  modelCalls: number; inputTokens: number; cachedTokens: number; outputTokens: number; model: string | null;
+  contextTokens: number; contextWindow: number | null; cost: number; unpricedCalls: number;
+};
+
+const noUsage = (): TranscriptUsage => ({
+  modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null, contextTokens: 0, contextWindow: null, cost: 0, unpricedCalls: 0,
+});
 
 export type LiveMessage =
   | { type: "steps"; steps: LiveStep[]; phase: { phase: Phase; elapsedMs: number } | null }
@@ -49,8 +60,12 @@ export class TranscriptTail {
   private packedStamp: string | null = null;
   private partial = Buffer.alloc(0);
   entries: TimelineEntry[] = [];
-  usage: TranscriptUsage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null };
-  private seen = new Set<string>();
+  usage: TranscriptUsage = noUsage();
+  /// Each Claude response counted, with the output counted of it and what a token of that costs (null: no price): one
+  /// response is written as several lines, its output at its fullest on the last.
+  private seen = new Map<string, { output: number; rate: number | null }>();
+  /// Codex's running totals counted: token counts are told again with rate limits.
+  private totals = new Set<number>();
   private state: ReadState = { inner: new Map() };
 
   constructor(runtime: "claude" | "codex", path: string) {
@@ -131,28 +146,67 @@ export class TranscriptTail {
 
   private addUsage(records: Json[]) {
     const n = (v: Json) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : 0);
+    const usage = this.usage;
     for (const r of records) {
       if (this.runtime === "claude") {
         const m = r?.type === "assistant" ? r.message : undefined;
         if (!m || m.usage === undefined || typeof m.id !== "string") continue;
-        if (this.seen.has(m.id)) continue;
-        this.seen.add(m.id);
         const u = m.usage;
-        const cached = n(u?.cache_read_input_tokens) + n(u?.cache_creation_input_tokens);
-        this.usage.modelCalls++;
-        this.usage.inputTokens += n(u?.input_tokens) + cached;
-        this.usage.cachedTokens += n(u?.cache_read_input_tokens);
-        this.usage.outputTokens += n(u?.output_tokens);
-        if (typeof m.model === "string" && m.model !== "<synthetic>") this.usage.model = m.model;
+        const output = n(u?.output_tokens);
+        const known = this.seen.get(m.id);
+        if (known !== undefined) {
+          if (output > known.output) {
+            usage.outputTokens += output - known.output;
+            if (known.rate !== null) usage.cost += ((output - known.output) * known.rate) / 1e6;
+            known.output = output;
+          }
+          continue;
+        }
+        const read = n(u?.cache_read_input_tokens);
+        const written = n(u?.cache_creation_input_tokens);
+        const input = n(u?.input_tokens);
+        usage.modelCalls++;
+        usage.inputTokens += input + read + written;
+        usage.cachedTokens += read;
+        usage.outputTokens += output;
+        const name = typeof m.model === "string" && m.model !== "<synthetic>" ? m.model : null;
+        if (name !== null) usage.model = name;
+        // The main thread's prompt is the context; a subagent's is its own.
+        if (r.isSidechain !== true) usage.contextTokens = input + read + written;
+        const p = name === null ? null : price(name);
+        if (p === null) {
+          if (name !== null) usage.unpricedCalls++;
+          this.seen.set(m.id, { output, rate: null });
+          continue;
+        }
+        // Written to the cache for an hour costs 2× input, for five minutes 1.25× (counter.ts splits them alike).
+        const long = n(u?.cache_creation?.ephemeral_1h_input_tokens);
+        const fast = u?.speed === "fast" ? 2 : 1;
+        usage.cost += ((input * p.input + (written - long) * p.input * 1.25 + long * p.input * 2 + read * p.cacheRead + output * p.output) * fast) / 1e6;
+        this.seen.set(m.id, { output, rate: p.output * fast });
       } else {
         const p = r?.payload ?? null;
-        if (r?.type === "turn_context" && typeof p?.model === "string") this.usage.model = p.model;
-        const last = r?.type === "event_msg" && p?.type === "token_count" ? p?.info?.last_token_usage : undefined;
+        if (r?.type === "turn_context" && typeof p?.model === "string") usage.model = p.model;
+        const info = r?.type === "event_msg" && p?.type === "token_count" ? p?.info : undefined;
+        const last = info?.last_token_usage;
         if (last === undefined || last === null) continue;
-        this.usage.modelCalls++;
-        this.usage.inputTokens += n(last.input_tokens);
-        this.usage.cachedTokens += n(last.cached_input_tokens);
-        this.usage.outputTokens += n(last.output_tokens);
+        const total = info?.total_token_usage?.total_tokens;
+        if (typeof total === "number") {
+          if (this.totals.has(total)) continue;
+          this.totals.add(total);
+        }
+        const input = n(last.input_tokens);
+        const cached = Math.min(n(last.cached_input_tokens), input);
+        const output = n(last.output_tokens);
+        usage.modelCalls++;
+        usage.inputTokens += input;
+        usage.cachedTokens += cached;
+        usage.outputTokens += output;
+        usage.contextTokens = input;
+        if (n(info?.model_context_window) > 0) usage.contextWindow = n(info.model_context_window);
+        const rate = usage.model === null ? null : price(usage.model);
+        if (rate === null) usage.unpricedCalls++;
+        else usage.cost += ((input - cached) * rate.input + cached * rate.cacheRead + output * rate.output) / 1e6;
       }
     }
   }
@@ -179,13 +233,17 @@ export class ChainTail {
   }
 
   get usage(): TranscriptUsage {
-    const usage: TranscriptUsage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null };
+    const usage = noUsage();
     for (const t of this.tails) {
       usage.modelCalls += t.usage.modelCalls;
       usage.inputTokens += t.usage.inputTokens;
       usage.cachedTokens += t.usage.cachedTokens;
       usage.outputTokens += t.usage.outputTokens;
       usage.model = t.usage.model ?? usage.model;
+      usage.cost += t.usage.cost;
+      usage.unpricedCalls += t.usage.unpricedCalls;
+      // The context is the transcript's written to last that has called the model.
+      if (t.usage.modelCalls > 0) [usage.contextTokens, usage.contextWindow] = [t.usage.contextTokens, t.usage.contextWindow];
     }
     return usage;
   }
