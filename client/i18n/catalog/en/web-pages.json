@@ -515,7 +515,7 @@
   "web-pages.profiles.machineLoginAbout": "To switch accounts, sign in again or sign out, use {runtime} on this machine; this profile follows. To stop using it, disable it (top-right menu).",
   "web-pages.profiles.machineLoginHere": "{runtime} sign-in on this machine",
   "web-pages.profiles.machineLoginOn": "{runtime} sign-in on {station}",
-  "web-pages.profiles.machineSignedIn": "Signed in on this machine",
+  "web-pages.profiles.machineSignedIn": "Signed in on {station}",
   "web-pages.profiles.manual": "Or sign in on the server by hand",
   "web-pages.profiles.models": "Models",
   "web-pages.profiles.modelsAbout": "Only enabled models can be picked for new chats and connects.",

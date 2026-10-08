@@ -282,12 +282,12 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal(made[1].id, "machine-claude");
     const profile = () => s.profile("machine-claude")!;
     assert.equal(profile().machine, true);
-    assert.equal(profile().name, "b@x.com（本机）");
+    assert.equal(profile().name, "b@x.com");
     assert.equal((profile().access as any).kind, "subscription");
     assert.equal((await s.call("POST", "/profiles/machine", { runtime: "claude" }))[0], 409);
     // Only its models are chosen here.
     assert.equal((await s.call("PUT", "/profiles/machine-claude", { name: "renamed", models: ["claude-x"], access: { kind: "opencode-go", key: "k" } }))[0], 200);
-    assert.deepEqual([profile().name, profile().models, (profile().access as any).kind, profile().machine], ["b@x.com（本机）", ["claude-x"], "subscription", true]);
+    assert.deepEqual([profile().name, profile().models, (profile().access as any).kind, profile().machine], ["b@x.com", ["claude-x"], "subscription", true]);
     assert.equal(s.view("machine-claude")!.machine, true);
     // And how it runs: on by default, turned off and on here; other edits keep it.
     assert.equal(profile().backgroundOnMessage, true);

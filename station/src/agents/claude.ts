@@ -52,10 +52,18 @@ export function transcriptExists(home: string, sessionId: string): boolean {
   });
 }
 
+/// Anthropic turning the request away before any account is looked at (a region it does not serve, a proxy's address
+/// it refuses): a 403 "Request not allowed", "forbidden". Signing in again changes nothing; the network does.
+export function refused(text: string): boolean {
+  const lower = text.toLowerCase();
+  return lower.includes("request not allowed") || /\bforbidden\b/.test(lower);
+}
+
 export function classifyResult(text: string): FailureReason {
   const lower = text.toLowerCase();
   const words = lower.split(/[^\p{L}\p{N}]+/u);
   const word = (w: string) => words.includes(w);
+  if (refused(text)) return "refused";
   if (word("401") || word("403") || lower.includes("authenticat") || lower.includes("api key")) return "auth";
   if (
     word("429") ||
@@ -117,7 +125,7 @@ export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => 
   } else if (kind === "result") {
     const text = typeof frame.result === "string" ? frame.result : subtype;
     let outcome: TurnOutcome;
-    if (turn.authFailure !== null) outcome = { kind: "failed", reason: "auth", message: turn.authFailure };
+    if (turn.authFailure !== null) outcome = { kind: "failed", reason: refused(turn.authFailure) ? "refused" : "auth", message: turn.authFailure };
     else if (turn.aborting) outcome = { kind: "aborted" };
     else if (frame.is_error === true) outcome = { kind: "failed", reason: classifyResult(text), message: chars(text, 1000) };
     else outcome = { kind: "completed" };

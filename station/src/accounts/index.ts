@@ -473,7 +473,8 @@ export class Accounts {
     const home = join(this.deps.data, "homes", id);
     mkdirSync(home, { recursive: true });
     if (runtime === "codex") linkCodexAuth(home, machine.env);
-    const name = login.email !== null ? t("station.machine.emailName", { email: login.email }) : t("station.machine.runtimeName", { runtime: named(runtime) });
+    // Its account, not "this machine": the profile is listed with the workspace's, read from other machines.
+    const name = login.email ?? named(runtime);
     log.info("accounts", "profile on the machine's login made", { profile: id, runtime, by: viewer.email });
     this.save(viewer, `profile ${id} on the machine's login`, (raw) => {
       const made = { id, name, runtime, access: { kind: "subscription" }, home: `homes/${id}`, env: {}, machine: true };

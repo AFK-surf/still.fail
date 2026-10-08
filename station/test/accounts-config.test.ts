@@ -124,3 +124,13 @@ test("an edit the check refuses is not written", () => {
   file.update((raw) => raw.profiles.push({ id: "ok", runtime: "codex", home: "homes/ok" }));
   assert.equal(file.raw().profiles.length, 2);
 });
+
+test("a profile on the machine's login loses the 「本机」 it was named with; another keeps its name as written", () => {
+  const sub = { runtime: "codex", home: "homes/m", access: { kind: "subscription" } };
+  const raw = { profiles: [
+    { ...sub, id: "machine-codex", machine: true, name: "b@x.com（本机）" },
+    { ...sub, id: "machine-claude", machine: true, name: "Local Claude Code" },
+    { ...sub, id: "other", name: "a@x.com（本机）" },
+  ] };
+  assert.deepEqual(hubConfig(raw, "/x").profiles.map((p) => p.name), ["b@x.com", "Claude Code", "a@x.com（本机）"]);
+});

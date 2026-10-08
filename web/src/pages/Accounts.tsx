@@ -45,6 +45,8 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
   const link = useLink();
   const navigate = useNavigate();
   const toast = useToast();
+  // Whose logins: the page may list several stations', and is read from any machine.
+  const station = useStation();
   const use = useAction((runtime: MachineLogin["runtime"]) => api.useMachineLogin(runtime), ({ id }) => {
     toast(t("web-pages.profiles.machineAdded"));
     navigate(link(`/settings/accounts/${id}`));
@@ -53,7 +55,7 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
   if (!offers.length) return null;
   return (
     <div className={css.machineLogins}>
-      <p className={css.machineLoginsHead}>{t("web-pages.profiles.machineSignedIn")}</p>
+      <p className={css.machineLoginsHead}>{t("web-pages.profiles.machineSignedIn", { station: station.name || t("web-main.machine.this") })}</p>
       {offers.map((l) => (
         // A refused account is said so, with nothing to do with it here.
         <MachineLoginCard key={l.runtime} login={l} action={l.quota?.state === "blocked" ? null : l.usable

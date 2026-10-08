@@ -12,6 +12,35 @@ import { join } from "node:path";
 /** stillfail-station's exit when another station runs the data directory (station/native/launcher: HELD). */
 const HELD = 3;
 
+/** The proxy variables a terminal has and an app opened from Finder does not (Claude Code and Codex follow only these). */
+const PROXY = ["http_proxy", "https_proxy", "all_proxy", "no_proxy"].flatMap((name) => [name, name.toUpperCase()]);
+const MARK = "__stillfail_env__";
+
+/**
+ * The proxy variables the user's login shell sets (an `export https_proxy=…` in ~/.zshrc, as proxy apps tell one to
+ * write), for those the app was not started with: opened from Finder or the Dock it has launchd's environment, and the
+ * station's agents would reach the API without the proxy the terminal's go through. Read once, by an interactive login
+ * shell as a terminal's (what it prints of its own is cut off by the marks); none when it fails or takes over 5 s.
+ */
+let shellProxy: Promise<Record<string, string>> | null = null;
+function proxyOfShell(): Promise<Record<string, string>> {
+  shellProxy ??= new Promise((resolve) => {
+    const shell = process.env.SHELL;
+    if (process.platform === "win32" || !shell) return resolve({});
+    execFile(shell, ["-ilc", `printf '${MARK}'; env; printf '${MARK}'`], { timeout: 5000, maxBuffer: 1 << 20 }, (error, stdout) => {
+      const env = error ? undefined : stdout.split(MARK)[1];
+      const found: Record<string, string> = {};
+      for (const line of env?.split("\n") ?? []) {
+        const at = line.indexOf("=");
+        const name = line.slice(0, at);
+        if (at > 0 && PROXY.includes(name) && process.env[name] === undefined) found[name] = line.slice(at + 1);
+      }
+      resolve(found);
+    });
+  });
+  return shellProxy;
+}
+
 /** A directory with something in it (a link counts: ~/.ember once moved is one). */
 function inUse(path: string): boolean {
   try {
@@ -42,6 +71,8 @@ export class LocalStation {
   }
   readonly #bin: string;
   #child: ChildProcess | null = null;
+  /** Reading the shell's proxy before the first start. */
+  #starting = false;
   #stopping = false;
   #backoff = 1000;
   /** Another station runs this machine's data: this one is not started again until the app is. */
@@ -93,15 +124,23 @@ export class LocalStation {
   }
 
   start(): void {
-    if (!this.carried || this.#child || this.#stopping || this.held) return;
+    if (!this.carried || this.#child || this.#starting || this.#stopping || this.held) return;
+    this.#starting = true;
+    void proxyOfShell().then((proxy) => {
+      this.#starting = false;
+      if (!this.#child && !this.#stopping && !this.held) this.#spawn(proxy);
+    });
+  }
+
+  #spawn(proxy: Record<string, string>): void {
     const data = this.data;
     mkdirSync(data, { recursive: true });
     const log = openSync(join(data, "stillfail.log"), "a");
     const started = Date.now();
     const child = spawn(this.#bin, ["run", "--app", this.dir, "--data", data, "--with-parent"], {
       // Opened from Finder the app has launchd's short PATH; the agents it starts (Claude Code, Codex) are found on this
-      // one, as an installed station's (cloud/src/install.ts).
-      env: { ...process.env, ...this.#node, STILLFAIL_DATA: data, EMBER_DATA: data, PATH: `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin` },
+      // one, as an installed station's (cloud/src/install.ts); and they go through the proxy the terminal's do.
+      env: { ...proxy, ...process.env, ...this.#node, STILLFAIL_DATA: data, EMBER_DATA: data, PATH: `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin` },
       stdio: ["ignore", log, log],
     });
     this.#child = child;
