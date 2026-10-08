@@ -9,9 +9,18 @@ export const mChatHost = style({
 export const mComposer = style({
   position: "absolute", left: "0", right: "0", bottom: "0", zIndex: "3",
   padding: "8px 10px calc(10px + var(--m-foot))",
+  "@media": {
+    // Wider (app.tsx WIDE): beside the latest chats' button, which is level with it (app.css.ts mRecentButton: 10 + 52 + 10).
+    "(min-width: 680px)": { paddingLeft: "72px" },
+  },
 });
-/** The same composer, in the decisions page's footer rather than over a chat. */
-export const mInlineComposer = style({ position: "relative", padding: "8px 0 0" });
+/** The same composer, in the decisions page's footer rather than over a chat (wider, clear of the latest chats' button too). */
+export const mInlineComposer = style({
+  position: "relative", padding: "8px 0 0",
+  "@media": {
+    "(min-width: 680px)": { paddingLeft: "62px" },
+  },
+});
 export const mHostComposer = style({
   selectors: {
     [`${mComposer}&`]: { zIndex: "6" },

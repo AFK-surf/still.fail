@@ -5,7 +5,7 @@ export const mSignIn = style({
   display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px",
   padding: "calc(40px + var(--m-top)) 30px calc(40px + var(--m-foot))", textAlign: "center", overflowY: "auto",
   "@media": {
-    // Wider than a phone: in the pages' column (app.css.ts mColumn).
+    // Wider than a phone: what it says kept to a column in the middle.
     "(min-width: 680px)": { paddingInline: "max(72px, calc(50% - 340px))" },
   },
 });

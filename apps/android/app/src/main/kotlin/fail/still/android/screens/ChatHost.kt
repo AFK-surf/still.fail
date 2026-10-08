@@ -470,7 +470,8 @@ internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean =
     Column(modifier.fillMaxWidth()) {
         ChatRefMenu(draft, spec.station, spec.here, host.haze, Modifier.padding(horizontal = 10.dp))
         // A capsule floating over the page, which runs on around it.
-        Box(Modifier.fillMaxWidth().onSizeChanged { host.composerHeight = it.height }.padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp)) {
+        // On a wide screen beside the latest chats' button (Wide.kt), which is level with it.
+        Box(Modifier.fillMaxWidth().onSizeChanged { host.composerHeight = it.height }.padding(start = if (LocalWide.current) BesideRecent else 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp)) {
             Column(
                 Modifier.fillMaxWidth().onGloballyPositioned { host.capsule = it }
                     .then(if (overContent) Modifier.floating(host.haze, RoundedCornerShape(ComposerCorner)) else Modifier.floatingStill(RoundedCornerShape(ComposerCorner)))
