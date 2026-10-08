@@ -33,6 +33,15 @@ A task is keyed by **workspace + source station + source session + caller key**.
 
 Task files and records remain under the target's data directory `remote/incoming`; source receipts are under `remote/outgoing`. Automatic retention/cleanup, remote long-lived services, and delegating to another model are not provided in this first service.
 
+## Chats on other stations
+
+Any station of the workspace may read another's chats and write to its sessions; no `remoteTasks.allow` is needed, as these are what a workspace member sees and does on the chats' pages, not execution.
+
+- `chat_read` / `session_history` with a chat's link on another station ask it (`session.read`). Its answer lists the attachments of the messages read; the reader fetches each (`session.file`, 256 KiB chunks) into its session's `uploads/<station>/` and names them by their path there. Those up to 16 MB come by themselves (up to 64 MB per read); larger ones are fetched when the agent names them in `fetch`. `session.file` gives only a file in the uploads directory of one of that chat's sessions — the files its page shows, also from an archived workspace — never another path.
+- `session_send` to a session on another station sends its `files` first (`session.put`, at most 10 of 50 MB each), staged under the target's data directory `remote/staged`, then the message naming them (`session.message`); the target moves them into the uploads of the chat's agent and posts them with the message. Files no message claims are removed after a day. On the same station the files are copied there directly.
+
+A station from before these methods takes them for tasks and refuses them; the reader then gets the text and is told the files were left there, and a message with files is not sent.
+
 ## Shares
 
 Stations also share profiles and skills over this transport (`share.get`, `share.lend`, `share.status`, `share.put`, `share.take`; [station-share.md](station-share.md)). Any station of the workspace may ask; what each share allows is checked by its host, which keeps it (still.fail cloud keeps nothing of shares). No `remoteTasks.allow` is needed: these are not execution.

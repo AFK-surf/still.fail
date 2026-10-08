@@ -3,11 +3,12 @@
 // what its agents did.
 import { parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { iso, type TimelineEntry } from "../read/transcript.ts";
-import { STILLFAIL_SURFACE, type SessionRow, type SessionThread, type ThreadRow } from "../store/store.ts";
+import { type Attachment, STILLFAIL_SURFACE, type SessionRow, type SessionThread, type ThreadRow } from "../store/store.ts";
 import { type Args, jsNumber, jsString } from "./args.ts";
 import { threadHistory } from "./conversations.ts";
 import type { Hub } from "./hub.ts";
 import { Refused } from "./neighbours.ts";
+import { fetchAttachments, type Listed } from "./peer-files.ts";
 
 type Json = any;
 
@@ -107,7 +108,21 @@ export async function readAfar(hub: Hub, key: string, station: string, tool: "ch
     throw new Error(`not read from station ${station}: ${why}`);
   }
   if (typeof answer?.text !== "string") throw new Error(`station ${station} answered with nothing to read`);
-  return `(Read from station ${station}: give its chats' links, not their addresses or keys, to read more there.)\n${answer.text}`;
+  let text: string = answer.text;
+  const files: Listed[] = Array.isArray(answer.files)
+    ? answer.files.filter((f: Json) => typeof f?.path === "string" && typeof f?.size === "number").map((f: Json) => ({ path: f.path, name: String(f.name ?? ""), size: f.size }))
+    : [];
+  const wanted: string[] = Array.isArray(args.fetch) ? args.fetch.filter((p): p is string => typeof p === "string") : [];
+  let fetched = "";
+  if (files.length > 0 || wanted.length > 0) {
+    // Its attachments, here: the paths read are this station's.
+    const { here, left } = await fetchAttachments(hub, key, call, station, String(args.chat), files, wanted);
+    for (const [there, local] of here) text = text.replaceAll(`- ${there} (`, `- ${local} (`);
+    const asked = wanted.flatMap((p) => (here.has(p) ? [`${p} → ${here.get(p)}`] : []));
+    if (asked.length > 0) fetched += `\n(Fetched here: ${asked.join("; ")}.)`;
+    if (left.length > 0) fetched += `\n(Attachments left on station ${station}; fetch one with chat_read fetch=[its path]: ${left.join("; ")}.)`;
+  }
+  return `(Read from station ${station}: give its chats' links, not their addresses or keys, to read more there.)\n${text}${fetched}`;
 }
 
 /// What another station's session reads here (`readAfar` there), from station `peer`: its own chats are not involved.
@@ -116,7 +131,12 @@ export async function forPeer(hub: Hub, peer: string, request: Json): Promise<Js
   const args: Args = request?.args !== null && typeof request?.args === "object" && !Array.isArray(request.args) ? request.args : {};
   const from = typeof request?.session === "string" ? request.session : "";
   if (typeof args.chat !== "string" || args.chat.trim() === "") throw new Error("chat is required");
-  if (tool === "chat_read") return { text: await chatRead(hub, `${peer}/${from}`, args) };
+  if (tool === "chat_read") {
+    // With the attachments of what it read, for that station to fetch (session.file, peer-files.ts).
+    const seen: Attachment[] = [];
+    const text = await chatRead(hub, `${peer}/${from}`, args, seen);
+    return { text, files: seen.map(({ path, name, size }) => ({ path, name, size })) };
+  }
   if (tool === "session_history") return { text: sessionHistory(hub, args) };
   throw new Error(`cannot read with ${JSON.stringify(tool)}`);
 }
@@ -221,8 +241,8 @@ export function chatList(hub: Hub, key: string, args: Args): string {
   return `${lines.join("\n")}${more}`;
 }
 
-/// chat_read: the messages of any conversation of the station.
-export async function chatRead(hub: Hub, key: string, args: Args): Promise<string> {
+/// chat_read: the messages of any conversation of the station. `seen` gets the attachments of the messages given.
+export async function chatRead(hub: Hub, key: string, args: Args, seen?: Attachment[]): Promise<string> {
   const reference = args.chat === undefined ? "" : jsString(args.chat);
   const what = named(hub, reference);
   let thread: ThreadRow;
@@ -241,7 +261,7 @@ export async function chatRead(hub: Hub, key: string, args: Args): Promise<strin
     if (others.length > 0) note = `\n(Session ${what.key} also takes part in ${others.join(", ")}; read them with chat_read chat=<address>.)`;
   }
   const address = threadAddress(thread.channel, thread.threadTs);
-  const text = await threadHistory(hub, key, thread, connect, address, args);
+  const text = await threadHistory(hub, key, thread, connect, address, args, seen);
   const agents = hub.store.threadSessions(thread.id).map((m) => m.session);
   return `Conversation ${address}; its agents: ${agents.length === 0 ? "none" : agents.join(", ")}.\n${text}${note}`;
 }
