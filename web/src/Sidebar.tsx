@@ -1,4 +1,4 @@
-import { Archive, Bot, Copy, Edit, Pin, Unplug } from "./icons.tsx";
+import { Archive, Copy, Edit, Pin, Unplug } from "./icons.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
 import { stationBase, useSidebarMode, type ChatFilter } from "./station.tsx";
 import { SidebarActions } from "./SidebarActions.tsx";
@@ -288,7 +288,6 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setEditing(true)}><Edit size={14} />{t("web-main.chat.rename")}</ContextMenu.Item>
             {/* Its link, for another chat's agent to read it (chat_read / session_history), on any station of the workspace. */}
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => copyLink(item)}><Copy size={14} />{t("web-main.chat.copyLink")}</ContextMenu.Item>
-            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => copyLink(item, true)}><Bot size={14} />{t("web-main.chat.copyHistoryLink")}</ContextMenu.Item>
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={archiveAsked}><Archive size={14} />{t("web-main.chat.archive")}</ContextMenu.Item>
           </ContextMenu.Content>
         </ContextMenu.Portal>

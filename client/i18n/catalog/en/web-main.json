@@ -131,7 +131,6 @@
   "web-main.chat.archiveAsk": "Archive \"{title}\"?",
   "web-main.chat.archiveFailed": "Couldn't archive: {error}",
   "web-main.chat.copyLink": "Copy chat link",
-  "web-main.chat.copyHistoryLink": "Copy execution history link",
   "web-main.chat.historyRefTitle": "History: {title}",
   "web-main.chat.linkCopied": "Copied: paste it into another chat and its agent can read this one",
   "web-main.chat.historyLinkCopied": "Copied: paste it into another chat and its agent can read what this chat's agent did",
@@ -254,6 +253,7 @@
   "web-main.filter.watching": "Watching",
   "web-main.fold": "Less",
   "web-main.history.bindFailed": "Couldn't link: {error}",
+  "web-main.history.copyLink": "Copy link to this step",
   "web-main.history.details": "Details",
   "web-main.history.failures": {
     "one": "1 failed",

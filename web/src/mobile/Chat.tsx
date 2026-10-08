@@ -185,15 +185,21 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
   // chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
   // link to an agent's execution history opens it.
   const onClick = (event: React.MouseEvent) => {
+    // One of this chat's agents' (another's goes to its chat, below).
     const history = historyLinkClicked(event);
-    if (history) {
+    if (history && view.agents.some((a) => a.session.key === history.key)) {
       event.preventDefault();
-      openHistory(app, here.station, here.key, history.key);
+      openHistory(app, here.station, here.key, history.key, history.entry);
       return;
     }
     const link = stillfailLinkClicked(event);
     if (!link) return;
-    if (link.service && view.agents.some((a) => a.session.key === link.session)) {
+    const elsewhere = link.sameOrigin && history ? history : null;
+    if (elsewhere) {
+      // Another chat's agent's execution history, at the entry it names: over this chat, as its page would open it.
+      event.preventDefault();
+      app.push(`/w/${link.workspace}/s/${link.station}/chats/${encodeURIComponent(link.session)}/history/${encodeURIComponent(elsewhere.key)}?entry=${elsewhere.entry}`);
+    } else if (link.service && view.agents.some((a) => a.session.key === link.session)) {
       event.preventDefault();
       app.push(servicePath(here.station, here.key, link.service));
     } else if (link.sameOrigin) {

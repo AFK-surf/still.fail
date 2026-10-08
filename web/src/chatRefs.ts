@@ -28,17 +28,17 @@ export function isChatLink(href: string | undefined): boolean {
 /**
  * The link a chat is given away by (copied from its row's menu): still.fail's, `…/o/<workspace>/<station>/<session>`,
  * which opens it wherever it is pasted and which an agent on any station of the workspace reads it by (chat_read);
- * `history`: its agent's execution history (session_history). A station of no workspace has no such link: its page
- * here (`root`, where this page's routes start).
+ * `history`: an agent's execution history there (session_history), opened at `entry` (copied from the history). A
+ * station of no workspace has no such link: its page here (`root`, where this page's routes start).
  */
-export function shareLink(item: { station: string; session: string; id: string }, root: string, history = false): string {
+export function shareLink(item: { station: string; session: string; id: string }, root: string, history?: { key: string; entry?: number | undefined }): string {
   const at = item.station.indexOf("/");
   const here = /^https?:$/.test(location.protocol) ? location.origin : null;
   const cloud = window.stillfailDesktop?.cloudOrigin || here;
   const page = at >= 0 && cloud
     ? `${cloud.replace(/\/+$/, "")}/o/${item.station.slice(0, at)}/${item.station.slice(at + 1)}/${encodeURIComponent(item.session)}`
     : `${here ?? ""}${root.replace(/\/+$/, "")}/chats/${encodeURIComponent(item.id)}`;
-  return history ? `${page}?history=${encodeURIComponent(item.session)}` : page;
+  return history ? `${page}?history=${encodeURIComponent(history.key)}${history.entry === undefined ? "" : `&entry=${history.entry}`}` : page;
 }
 
 /**

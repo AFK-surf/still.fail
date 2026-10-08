@@ -203,6 +203,7 @@
   "web-mobile.history.changeModel": "换模型",
   "web-mobile.history.changeNote": "改了以后从下一轮开始生效。",
   "web-mobile.history.changed": "已改，下一轮起生效",
+  "web-mobile.history.copyLink": "复制执行记录链接",
   "web-mobile.history.details": "详情",
   "web-mobile.history.effort": "深度",
   "web-mobile.history.effortNote": "想得越深越慢，也越费额度。",

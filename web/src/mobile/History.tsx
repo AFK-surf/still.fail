@@ -8,7 +8,7 @@ import { LOCAL_MS } from "../motion.ts";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useChat, useHistory, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
-import { ArrowRight, Check, ChevronDown, ChevronRight, Wait, Received, Send, Stop, Unplug } from "../icons.tsx";
+import { ArrowRight, Check, ChevronDown, Copy, ChevronRight, Wait, Received, Send, Stop, Unplug } from "../icons.tsx";
 import { optionOf } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
 import { Prose } from "../Prose.tsx";
@@ -16,7 +16,7 @@ import { useStickToBottom } from "../scroll.ts";
 import { useOlderOnScroll, Waited } from "../Chat.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { useApp, type MobileApp } from "./app.tsx";
-import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, ProviderMark, QuotaRings, Seg, SlackMark, Spinner, stateOf, tNodes, type Icon } from "./parts.tsx";
+import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, NavButton, ProviderMark, QuotaRings, Seg, SlackMark, Spinner, stateOf, tNodes, type Icon } from "./parts.tsx";
 import * as partsCss from "./styles/parts.css.ts";
 import * as css from "./History.css.ts";
 import { ToolCall, ToolResult } from "../ToolStep.tsx";
@@ -29,6 +29,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 import { Tip } from "../ui.tsx";
+import { useCopyChatLink } from "../ChatRef.tsx";
 import { MeterChips, QuotaRing } from "../components.tsx";
 import * as chatPageCss from "../pages/ChatPage.css.ts";
 
@@ -47,10 +48,14 @@ export function HistoryScreen() {
   const [search] = useSearchParams();
   const raw = search.get("entry");
   const entry = raw !== null && /^\d+$/.test(raw) && Number.isSafeInteger(Number(raw)) ? Number(raw) : undefined;
-  const bar = <NavBar back={t("common.back")} onBack={app.pop} title={t("web-mobile.app.runHistory")} />;
   // Slides in once what it shows is read from the device (LOCAL_MS at most, as Chat.tsx): not its loading look first.
   useReady({ topic: "history", station, key: agentKey }, LOCAL_MS);
   const view = useChat(station, { session: chat });
+  // Its link, to paste into another chat for its agent to read (or a person to open here).
+  const copyLink = useCopyChatLink(app.toast);
+  const title = view.value?.title;
+  const bar = <NavBar back={t("common.back")} onBack={app.pop} title={t("web-mobile.app.runHistory")}
+    trailing={title !== undefined ? <NavButton icon={Copy} label={t("web-mobile.history.copyLink")} onClick={() => copyLink({ station, session: agentKey, id: agentKey, title }, { key: agentKey })} /> : undefined} />;
   const history = useHistory(station, agentKey).value;
   const [tab, setTab] = useState(0);
   const agent = view.value?.agents.find((a) => a.session.key === agentKey);

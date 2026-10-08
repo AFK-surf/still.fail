@@ -119,12 +119,12 @@ export function markBefore(text: string, caret: number): number | null {
 }
 
 /**
- * Copying a chat's link from its row's menu (shareLink), to paste into another chat for its agent to read: `history`,
- * the link to its agent's execution history. `toast` says it is copied, or why not.
+ * Copying a chat's link (shareLink), to paste into another chat for its agent to read: from its row's menu, or from an
+ * agent's execution history (`history`: that agent, at one of its entries). `toast` says it is copied, or why not.
  */
 export function useCopyChatLink(toast: (text: string) => void) {
   const root = useHref("/");
-  return (item: Pick<ChatItem, "station" | "session" | "id" | "title">, history = false) => {
+  return (item: Pick<ChatItem, "station" | "session" | "id" | "title">, history?: { key: string; entry?: number | undefined }) => {
     // Its history named as such: pasted, its reference is told from the chat's own.
     const title = history ? t("web-main.chat.historyRefTitle", { title: item.title }) : item.title;
     void copyChatLink(title, shareLink(item, root, history)).then(
