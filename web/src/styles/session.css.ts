@@ -44,7 +44,7 @@ export const chatPane = style({
 });
 /** These panes keep their distance from the bottom themselves; the browser's top anchoring would fight it. */
 export const chatList = style({
-  flex: "1", minHeight: "0", overflowY: "auto", padding: "24px 32px", display: "flex", flexDirection: "column",
+  flex: "1", minHeight: "0", overflowY: "auto", padding: "24px 40px", display: "flex", flexDirection: "column",
   gap: "28px", position: "relative", overflowAnchor: "none",
   selectors: {
     // What floats over its foot: its scrollbar (scrollbars.ts) ends a little above the composer, not under it.
@@ -57,7 +57,7 @@ export const chatList = style({
   },
   // Making way for the small web services in the corner (Previews.tsx, which moves it), with its composer: what it
   // shows, not its scrollbar, which stays at the window's edge.
-  paddingRight: "calc(32px + var(--avoid-previews, 0px))",
+  paddingRight: "calc(40px + var(--avoid-previews, 0px))",
   "@media": {
     "(max-width: 700px)": {
       padding: "16px",
