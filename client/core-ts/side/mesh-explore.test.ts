@@ -4,7 +4,7 @@
 // - every request is answered or fails; none waits forever;
 // - a write the station does not say it keeps to once is carried out at most once;
 // - once all is well again, a read is answered;
-// - measured once all is well, the link is through a relay not clearly slower than the quickest one it measures;
+// - left to choose a while once all is well, the requests go through a relay not clearly slower than the quickest;
 // - closed, nothing of it is left open.
 // SIM_EXPLORE=<runs> (200) networks; a failure names the seed its network was made from, and SIM_SEED=<seed> makes the
 // same one again, for an agent to reproduce it as a test in test/mesh.test.ts.
@@ -14,7 +14,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import type { Credential } from "../src/cloud.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ALPN, cost, FORMER_ALPN, Mesh, MeshWire, type CredentialSource } from "../src/mesh.ts";
+import { ALPN, cost, EXPLORE_MS, FORMER_ALPN, Mesh, MeshWire, type CredentialSource } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -31,9 +31,9 @@ const RUNS = Number(process.env.SIM_EXPLORE ?? 200);
 const SEEDS = process.env.SIM_SEED ? [Number(process.env.SIM_SEED)] : Array.from({ length: RUNS }, () => randomInt(1, 2 ** 31));
 /// How long, once all is well again, a read may take.
 const RECOVER_MS = 2 * 60_000;
-/// How much slower than the quickest relay the link may stay: what quicker() asks of a move (QUICKER_SHARE 0.2, QUICKER_MS
-/// 30), and the jitter of measuring (up to 3 ms each way of a round trip, a few of them).
-const slowest = (best: number) => Math.max(best / 0.8, best + 30) + 12;
+/// How much slower than the quickest relay the requests may stay: a quarter, and the jitter of pinging (up to 3 ms each
+/// way of a round trip, a few of them).
+const slowest = (best: number) => best * 1.25 + 12;
 
 const grants: CredentialSource = () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential);
 
@@ -135,23 +135,18 @@ async function explore(seed: number): Promise<void> {
       if (twice.length > 0) failures.push(`writes carried out twice: ${[...new Set(twice)].join(", ")}`);
     }
 
-    // Measured now, all well: through a relay not clearly slower than the quickest it can use.
+    // Left to choose a while (past a dialling of the ways let go), all well: through a relay not clearly slower than the
+    // quickest it can use.
     if (read === "200") {
-      // A measuring under way (every MEASURE_EVERY_MS) is waited out first: asked meanwhile, remeasure leaves it be.
-      const quiet = () => !mesh.measured(id)?.measuring;
-      await time.until(quiet, 5 * 60_000);
-      const before = { via: mesh.current(id)?.via() ?? null, rtt: mesh.current(id)?.net().rttMs ?? null, speeds: Object.fromEntries(relays.map((u) => [u, mesh.speed(id, u)])) };
-      await time.settle(runner.run(mesh.remeasure(id)), 5 * 60_000).catch((e) => failures.push(`measuring: ${e?.message ?? e}`));
-      await time.until(quiet, 5 * 60_000);
+      await time.pass(EXPLORE_MS + 2 * 60_000);
       const via = mesh.current(id)?.via() ?? null;
-      // Those it measures: its own and the station's workspace's (relaysFor).
       const usable = mesh.relaysFor(id).filter((u) => relays.includes(u));
       // A way's round trip as it is, its speed as the mesh has seen it (none seen: not counted, as the mesh does).
       const truly = (u: string) => cost(2 * (net.leg(u, "device").ms + net.leg(u, "station").ms), mesh.speed(id, u));
       const best = Math.min(...usable.map(truly));
       const now = via === null ? null : relays.find((u) => new URL(u).host === new URL(via).host);
       if (now !== undefined && now !== null && truly(now) > slowest(best))
-        failures.push(`measured, the link is through ${now} (${truly(now).toFixed(0)} ms) though the quickest is ${best.toFixed(0)} ms: before ${JSON.stringify(before)}, measured ${JSON.stringify(mesh.measured(id))}`);
+        failures.push(`left to choose, the requests go through ${now} (${truly(now).toFixed(0)} ms) though the quickest is ${best.toFixed(0)} ms: ${JSON.stringify(mesh.measured(id))}`);
     }
 
     // Closed: nothing left open.

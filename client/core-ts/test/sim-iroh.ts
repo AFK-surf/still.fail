@@ -12,9 +12,9 @@ import { flush, type HostTime } from "../src/testing.ts";
 import type { CloseReason, Iroh, IrohAddr } from "../src/iroh.ts";
 import { wrapIroh } from "../src/iroh-bindings.ts";
 
-/// One side of a relay: how long a packet takes between it and the endpoint each way, and how fast that line is (bytes a
-/// second; none: as fast as can be).
-export type Leg = { ms: number; bps?: number };
+/// One side of a relay: how long a packet takes between it and the endpoint each way, how fast that line is (bytes a
+/// second; none: as fast as can be), and what share of the packets on it are lost (none: none are).
+export type Leg = { ms: number; bps?: number; loss?: number };
 /// A relay as the test sets it: the device's line to it, and the station's.
 export type RelaySpec = { device?: Leg; station?: Leg };
 
@@ -159,6 +159,15 @@ class Way {
     const least = Math.min(...this.#legs().map((leg) => leg.bps ?? Infinity));
     return Number.isFinite(least) ? least : undefined;
   }
+  /// The share of packets lost on the way, all its legs together.
+  loss(): number {
+    return 1 - this.#legs().reduce((kept, leg) => kept * (1 - (leg.loss ?? 0)), 1);
+  }
+  /// How long a packet lost on it takes to be sent again, the first time (QUIC's probe timeout: some two round trips);
+  /// each time again twice as long.
+  pto(): number {
+    return 4 * this.oneWay() + 25;
+  }
   /// Until when it is down (its relay's), or 0.
   downUntil(): number {
     return this.relay === null ? 0 : this.net.downUntil(this.relay);
@@ -166,7 +175,9 @@ class Way {
 }
 
 /// One way of a connection: what goes in comes out after the way's latency (and its jitter), at its speed, in order;
-/// sent while its relay is down, it goes once the relay is back (QUIC sends it again), unless the connection is gone.
+/// sent while its relay is down, it goes once the relay is back (QUIC sends it again), unless the connection is gone. A
+/// packet lost on the way (drawn from the seed, as the way loses them) comes a probe timeout later, or more: those
+/// after it wait for it, as a stream's do.
 class Line {
   #free = 0;
   #queue: { at: number; deliver: () => void }[] = [];
@@ -174,10 +185,12 @@ class Line {
   readonly net: SimNet;
   readonly way: Way;
   readonly live: () => boolean;
-  constructor(net: SimNet, way: Way, live: () => boolean) {
+  readonly lost: () => void;
+  constructor(net: SimNet, way: Way, live: () => boolean, lost: () => void = () => {}) {
     this.net = net;
     this.way = way;
     this.live = live;
+    this.lost = lost;
   }
 
   /// `always`: delivered though its connection is gone meanwhile (word of its closing).
@@ -189,7 +202,13 @@ class Line {
     // before it.
     const leaves = Math.max(this.#free, now, this.way.downUntil()) + (bps ? (size / bps) * 1000 : 0);
     this.#free = leaves;
-    const at = Math.max(leaves + latency, this.#queue.at(-1)?.at ?? 0);
+    let again = 0;
+    const loss = this.way.loss();
+    for (let pto = this.way.pto(); loss > 0 && this.net.rng.next() < loss; pto *= 2) {
+      again += pto;
+      this.lost();
+    }
+    const at = Math.max(leaves + latency + again, this.#queue.at(-1)?.at ?? 0);
     this.#queue.push({ at, deliver: always ? deliver : () => this.live() && deliver() });
     if (!this.#pumping) void this.#pump();
   }
@@ -357,7 +376,12 @@ export class SimConnection {
     this.way = way;
     this.rttMs = firstSample;
     this.heard = net.now();
-    this.out = new Line(net, way, () => this.reason === null);
+    this.out = new Line(
+      net,
+      way,
+      () => this.reason === null,
+      () => this.counts.lostPackets++,
+    );
     this.#closed = new Promise((r) => (this.#resolveClosed = r));
   }
 
@@ -514,9 +538,13 @@ export class SimEndpoint {
       await this.#goOnto(relay);
     }
     const way = new Way(this.net, relay, [this.side, there.side]);
-    // A handshake: a round trip. One the other end holds, or through a relay that is down, is never answered.
-    await this.net.sleep(2 * way.oneWay() + this.net.jitter());
-    if (way.downUntil() > this.net.now()) return NEVER;
+    // A handshake: a round trip, its packets lost as the way loses them (sent again after QUIC's initial probe timeout,
+    // a second, twice as long each time). One the other end holds, or through a relay that is down, is never answered.
+    let handshake = 2 * way.oneWay() + this.net.jitter();
+    const loss = way.loss();
+    for (let pto = 1000; loss > 0 && this.net.rng.next() < 1 - (1 - loss) ** 2; pto *= 2) handshake += pto;
+    await this.net.sleep(handshake);
+    if (way.downUntil() > this.net.now() || this.#closed || there.#closed) return NEVER;
     if (there.#held > 0) {
       there.#held--;
       return NEVER;
@@ -657,7 +685,8 @@ export class SimNet {
   }
   #legs(at: string): string {
     const r = this.#relays.get(at)!;
-    return `device ${r.device.ms} ms${r.device.bps ? ` ${r.device.bps} B/s` : ""}, station ${r.station.ms} ms${r.station.bps ? ` ${r.station.bps} B/s` : ""}`;
+    const leg = (l: Leg) => `${l.ms} ms${l.bps ? ` ${l.bps} B/s` : ""}${l.loss ? ` ${Math.round(l.loss * 100)}% lost` : ""}`;
+    return `device ${leg(r.device)}, station ${leg(r.station)}`;
   }
   leg(relay: string, side: "device" | "station"): Leg {
     return this.#relays.get(href(relay))?.[side] ?? { ms: 0 };

@@ -27,11 +27,12 @@ export class Station {
     return Station.bound({ alpns: alpns.map((a) => Buffer.from(a)), relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" }, world);
   }
 
-  /// One at home on the relay `home`, held on `other` too by a keeper there (station/native/mesh keep.rs).
-  static async on(home: string, other: string, world: World = REAL): Promise<Station> {
+  /// One at home on the relay `home`, held on `other` (one relay or several) too by a keeper there (station/native/mesh
+  /// keep.rs).
+  static async on(home: string, other: string | string[], world: World = REAL): Promise<Station> {
     const s = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [home], discovery: false, relayOnly: true }, world);
     await s.endpoint.online();
-    s.endpoint.keep([other]);
+    s.endpoint.keep(Array.isArray(other) ? other : [other]);
     return s;
   }
 

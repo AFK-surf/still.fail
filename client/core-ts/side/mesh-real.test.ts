@@ -10,7 +10,7 @@ import type { Credential } from "../src/cloud.ts";
 import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ALPN, CONNECT_TIMEOUT_MS, DEVICE_KEY, FORMER_ALPN, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, sampleRelayRtt, SPEED_MIN_BYTES, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, CONNECT_TIMEOUT_MS, DEVICE_KEY, FORMER_ALPN, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -456,19 +456,6 @@ test("relay_probes_disable_ip_without_disabling_live_hole_punching", { skip: noR
   server.kill();
 });
 
-test("a_direct_rtt_is_never_reported_as_a_relay_measurement", { skip }, async () => {
-  const station = await Station.start();
-  const runner = new Runner();
-  const endpoint = await runner.run(nodeIroh()!.bind({ secretKey: new Uint8Array(32).fill(5), relayUrls: [], lookup: false, relayOnly: false }));
-  endpoint.addAddr(station.addr());
-  const conn = await runner.run(endpoint.connect({ id: station.id(), relays: [] }, ALPN, []));
-  assert.equal(await runner.run(sampleRelayRtt(conn, "https://relay.test/")), null);
-  conn.close(0, "done");
-  await runner.run(endpoint.close());
-  await station.close();
-  runner.shutdown();
-});
-
 /// A phone's link to a station abroad went through the relay nearest the phone, the station's way there slow
 /// (2026-10-01, bft: 11 s a round trip); measured, it moves to the relay that is quicker the whole way.
 test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, async () => {
@@ -521,8 +508,9 @@ test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, 
   // no link is opened from here on (the probes have their own timeout), so of the 10 s timers only RETIRE_MS is to come.
   const retired = 100;
   times.set(RETIRE_MS, retired);
+  const moves = mesh.moves(id);
   await runner.run(mesh.remeasure(id));
-  assert.equal(mesh.measured(id)!.moved, null);
+  assert.equal(mesh.moves(id), moves);
   assert.equal(mesh.current(id), moved);
   // The endpoint only measured on is let go (RETIRE_MS after measuring); b's, with the link on it, stays.
   await sleep(retired + 300);

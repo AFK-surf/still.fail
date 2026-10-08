@@ -37,15 +37,26 @@ export const CONNECT_TIMEOUT_MS = 10_000;
 export const PROBE_MS = 5_000;
 export const RETIRE_MS = 10_000;
 export const REBIND_MS = 5_000;
-export const MEASURE_AFTER_MS = 3_000;
-export const MEASURE_EVERY_MS = 4 * 60_000;
-const MEASURE_TIMEOUT_MS = 15_000;
-const MEASURE_WARMUP = 3;
-const MEASURE_SAMPLES = 5;
+/// How often each way to a station is pinged (its credential presented again on it, answered by the station itself).
+export const TICK_MS = 5_000;
+/// A ping not answered by then counts as having taken this long, and as missed.
+export const PING_TIMEOUT_MS = 3_000;
+/// The ways kept open to a station: the one its requests go on, and the best of the others.
+export const KEEP_WAYS = 2;
+/// How often the ways not kept open are dialled again, to see whether one became better.
+export const EXPLORE_MS = 5 * 60_000;
+/// Pings a way needs answered before it is compared with another.
+export const MIN_SAMPLES = 3;
+/// Ticks in a row a way must be clearly better than the one requests go on before they move to it.
+const BETTER_TICKS = 3;
+/// Pings in a row a way may miss before it is let go.
+const DEAD_PINGS = 3;
+/// The least a read waits for its answer on its way before it is asked on the next best way as well.
+export const HEDGE_FLOOR_MS = 1_000;
+/// How often a read gone slow looks again for another way to be asked on, while there is none.
+const HEDGE_RECHECK_MS = 250;
 export const NET_DAY_KEY = "net-day";
 export const TALLY_EVERY_MS = 60_000;
-const QUICKER_MS = 30;
-const QUICKER_SHARE = 0.2;
 export const SPEED_KEY = "relay-speed";
 /// A reply this long or longer tells how fast a way is; a shorter one is mostly its round trip.
 export const SPEED_MIN_BYTES = 512 * 1024;
@@ -109,27 +120,66 @@ export function pinnedKey(secret: Uint8Array, relay: string): Uint8Array {
 }
 
 /// What a way costs, in ms: its round trip, and what a TYPICAL_BYTES reply takes to come through it at the speed it was
-/// seen at (nothing while that is not known: it is found out once a link goes that way).
+/// seen at (nothing while that is not known: it is found out once requests go that way).
 export function cost(ms: number, bps: number | null): number {
   return bps !== null && bps > 0 ? ms + (TYPICAL_BYTES / bps) * 1000 : ms;
 }
 
-/// The relay to move a link to, of those measured: the cheapest (`cost`), if the link is not already through it and it
-/// costs less than the link's way by both QUICKER_MS and QUICKER_SHARE. `speed`: how fast each way was seen, if it was.
-export function quicker(rttMs: number | null, via: string | null, measured: [string, number | null][], speed: (relay: string) => number | null = () => null): string | null {
-  let best: [string, number] | null = null;
-  for (const [relay, ms] of measured) {
-    if (ms === null) continue;
-    const c = cost(ms, speed(relay));
-    if (best === null || c < best[1]) best = [relay, c];
+/// A way as compared with another: what a request is expected to take on it at worst, its round trip and what a
+/// TYPICAL_BYTES reply takes to come (`cost`) and twice how much its round trips vary; and how much they vary.
+export type Score = { score: number; dev: number };
+
+/// What a way must be quicker by, at least, for requests to move to it: a move re-asks the reads under way and starts
+/// the event stream again, worth it only for a gain a person could notice.
+export const MOVE_GAIN = 0.1;
+
+/// Whether `other` is clearly better than `cur`: expected quicker by MOVE_GAIN at least, and by more than what the two
+/// vary by (half their deviations together), so two ways as good as each other are not swapped back and forth. A way
+/// gone erratic scores worse at once by its deviation alone.
+export function clearlyBetter(cur: Score, other: Score): boolean {
+  return other.score <= cur.score * (1 - MOVE_GAIN) && other.score + (cur.dev + other.dev) / 2 < cur.score;
+}
+
+/// One way to a station: a link (on the main endpoint, or on one pinned to a relay) and how it has been answering: its
+/// pings' round trips smoothed as TCP smooths its own (RFC 6298: the mean an eighth each time, the mean deviation a
+/// quarter).
+/// A ping is the link's credential presented again on its control stream, answered by the station: the whole way
+/// there and back, the station included, on the connection requests go on. Not QUIC's own estimate, which starts from
+/// the handshake (getting onto the relay included) and moves an eighth a keep-alive (2026-10-05).
+export class Way {
+  readonly link: Link;
+  samples = 0;
+  srtt = 0;
+  dev = 0;
+  /// Ticks in a row it was clearly better than the way requests go on.
+  better = 0;
+  /// Pings in a row not answered.
+  missed = 0;
+  /// A ping of it is under way (one not answered yet is not sent again over it).
+  pinging = false;
+
+  constructor(link: Link) {
+    this.link = link;
   }
-  if (best === null) return null;
-  if (via !== null && sameRelay(via, best[0])) return null;
-  const fresh = measured.find(([relay]) => sameRelay(via, relay))?.[1] ?? null;
-  const ms = fresh ?? rttMs;
-  if (ms === null) return null;
-  const now = cost(ms, via !== null ? speed(via) : null);
-  return best[1] + QUICKER_MS <= now && best[1] <= now * (1 - QUICKER_SHARE) ? best[0] : null;
+
+  note(ms: number): void {
+    if (this.samples === 0) {
+      this.srtt = ms;
+      this.dev = ms / 2;
+    } else {
+      this.dev = 0.75 * this.dev + 0.25 * Math.abs(ms - this.srtt);
+      this.srtt = 0.875 * this.srtt + 0.125 * ms;
+    }
+    this.samples++;
+  }
+
+  /// Where it goes: its relay (as a key), or "direct".
+  key(): string {
+    const via = this.link.via();
+    if (via !== null) return relayKey(via);
+    if (this.link.path() === "direct") return "direct";
+    return this.link.pinned !== null ? relayKey(this.link.pinned) : "main";
+  }
 }
 
 function closeMessage(reason: CloseReason): string {
@@ -416,9 +466,19 @@ export class Mesh {
   readonly #hedges = new Map<string, Hedge>();
   #serials = 0;
   readonly #pinned = new Map<string, Deferred.Deferred<IrohEndpoint | null>>();
-  readonly #measuring = new Set<string>();
-  #probing = 0;
-  readonly #measured = new Map<string, Measured>();
+  /// By station: the ways open to it (the link requests go on among them), each pinged every TICK_MS while it has any.
+  readonly #ways = new Map<string, Way[]>();
+  readonly #steering = new Set<string>();
+  /// Ways let go, closed RETIRE_MS later (what is still coming on them comes meanwhile).
+  readonly #retiring = new Set<Link>();
+  readonly #exploring = new Set<string>();
+  readonly #exploredAt = new Map<string, number>();
+  /// Dials under way on pinned endpoints (their endpoints are not let go meanwhile).
+  #dialing = 0;
+  /// By station: the relay requests last moved to (its host), and how many times they moved.
+  readonly #moved = new Map<string, string>();
+  readonly #moves = new Map<string, number>();
+  #closed = false;
   /// The relays a station's workspace has of its own, as the last `link` to it said.
   readonly #theirs = new Map<string, string[]>();
   #days: Record<string, Day>;
@@ -584,6 +644,7 @@ export class Mesh {
       next.close();
       return;
     }
+    this.#adopt(stationId, next);
     const done = Deferred.makeUnsafe<Link, CoreError>();
     Deferred.doneUnsafe(done, Effect.succeed(next));
     this.#links.set(stationId, { done, result: { ok: next } });
@@ -662,6 +723,14 @@ export class Mesh {
           fresh = existing.result.ok.refused !== null;
         } else fresh = existing.result.err.code === "credential_refused";
       }
+      // Gone, with another way still open: requests go on that one at once.
+      if (!fresh && existing !== undefined) {
+        const standby = this.#best(stationId, this.#live(stationId).filter((w) => w.missed === 0));
+        if (standby !== null) {
+          this.#promote(stationId, standby, "lost");
+          return standby.link;
+        }
+      }
       const span = this.#env.tracer.span("mesh.connect", Kind.Internal);
       span.set("stillfail.station", stationId);
       let endpoint = this.#endpoint;
@@ -678,7 +747,7 @@ export class Mesh {
       this.#links.set(stationId, opening);
       if (before?.result && "ok" in before.result) this.#count(stationId, before.result.ok);
       this.#notify();
-      const first = open(this.#env, endpoint, this.relaysFor(stationId), stationId, credentials, fresh, null, span.context);
+      const first = this.#dialAll(stationId, endpoint, credentials, fresh, span.context);
       const self = this;
       const run = Effect.gen(function* () {
         const raced = yield* Effect.raceFirst(
@@ -706,6 +775,8 @@ export class Mesh {
           self.#stuck = false;
           const path = link.success.path();
           if (path !== null) span.set("stillfail.path", path);
+          const via = link.success.via();
+          if (via !== null) span.set("stillfail.via", relayHost(via));
         } else {
           if (link.failure.message === noAnswer()) self.#stuck = true;
           span.fail();
@@ -714,12 +785,11 @@ export class Mesh {
         }
         span.end();
         opening.result = link._tag === "Success" ? { ok: link.success } : { err: link.failure };
+        if (link._tag === "Success") self.#adopt(stationId, link.success);
         Deferred.doneUnsafe(opening.done, link._tag === "Success" ? Effect.succeed(link.success) : Effect.fail(link.failure));
       });
       this.#env.runner.fork(run);
-      const link = yield* Deferred.await(opening.done);
-      this.#measureSoon(stationId);
-      return link;
+      return yield* Deferred.await(opening.done);
     });
   }
 
@@ -732,6 +802,8 @@ export class Mesh {
       opening.result.ok.conn.close(0, "woke");
       this.#count(stationId, opening.result.ok);
     }
+    for (const w of this.#ways.get(stationId) ?? []) w.link.conn.close(0, "woke");
+    this.#ways.delete(stationId);
   }
 
   /// Takes over the device key a page kept before the core existed (32 bytes): stored, the endpoint bound anew with
@@ -753,6 +825,8 @@ export class Mesh {
       this.#pinned.clear();
       const links = [...this.#links];
       this.#links.clear();
+      for (const ways of this.#ways.values()) for (const w of ways) w.link.conn.close(0, "device key replaced");
+      this.#ways.clear();
       this.#notify();
       for (const [id, o] of links) {
         if (o.result && "ok" in o.result) {
@@ -764,23 +838,316 @@ export class Mesh {
     });
   }
 
-  #measureSoon(stationId: string): void {
-    if (this.relaysFor(stationId).length < 2 || this.#measuring.has(stationId)) return;
-    this.#measuring.add(stationId);
-    this.#env.runner.fork(this.#measure(stationId));
+  /// The ways open to a station that are still up.
+  #live(stationId: string): Way[] {
+    const all = this.#ways.get(stationId);
+    if (all === undefined) return [];
+    const live = all.filter((w) => w.link.usable());
+    for (const w of all) if (!live.includes(w)) w.link.close();
+    if (live.length > 0) this.#ways.set(stationId, live);
+    else this.#ways.delete(stationId);
+    return live;
+  }
+
+  /// A way as compared with another (`clearlyBetter`).
+  #score(stationId: string, way: Way): Score {
+    const via = way.link.via();
+    return { score: cost(way.srtt, via !== null ? this.speed(stationId, via) : null) + 2 * way.dev, dev: way.dev };
+  }
+
+  /// Of `ways`, the one scoring best (pinged at least once; none pinged yet: the first).
+  #best(stationId: string, ways: Way[]): Way | null {
+    let best: Way | null = null;
+    for (const w of ways) {
+      if (best === null) best = w;
+      else if (w.samples > 0 && (best.samples === 0 || this.#score(stationId, w).score < this.#score(stationId, best).score)) best = w;
+    }
+    return best;
+  }
+
+  /// Dials the station every way at once: on the main endpoint (through any relay, or direct), and on each relay's own
+  /// endpoint through that relay alone. The first through is the link; the others, as they come through, are ways to it
+  /// as well (`#adopt`). Fails once all have, as the main endpoint's dial failed. A phone whose own relay could not
+  /// reach the station (Beijing's, bft in Tokyo, 2026-10-08) waited out CONNECT_TIMEOUT_MS on it time after time.
+  #dialAll(stationId: string, endpoint: IrohEndpoint, credentials: CredentialSource, fresh: boolean, ctx: unknown): Effect.Effect<Link, CoreError> {
+    return Effect.suspend(() => {
+      this.#exploredAt.set(stationId, this.now());
+      const relays = this.relaysFor(stationId);
+      const main = open(this.#env, endpoint, relays, stationId, credentials, fresh, null, ctx);
+      const pinned = relays.length >= 2 ? relays.map((r) => this.#dialPinned(stationId, r, credentials, fresh, ctx)) : [];
+      const self = this;
+      const won = Deferred.makeUnsafe<Link, CoreError>();
+      let left = 1 + pinned.length;
+      let mainFailure: CoreError | null = null;
+      [main, ...pinned].forEach((attempt, i) =>
+        this.#env.runner.fork(
+          Effect.gen(function* () {
+            const r = yield* Effect.result(attempt);
+            if (r._tag === "Success") {
+              if (!Deferred.doneUnsafe(won, Effect.succeed(r.success))) self.#adopt(stationId, r.success);
+              return;
+            }
+            if (i === 0) mainFailure = r.failure;
+            if (--left === 0) Deferred.doneUnsafe(won, Effect.fail(mainFailure ?? r.failure));
+          }),
+        ),
+      );
+      return Deferred.await(won);
+    });
+  }
+
+  /// A link through `relay` alone, on that relay's own endpoint.
+  #dialPinned(stationId: string, relay: string, credentials: CredentialSource, fresh: boolean, ctx: unknown): Effect.Effect<Link, CoreError> {
+    return Effect.suspend(() => {
+      this.#dialing++;
+      return Effect.flatMap(this.#pinnedEndpoint(relay), (endpoint) =>
+        endpoint === null ? Effect.fail(meshError(t("core-logic.mesh.unreachable", { error: relayHost(relay) }))) : open(this.#env, endpoint, [relay], stationId, credentials, fresh, relay, ctx),
+      ).pipe(Effect.ensuring(Effect.sync(() => this.#dialing--)));
+    });
+  }
+
+  /// `link` is a way to the station as well, if it is still wanted; pinged from now on.
+  #adopt(stationId: string, link: Link): void {
+    if (this.#closed || !this.#links.has(stationId)) {
+      link.close();
+      return;
+    }
+    const ways = this.#live(stationId);
+    if (ways.some((w) => w.link === link)) return;
+    this.#ways.set(stationId, [...ways, new Way(link)]);
+    // One way there is all it has (no relays, or one): nothing to choose between.
+    if (!this.#steering.has(stationId) && this.relaysFor(stationId).length >= 2) {
+      this.#steering.add(stationId);
+      this.#env.runner.fork(this.#steer(stationId));
+    }
+  }
+
+  /// Requests to the station go on `way` from now on; the link they went on stays open as another way.
+  #promote(stationId: string, way: Way, why: string): void {
+    const before = this.current(stationId);
+    if (before === way.link) return;
+    const span = this.#env.tracer.span("mesh.route", Kind.Internal);
+    span.set("stillfail.station", stationId);
+    span.set("stillfail.why", why);
+    const was = before !== null ? this.#live(stationId).find((w) => w.link === before) : undefined;
+    if (was !== undefined) {
+      span.set("stillfail.from", was.key());
+      span.set("stillfail.from.score", Math.round(this.#score(stationId, was).score));
+    }
+    span.set("stillfail.to", way.key());
+    span.set("stillfail.to.score", Math.round(this.#score(stationId, way).score));
+    span.end();
+    const done = Deferred.makeUnsafe<Link, CoreError>();
+    Deferred.doneUnsafe(done, Effect.succeed(way.link));
+    this.#links.set(stationId, { done, result: { ok: way.link } });
+    if (before !== null) this.#count(stationId, before);
+    const via = way.link.via();
+    this.#moved.set(stationId, via !== null ? relayHost(via) : "direct");
+    this.#moves.set(stationId, this.moves(stationId) + 1);
+    for (const w of this.#live(stationId)) w.better = 0;
+    this.#notify();
+  }
+
+  /// How many times requests to the station moved from one way to another.
+  moves(stationId: string): number {
+    return this.#moves.get(stationId) ?? 0;
+  }
+
+  /// The ways open to the station, the link requests go on among them.
+  ways(stationId: string): Way[] {
+    return this.#live(stationId);
+  }
+
+  /// Pings a way: its credential presented again on it, answered by the station. Not answered within PING_TIMEOUT_MS,
+  /// it counts as that long, and as missed; one still not answered is not sent again over it meanwhile.
+  #ping(way: Way): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      if (way.pinging) {
+        way.missed++;
+        way.note(PING_TIMEOUT_MS);
+        return Effect.void;
+      }
+      way.pinging = true;
+      const link = way.link;
+      const answered = Deferred.makeUnsafe<number | null>();
+      this.#env.runner.fork(
+        Effect.gen(function* () {
+          const started = yield* Clock.currentTimeMillis;
+          const r = yield* Effect.result(link.controlled((c) => c.exchange(link.credential)));
+          const took = (yield* Clock.currentTimeMillis) - started;
+          way.pinging = false;
+          Deferred.doneUnsafe(answered, Effect.succeed(r._tag === "Success" ? took : null));
+        }),
+      );
+      return Effect.map(Effect.raceFirst(Deferred.await(answered), Effect.as(Effect.sleep(PING_TIMEOUT_MS), null)), (ms) => {
+        if (ms === null) {
+          way.missed++;
+          way.note(PING_TIMEOUT_MS);
+        } else {
+          way.missed = 0;
+          way.note(ms);
+        }
+      });
+    });
+  }
+
+  /// Every way to the station pinged at once.
+  #sample(stationId: string): Effect.Effect<void> {
+    return Effect.asVoid(Effect.all(this.#live(stationId).map((w) => this.#ping(w)), { concurrency: "unbounded" }));
+  }
+
+  /// Moves the station's requests to the best way if it is clearly better than theirs (`clearlyBetter`) BETTER_TICKS
+  /// times in a row, or at once (`now`: as a person asks, as a read was answered on another way first); to the best
+  /// way left at once if theirs is gone or missed DEAD_PINGS pings.
+  #choose(stationId: string, now: boolean): void {
+    const cur = this.current(stationId);
+    if (cur === null && this.#links.get(stationId)?.result === null) return;
+    const ways = this.#live(stationId);
+    const up = ways.filter((w) => w.missed < DEAD_PINGS);
+    const mine = ways.find((w) => w.link === cur);
+    if (cur === null || !cur.usable() || mine === undefined || mine.missed >= DEAD_PINGS) {
+      const best = this.#best(stationId, up.filter((w) => w.link !== cur));
+      if (best !== null) this.#promote(stationId, best, "lost");
+      return;
+    }
+    if (mine.samples < MIN_SAMPLES) return;
+    const best = this.#best(stationId, up.filter((w) => w.link !== cur && w.samples >= MIN_SAMPLES));
+    for (const w of ways) if (w !== best) w.better = 0;
+    if (best === null) return;
+    if (!clearlyBetter(this.#score(stationId, mine), this.#score(stationId, best))) {
+      best.better = 0;
+      return;
+    }
+    best.better++;
+    if (now || best.better >= BETTER_TICKS) this.#promote(stationId, best, now ? "asked" : "better");
+  }
+
+  /// No more requests go on `way`; it is closed RETIRE_MS later, unless they went back to it meanwhile (replies under way
+  /// on it come meanwhile: a large one, a read that just moved off it).
+  #retire(stationId: string, way: Way): void {
+    this.#ways.set(
+      stationId,
+      (this.#ways.get(stationId) ?? []).filter((w) => w !== way),
+    );
+    this.#retiring.add(way.link);
+    this.#env.runner.fork(
+      Effect.andThen(
+        Effect.sleep(RETIRE_MS),
+        Effect.sync(() => {
+          this.#retiring.delete(way.link);
+          if (this.#isCurrent(stationId, way.link)) return;
+          way.link.close();
+          this.#count(stationId, way.link);
+          this.#env.runner.fork(this.#letGo());
+        }),
+      ),
+    );
+  }
+
+  /// Lets go of the ways not worth keeping: one that missed DEAD_PINGS pings, one of two going the same way, and past
+  /// KEEP_WAYS the worst of those pinged MIN_SAMPLES times (never the one requests go on).
+  #prune(stationId: string): void {
+    const cur = this.current(stationId);
+    for (const w of this.#live(stationId)) if (w.link !== cur && w.missed >= DEAD_PINGS) this.#retire(stationId, w);
+    const byKey = new Map<string, Way>();
+    for (const w of this.#live(stationId)) {
+      const k = w.key();
+      const other = byKey.get(k);
+      if (other === undefined) {
+        byKey.set(k, w);
+        continue;
+      }
+      const keep = other.link === cur ? other : w.link === cur ? w : this.#score(stationId, w).score < this.#score(stationId, other).score ? w : other;
+      this.#retire(stationId, keep === w ? other : w);
+      byKey.set(k, keep);
+    }
+    const others = this.#live(stationId)
+      .filter((w) => w.link !== cur && w.samples >= MIN_SAMPLES)
+      .sort((a, b) => this.#score(stationId, a).score - this.#score(stationId, b).score);
+    for (const w of others.slice(Math.max(0, KEEP_WAYS - 1))) this.#retire(stationId, w);
+  }
+
+  /// Dials the station on the ways not open to it (the main endpoint, each relay's own), each come through a way.
+  #explore(stationId: string, credentials: CredentialSource): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.#exploring.has(stationId)) return;
+      this.#exploring.add(stationId);
+      this.#exploredAt.set(stationId, this.now());
+      const have = new Set(this.#live(stationId).map((w) => w.link.pinned ?? "main"));
+      const relays = this.relaysFor(stationId);
+      const tries: Effect.Effect<Link, CoreError>[] = [];
+      if (!have.has("main")) tries.push(open(this.#env, this.#endpoint, relays, stationId, credentials, false, null, undefined));
+      if (relays.length >= 2) for (const r of relays) if (!have.has(r)) tries.push(this.#dialPinned(stationId, r, credentials, false, undefined));
+      yield* Effect.all(
+        tries.map((attempt) => Effect.map(Effect.result(attempt), (r) => (r._tag === "Success" ? this.#adopt(stationId, r.success) : undefined))),
+        { concurrency: "unbounded" },
+      );
+      this.#exploring.delete(stationId);
+    });
+  }
+
+  /// While the station has a way open: every TICK_MS each pinged, the requests moved to the best (`#choose`), the
+  /// ways not worth keeping let go (`#prune`), and every EXPLORE_MS the others dialled again (`#explore`).
+  #steer(stationId: string): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      for (;;) {
+        yield* Effect.sleep(TICK_MS);
+        if (this.#closed || !this.#links.has(stationId)) break;
+        const cur = this.current(stationId);
+        if (this.#live(stationId).length === 0 && (cur === null || !cur.usable())) break;
+        yield* this.#sample(stationId);
+        this.#choose(stationId, false);
+        this.#prune(stationId);
+        const credentials = (this.current(stationId) ?? this.#live(stationId)[0]?.link)?.credentials;
+        if (credentials !== undefined && this.now() - (this.#exploredAt.get(stationId) ?? 0) >= EXPLORE_MS) this.#env.runner.fork(this.#explore(stationId, credentials));
+      }
+      this.#steering.delete(stationId);
+    });
+  }
+
+  /// The way a read slow on `link` is asked on as well: the best other way open, going another way than `link` (not the
+  /// main endpoint through the same relay), whose last ping was answered (one not pinged yet: its handshake was).
+  standby(stationId: string, link: Link): Link | null {
+    const ways = this.#live(stationId);
+    const key = ways.find((w) => w.link === link)?.key() ?? null;
+    return this.#best(stationId, ways.filter((w) => w.link !== link && w.missed === 0 && w.key() !== key))?.link ?? null;
+  }
+
+  /// How long a read on `link` waits for its answer before it is asked on another way as well: what its way is expected
+  /// to take at worst, and twice its deviation more; HEDGE_FLOOR_MS at least (the station's own time to answer).
+  hedgeAfter(stationId: string, link: Link): number {
+    const w = this.#live(stationId).find((x) => x.link === link);
+    if (w === undefined || w.samples === 0) return HEDGE_FLOOR_MS;
+    const s = this.#score(stationId, w);
+    return Math.max(HEDGE_FLOOR_MS, s.score + 2 * s.dev);
+  }
+
+  /// A read asked on `slow` and then on another way as well was answered on the other first, `ms` after it was asked on
+  /// `slow`: that long counts as a ping of `slow`, and the requests move at once if another way is now clearly better.
+  outran(stationId: string, slow: Link, ms: number): void {
+    const w = this.#live(stationId).find((x) => x.link === slow);
+    if (w === undefined) return;
+    w.note(ms);
+    this.#choose(stationId, true);
   }
 
   measured(stationId: string): Measured | null {
-    return this.#measured.get(stationId) ?? null;
+    const ways = this.#live(stationId).filter((w) => w.samples > 0 && w.link.via() !== null);
+    const measuring = this.#exploring.has(stationId);
+    if (ways.length === 0 && !measuring) return null;
+    return { measuring, relays: ways.map((w) => [relayHost(w.link.via()!), Math.round(this.#score(stationId, w).score)]), moved: this.#moved.get(stationId) ?? null };
   }
 
-  /// Measures the ways to a station now, as a person asks.
+  /// The ways to a station dialled and pinged now, as a person asks; the requests moved to the best if it is clearly
+  /// better.
   remeasure(stationId: string): Effect.Effect<void, CoreError> {
-    return Effect.suspend(() => {
-      if (this.measured(stationId)?.measuring) return Effect.void;
+    return Effect.gen({ self: this }, function* () {
       const link = this.current(stationId);
-      if (link === null || !link.usable()) return Effect.fail(meshError(t("core-logic.mesh.not_connected")));
-      return this.#quickest(stationId, link);
+      if (link === null || !link.usable()) return yield* Effect.fail(meshError(t("core-logic.mesh.not_connected")));
+      yield* this.#explore(stationId, link.credentials);
+      for (let i = 0; i < MIN_SAMPLES; i++) yield* this.#sample(stationId);
+      this.#choose(stationId, true);
+      this.#prune(stationId);
     });
   }
 
@@ -798,104 +1165,19 @@ export class Mesh {
     });
   }
 
-  /// A relay-only connection, warmed up before sampling QUIC's round trip estimate.
-  #probe(relay: string, stationId: string): Effect.Effect<number | null> {
-    return Effect.gen({ self: this }, function* () {
-      const secret = pinnedKey(pinnedKey(this.#secret, relay), stationId);
-      const bound = yield* Effect.result(Mesh.#bind(this.#env.iroh, secret, [relay], true));
-      if (bound._tag === "Failure") return null;
-      const endpoint = bound.success;
-      const exchange = Effect.gen(function* () {
-        const conn = yield* Effect.result(endpoint.connect({ id: stationId, relays: [relay] }, ALPN, [FORMER_ALPN]));
-        if (conn._tag === "Failure") return null;
-        const rtt = yield* sampleRelayRtt(conn.success, relay);
-        conn.success.close(0, "measured");
-        return rtt;
-      });
-      const rtt = yield* Effect.raceFirst(exchange, Effect.as(Effect.sleep(MEASURE_TIMEOUT_MS), null));
-      yield* endpoint.close();
-      return rtt;
-    });
-  }
-
-  /// Measures the way to the station through each relay and, if one is clearly quicker than the way `link` goes,
-  /// opens a link on that relay's own endpoint and puts it in `link`'s place.
-  #quickest(stationId: string, link: Link): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      if (this.measured(stationId)?.measuring) return;
-      const span = this.#env.tracer.span("mesh.measure", Kind.Internal);
-      span.set("stillfail.station", stationId);
-      const net = link.net();
-      const via = link.via();
-      if (net.rttMs !== null) span.set("stillfail.rtt", Math.round(net.rttMs));
-      if (via !== null) span.set("stillfail.via", relayHost(via));
-      const entry = this.#measured.get(stationId) ?? { measuring: false, relays: [], moved: null };
-      entry.measuring = true;
-      this.#measured.set(stationId, entry);
-      this.#probing++;
-      const measured = yield* Effect.all(
-        this.relaysFor(stationId).map((relay) => Effect.map(this.#probe(relay, stationId), (ms) => [relay, ms] as [string, number | null])),
-        { concurrency: "unbounded" },
-      );
-      this.#probing--;
-      const shown: Measured = { measuring: false, relays: measured.map(([r, ms]) => [relayHost(r), ms]), moved: null };
-      const speed = (relay: string) => this.speed(stationId, relay);
-      for (const [relay, ms] of measured) {
-        span.set(`stillfail.rtt.${relayHost(relay)}`, ms !== null ? Math.round(ms) : "none");
-        const bps = speed(relay);
-        if (bps !== null) span.set(`stillfail.kbps.${relayHost(relay)}`, Math.round(bps / 1024));
-      }
-      const relay = link.path() === "relay" && this.#isCurrent(stationId, link) ? quicker(net.rttMs, via, measured, speed) : null;
-      if (relay !== null) {
-        const endpoint = yield* this.#pinnedEndpoint(relay);
-        if (endpoint !== null) {
-          span.set("stillfail.moved", relayHost(relay));
-          const opened = yield* Effect.result(open(this.#env, endpoint, [relay], stationId, link.credentials, false, relay, span.context));
-          if (opened._tag === "Success") {
-            const next = opened.success;
-            if (this.#isCurrent(stationId, link) && link.path() === "relay") {
-              const v = next.via();
-              shown.moved = v !== null ? relayHost(v) : null;
-              this.#switch(stationId, link, next);
-            } else next.close();
-          } else {
-            span.fail();
-            span.set("error.type", opened.failure.code);
-          }
-        }
-      }
-      span.end();
-      this.#measured.set(stationId, shown);
-      this.#env.runner.fork(Effect.andThen(Effect.sleep(RETIRE_MS), Effect.suspend(() => this.#letGo())));
-    });
-  }
-
-  /// Closes the pinned endpoints no open link is on, unless something is being measured on them.
+  /// Closes the pinned endpoints no way is on, unless something is being dialled meanwhile.
   #letGo(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      if (this.#probing > 0) return;
-      const used = new Set(this.#openLinks().flatMap(([, l]) => (l.pinned !== null ? [l.pinned] : [])));
+      if (this.#dialing > 0) return;
+      const used = new Set<string>();
+      for (const ways of this.#ways.values()) for (const w of ways) if (w.link.pinned !== null && w.link.usable()) used.add(w.link.pinned);
+      for (const [, l] of this.#openLinks()) if (l.pinned !== null) used.add(l.pinned);
+      for (const l of this.#retiring) if (l.pinned !== null && l.usable()) used.add(l.pinned);
       for (const [relay, d] of [...this.#pinned]) {
         if (used.has(relay)) continue;
         this.#pinned.delete(relay);
         const e = yield* Deferred.await(d);
         if (e) this.#env.runner.fork(e.close());
-      }
-    });
-  }
-
-  /// Keeps a station's link on the quickest way there, for as long as it has one.
-  #measure(stationId: string): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      yield* Effect.sleep(MEASURE_AFTER_MS);
-      for (;;) {
-        const link = this.current(stationId);
-        if (link === null || !link.usable()) {
-          this.#measuring.delete(stationId);
-          return;
-        }
-        if (link.path() === "relay") yield* this.#quickest(stationId, link);
-        yield* Effect.sleep(MEASURE_EVERY_MS);
       }
     });
   }
@@ -942,7 +1224,7 @@ export class Mesh {
       const span = this.#env.tracer.span("mesh.hedge", Kind.Internal);
       span.set("stillfail.station", id);
       span.set("stillfail.relay", relayStatus(endpoint));
-      const opened = yield* Effect.result(open(this.#env, endpoint, this.relaysFor(id), id, credentials, false, null, span.context));
+      const opened = yield* Effect.result(this.#dialAll(id, endpoint, credentials, false, span.context));
       if (opened._tag === "Failure") span.fail();
       span.end();
       const taken = Deferred.doneUnsafe(tx, opened._tag === "Success" ? Effect.succeed(opened.success) : Effect.fail(opened.failure));
@@ -955,7 +1237,7 @@ export class Mesh {
     return Effect.gen({ self: this }, function* () {
       const span = this.#env.tracer.span("mesh.race", Kind.Internal);
       span.set("stillfail.station", id);
-      const fresh = Effect.result(open(this.#env, this.#endpoint, this.relaysFor(id), id, old.credentials, false, null, span.context));
+      const fresh = Effect.result(this.#dialAll(id, this.#endpoint, old.credentials, false, span.context));
       const freshFiber = yield* Effect.forkChild(fresh);
       const probeFiber = yield* Effect.forkChild(old.answers());
       const first = yield* Effect.raceFirst(
@@ -986,8 +1268,18 @@ export class Mesh {
 
   close(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
+      this.#closed = true;
       for (const [, o] of this.#links) if (o.result && "ok" in o.result) o.result.ok.close();
       this.#links.clear();
+      for (const ways of this.#ways.values()) for (const w of ways) w.link.close();
+      this.#ways.clear();
+      for (const l of this.#retiring) l.close();
+      this.#retiring.clear();
+      for (const [, d] of [...this.#pinned]) {
+        const e = yield* Deferred.await(d);
+        if (e) yield* e.close();
+      }
+      this.#pinned.clear();
       yield* this.#endpoint.close();
     });
   }
@@ -997,35 +1289,6 @@ function relayStatus(endpoint: IrohEndpoint): string {
   const status = endpoint.relayStatus();
   if (status.length === 0) return "none";
   return status.map((s) => `${s.url} ${s.connected ? "up" : "down"}`).join(", ");
-}
-
-/// Sends a byte on a one-way stream and times how long its acknowledgement takes, after MEASURE_WARMUP of them: the
-/// median of MEASURE_SAMPLES. Not QUIC's round trip estimate: that is smoothed from the handshake on, and a probe's
-/// handshake waits on its new endpoint getting onto the relay (connections there, TLS), so it carried the device's
-/// distance to the relay: one far from the device but near the station (Cloudflare, Hong Kong for bft in Tokyo) measured
-/// slow and was never chosen (2026-10-05). Wall time, not the core's clock (a test's moves by itself).
-export function sampleRelayRtt(conn: IrohConnection, relay: string): Effect.Effect<number | null> {
-  return Effect.gen(function* () {
-    const samples: number[] = [];
-    for (let i = 0; i < MEASURE_WARMUP + MEASURE_SAMPLES; i++) {
-      const started = yield* Clock.currentTimeMillis;
-      const sent = yield* Effect.result(
-        Effect.gen(function* () {
-          const s = yield* conn.openUni();
-          yield* s.write(new Uint8Array([0]));
-          yield* s.finish();
-          return yield* s.stopped();
-        }),
-      );
-      const took = (yield* Clock.currentTimeMillis) - started;
-      if (sent._tag === "Failure" || sent.success !== null) return null;
-      const path = conn.paths().find((p) => p.selected);
-      if (path === undefined || !sameRelay(path.relay, relay)) return null;
-      if (i >= MEASURE_WARMUP) samples.push(took);
-    }
-    samples.sort((a, b) => a - b);
-    return samples[Math.floor(MEASURE_SAMPLES / 2)];
-  });
 }
 
 /// Connects, presents the first credential, and starts renewing it. The credential is asked for while the
@@ -1044,9 +1307,25 @@ function open(
   return Effect.gen(function* () {
     if (!/^[0-9a-f]{64}$/.test(stationId)) return yield* Effect.fail(CoreError.invalid(t("core-logic.mesh.bad_station_id", { id: stationId })));
     const device = endpoint.id();
+    // Dialled on its own, so a connection made after CONNECT_TIMEOUT_MS is closed rather than left open, unused.
+    const dialled = Deferred.makeUnsafe<IrohConnection, CoreError>();
+    let late = false;
+    env.runner.fork(
+      Effect.gen(function* () {
+        const r = yield* Effect.result(endpoint.connect({ id: stationId, relays }, ALPN, [FORMER_ALPN]));
+        if (r._tag === "Success" && late) r.success.close(0, "too late");
+        else Deferred.doneUnsafe(dialled, r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(meshError(t("core-logic.mesh.unreachable", { error: r.failure.message }))));
+      }),
+    );
     const connecting = Effect.raceFirst(
-      Effect.mapError(endpoint.connect({ id: stationId, relays }, ALPN, [FORMER_ALPN]), (e) => meshError(t("core-logic.mesh.unreachable", { error: e.message }))),
-      Effect.andThen(Effect.sleep(CONNECT_TIMEOUT_MS), Effect.fail(meshError(noAnswer()))),
+      Deferred.await(dialled),
+      Effect.andThen(
+        Effect.sleep(CONNECT_TIMEOUT_MS),
+        Effect.suspend(() => {
+          late = true;
+          return Effect.fail(meshError(noAnswer()));
+        }),
+      ),
     );
     const [credential, conn] = yield* Effect.all([Effect.result(credentials(device, fresh)), connecting], { concurrency: "unbounded" });
     if (credential._tag === "Failure") {
@@ -1144,17 +1423,27 @@ export class MeshWire implements StationWire {
       const ask = (l: Link) => Effect.map(l.request(head, body), (reply) => [l, reply] as [Link, Reply]);
       let answered: [Link, Reply];
       if (repeats) {
-        const first = yield* Effect.raceFirst(
-          Effect.map(Effect.result(ask(link)), (r) => ({ asked: r }) as const),
-          Effect.as(mesh.replaced(id, link), { replaced: true } as const),
-        );
+        // Asked on its link; on another way as well if not answered within what its way is expected to take
+        // (`hedgeAfter`), or on the link put in its place if its link is replaced meanwhile: the first answer taken.
+        const started = mesh.now();
+        const asked = yield* Effect.forkChild(Effect.result(ask(link)));
+        const answer = Effect.flatMap(Fiber.join(asked), (r) => (r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(r.failure)));
+        // The other way, as there is one by then (the ways dialled with the link may come through after it).
+        const slow = Effect.gen(function* () {
+          yield* Effect.sleep(mesh.hedgeAfter(id, link));
+          for (;;) {
+            const standby = mesh.standby(id, link);
+            if (standby !== null) return { slow: standby } as const;
+            yield* Effect.sleep(HEDGE_RECHECK_MS);
+          }
+        });
+        const first = yield* Effect.raceAllFirst([Effect.map(Fiber.join(asked), (r) => ({ asked: r }) as const), Effect.as(mesh.replaced(id, link), { replaced: true } as const), slow]);
         if ("asked" in first) {
           const r = first.asked;
           if (r._tag === "Success") answered = r.success;
           else if (r.failure.code === "mesh" && write) {
             // A write gone and not answered: asked again with its key whenever its station is back, a while.
             const w = status.begin(address, RECHECKING(), true);
-            const started = mesh.now();
             let pause = 1_000;
             answered = yield* Effect.gen(function* () {
               for (;;) {
@@ -1170,10 +1459,14 @@ export class MeshWire implements StationWire {
             const l = yield* waiting(status, address, t("station.core.connecting"), mesh.link(id, credentials, theirs));
             answered = yield* ask(l);
           } else return yield* Effect.fail(r.failure);
-        } else {
+        } else if ("replaced" in first) {
           // Replaced while under way: asked again on the new one at once, the first answer taken.
           const again = Effect.flatMap(mesh.link(id, credentials, theirs), ask);
-          answered = yield* firstAnswer(ask(link), again);
+          answered = yield* firstAnswer(answer, again);
+        } else {
+          // Slow on its way: asked on the next best as well. Answered there first, its way is told how long it kept it.
+          answered = yield* firstAnswer(answer, ask(first.slow));
+          if (answered[0] !== link) mesh.outran(id, link, mesh.now() - started);
         }
       } else {
         const r = yield* Effect.result(ask(link));
