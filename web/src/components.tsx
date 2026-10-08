@@ -50,7 +50,7 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
         <Filter size={16} strokeWidth={1.8} />{!compact && <span>{named}</span>}
       </DropdownMenu.Trigger></Tip>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}
+        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.popoverSolid} ${controlsCss.menuList} ${chatCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}
           onCloseAutoFocus={(e) => { if (leaving.current) { leaving.current = false; e.preventDefault(); } }}>
           {item("all", t(`web-main.filter.${of}.all`))}
           {item("mine", mine)}

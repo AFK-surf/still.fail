@@ -70,7 +70,7 @@ export function AttentionEntry({ scope }: { scope: string }) {
         </button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className={`${controlsCss.popover} ${css.panel}`} side="bottom" align="start" sideOffset={6} collisionPadding={8}
+        <Popover.Content className={`${controlsCss.popover} ${controlsCss.popoverSolid} ${css.panel}`} side="bottom" align="start" sideOffset={6} collisionPadding={8}
           onOpenAutoFocus={(e) => e.preventDefault()}>
           {all.length === 0 && <div className={css.empty}>{t("web-main.attention.empty")}</div>}
           {listed.map((g) => (
