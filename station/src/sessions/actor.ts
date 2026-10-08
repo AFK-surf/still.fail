@@ -642,12 +642,16 @@ export class SessionActor {
   }
 
   /// A process idle since the session was changed takes its new model and effort in place, when it runs on the same
-  /// profile and can; otherwise it ends (when `end`: not while a turn or a wait holds on to it).
+  /// profile and can; otherwise it ends (when `end`: not while a turn or a wait holds on to it), also when no profile
+  /// can run it now (its own deleted, none to take it on).
   private async catchUp(end: boolean) {
     const agent = this.agent;
     if (!agent || !this.stale || agent.session.busy()) return;
     const row = this.deps.store.getSession(this.key);
-    const profile = row ? this.deps.runOn(this.key) : null;
+    let profile: ReturnType<SessionDeps["runOn"]> | null = null;
+    try {
+      profile = row ? this.deps.runOn(this.key) : null;
+    } catch {}
     if (row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps))) {
       this.stale = false;
       log.info("session", "session process takes the change in place", { session: this.key, model: row.model ?? "", effort: row.effort ?? "" });

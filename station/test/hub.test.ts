@@ -1083,6 +1083,42 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await r.close();
 });
 
+test("a deleted profile's sessions go on on another, and stop when no other can run them", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> fix the build");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  r.edit(withProfile("cc2", "another", ["opus"]));
+  await configure(r.hub, key, { profile: "cc" });
+  // Deleted while a turn runs on it: that turn goes on, the next runs on the other one, kept to it no longer.
+  const running = r.claude.last();
+  r.edit((raw) => (raw.profiles = raw.profiles.filter((p: any) => p.id !== "cc")));
+  await r.hub.profileGone("cc");
+  assert.deepEqual([r.session(key).profile, r.session(key).profilePinned], ["cc2", false]);
+  assert.ok(!running.disposed && running.aborts === 0, "the running turn is not cut off");
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  running.complete();
+  await settle();
+  await r.accept({ ...say("<@UBOT> once more"), threadTs: m.threadTs });
+  await settle();
+  assert.ok(running.disposed, "its process ended before the next turn");
+  const moved = r.claude.last();
+  assert.equal(moved.options.profile.id, "cc2");
+  // The last one that runs it deleted too: its turn is stopped and its process does not start another.
+  r.edit((raw) => (raw.profiles = raw.profiles.filter((p: any) => p.id !== "cc2")));
+  await r.hub.profileGone("cc2");
+  await settle();
+  assert.equal(moved.aborts, 1);
+  moved.end({ kind: "aborted" });
+  await settle();
+  await r.accept({ ...say("<@UBOT> and again"), threadTs: m.threadTs });
+  await settle();
+  assert.ok(moved.disposed, "not left running on the deleted profile");
+  assert.equal(r.claude.last(), moved, "no process started without a profile");
+  await r.close();
+});
+
 test("a connect or a new chat can keep its sessions to one profile; otherwise the pool picks", async () => {
   const r = new Rig();
   r.edit((raw) => {

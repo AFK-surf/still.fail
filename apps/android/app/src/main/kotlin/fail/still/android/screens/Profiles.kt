@@ -592,7 +592,7 @@ private fun openProfileMenu(app: AppState, station: String, p: Profile) {
             PickRow(t("android-settings.profile.recheck"), busy = checking, failed = app.failedOf("profile.check", "station" to station, "id" to p.id)) { run(t("android-settings.profile.checkShort"), t("android-settings.profile.checked")) { api.checkProfile(p.id) } }
             // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
             val machine = p.machine == true
-            PickRow((if (machine) t("android-settings.connect.disable") else t("android-settings.profile.delete")).let { if (p.usedBy.isNotEmpty()) t("android-settings.profile.inUse", "action" to it) else it }, color = C.red, enabled = p.usedBy.isEmpty()) {
+            PickRow(if (machine) t("android-settings.connect.disable") else t("android-settings.profile.delete"), color = C.red) {
                 if (machine) confirm(app, t("android-settings.profile.disableTitle", "name" to p.name), t("android-settings.profile.disableText", "app" to BuildConfig.APP_NAME, "runtime" to (MACHINE_RUNTIME[p.runtime] ?: p.runtime)), t("android-settings.connect.disable"), danger = true,
                     what = t("android-settings.profile.disableWhat"), then = app::pop) {
                     api.deleteProfile(p.id); app.toast = t("android-settings.profile.disabled")

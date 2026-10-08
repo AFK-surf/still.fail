@@ -571,6 +571,25 @@ export class Hub {
     await this.actors.get(key)?.changed();
   }
 
+  /// A profile was deleted: the sessions on it are taken on by another of their runtime's (their process ends now if
+  /// idle, else when its turn is over); those no other profile can run are stopped, and their process ends.
+  async profileGone(id: string) {
+    for (const row of this.store.listSessions()) {
+      if (row.profile !== id) continue;
+      let movable = true;
+      try {
+        this.accounts.runOn(row.key);
+      } catch {
+        movable = false;
+      }
+      log.info("hub", "profile deleted under a session", { session: row.key, profile: id, movedTo: movable ? (this.store.getSession(row.key)?.profile ?? "") : "" });
+      const actor = this.actors.get(row.key);
+      if (!actor) continue;
+      if (!movable) await actor.stop();
+      await actor.changed();
+    }
+  }
+
   /// Starts a session's runtime ahead of a message (SessionActor.warm).
   async warm(key: string) {
     const row = this.store.getSession(key);

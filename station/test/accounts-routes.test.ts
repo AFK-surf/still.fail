@@ -89,11 +89,15 @@ describe("the accounts routes", { concurrency: true }, () => {
   test("invalid edits are refused and leave the config unchanged", async () => {
     const t = await rig();
     const before = readFileSync(t.path, "utf8");
-    const last = await t.call("DELETE", "/profiles/cc");
-    assert.equal(last[0], 400);
-    assert.ok(last[1].error.includes("最后一个 claude 的 Profile，ember 还要用它运行"), last[1].error);
     assert.deepEqual(await t.call("DELETE", "/profiles/nope"), [400, { error: "unknown profile nope" }]);
     assert.equal(readFileSync(t.path, "utf8"), before);
+    await t.close();
+  });
+
+  test("a profile in use is deleted all the same, even the last of its runtime a connect runs", async () => {
+    const t = await rig();
+    assert.equal((await t.call("DELETE", "/profiles/cc"))[0], 200);
+    assert.equal(t.profile("cc"), undefined);
     await t.close();
   });
 

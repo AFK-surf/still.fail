@@ -128,7 +128,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
           </p>
           {check.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.checkFailed", { error: check.error.message })}</p>}
         </div>
-        {!copy && <Menu items={[{ label: profile.usedBy.length ? t("web-pages.profiles.inUse", { item: removal.item }) : removal.item, icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />}
+        {!copy && <Menu items={[{ label: removal.item, icon: Trash, danger: true, onSelect: () => setDeleting(true) }]} />}
       </header>
       {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
       {/* A subscription that needs signing in, or is signing in: that comes first. */}

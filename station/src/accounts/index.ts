@@ -77,7 +77,11 @@ export type AccountsDeps = {
   /// The hub, whose account pool picks profiles by their checks and allowances (and knows which ran out lately).
   /// Starts reviewing the done chats no decision has answered (review.ts): how many, or null without a usable model.
   reviewUndecided?: () => number | null;
-  hub?: { accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth } };
+  hub?: {
+    accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth };
+    /// A profile was deleted: its sessions are taken on by another, or stopped.
+    profileGone?(id: string): Promise<void>;
+  };
   /// The codex driver, once there.
   codex?: () => CodexAccess | undefined;
   /// Whether someone follows the events (allowances are asked again on a round only then).
@@ -367,16 +371,16 @@ export class Accounts {
     });
   }
 
-  /// DELETE /profiles/:id. Its home stays.
+  /// DELETE /profiles/:id. Its home stays. Taken even while sessions or connects use it (the pages say so first): its
+  /// sessions go on on another profile of their runtime, or stop when there is none.
   deleteProfile(id: string, viewer: Viewer, lang: Lang = stationLang()) {
     this.own(id, lang);
     this.save(viewer, `delete profile ${id}`, (raw) => {
       const list: Json[] = Array.isArray(raw.profiles) ? raw.profiles : [];
-      const profile = list.find((p) => p?.id === id);
-      if (!profile) throw new Error(`unknown profile ${id}`);
-      for (const r of runtimesFor(profile.access, profile.runtime)) lastOfRuntime(raw, r, id, lang);
+      if (!list.some((p) => p?.id === id)) throw new Error(`unknown profile ${id}`);
       raw.profiles = list.filter((p) => p?.id !== id);
     });
+    this.deps.hub?.profileGone?.(id).catch((error) => log.warn("accounts", "moving sessions off a deleted profile failed", { profile: id, error: (error as Error).message }));
   }
 
   /// POST /profiles: a new keyed profile, made only once its key is checked and works. Its id.
@@ -956,7 +960,7 @@ export class Accounts {
 /// Makes the station's accounts (start() it once wired).
 export const makeAccounts = (deps: AccountsDeps) => new Accounts(deps);
 
-/// A profile leaving its runtime (deleted, or moved to another): refused when it is the last one of a runtime that
+/// A profile moved to another runtime: refused when it is the last one of a runtime that
 /// connects run.
 function lastOfRuntime(raw: Json, runtime: Runtime, id: string, lang: Lang) {
   const profiles: Json[] = Array.isArray(raw?.profiles) ? raw.profiles : [];
