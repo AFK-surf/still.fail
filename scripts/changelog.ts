@@ -1,6 +1,6 @@
 // The changelog people read in the apps (docs/changelog.md), from main's history: each commit's `Changelog:` trailers
 // (a line for people, in Chinese) and `Fixes: FB-<n>` (the bug reports it fixes), with the version it came in (the
-// commits up to it: 0.1.<n>, as every part numbers its builds) and the parts it reached by the files it changed.
+// commits up to it: 0.1.<n>, as every part numbers its builds) and the parts it reached by the files it changed (partsOf).
 // docs/changelog-notes.json adds lines to commits from before, or says one again: { "<commit or its start>": { "text":
 // [...], "fixes": [...] } }.
 // That is the test channel's. The stable channel's is written once a release, for people who skip the steps between:
@@ -30,9 +30,13 @@ export interface Entry {
   parts: Part[];
 }
 
+// Each file reaches the parts of the first of these it is under.
 const PARTS: [RegExp, Part[]][] = [
   // The station: station/ (src/ and its native parts; not its tests), and mesh/ in the history before it (the Rust one).
   [/^station\/(src|native)\/|^mesh\//, ["station"]],
+  // Android's native shell (the web's iroh, client/iroh-wasm, is among what Android does not carry).
+  [/^client\/(shell\/|Cargo\.)/, ["android"]],
+  // The core, which every app carries; but what apps/android/not-carried.txt says the Android app does not.
   [/^client\//, ["web", "android"]],
   [/^web\//, ["web"]],
   [/^apps\/android\//, ["android"]],
@@ -40,23 +44,68 @@ const PARTS: [RegExp, Part[]][] = [
   [/^cloud\/src\//, ["cloud"]],
 ];
 
-/** The parts a commit's files reach. */
-export function partsOf(files: string[]): Part[] {
-  const parts = new Set<Part>();
-  for (const file of files) for (const [path, reached] of PARTS) if (path.test(file)) reached.forEach((p) => parts.add(p));
-  return [...parts].sort();
+// What changes no app by itself: tests, the lists of what the Android app carries, and the types the clients read
+// (client/core-ts/src/shapes/schema.ts, and the bindings made from it), which change with the code that fills them.
+const CHANGES_NOTHING =
+  /^client\/core-ts\/(test|bench|harness|side)\/|^apps\/android\/[^/]+\/src\/(androidTest|test)\/|^apps\/android\/(carries\.sh|not-carried\.txt)$|^client\/core-ts\/src\/shapes\/schema\.ts$|^web\/src\/core\/(shapes|operations)\.ts$|^apps\/android\/.*\/data\/(Shapes|Operations)\.kt$/;
+
+// The words people read (client/i18n/catalog/<language>/<part>[-…].json). The core carries them all into every app,
+// but they reach people where the code that says them does: a commit that changes code as well reaches only what its
+// code reaches (a desktop feature's words are no news on Android); one of words alone, the parts they are named for.
+const WORDS = /^client\/i18n\/catalog\/[^/]+\/([a-z]+)[^/]*\.json$/;
+const SAID_IN: Record<string, Part[]> = {
+  android: ["android"],
+  web: ["web"],
+  desktop: ["desktop"],
+  station: ["station"],
+  cloud: ["cloud"],
+  core: ["android", "web"],
+  common: ["android", "web"],
+};
+
+/**
+ * The parts a commit's files reach (`notCarried`: the paths apps/android/not-carried.txt names). A commit that by itself
+ * changes nothing anyone uses (its tests, say, carrying the line for the commits before it) reaches where its files are.
+ */
+export function partsOf(files: string[], notCarried: RegExp | null = null): Part[] {
+  const reach = (file: string) => PARTS.find(([path]) => path.test(file))?.[1] ?? [];
+  const code = new Set<Part>();
+  const words = new Set<Part>();
+  for (const file of files) {
+    const said = WORDS.exec(file)?.[1];
+    if (said !== undefined) for (const part of SAID_IN[said] ?? []) words.add(part);
+    else if (!CHANGES_NOTHING.test(file)) for (const part of reach(file)) if (part !== "android" || !notCarried?.test(file)) code.add(part);
+  }
+  if (!code.size && !words.size) for (const file of files) for (const part of reach(file)) code.add(part);
+  return [...(code.size ? code : words)].sort();
 }
 
-/** A commit's trailers as `git log --format=%(trailers:unfold,only)` gives them: the changelog's lines and the fixes. */
-export function readTrailers(trailers: string): { text: string[]; fixes: number[] } {
+/** apps/android/not-carried.txt's paths, as one expression (null: there is none). */
+export function readNotCarried(root: string): RegExp | null {
+  const file = join(root, "apps/android/not-carried.txt");
+  const paths = existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((l) => l.trim() && !l.startsWith("#")) : [];
+  return paths.length ? new RegExp(paths.join("|")) : null;
+}
+
+const TRAILER = /^([A-Za-z][A-Za-z0-9-]*):\s*(.*)$/;
+
+/**
+ * A commit's message: the changelog's lines and the fixes in its trailers, from every paragraph after the subject that is
+ * only trailers (each line `Key: value`, or one indented to fold the line before on). git takes the last such paragraph
+ * alone for the trailers, which lost every `Changelog:` written above a blank line and `Co-Authored-By:` (37 commits from
+ * 2026-10-01 to 10-08: their changes were in the apps, and nothing said so).
+ */
+export function readMessage(message: string): { text: string[]; fixes: number[] } {
   const text: string[] = [];
   const fixes: number[] = [];
-  for (const line of trailers.split("\n")) {
-    const m = /^([A-Za-z-]+):\s*(.*)$/.exec(line.trim());
-    if (!m) continue;
-    const [, key, value] = m;
-    if (/^changelog$/i.test(key!) && value!.trim()) text.push(value!.trim());
-    if (/^fixes$/i.test(key!)) for (const fb of value!.matchAll(/FB-?(\d+)/gi)) fixes.push(Number(fb[1]));
+  for (const paragraph of message.split("\n").slice(1).join("\n").split(/\n[ \t]*\n/)) {
+    const lines = paragraph.split("\n").filter((l) => l.trim());
+    if (!lines.length || !lines.every((l, i) => TRAILER.test(l) || (i > 0 && /^\s/.test(l)))) continue;
+    for (const line of lines.join("\n").replace(/\n\s+/g, " ").split("\n")) {
+      const [, key, value] = TRAILER.exec(line)!;
+      if (/^changelog$/i.test(key!) && value!.trim()) text.push(value!.trim());
+      if (/^fixes$/i.test(key!)) for (const fb of value!.matchAll(/FB-?(\d+)/gi)) fixes.push(Number(fb[1]));
+    }
   }
   return { text, fixes };
 }
@@ -67,19 +116,20 @@ export function changelog(root: string, rev = "HEAD"): Entry[] {
   const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
   const notesFile = join(root, "docs/changelog-notes.json");
   const notes: Notes = existsSync(notesFile) ? JSON.parse(readFileSync(notesFile, "utf8")) : {};
-  // Newest first, one record a commit: its hash, time and trailers, then its files.
-  const log = git("log", "--first-parent", "--diff-merges=first-parent", "--name-only", "--format=%x1e%H%x1f%ct%x1f%(trailers:unfold,only)%x1f", rev);
+  const notCarried = readNotCarried(root);
+  // Newest first, one record a commit: its hash, time and message, then its files.
+  const log = git("log", "--first-parent", "--diff-merges=first-parent", "--name-only", "--format=%x1e%H%x1f%ct%x1f%B%x1f", rev);
   const entries: Entry[] = [];
   for (const record of log.split("\x1e").slice(1)) {
-    const [commit, at, trailers, rest] = record.split("\x1f") as [string, string, string, string];
-    const said = readTrailers(trailers);
+    const [commit, at, message, rest] = record.split("\x1f") as [string, string, string, string];
+    const said = readMessage(message);
     const note = Object.entries(notes).find(([start]) => start.length >= 7 && commit.startsWith(start))?.[1];
     const text = note?.text ?? said.text;
     const fixes = [...new Set([...said.fixes, ...(note?.fixes ?? [])])];
     if (!text.length && !fixes.length) continue;
     // Counted for each (early history has merges, so its place in this list is not its number).
     const version = Number(git("rev-list", "--count", commit).trim());
-    entries.push({ version, commit, at: Number(at), text, fixes, parts: partsOf(rest.split("\n").filter(Boolean)) });
+    entries.push({ version, commit, at: Number(at), text, fixes, parts: partsOf(rest.split("\n").filter(Boolean), notCarried) });
   }
   return entries;
 }
