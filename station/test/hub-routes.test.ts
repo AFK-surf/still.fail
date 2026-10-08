@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
 import type { Request } from "../src/api/request.ts";
@@ -359,6 +360,15 @@ test("a file a message names by its path: its peek and the file whole, only with
     mkdirSync(dirname(skill), { recursive: true });
     writeFileSync(skill, "---\nname: x\n---\n");
     assert.deepEqual((await peek(skill))[1].lines.text[1], "name: x");
+    // A path from inside a repository of its workspace, as agents write one: the file whose path ends with it.
+    const repo = join(workspace, "cue");
+    mkdirSync(join(repo, "apps", "x", "lib", "ifc"), { recursive: true });
+    writeFileSync(join(repo, "apps", "x", "lib", "ifc", "destination.ex"), "defmodule D do\nend\n");
+    execFileSync("git", ["init", "-q", repo]);
+    execFileSync("git", ["-C", repo, "add", "."]);
+    const [found, d] = await peek("x/lib/ifc/destination.ex");
+    assert.deepEqual([found, d.lines?.text[0]], [200, "defmodule D do"]);
+    assert.equal((await peek("y/ifc/destination.ex"))[0], 404);
     // Nothing outside, however named; nothing that is not there.
     assert.deepEqual(await peek("../../../../stillfail.db"), [403, { error: en("station.files.outside") }]);
     assert.deepEqual(await peek("/etc/hosts"), [403, { error: en("station.files.outside") }]);
