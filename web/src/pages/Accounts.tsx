@@ -538,9 +538,10 @@ function QuotaSection({ profile }: { profile: Profile }) {
 }
 
 /**
- * Which of the profile's models may be used: none until picked here. Chats
- * and connects offer only enabled models, and the account pool sends a chat
- * only to a profile that has its model enabled.
+ * Which of the profile's models may be used, picked here (one just signed in
+ * starts with those the others of its runtime have, the station's
+ * accounts/models.ts). Chats and connects offer only enabled models, and the
+ * account pool sends a chat only to a profile that has its model enabled.
  */
 function ModelPool({ profile, found, onSave }: { profile: Profile; found: string[] | null; onSave(models: string[]): Promise<unknown> }) {
   const api = useApi();
