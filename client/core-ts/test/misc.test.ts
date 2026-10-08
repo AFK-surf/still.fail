@@ -1,7 +1,8 @@
 // entries.rs, activity.rs, brand.rs and doing.rs's tests, ported (same names, same checks).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { doing, epochMs, present } from "../src/activity.ts";
+import { doing, epochMs } from "../src/activity.ts";
+import { activity as present } from "../src/history.ts";
 import { name, setTestChannel, STABLE, TEST } from "../src/brand.ts";
 import { Core } from "../src/core.ts";
 import { Doing } from "../src/doing.ts";

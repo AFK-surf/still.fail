@@ -18,7 +18,7 @@ import { Kind, type SpanContext } from "../trace.ts";
 import { equal, get, isObject, parseJson } from "../util.ts";
 import { GONE, NETWORK } from "../wake.ts";
 import { Priority } from "../sync/scheduler.ts";
-import * as activity from "../activity.ts";
+import { activity as historyActivity } from "../history.ts";
 import { StationAddr } from "./addr.ts";
 import { IDEMPOTENCY_KEY, Requests, httpError } from "./requests.ts";
 import { SseParser } from "./sse.ts";
@@ -864,7 +864,7 @@ export class StationsSync {
 
   /// What the chat shows of a session at work (activity.ts), from its live view.
   activity(view: Record<string, unknown>): unknown {
-    return activity.present(view);
+    return historyActivity(view);
   }
 
   // ── writes ──

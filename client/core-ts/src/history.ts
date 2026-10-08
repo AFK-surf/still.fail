@@ -175,9 +175,7 @@ export function presentHistory(live: J, cx: Context): J {
   const flag = (e: J, k: string): boolean => e?.[k] === true;
 
   const items: [Item, number, number][] = [];
-  const steps: Step[] = [];
-  const byCall = new Map<string, number>();
-  let lastStep: number | null = null;
+  const { steps, stepAt } = pair(timeline);
   let grouping = false;
   const cover = (i: number) => {
     const last = items[items.length - 1];
@@ -186,15 +184,9 @@ export function presentHistory(live: J, cx: Context): J {
   timeline.forEach((e, i) => {
     const kind = s(e, "kind");
     if (kind === "tool_result") {
-      let step = typeof e.callId === "string" ? byCall.get(e.callId) : undefined;
-      if (step === undefined && lastStep !== null && steps[lastStep].result === null) step = lastStep;
-      if (step !== undefined) steps[step].result = i;
       cover(i);
     } else if (kind === "tool_call") {
-      const step = steps.length;
-      steps.push({ call: i, result: null });
-      if (typeof e.callId === "string") byCall.set(e.callId, step);
-      lastStep = step;
+      const step = stepAt.get(i)!;
       const a = args(s(e, "text"));
       const arg = (k: string) => (typeof a?.[k] === "string" ? (a[k] as string) : null);
       const sub = flag(e, "subagent");
@@ -325,25 +317,9 @@ export function presentHistory(live: J, cx: Context): J {
     return { key: `e${base + first}`, entries: [base + first, base + last], body: { kind, content: v } };
   });
 
-  const liveSteps = (Array.isArray(live?.steps) ? live.steps : [])
-    .filter((st: J) => !flag(st, "subagent") && s(st, "step") !== "tool")
-    .map((st: J) => ({ id: s(st, "id"), text: s(st, "step") === "text" ? t("core-logic.history.live.writing") : t("core-logic.history.live.thinking") }));
-  const p = live?.phase;
-  const phase =
-    p !== null && typeof p === "object" && !Array.isArray(p)
-      ? (() => {
-          const name = typeof p.phase === "string" ? p.phase : "";
-          const text =
-            name === "starting"
-              ? t("core-logic.history.phase.starting", { runtime: format.runtimeLabel(cx.runtime) })
-              : name === "requesting"
-                ? t("core-logic.history.phase.requesting")
-                : name === "working"
-                  ? t("core-logic.history.phase.working")
-                  : "Thinking";
-          return { phase: p.phase ?? null, text, since: p.since ?? null };
-        })()
-      : null;
+  const pushedNow = pushed(live, cx.runtime);
+  const liveSteps = pushedNow.liveSteps.map(({ id, text }) => ({ id, text }));
+  const phase = pushedNow.phase;
   const u = live?.usage;
   const isUsage = u !== null && typeof u === "object" && !Array.isArray(u);
   const n = (k: string): number => (isUsage && typeof u[k] === "number" ? u[k] : 0);
@@ -472,4 +448,92 @@ function span(s: number): string {
   const h = Math.trunc(s / 3600);
   const m = Math.trunc((s % 3600) / 60);
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+/// Each call with its result: a result by its call's id, or (one without) the latest call before it with none yet.
+function pair(timeline: J[]): { steps: Step[]; stepAt: Map<number, number> } {
+  const steps: Step[] = [];
+  const stepAt = new Map<number, number>();
+  const byCall = new Map<string, number>();
+  let lastStep: number | null = null;
+  timeline.forEach((e, i) => {
+    const kind = typeof e?.kind === "string" ? e.kind : "";
+    if (kind === "tool_result") {
+      let step = typeof e.callId === "string" ? byCall.get(e.callId) : undefined;
+      if (step === undefined && lastStep !== null && steps[lastStep].result === null) step = lastStep;
+      if (step !== undefined) steps[step].result = i;
+    } else if (kind === "tool_call") {
+      const step = steps.length;
+      steps.push({ call: i, result: null });
+      stepAt.set(i, step);
+      if (typeof e.callId === "string") byCall.set(e.callId, step);
+      lastStep = step;
+    }
+  });
+  return { steps, stepAt };
+}
+
+/// What the station pushes of the turn beyond its transcript, as the history shows it after its items: the steps in
+/// flight (thinking, writing) and where the turn stands with the model.
+function pushed(live: J, runtime: string): { liveSteps: { id: string; step: string; text: string }[]; phase: { phase: J; text: string; since: J } | null } {
+  const s = (e: J, k: string): string => (typeof e?.[k] === "string" ? e[k] : "");
+  const flag = (e: J, k: string): boolean => e?.[k] === true;
+  const liveSteps = (Array.isArray(live?.steps) ? live.steps : [])
+    .filter((st: J) => !flag(st, "subagent") && s(st, "step") !== "tool")
+    .map((st: J) => ({ id: s(st, "id"), step: s(st, "step"), text: s(st, "step") === "text" ? t("core-logic.history.live.writing") : t("core-logic.history.live.thinking") }));
+  const p = live?.phase;
+  const phase =
+    p !== null && typeof p === "object" && !Array.isArray(p)
+      ? (() => {
+          const name = typeof p.phase === "string" ? p.phase : "";
+          const text =
+            name === "starting"
+              ? t("core-logic.history.phase.starting", { runtime: format.runtimeLabel(runtime) })
+              : name === "requesting"
+                ? t("core-logic.history.phase.requesting")
+                : name === "working"
+                  ? t("core-logic.history.phase.working")
+                  : "Thinking";
+          return { phase: p.phase ?? null, text, since: p.since ?? null };
+        })()
+      : null;
+  return { liveSteps, phase };
+}
+
+/**
+ * The chat's activity: the execution history's latest, in one line. The call it shows running (this turn's, said as
+ * its row says it), else what is in flight (thinking, writing, a reply being written), else where the turn stands.
+ */
+export function activity(live: J): J {
+  const timeline: J[] = Array.isArray(live?.timeline) ? live.timeline : [];
+  const s = (e: J, k: string): string => (typeof e?.[k] === "string" ? e[k] : "");
+  let turn = -1;
+  timeline.forEach((e, i) => {
+    if (s(e, "kind") === "user") turn = i;
+  });
+  let call: [string, string] | null = null;
+  let replying = false;
+  for (const st of pair(timeline).steps) {
+    const e = timeline[st.call];
+    if (st.call < turn || st.result !== null || e?.subagent === true) continue;
+    const name = toolName(s(e, "tool"));
+    if (name === "chat_post") replying = true;
+    else if (name !== "chat_state") call = [s(e, "callId") || `call:${st.call}`, doing(s(e, "tool"), s(e, "text"))];
+  }
+  const { liveSteps, phase } = pushed(live, "");
+  // A reply being written comes as a step before its call is in the transcript.
+  const steps: J[] = Array.isArray(live?.steps) ? live.steps : [];
+  if (steps.some((st) => st?.subagent !== true && st?.ended !== true && s(st, "step") === "tool" && toolName(s(st, "tool")) === "chat_post")) replying = true;
+  const rate = Number.isInteger(live?.rate) && live.rate > 0 ? (live.rate as number) : 0;
+  const said = (key: string, word: string) => ({ key, text: rate > 0 ? `${t(word)} · ≈ ${rate} token/s` : t(word) });
+  if (call) return { now: { key: call[0], text: call[1] } };
+  if (replying) return { now: said("reply", "core-logic.activity.replying") };
+  const flight = liveSteps.at(-1);
+  if (flight) return { now: flight.step === "text" ? said("write", "core-logic.activity.writing") : said("think", "core-logic.activity.thinking") };
+  const at = typeof phase?.phase === "string" ? phase.phase : "";
+  if (at === "starting") return { now: said("starting", "core-logic.activity.starting") };
+  if (at === "requesting") return { now: said("requesting", "core-logic.activity.requesting") };
+  if (at === "thinking") return { now: said("think", "core-logic.activity.thinking") };
+  if (at === "responding") return { now: said("write", "core-logic.activity.writing") };
+  return { now: said("busy", "core-logic.activity.busy") };
 }
