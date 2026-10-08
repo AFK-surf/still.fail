@@ -35,7 +35,7 @@ export function RefChip({ title, href }: { title: ReactNode; href: string }) {
   return (
     <a className={css.refChip} href={href}>
       <span className={css.refChipHash}>@</span>{title}
-      {name && <span className={css.refChipStation}><Server size={11} />{name}</span>}
+      {name && <span className={css.refChipStation}><Server size={11} className={css.refChipStationIcon} />{name}</span>}
     </a>
   );
 }
