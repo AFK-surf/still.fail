@@ -10,16 +10,16 @@ export const idle = style({
 export const column = style({ width: "100%", maxWidth: 560, margin: "auto", display: "flex", flexDirection: "column", gap: 28 });
 export const head = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, textAlign: "center" });
 export const title = style({ margin: "6px 0 0", fontSize: vars.textTitle, fontWeight: 600, lineHeight: "22px" });
-export const note = style({ margin: 0, fontSize: vars.textSecondary, color: vars.muted, lineHeight: "20px" });
+export const note = style({ margin: 0, fontSize: vars.textUi, color: vars.muted, lineHeight: "20px" });
 
 /** The day in numbers: each a figure over its words. */
 export const stats = style({ display: "flex", justifyContent: "center", gap: 32, marginTop: 10 });
 export const stat = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 });
 export const figure = style({ fontSize: vars.textHeading, lineHeight: "26px", fontWeight: 600, fontVariantNumeric: "tabular-nums" });
-export const figureWords = style({ fontSize: vars.textLabel, lineHeight: "16px", color: vars.subtle });
+export const figureWords = style({ fontSize: vars.textMeta, lineHeight: "16px", color: vars.subtle });
 
 export const section = style({ display: "flex", flexDirection: "column", gap: 2 });
-export const sectionTitle = style({ margin: "0 0 4px 10px", fontSize: vars.textLabel, lineHeight: "18px", fontWeight: 500, color: vars.subtle });
+export const sectionTitle = style({ margin: "0 0 4px 10px", fontSize: vars.textMeta, lineHeight: "18px", fontWeight: 500, color: vars.subtle });
 
 /** One chat or card: its mark, its words over where it is, when at its end; opens its chat. */
 export const row = style({
@@ -37,7 +37,7 @@ export const busy = style({
 /** Answered: a quiet dot. */
 export const done = style({ flex: "none", width: 6, height: 6, margin: "7px 3px 0", borderRadius: "50%", background: vars.subtle });
 export const words = style({ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 });
-export const main = style({ fontSize: vars.textSecondary, lineHeight: "20px", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const meta = style({ fontSize: vars.textLabel, lineHeight: "18px", color: vars.subtle, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const main = style({ fontSize: vars.textUi, lineHeight: "20px", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const meta = style({ fontSize: vars.textMeta, lineHeight: "18px", color: vars.subtle, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const answer = style({ color: vars.text });
-export const when = style({ flex: "none", fontSize: vars.textLabel, lineHeight: "20px", color: vars.subtle, fontVariantNumeric: "tabular-nums" });
+export const when = style({ flex: "none", fontSize: vars.textMeta, lineHeight: "20px", color: vars.subtle, fontVariantNumeric: "tabular-nums" });

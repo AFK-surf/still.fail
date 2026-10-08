@@ -259,6 +259,7 @@
   "web-main.history.sentTo": "发送到 ",
   "web-main.history.thinking": "思考",
   "web-main.history.unbindFailed": "解除没有成功：{error}",
+  "web-main.jobs.chip": "在跑 {n}",
   "web-main.jobs.clearWhat": "清掉已结束的任务",
   "web-main.jobs.inPanel": "在侧栏看",
   "web-main.jobs.jobs": "后台任务",

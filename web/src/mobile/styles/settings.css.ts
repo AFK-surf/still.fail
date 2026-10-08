@@ -19,10 +19,10 @@ export const mCheck = style({
   },
 });
 /** Connects: a page's note, a row's status, the mode choices, a switch, tokens, steps. */
-export const mPageNote = style({ padding: "0 24px 10px", fontSize: vars.textSecondary, color: "var(--m-muted)" });
-export const mRowAside = style({ fontSize: vars.textSecondary, color: "var(--m-muted)" });
+export const mPageNote = style({ padding: "0 24px 10px", fontSize: vars.textMeta, color: "var(--m-muted)" });
+export const mRowAside = style({ fontSize: vars.textMeta, color: "var(--m-muted)" });
 export const mRowStatus = style({
-  display: "inline-flex", alignItems: "center", gap: "5px", flex: "none", fontSize: vars.textLabel, color: "var(--m-muted)",
+  display: "inline-flex", alignItems: "center", gap: "5px", flex: "none", fontSize: vars.textCaption, color: "var(--m-muted)",
   whiteSpace: "nowrap",
 });
 export const mPresence = style({
@@ -38,7 +38,7 @@ export const mPresence = style({
 export const mWrap = style({ whiteSpace: "normal" });
 export const mCallout = style({
   margin: "0 12px 10px", padding: "10px 12px", borderRadius: "12px",
-  background: "color-mix(in srgb, var(--m-warn) 12%, transparent)", fontSize: vars.textSecondary, lineHeight: "1.5",
+  background: "color-mix(in srgb, var(--m-warn) 12%, transparent)", fontSize: vars.textMeta, lineHeight: "1.5",
   selectors: {
     [`${mForm} &`]: { margin: "0" },
   },

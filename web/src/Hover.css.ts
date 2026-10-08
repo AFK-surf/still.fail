@@ -11,7 +11,7 @@ const exit = keyframes({ to: { opacity: "0", transform: "scale(.97)" } });
 
 export const card = style({
   zIndex: "60", width: "320px", maxWidth: "calc(100vw - 16px)", padding: "10px 12px", borderRadius: vars.rMenu, ...glass,
-  border: `1px solid ${vars.line}`, boxShadow: `0 12px 32px ${vars.shadow}`, color: vars.text, fontSize: vars.textSecondary, lineHeight: "1.45",
+  border: `1px solid ${vars.line}`, boxShadow: `0 12px 32px ${vars.shadow}`, color: vars.text, fontSize: vars.textUi, lineHeight: "1.45",
   transformOrigin: "var(--radix-hover-card-content-transform-origin)", cornerShape: vars.cornerShape,
   selectors: {
     '&[data-state="open"]': { animation: `${enter} 160ms ${vars.easeOut}` },
@@ -34,21 +34,21 @@ export const tileIcon = style({ width: "20px", height: "20px", objectFit: "conta
 export const tileBody = style({ display: "flex", flexDirection: "column", gap: "1px", minWidth: "0" });
 /** The title in two lines at most (a commit's or a page's is often longer than the tile), then an ellipsis. */
 export const tileTitle = style({
-  fontWeight: "560", overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: "2", overflowWrap: "anywhere",
+  fontWeight: "500", overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: "2", overflowWrap: "anywhere",
 });
-export const tileUrl = style({ fontSize: vars.textLabel, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const tileUrl = style({ fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 
 // ---- the rich card: state and reference with the time at the right; the title; who, and a few facts ----
 
 export const rich = style({ display: "flex", flexDirection: "column", gap: "8px", minWidth: "0" });
-export const meta = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", fontSize: vars.textLabel, color: vars.muted });
+export const meta = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", fontSize: vars.textMeta, color: vars.muted });
 export const ref = style({ flex: "1 1 auto", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const refIcon = style({ verticalAlign: "-1px", marginRight: "4px" });
 export const time = style({ flex: "0 0 auto", marginLeft: "auto", whiteSpace: "nowrap" });
 /** A tinted pill: its glyph and the state's name, its colours by `data-state`. */
 export const state = style({
   display: "inline-flex", alignItems: "center", gap: "4px", flex: "0 0 auto", padding: "1px 8px 1px 6px", borderRadius: "999px",
-  background: vars.hover, color: vars.muted, fontWeight: "520", whiteSpace: "nowrap",
+  background: vars.hover, color: vars.muted, fontWeight: "500", whiteSpace: "nowrap",
   selectors: {
     '&[data-state="open"], &[data-state="passed"]': { background: vars.greenBg, color: vars.green },
     '&[data-state="merged"], &[data-state="completed"]': { background: "color-mix(in srgb, #8250df 14%, transparent)", color: "#8250df" },
@@ -57,12 +57,12 @@ export const state = style({
     '&[data-state="pending"]': { background: vars.amberBg, color: vars.amber },
   },
 });
-export const title = style({ display: "block", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "560" });
+export const title = style({ display: "block", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "500" });
 export const excerpt = style({
   margin: "0", minWidth: "0", color: vars.text, overflowWrap: "anywhere",
   display: "-webkit-box", WebkitLineClamp: "3", WebkitBoxOrient: "vertical", overflow: "hidden",
 });
-export const facts = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", flexWrap: "wrap", fontSize: vars.textLabel, color: vars.muted });
+export const facts = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", flexWrap: "wrap", fontSize: vars.textMeta, color: vars.muted });
 export const person = style({ display: "inline-flex", alignItems: "center", gap: "6px", minWidth: "0", color: vars.text });
 export const avatar = style({ width: "18px", height: "18px", borderRadius: "50%", background: vars.hover, flex: "0 0 auto" });
 export const chip = style({ display: "inline-flex", gap: "6px", padding: "1px 7px", borderRadius: "999px", background: vars.hover, whiteSpace: "nowrap" });

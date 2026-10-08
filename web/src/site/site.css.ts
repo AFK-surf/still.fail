@@ -67,7 +67,7 @@ export const nav = style({
 });
 export const navRow = style({ display: "flex", alignItems: "center", height: "64px", gap: "28px" });
 /** The name in the bar: the station buddy and still.fail, its .fail in still.fail's orange. */
-export const brand = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textHeading, fontWeight: "700", letterSpacing: "-.03em", color: FG });
+export const brand = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "-.03em", color: FG });
 export const brandTail = style({ color: ORANGE });
 export const logo = style({ display: "block", height: "28px", width: "auto" });
 // The logo on the left, the rest of the bar on the right.
@@ -95,11 +95,11 @@ export const menuCard = style({
 });
 export const menuItem = style({
   display: "grid", gridTemplateRows: "auto 1fr auto", justifyItems: "start", gap: "2px", width: "150px", minHeight: "178px", padding: "14px",
-  borderRadius: "15px", fontSize: vars.textSecondary, color: DIM, transition: "background .2s",
+  borderRadius: "15px", fontSize: vars.textUi, color: DIM, transition: "background .2s",
   selectors: { "a&:hover": { background: CARD } },
 });
-globalStyle(`${menuItem} > b`, { fontSize: vars.textTitle, fontWeight: "650", color: FG, letterSpacing: "-.01em" });
-export const menuGo = style({ gridRow: "3", color: FG, fontWeight: "550" });
+globalStyle(`${menuItem} > b`, { fontSize: vars.textTitle, fontWeight: "600", color: FG, letterSpacing: "-.01em" });
+export const menuGo = style({ gridRow: "3", color: FG, fontWeight: "500" });
 /** The code itself stays dark on white in either theme, with the quiet margin a scanner wants. */
 export const scanCode = style({ display: "block", width: "122px", height: "122px", padding: "8px", borderRadius: "10px", background: "#fff", imageRendering: "pixelated" });
 
@@ -124,7 +124,7 @@ export const navButton = style({ "@media": { [NARROW]: { display: "none" } } });
 
 export const button = style({
   position: "relative", overflow: "hidden", display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 20px", borderRadius: "999px",
-  fontSize: vars.textTitle, fontWeight: "550", whiteSpace: "nowrap", transition: `transform .2s ${vars.easeOut}, box-shadow .2s, background .2s`,
+  fontSize: vars.textTitle, fontWeight: "500", whiteSpace: "nowrap", transition: `transform .2s ${vars.easeOut}, box-shadow .2s, background .2s`,
   selectors: {
     "&:hover": { transform: "translateY(-2px)" },
     "&[data-kind=\"primary\"]": { background: "var(--s-primary)", color: "var(--s-on-primary)" },
@@ -233,7 +233,7 @@ export const dotSay = style({
 });
 export const dotWords = style({
   display: "block", writingMode: "vertical-rl", textOrientation: "upright",
-  fontSize: "max(.1em, 8px)", fontWeight: "700", lineHeight: "1", whiteSpace: "nowrap",
+  fontSize: "max(.1em, 8px)", fontWeight: "600", lineHeight: "1", whiteSpace: "nowrap",
 });
 
 /** A character of those words: they land one at a time (motion.ts), unseen till then when script will move them. */
@@ -289,7 +289,7 @@ export const demo = style({
  *  700 wide, the box being the page's width less its margins), the desktop's elsewhere. */
 export const frameWide = style({ height: "100%", "@media": { [PHONE_BOX]: { display: "none" } } });
 export const framePhone = style({ height: "100%", display: "none", "@media": { [PHONE_BOX]: { display: "block" } } });
-export const key = style({ padding: "2px 8px", borderRadius: "6px", background: `${ink(8)}`, color: FG, fontWeight: "550", whiteSpace: "nowrap" });
+export const key = style({ padding: "2px 8px", borderRadius: "6px", background: `${ink(8)}`, color: FG, fontWeight: "500", whiteSpace: "nowrap" });
 
 // ---- Sections ----
 
@@ -305,7 +305,7 @@ export const terminal = style({
   position: "relative", maxWidth: "840px", margin: "0 auto", borderRadius: "18px", overflow: "hidden",
   background: "#0F0F12", color: "#E9E9EA", border: `1px solid ${LINE}`,
   boxShadow: `0 50px 100px -40px color-mix(in srgb, ${ORANGE} 50%, transparent)`,
-  font: `16px/1.8 ${vars.fontMono}`, "@media": { [NARROW]: { fontSize: vars.textLabel } },
+  font: `16px/1.8 ${vars.fontMono}`, "@media": { [NARROW]: { fontSize: vars.textMeta } },
 });
 export const terminalBar = style({ display: "flex", gap: "8px", padding: "16px 18px", borderBottom: `1px solid ${LINE}` });
 export const terminalDot = style({ width: "12px", height: "12px", borderRadius: "50%", background: "#2A2A30" });

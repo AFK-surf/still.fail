@@ -20,7 +20,7 @@ export const toastViewport = style({
   padding: "0", listStyle: "none", outline: "none",
 });
 export const toast = style({
-  padding: "9px 18px", borderRadius: "999px", background: vars.primary, color: vars.onPrimary, fontSize: vars.textSecondary,
+  padding: "9px 18px", borderRadius: "999px", background: vars.primary, color: vars.onPrimary, fontSize: vars.textUi,
   whiteSpace: "nowrap", boxShadow: `0 8px 24px ${vars.shadow}`, animation: `${toastInKeyframes} 200ms ${vars.easeOut}`,
   selectors: {
     "&[data-state=\"closed\"]": { animation: `${fadeKeyframes} 150ms ${vars.easeOut} reverse forwards` },
@@ -28,7 +28,7 @@ export const toast = style({
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(groupHead, {
-  display: "flex", alignItems: "baseline", gap: "8px", margin: "0 4px 6px", fontSize: vars.textSecondary,
+  display: "flex", alignItems: "baseline", gap: "8px", margin: "0 4px 6px", fontSize: vars.textUi,
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(hPlace, {
@@ -43,7 +43,7 @@ globalStyle(quotaRing, {
   color: vars.green,
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
-globalStyle(quotaNote, { margin: "0", fontSize: vars.textSecondary });
+globalStyle(quotaNote, { margin: "0", fontSize: vars.textUi });
 /** Here rather than with its class: it comes after .toast-viewport, and wins over it. */
 globalStyle(`${peopleStack} > *`, { marginLeft: "-4px", boxShadow: `0 0 0 1.5px ${vars.sidebar}` });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
@@ -84,7 +84,7 @@ globalStyle(jobsPanel, { width: "360px", display: "flex", flexDirection: "column
 globalStyle(details, { display: "grid", gap: "10px", margin: "0" });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(detailsList, {
-  listStyle: "none", margin: "0", padding: "0", display: "grid", gap: "8px", fontSize: vars.textSecondary,
+  listStyle: "none", margin: "0", padding: "0", display: "grid", gap: "8px", fontSize: vars.textUi,
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(attachBtn, {
@@ -102,7 +102,7 @@ globalStyle(resizeHandle, {
 globalStyle(hPlace, {
   display: "inline-flex", alignItems: "center", gap: "4px", padding: "1px 6px", margin: "0 2px", border: "0",
   borderRadius: `calc(6px * ${vars.cornerScale})`, background: vars.neutralBg, color: vars.text, font: "inherit",
-  fontSize: vars.textLabel, lineHeight: "18px", fontWeight: "500", textDecoration: "none", verticalAlign: "1px",
+  fontSize: vars.textMeta, lineHeight: "18px", fontWeight: "500", textDecoration: "none", verticalAlign: "1px",
   cornerShape: vars.cornerShape, maxWidth: "100%", minWidth: "0", whiteSpace: "nowrap",
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
@@ -144,7 +144,7 @@ globalStyle(fileCardOpen, {
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(activityLine, {
   display: "flex", alignItems: "center", gap: "8px", minWidth: "0", minHeight: "0", overflow: "hidden", padding: "6px",
-  margin: "-6px", border: "0", background: "none", font: "inherit", fontSize: vars.textSecondary, textAlign: "left",
+  margin: "-6px", border: "0", background: "none", font: "inherit", fontSize: vars.textUi, textAlign: "left",
   color: vars.muted, cursor: "pointer",
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */

@@ -16,8 +16,8 @@ const names = [
   "r-field", "r-card", "r-dialog", "r-nav", "r-menu", "r-option",
   // Type sizes, by what the text is (global.css.ts gives them their values; the phone's are its own, mobile/styles/root.css.ts).
   // A style says one of these, never a size of its own (scripts/check.sh).
-  "text-micro", "text-caption", "text-label", "text-secondary", "text-control", "text-body", "text-input", "text-title",
-  "text-heading", "text-display",
+  "text-caption", "text-meta", "text-ui", "text-body", "text-input", "text-title", "text-heading", "text-display",
+  "leading-caption", "leading-meta", "leading-ui", "leading-body", "leading-title", "leading-heading",
   "dur", "ease-out", "corner-shape", "corner-scale",
   // Set by the page as it runs: the sidebar's dragged width (ui.tsx's ResizeHandle).
   "sidebar-w",

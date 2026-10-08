@@ -4,7 +4,7 @@ import { activityPulse } from "./conversation.css.ts";
 
 export const callout = style({
   display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px",
-  borderRadius: `calc(14px * ${vars.cornerScale})`, fontSize: vars.textSecondary, background: vars.neutralBg,
+  borderRadius: `calc(14px * ${vars.cornerScale})`, fontSize: vars.textUi, background: vars.neutralBg,
   cornerShape: vars.cornerShape,
   selectors: {
     "&[data-tone=\"amber\"]": { display: "block", background: vars.amberBg, color: vars.text },
@@ -14,7 +14,7 @@ export const callout = style({
 });
 export const choiceBadge = style({
   marginLeft: "8px", padding: "1px 7px", borderRadius: "999px", background: vars.accentBg, color: vars.accentText,
-  fontSize: vars.textLabel, fontWeight: "500",
+  fontSize: vars.textMeta, fontWeight: "500",
 });
 export const inputRow = style({ display: "flex", gap: "8px", alignItems: "center" });
 export const inline = style({

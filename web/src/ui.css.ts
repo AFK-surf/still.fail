@@ -12,7 +12,7 @@ export const firstOneTitle = style({
 });
 export const firstOneLead = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "0", maxWidth: "34em",
-  color: vars.muted, fontSize: vars.textSecondary, lineHeight: "1.6",
+  color: vars.muted, fontSize: vars.textUi, lineHeight: "1.6",
 });
 export const dialogLead = style({});
 export const kindIcon = style({
@@ -52,17 +52,17 @@ export const empty = style({
 export const sectionHead = style({
   display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "10px", alignItems: "center",
 });
-export const sectionSub = style({ margin: "3px 0 0", fontSize: vars.textLabel, color: vars.muted, maxWidth: "52em" });
+export const sectionSub = style({ margin: "3px 0 0", fontSize: vars.textMeta, color: vars.muted, maxWidth: "52em" });
 export const sectionActions = style({ display: "flex", gap: "8px" });
 export const field = style({ display: "grid", gap: "6px" });
 export const fieldTop = style({ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "8px" });
-export const fieldLabel = style({ fontSize: vars.textSecondary, fontWeight: "500" });
-export const fieldHint = style({ fontSize: vars.textLabel, color: vars.muted });
+export const fieldLabel = style({ fontSize: vars.textUi, fontWeight: "500" });
+export const fieldHint = style({ fontSize: vars.textMeta, color: vars.muted });
 export const dialogError = style({});
 /** A pill, as a one-line field is (controls.css.ts input). */
 export const select = style({
   width: "100%", minHeight: "36px", padding: "7px 16px", border: `1px solid ${vars.lineStrong}`,
-  borderRadius: "999px", background: vars.canvas, fontSize: vars.textSecondary,
+  borderRadius: "999px", background: vars.canvas, fontSize: vars.textInput,
   transition: `border-color ${vars.dur} ${vars.easeOut}`, cornerShape: "round", display: "flex",
   alignItems: "center", justifyContent: "space-between", gap: "8px", textAlign: "left", cursor: "pointer",
   selectors: {
@@ -93,7 +93,7 @@ export const segmentedThumb = style({
 });
 export const segmentedOption = style({
   flex: "1", height: "30px", border: "0", borderRadius: "999px", background: "transparent", color: vars.muted,
-  fontSize: vars.textSecondary, cursor: "pointer", transition: `color ${vars.dur} ${vars.easeOut}`,
+  fontSize: vars.textUi, cursor: "pointer", transition: `color ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&:hover:not([data-state=\"on\"])": { color: vars.text },
     "&[data-state=\"on\"]": { color: vars.text, fontWeight: "500" },
@@ -122,7 +122,7 @@ export const switchThumbSmall = style({
   selectors: { "&[data-state=\"checked\"]": { transform: "translateX(12px)" } },
 });
 export const switchRow = style({ display: "flex", alignItems: "center", gap: "16px" });
-export const switchRowText = style({ flex: "1", display: "grid", gap: "2px", fontSize: vars.textSecondary, cursor: "pointer" });
+export const switchRowText = style({ flex: "1", display: "grid", gap: "2px", fontSize: vars.textUi, cursor: "pointer" });
 export const choices = style({ display: "grid", gap: "8px" });
 export const choice = style({
   border: `1px solid ${vars.lineStrong}`, borderRadius: `calc(16px * ${vars.cornerScale})`, background: vars.canvas,
@@ -142,7 +142,7 @@ export const choiceHit = style({
     "&:disabled": { cursor: "default" },
   },
 });
-export const choiceText = style({ flex: "1", display: "grid", gap: "2px", fontSize: vars.textSecondary });
+export const choiceText = style({ flex: "1", display: "grid", gap: "2px", fontSize: vars.textUi });
 export const choiceExtra = style({ margin: "0 14px", padding: "12px 0 14px", borderTop: `1px solid ${vars.line}` });
 export const radio = style({
   display: "grid", placeItems: "center", flex: "none", width: "18px", height: "18px", borderRadius: "50%",
@@ -158,11 +158,11 @@ export const selectContent = style({
 });
 export const selectViewport = style({ padding: "0" });
 export const selectItem = style({ position: "relative", paddingRight: "32px" });
-export const selectHint = style({ marginLeft: "auto", fontSize: vars.textLabel, color: vars.muted });
+export const selectHint = style({ marginLeft: "auto", fontSize: vars.textMeta, color: vars.muted });
 export const selectCheck = style({ position: "absolute", right: "10px", display: "grid", color: vars.text });
 export const pill = style({
   display: "inline-flex", alignItems: "center", height: "22px", padding: "0 9px", borderRadius: "999px",
-  fontSize: vars.textLabel, fontWeight: "500", whiteSpace: "nowrap", background: vars.neutralBg, color: vars.muted,
+  fontSize: vars.textMeta, fontWeight: "500", whiteSpace: "nowrap", background: vars.neutralBg, color: vars.muted,
   selectors: {
     "&[data-tone=\"green\"]": { background: vars.greenBg, color: vars.green },
     "&[data-tone=\"blue\"]": { background: vars.blueBg, color: vars.blue },
@@ -181,7 +181,7 @@ export const statusDot = style({
   },
 });
 export const avatar = style({
-  display: "inline-grid", placeItems: "center", flex: "none", color: "#fff", fontWeight: "650", lineHeight: "1",
+  display: "inline-grid", placeItems: "center", flex: "none", color: "#fff", fontWeight: "600", lineHeight: "1",
 });
 export const tooltip = style({});
 /** A tip's keys, after what it says: quieter. */
@@ -223,7 +223,7 @@ export const srOnly = style({
   position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap",
 });
 export const mobileBack = style({
-  display: "none", alignItems: "center", gap: "2px", color: vars.muted, fontSize: vars.textSecondary, lineHeight: "20px",
+  display: "none", alignItems: "center", gap: "2px", color: vars.muted, fontSize: vars.textUi, lineHeight: "20px",
   "@media": {
     "(max-width: 700px)": {
       display: "inline-flex", marginBottom: "12px",
@@ -237,14 +237,14 @@ export const mobileBack = style({
 export const pageBackRow = style({ display: "flex", alignItems: "center", height: "24px", marginBottom: "14px" });
 export const pageBack = style({
   display: "inline-flex", alignItems: "center", gap: "2px", marginLeft: "-4px", color: vars.muted,
-  fontSize: vars.textSecondary, lineHeight: "20px", textDecoration: "none",
+  fontSize: vars.textUi, lineHeight: "20px", textDecoration: "none",
   selectors: {
     "&:hover": { color: vars.text },
   },
 });
 /** Loading says so only when it takes a while: a page that is there in a moment (from the device) shows nothing before it. */
 export const loading = style({
-  display: "flex", alignItems: "center", gap: "10px", color: vars.muted, fontSize: vars.textSecondary,
+  display: "flex", alignItems: "center", gap: "10px", color: vars.muted, fontSize: vars.textUi,
   animation: `${appearKeyframes} 0s linear 400ms both`,
   selectors: {
     [`${gate} &`]: { justifyContent: "center" },
@@ -252,7 +252,7 @@ export const loading = style({
 });
 export const loadingFill = style({ flex: "1", minHeight: "100%", justifyContent: "center" });
 export const splashLabel = style({
-  margin: "0", maxWidth: "32em", fontSize: vars.textSecondary, color: vars.muted,
+  margin: "0", maxWidth: "32em", fontSize: vars.textUi, color: vars.muted,
   animation: `${appearKeyframes} 0s linear 1s both`,
   selectors: {
     "&[data-now]": { animation: "none" },
@@ -311,13 +311,13 @@ export const about = style({
 });
 export const aboutText = style({ display: "block", lineHeight: "1.5" });
 globalStyle(`${empty} h2`, { margin: "10px 0 0", fontSize: vars.textTitle, color: vars.text });
-globalStyle(`${empty} p`, { margin: "0", maxWidth: "34em", fontSize: vars.textSecondary });
+globalStyle(`${empty} p`, { margin: "0", maxWidth: "34em", fontSize: vars.textUi });
 globalStyle(`${sectionHead} h2`, { margin: "0", fontSize: vars.textBody, lineHeight: "22px", fontWeight: "600" });
-globalStyle(`${switchRowText} ${muted}`, { fontSize: vars.textLabel });
+globalStyle(`${switchRowText} ${muted}`, { fontSize: vars.textMeta });
 globalStyle(`${choiceText} strong`, { fontWeight: "600" });
-globalStyle(`${choiceText} ${muted}`, { fontSize: vars.textLabel, lineHeight: "1.5" });
+globalStyle(`${choiceText} ${muted}`, { fontSize: vars.textMeta, lineHeight: "1.5" });
 globalStyle(`${select} > span:first-child`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-globalStyle(`${command} code`, { flex: "1", fontSize: vars.textLabel, overflowX: "auto", whiteSpace: "nowrap" });
+globalStyle(`${command} code`, { flex: "1", fontSize: vars.textMeta, overflowX: "auto", whiteSpace: "nowrap" });
 globalStyle(`${dialogAlert} ${dialogLead}`, { margin: "0" });
 /** Here rather than with its class: it comes after .empty p, and wins over it. */
 globalStyle(`${markdown} p`, { margin: "0 0 8px" });
@@ -325,7 +325,7 @@ globalStyle(`${markdown} p`, { margin: "0 0 8px" });
 globalStyle(`${markdown} h2`, { fontSize: vars.textBody, margin: "14px 0 6px" });
 /** Here rather than with its class: it comes after .command code, and wins over it. */
 globalStyle(`${markdown} code`, {
-  fontSize: vars.textLabel, padding: "1px 5px", borderRadius: `calc(6px * ${vars.cornerScale})`, background: vars.neutralBg,
+  fontSize: vars.textMeta, padding: "1px 5px", borderRadius: `calc(6px * ${vars.cornerScale})`, background: vars.neutralBg,
   cornerShape: vars.cornerShape,
 });
 globalStyle(`${dialog} ${command} code`, { minWidth: "0" });

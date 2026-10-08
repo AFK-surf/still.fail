@@ -24,4 +24,4 @@ globalStyle(`${aside} > ${face}:not([data-starter])`, { boxShadow: `0 0 0 1px va
 globalStyle(`${aside} > ${face}[data-starter]`, { zIndex: 1, marginRight: 1 });
 export const asideAgent = style({ display: "inline-flex", alignItems: "center", gap: 1, minWidth: 16, height: 16, justifyContent: "center", color: vars.muted });
 globalStyle(`${asideAgent} + ${asideAgent}`, { marginLeft: 4 });
-export const asideMore = style({ marginLeft: "3px !important", fontSize: vars.textLabel, color: vars.muted, fontVariantNumeric: "tabular-nums" });
+export const asideMore = style({ marginLeft: "3px !important", fontSize: vars.textMeta, color: vars.muted, fontVariantNumeric: "tabular-nums" });

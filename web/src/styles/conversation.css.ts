@@ -9,19 +9,19 @@ export const pageBarTitle = style({
     },
   },
 });
-export const msg = style({ display: "grid", gap: "6px", fontSize: vars.textSecondary, lineHeight: "1.65", minWidth: "0" });
+export const msg = style({ display: "grid", gap: "6px", fontSize: vars.textBody, lineHeight: "1.65", minWidth: "0" });
 export const msgBubble = style({
   maxWidth: "min(78%, 640px)", padding: "10px 16px", borderRadius: `calc(20px * ${vars.cornerScale})`,
   background: vars.neutralBg, whiteSpace: "pre-wrap", overflowWrap: "anywhere", cornerShape: vars.cornerShape,
 });
 export const msgHead = style({ display: "flex", minHeight: "24px", alignItems: ["baseline", "center"], gap: "6px" });
-export const msgTime = style({ fontSize: vars.textMicro, color: vars.muted });
+export const msgTime = style({ fontSize: vars.textCaption, color: vars.muted });
 /** "At work", as the agent badge says it: a still hollow ring. */
 export const activityPulse = style({
   width: "8px", height: "8px", boxSizing: "border-box", borderRadius: "50%", border: `2px solid ${vars.accent}`,
   flex: "none",
 });
-export const markdown = style({ fontSize: vars.textSecondary, lineHeight: "1.65", overflowWrap: "anywhere", minWidth: "0" });
+export const markdown = style({ fontSize: vars.textBody, lineHeight: "1.65", overflowWrap: "anywhere", minWidth: "0" });
 globalStyle(`${pageBarTitle} h1`, {
   margin: "0", fontSize: vars.textBody, fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap", maxWidth: "42vw",
@@ -37,10 +37,10 @@ globalStyle(`${markdown} pre`, {
 });
 globalStyle(`${markdown} pre code`, { padding: "0", background: "none" });
 globalStyle(`${markdown} a`, { color: vars.blue });
-globalStyle(`${markdown} table`, { borderCollapse: "collapse", fontSize: vars.textSecondary, fontVariantNumeric: "tabular-nums" });
+globalStyle(`${markdown} table`, { borderCollapse: "collapse", fontSize: vars.textUi, fontVariantNumeric: "tabular-nums" });
 globalStyle(`${markdown} th, ${markdown} td`, { borderBottom: `1px solid ${vars.line}`, padding: "7px 12px", textAlign: "left" });
 globalStyle(`${markdown} th`, {
-  fontSize: vars.textLabel, fontWeight: "500", color: vars.muted, background: `color-mix(in srgb, ${vars.text} 4%, ${vars.canvas})`,
+  fontSize: vars.textMeta, fontWeight: "500", color: vars.muted, background: `color-mix(in srgb, ${vars.text} 4%, ${vars.canvas})`,
 });
 globalStyle(`${markdown} tr:last-child td`, { borderBottom: "0" });
 globalStyle(`${markdown} blockquote`, { paddingLeft: "10px", borderLeft: `2px solid ${vars.lineStrong}`, color: vars.muted });

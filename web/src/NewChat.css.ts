@@ -6,11 +6,11 @@ import { glass } from "./styles/glass.ts";
 
 export const newChatSub = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "0 0 8px", color: vars.muted,
-  fontSize: vars.textSecondary, lineHeight: "20px",
+  fontSize: vars.textUi, lineHeight: "20px",
 });
 export const spentNotice = style({
   margin: "0 0 8px", padding: "8px 12px", borderRadius: "10px",
-  background: `color-mix(in srgb, ${vars.amber} 12%, transparent)`, color: vars.text, fontSize: vars.textSecondary,
+  background: `color-mix(in srgb, ${vars.amber} 12%, transparent)`, color: vars.text, fontSize: vars.textUi,
 });
 /** New chat: a centred composer with the choices of where and on what it runs. */
 export const newChat = style({

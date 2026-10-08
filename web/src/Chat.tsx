@@ -105,6 +105,11 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
     archive: () => latest.current.onArchive?.() }));
   useShortcut("chat.latest", rows.toEnd);
   const askedFile = useAskedFile(list, rows.messages, ownerOf);
+  // What an agent waits on the viewer for with no card to say it, right on top of the composer: kept the same element
+  // while it says the same (the dock compares what it is handed).
+  const waiting = chat.waiting && !chat.waiting.card && !chat.archived && id !== null ? chat.waiting : null;
+  const waitingBar = useMemo(() => waiting && id !== null ? <WaitingBar station={station.address} thread={id} waiting={waiting} /> : undefined,
+    [station.address, id, waiting?.seq, waiting?.text]); // eslint-disable-line react-hooks/exhaustive-deps
   // Selecting text inside one message offers to quote it.
   const quoting = useSelectionQuote(list, (q) => {
     const quote = { ...q, comment: "", id: `${Date.now()}` };
@@ -134,21 +139,19 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {quoting.pop}
       {askedFile}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
-      {chat.waiting && !chat.archived && id !== null && <WaitingBar station={station.address} thread={id} waiting={chat.waiting} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
-      <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused}
+      <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused} above={waitingBar}
         locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
 }
 
 /**
- * What waits for the viewer in this chat (the core's `waiting`: a card for them, or an agent needing them), above the
- * composer: in a line, leading to the post it is about; 忽略 lets it go (`decision.dismiss`). A need has no card in
- * the chat, so this is where it shows.
+ * What an agent needs of the viewer in this chat with no card for it (the core's `waiting`), on top of the composer: in a
+ * line, leading to the post it is about; 忽略 lets it go (`decision.dismiss`). A card says so on its post already.
  */
-function WaitingBar({ station, thread, waiting }: { station: string; thread: number; waiting: ChatWaiting }) {
+export function WaitingBar({ station, thread, waiting }: { station: string; thread: number; waiting: ChatWaiting }) {
   const call = useCall();
   const act = useAct();
   const [gone, setGone] = useState<number | null>(null);
@@ -1414,6 +1417,8 @@ export interface ComposerProps {
   onSending?: (text: string | null) => void;
   /** Choices shown in the toolbar, between attach and send (a new chat's station, model and effort). */
   toolbar?: ReactNode;
+  /** Said right on top of the box (what an agent waits on the viewer for: WaitingBar). */
+  above?: ReactNode;
   placeholder?: string;
   /** While true (a new chat being made) nothing can be sent. */
   locked?: boolean;
@@ -1433,7 +1438,7 @@ export function Composer(props: ComposerProps) {
 }
 
 /** The chat's composer, also used where a page sends its draft as a reply to a decision. */
-export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
+export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
   draft: Draft; submitDraft?: (draft: Draft) => void;
 }) {
   const api = useApi();
@@ -1493,6 +1498,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   return (
     <div className={cloudCss.composerWrap}>
       {menu}
+      {above && <div className={css.composerAbove}>{above}</div>}
       <form ref={box} className={`${composerCss.composerBox} ${refCss.refHost}`} data-multiline={multiline || undefined} data-dragging={dragging || undefined}
         onFocus={() => setFocused(true)}
         onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}

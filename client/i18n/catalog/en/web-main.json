@@ -292,6 +292,7 @@
   "web-main.history.sentTo": "Sent to ",
   "web-main.history.thinking": "Thinking",
   "web-main.history.unbindFailed": "Couldn't unlink: {error}",
+  "web-main.jobs.chip": "Running {n}",
   "web-main.jobs.clearWhat": "clear finished jobs",
   "web-main.jobs.inPanel": "Open in panel",
   "web-main.jobs.jobs": "Jobs",

@@ -14,14 +14,14 @@ export const mPill = style({
     "&[data-tone=\"neutral\"]": { color: "var(--m-muted)", background: "var(--m-chip)" },
   },
 });
-export const mRunLabel = style({ width: "32px", flex: "none", fontSize: vars.textSecondary, color: "var(--m-muted)" });
+export const mRunLabel = style({ width: "32px", flex: "none", fontSize: vars.textMeta, color: "var(--m-muted)" });
 export const mSettingMain = style({
   fontSize: vars.textBody, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const mEffortNote = style({ paddingBottom: "8px" });
 export const mChips = style({ display: "flex", flexWrap: "wrap", gap: "8px" });
 export const mChip = style({
-  padding: "9px 16px", border: "0", borderRadius: "18px", background: "var(--m-chip)", fontSize: `${vars.textControl} !important`,
+  padding: "9px 16px", border: "0", borderRadius: "18px", background: "var(--m-chip)", fontSize: `${vars.textUi} !important`,
   cursor: "pointer",
   selectors: {
     "&[data-on]": { background: "var(--m-ink)", color: "var(--m-bg) !important", fontWeight: "600" },

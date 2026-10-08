@@ -368,6 +368,7 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
   };
   useLayoutEffect(() => use({
     station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : t("web-mobile.chat.placeholder"), offline: view.offline, archived: !!view.archived, send,
+    waiting: view.waiting && !view.waiting.card && !view.archived && view.thread ? { thread: view.thread.id, waiting: view.waiting } : null,
     restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {

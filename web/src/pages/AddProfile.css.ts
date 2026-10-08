@@ -3,7 +3,7 @@ import { vars } from "../styles/tokens.css.ts";
 
 /** A group of providers under its small heading (Cue's order: labs, china, gateways, cloud, inference, local). */
 export const group = style({ marginBottom: "28px" });
-export const groupHead = style({ margin: "0 0 8px", fontSize: vars.textLabel, fontWeight: "500", color: vars.muted });
+export const groupHead = style({ margin: "0 0 8px", fontSize: vars.textMeta, fontWeight: "500", color: vars.muted });
 export const tiles = style({
   display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "4px", margin: "0 -12px",
   "@media": { "(max-width: 700px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } },
@@ -25,8 +25,8 @@ export const method = style({
   background: vars.paper, color: vars.text, cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover } },
 });
-export const methodHint = style({ fontSize: vars.textSecondary, color: vars.muted });
+export const methodHint = style({ fontSize: vars.textUi, color: vars.muted });
 export const form = style({ display: "grid", gap: "18px" });
 export const offers = style({ marginBottom: "28px" });
-export const uses = style({ margin: "0", fontSize: vars.textSecondary, color: vars.muted });
+export const uses = style({ margin: "0", fontSize: vars.textUi, color: vars.muted });
 export const stations = style({ marginBottom: "24px" });

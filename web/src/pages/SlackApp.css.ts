@@ -34,13 +34,13 @@ export const appAvatar = style({
   },
 });
 export const appAvatarEmpty = style({
-  display: "grid", placeItems: "center", gap: "4px", height: "100%", fontSize: vars.textLabel, color: vars.muted,
+  display: "grid", placeItems: "center", gap: "4px", height: "100%", fontSize: vars.textMeta, color: vars.muted,
   alignContent: "center",
 });
 export const appLookMain = style({ flex: "1", minWidth: "0", display: "grid", gap: "8px" });
 export const appNameInput = style({ height: "44px", fontSize: vars.textTitle, fontWeight: "600" });
-export const appColour = style({ display: "flex", alignItems: "center", gap: "8px", fontSize: vars.textLabel });
-export const appColourHex = style({ width: "96px", height: "28px", fontSize: vars.textLabel });
+export const appColour = style({ display: "flex", alignItems: "center", gap: "8px", fontSize: vars.textMeta });
+export const appColourHex = style({ width: "96px", height: "28px", fontSize: vars.textMeta });
 export const avatarPicker = style({
   display: "grid", gridTemplateColumns: "repeat(15, minmax(0, 1fr))", gap: "6px", margin: "16px 0 10px",
   "@media": {
@@ -58,8 +58,8 @@ export const avatarTile = style({
     "&[data-picked]": { outline: `2px solid ${vars.text}`, outlineOffset: "1px" },
   },
 });
-export const appDesc = style({ height: "34px", fontSize: vars.textSecondary });
-export const appPerms = style({ fontSize: vars.textSecondary });
+export const appDesc = style({ height: "34px", fontSize: vars.textUi });
+export const appPerms = style({ fontSize: vars.textUi });
 export const permSections = style({ display: "grid", gap: "4px", marginTop: "8px" });
 export const permAll = style({ marginLeft: "8px" });
 /** Names only, three to a line; what each allows shows on hover. */
@@ -70,11 +70,11 @@ export const permGrid = style({
 export const appFold = style({ marginTop: "28px", marginBottom: "28px" });
 export const appFoldTitle = style({ fontWeight: "600" });
 export const appFoldBody = style({ display: "grid", gap: "10px", marginTop: "8px" });
-export const appFoldLink = style({ justifySelf: "start", fontSize: vars.textLabel, color: vars.muted });
+export const appFoldLink = style({ justifySelf: "start", fontSize: vars.textMeta, color: vars.muted });
 globalStyle(`${tokenGuide} li::before`, {
   content: "counter(guide)", position: "absolute", left: "0", top: "-1px", width: "24px", height: "24px",
   borderRadius: "50%", display: "grid", placeItems: "center", background: vars.neutralBg, color: vars.muted,
-  fontSize: vars.textLabel, fontWeight: "600", fontVariantNumeric: "tabular-nums",
+  fontSize: vars.textMeta, fontWeight: "600", fontVariantNumeric: "tabular-nums",
 });
 globalStyle(`${tokenGuide} li > ${inputRow}`, { marginTop: "6px" });
 globalStyle(`${appAvatar} img`, { width: "100%", height: "100%", display: "block" });

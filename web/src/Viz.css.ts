@@ -20,4 +20,4 @@ export const vizPage = style({
 });
 /** Where a visualization's frame comes while its file is fetched, as tall as the frame will be (Viz.tsx sets it), quietly. */
 export const vizWait = style({ borderRadius: `calc(12px * ${vars.cornerScale})`, background: vars.paper });
-export const vizNote = style({ padding: "24px", color: vars.muted, fontSize: vars.textSecondary });
+export const vizNote = style({ padding: "24px", color: vars.muted, fontSize: vars.textUi });

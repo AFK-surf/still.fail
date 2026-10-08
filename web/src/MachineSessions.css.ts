@@ -7,7 +7,7 @@ const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", wh
 /** Under the composer, quiet as the words around it until pointed at. */
 export const offer = style({
   display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", border: 0, borderRadius: vars.rNav,
-  background: "transparent", color: vars.muted, font: "inherit", fontSize: vars.textSecondary, lineHeight: "20px", cursor: "pointer",
+  background: "transparent", color: vars.muted, font: "inherit", fontSize: vars.textUi, lineHeight: "20px", cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
 
@@ -22,11 +22,11 @@ export const row = style({
 
 export const main = style({ display: "grid", gap: 2, minWidth: 0 });
 export const title = style({ ...ellipsis, fontSize: vars.textBody, fontWeight: 500 });
-export const meta = style({ ...ellipsis, fontSize: vars.textLabel, color: vars.muted });
-export const already = style({ fontSize: vars.textLabel, color: vars.muted, whiteSpace: "nowrap" });
+export const meta = style({ ...ellipsis, fontSize: vars.textMeta, color: vars.muted });
+export const already = style({ fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });
 
 /** A session looked at before going on with it, its messages spaced as a chat's (session.css.ts chatList). */
 // A chat hangs agents' avatars 28px out in its margin (Chat.css.ts msgRow): the preview keeps that room inside the dialog.
 export const preview = style({ display: "flex", flexDirection: "column", gap: 28, padding: "0 0 12px 28px" });
-export const previewWait = style({ display: "flex", alignItems: "center", gap: 8, minHeight: 120, justifyContent: "center", color: vars.muted, fontSize: vars.textSecondary });
-export const previewMore = style({ margin: 0, textAlign: "center", color: vars.muted, fontSize: vars.textLabel });
+export const previewWait = style({ display: "flex", alignItems: "center", gap: 8, minHeight: 120, justifyContent: "center", color: vars.muted, fontSize: vars.textUi });
+export const previewMore = style({ margin: 0, textAlign: "center", color: vars.muted, fontSize: vars.textMeta });

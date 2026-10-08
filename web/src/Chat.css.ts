@@ -35,7 +35,7 @@ export const chatToBottom = style({
     // With how many new messages wait at the end (a window short of it): a pill, growing leftwards from where it sits.
     "&[data-count]": {
       width: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "0 12px 0 9px", borderRadius: "17px",
-      fontSize: vars.textSecondary, whiteSpace: "nowrap",
+      fontSize: vars.textUi, whiteSpace: "nowrap",
     },
     [`${chat}[data-under-composer] &[data-count]`]: { width: "auto", borderRadius: "16px" },
   },
@@ -48,13 +48,13 @@ export const chatToBottom = style({
   },
 });
 export const chatEmpty = style({
-  color: vars.muted, margin: "auto", textAlign: "center", fontSize: vars.textSecondary, display: "grid", gap: "4px",
+  color: vars.muted, margin: "auto", textAlign: "center", fontSize: vars.textUi, display: "grid", gap: "4px",
 });
 export const chatError = style({ padding: "0 32px 10px" });
 /** A chat whose station is offline: read from what was kept, not written to. */
 export const offlineNotice = style({
   margin: "0 auto 8px", maxWidth: "760px", width: "calc(100% - 64px)", padding: "8px 12px", borderRadius: "10px",
-  background: vars.hover, color: vars.muted, fontSize: vars.textSecondary,
+  background: vars.hover, color: vars.muted, fontSize: vars.textUi,
   selectors: {
     [`${chat}[data-under-composer] > &`]: { marginBottom: "calc(8px + var(--composer-room))" },
   },
@@ -66,7 +66,7 @@ export const offlineNotice = style({
 export const msgSystem = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" });
 export const msgSystemBox = style({
   minWidth: "0", maxWidth: "100%", padding: "6px 14px", borderRadius: "999px", background: vars.hover, color: vars.text,
-  fontSize: vars.textSecondary, cursor: "pointer",
+  fontSize: vars.textUi, cursor: "pointer",
   selectors: {
     "&[data-failed]": { background: vars.redBg, color: vars.red },
     "&[data-open]": { borderRadius: "16px" },
@@ -82,7 +82,7 @@ globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit"
  */
 export const composerText = style({
   flex: "1", minHeight: "20px", maxHeight: "160px", padding: "6px 8px 4px", border: "0", outline: "none",
-  resize: "none", background: "transparent", font: "inherit", fontSize: vars.textBody, lineHeight: "1.5",
+  resize: "none", background: "transparent", font: "inherit", fontSize: vars.textInput, lineHeight: "1.5",
   color: vars.text, textWrap: "wrap",
   vars: { "--more-above": "0px", "--more-below": "0px" },
   selectors: {
@@ -121,7 +121,7 @@ export const sendBtn = style({
 });
 /** Over the first message that was unread when the chat opened. */
 export const chatUnreadLine = style({
-  display: "flex", alignItems: "center", gap: "10px", color: vars.accent, fontSize: vars.textLabel, fontWeight: "500",
+  display: "flex", alignItems: "center", gap: "10px", color: vars.accent, fontSize: vars.textMeta, fontWeight: "500",
   selectors: {
     "&::before": { content: "\"\"", flex: "1", height: "1px", background: "currentColor", opacity: ".5" },
     "&::after": { content: "\"\"", flex: "1", height: "1px", background: "currentColor", opacity: ".5" },
@@ -157,7 +157,7 @@ export const chatOlder = style({ display: "flex", justifyContent: "center", padd
 export const chatNewer = style({ display: "flex", justifyContent: "center", padding: "8px 0 4px", color: vars.muted });
 export const msgUnsent = style({
   display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "2px", marginTop: "4px",
-  fontSize: vars.textLabel,
+  fontSize: vars.textMeta,
 });
 export const msgUnsentNote = style({});
 export const msgUnsentBtn = style({
@@ -239,7 +239,7 @@ export const fileCardMeta = style({
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
 export const fileCardName = style({
-  fontSize: vars.textSecondary, lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: vars.textUi, lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const fileCardRemove = style({
   display: "grid", placeItems: "center", width: "22px", height: "22px", padding: "0", border: "0", borderRadius: "50%",
@@ -288,7 +288,7 @@ globalStyle(`${msgImage}[data-failed]`, { cursor: "pointer" });
 globalStyle(`${msgImage}[data-failed] ${msgImageWait} i`, { animation: "none" });
 export const msgImageUnavailable = style({
   position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-  gap: "6px", fontSize: vars.textLabel, color: vars.muted, background: `color-mix(in oklab, ${vars.neutralBg} 70%, transparent)`,
+  gap: "6px", fontSize: vars.textMeta, color: vars.muted, background: `color-mix(in oklab, ${vars.neutralBg} 70%, transparent)`,
 });
 globalStyle(`${msgImageWait} i`, {
   position: "absolute", width: "70%", aspectRatio: "1", borderRadius: "50%", filter: "blur(28px)", opacity: ".75",
@@ -314,7 +314,7 @@ globalStyle(`button${msgImage}[data-loaded="reveal"] img`, {
 export const quotePop = style({
   cornerShape: vars.cornerShape, position: "fixed", zIndex: "40", transform: "translate(-50%, calc(-100% - 8px))",
   display: "inline-flex", alignItems: "center", gap: "4px", height: "26px", padding: "0 10px", border: "0",
-  borderRadius: "999px", background: vars.primary, color: vars.onPrimary, fontSize: vars.textLabel, fontWeight: "500",
+  borderRadius: "999px", background: vars.primary, color: vars.onPrimary, fontSize: vars.textMeta, fontWeight: "500",
   boxShadow: `0 6px 16px ${vars.shadow}`, cursor: "pointer", animation: `${popInKeyframes} 120ms ${vars.easeOut}`,
   selectors: {
     "&:hover": { background: vars.primaryHover },
@@ -437,12 +437,12 @@ export const quoteCardWho = style({ fontWeight: "500", color: vars.text });
 /** A page mark's number, as its pin on the page (annotate/Marks.css.ts). */
 export const quoteCardPin = style({
   display: "inline-grid", placeItems: "center", minWidth: "16px", height: "16px", padding: "0 4px", marginRight: "6px",
-  boxSizing: "border-box", borderRadius: "8px 8px 8px 2px", background: vars.accent, color: "#fff", fontSize: vars.textMicro,
-  fontWeight: "650", lineHeight: "1", verticalAlign: "1px",
+  boxSizing: "border-box", borderRadius: "8px 8px 8px 2px", background: vars.accent, color: "#fff", fontSize: vars.textCaption,
+  fontWeight: "600", lineHeight: "1", verticalAlign: "1px",
 });
 export const quoteCardText = style({
   whiteSpace: "pre-wrap", overflow: "hidden", WebkitBoxOrient: "vertical", display: "-webkit-box",
-  WebkitLineClamp: "2", fontSize: vars.textLabel, lineHeight: "1.5", color: vars.muted,
+  WebkitLineClamp: "2", fontSize: vars.textMeta, lineHeight: "1.5", color: vars.muted,
   selectors: {
     [`${composerQuote} &`]: { WebkitLineClamp: "2" },
     [`${quoteCardSource}:not(:disabled):hover &`]: { color: vars.text },
@@ -462,7 +462,7 @@ export const quoteCardComment = style({
 });
 export const quoteCardInput = style({
   width: "100%", border: "0", outline: "none", background: "transparent", color: vars.text, font: "inherit",
-  fontSize: vars.textSecondary,
+  fontSize: vars.textUi,
   selectors: {
     "&::placeholder": { color: vars.subtle },
   },
@@ -516,7 +516,7 @@ globalStyle(`${sendBtn} ${spinner}`, {
 globalStyle(`${chatEmpty} p`, { margin: "0" });
 /** Here rather than with its class: it comes after .msg-agent:hover, and wins over it. */
 globalStyle(`${msgHead} ${msgName}`, {
-  fontWeight: "650", fontSize: vars.textBody, color: vars.accentText, maxWidth: "240px", overflow: "hidden",
+  fontWeight: "600", fontSize: vars.textUi, color: vars.accentText, maxWidth: "240px", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 globalStyle(`${fileCard} ${spinner}`, { width: "14px", height: "14px", flex: "none" });
@@ -565,20 +565,20 @@ globalStyle(`button${msgImage}[data-letterbox] img`, { objectFit: "contain" });
 globalStyle(`${msgRow} ${msgFiles}`, { justifyContent: "flex-start" });
 /** Here rather than with its class: it comes after .quote-card-input, and wins over it. */
 globalStyle(quoteCardComment, {
-  padding: "9px 12px 10px", fontSize: vars.textSecondary, lineHeight: "1.55", whiteSpace: "pre-wrap",
+  padding: "9px 12px 10px", fontSize: vars.textUi, lineHeight: "1.55", whiteSpace: "pre-wrap",
   overflowWrap: "anywhere",
 });
 globalStyle(`${composerThumb} img`, { width: "100%", height: "100%", objectFit: "cover", display: "block" });
 globalStyle(`${composerThumbBusy} ${spinner}`, { width: "16px", height: "16px" });
 globalStyle(`${quoteCardText} svg`, { display: "inline", verticalAlign: "-1px", marginRight: "4px", color: vars.accent });
 /** Here rather than with its class: it comes after .quote-card-input, and wins over it. */
-globalStyle(quoteCardComment, { padding: "3px 11px 8px", fontSize: vars.textSecondary, lineHeight: "1.5" });
+globalStyle(quoteCardComment, { padding: "3px 11px 8px", fontSize: vars.textUi, lineHeight: "1.5" });
 globalStyle(`${quoteCard}:not(:has(${quoteCardComment})) ${quoteCardSource}`, { paddingBottom: "7px" });
 globalStyle(`${quoteCard}:not(:has(${quoteCardComment})) ${quoteCardPicture}`, { paddingBottom: "8px" });
 /** Here rather than with its class: it comes after .chat-empty p, and wins over it. */
-globalStyle(`${tokenStart} > p`, { margin: "0 0 8px", fontSize: vars.textSecondary });
+globalStyle(`${tokenStart} > p`, { margin: "0 0 8px", fontSize: vars.textUi });
 /** Here rather than with its class: it comes after .token-start > p, and wins over it. */
-globalStyle(`${onboardingCard} p`, { margin: "0", fontSize: vars.textSecondary });
+globalStyle(`${onboardingCard} p`, { margin: "0", fontSize: vars.textUi });
 
 /** Video stills share each screen's attachment sizing, with an explicit play affordance. */
 export const msgVideo = style({
@@ -599,12 +599,12 @@ export const msgVideoPlay = style({
 });
 export const msgVideoName = style({
   position: "absolute", bottom: "0", left: "0", right: "0", padding: "6px 8px",
-  background: "rgba(0, 0, 0, 0.65)", fontSize: vars.textLabel, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  background: "rgba(0, 0, 0, 0.65)", fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 
 export const msgVideoUnavailable = style({
   position: "absolute", inset: "0 0 30px", display: "flex", flexDirection: "column",
-  alignItems: "center", justifyContent: "center", gap: "8px", fontSize: vars.textSecondary,
+  alignItems: "center", justifyContent: "center", gap: "8px", fontSize: vars.textUi,
 });
 globalStyle(`${msgVideo}[data-unavailable] .${msgVideoName}`, {
   background: "transparent", color: vars.text, textAlign: "center", padding: "8px 12px",
@@ -613,15 +613,14 @@ globalStyle(`${msgVideo}[data-unavailable] .${msgVideoName}`, {
 
 /** What the archive check made of the chat, under its agent's all-done post: a quiet line; red when the check failed. */
 export const archiveCheck = style({
-  margin: "6px 0 0", fontSize: vars.textLabel, color: vars.muted, lineHeight: "18px",
+  margin: "6px 0 0", fontSize: vars.textMeta, color: vars.muted, lineHeight: "18px",
   selectors: { "&[data-failed]": { color: vars.red } },
 });
 
-/** What waits for the viewer in the chat (Chat.tsx WaitingBar): a line above the composer, as the offline notice sits. */
+/** What an agent needs of the viewer (Chat.tsx WaitingBar): a line on top of the composer (composerAbove). */
 export const waitingBar = style({
-  display: "flex", alignItems: "center", gap: "8px", margin: "0 auto 8px", maxWidth: "760px", width: "calc(100% - 64px)",
-  padding: "6px 6px 6px 12px", borderRadius: "10px", background: vars.amberBg, color: vars.text, fontSize: vars.textSecondary,
-  selectors: { [`${chat}[data-under-composer] > &`]: { marginBottom: "calc(8px + var(--composer-room))" } },
+  display: "flex", alignItems: "center", gap: "8px", padding: "6px 6px 6px 12px", borderRadius: "10px",
+  background: vars.amberBg, color: vars.text, fontSize: vars.textUi,
 });
 export const waitingText = style({
   flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "6px", padding: "0", border: "0", background: "none",
@@ -633,5 +632,8 @@ globalStyle(`${waitingText} > span`, { overflow: "hidden", textOverflow: "ellips
 globalStyle(`${waitingText}:hover > span`, { textDecoration: "underline" });
 export const waitingDismiss = style({
   flex: "none", padding: "3px 8px", border: "0", borderRadius: "7px", background: "none", color: vars.muted, font: "inherit",
-  fontSize: vars.textLabel, cursor: "pointer", selectors: { "&:hover": { background: vars.hover, color: vars.text } },
+  fontSize: vars.textMeta, cursor: "pointer", selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
+
+/** What is said right on top of the composer's box (ComposerProps `above`): as wide as it, a little inset. */
+export const composerAbove = style({ margin: "0 12px 6px" });

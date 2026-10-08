@@ -8,7 +8,7 @@ export const mPillRow = style({ display: "flex", justifyContent: "center", paddi
 export const mPill = style({
   display: "inline-flex", alignItems: "center", gap: "8px", maxWidth: "100%", boxSizing: "border-box",
   padding: "6px 12px", borderRadius: "16px", background: "var(--m-chip)", color: "var(--m-muted)",
-  fontSize: vars.textSecondary, lineHeight: "18px", textAlign: "center",
+  fontSize: vars.textMeta, lineHeight: "18px", textAlign: "center",
   selectors: { "&[data-error]": { color: "var(--m-red)" } },
 });
 export const mPlaceholders = style({

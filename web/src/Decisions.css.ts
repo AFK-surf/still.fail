@@ -30,11 +30,11 @@ export const option = style({
   },
 });
 export const optionLabel = style({
-  fontSize: vars.textSecondary, lineHeight: "20px", fontWeight: "500", overflowWrap: "anywhere",
+  fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500", overflowWrap: "anywhere",
   selectors: { [`${option}[data-busy] &`]: { paddingRight: "22px" } },
 });
 export const optionDetail = style({
-  fontSize: vars.textLabel, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere",
+  fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere",
   selectors: { [`${option}[data-recommended] &`]: { color: "rgba(255, 255, 255, .78)" } },
 });
 /** Being sent: a small ring at the button's right. */
@@ -45,7 +45,7 @@ globalStyle(`${optionSpinner}${spinner}`, { width: "12px", height: "12px", borde
 export const decision = style({ position: "relative" });
 
 /** Answered (or replaced), in the chat: who did what, quiet, where the options were. */
-export const settledLine = style({ margin: "2px 0 0", fontSize: vars.textLabel, lineHeight: "18px", color: vars.subtle });
+export const settledLine = style({ margin: "2px 0 0", fontSize: vars.textMeta, lineHeight: "18px", color: vars.subtle });
 
 // ── the decisions page ────────────────────────────────────────────────
 
@@ -90,12 +90,12 @@ export const head = style({ display: "flex", alignItems: "center", gap: "8px", m
 /** The chat's title: small, opening the chat. */
 export const chatLink = style({
   flex: "0 1 auto", minWidth: "0", padding: "0", border: "0", background: "none", color: vars.muted,
-  fontFamily: "inherit", fontSize: vars.textLabel, lineHeight: "20px", textAlign: "left", cursor: "pointer",
+  fontFamily: "inherit", fontSize: vars.textMeta, lineHeight: "20px", textAlign: "left", cursor: "pointer",
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   selectors: { "&:hover": { color: vars.text } },
 });
 export const count = style({
-  marginLeft: "auto", flex: "none", color: vars.subtle, fontSize: vars.textLabel, lineHeight: "20px",
+  marginLeft: "auto", flex: "none", color: vars.subtle, fontSize: vars.textMeta, lineHeight: "20px",
   fontVariantNumeric: "tabular-nums",
 });
 
@@ -126,18 +126,18 @@ globalStyle(`${footColumn} > :not(${reply}), ${reply} > *`, { pointerEvents: "au
  */
 export const hint = style({
   display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", width: "fit-content", height: "24px",
-  margin: "8px auto 0", padding: "0 12px", borderRadius: "12px", color: vars.subtle, fontSize: vars.textLabel, lineHeight: "24px",
+  margin: "8px auto 0", padding: "0 12px", borderRadius: "12px", color: vars.subtle, fontSize: vars.textMeta, lineHeight: "24px",
   ...glass,
 });
 export const hintButton = style({
   height: "20px", padding: "0 4px", border: "0", borderRadius: "6px", background: "none", color: vars.subtle,
-  fontFamily: "inherit", fontSize: vars.textLabel, lineHeight: "20px", cursor: "pointer",
+  fontFamily: "inherit", fontSize: vars.textMeta, lineHeight: "20px", cursor: "pointer",
   selectors: { "&:hover": { color: vars.text } },
 });
 
 export const empty = style({
   position: "absolute", inset: "0", display: "grid", placeItems: "center", margin: "0", color: vars.muted,
-  fontSize: vars.textSecondary,
+  fontSize: vars.textUi,
 });
 
 const rise = keyframes({ from: { transform: "translateY(12px) scale(.98)", opacity: "0" }, to: { transform: "none", opacity: "1" } });
@@ -160,7 +160,7 @@ export const page = style({ flex: "1", minHeight: "0", display: "flex", flexDire
 /** A card this page does not know: the way to its chat, to answer there. */
 export const elsewhere = style({
   display: "block", width: "100%", height: "38px", padding: "0 14px", border: "0", borderRadius: vars.rField,
-  cornerShape: vars.cornerShape, background: chip, color: vars.text, fontFamily: "inherit", fontSize: vars.textSecondary,
+  cornerShape: vars.cornerShape, background: chip, color: vars.text, fontFamily: "inherit", fontSize: vars.textUi,
   fontWeight: "500", cursor: "pointer",
   selectors: { "&:hover": { filter: "brightness(.96)" } },
 });

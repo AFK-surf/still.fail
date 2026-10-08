@@ -65,25 +65,18 @@ globalStyle(":root", {
     "--r-nav": `calc(12px * ${vars.cornerScale})`,
     "--r-menu": `calc(20px * ${vars.cornerScale})`,
     "--r-option": `calc(12px * ${vars.cornerScale})`,
-    // Counts in pills, the smallest marks.
-    "--text-micro": "10px",
-    // Times, tags, keys: what is read last.
-    "--text-caption": "11px",
-    // Small labels, a menu's headings, a row's third line.
-    "--text-label": "12px",
-    // A row's second line, notes under a setting, menus.
-    "--text-secondary": "13px",
-    // Buttons and other controls.
-    "--text-control": "13px",
-    // What is read: messages, pages.
-    "--text-body": "14px",
-    // What is typed in.
+    // Six roles, each a size with its line (leading-*): times and tags; a row's second line and notes; lists, menus,
+    // buttons and settings; what is read; a section's or dialog's title; a page's. The phone's are a size up
+    // (mobile/styles/root.css.ts). Weights are three: 400, 500 to stand out, 600 for titles.
+    "--text-caption": "11px", "--leading-caption": "16px",
+    "--text-meta": "12px", "--leading-meta": "18px",
+    "--text-ui": "13px", "--leading-ui": "20px",
+    "--text-body": "14px", "--leading-body": "22px",
+    // What is typed in: as what is read (the phone's 16, iOS zooms into less).
     "--text-input": "14px",
-    // A section's or a dialog's title, a list's titles that lead.
-    "--text-title": "16px",
-    // A page's title.
-    "--text-heading": "22px",
-    // Big numbers.
+    "--text-title": "16px", "--leading-title": "24px",
+    "--text-heading": "22px", "--leading-heading": "30px",
+    // Big numbers (usage).
     "--text-display": "28px",
     "--ease-out": "cubic-bezier(.2, .7, .2, 1)",
     "--dur": "140ms",

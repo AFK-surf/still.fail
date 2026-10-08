@@ -60,7 +60,7 @@ globalStyle(`${fp}[data-awake] ${fpHead}, ${fpHead}:hover, ${fpHead}:has(:focus-
   opacity: "1", transitionDuration: "120ms",
 });
 export const fpHeadProgress = style({
-  display: "flex", alignItems: "center", gap: "10px", padding: "0 8px", color: vars.muted, fontSize: vars.textLabel,
+  display: "flex", alignItems: "center", gap: "10px", padding: "0 8px", color: vars.muted, fontSize: vars.textMeta,
   fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
 });
 globalStyle(`${fpHeadProgress} b`, { color: vars.text, fontWeight: "600" });
@@ -70,7 +70,7 @@ export const fpName = style({
   fontSize: vars.textBody, fontWeight: "600",
 });
 export const fpMeta = style({
-  flex: "none", color: vars.muted, fontSize: vars.textLabel,
+  flex: "none", color: vars.muted, fontSize: vars.textMeta,
   "@media": {
     "(max-width: 640px)": {
       display: "none",
@@ -80,7 +80,7 @@ export const fpMeta = style({
 export const fpZoom = style({ display: "flex", alignItems: "center", gap: "2px" });
 export const fpToolText = style({
   height: "32px", minWidth: "36px", padding: "0 8px", border: "0", borderRadius: `calc(12px * ${vars.cornerScale})`,
-  background: "none", color: vars.muted, font: "inherit", fontSize: vars.textLabel, fontVariantNumeric: "tabular-nums",
+  background: "none", color: vars.muted, font: "inherit", fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums",
   cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
@@ -143,7 +143,7 @@ export const fpImage = style({
 export const fpProgress = style({
   display: "grid", gap: "8px", width: "220px", padding: "12px 14px", borderRadius: `calc(14px * ${vars.cornerScale})`,
   cornerShape: vars.cornerShape, background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`,
-  WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)", color: vars.muted, fontSize: vars.textSecondary,
+  WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)", color: vars.muted, fontSize: vars.textUi,
   fontVariantNumeric: "tabular-nums", textAlign: "center", animation: `${fadeInKeyframes} 200ms ${vars.easeOut}`,
 });
 export const fpProgressText = style({});
@@ -162,7 +162,7 @@ export const fpProgressBar = style({
 });
 export const fpAudio = style({ display: "grid", gap: "14px", justifyItems: "center", width: "min(100% - 48px, 480px)" });
 export const fpAudioName = style({
-  maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textSecondary,
+  maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textUi,
   color: vars.muted,
 });
 export const fpFrame = style({ width: "100%", height: "100%", border: "0", background: "#fff" });
@@ -180,7 +180,7 @@ export const fpMarkdown = style({
     },
   },
 });
-export const fpCode = style({ padding: "64px 12px 48px", fontSize: vars.textLabel });
+export const fpCode = style({ padding: "64px 12px 48px", fontSize: vars.textMeta });
 export const fpPdf = style({
   display: "grid", justifyItems: "center", alignContent: "start", gap: "20px", padding: "76px 28px 28px",
   selectors: {
@@ -197,7 +197,7 @@ export const fpPdfPage = style({
   boxShadow: "0 1px 3px rgba(0, 0, 0, .08), 0 8px 28px rgba(0, 0, 0, .10)",
 });
 export const fpPlain = style({
-  margin: "0", padding: "76px 32px 64px", fontSize: vars.textLabel, lineHeight: "1.65", whiteSpace: "pre-wrap",
+  margin: "0", padding: "76px 32px 64px", fontSize: vars.textMeta, lineHeight: "1.65", whiteSpace: "pre-wrap",
   overflowWrap: "anywhere",
   "@media": {
     "(max-width: 640px)": {
@@ -207,11 +207,11 @@ export const fpPlain = style({
 });
 export const fpCut = style({
   position: "sticky", top: "0", zIndex: "2", padding: "8px 20px", background: vars.amberBg, color: vars.amber,
-  fontSize: vars.textLabel,
+  fontSize: vars.textMeta,
 });
 export const fpTableWrap = style({ overflow: "visible", padding: "68px 0 48px" });
 export const fpTable = style({
-  borderCollapse: "collapse", minWidth: "100%", fontSize: vars.textSecondary, fontVariantNumeric: "tabular-nums",
+  borderCollapse: "collapse", minWidth: "100%", fontSize: vars.textUi, fontVariantNumeric: "tabular-nums",
 });
 export const fpRow = style({
   selectors: {
@@ -219,14 +219,14 @@ export const fpRow = style({
   },
 });
 export const fpNote = style({
-  display: "grid", justifyItems: "center", gap: "14px", color: vars.muted, fontSize: vars.textSecondary,
+  display: "grid", justifyItems: "center", gap: "14px", color: vars.muted, fontSize: vars.textUi,
 });
 globalStyle(`${fpHeadProgress} ${fpProgressTrack}`, { width: "120px" });
 globalStyle(`${fpHead} ${segmented}`, {
   width: "120px",
   vars: { "--pad": "2px" },
 });
-globalStyle(`${fpHead} ${segmentedOption}`, { height: "26px", fontSize: vars.textLabel });
+globalStyle(`${fpHead} ${segmentedOption}`, { height: "26px", fontSize: vars.textMeta });
 globalStyle(`${fpZoom} ${iconBtn}:disabled`, { opacity: ".35", cursor: "default", background: "none" });
 globalStyle(`${fpAudio} audio`, { width: "100%" });
 globalStyle(`${fpCode} ${codeBlock}`, { margin: "0", border: "0", borderRadius: "0", background: "none" });

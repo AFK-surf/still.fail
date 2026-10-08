@@ -40,7 +40,7 @@ export const codeBar = style({
   },
 });
 export const codeLang = style({
-  padding: "0 6px", fontFamily: "var(--font-sans, inherit)", fontSize: vars.textMicro, letterSpacing: ".02em",
+  padding: "0 6px", fontFamily: "var(--font-sans, inherit)", fontSize: vars.textCaption, letterSpacing: ".02em",
   color: vars.subtle,
 });
 export const codeCopy = style({
@@ -65,10 +65,10 @@ globalStyle(`${tableScroll}:last-child`, { marginBottom: "0" });
 globalStyle(`${tableScroll} > table`, { margin: "0" });
 globalStyle(`${tableScroll} th, ${tableScroll} td`, { overflowWrap: "normal", minWidth: "4em" });
 globalStyle(`${markdown} ${codeBlock} pre`, {
-  margin: "0", padding: "10px 12px", borderRadius: "0", background: "none", fontSize: vars.textLabel, lineHeight: "1.55",
+  margin: "0", padding: "10px 12px", borderRadius: "0", background: "none", fontSize: vars.textMeta, lineHeight: "1.55",
 });
 globalStyle(`${codeShiki} pre.shiki`, {
-  margin: "0", padding: "10px 12px", background: "none !important", overflow: "auto", fontSize: vars.textLabel,
+  margin: "0", padding: "10px 12px", background: "none !important", overflow: "auto", fontSize: vars.textMeta,
   lineHeight: "1.55",
 });
 // Dark: vitesse-dark's colours, which Shiki puts in `--shiki-dark` beside the light ones it writes inline.
@@ -78,4 +78,4 @@ globalStyle(`:root:not([data-theme="light"]) ${codeShiki} .shiki, :root:not([dat
   "@media": { "(prefers-color-scheme: dark)": shikiDark },
 });
 globalStyle(`${codeShiki} pre.shiki code`, { fontFamily: vars.fontMono, padding: "0", background: "none" });
-globalStyle(`${markdown} ${codeBlock} pre, ${codeShiki} pre.shiki`, { padding: "12px 14px", fontSize: vars.textLabel, lineHeight: "1.6" });
+globalStyle(`${markdown} ${codeBlock} pre, ${codeShiki} pre.shiki`, { padding: "12px 14px", fontSize: vars.textMeta, lineHeight: "1.6" });

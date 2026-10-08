@@ -12,13 +12,13 @@ export const mCard = style({
 export const mRowText = style({ display: "flex", flexDirection: "column" });
 export const mRowTitle = style({ fontSize: vars.textBody, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const mRowNote = style({
-  display: "block", fontSize: vars.textSecondary, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis",
+  display: "block", fontSize: vars.textMeta, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
-export const mGroupLabel = style({ padding: "14px 0 4px", fontSize: vars.textSecondary, color: "var(--m-muted)" });
+export const mGroupLabel = style({ padding: "14px 0 4px", fontSize: vars.textMeta, color: "var(--m-muted)" });
 export const mInfoRow = style({
   display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", padding: "10px 12px",
-  border: "0", background: "none", color: "var(--m-ink)", textAlign: "left", fontSize: vars.textControl,
+  border: "0", background: "none", color: "var(--m-ink)", textAlign: "left", fontSize: vars.textUi,
   selectors: {
     "button&": { cursor: "pointer" },
   },
