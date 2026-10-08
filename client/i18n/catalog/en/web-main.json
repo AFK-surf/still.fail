@@ -128,9 +128,9 @@
   "web-main.archived.restore": "Restore",
   "web-main.archived.restoring": "Restoring…",
   "web-main.attention.alertOne": "Went wrong",
-  "web-main.attention.desk": "Open 奏",
+  "web-main.attention.desk": "All decisions",
   "web-main.attention.dismiss": "Dismiss",
-  "web-main.attention.dismissNote": "Dismiss: off your to-do (its options still work in the chat)",
+  "web-main.attention.dismissNote": "Dismiss: off your to-do and Decisions (its options still work in the chat)",
   "web-main.attention.empty": "Nothing to do",
   "web-main.attention.entry": "To do",
   "web-main.attention.label": {
