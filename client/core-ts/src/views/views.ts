@@ -31,6 +31,7 @@ import { usageView } from "./usage.ts";
 import { workspaceProfiles } from "./profiles.ts";
 import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes } from "./models.ts";
+import { jobsText, workText } from "./brief.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -1356,6 +1357,8 @@ export class Views implements Owner {
       turns: structuredClone(get(detail, "turns") ?? []),
       threads: structuredClone(get(detail, "threads") ?? []),
       jobs: structuredClone(get(detail, "jobs") ?? []),
+      workText: workText(turns),
+      jobsText: jobsText(get(detail, "jobs")),
     };
   }
 

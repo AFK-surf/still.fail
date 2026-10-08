@@ -1,11 +1,11 @@
-// An agent of the chat in brief, over its avatar while it is pointed at (Hover, Peeks.tsx): what it runs, where it
-// stands, the account it runs on, where it came from and when it was last active, as the chat's info has them
-// (ChatPage's AgentLine). All from the chat's view: nothing is asked of the station.
-import { createContext, useContext, type ReactElement, type ReactNode } from "react";
+// An agent of the chat in brief, over its avatar while it is pointed at (Hover, Peeks.tsx): what it runs and on which
+// account, where it stands and for how long, what it has done, its jobs, and what is worth a look. All from the chat's
+// view (the core words it, views/brief.ts): nothing is asked of the station.
+import { createContext, useContext, type ReactElement } from "react";
 import type { ChatAgent } from "./api.ts";
 import { Hover } from "./Peeks.tsx";
-import { AgentMark, ConnectKindIcon, Time } from "./ui.tsx";
-import { t } from "./i18n.ts";
+import { AgentMark } from "./ui.tsx";
+import { Elapsed, Waited } from "./Chat.tsx";
 import * as css from "./AgentCard.css.ts";
 
 /** The agents of the chat whose messages are drawn (ChatRows). */
@@ -18,28 +18,42 @@ export function AgentHover({ agent, children }: { agent: string | null | undefin
   return <Hover tile content={<AgentCard agent={agent} />}>{children}</Hover>;
 }
 
+/** Only what says something: where it stands now and for how long, what it has done here, its jobs at work, and what
+ * is worth a look (a quota running out, an account that cannot run, the disk filling up); each line only when it has one. */
 function AgentCard({ agent: key }: { agent: string }) {
   const agent = useContext(ChatAgents).find((a) => a.session.key === key);
   if (!agent) return null;
-  const { session: s, connect } = agent;
+  const { session: s, wait } = agent;
   const account = agent.account ?? agent.profile;
   const quota = agent.account?.quotaLine;
-  const row = (label: string, value: ReactNode) => <div className={css.row}><dt>{label}</dt><dd>{value}</dd></div>;
+  // A quota running out is in its account's line already.
+  const attention = quota ? agent.attention.filter((a) => a.kind !== "quota") : agent.attention;
   return (
     <div className={css.agentCard}>
       <div className={css.head}>
         <AgentMark maker={s.maker} runtime={s.runtime} badge={agent.badge} badgeText={s.badgeText} size={28} />
         <span className={css.who}>
           <span className={css.name}>{s.agentText}</span>
-          <span className={css.sub}>{[s.runtimeText, s.processText].filter(Boolean).join(" · ")}</span>
+          {account && <span className={css.sub}>{account.name}{quota && <span className={css.quota} data-level={quota.level}> · {quota.text}</span>}</span>}
         </span>
       </div>
-      <p className={css.status} data-tone={s.tone}>{s.statusText}</p>
-      <dl className={css.rows}>
-        {account && row(t("web-main.chat.agentCard.account"), <>{account.name}{quota && <span className={css.quota} data-level={quota.level}> · {quota.text}</span>}</>)}
-        {connect && row(t("web-main.chat.agentCard.from"), <span className={css.inline}><ConnectKindIcon kind={connect.kind} size={12} />{connect.name}</span>)}
-        {s.time?.lastActiveAt && row(t("web-main.chat.agentCard.active"), <Time stamp={s.time.lastActiveAt} fixed />)}
-      </dl>
+      <p className={css.status} data-tone={s.tone}>
+        {s.statusText}
+        {wait
+          ? <span className={css.elapsed}> · <Waited since={wait.since} seconds={wait.seconds} /></span>
+          : agent.since ? <span className={css.elapsed}> · <Elapsed since={agent.since} /></span> : null}
+      </p>
+      {(agent.workText || agent.jobsText) && (
+        <div className={css.lines}>
+          {agent.workText && <span>{agent.workText}</span>}
+          {agent.jobsText && <span>{agent.jobsText}</span>}
+        </div>
+      )}
+      {attention.length > 0 && (
+        <div className={css.lines}>
+          {attention.map((a, i) => <span key={i} className={css.attention} data-level={a.quota?.level ?? (a.kind === "disk" ? "amber" : "red")}>{a.text}</span>)}
+        </div>
+      )}
     </div>
   );
 }

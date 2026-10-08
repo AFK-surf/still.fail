@@ -110,6 +110,22 @@
     "other": "{n} people stuck after sign-in"
   },
   "core-views.admin.todo.stuck_hint": "Grant access or see where they're stuck",
+  "core-views.agent.hours": "{h}h {m}m",
+  "core-views.agent.minutes": "{m}m",
+  "core-views.agent.running": {
+    "one": "1 job running",
+    "other": "{n} jobs running"
+  },
+  "core-views.agent.services": "Up: {names}",
+  "core-views.agent.turns": {
+    "one": "1 turn",
+    "other": "{n} turns"
+  },
+  "core-views.agent.watching": "Watching: {names}",
+  "core-views.agent.work": {
+    "one": "1 turn · {time} of work",
+    "other": "{n} turns · {time} of work"
+  },
   "core-views.archive.auto": "Auto-archived when idle",
   "core-views.archive.day_with_year": "{day}, {year}",
   "core-views.archive.empty": "No archived chats.",

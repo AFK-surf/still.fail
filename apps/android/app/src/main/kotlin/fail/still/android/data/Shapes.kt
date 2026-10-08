@@ -1091,7 +1091,11 @@ data class ChatAgent (
 	val turns: List<TurnRecord>,
 	val threads: List<ChatThread>,
 	/// Its background jobs, newest first; those with a port are web services, shown by their names.
-	val jobs: List<Job>
+	val jobs: List<Job>,
+	/// How much it has done, for its card: its turns, and how long the finished ones took (8 轮 · 共干了 1 小时 12 分).
+	val workText: String? = null,
+	/// Its jobs at work now, for its card (服务在线：web · 在盯着：CI). Absent when none is.
+	val jobsText: String? = null
 )
 
 /// An agent of a sidebar row, with what its mark shows.

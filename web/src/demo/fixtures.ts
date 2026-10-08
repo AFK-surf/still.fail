@@ -242,6 +242,7 @@ export interface Runs { choices: ModelOption[]; profile: Profile }
 export function chatView(chat: DemoChat, runs?: Runs): ChatView {
   const created = chat.messages[0]?.createdAt ?? Date.now();
   const last = chat.messages.at(-1)?.seq ?? 0;
+  const turns = chat.messages.filter((m) => m.authorKind === "person").length;
   const agent: ChatAgent = {
     session: session(chat), status: chat.running ? "running" : chat.blocked ? "block" : chat.failed ? "failed" : "final",
     ...(chat.running ? { badge: "run" as const, since: chat.running.since, ...(chat.running.started ? { started: true } : {}) } : chat.blocked ? { badge: "block" as const } : chat.failed ? { badge: "failed" as const } : {}),
@@ -251,6 +252,8 @@ export function chatView(chat: DemoChat, runs?: Runs): ChatView {
       profiles: [{ id: runs.profile.id, name: runs.profile.name, current: true, kind: runs.profile.access.kind, runtime: "claude" as const }],
     } : { profiles: [], choices: [] }),
     attention: chat.failed ? [{ kind: "account", text: "账号被停用" }] : [], turns: [], threads: [], jobs: [],
+    // As the core words it (views/brief.ts): a turn for each message of a person's, a few minutes each.
+    ...(turns > 0 ? { workText: `${turns} 轮 · 共干了 ${turns * 7} 分钟` } : {}),
   };
   // A chat the visitor started is theirs.
   const creator = chat.people[0] ?? { id: "local", name: "你", via: "local", shown: { name: "你", display: "你", mine: true } };

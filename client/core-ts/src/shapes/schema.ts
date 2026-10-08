@@ -1282,6 +1282,8 @@ export const SHAPES: Record<string, Shape> = {
     ["turns", vec("TurnRecord")],
     ["threads", vec("ChatThread")],
     ["jobs", vec("Job"), { doc: "Its background jobs, newest first; those with a port are web services, shown by their names." }],
+    ["workText", opt("String"), { doc: "How much it has done, for its card: its turns, and how long the finished ones took (8 轮 · 共干了 1 小时 12 分)." }],
+    ["jobsText", opt("String"), { doc: "Its jobs at work now, for its card (服务在线：web · 在盯着：CI). Absent when none is." }],
   ], { doc: "An agent of a chat: its session, the connect that started it, its profile, and what it can move to." }),
   AgentWait: struct([
     ["since", "i64", { client: "I54" }],

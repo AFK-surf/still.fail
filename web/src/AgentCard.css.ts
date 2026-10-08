@@ -23,15 +23,15 @@ export const status = style({
   },
 });
 
-export const rows = style({
-  display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", columnGap: "12px", rowGap: "2px", margin: "0",
-  fontSize: vars.textMeta,
-});
-export const row = style({ display: "contents" });
-globalStyle(`${row} > dt`, { color: vars.muted });
-globalStyle(`${row} > dd`, { margin: "0", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const inline = style({ display: "inline-flex", alignItems: "center", gap: "4px", verticalAlign: "top" });
+export const elapsed = style({ color: vars.muted, fontVariantNumeric: "tabular-nums" });
 export const quota = style({
-  color: vars.muted,
+  selectors: { "&[data-level=amber]": { color: vars.amber }, "&[data-level=red]": { color: vars.red } },
+});
+
+/** A few facts, a line each, quiet. */
+export const lines = style({ display: "flex", flexDirection: "column", gap: "2px", minWidth: "0", fontSize: vars.textMeta, color: vars.muted });
+globalStyle(`${lines} > span`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** What is worth a look, in its level's colour. */
+export const attention = style({
   selectors: { "&[data-level=amber]": { color: vars.amber }, "&[data-level=red]": { color: vars.red } },
 });
