@@ -187,6 +187,7 @@ function session(chat: DemoChat): Session {
     runtimeText: chat.model.runtime === "claude" ? "Claude Code" : "Codex", processText: chat.running ? "运行中" : "待命",
     running: !!chat.running, tone: chat.running ? "accent" : chat.blocked ? "amber" : chat.failed ? "red" : "green", titleText: chat.title,
     efforts: ["low", "medium", "high"], ...(chat.model.runtime === "claude" ? { profile: "machine-claude" } : {}), workspace: `~/.stillfail/sessions/${chat.key.slice(6)}/workspace`,
+    time: { lastActiveAt: stamp(lastActive(chat)) },
   };
 }
 
