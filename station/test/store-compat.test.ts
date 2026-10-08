@@ -82,7 +82,10 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
       const stats = store.sessionStats(null);
       for (const [key, s] of read.sessionStats(r, null)) {
         const mine = stats.get(key)!;
-        assert.deepEqual({ ...mine, lastTurn: mine.lastTurn && turnSummaryJson(mine.lastTurn) }, s, key);
+        // What the pages read names its last turn too (a client holding the turns puts it in place).
+        const { id, ...last } = (s.lastTurn ?? {}) as Record<string, unknown>;
+        assert.deepEqual({ ...mine, lastTurn: mine.lastTurn && turnSummaryJson(mine.lastTurn) }, { ...s, lastTurn: s.lastTurn && last }, key);
+        if (s.lastTurn) assert.equal(typeof id, "string", key);
       }
       for (const s of store.listSessions().slice(0, 30)) {
         assert.deepEqual(store.listTurns(s.key).map((t) => ({ ...turnSummaryJson(t.summary), id: t.id })), read.listTurns(r, s.key));

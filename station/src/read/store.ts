@@ -603,14 +603,15 @@ function turnSummary(r: Json, startedAt: number): TurnSummary {
   return v;
 }
 
-/// Per session (or for one): turn count, the latest turn, undelivered messages and the first one it heard.
+/// Per session (or for one): turn count, the latest turn (with its id: a client holding the turns puts it in place
+/// rather than read them all again), undelivered messages and the first one it heard.
 export function sessionStats(s: Store, key: string | null): Map<string, SessionStats> {
   const sql = `SELECT s.key,
        (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
        (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
        (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN merged m ON m.thread = d.thread AND m.n = d.n
          WHERE d.session = s.key ORDER BY d.rowid LIMIT 1) AS first_text,
-       l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
+       l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
      FROM sessions s
      LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
      ${key !== null ? "WHERE s.key = ?" : ""}`;
@@ -618,7 +619,7 @@ export function sessionStats(s: Store, key: string | null): Map<string, SessionS
   return new Map(
     rows.map((r) => [
       r.key as string,
-      { turns: r.turns, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : turnSummary(r, r.started_at) },
+      { turns: r.turns, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : { ...turnSummary(r, r.started_at), id: r.turn_id } },
     ]),
   );
 }
