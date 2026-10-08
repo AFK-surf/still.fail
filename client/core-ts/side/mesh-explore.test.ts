@@ -14,7 +14,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import type { Credential } from "../src/cloud.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ALPN, cost, EXPLORE_MS, FORMER_ALPN, Mesh, MeshWire, type CredentialSource } from "../src/mesh.ts";
+import { ALPN, cost, EXPLORE_MS, FORMER_ALPN, Mesh, MeshWire, MOVE_GAIN, type CredentialSource } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -31,9 +31,9 @@ const RUNS = Number(process.env.SIM_EXPLORE ?? 200);
 const SEEDS = process.env.SIM_SEED ? [Number(process.env.SIM_SEED)] : Array.from({ length: RUNS }, () => randomInt(1, 2 ** 31));
 /// How long, once all is well again, a read may take.
 const RECOVER_MS = 2 * 60_000;
-/// How much slower than the quickest relay the requests may stay: a quarter, and the jitter of pinging (up to 3 ms each
-/// way of a round trip, a few of them).
-const slowest = (best: number) => best * 1.25 + 12;
+/// How much slower than the quickest relay the requests may stay: what a move asks of the way moved to (MOVE_GAIN
+/// quicker), and the jitter of pinging (up to 3 ms each way of a round trip, a few of them).
+const slowest = (best: number) => best / (1 - MOVE_GAIN) + 12;
 
 const grants: CredentialSource = () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential);
 

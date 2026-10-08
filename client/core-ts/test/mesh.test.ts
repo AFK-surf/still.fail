@@ -576,6 +576,24 @@ sim("a_way_let_go_is_tried_again_and_taken_once_it_is_the_best", async (s) => {
   await close(s, station, mesh);
 });
 
+/// Asked to measure (remeasure), a way just dialled that is clearly quicker is moved to at once, and each way shows
+/// on its own, relays on the same host too. Its deviation started at half its round trip (RFC 6298's start, for a
+/// timeout) and it scored twice its round trip: the requests stayed on a way 40% slower (side run, 2026-10-08).
+sim("a_way_just_dialled_and_clearly_quicker_is_taken_when_asked", async (s) => {
+  const a = s.relay("https://a.relay.test/", { station: { ms: 100 } });
+  const b = s.relay("https://a.relay.test:444/", { device: { ms: 60 } });
+  const station = await s.stationOn(b, a);
+  const id = station.id();
+  const mesh = await s.run(Mesh.make(env(s), [a]));
+  await reach(s, mesh, id);
+  assert.ok(sameRelay(via(mesh, id), a), `${via(mesh, id)}`);
+  (mesh.relays as string[]).push(b);
+  await s.run(mesh.remeasure(id));
+  assert.equal(via(mesh, id), b, JSON.stringify(mesh.measured(id)));
+  assert.equal(mesh.measured(id)!.relays.length, 2, JSON.stringify(mesh.measured(id)));
+  await close(s, station, mesh);
+});
+
 /// A workspace's own relay (cloud directory.ts setRelays): its station is on that relay alone, the device's endpoint on
 /// still.fail's; told the workspace's relays, the device reaches the station through it.
 sim("reaches_a_station_through_its_workspaces_own_relay", async (s) => {

@@ -161,15 +161,20 @@ export class Way {
   missed = 0;
   /// A ping of it is under way (one not answered yet is not sent again over it).
   pinging = false;
+  /// Its first ping answered: not counted, it carried the link's own start (its first streams, the station taking the
+  /// credential), and smoothed an eighth at a time it kept a way just dialled looking slower than it is.
+  warm = false;
 
   constructor(link: Link) {
     this.link = link;
   }
 
   note(ms: number): void {
+    // Its deviation from nothing at first, not half the first round trip as RFC 6298 starts it (that is for a timeout,
+    // kept long to be safe): a way just dialled scored twice its round trip and lost to one no quicker for minutes.
     if (this.samples === 0) {
       this.srtt = ms;
-      this.dev = ms / 2;
+      this.dev = 0;
     } else {
       this.dev = 0.75 * this.dev + 0.25 * Math.abs(ms - this.srtt);
       this.srtt = 0.875 * this.srtt + 0.125 * ms;
@@ -991,7 +996,8 @@ export class Mesh {
           way.note(PING_TIMEOUT_MS);
         } else {
           way.missed = 0;
-          way.note(ms);
+          if (way.warm) way.note(ms);
+          way.warm = true;
         }
       });
     });
@@ -1142,12 +1148,15 @@ export class Mesh {
     const measuring = this.#exploring.has(stationId);
     if (ways.length === 0 && !measuring) return null;
     const relays: [string, number | null][] = [];
+    const seen = new Set<string>();
     for (const w of [...ways].sort((a, b) => a.srtt - b.srtt)) {
+      const key = w.key();
+      if (seen.has(key)) continue;
+      seen.add(key);
       const via = w.link.via();
-      const name = via !== null ? relayHost(via) : "direct";
-      if (!relays.some(([n]) => n === name)) relays.push([name, Math.round(w.srtt)]);
+      relays.push([via !== null ? relayHost(via) : "direct", Math.round(w.srtt)]);
     }
-    for (const r of this.relaysFor(stationId)) if (!relays.some(([n]) => n === relayHost(r))) relays.push([relayHost(r), null]);
+    for (const r of this.relaysFor(stationId)) if (!seen.has(relayKey(r))) relays.push([relayHost(r), null]);
     return { measuring, relays, moved: this.#moved.get(stationId) ?? null };
   }
 
@@ -1158,7 +1167,7 @@ export class Mesh {
       const link = this.current(stationId);
       if (link === null || !link.usable()) return yield* Effect.fail(meshError(t("core-logic.mesh.not_connected")));
       yield* this.#explore(stationId, link.credentials);
-      for (let i = 0; i < MIN_SAMPLES; i++) yield* this.#sample(stationId);
+      for (let i = 0; i <= MIN_SAMPLES; i++) yield* this.#sample(stationId);
       this.#choose(stationId, true);
       this.#prune(stationId);
     });
