@@ -1090,7 +1090,7 @@ test("a deleted profile's sessions go on on another, and stop when no other can 
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
   r.edit(withProfile("cc2", "another", ["opus"]));
-  await configure(r.hub, key, { profile: "cc" });
+  r.hub.store.setSessionProfile(key, "cc", true);
   // Deleted while a turn runs on it: that turn goes on, the next runs on the other one, kept to it no longer.
   const running = r.claude.last();
   r.edit((raw) => (raw.profiles = raw.profiles.filter((p: any) => p.id !== "cc")));
