@@ -50,3 +50,8 @@ export const refChip = style({
   },
 });
 export const refChipHash = style({ marginRight: "1px", opacity: ".7" });
+/** The station a reference to another station's chat is on, after its title: quieter than it. */
+export const refChipStation = style({
+  display: "inline-flex", alignItems: "center", gap: "2px", marginLeft: "4px", padding: "0 5px", borderRadius: "999px",
+  fontSize: vars.textXs, lineHeight: "16px", color: vars.muted, background: vars.hover, verticalAlign: "1px",
+});

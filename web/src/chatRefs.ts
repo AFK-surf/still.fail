@@ -69,3 +69,9 @@ export function chatOfLink(href: string): { station: string; id: string; history
     return null;
   }
 }
+
+/** The station (`<workspace>/<station>`) a link to a chat is on, as chatOfLink reads it; null for a link that does not say. */
+export function stationOfLink(href: string): string | null {
+  const m = /\/o\/([^/?#\s]+)\/([^/?#\s]+)\/[^/?#\s]+/.exec(href) ?? /\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/chats\//.exec(href);
+  return m ? `${m[1]}/${m[2]}` : null;
+}

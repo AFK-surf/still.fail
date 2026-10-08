@@ -3,10 +3,11 @@
 // The agent reads that chat by the link (the station's chat_read and session_history tools).
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { useHref } from "react-router";
-import { useChatSearch, type ChatItem } from "./api.ts";
+import { useChatSearch, useStations, type ChatItem } from "./api.ts";
+import { Server } from "./icons.tsx";
 import { scopeOf, useStation } from "./station.tsx";
 import { ModelLogo, Time } from "./ui.tsx";
-import { copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy } from "./chatRefs.ts";
+import { copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy, stationOfLink } from "./chatRefs.ts";
 import { failure } from "./toast.tsx";
 import * as css from "./ChatRef.css.ts";
 
@@ -21,9 +22,22 @@ export function refAt(text: string, caret: number): { start: number; query: stri
   return m ? { start: caret - m[1]!.length - 1, query: m[1]! } : null;
 }
 
-/** A reference in a message: a chip that opens the chat (ChatPage opens its link in the page). */
+/**
+ * A reference in a message: a chip that opens the chat (ChatPage opens its link in the page); one on another station of
+ * the workspace says which after its title.
+ */
 export function RefChip({ title, href }: { title: ReactNode; href: string }) {
-  return <a className={css.refChip} href={href}><span className={css.refChipHash}>@</span>{title}</a>;
+  const here = useStation().address;
+  const there = stationOfLink(href);
+  const elsewhere = there !== null && here.includes("/") && there !== here;
+  const stations = useStations(scopeOf(here)).value;
+  const name = elsewhere ? (stations?.find((s) => s.station === there)?.name ?? there.slice(there.indexOf("/") + 1, there.indexOf("/") + 9)) : null;
+  return (
+    <a className={css.refChip} href={href}>
+      <span className={css.refChipHash}>@</span>{title}
+      {name && <span className={css.refChipStation}><Server size={11} />{name}</span>}
+    </a>
+  );
 }
 
 /** Plain text with its references (links to chats) drawn as chips. */
