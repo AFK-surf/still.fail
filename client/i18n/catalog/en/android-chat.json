@@ -14,6 +14,7 @@
   "android-chat.annotate.write": "Add a note (optional)",
   "android-chat.annotate.you": "You",
   "android-chat.archive": "Archive",
+  "android-chat.station.details": "Station details",
   "android-chat.archive.ask": "Archive “{title}”?",
   "android-chat.archive.named": "Archive “{title}”",
   "android-chat.archive.verb": "archive",

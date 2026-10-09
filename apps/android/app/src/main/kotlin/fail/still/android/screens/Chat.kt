@@ -325,6 +325,7 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
             if (alarm != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(11.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(if (alarm == Tone.Fail) C.red else C.warn))
         }
     }) {
+        ChatStationChip(station)
         StationUpdateControl(station, view.stationUpdate)
         if (view.people.isNotEmpty()) PeopleStack(view.people.take(5), 16.dp)
         agents.forEach { a ->
