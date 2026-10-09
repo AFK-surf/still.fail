@@ -14,6 +14,9 @@ import type { StationAddr } from "./addr.ts";
 import { concat, readAll, replyHeader, type RequestHead, type StationWire, type WireReply, type WireSocket } from "./wire.ts";
 
 export const IDEMPOTENCY_KEY = "idempotency-key";
+/// A request that only reads though it is no GET (POST /changed/<list>, what is held in its body): asked again on
+/// another way as a GET is (mesh.ts `mayRepeat`).
+export const READS = "stillfail-reads";
 export const IDEMPOTENT = "stillfail-idempotent";
 export const LANG_HEADER = "stillfail-lang";
 export const EVENT_STREAM = "text/event-stream";

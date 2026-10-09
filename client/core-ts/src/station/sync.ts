@@ -20,7 +20,8 @@ import { GONE, NETWORK } from "../wake.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { activity as historyActivity } from "../history.ts";
 import { StationAddr } from "./addr.ts";
-import { IDEMPOTENCY_KEY, RESUMED, Requests, httpError } from "./requests.ts";
+import { IDEMPOTENCY_KEY, READS, RESUMED, Requests, httpError } from "./requests.ts";
+import { digest } from "../digest.ts";
 import { SseParser } from "./sse.ts";
 import { readAll, replyHeader, type StationWire } from "./wire.ts";
 
@@ -48,6 +49,10 @@ export const RECHECK_MS = 5 * 60 * 1000;
 /// A read that failed in passing (a 5xx, the link dropping) is tried again after this, doubling, this many times.
 export const READ_RETRY_MS = 2_000;
 export const READ_RETRIES = 5;
+/// The field naming a row of each list read whole that may be asked as what changed of it (POST /changed/<list>).
+const LIST_ID: Record<string, string> = { chatRows: "id", archivedRows: "id", threads: "id", sessions: "key" };
+/// A station from before POST /changed/<list> reads its lists whole, and is tried again after this.
+export const CHANGES_RETRY_MS = 3_600_000;
 export const RECHECKING = "等它回来确认";
 
 /// The steps in flight and the phase of a session at work, as its stream says them.
@@ -58,6 +63,8 @@ export type EventsFor = { host: boolean; live: string[]; logs: [string, number][
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+/// A row's id as text (sessions' and chats' are strings, threads' numbers).
+const idText = (v: unknown): string | null => (typeof v === "string" ? v : typeof v === "number" ? String(v) : null);
 
 /// One `step` event, as useLiveSession applies it.
 export function applyStep(view: LiveView, event: unknown, now: number): void {
@@ -123,6 +130,8 @@ export class Link {
   usageCurrent = false;
   /// Whether the archived chats held are as the station has them: read since anything could have changed them.
   archivedCurrent = false;
+  /// When the station said it has no POST /changed/<list> (one from before): its lists are read whole a while.
+  changesRefused: number | null = null;
 
   constructor(address: string, addr: StationAddr, scoped: Scoped) {
     this.address = address;
@@ -524,7 +533,7 @@ export class StationsSync {
     return Effect.gen({ self: this }, function* () {
       if (!this.reachable(address) || !this.#links.has(address)) return;
       const link = this.#links.get(address)!;
-      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", path, null, { quiet: true, ctx }));
+      const answer = yield* Effect.result(shape ? this.requests.call(link.addr, "GET", path, null, { quiet: true, ctx }) : this.#whole(link, topic, path, ctx));
       const key = topicKey(topic);
       if (answer._tag === "Success") {
         link.errors.delete(key);
@@ -538,6 +547,50 @@ export class StationsSync {
         );
         this.#core.runner.fork(again, link.scoped);
       }
+    });
+  }
+
+  /// What `GET path` answers. A list some of which is held is asked as what changed of it (POST /changed/<list>, each
+  /// held row's digest sent), and put together from what came and what is held, in the station's order: read again
+  /// after a stream that could not be resumed, most of a list is as it is held, and on a slow link it was most of the
+  /// wait. A station from before is asked the list whole (and tried again after CHANGES_RETRY_MS).
+  #whole(link: Link, topic: Topic, path: string, ctx: SpanContext | null): Effect.Effect<unknown, CoreError> {
+    const whole = this.requests.call(link.addr, "GET", path, null, { quiet: true, ctx });
+    const id = LIST_ID[topic.topic];
+    const refused = link.changesRefused !== null && this.#core.host.nowMs() - link.changesRefused < CHANGES_RETRY_MS;
+    const held = id === undefined || refused ? undefined : this.#core.data.shared(topic);
+    if (id === undefined || !Array.isArray(held) || held.length === 0) return whole;
+    const rows = new Map<string, unknown>();
+    const digests: Record<string, string> = {};
+    for (const row of held) {
+      const key = idText(get(row, id));
+      if (key === null) continue;
+      rows.set(key, row);
+      digests[key] = digest(row);
+    }
+    return Effect.gen({ self: this }, function* () {
+      const asked = yield* Effect.result(this.requests.call(link.addr, "POST", `/changed${path}`, { held: digests }, { quiet: true, ctx, headers: [[READS, "1"]] }));
+      if (asked._tag === "Failure") {
+        // Not answered: failed as a read is. Answered no (a station from before has no such route): read whole.
+        if (asked.failure.status === undefined) return yield* Effect.fail(asked.failure);
+        if (asked.failure.status === 404 && asked.failure.message.startsWith("no route ")) link.changesRefused = this.#core.host.nowMs();
+        return yield* whole;
+      }
+      const order = get(asked.success, "order");
+      const changed = get(asked.success, "rows");
+      if (!Array.isArray(order) || !Array.isArray(changed)) return yield* whole;
+      for (const row of changed) {
+        const key = idText(get(row, id));
+        if (key !== null) rows.set(key, row);
+      }
+      const list: unknown[] = [];
+      for (const key of order) {
+        const row = rows.get(idText(key) ?? "");
+        // Neither held nor sent: read whole.
+        if (row === undefined) return yield* whole;
+        list.push(row);
+      }
+      return list;
     });
   }
 

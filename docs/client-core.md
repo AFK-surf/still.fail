@@ -214,7 +214,15 @@ that only notifications change it:
   again. When it cannot (more than that ago, or another run's), it says
   `missed` and the station is read again, once; a station from before
   resuming does not answer so, and a stream coming back reads it again as
-  before (one taking over only on `missed`). Events go into the topics
+  before (one taking over only on `missed`). Read again, a list some of
+  which is held (`chatRows`, `archivedRows`, `threads`, `sessions`; after a
+  write too) is asked as what changed of it, `POST /changed/<list>` with
+  each held row's digest (`digest.ts`, docs/station-storage.md, Reading):
+  only the rows that differ come, and the list is put together from them
+  and what is held, in the station's order (an answer that does not add up,
+  and a station from before, are read whole; one from before is asked again
+  after an hour). Most of a list is as it is held: on a slow link the whole
+  lists were most of what reading a station again carried. Events go into the topics
   as they come: `session` replaces the summary in `sessions` (an archived one
   leaves the list) and in its `session` topic (whose `turns` are read again
   only when the summary's `turns` or `lastTurn` differ from them);

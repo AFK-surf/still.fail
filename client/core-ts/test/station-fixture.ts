@@ -7,6 +7,7 @@ import type { HttpRequest, HttpResponse, Pull } from "../src/host.ts";
 import { HostWire, type StationWire } from "../src/station/wire.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { HostError } from "../src/error.ts";
+import { digest } from "../src/digest.ts";
 import { signIn } from "./helpers.ts";
 
 export type Answers = Record<string, unknown>;
@@ -54,11 +55,22 @@ function zstdBlocks(): (chunk: Uint8Array) => Uint8Array {
   };
 }
 
+/// What changed of a list as the station answers it (station/src/read/digest.ts `changedOf`): the list as its GET
+/// answers, its order, and its rows whose digest is not the one held.
+function changedOf(whole: HttpResponse, id: string, req: HttpRequest): HttpResponse {
+  if (whole.status !== 200) return whole;
+  const rows = JSON.parse(new TextDecoder().decode(whole.body)) as Record<string, unknown>[];
+  const held = (JSON.parse(new TextDecoder().decode(req.body ?? new Uint8Array())) as { held: Record<string, string> }).held;
+  return jsonResponse(200, { order: rows.map((r) => r[id]), rows: rows.filter((r) => held[String(r[id])] !== digest(r)) });
+}
+
 export function stationHost(answers: Answers) {
   const host = new FakeHost();
   signIn(host);
   const streams: { path: string; queue: Queue.Queue<Uint8Array | null>; closed: boolean }[] = [];
   host.onFetch((req: HttpRequest) => compressedFor(req, answer(req)));
+  // How it answers what changed of a list (POST /changed/<list>): `false`, as a station from before (no such route).
+  const changes = { on: true };
   const answer = (req: HttpRequest): HttpResponse => {
     const path = req.url.replace("https://stillfail.test", "");
     if (path === "/v1/me") return jsonResponse(200, { workspaces: [{ id: "ws", name: "W" }], invitations: [], relay_url: null });
@@ -66,6 +78,11 @@ export function stationHost(answers: Answers) {
     const said = replies.get(host)?.(req);
     if (said instanceof Status) return jsonResponse(said.code, said.body);
     if (said !== undefined) return jsonResponse(200, said);
+    const list = /^\/admin\/api\/changed\/(chats|threads|sessions)(\?|$)/.exec(path);
+    if (req.method === "POST" && list) {
+      if (!changes.on) return jsonResponse(404, { error: `no route POST ${path.replace("/admin/api", "").split("?")[0]}` });
+      return changedOf(answer({ ...req, method: "GET", url: req.url.replace("/admin/api/changed/", "/admin/api/"), body: null }), list[1] === "sessions" ? "key" : "id", req);
+    }
     const key = `${req.method} ${path.replace("/admin/api", "")}`;
     if (key in answers) return answers[key] instanceof Status ? jsonResponse((answers[key] as Status).code, (answers[key] as Status).body) : jsonResponse(200, answers[key]);
     if (path.startsWith("/admin/api/threads/") && path.includes("/entries")) return jsonResponse(200, { last: 0, entries: [] });
@@ -106,7 +123,7 @@ export function stationHost(answers: Answers) {
     const s = streams[streams.length - 1];
     Queue.offerUnsafe(s.queue, null);
   };
-  return { host, streams, push, end, gate };
+  return { host, streams, push, end, gate, changes };
 }
 
 /// A session as the station lists it (core/tests.rs `session`).

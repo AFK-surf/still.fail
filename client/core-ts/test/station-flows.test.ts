@@ -13,15 +13,16 @@ import { SseParser } from "../src/station/sse.ts";
 import { run } from "./run.ts";
 import { base, entries, entry, overview, session, started, status, stationReplies, threadView } from "./station-fixture.ts";
 import { merge } from "../src/entries.ts";
-import { apply, call, subscribe, v } from "./helpers.ts";
+import { apply, call, readOf, subscribe, v } from "./helpers.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
-import { EVENTS_COALESCE_MS, LINK_KEY, READ_RETRY_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
+import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, READ_RETRY_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
+import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
 import { SOCKET_OPEN_MS } from "../src/station/requests.ts";
 import { HostWire, encodeFrame, takeFrames } from "../src/station/wire.ts";
 import type { FakeHost } from "../src/testing.ts";
 
-const gets = (host: FakeHost, path: string) => host.requests.filter((r) => r.method === "GET" && r.url.endsWith(path)).length;
+const gets = (host: FakeHost, path: string) => host.requests.filter((r) => readOf(r)?.endsWith(path)).length;
 const text = (b: Uint8Array | null | undefined) => (b === undefined || b === null ? undefined : new TextDecoder().decode(b));
 
 // deno-lint-ignore no-explicit-any
@@ -190,6 +191,103 @@ test("a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks", async ()
 
 const summary = (key: string, turns: number) => ({ ...session(key, turns), title: null, archivedAt: null, lastTurn: null });
 
+test("a_rows_digest_is_the_stations_whatever_the_order_of_its_fields", () => {
+  // The values station/test/hub-routes.test.ts takes: the station makes the same digests.
+  const v = { b: [1, "x", null, true, { z: 2, y: [] }], a: { d: 1.5, c: '中文 \u2028 "q"' }, e: -0 };
+  const w = { e: 0, a: { c: '中文 \u2028 "q"', d: 1.5 }, b: [1, "x", null, true, { y: [], z: 2 }] };
+  assert.deepEqual([digest(v), digest(w), digest(Object.freeze({ k: 1 })), digest({ k: 2 })], ["txw0i07ix8", "txw0i07ix8", "1x451bsuzqf", "1jui8glvs7p"]);
+});
+
+/// The digests a list was asked with (POST /changed/<list>) in the requests from `from` on.
+const heldIn = (host: FakeHost, from: number, list: string): J[] =>
+  host.requests
+    .slice(from)
+    .filter((r) => r.method === "POST" && r.url.endsWith(`/admin/api/changed/${list}`))
+    .map((r) => JSON.parse(new TextDecoder().decode(r.body!)).held);
+
+test("lists_held_are_read_again_as_what_changed_of_them", async () => {
+  const answers: J = { ...base(), "GET /sessions": [session("k1"), session("k2")], "GET /sessions/k2": { session: session("k2"), threads: [], turns: [], jobs: [] } };
+  const s = await ui(answers);
+  const { host, core } = s;
+  // Nothing held: read whole.
+  assert.deepEqual([gets(host, "/admin/api/threads"), heldIn(host, 0, "threads").length], [1, 0]);
+  // Held, each row as the station has it (the fields the device keeps apart put back too): read again, every row is
+  // held as it is, and the station would send none.
+  const lists: [string, string, string][] = [["chats", "id", "GET /chats"], ["threads", "id", "GET /threads"], ["sessions", "key", "GET /sessions"]];
+  const asked = (from: number) => lists.map(([list]) => heldIn(host, from, list).at(-1));
+  const as = (rows: J[], id: string) => Object.fromEntries(rows.map((r) => [String(r[id]), digest(r)]));
+  let from = host.requests.length;
+  core.inner.stations.snapshot(ST);
+  await host.settle();
+  assert.deepEqual(asked(from), lists.map(([, id, get]) => as(answers[get], id)));
+  // So after the app starts anew, the rows read from its database.
+  const again = await reopen(s);
+  from = host.requests.length;
+  again.core.inner.stations.snapshot(ST);
+  await host.settle();
+  assert.deepEqual(asked(from), lists.map(([, id, get]) => as(answers[get], id)));
+  // One thread on, one new, the chat gone: the device has the lists as the station does.
+  answers["GET /threads"] = [threadView(7, 4), threadView(8, 1)];
+  answers["GET /threads/7/entries?after=3"] = { last: 4, entries: [entry(4, "m4")] };
+  answers["GET /chats"] = [];
+  again.core.inner.stations.snapshot(ST);
+  await host.settle();
+  const threads = (again.core.inner.data.get({ topic: "threads", station: ST }) as J[]).map((t) => [t.id, t.last]).sort();
+  assert.deepEqual(threads, [[7, 4], [8, 1]]);
+  assert.deepEqual(again.core.inner.data.get({ topic: "chatRows", station: ST }), []);
+  assert.deepEqual((again.core.inner.data.get({ topic: "sessions", station: ST }) as J[]).map((x) => x.key).sort(), ["k1", "k2"]);
+  assert.equal(host.requests.filter((r) => r.method === "GET" && r.url.endsWith("/admin/api/threads")).length, 1, "whole only the first time");
+  again.core.close();
+});
+
+test("a_station_from_before_is_read_whole_and_asked_again_after_a_while", async () => {
+  const { host, core, changes } = await started(base());
+  changes.on = false;
+  const lists = ["chats", "threads", "sessions"];
+  const asked = (from: number) => lists.map((l) => heldIn(host, from, l).length).reduce((a, b) => a + b, 0);
+  const whole = (from: number) => lists.map((l) => host.requests.slice(from).filter((r) => r.method === "GET" && r.url.endsWith(`/admin/api/${l}`)).length);
+  let from = host.requests.length;
+  core.inner.stations.snapshot(ST);
+  await host.settle();
+  // Asked what changed, refused (it has no such route): read whole, and the rest whole at once.
+  assert.ok(asked(from) >= 1);
+  assert.deepEqual(whole(from), [1, 1, 1]);
+  from = host.requests.length;
+  core.inner.stations.snapshot(ST);
+  await host.settle();
+  assert.deepEqual([asked(from), whole(from)], [0, [1, 1, 1]]);
+  // Updated since, maybe: asked again after a while.
+  changes.on = true;
+  host.advance(CHANGES_RETRY_MS);
+  from = host.requests.length;
+  core.inner.stations.snapshot(ST);
+  await host.settle();
+  assert.deepEqual([asked(from), whole(from)], [3, [0, 0, 0]]);
+  core.close();
+});
+
+test("what_changed_answered_no_or_not_adding_up_is_read_whole", async () => {
+  const { host, core } = await started(base());
+  // A row in the order neither held nor sent.
+  let reply: unknown = { order: ["7", "x"], rows: [] };
+  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/admin/api/changed/chats") ? reply : undefined));
+  const whole = (from: number) => host.requests.slice(from).filter((r) => r.method === "GET" && r.url.endsWith("/admin/api/chats")).length;
+  let from = host.requests.length;
+  core.inner.stations.snapshot(ST);
+  await host.settle();
+  assert.equal(whole(from), 1);
+  assert.deepEqual((core.inner.data.get({ topic: "chatRows", station: ST }) as J[]).map((r) => r.id), ["7"]);
+  // Answered no (too much held, say): read whole, and asked again the next time.
+  reply = status(413, { error: "request too large" });
+  for (const _ of [1, 2]) {
+    from = host.requests.length;
+    core.inner.stations.snapshot(ST);
+    await host.settle();
+    assert.deepEqual([heldIn(host, from, "chats").length, whole(from)], [1, 1]);
+  }
+  core.close();
+});
+
 test("writes_bring_what_they_touch_up_to_date", async () => {
   const { host, core } = await started({
     ...base(),
@@ -241,7 +339,7 @@ test("writes_bring_what_they_touch_up_to_date", async () => {
   // The threads and sessions are not read again for it. (The TS core reads the chat rows, which the station makes, so
   // the new chat is in the list as the station has it; and the sync brings the new chat's entries onto the device.)
   assert.deepEqual(
-    host.requests.slice(reads).map((r) => `${r.method} ${r.url.replace("https://stillfail.test/admin/api", "")}`).filter((r) => !r.includes("/threads/9/entries") && r !== "GET /chats"),
+    host.requests.slice(reads).map((r) => `${r.method} ${r.url.replace("https://stillfail.test/admin/api", "")}`).filter((r) => !r.includes("/threads/9/entries") && r !== "GET /chats" && r !== "POST /changed/chats"),
     ["POST /threads"],
   );
   // A read changes nothing.
@@ -738,8 +836,9 @@ test("answers_come_compressed_as_asked_and_are_read_as_they_were", async () => {
 test("what_a_person_waits_on_is_not_held_up_by_reads_that_take_long", async () => {
   const { host, core } = await started({ ...base(), "GET /threads/9/entries?limit=50": { last: 1, entries: [entry(1, "m1")] } });
   const sync = core.inner.stations;
-  // A slow link: the station read again, its first two reads taking all the time there is.
-  const release = [host.hold("/admin/api/overview"), host.hold("/admin/api/sessions")];
+  // A slow link: the station read again, its first two reads taking all the time there is (the sessions, held here,
+  // asked as what changed of them).
+  const release = [host.hold("/admin/api/overview"), host.hold("/admin/api/changed/sessions")];
   sync.snapshot(ST);
   await host.settle();
   const ran: string[] = [];

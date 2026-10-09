@@ -19,7 +19,7 @@ import * as format from "./format.ts";
 import type { Runner } from "./runtime.ts";
 import { RECHECKING } from "./station/words.ts";
 import { StationAddr } from "./station/addr.ts";
-import { IDEMPOTENCY_KEY, IDEMPOTENT } from "./station/requests.ts";
+import { IDEMPOTENCY_KEY, IDEMPOTENT, READS } from "./station/requests.ts";
 import type { LinkNet, RequestHead, SocketOut, StationWire, WireReply, WireSocket } from "./station/wire.ts";
 import { RELAY } from "./status.ts";
 import { Kind, type Tracer } from "./trace.ts";
@@ -1447,7 +1447,12 @@ export function unconfirmed(why: CoreError): CoreError {
 }
 
 function mayRepeat(head: RequestHead, idempotent: boolean): boolean {
-  return head.method.toUpperCase() === "GET" || (idempotent && head.headers.some(([k]) => k.toLowerCase() === IDEMPOTENCY_KEY));
+  return head.method.toUpperCase() === "GET" || onlyReads(head) || (idempotent && head.headers.some(([k]) => k.toLowerCase() === IDEMPOTENCY_KEY));
+}
+
+/// A request that only reads though it is no GET (requests.ts READS).
+function onlyReads(head: RequestHead): boolean {
+  return head.headers.some(([k]) => k.toLowerCase() === READS);
 }
 
 /// What the wire needs of the core: the mesh (brought up on first use), each workspace's credentials and waits.
@@ -1482,7 +1487,7 @@ export class MeshWire implements StationWire {
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
       const link = yield* waiting(status, address, t("station.core.connecting"), mesh.link(id, credentials, theirs));
       const repeats = mayRepeat(head, idempotent.has(id));
-      const write = !["GET", "HEAD"].includes(head.method.toUpperCase());
+      const write = !["GET", "HEAD"].includes(head.method.toUpperCase()) && !onlyReads(head);
       const ask = (l: Link) => Effect.map(l.request(head, body), (reply) => [l, reply] as [Link, Reply]);
       let answered: [Link, Reply];
       if (repeats) {
