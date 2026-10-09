@@ -469,3 +469,30 @@ test("several reads in one: each answered as its GET is, in their order, only th
     await r.close();
   }
 });
+
+test("an archived chat is listed from its file, and anew once it is archived again", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
+    const id = made.thread.id;
+    r.store.insertMessage(newMessage(id, "1.2", "person", "a@x", "first"));
+    const listed = async () => ((await r.ask("GET", "/threads"))[1] as any[]).find((t) => t.id === id);
+    const before = await listed();
+    // Archived: its entries go to its file, and the lists read it from there (once: a second list is the same).
+    const file = join(r.data, "archive", "threads", `${id}.jsonl.zst`);
+    assert.equal((await r.ask("POST", `/sessions/${made.key}/archive`))[0], 200);
+    assert.ok(existsSync(file));
+    const archived = await listed();
+    assert.deepEqual([archived.last, archived.lastMessage.text, archived.unread, archived.people], [before.last, "first", before.unread, before.people]);
+    assert.deepEqual(await listed(), archived);
+    // Brought back by what is said in it and archived again: listed as its new file has it.
+    r.store.insertMessage(newMessage(id, "1.3", "person", "b@x", "second"));
+    assert.ok(!existsSync(file));
+    assert.equal((await r.ask("POST", `/sessions/${made.key}/archive`))[0], 200);
+    assert.ok(existsSync(file));
+    const again = await listed();
+    assert.deepEqual([again.last, again.lastMessage.text, again.people.map((p: any) => p.email)], [archived.last + 1, "second", ["a@x", "b@x"]]);
+  } finally {
+    await r.close();
+  }
+});

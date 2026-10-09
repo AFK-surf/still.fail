@@ -328,7 +328,12 @@ the thread row is marked archived (`archived_at`). Since entries never change,
 the file is the thread as it was, and clients' kept copies stay valid.
 Reading an archived thread reads the file (the same API and summaries,
 answered from the decompressed entries; the last 32 threads read are kept
-decompressed in memory). A new entry — someone writing in it (an edit too), or a session of it shown again — loads it back into the
+decompressed in memory). What lists show of each (its last entry, latest
+message, who wrote and when first, the first thing a person said, each
+message's author for unread counts) is read from its file once a reader
+and kept, by the file as it is (its size and when it was written: one
+archived again is another file): every list of chats, sessions and threads
+read each archived thread's file, some 400 on a busy station. A new entry — someone writing in it (an edit too), or a session of it shown again — loads it back into the
 database first and removes the file. Archiving a session also writes its
 transcript copy, `<data>/archive/transcripts/<session>.jsonl.zst` (the
 runtime's file, compressed); the runtime's own file in the profile's home is

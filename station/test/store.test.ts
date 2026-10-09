@@ -68,6 +68,21 @@ test("a new database is made at version 12", () => {
   db.close();
 });
 
+test("a database from before the index on turns gets it as it is opened", () => {
+  const path = join(tempdir(), "turns.db");
+  open(path).close();
+  const before = new DatabaseSync(path);
+  before.exec("DROP INDEX turns_by_session");
+  before.close();
+  open(path).close();
+  const db = new DatabaseSync(path, { readOnly: true });
+  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'turns_by_session'").get() !== undefined);
+  // Each session's turns are found by it (sessionStats), not by reading every turn.
+  const plan = db.prepare("EXPLAIN QUERY PLAN SELECT COUNT(*) FROM turns WHERE session_key = ?").all("k") as { detail: string }[];
+  assert.ok(plan.some((p) => p.detail.includes("turns_by_session")), JSON.stringify(plan));
+  db.close();
+});
+
 test("a message is recorded once and delivered to every session in its thread", () => {
   const store = memory();
   session(store, "a");

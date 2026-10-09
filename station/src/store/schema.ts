@@ -143,6 +143,9 @@ CREATE TABLE IF NOT EXISTS turns (
   about_n INTEGER,
   about_ts TEXT
 );
+-- A session's turns, by when they started: every list of chats and sessions counts each session's turns and takes its
+-- latest (sessionStats); without it each scanned every turn of every session (some 160 ms a list on a busy station).
+CREATE INDEX IF NOT EXISTS turns_by_session ON turns (session_key, started_at);
 CREATE TABLE IF NOT EXISTS processes (
   pgid INTEGER PRIMARY KEY,
   started_at INTEGER NOT NULL,
