@@ -68,6 +68,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -85,6 +86,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -598,14 +602,23 @@ fun DraftExtras(draft: Draft, host: Host? = null) {
                 if (f.done == null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (f.error != null) 0.5f else 0.25f)), contentAlignment = Alignment.Center) {
                     if (f.error != null) Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp) else CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 1.5.dp)
                 }
-                Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
-                    IconIn(Icons.Close, 12.dp, Color.White)
+                // Only where it is drawn: Compose would take a touch target this small out to 48dp, most of the tile,
+                // and a tap meant to open the picture removed it.
+                CompositionLocalProvider(LocalViewConfiguration provides LocalViewConfiguration.current.exact()) {
+                    Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
+                        IconIn(Icons.Close, 12.dp, Color.White)
+                    }
                 }
             } else Box(Modifier.sendTile(host, f.id)) {
                 FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
             }
         }
     }
+}
+
+/** The same, but a touch target is only as big as what is drawn. */
+private fun ViewConfiguration.exact(): ViewConfiguration = object : ViewConfiguration by this {
+    override val minimumTouchTargetSize: DpSize get() = DpSize.Zero
 }
 
 /**

@@ -42,9 +42,12 @@ class NewChatGlassTest {
         fake.put(Topics.newChat(Fixtures.WS), NewChatView(
             kept = Fixtures.STATION, stations = listOf(Fixtures.station), any = true, station = Fixtures.station,
             model = Fixtures.station.models.first(), runtime = "claude", effort = "high", efforts = listOf("high"),
-            accounts = emptyList(), pickAccount = false, waiting = false, frequent = combos,
+            accounts = emptyList(), pickAccount = false, waiting = true, problem = "正在读取 studio 上的 profile…", frequent = combos,
         ))
         launch(listOf(Screen.Home, Screen.NewChat), dark = dark)
+        // A new chat's draft is kept on the device: none left from another test.
+        rule.runOnUiThread { Drafts.of(rule.activity, fake.core, "new:${Fixtures.STATION}").files.clear() }
+        settle()
     }
 
     private fun save(name: String) {
@@ -66,10 +69,10 @@ class NewChatGlassTest {
         h.keyboard()
         save(if (dark) "new-chat-foot-dark" else "new-chat-foot")
         val chooser = rule.onNode(hasText(Fixtures.station.name)).fetchSemanticsNode().boundsInRoot
-        val last = rule.onNode(hasText(combos.last().label)).fetchSemanticsNode()
-        // Laid out where it is, under the choosers: its own box, not clipped at the top of the foot.
-        val at = last.positionInRoot.y + last.size.height
-        assertTrue("the scene stops above the choosers: last combo ends at $at, choosers start at ${chooser.top}", at > chooser.top)
+        // The scene's last words, as much of them as shows (clipped by the scene's own bounds): under the choosers,
+        // not cut off at the top of the foot.
+        val last = rule.onNode(hasText("正在读取", substring = true)).fetchSemanticsNode().boundsInRoot
+        assertTrue("the scene stops above the choosers: its end shows to ${last.bottom}, choosers start at ${chooser.top}", last.bottom > chooser.bottom)
     }
 
     /** A picture in the composer, tapped: the viewer shows it, from the bytes picked. */
@@ -88,9 +91,10 @@ class NewChatGlassTest {
         }
         h.settle()
         save("composer-picture")
+        // Its middle, where the remove button's touch target (taken out to 48dp by Compose) used to reach.
         rule.onNode(hasContentDescription("safari.png")).performClick()
         h.settle()
-        assertTrue("the viewer did not open", FileViewers.open)
         save("composer-picture-open")
+        assertTrue("the viewer did not open", FileViewers.open)
     }
 }
