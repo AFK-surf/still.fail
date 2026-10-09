@@ -90,7 +90,7 @@ function NewChatOn({ choice, view, stations, pick, create }: {
   };
   useLayoutEffect(() => use({ station: view.station, placeholder: t("web-mobile.newChat.placeholder"), offline: false, send }));
   const scene = useRef<HTMLDivElement>(null);
-  // The scene's end clear of the choices standing over it, whatever their height.
+  // The scene's end clear of the band of glass at its foot, whatever its height.
   const foot = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = foot.current;
@@ -113,11 +113,11 @@ function NewChatOn({ choice, view, stations, pick, create }: {
         {/* No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too). */}
         {choice.blocked === "profile" && <NoProfile view={view} />}
       </div>
-      <div className={css.mNewFoot} ref={foot}>
+      <div className={css.mNewFoot} ref={foot} data-made-leave="fade">
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
         {choice.spent && <p className={css.mNewSpent}>{choice.spent}</p>}
         {/* The choices, then the composer as a floating capsule, as in a chat. */}
-        <div className={css.mNewBottom} data-made-leave="fade">
+        <div className={css.mNewBottom}>
           <div className={css.mChoosers}>
             <Chooser leading={<StationMark emoji={view.emoji} icon={view.icon} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
             {!runtime || !model ? (

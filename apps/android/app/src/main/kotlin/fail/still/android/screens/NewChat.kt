@@ -9,6 +9,7 @@ import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.ComposerCorner
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import fail.still.android.ui.floating
+import fail.still.android.ui.glassFoot
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.compositeOver
 import fail.still.android.ui.Ease
@@ -202,7 +203,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                 Spacer(Modifier.height(with(androidx.compose.ui.platform.LocalDensity.current) { foot.toDp() }))
             }
         }
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { foot = it.height }) {
+        // A band of glass of its own, from the choices to the screen's end: what runs under it is frosted all over,
+        // not seen between the choices; it goes with them as the page leaves.
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { foot = it.height }.graphicsLayer { alpha = 1f - fade() }.glassFoot(haze)) {
             // Chosen anyway (it is the person's call), but said: what is sent waits for its quota.
             if (!leaving) choice.spent?.let { spent ->
                 Text(
@@ -212,7 +215,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                 )
             }
             // The choices, over the composer (the host's, a floating capsule as in a chat), with room for it below.
-            Column(Modifier.fillMaxWidth().graphicsLayer { alpha = 1f - fade() }.padding(start = 10.dp, end = 10.dp, top = 8.dp)) {
+            Column(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp)) {
                 // One line that fits the width, no scrolling: where it runs, and what it runs on as one control (web/src/ModelTriple.tsx),
                 // cut short rather than pushed off the edge. Room above and below for the chips' shadows.
                 Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

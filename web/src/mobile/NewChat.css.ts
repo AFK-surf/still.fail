@@ -3,15 +3,20 @@ import { vars } from "../styles/tokens.css.ts";
 
 export const mNewchatScreen = style({ paddingBottom: "var(--m-bottom)", boxSizing: "border-box" });
 /**
- * The scene runs on under what stands at its foot (the choices, then the composer: both glass, frosting it), down to
- * the screen's end; its own end kept clear of them (`--m-new-foot`: the choices' height, NewChat.tsx).
+ * The scene runs on under what stands at its foot (the choices, then the composer, on a band of glass frosting it), down
+ * to the screen's end; its own end kept clear of them (`--m-new-foot`: the band's height, NewChat.tsx).
  */
 export const mNewBody = style({
   flex: "1", minHeight: "0", overflowY: "auto", display: "flex", flexDirection: "column", alignItems: "center",
-  gap: "6px", padding: "30px 30px calc(10px + var(--m-new-foot, 0px) + var(--m-bottom))", marginBottom: "calc(-1 * var(--m-bottom))",
+  gap: "6px", padding: "30px 30px calc(10px + var(--m-new-foot, var(--m-bottom)))", marginBottom: "calc(-1 * var(--m-bottom))",
   textAlign: "center",
 });
-export const mNewFoot = style({ position: "absolute", left: "0", right: "0", bottom: "var(--m-bottom)", display: "flex", flexDirection: "column" });
+/** A band of glass from the choices to the screen's end (the composer on it too): what runs under it is frosted all over. */
+export const mNewFoot = style({
+  position: "absolute", left: "0", right: "0", bottom: "0", paddingBottom: "var(--m-bottom)", display: "flex", flexDirection: "column",
+  background: "color-mix(in srgb, var(--m-bg) 70%, transparent)", WebkitBackdropFilter: "blur(24px)", backdropFilter: "blur(24px)",
+  boxShadow: "inset 0 0.5px 0 var(--m-line)",
+});
 export const mNewProblem = style({
   marginTop: "6px !important", fontSize: `${vars.textMeta} !important`, color: "var(--m-red)",
   selectors: {

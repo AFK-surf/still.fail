@@ -39,6 +39,23 @@ fun Modifier.glass(state: HazeState): Modifier {
     }
 }
 
+/** The same glass as a band along the page's foot (a new chat's choices and composer stand on it): its hairline along its top. */
+@Composable
+fun Modifier.glassFoot(state: HazeState): Modifier {
+    val bg = C.bg
+    val line = C.line
+    return hazeEffect(state) {
+        backgroundColor = bg
+        tints = listOf(HazeTint(bg.copy(alpha = 0.7f)))
+        blurRadius = cssBlur(24f)
+        noiseFactor = 0f
+    }.drawWithContent {
+        drawContent()
+        val y = 0.25.dp.toPx()
+        drawLine(line, Offset(0f, y), Offset(size.width, y), strokeWidth = 0.5.dp.toPx())
+    }
+}
+
 /** The web phone's `--raised` (mobile/styles/root.css.ts): white over the warm page, the wide screen's grey in the dark. */
 val Raised: Color @Composable get() = if (C.dark) Color(0xFF2A2C31) else Color.White
 

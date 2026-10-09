@@ -1,5 +1,5 @@
 // With `pnpm dev:web --host 127.0.0.1 --port 5187` running, check the phone's new chat page: its scene runs on under the
-// choices and the composer (their glass frosts it) down to the screen's end, and scrolled to its end it is clear of
+// choices and the composer (on a band of glass frosting it) down to the screen's end, and scrolled to its end it is clear of
 // them. The page is drawn from its real styles (mobile/NewChat.css.ts, ChatHost.css.ts), heights as the components set
 // them. SHOTS=<dir> keeps a picture of each. PLAYWRIGHT_MODULE / CHROMIUM_EXECUTABLE select tools.
 import { writeFileSync, rmSync } from 'node:fs';
@@ -26,7 +26,7 @@ document.body.innerHTML = \`<div class="\${m}"><div class="\${mChatHost}" data-n
       <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center">\${chips.map((c) => \`<span style="padding:8px 10px;border-radius:18px;background:#2E7DD7;color:white">\${c}</span>\`).join('')}</div>
       <p id="last" style="color:#D9480F">Reading studio's profiles…</p>
     </div>
-    <div class="\${mNewFoot}" id="foot"><div class="\${mNewBottom}"><div class="\${mChoosers}">
+    <div class="\${mNewFoot}" id="foot"><div class="\${mNewBottom}"><div class="\${mChoosers}" id="choosers">
       <button class="\${mChooser} \${mFloating}">studio</button><button class="\${mChooser} \${mFloating}">Opus 5.5 · high</button>
     </div></div></div>
   </div>
@@ -48,9 +48,10 @@ Object.assign(window, { ready: true });
   await page.goto(new URL('/new-chat-foot-check.html', process.env.WEB_URL || 'http://127.0.0.1:5187').href);
   await page.waitForFunction(() => window.ready === true);
   const rect = (id) => page.evaluate((id) => { const r = document.getElementById(id).getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; }, id);
-  const [body, foot, composer] = [await rect('body'), await rect('foot'), await rect('composer')];
+  const [body, foot, choosers, composer] = [await rect('body'), await rect('foot'), await rect('choosers'), await rect('composer')];
   assert(body.bottom >= composer.bottom - 0.5, `the scene runs on under the composer to the screen's end (${body.bottom} < ${composer.bottom})`);
-  assert(foot.bottom <= composer.top + 0.5, `the choices stand just over the composer (${foot.bottom} > ${composer.top})`);
+  assert(foot.bottom >= composer.bottom - 0.5, `the band of glass goes on to the screen's end (${foot.bottom} < ${composer.bottom})`);
+  assert(choosers.bottom <= composer.top + 0.5, `the choices stand just over the composer (${choosers.bottom} > ${composer.top})`);
   const scroll = await page.evaluate(() => { const b = document.getElementById('body'); return b.scrollHeight - b.clientHeight; });
   assert(scroll > 0, 'the scene is taller than its room');
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/new-chat-foot-top.png` });
