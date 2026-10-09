@@ -143,7 +143,6 @@
   "web-main.chat.agentCard.cache": "Cache hits",
   "web-main.chat.agentCard.context": "Context",
   "web-main.chat.agentCard.cost": "Est. cost",
-  "web-main.chat.agentCard.left": "{left}% left",
   "web-main.chat.archive": "Archive",
   "web-main.chat.archiveAsk": "Archive \"{title}\"?",
   "web-main.chat.archiveFailed": "Couldn't archive: {error}",

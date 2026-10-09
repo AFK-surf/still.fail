@@ -23,9 +23,6 @@ export const status = style({
 
 export const elapsed = style({ color: vars.muted, fontVariantNumeric: "tabular-nums" });
 
-/** The cost to the right of its name. */
-export const headCost = style({ marginLeft: "auto", paddingLeft: "12px", fontWeight: "500", fontVariantNumeric: "tabular-nums" });
-
 /** The figures that say most, each large over its name, side by side. */
 export const tiles = style({ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0, 1fr))", gap: "6px" });
 export const tile = style({
@@ -41,22 +38,7 @@ export const account = style({ display: "flex", alignItems: "center", gap: "8px"
 export const accountName = style({ flex: "1 1 auto", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: vars.muted });
 export const chips = style({ display: "inline-flex", gap: "4px", flex: "none" });
 
-/** Rings in a row, each its name under it. */
-export const rings = style({ display: "flex", gap: "14px", flexWrap: "wrap" });
-export const ringCell = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" });
-globalStyle(`${ringCell} small`, { fontSize: vars.textCaption, color: vars.muted, whiteSpace: "nowrap" });
-
-/** A bar each: its name, how full, the figure. */
-export const bars = style({ display: "grid", gridTemplateColumns: "auto minmax(72px, 1fr) auto", columnGap: "10px", rowGap: "5px", alignItems: "center", fontSize: vars.textMeta });
-export const bar = style({ display: "contents" });
-export const barLabel = style({ color: vars.muted, whiteSpace: "nowrap" });
-export const barTrack = style({ height: "4px", borderRadius: "999px", background: vars.line, overflow: "hidden" });
-globalStyle(`${barTrack} i`, { display: "block", height: "100%", borderRadius: "inherit", background: vars.muted });
-globalStyle(`${bar}[data-level=amber] ${barTrack} i`, { background: vars.amber });
-globalStyle(`${bar}[data-level=red] ${barTrack} i`, { background: vars.red });
-export const barText = style({ textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", selectors: { [`${bar}[data-level=amber] &`]: { color: vars.amber }, [`${bar}[data-level=red] &`]: { color: vars.red } } });
-
-/** What is left: a quiet line. */
+/** The rest: a quiet line. */
 export const quiet = style({ margin: "0", fontSize: vars.textMeta, color: vars.muted, overflowWrap: "anywhere" });
 /** Its jobs, and what is wrong in its level's colour. */
 export const notes = style({ display: "flex", flexDirection: "column", gap: "2px", fontSize: vars.textMeta, color: vars.muted });

@@ -125,7 +125,6 @@
   "web-main.chat.agentCard.cache": "缓存命中",
   "web-main.chat.agentCard.context": "上下文",
   "web-main.chat.agentCard.cost": "费用估算",
-  "web-main.chat.agentCard.left": "剩 {left}%",
   "web-main.chat.archive": "归档",
   "web-main.chat.archiveAsk": "归档「{title}」？",
   "web-main.chat.archiveFailed": "没能归档：{error}",
