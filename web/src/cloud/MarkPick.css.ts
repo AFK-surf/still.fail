@@ -1,5 +1,6 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import { segmentedThumb } from "../ui.css.ts";
 
 // The station's mark before its name: a square the size of a line, dashed while it has none; a picture fills it.
 export const slot = style({
@@ -20,8 +21,12 @@ export const shown = style({ display: "grid", flex: "none" });
 export const pick = style({ width: "300px" });
 export const panel = style({ display: "flex", flexDirection: "column", gap: "6px" });
 const inner = `calc(${vars.rMenu} - 6px)`;
-export const kinds = style({ alignSelf: "stretch" });
+// Not pills: a pill's round end beside the panel's squarer corner leaves a crescent between them. The switch and the
+// field take the corner's own shape, less the padding; the switch's thumb, less its own.
+export const kinds = style({ alignSelf: "stretch", borderRadius: inner, cornerShape: vars.cornerShape });
+globalStyle(`${kinds} ${segmentedThumb}`, { borderRadius: `calc(${inner} - 3px)`, cornerShape: vars.cornerShape });
 export const field = style({ width: "100%", height: "32px" });
+globalStyle(`input${field}${field}`, { borderRadius: inner, cornerShape: vars.cornerShape });
 export const grid = style({ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "2px" });
 /** Emoji are pictures: drawn a step above the title's size, as large as the icons look. */
 export const emojiGrid = style({ fontSize: `calc(${vars.textTitle} * 1.25)`, lineHeight: "1" });
