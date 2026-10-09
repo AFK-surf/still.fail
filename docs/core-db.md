@@ -104,7 +104,12 @@ There is one writer by construction:
   relay their page's messages over a BroadcastChannel to it and what it says back (each holds a lock of its own, which
   tells the core when a tab is gone). When the tab running the core goes, its lock goes to a waiting worker, which
   starts the core from the same databases; every page subscribes again (`{rejoin: true}`; calls in flight fail as
-  when a worker restarts). SQLite's module is loaded by that worker alone.
+  when a worker restarts). SQLite's module is loaded by that worker alone. A page's worker ends as the page leaves
+  (`pagehide`; a new one if it comes back from the back/forward cache), and the app's pages are served `no-store`, so
+  no worker sits frozen in that cache holding the lock (an iOS home-screen app coming back from Google's sign-in waited
+  on one for good). A worker holding the lock answers a starting worker's `hello` at once, its core started or not; one
+  silent for 3 s has the lock taken from it (`steal`), and on waking it ends and its page starts a worker that follows.
+  If it still held the OPFS handles, the new core's databases are in memory for that run (said by `status`).
 
 A database that cannot be opened (another process holds it) is one in memory for this run, said by `status`
 (`core-logic.status.db.busy`).

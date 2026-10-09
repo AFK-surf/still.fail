@@ -129,6 +129,32 @@ test("back from the back/forward cache: bye, then everything subscribed again", 
   assert.deepEqual(workers.last.sent.slice(2), [{ bye: true }, { id: 1, subscribe: { topic: "session", station: "local", key: "k" }, keyed: true }]);
 });
 
+test("a worker of the page's own ends as the page leaves, and a new one starts when it is back", async () => {
+  const workers = new FakeWorkers();
+  const client = new CoreClient(workers.opener, { schedule: (_ms, run) => run(), endWithPage: true });
+  client.subscribe({ topic: "accounts" }, () => undefined, () => undefined);
+  client.focus({ visible: true }).catch(() => undefined);
+  const pending = client.call("auth.complete", { query: "?code=c" });
+  client.suspend();
+  const old = workers.last;
+  assert.equal(old.closed, true, "not kept frozen with the page, holding the core's lock");
+  assert.deepEqual(old.sent.at(-1), { bye: true });
+  // Back from the cache: what the old one was asked is lost; a new one hears the subscriptions and where the page is.
+  client.resume();
+  await assert.rejects(pending);
+  assert.equal(workers.opened.length, 2);
+  assert.deepEqual(workers.last.sent, [
+    { id: 1, subscribe: { topic: "accounts" }, keyed: true },
+    { id: 4, call: "client.focus", params: { visible: true } },
+  ]);
+  // Shown again with no pageshow saying it came back: the same.
+  client.suspend();
+  client.wake(1000);
+  assert.equal(workers.opened.length, 3);
+  assert.deepEqual(workers.last.sent.slice(0, 2), [{ id: 1, subscribe: { topic: "accounts" }, keyed: true }, { id: 5, call: "client.focus", params: { visible: true } }]);
+  assert.deepEqual(workers.last.sent.at(-1), { id: 6, call: "client.wake", params: { away: 1000 } });
+});
+
 test("back after being away: the core is told, and a worker that was up and now says nothing is replaced", () => {
   const workers = new FakeWorkers();
   const timers: [number, () => void][] = [];

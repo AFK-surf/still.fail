@@ -3,6 +3,8 @@
 // OPFS, whose access handles only one worker can hold. The other tabs' workers relay their page's messages to it over
 // a BroadcastChannel and what it says back; when the tab running the core goes, the lock goes to another worker, which
 // starts the core from the same databases, and every page subscribes again (`rejoin`).
+// A worker that holds the lock answers a starting worker's `hello` at once; one that answers nothing for a while is
+// frozen (its page kept in the back/forward cache) and would hold the lock for good, so the lock is taken from it.
 // The core is the TypeScript one (client/core-ts, its web host; docs/core-ts.md); of Rust only iroh is left,
 // client/iroh-wasm, loaded once the mesh is first needed while the core starts from its database.
 import { startWeb, type WasmSqlite, type WebCore } from "@stillfail/core-ts/web";
@@ -30,11 +32,13 @@ const tabLock = (id: string) => `stillfail-tab-${id}`;
 // The channel the workers of this origin and build talk on (another build's workers retire, below).
 const relay = new BroadcastChannel(`stillfail-core-${BUILT_AT}`);
 
-/// What the workers say to each other: a worker started (`hello`); who runs the core (`leader`, to one or all); a
-/// page's message to the core (`up`), and the core's to a page (`down`).
+/// What the workers say to each other: a worker started (`hello`); who runs the core (`leader`, to one or all); who
+/// holds the lock while its core starts (`holder`, to the worker that said hello); a page's message to the core (`up`),
+/// and the core's to a page (`down`).
 type Relayed =
   | { hello: string }
   | { leader: string; to?: string }
+  | { holder: string; to: string }
   | { from: string; to: string; up: unknown }
   | { from: string; to: string; down: unknown };
 
@@ -202,8 +206,13 @@ relay.onmessage = (event: MessageEvent) => {
   const data = event.data as Relayed;
   if (dead || typeof data !== "object" || data === null) return;
   if ("hello" in data) {
-    // A worker started: told who runs the core, if it is this one.
+    // A worker started: told who runs the core, if it is this one, or that the lock is this one's while its core starts.
     if (core !== null) relay.postMessage({ leader: tab, to: data.hello } satisfies Relayed);
+    else if (holding) relay.postMessage({ holder: tab, to: data.hello } satisfies Relayed);
+    return;
+  }
+  if ("holder" in data) {
+    if (data.to === tab) heardHolder = true;
     return;
   }
   if ("leader" in data) {
@@ -264,14 +273,38 @@ function fromTab(id: string, message: unknown): void {
 // ── who runs the core ──
 
 let ready: Promise<WebCore> | null = null;
+/** This worker holds the lock (its core starting or running). */
+let holding = false;
+/** The worker holding the lock answered this one's hello: alive, its core coming. */
+let heardHolder = false;
+
+/**
+ * How long a worker waits to hear from the one holding the lock before taking it: a holder answers a hello at once,
+ * its core started or not, so one silent this long is frozen (iOS keeps a home-screen app's page in the back/forward
+ * cache, worker and lock with it, as the app comes back from Google's sign-in) and would keep every page waiting.
+ */
+const SILENT_HOLDER_MS = 3000;
 
 // This worker's own lock, held as long as it lives (the worker running the core hears when it is gone).
 void navigator.locks.request(tabLock(tab), () => new Promise<void>(() => {}));
 // Asks who runs the core; one that does answers.
 relay.postMessage({ hello: tab } satisfies Relayed);
+/** The lock taken from this worker by another that heard nothing from it: this core is done, and its page starts a worker that follows that one. */
+const lost = (error: unknown) => {
+  if ((error as { name?: unknown } | null)?.name === "AbortError") fatal("核心被另一个页面接管了");
+  else fault(error);
+};
 // Runs the core once the lock is this worker's: at once when no other tab runs one, else when it goes.
-void navigator.locks.request(CORE_LOCK, async () => {
-  if (dead) return;
+navigator.locks.request(CORE_LOCK, lead).catch(lost);
+// Taken from a holder that says nothing.
+setTimeout(() => {
+  if (dead || holding || heardHolder || leader !== null) return;
+  navigator.locks.request(CORE_LOCK, { steal: true }, lead).catch(lost);
+}, SILENT_HOLDER_MS);
+
+async function lead(): Promise<void> {
+  if (dead || holding) return;
+  holding = true;
   const followed = leader !== null;
   // On the test channel the page names the worker so (core/client.ts workerName): the core's words say youdid.wtf.
   // A defect's stack goes to error tracking first (as a fault): the fatal the pages hear is its message only.
@@ -295,7 +328,7 @@ void navigator.locks.request(CORE_LOCK, async () => {
   }
   // Held until this worker ends.
   await new Promise<void>(() => {});
-});
+}
 
 // Errors in the core's own tasks surface here, not at a call.
 scope.addEventListener("error", (event) => {

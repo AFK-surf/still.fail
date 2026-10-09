@@ -360,7 +360,8 @@ SharedWorker 时多个 core 一起写、各账号共用一个库（已读、未�
   再写，`status` 说出来。
 - web 单写者：每个标签页一个 dedicated worker，拿到 Web Lock `stillfail-core` 的那个跑 core，其它的经 BroadcastChannel
   转发，那个标签页关了由下一个接管，页面收到 `{rejoin: true}` 重新订阅（`web/src/core/worker.ts`、`client.ts`）；
-  页面调用 `navigator.storage.persist()`。桌面/安卓靠 `locking_mode = EXCLUSIVE`，第二个进程打开得到 busy（库在内存里
+  页面离开时结束自己的 worker、页面以 no-store 发，不让冻在前进后退缓存里的 worker 一直攥着锁；拿着锁的 worker 立刻
+  回应新 worker 的 hello，3 秒没回应的锁被抢走（steal）；页面调用 `navigator.storage.persist()`。桌面/安卓靠 `locking_mode = EXCLUSIVE`，第二个进程打开得到 busy（库在内存里
   这一轮，`status` 说出来）；桌面同一进程里 core 因 fatal 重启前先关库。
 - 读就是查询：列表在被读时一条索引查询载入、之后写者逐行维护、topic 走了就放掉；只被 view 盯着的列表不读；chat 列表
   行多（> 500）时首屏 80 行一条查询先出（`chat_recent` 索引），再逐台载入；workspace 标记只读 `tone`/`asks` 选出的行，

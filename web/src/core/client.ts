@@ -169,6 +169,13 @@ export interface ClientOptions {
   schedule?: (ms: number, run: () => void) => void;
   /** Errors in the worker (it reports them; the page cannot see them) and the worker failing, for error tracking. */
   onFault?: (error: Error) => void;
+  /**
+   * The channel is to a worker of the page's own (workerOpener): it ends as the page leaves, and a new one starts if the
+   * page comes back. Kept in the back/forward cache with the page, it would be frozen there with the lock the core runs
+   * under (worker.ts), and the pages after it would wait on that core for good (an iOS home-screen app coming back from
+   * Google's sign-in, 2026-10-09).
+   */
+  endWithPage?: boolean;
 }
 
 // A worker that keeps failing (a broken build, a panic on start) is retried
@@ -209,11 +216,15 @@ export class CoreClient {
   #heard = 0;
   /** Where this page's attention is, as told last: told again to a worker started anew. */
   #focus: Focus = {};
+  readonly #endWithPage: boolean;
+  /** The page left and its worker ended with it (`endWithPage`): a new one starts once it is back. */
+  #left = false;
 
   constructor(open: Opener, options: ClientOptions = {}) {
     this.#open = open;
     this.#schedule = options.schedule ?? ((ms, run) => void setTimeout(run, ms));
     this.#onFault = options.onFault ?? (() => undefined);
+    this.#endWithPage = options.endWithPage ?? false;
     this.#connect();
   }
 
@@ -265,19 +276,35 @@ export class CoreClient {
     return this.call("client.focus", part);
   }
 
-  /** The page is going away (or into the back/forward cache): the worker drops this client. */
+  /** The page is going away (or into the back/forward cache): the worker drops this client, or ends (`endWithPage`). */
   suspend(): void {
-    if (this.#channel) this.#post({ bye: true });
+    if (!this.#channel) return;
+    this.#post({ bye: true });
+    if (!this.#endWithPage) return;
+    this.#channel.close();
+    this.#channel = null;
+    this.#left = true;
   }
 
   /**
-   * The page is back from the back/forward cache: the worker forgot us, so
+   * The page is back from the back/forward cache: the worker forgot us (or ended as the page left: a new one), so
    * subscribe again. Calls in flight were lost with the old client.
    */
   resume(): void {
+    if (this.#left) return this.#back();
     this.#rejectCalls(t("web-main.core.resumed"));
     if (this.#channel) for (const [id, sub] of this.#subs) this.#post({ id, subscribe: sub.topic, keyed: true });
     this.#refocus();
+  }
+
+  /**
+   * Back after its worker ended with the page leaving: what was asked of that one is lost, and a new one is told every
+   * subscription and where the page is.
+   */
+  #back(): void {
+    this.#rejectCalls(t("web-main.core.resumed"));
+    this.#left = false;
+    this.#connect();
   }
 
   /**
@@ -287,6 +314,8 @@ export class CoreClient {
    */
   wake(away: number): void {
     if (this.#closed) return;
+    // Shown again after leaving without the cache bringing it back (no pageshow said so): its worker is started anew.
+    if (this.#left) this.#back();
     const channel = this.#channel;
     const heard = this.#heard;
     // With the worker being replaced it waits in the queue: a worker joined again (a shared one) is the same core.
@@ -626,7 +655,8 @@ function same(a: ChatShown, b: ChatShown): boolean {
 /** Starts (or joins) the core and keeps the page's client in step with the page's lifecycle. */
 export function connectCore(): CoreClient {
   const open = window.stillfailDesktop ? desktopOpener(window.stillfailDesktop) : workerOpener();
-  const client = new CoreClient(open, { onFault: (error) => captureException(error, { source: "core" }) });
+  // The desktop app's core is its own process's, not the page's: kept as the page goes.
+  const client = new CoreClient(open, { onFault: (error) => captureException(error, { source: "core" }), endWithPage: !window.stillfailDesktop });
   addEventListener("pagehide", () => client.suspend());
   // Hidden since when (wall clock: a frozen page's monotonic clock may stand still).
   let hidden = document.visibilityState === "hidden" ? Date.now() : null;
