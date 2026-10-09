@@ -85,6 +85,16 @@ export const m = style({
   },
 });
 /**
+ * The page under the narrow screen its paper too: an iPhone's home-screen app paints its status bar from the page's
+ * background (iOS 26 reads html/body, not theme-color), and the wide screen's white canvas there stood as a white band
+ * over the warm top bar.
+ */
+globalStyle(`:root:has(${m}), :root:has(${m}) body`, { background: "#F5F3EF" });
+globalStyle(`:root[data-theme="dark"]:has(${m}), :root[data-theme="dark"]:has(${m}) body`, { background: darkVars["--m-bg"] });
+globalStyle(`:root:not([data-theme="light"]):has(${m}), :root:not([data-theme="light"]):has(${m}) body`, {
+  "@media": { "(prefers-color-scheme: dark)": { background: darkVars["--m-bg"] } },
+});
+/**
  * Where the phone draws what the wide screen draws, with the wide screen's own parts (a chat's messages, its composer):
  * the wide screen's styles hold there, the phone's resets below do not reach in, and its type is a size up for the
  * narrow screen.
