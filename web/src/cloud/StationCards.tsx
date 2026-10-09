@@ -24,9 +24,10 @@ export function StationList({ stations, menu, manager = false, onEmoji, emojiBus
 
 /**
  * A station at a glance, in a card that opens over where it is named (a chat's bar): its emoji and name, whether it is
- * up and what its agents do, what the machine is, its load, this device's connection to it, and its settings.
+ * up and what its agents do, what the machine is, its load, this device's connection to it, and its settings (`settings`,
+ * a path; the phone's sheet gives its own way there, `footer`).
  */
-export function StationPeek({ s, settings }: { s: StationView; settings: string }) {
+export function StationPeek({ s, settings, footer }: { s: StationView; settings?: string; footer?: ReactNode }) {
   return (
     <div className={css.peek}>
       <div className={css.peekHead}>
@@ -39,7 +40,8 @@ export function StationPeek({ s, settings }: { s: StationView; settings: string 
       {s.host && <span className={css.peekLine}>{s.host.hostname} · {s.host.arch} · {s.host.emberText}</span>}
       {s.online && s.host && <MeterChips meters={s.host.meters} />}
       {s.online && s.net && <Net net={s.net} stacked />}
-      <Link className={css.peekLink} to={settings}>{t("web-pages.stations.peekSettings")}</Link>
+      {settings !== undefined && <Link className={css.peekLink} to={settings}>{t("web-pages.stations.peekSettings")}</Link>}
+      {footer}
     </div>
   );
 }

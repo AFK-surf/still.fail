@@ -73,6 +73,7 @@
   "web-mobile.chat.stopping": "Stopping…",
   "web-mobile.chat.toLatest": "Jump to latest",
   "web-mobile.chat.unknown": "Unknown",
+  "web-mobile.chat.stationDetails": "Station details",
   "web-mobile.connects.add": "Add connect",
   "web-mobile.connects.addConfig": "Add config token",
   "web-mobile.connects.addConnect": "Add and connect",

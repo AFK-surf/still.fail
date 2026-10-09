@@ -6,7 +6,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useReady } from "../core/react.ts";
-import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
+import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStations, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
@@ -15,7 +15,10 @@ import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
-import { stationBase, useStation } from "../station.tsx";
+import { scopeOf, stationBase, useStation } from "../station.tsx";
+import { Glyph } from "../StationMark.tsx";
+import { StationPeek } from "../cloud/StationCards.tsx";
+import { GoRow } from "./Settings.tsx";
 import { LoadingPill, PlaceholderMessages } from "./Loading.tsx";
 import { PENDING } from "../lastChat.ts";
 import { LOCAL_MS } from "../motion.ts";
@@ -128,6 +131,7 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
         {view.archivable && thread && <ArchiveButton here={here} view={view} thread={thread} />}
         {jobs && jobs.jobs.length > 0 && <JobsButton here={here} alarm={jobs.alarm} />}
       </>}>
+      <StationChip station={here.station} />
       <StationUpdate station={here.station} notice={view.stationUpdate} />
       <PeopleStack people={view.people} max={5} />
       {view.agents.map((a) => (
@@ -136,6 +140,35 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
         </button>
       ))}
     </BarFrame>
+  );
+}
+
+/**
+ * The station the chat runs on, after its title once the workspace has more than one: its emoji and name; a tap opens its
+ * card in a sheet (the wide screen's is a hover card over the same tag, ../cloud/StationCards.tsx StationPeek).
+ */
+function StationChip({ station }: { station: string }) {
+  const app = useApp();
+  const stations = useStations(scopeOf(station)).value;
+  const s = stations?.find((x) => x.station === station);
+  if (!stations || stations.length < 2 || !s) return null;
+  return (
+    <button type="button" className={css.mBarStation} aria-label={s.name} onClick={() => app.sheet({ height: 0.55, content: () => <StationSheet station={station} /> })}>
+      {s.emoji && <Glyph emoji={s.emoji} />}<span>{s.name}</span>
+    </button>
+  );
+}
+
+function StationSheet({ station }: { station: string }) {
+  const app = useApp();
+  const s = useStations(scopeOf(station)).value?.find((x) => x.station === station);
+  return (
+    <>
+      <SheetGrab />
+      <div className={`${sheetsCss.mSheetScroll} ${css.mStationSheet}`}>
+        {s && <StationPeek s={s} footer={<GoRow title={t("web-mobile.chat.stationDetails")} onClick={() => { app.sheet(null); app.push(app.at(`/s/${s.id}/overview`)); }} />} />}
+      </div>
+    </>
   );
 }
 

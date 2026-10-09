@@ -67,6 +67,7 @@
   "web-mobile.chat.stopping": "正在停止…",
   "web-mobile.chat.toLatest": "跳到最新",
   "web-mobile.chat.unknown": "未记录",
+  "web-mobile.chat.stationDetails": "机器详情",
   "web-mobile.connects.add": "添加连接",
   "web-mobile.connects.addConfig": "添加配置 token",
   "web-mobile.connects.addConnect": "添加并连接",
