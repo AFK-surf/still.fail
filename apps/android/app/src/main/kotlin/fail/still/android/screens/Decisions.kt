@@ -4,14 +4,17 @@
 // replaced), the buttons go and a quiet line says how it went.
 // The decisions page 「奏」 (from the home page's 奏 N) shows the workspace's decisions waiting for the viewer one at a
 // time: the chat's title small at the top (to its chat), the messages before the post and the post itself as the chat
-// draws them, and at the foot its options, the hint and `1 / N`. The whole decision is swiped: left 待定 (set aside on
-// this device: last of the page, still waiting), right 不再提醒 (dismissed for the viewer). Let go past about a third
+// draws them, and at the foot its options, the composer and a row: 待定, `1 / N`, 不再提醒. The whole decision is swiped
+// (or those buttons tapped): left 待定 (set aside on this device: last of the page, still waiting), right 不再提醒
+// (dismissed for the viewer). Let go past about a third
 // of the width, or flung, it flies off and the next comes in; short of that it springs back.
 // Options and text cards both have a multiline reply field on the page, below any options
 // offered (the reply is the viewer's message quoting the post, `decision.reply`); a swipe never starts in the field. A card
 // of a type this app does not know is answered in its chat. In a chat only an options card has anything under it.
 package fail.still.android.screens
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.heightIn
 import fail.still.android.data.t
 import dev.chrisbanes.haze.hazeSource
 import androidx.compose.animation.AnimatedVisibility
@@ -557,14 +560,31 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
                 }.background(C.bg),
             ) { Face(item, onPick = answer, onReply = reply, onField = { field = it }) }
         }
-        // The hint and where this one is among them, still.
+        // What a swipe does, also as buttons on the side it goes to (left 待定, right 不再提醒), and where this one is
+        // among them between them.
         Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp),
+            Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(t("android-misc.decisions.hint"), fontSize = 12.sp, color = C.subtle, maxLines = 1, modifier = Modifier.weight(1f))
-            Text("1 / $n", fontSize = 12.sp, color = C.subtle, maxLines = 1)
+            FootAction("← " + t("android-misc.decisions.defer"), enabled = local.replying == null, onClick = defer)
+            Text("1 / $n", fontSize = 13.sp, color = C.subtle, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            FootAction(t("android-misc.decisions.dismiss") + " →", enabled = local.replying == null, onClick = dismiss)
         }
+    }
+}
+
+/** A swipe's way as a button at the page's foot: a quiet pill, its touch the full 48dp high. */
+@Composable
+private fun FootAction(label: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp))
+            .clickable(enabled = enabled, role = Role.Button) { onClick() }.padding(vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (enabled) C.muted else C.subtle, maxLines = 1,
+            modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(C.chip).padding(horizontal = 16.dp, vertical = 9.dp),
+        )
     }
 }
 

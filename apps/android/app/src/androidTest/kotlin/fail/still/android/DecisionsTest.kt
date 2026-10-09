@@ -1,7 +1,7 @@
 // Decisions (screens/Decisions.kt) with real touches, injected as the system's own (UiAutomation, through the input
 // dispatcher to the activity's window, in real time), on the app as it lays out its pages over a fake core:
 // the decisions page swiped left sets the decision aside (decision.defer), right dismisses it (decision.dismiss); short
-// of the threshold it springs back; up or down is not a swipe; a tap on an option answers (decision.answer), and a swipe
+// of the threshold it springs back; the foot's 待定 and 不再提醒 buttons do the same as the swipes; up or down is not a swipe; a tap on an option answers (decision.answer), and a swipe
 // begun on an option is still a swipe. In a chat, a tap on an option under the post answers; an answered one has no
 // buttons, only its line. A text card: words typed in its field and sent (the button or the keyboard's send) reply
 // (decision.reply); refused, the words stay; a swipe begun in the field is not a swipe, one begun elsewhere still is.
@@ -245,6 +245,22 @@ class DecisionsTest {
         rule.onNodeWithText("1 / 1").assertExists()
     }
 
+    @Test fun tapOnDeferSetsItAside() {
+        val h = page()
+        tap(bounds("← 待定", substring = false).center)
+        assertOneCall(h, "decision.defer", gap)
+        rule.onNodeWithText(second.title).assertExists()
+        rule.onNodeWithText("1 / 2").assertExists()
+    }
+
+    @Test fun tapOnDismissDismissesIt() {
+        val h = page()
+        tap(bounds("不再提醒 →", substring = false).center)
+        assertOneCall(h, "decision.dismiss", gap)
+        rule.onNodeWithText(second.title).assertExists()
+        rule.onNodeWithText("1 / 1").assertExists()
+    }
+
     @Test fun shortSlowSwipeSpringsBack() {
         val h = page()
         val before = postAt()
@@ -338,7 +354,7 @@ class DecisionsTest {
     @Test fun textCardShowsItsPlaceholder() {
         textPage()
         rule.onNodeWithText("sk_test_…").assertExists()
-        rule.onNodeWithText("← 待定　不再提醒 →").assertExists()
+        rule.onNodeWithText("← 待定").assertExists()
     }
 
     @Test fun textCardSendReplies() {
