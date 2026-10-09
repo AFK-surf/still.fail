@@ -483,6 +483,8 @@ export class CloudSync {
         }
         return w;
       });
+      // Back: tried now rather than when its wait ends (station/sync.ts OFFLINE_RETRY_MS).
+      if (online) core.stations?.cameOnline(`${event.workspace}/${id}`);
       this.onReach?.();
     }
   }

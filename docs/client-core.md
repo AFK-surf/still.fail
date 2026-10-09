@@ -157,7 +157,7 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `accounts` | — | signed-in accounts (no tokens) |
 | `workspaces` | — | every workspace of every account, with its account and pending invitations |
 | `workspace` | `workspace` | the workspace view (members, stations) |
-| `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s) / `error` + message |
+| `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s; every 10 minutes while still.fail cloud says the station is not online, and at once when it says it is back or the UI comes back) / `error` + message |
 | `overview` | `station` | the admin API's `/overview` |
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
 | `archivedRows` | `station` | `/chats?archived=1`: the station's archived chats. Read only while a page shows it (every chat ever archived: read with each snapshot and archiving, it was a large part of what a slow link carried): again after `chat.archive`, `session.delete` while shown, else marked to be read as it is next shown |

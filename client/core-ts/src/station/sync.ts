@@ -29,6 +29,10 @@ import { readAll, replyHeader, type StationWire } from "./wire.ts";
 /// RECONNECT_MS, doubling up to RECONNECT_MAX_MS.
 export const RECONNECT_MS = 2_000;
 export const RECONNECT_MAX_MS = 60_000;
+/// A station not reached that still.fail cloud says is not online is tried again this seldom, and at once when it says it
+/// is back (or the UI comes back): tried every minute, an unreachable station took a phone some 50 dials an hour, each
+/// waiting 10 s for nothing.
+export const OFFLINE_RETRY_MS = 10 * 60_000;
 /// How many tries in a row a station that was up may miss before it is taken for down.
 export const MISSES = 3;
 export const LINK_KEY = "link";
@@ -183,6 +187,39 @@ export class StationsSync {
 
   links(): Link[] {
     return [...this.#links.values()];
+  }
+
+  /// What a station's reconnecting waits on besides its time: still.fail cloud saying it is online (`cameOnline`).
+  readonly #backs = new Map<string, Deferred.Deferred<void>>();
+
+  #backOf(address: string): Deferred.Deferred<void> {
+    let back = this.#backs.get(address);
+    if (!back) {
+      back = Deferred.makeUnsafe<void>();
+      this.#backs.set(address, back);
+    }
+    return back;
+  }
+
+  /// still.fail cloud says the station came online: one waiting to reconnect tries now.
+  cameOnline(address: string): void {
+    const back = this.#backs.get(address);
+    if (!back) return;
+    this.#backs.delete(address);
+    Deferred.doneUnsafe(back, Effect.void);
+  }
+
+  /// Whether still.fail cloud says the station is not online (its workspace as held lists it so).
+  #cloudSaysOffline(address: string): boolean {
+    let addr: StationAddr;
+    try {
+      addr = StationAddr.parse(address);
+    } catch {
+      return false;
+    }
+    const workspace = this.#core.data.shared({ topic: "workspace", workspace: addr.workspace });
+    const station = isObject(workspace) && Array.isArray(workspace.stations) ? workspace.stations.find((s) => get(s, "id") === addr.station) : undefined;
+    return get(station, "online") === false;
   }
 
   /// Whether the station is worth asking now: not while its link has found it down.
@@ -471,9 +508,12 @@ export class StationsSync {
             : { why: ended.why ?? "", lasted: 0, bytes: 0, read: 0, events: 0 };
           if (ended.again) continue;
         } else previous = { why: ended.failed, lasted: 0, bytes: 0, read: 0, events: 0 };
-        // Not reached: less and less often. A UI back after being away wants it now.
-        const wait = Math.min(RECONNECT_MS * 2 ** Math.min(Math.max(misses - 1, 0), 8), RECONNECT_MAX_MS);
-        const woken = yield* Effect.raceFirst(Effect.sleep(wait).pipe(Effect.as(false)), core.wakes.next.pipe(Effect.as(true)));
+        // Not reached: less and less often, and seldom while still.fail cloud says it is not online. A UI back after
+        // being away wants it now, and so does the cloud saying it is back.
+        const offline = self.#cloudSaysOffline(address);
+        const wait = offline ? OFFLINE_RETRY_MS : Math.min(RECONNECT_MS * 2 ** Math.min(Math.max(misses - 1, 0), 8), RECONNECT_MAX_MS);
+        const back = self.#backOf(address);
+        const woken = yield* Effect.raceFirst(Effect.sleep(wait).pipe(Effect.as(false)), Effect.raceFirst(core.wakes.next.pipe(Effect.as(true)), Deferred.await(back).pipe(Effect.as(true))));
         if (woken) self.#retrying(address);
       }
     });

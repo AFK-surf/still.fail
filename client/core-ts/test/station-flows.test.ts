@@ -15,7 +15,7 @@ import { base, entries, entry, overview, session, started, status, stationReplie
 import { merge } from "../src/entries.ts";
 import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
-import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, READ_RETRY_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
+import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
 import { SOCKET_OPEN_MS } from "../src/station/requests.ts";
@@ -169,6 +169,25 @@ test("a_station_not_reached_is_down_and_asked_for_nothing_until_it_is", async ()
   assert.equal(linkOf(values, 1), "online");
   assert.equal(gets(host, "/admin/api/overview"), 1, "back: what it holds is read");
   assert.equal(core.inner.data.record("link", ST), "online");
+  core.close();
+});
+
+test("a_station_the_cloud_says_is_not_online_is_tried_seldom_and_at_once_when_it_is_back", async () => {
+  const { host, core, gate } = await started(base(), 0, undefined, (s) => {
+    s.gate.stream = "fail";
+    s.cloud.online = false;
+  });
+  const tries = () => host.requests.filter((r) => r.url.includes("/admin/api/events")).length;
+  const first = tries();
+  assert.ok(first >= 1);
+  // Not tried again each minute while the cloud says it is not online.
+  await host.time.pass(5 * RECONNECT_MAX_MS, 1_000);
+  assert.equal(tries(), first);
+  // The cloud says it is back: tried at once.
+  gate.stream = "open";
+  host.socketSend("/v1/events", JSON.stringify({ type: "station", workspace: "ws", id: "st", online: true }));
+  await host.time.pass(1_000, 100);
+  assert.equal(tries(), first + 1);
   core.close();
 });
 

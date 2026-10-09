@@ -73,10 +73,12 @@ export function stationHost(answers: Answers) {
   // station from before (no such route).
   const changes = { on: true };
   const batches = { on: true };
+  // Whether still.fail cloud lists the station as online.
+  const cloud = { online: true };
   const answer = (req: HttpRequest): HttpResponse => {
     const path = req.url.replace("https://stillfail.test", "");
     if (path === "/v1/me") return jsonResponse(200, { workspaces: [{ id: "ws", name: "W" }], invitations: [], relay_url: null });
-    if (path === "/v1/workspaces/ws") return jsonResponse(200, { id: "ws", stations: [{ id: "st", name: "studio", online: true, last_seen: null }] });
+    if (path === "/v1/workspaces/ws") return jsonResponse(200, { id: "ws", stations: [{ id: "st", name: "studio", online: cloud.online, last_seen: null }] });
     const said = replies.get(host)?.(req);
     if (said instanceof Status) return jsonResponse(said.code, said.body);
     if (said !== undefined) return jsonResponse(200, said);
@@ -134,7 +136,7 @@ export function stationHost(answers: Answers) {
     const s = streams[streams.length - 1];
     Queue.offerUnsafe(s.queue, null);
   };
-  return { host, streams, push, end, gate, changes, batches };
+  return { host, streams, push, end, gate, changes, batches, cloud };
 }
 
 /// A session as the station lists it (core/tests.rs `session`).
