@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { vars } from "./styles/tokens.css.ts";
 
 /** Its icon in a line of text, before the station's name: on the text's middle, a space's width from the name. */
 export const inline = style({ display: "inline-block", verticalAlign: "-0.125em", marginRight: "0.3em" });
@@ -13,3 +14,5 @@ export const emoji = style({
  * 16px emoji at the left of 20px), which centring the room would leave off centre.
  */
 export const glyph = style({ display: "inline-block", width: "1em", whiteSpace: "nowrap", textAlign: "left", overflow: "visible" });
+/** A picture put up: a rounded square as large as the icon it stands for. */
+export const picture = style({ display: "inline-block", flex: "none", objectFit: "cover", borderRadius: "24%", cornerShape: vars.cornerShape });

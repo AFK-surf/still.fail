@@ -28,7 +28,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * A chat's bar names the station it runs on once its workspace has more than one (its emoji and name), and a tap on it
+ * A chat's bar names the station it runs on once its workspace has more than one (its icon and name), and a tap on it
  * opens the station's card; with one station it says nothing. `shots` pictures them (light and dark) into files/shots.
  */
 class StationChipTest {
@@ -66,7 +66,7 @@ class StationChipTest {
         val h = open(listOf(studio, mini))
         rule.onNodeWithContentDescription("Studio").performClick()
         h.settle()
-        rule.onNodeWithText("🍎 Studio").assertExists()
+        rule.onNodeWithText("1 个 agent 在跑").assertExists()
         rule.onNodeWithText("机器详情").performClick()
         h.settle()
         assertEquals(Screen.Station(Fixtures.STATION), h.app.stack.last())

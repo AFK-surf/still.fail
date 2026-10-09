@@ -520,7 +520,7 @@
   "web-mobile.stations.removeText": "It disconnects from {name} cloud and members can't reach it here. {name} and the data on the machine stay; you can add it again.",
   "web-mobile.stations.removed": "Station removed",
   "web-mobile.stations.rename": "Rename",
-  "web-mobile.stations.emoji": "Set icon",
+  "web-mobile.stations.emoji": "Icon",
   "web-mobile.stations.emojiTitle": "Icon for {name}",
   "web-mobile.stations.emojiWhat": "set the icon",
   "web-mobile.stations.emojiClear": "No icon",

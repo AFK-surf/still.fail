@@ -53,6 +53,7 @@
   "core-misc.comma.sign_in": "Sign in from the Comma app",
   "core-misc.cloud.invalid_email": "Use the email they sign in to {brand} with",
   "core-misc.cloud.invalid_name": "Name must be 1–80 characters",
+  "core-misc.cloud.invalid_icon": "That icon can’t be used",
   "core-misc.cloud.invalid_emoji": "That isn’t an emoji",
   "core-misc.cloud.invalid_relay": "Enter an iroh-relay https address, such as https://relay.example.com",
   "core-misc.cloud.invalid_relays": "A workspace can have at most 4 relays",

@@ -65,7 +65,7 @@ export const chatDerive: Derive = {
 };
 
 /// A station of a scope, as the workspace lists it.
-export type StationInfo = { address: string; id: string; name: string; emoji: string | null; online: boolean; lastSeen: J; version: J };
+export type StationInfo = { address: string; id: string; name: string; emoji: string | null; icon: string | null; online: boolean; lastSeen: J; version: J };
 
 /// Whether a station is taken for down: its link found it so, or — not found out yet this time — it was, last.
 export function down(link: J): boolean {
@@ -588,7 +588,7 @@ export class Views implements Owner {
       const id = str(get(s, "id"));
       if (id === null) return [];
       const address = `${scope}/${id}`;
-      return [{ address, id, name: str(get(s, "name")) ?? id, emoji: str(get(s, "emoji")) || null, online: !down(this.link(address)), lastSeen: get(s, "last_seen") ?? null, version: get(s, "version") ?? null }];
+      return [{ address, id, name: str(get(s, "name")) ?? id, emoji: str(get(s, "emoji")) || null, icon: str(get(s, "icon")) || null, online: !down(this.link(address)), lastSeen: get(s, "last_seen") ?? null, version: get(s, "version") ?? null }];
     });
   }
 
@@ -825,9 +825,9 @@ export class Views implements Owner {
         // What a row is made with besides its record: a row whose record and these are as they were is the one made
         // before (rule 7: the list redoes only the rows that changed).
         const link = this.link(s.address);
-        // Its station's emoji only with several stations (with one, it says nothing).
-        const emoji = stations.length > 1 ? s.emoji : null;
-        const sig = JSON.stringify([s.address, s.name, emoji, s.online, link.state ?? null, me, slackUsers, members_, watching]);
+        // Its station's emoji and icon only with several stations (with one, it says nothing).
+        const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
+        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, me, slackUsers, members_, watching]);
         for (const listedRaw of [...asked.rows, ...listed]) {
           const raw = asked.titled.get(get(listedRaw, "id")) ?? listedRaw;
           if (mine && get(raw, "mine") !== true) continue;
@@ -839,7 +839,7 @@ export class Views implements Owner {
           let row: J;
           if (kept && kept.sig === sig) row = kept.row;
           else {
-            row = this.#chatRow(s, shown, me, slackUsers, members_, watching, emoji);
+            row = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark);
             if (row !== null) deepFreeze(row);
             if (keepable) this.#rowsMade.set(shown, { sig, row });
           }
@@ -942,14 +942,15 @@ export class Views implements Owner {
   }
 
   /// A station's row as the list shows it (null: not in this list).
-  #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean, emoji: string | null): J {
+  #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean, mark: { emoji: string | null; icon: string | null } | null): J {
     const row = structuredClone(raw);
     // Pinned rows are pinned (true) in the list, in the order they were pinned in; one unpinned says false.
     if (typeof row.pinned === "number") pinnedAt.set(row, row.pinned);
     if (row.pinned !== undefined) row.pinned = typeof row.pinned === "number";
     row.station = s.address;
     row.stationName = s.name;
-    if (emoji) row.stationEmoji = emoji;
+    if (mark?.emoji) row.stationEmoji = mark.emoji;
+    if (mark?.icon) row.stationIcon = mark.icon;
     if (!s.online) row.offline = t("core-views.station.offline", { name: s.name });
     else {
       const state = str(this.link(s.address).state) ?? "connecting";
@@ -1048,6 +1049,7 @@ export class Views implements Owner {
         id: s.id,
         name: s.name,
         ...(s.emoji ? { emoji: s.emoji } : {}),
+        ...(s.icon ? { icon: s.icon } : {}),
         summary,
         face: looks.face(s.online, overview),
         line: looks.stationLine(s.online, host),
@@ -1488,7 +1490,7 @@ export class Views implements Owner {
       for (const raw of desk.get(s.address) ?? []) {
         if (this.local.beingArchived(s.address, raw)) continue;
         const row = this.local.asChanging(s.address, raw);
-        const place = () => ({ station: s.address, stationName: s.name, ...(s.emoji ? { stationEmoji: s.emoji } : {}), session: row.id ?? null, thread: row.thread ?? null, title: row.title ?? "" });
+        const place = () => ({ station: s.address, stationName: s.name, ...(s.emoji ? { stationEmoji: s.emoji } : {}), ...(s.icon ? { stationIcon: s.icon } : {}), session: row.id ?? null, thread: row.thread ?? null, title: row.title ?? "" });
         for (const a of arr(row.answered)) {
           const seq = u64(get(a, "seq"));
           const at = get(a, "answeredAt");
@@ -1533,6 +1535,7 @@ export class Views implements Owner {
             station: s.address,
             stationName: s.name,
             ...(s.emoji ? { stationEmoji: s.emoji } : {}),
+            ...(s.icon ? { stationIcon: s.icon } : {}),
             session: row.id ?? null,
             thread,
             title: row.title ?? "",

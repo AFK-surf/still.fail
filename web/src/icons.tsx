@@ -714,7 +714,7 @@ function StationTurtle(props: IconProps) {
   return <Svg {...props}><path d="M3 15Q3 6 10 6Q17 6 17 15Z M17 13V11Q17 8 19.5 8Q22 8 22 11Q22 15 17 15 M6 15L5 19H8 M14 15L15 19H18 M8 6.5L11 10L10 15 M11 10H15" /></Svg>;
 }
 
-/** The icons a station can have (design/station-icons), in the picker's order, each by the emoji kept for it: older clients show the emoji. */
+/** The icons a station can have (design/station-icons), in the picker's order, each with the emoji kept beside it for older clients. */
 export const STATION_ICONS: readonly { emoji: string; name: string; Icon: (props: IconProps) => React.JSX.Element }[] = [
   { emoji: "🖥️", name: "desktop", Icon: StationDesktop },
   { emoji: "💻", name: "laptop", Icon: StationLaptop },

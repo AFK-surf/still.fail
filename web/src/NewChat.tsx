@@ -32,6 +32,9 @@ import { OVER_DOCK } from "./Chat.tsx";
 import { LOCAL_MS } from "./motion.ts";
 import { t } from "./i18n.ts";
 
+/** What a station is shown by (StationMark): its icon and emoji, none for a station not listed. */
+const markOf = (s: { emoji?: string | null | undefined; icon?: string | null | undefined } | undefined) => ({ emoji: s?.emoji, icon: s?.icon });
+
 /** A new chat in a workspace; `onCreated` gets the station's address and the new item's session (its address). */
 export function NewChat({ scope, onCreated }: { scope: string; onCreated(station: string, session: string): void }) {
   // What the core keeps of it (../pick.ts): held back a moment for its first value from the device (LOCAL_MS, not for
@@ -87,8 +90,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
   const toolbar = useMemo(() => (
     <>
       {station.name && (
-        <Chooser side="top" label={<><StationMark emoji={stations.find((s) => s.station === station.address)?.emoji} />{station.name}</>}>
-          {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><StationMark emoji={s.emoji} />{s.name}</Item>)}
+        <Chooser side="top" label={<><StationMark {...markOf(stations.find((s) => s.station === station.address))} />{station.name}</>}>
+          {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><StationMark emoji={s.emoji} icon={s.icon} />{s.name}</Item>)}
         </Chooser>
       )}
       {!runtime || !model ? (
@@ -134,8 +137,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
               ? <Button variant="primary" icon={Plus} onClick={() => navigate(addProfilePath(workspace, station.address))}>{t("web-main.newChat.addProfile")}</Button>
               : <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} to={profilesPage(station)}>{t("web-main.newChat.goPickModels")}</Link>}
             {stations.length > 1 && (
-              <Chooser side="bottom" label={<><StationMark emoji={stations.find((s) => s.station === station.address)?.emoji} />{station.name}</>}>
-                {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><StationMark emoji={s.emoji} />{s.name}</Item>)}
+              <Chooser side="bottom" label={<><StationMark {...markOf(stations.find((s) => s.station === station.address))} />{station.name}</>}>
+                {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><StationMark emoji={s.emoji} icon={s.icon} />{s.name}</Item>)}
               </Chooser>
             )}
             {blocked === "profile" && <MachineLoginOffers logins={view.overview?.machineLogins} onAdd={(c) => navigate(addProfilePath(workspace, station.address, c === "claude-sub" ? "anthropic" : "openai", "plan"))} />}

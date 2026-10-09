@@ -40,5 +40,14 @@ globalStyle(`${mStationOffline} button${connectionRetry}`, { marginTop: "6px", f
 export const mStationLine = style({ display: "block", paddingTop: "8px", fontSize: vars.textMeta, lineHeight: "18px", color: "var(--m-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
 globalStyle(`${mStationLine}[data-unknown] i`, { display: "inline-block", verticalAlign: "middle", height: "10px", borderRadius: "5px", background: "color-mix(in srgb, var(--m-line) 70%, transparent)" });
 globalStyle(`${mStationHead} ${mGrow}`, { display: "flex", flexDirection: "column" });
-/** The icons to pick from in the sheet: six to a row, wide enough for a thumb. */
-export const mIconGrid = style({ gridTemplateColumns: "repeat(6, 1fr)", gap: "4px", padding: "4px 16px 12px" });
+/** A station's mark in its sheet: which grid, and (for emoji) a field taking any pasted or typed. */
+export const mMarkHead = style({ display: "flex", flexDirection: "column", gap: "10px", padding: "0 18px 10px" });
+export const mMarkField = style({
+  height: "40px", padding: "0 16px", border: "0", borderRadius: "999px", outline: "none",
+  background: "color-mix(in srgb, var(--m-ink) 6%, transparent)", color: "var(--m-ink)", fontSize: "16px",
+});
+/** The grid: six to a row, wide enough for a thumb. */
+export const mMarkGrid = style({ gridTemplateColumns: "repeat(6, 1fr)", gap: "4px", padding: "0 14px 10px" });
+globalStyle(`${mMarkGrid} > button:not([aria-pressed=true])`, { color: "var(--m-ink)" });
+export const mMarkEmoji = style({ fontSize: "26px" });
+export const mMarkPicture = style({ width: "20px", height: "20px", objectFit: "cover", borderRadius: "24%" });

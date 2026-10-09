@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """still.fail's own icons (design/icons, drawn for still.fail by astra) for both clients: web/src/icons.tsx (React components)
 and the Android app's ui/Icons.kt (ImageVectors). With them the icons a station can have (design/station-icons, in the order
-of its manifest.json, each standing for the emoji kept for it). The SVGs are the one source; `python3 scripts/icons.py --check`
+of its manifest.json, each with the emoji kept beside it for older clients). The SVGs are the one source; `python3 scripts/icons.py --check`
 fails when the generated files are not what they make."""
 import json
 import re
@@ -110,7 +110,7 @@ def web(icons, stations) -> str:
         lines.append(f"  return <Svg {{...props}}>{body}</Svg>;")
         lines.append("}")
         lines.append("")
-    lines.append("/** The icons a station can have (design/station-icons), in the picker's order, each by the emoji kept for it: older clients show the emoji. */")
+    lines.append("/** The icons a station can have (design/station-icons), in the picker's order, each with the emoji kept beside it for older clients. */")
     lines.append("export const STATION_ICONS: readonly { emoji: string; name: string; Icon: (props: IconProps) => React.JSX.Element }[] = [")
     for name, emoji, _ in stations:
         lines.append(f"  {{ emoji: \"{emoji}\", name: \"{name}\", Icon: Station{pascal(name)} }},")
@@ -151,20 +151,23 @@ def android(icons, stations) -> str:
     lines.append("    val byName = mapOf(" + ", ".join(f"\"{n}\" to {pascal(n)}" for n, _ in icons) + ")")
     lines.append("}")
     lines.append("")
-    lines.append("/** The icons a station can have (design/station-icons), in the picker's order, each by the emoji kept for it: older clients show the emoji. */")
+    lines.append("/** One of the icons a station can have: its name (kept as glyph:<name>), the emoji kept beside it for older clients, and it drawn. */")
+    lines.append("data class StationGlyph(val name: String, val emoji: String, val icon: ImageVector)")
+    lines.append("")
+    lines.append("/** The icons a station can have (design/station-icons), in the picker's order. */")
     lines.append("object StationIcons {")
-    lines.append("    val all: List<Pair<String, ImageVector>> = listOf(")
+    lines.append("    val all: List<StationGlyph> = listOf(")
     for name, emoji, els in stations:
         stroked = [as_path(t, a) for t, a, f in els if not f]
         dots = [as_path(t, a) for t, a, f in els if f]
         q = lambda xs: ", ".join('"' + x.replace('"', '\\"') + '"' for x in xs)
-        lines.append(f"        \"{emoji}\" to icon(\"{name}\", listOf({q(stroked)}), listOf({q(dots)})),")
+        lines.append(f"        StationGlyph(\"{name}\", \"{emoji}\", icon(\"{name}\", listOf({q(stroked)}), listOf({q(dots)}))),")
     lines.append("    )")
     lines.append("")
-    lines.append("    private val byEmoji = all.associate { (e, v) -> e.replace(\"\\uFE0F\", \"\") to v }")
+    lines.append("    private val byName = all.associateBy { it.name }")
     lines.append("")
-    lines.append("    /** The icon for an emoji kept, with or without its variation selector; null for one not drawn here. */")
-    lines.append("    fun of(emoji: String?): ImageVector? = emoji?.let { byEmoji[it.replace(\"\\uFE0F\", \"\")] }")
+    lines.append("    /** The one a station's icon names (glyph:<name>); null for a picture, none, or one this build does not know. */")
+    lines.append("    fun of(icon: String?): StationGlyph? = icon?.takeIf { it.startsWith(\"glyph:\") }?.let { byName[it.removePrefix(\"glyph:\")] }")
     lines.append("}")
     lines.append("")
     return "\n".join(lines)

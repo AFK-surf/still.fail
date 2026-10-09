@@ -103,7 +103,7 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
             <ChatPicture item={item} />
             <span className={css.title} data-unread={item.unread || undefined}>{item.title}</span>
             <span className={css.meta}>
-              <span>{item.stationEmoji && <StationMark emoji={item.stationEmoji} size={12} className={markCss.inline} />}{item.stationName}</span>
+              <span>{(item.stationEmoji || item.stationIcon) && <StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={12} className={markCss.inline} />}{item.stationName}</span>
               <Time stamp={item.time?.lastActiveAt} fixed />
             </span>
           </div>

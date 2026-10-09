@@ -539,6 +539,13 @@ test("chats_puts_together_the_online_stations", async () => {
   t.set(workspace(), withEmoji);
   await t.read(u, 1);
   assert.deepEqual(u.value.days[0].items.map((i: J) => i.stationEmoji ?? null), [null, "🍎", null]);
+  // And an icon beside it: carried as it is (the clients draw it, or the emoji where they cannot).
+  const withIcon = stations(t.nowS());
+  withIcon.stations[1].emoji = "🍎";
+  withIcon.stations[1].icon = "glyph:apple";
+  t.set(workspace(), withIcon);
+  await t.read(u, 1);
+  assert.deepEqual(u.value.days[0].items.map((i: J) => i.stationIcon ?? null), [null, "glyph:apple", null]);
   t.set(link("ws/b"), { state: "offline" });
   await t.read(u, 1);
   v = u.value;

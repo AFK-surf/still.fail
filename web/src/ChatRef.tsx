@@ -37,10 +37,10 @@ export function RefChip({ title, href }: { title: ReactNode; href: string }) {
   const found = elsewhere ? stations?.find((s) => s.station === there) : undefined;
   const name = elsewhere ? (found?.name ?? there.slice(there.indexOf("/") + 1, there.indexOf("/") + 9)) : null;
   return (
-    <Hover content={<RefPreview href={href} here={here} station={name} emoji={found?.emoji} />}>
+    <Hover content={<RefPreview href={href} here={here} station={name} emoji={found?.emoji} icon={found?.icon} />}>
       <a className={css.refChip} href={href}>
         <span className={css.refChipHash}>@</span>{title}
-        {name && <span className={css.refChipStation}><StationMark emoji={found?.emoji} size={11} className={css.refChipStationIcon} />{name}</span>}
+        {name && <span className={css.refChipStation}><StationMark emoji={found?.emoji} icon={found?.icon} size={11} className={css.refChipStationIcon} />{name}</span>}
       </a>
     </Hover>
   );
@@ -54,7 +54,7 @@ export function RefChip({ title, href }: { title: ReactNode; href: string }) {
 /** The chats references' cards last showed, by link. */
 const seenChats = new Map<string, ChatItem>();
 
-function RefPreview({ href, here, station, emoji }: { href: string; here: string; station: string | null; emoji?: string | null | undefined }) {
+function RefPreview({ href, here, station, emoji, icon }: { href: string; here: string; station: string | null; emoji?: string | null | undefined; icon?: string | null | undefined }) {
   const relative = /\/chats\/([^/?#\s]+)/.exec(href);
   const of = chatOfLink(href) ?? (relative ? { station: here, id: safeDecode(relative[1]!), history: /[?&]history=/.test(href) ? "?" : "" } : null);
   const chats = useChats(scopeOf(here), false).value;
@@ -73,7 +73,7 @@ function RefPreview({ href, here, station, emoji }: { href: string; here: string
       <div className={hover.meta}>
         <ChatMark item={item} inline />
         <span className={hover.ref}>
-          {station && <><StationMark emoji={emoji} size={11} className={hover.refIcon} />{station}{of?.history ? " · " : ""}</>}
+          {station && <><StationMark emoji={emoji} icon={icon} size={11} className={hover.refIcon} />{station}{of?.history ? " · " : ""}</>}
           {of?.history ? t("web-main.chatRef.previewHistory") : ""}
         </span>
         <Time className={hover.time} stamp={item.time?.lastActiveAt} fixed />
@@ -164,7 +164,7 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
               {/* Another station's: its name after the title, as a reference to it shows it (the row keeps its three columns). */}
               <span className={css.refTitleCell}>
                 <span className={css.refTitle}>{item.title}</span>
-                {item.station !== station.address && <span className={css.refChipStation}><StationMark emoji={item.stationEmoji} size={11} className={css.refChipStationIcon} />{item.stationName}</span>}
+                {item.station !== station.address && <span className={css.refChipStation}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={11} className={css.refChipStationIcon} />{item.stationName}</span>}
               </span>
               <Time className={css.refTime} stamp={item.time?.lastActiveAt} fixed />
             </button>

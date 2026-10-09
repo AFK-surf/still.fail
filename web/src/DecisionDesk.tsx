@@ -145,7 +145,7 @@ export function DecisionRows({ active, page }: { active: boolean; page: string }
             onMouseDown={(e) => e.preventDefault()} onClick={() => choose(x)}>
             <span className={css.question}>{question(x)}</span>
             <span className={css.meta}>
-              <span className={css.metaWhere}>{x.title} · {x.stationEmoji && <StationMark emoji={x.stationEmoji} size={12} className={markCss.inline} />}{x.stationName}</span>
+              <span className={css.metaWhere}>{x.title} · {(x.stationEmoji || x.stationIcon) && <StationMark emoji={x.stationEmoji} icon={x.stationIcon} size={12} className={markCss.inline} />}{x.stationName}</span>
               <Time className={css.metaTime} stamp={x.message.time?.createdAt} fixed />
             </span>
           </button>
@@ -176,7 +176,7 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
         <div className={css.barLead}>
           {d && <>
             <button type="button" className={css.barChat} onClick={() => onOpen(path)} title={t("web-main.decisions.openChat")}>{d.title}</button>
-            <span className={css.barStation}>{d.stationEmoji && <StationMark emoji={d.stationEmoji} size={12} className={markCss.inline} />}{d.stationName}</span>
+            <span className={css.barStation}>{(d.stationEmoji || d.stationIcon) && <StationMark emoji={d.stationEmoji} icon={d.stationIcon} size={12} className={markCss.inline} />}{d.stationName}</span>
           </>}
         </div>
         <div className={css.barActions}>

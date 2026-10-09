@@ -7,7 +7,8 @@ import { UpdateSummary, Versions } from "../Versions.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
 import * as css from "./StationCards.css.ts";
-import { EmojiPick } from "./EmojiPick.tsx";
+import { MarkPick } from "./MarkPick.tsx";
+import { same, type Mark } from "../stationPick.ts";
 import { StationMark } from "../StationMark.tsx";
 import { Link } from "react-router";
 
@@ -15,11 +16,11 @@ import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "./words.tsx";
 
-/** `manager`: may update a station and its runtimes (a workspace owner or admin); `onEmoji`: may give it an emoji. */
-export function StationList({ stations, menu, manager = false, onEmoji, emojiBusy }: {
-  stations: StationView[]; menu(s: StationView): ReactNode; manager?: boolean; onEmoji?: ((s: StationView, emoji: string) => void) | undefined; emojiBusy?: ((s: StationView) => boolean) | undefined;
+/** `manager`: may update a station and its runtimes (a workspace owner or admin); `onMark`: may give it an icon or emoji. */
+export function StationList({ stations, menu, manager = false, onMark, markBusy }: {
+  stations: StationView[]; menu(s: StationView): ReactNode; manager?: boolean; onMark?: ((s: StationView, mark: Mark) => void) | undefined; markBusy?: ((s: StationView) => boolean) | undefined;
 }) {
-  return <div className={css.cards}>{stations.map((s) => <StationCard key={s.id} s={s} menu={menu(s)} manager={manager} onEmoji={onEmoji} emojiBusy={emojiBusy?.(s) ?? false} />)}</div>;
+  return <div className={css.cards}>{stations.map((s) => <StationCard key={s.id} s={s} menu={menu(s)} manager={manager} onMark={onMark} markBusy={markBusy?.(s) ?? false} />)}</div>;
 }
 
 /**
@@ -32,7 +33,7 @@ export function StationPeek({ s, settings, footer }: { s: StationView; settings?
     <div className={css.peek}>
       <div className={css.peekHead}>
         <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />
-        {s.emoji && <StationMark emoji={s.emoji} size={16} />}
+        {(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={16} />}
         <span className={css.peekName}>{s.name}</span>
         <span className={css.state}>{state(s)}</span>
       </div>
@@ -125,7 +126,7 @@ function useLong(waiting: boolean, ms: number): boolean {
   return waiting && long;
 }
 
-function StationCard({ s, menu, manager, onEmoji, emojiBusy }: { s: StationView; menu: ReactNode; manager: boolean; onEmoji: ((s: StationView, emoji: string) => void) | undefined; emojiBusy: boolean }) {
+function StationCard({ s, menu, manager, onMark, markBusy }: { s: StationView; menu: ReactNode; manager: boolean; onMark: ((s: StationView, mark: Mark) => void) | undefined; markBusy: boolean }) {
   const [details, setDetails] = useState(false);
   const silent = useLong(s.online && !s.host, 15_000);
   const wrong = problems(s, silent);
@@ -133,7 +134,7 @@ function StationCard({ s, menu, manager, onEmoji, emojiBusy }: { s: StationView;
     <div className={css.card} data-online={s.online || undefined}>
       <div className={css.cardHead}>
         <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />
-        <EmojiPick emoji={s.emoji} name={s.name} editable={onEmoji !== undefined} busy={emojiBusy} onPick={(e) => onEmoji?.(s, e)} />
+        <MarkPick emoji={s.emoji} icon={s.icon} name={s.name} editable={onMark !== undefined} busy={markBusy} onPick={(m) => { if (!same(m, s.emoji, s.icon)) onMark?.(s, m); }} />
         <span className={css.cardTitle}>
           <button type="button" className={css.name} onClick={() => setDetails(true)} aria-label={t("web-pages.stations.details", { name: s.name })}>{s.name}</button>
           <span className={css.state}>{state(s)}</span>

@@ -8,6 +8,16 @@ import fail.still.android.BuildConfig
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import fail.still.android.ui.Seg
+import fail.still.android.ui.hasStationMark
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -557,37 +567,106 @@ fun FirstStation(current: WorkspaceEntry) {
     }
 }
 
-/** A station's icon, picked from ours (the web's popover: web/src/cloud/EmojiPick.tsx) or none; set at once. */
-private fun openStationIcons(app: AppState, current: WorkspaceEntry, s: StationView) {
+/**
+ * A station's mark, picked in a sheet (the web's: web/src/cloud/MarkPick.tsx, the phone web's sheet): one of still.fail's
+ * icons or an emoji (any, pasted or typed), a picture put up, or none; set at once. What is sent is web/src/stationPick.ts's:
+ * a glyph keeps its emoji beside it for older clients, an emoji or a picture takes the other away.
+ */
+private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationView) {
     val cloud = Cloud(app.core, current.account.sub)
-    val kept = s.emoji?.replace("\uFE0F", "")
-    val pick = { emoji: String ->
+    val pick = { emoji: String, icon: String ->
         app.sheet = null
-        if (emoji != (s.emoji ?: "")) app.act(t("android-settings.station.emojiWhat"), t("android-settings.station.emojiSet")) { cloud.setStationEmoji(current.workspace.id, s.id, emoji) }
+        if (emoji != (s.emoji ?: "") || icon != (s.icon ?: "")) app.act(t("android-settings.station.emojiWhat"), t("android-settings.station.emojiSet")) { cloud.setStationMark(current.workspace.id, s.id, emoji, icon) }
     }
-    app.sheet = SheetSpec(0.62f) {
+    val glyph = StationIcons.of(s.icon)
+    val picture = s.icon?.takeIf { it.startsWith("data:image/") }
+    app.sheet = SheetSpec(0.78f) {
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        var emojis by remember { mutableStateOf(glyph == null && picture == null && s.emoji != null) }
+        var typed by remember { mutableStateOf("") }
+        val upload = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            if (uri != null) scope.launch {
+                val url = try { stationPictureOf(context, uri) } catch (_: Exception) { null }
+                if (url == null) app.toast = t("android-settings.station.imageFailed") else pick("", url)
+            }
+        }
         SheetGrab()
         SheetHead(t("android-settings.station.emojiTitle", "name" to s.name))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Column(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Seg(listOf(t("android-settings.station.glyphs"), "Emoji"), if (emojis) 1 else 0, { emojis = it == 1 }, Modifier.fillMaxWidth(), height = 34.dp, fill = true, radius = 17.dp)
+                if (emojis) Field(typed, { v -> typed = v; firstEmoji(v)?.let { pick(it, "") } }, t("android-settings.station.emojiPaste"))
+            }
             // Six to a row, wide enough for a thumb; the one it has on the accent's wash.
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                StationIcons.all.chunked(6).forEach { row ->
+            val kept = if (emojis) s.emoji?.takeIf { glyph == null && picture == null }?.replace("\uFE0F", "") else glyph?.name
+            val offered = if (!emojis) StationIcons.all.map { it.name } else if (kept != null && STATION_EMOJI.none { it.replace("\uFE0F", "") == kept }) listOf(s.emoji!!) + STATION_EMOJI.dropLast(1) else STATION_EMOJI
+            Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                offered.chunked(6).forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        row.forEach { (emoji, icon) ->
-                            val on = emoji.replace("\uFE0F", "") == kept
+                        row.forEach { key ->
+                            val on = (if (emojis) key.replace("\uFE0F", "") else key) == kept
                             Box(
                                 Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(14.dp)).background(if (on) C.accentBg else Color.Transparent)
-                                    .clickable { pick(emoji) }.semantics { contentDescription = emoji },
+                                    .clickable { if (emojis) pick(key, "") else StationIcons.all.first { it.name == key }.let { g -> pick(g.emoji, "glyph:${g.name}") } }
+                                    .semantics { contentDescription = key },
                                 contentAlignment = Alignment.Center,
-                            ) { IconIn(icon, 24.dp, if (on) C.accent else C.ink) }
+                            ) {
+                                if (emojis) Text(key, fontSize = 26.sp, lineHeight = 30.sp)
+                                else IconIn(StationIcons.all.first { it.name == key }.icon, 24.dp, if (on) C.accent else C.ink)
+                            }
                         }
                         repeat(6 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
-            if (s.emoji != null) PickRow(t("android-settings.station.emojiClear")) { pick("") }
+            PickRow(t(if (picture != null) "android-settings.station.imageAnother" else "android-settings.station.image"),
+                leading = { if (picture != null) StationMark(null, picture, 20.dp, C.ink) else IconIn(Icons.ImageUpload, 20.dp, C.ink) }) {
+                upload.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }
+            if (hasStationMark(s.emoji, s.icon)) PickRow(t("android-settings.station.emojiClear"), leading = { IconIn(Icons.Close, 20.dp, C.ink) }) { pick("", "") }
         }
     }
+}
+
+/** The emoji offered (any other can be pasted or typed): web/src/stationPick.ts's EMOJI. */
+private val STATION_EMOJI = listOf(
+    "🖥️", "💻", "🍎", "🐧", "🪟", "☁️", "🏠", "🏢", "🚀", "⚡", "🔥", "🧪", "🛠️", "🐳", "🦀", "🐙", "🌲", "🌊", "🌙", "☀️", "🍊", "🍋", "🍇", "🐱",
+    "🐶", "🦊", "🐼", "🐸", "🦉", "🐝", "🦄", "🐢", "🌵", "🌸", "🍄", "🌈", "❄️", "⭐", "🪐", "🌍", "🍉", "🍒", "🥑", "🍕", "☕", "🎧", "🎮", "🤖",
+)
+
+/** The first emoji of what was typed or pasted, as a person sees one (a flag, a family are one); null for none. */
+private fun firstEmoji(text: String): String? {
+    val t = text.trim()
+    if (t.isEmpty()) return null
+    val it = java.text.BreakIterator.getCharacterInstance().apply { setText(t) }
+    val one = t.substring(0, it.next().coerceAtLeast(1))
+    val cp = one.codePointAt(0)
+    // Pictographs and symbols (U+2190 on, past CJK's own) and flags' regional indicators; not letters, digits or CJK.
+    val emoji = cp in 0x1F000..0x1FAFF || cp in 0x2190..0x2BFF || cp in 0x1F1E6..0x1F1FF || cp == 0x00A9 || cp == 0x00AE || cp == 0x3030 || cp == 0x303D
+    return if (emoji) one else null
+}
+
+/**
+ * A picked picture as a station's icon (web/src/stationPick.ts pictureOf): its middle square at 96 px, as a data URL small
+ * enough to go with the workspace (WebP, else PNG, else JPEG); null when it can't be read or made small enough.
+ */
+private suspend fun stationPictureOf(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    var sample = 1
+    while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 192) sample *= 2
+    val image = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return@withContext null
+    val side = minOf(image.width, image.height)
+    val icon = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
+    val sx = (image.width - side) / 2; val sy = (image.height - side) / 2
+    android.graphics.Canvas(icon).drawBitmap(image, android.graphics.Rect(sx, sy, sx + side, sy + side), android.graphics.Rect(0, 0, 96, 96), android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+    val webp = if (android.os.Build.VERSION.SDK_INT >= 30) Bitmap.CompressFormat.WEBP_LOSSY else @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP
+    listOf(Triple(webp, 86, "webp"), Triple(Bitmap.CompressFormat.PNG, 100, "png"), Triple(Bitmap.CompressFormat.JPEG, 85, "jpeg"), Triple(Bitmap.CompressFormat.JPEG, 60, "jpeg")).firstNotNullOfOrNull { (format, quality, type) ->
+        val out = java.io.ByteArrayOutputStream()
+        icon.compress(format, quality, out)
+        "data:image/$type;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+    }?.takeIf { it.length <= 46_000 }
 }
 
 /** A station's own actions: its name, its icon, and removing it from the workspace. */
@@ -598,7 +677,7 @@ fun openStationMenu(app: AppState, current: WorkspaceEntry, s: StationView) {
         SheetHead(s.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             PickRow(t("android-settings.station.rename")) { ask(app, t("android-settings.station.renameTitle"), s.name, t("android-settings.station.renamePlaceholder"), t("common.save"), what = t("android-settings.station.renameWhat")) { cloud.renameStation(current.workspace.id, s.id, it); app.toast = t("android-settings.renamed") } }
-            PickRow(t("android-settings.station.emoji"), mark = s.emoji?.let { e -> { StationMark(e, 15.dp, C.ink) } }) { openStationIcons(app, current, s) }
+            PickRow(t("android-settings.station.emoji"), mark = if (hasStationMark(s.emoji, s.icon)) ({ StationMark(s.emoji, s.icon, 15.dp, C.ink) }) else null) { openStationMark(app, current, s) }
             PickRow(t("android-settings.station.removeRow"), color = C.red) {
                 confirm(app, t("android-settings.station.removeTitle", "name" to s.name), t("android-settings.station.removeText", "app" to BuildConfig.APP_NAME), t("android-settings.station.remove"), danger = true,
                     what = t("android-settings.station.removeWhat"), then = app::pop) {

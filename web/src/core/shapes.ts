@@ -1239,6 +1239,8 @@ export interface ChatItem {
 	stationName: string;
 	/** Its station's emoji, when its workspace gave it one and has more stations than it. */
 	stationEmoji?: string;
+	/** Its station's icon, when its workspace gave it one and has more stations than it: as StationView `icon`. */
+	stationIcon?: string;
 	/** block | run | failed */
 	state?: Badge;
 	/** Where it came from (Slack · workspace · #channel), for a Slack chat. */
@@ -1836,6 +1838,8 @@ export interface DecisionAnswered {
 	stationName: string;
 	/** Its station's emoji, when its workspace gave it one. */
 	stationEmoji?: string;
+	/** Its station's icon, when its workspace gave it one: glyph:<name> (design/station-icons) or a picture's data URL; shown before the emoji. */
+	stationIcon?: string;
 	session: string;
 	thread: number;
 	title: string;
@@ -1855,6 +1859,8 @@ export interface DecisionItem {
 	stationName: string;
 	/** Its station's emoji, when its workspace gave it one. */
 	stationEmoji?: string;
+	/** Its station's icon, when its workspace gave it one: glyph:<name> (design/station-icons) or a picture's data URL; shown before the emoji. */
+	stationIcon?: string;
 	/** Its chat's item id (its session's key): what its page opens by. */
 	session: string;
 	thread: number;
@@ -1887,6 +1893,8 @@ export interface DecisionWorking {
 	stationName: string;
 	/** Its station's emoji, when its workspace gave it one. */
 	stationEmoji?: string;
+	/** Its station's icon, when its workspace gave it one: glyph:<name> (design/station-icons) or a picture's data URL; shown before the emoji. */
+	stationIcon?: string;
 	session: string;
 	thread: number;
 	title: string;
@@ -2633,6 +2641,11 @@ export interface StationView {
 	name: string;
 	/** The one its workspace gave it (the settings), shown where it is named; none when none. */
 	emoji?: string;
+	/**
+	 * The icon its workspace gave it, shown before the emoji: glyph:<name> (one of still.fail's, design/station-icons; a client
+	 * that does not know the name shows the emoji) or a picture put up, as a data URL; none when none.
+	 */
+	icon?: string;
 	/** Its line in a list: offline since when, or what it is and whether its agents work. */
 	summary: string;
 	/** Its buddy's face: offline | working | idle; and what it is under its name (its processor, else 在线/离线). */

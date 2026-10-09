@@ -502,7 +502,7 @@
   "web-mobile.stations.removeText": "它会断开与 {name} cloud 的连接，成员不能再从这里访问它。那台机器上的 {name} 和数据不受影响，之后可以重新添加。",
   "web-mobile.stations.removed": "已移除 station",
   "web-mobile.stations.rename": "改名",
-  "web-mobile.stations.emoji": "设图标",
+  "web-mobile.stations.emoji": "图标",
   "web-mobile.stations.emojiTitle": "给 {name} 选个图标",
   "web-mobile.stations.emojiWhat": "设图标",
   "web-mobile.stations.emojiClear": "不用图标",

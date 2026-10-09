@@ -1263,6 +1263,8 @@ data class ChatItem (
 	val stationName: String,
 	/// Its station's emoji, when its workspace gave it one and has more stations than it.
 	val stationEmoji: String? = null,
+	/// Its station's icon, when its workspace gave it one and has more stations than it: as StationView `icon`.
+	val stationIcon: String? = null,
 	/// block | run | failed
 	val state: Badge? = null,
 	/// Where it came from (Slack · workspace · #channel), for a Slack chat.
@@ -1829,6 +1831,8 @@ data class DecisionAnswered (
 	val stationName: String,
 	/// Its station's emoji, when its workspace gave it one.
 	val stationEmoji: String? = null,
+	/// Its station's icon, when its workspace gave it one: glyph:<name> (design/station-icons) or a picture's data URL; shown before the emoji.
+	val stationIcon: String? = null,
 	val session: String,
 	val thread: Long,
 	val title: String,
@@ -1847,6 +1851,8 @@ data class DecisionItem (
 	val stationName: String,
 	/// Its station's emoji, when its workspace gave it one.
 	val stationEmoji: String? = null,
+	/// Its station's icon, when its workspace gave it one: glyph:<name> (design/station-icons) or a picture's data URL; shown before the emoji.
+	val stationIcon: String? = null,
 	/// Its chat's item id (its session's key): what its page opens by.
 	val session: String,
 	val thread: Long,
@@ -1876,6 +1882,8 @@ data class DecisionWorking (
 	val stationName: String,
 	/// Its station's emoji, when its workspace gave it one.
 	val stationEmoji: String? = null,
+	/// Its station's icon, when its workspace gave it one: glyph:<name> (design/station-icons) or a picture's data URL; shown before the emoji.
+	val stationIcon: String? = null,
 	val session: String,
 	val thread: Long,
 	val title: String,
@@ -2663,6 +2671,9 @@ data class StationView (
 	val name: String,
 	/// The one its workspace gave it (the settings), shown where it is named; none when none.
 	val emoji: String? = null,
+	/// The icon its workspace gave it, shown before the emoji: glyph:<name> (one of still.fail's, design/station-icons; a client
+	/// that does not know the name shows the emoji) or a picture put up, as a data URL; none when none.
+	val icon: String? = null,
 	/// Its line in a list: offline since when, or what it is and whether its agents work.
 	val summary: String,
 	/// Its buddy's face: offline | working | idle; and what it is under its name (its processor, else 在线/离线).

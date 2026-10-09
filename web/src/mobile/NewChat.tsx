@@ -106,7 +106,7 @@ function NewChatOn({ choice, view, stations, pick, create }: {
       {/* The choices, then the composer as a floating capsule, as in a chat. */}
       <div className={css.mNewBottom} data-made-leave="fade">
         <div className={css.mChoosers}>
-          <Chooser leading={<StationMark emoji={view.emoji} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
+          <Chooser leading={<StationMark emoji={view.emoji} icon={view.icon} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
           {!runtime || !model ? (
             // Nothing to choose from: the chooser leads to where models are enabled.
             <Chooser label={t("web-mobile.newChat.noModels")} onClick={() => app.push(app.at("/settings/profiles"))} />

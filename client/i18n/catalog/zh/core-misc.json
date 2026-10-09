@@ -53,6 +53,7 @@
   "core-misc.comma.sign_in": "请在 Comma 应用里登录",
   "core-misc.cloud.invalid_email": "要填对方登录 {brand} 用的邮箱",
   "core-misc.cloud.invalid_name": "名字不能为空，最长 80 个字",
+  "core-misc.cloud.invalid_icon": "这个图标用不了",
   "core-misc.cloud.invalid_emoji": "这不是一个 emoji",
   "core-misc.cloud.invalid_relay": "要填 iroh-relay 的 https 地址，例如 https://relay.example.com",
   "core-misc.cloud.invalid_relays": "最多只能加 4 个中继",

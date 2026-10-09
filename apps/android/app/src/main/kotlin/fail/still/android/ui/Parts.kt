@@ -60,6 +60,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -451,17 +453,32 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
 fun IconIn(icon: ImageVector, size: Dp = 18.dp, tint: Color = C.ink, modifier: Modifier = Modifier) = Icon(icon, null, modifier.size(size), tint = tint)
 
 /**
- * A station where it is named: the icon its workspace gave it (what is kept is the emoji it stands for, StationIcons), else
- * `none` (nothing when null). An emoji picked before there were icons shows as the emoji (web/src/StationMark.tsx).
+ * A station where it is named (web/src/StationMark.tsx): its `icon` first, one of still.fail's (glyph:<name>, StationIcons)
+ * or a picture put up (a data URL); else its emoji; else `none` (nothing when null). A glyph this build does not know shows
+ * the emoji kept beside it.
  */
 @Composable
-fun StationMark(emoji: String?, size: Dp, tint: Color, modifier: Modifier = Modifier, none: ImageVector? = null) {
-    val icon = StationIcons.of(emoji)
+fun StationMark(emoji: String?, icon: String?, size: Dp, tint: Color, modifier: Modifier = Modifier, none: ImageVector? = null) {
+    val glyph = StationIcons.of(icon)
+    val picture = remember(icon) { stationPicture(icon) }
     when {
-        icon != null -> Icon(icon, null, modifier.size(size), tint = tint)
+        glyph != null -> Icon(glyph.icon, null, modifier.size(size), tint = tint)
+        picture != null -> Image(picture, null, modifier.size(size).clip(RoundedCornerShape(size * 0.24f)), contentScale = ContentScale.Crop)
         emoji != null -> Text(emoji, fontSize = (size.value * 0.9f).sp, lineHeight = size.value.sp, modifier = modifier)
         none != null -> Icon(none, null, modifier.size(size), tint = tint)
     }
+}
+
+/** Whether a station has anything to be shown by (StationMark draws nothing for it otherwise). */
+fun hasStationMark(emoji: String?, icon: String?): Boolean = !emoji.isNullOrEmpty() || !icon.isNullOrEmpty()
+
+/** A picture put up as a station's icon (a data URL), decoded; null for none or one that is not. */
+fun stationPicture(icon: String?): ImageBitmap? {
+    if (icon == null || !icon.startsWith("data:image/")) return null
+    return try {
+        val bytes = android.util.Base64.decode(icon.substringAfter("base64,"), android.util.Base64.DEFAULT)
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+    } catch (_: IllegalArgumentException) { null }
 }
 
 // ── navigation ─────────────────────────────────────────────────────────

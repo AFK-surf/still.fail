@@ -258,7 +258,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
             ? <TitleInput value={item.title} onDone={(title) => { setEditing(false); rename(item, title); }} />
             : <span className={nav.navSessionTitle}>{renamingTo ?? item.title}</span>}
           {/* The station it runs on, by its icon (the core gives one only with several stations). */}
-          {item.stationEmoji && !editing && <Tip label={item.stationName} side="right"><span className={nav.sessionKind} aria-label={item.stationName}><StationMark emoji={item.stationEmoji} size={12} /></span></Tip>}
+          {(item.stationEmoji || item.stationIcon) && !editing && <Tip label={item.stationName} side="right"><span className={nav.sessionKind} aria-label={item.stationName}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={12} /></span></Tip>}
           {(saving.running || saving.error !== undefined) && !editing && <span className={nav.sessionKind}><DoingShown state={saving} className={nav.rowSpinner} label={t("web-main.saving")} side="right" /></span>}
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Slack is the only kind of connect there is. */}

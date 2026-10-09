@@ -154,7 +154,7 @@ function StationChip({ station }: { station: string }) {
   if (!stations || stations.length < 2 || !s) return null;
   return (
     <button type="button" className={css.mBarStation} aria-label={s.name} onClick={() => app.sheet({ height: 0.55, content: () => <StationSheet station={station} /> })}>
-      {s.emoji && <StationMark emoji={s.emoji} size={12} />}<span>{s.name}</span>
+      {(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={12} />}<span>{s.name}</span>
     </button>
   );
 }

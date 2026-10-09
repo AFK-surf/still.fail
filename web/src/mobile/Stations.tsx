@@ -10,7 +10,7 @@ import { useParams } from "react-router";
 import { useStations, type StationView } from "../api.ts";
 import type { StationNet } from "../core/shapes.ts";
 import { illustrationUrl } from "../brand.tsx";
-import { ChevronRight, More, Plus } from "../icons.tsx";
+import { ChevronRight, Close, ImageUpload, More, Plus } from "../icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
 import { track } from "../telemetry.ts";
 import { useDark } from "../theme.ts";
@@ -19,12 +19,13 @@ import { GoRow } from "./Settings.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
 import { Net } from "../cloud/StationCards.tsx";
-import { StationIconGrid } from "../cloud/EmojiPick.tsx";
-import { StationMark } from "../StationMark.tsx";
+import { EmojiGrid, GlyphGrid } from "../cloud/MarkPick.tsx";
+import { isPicture, StationMark, stationGlyph } from "../StationMark.tsx";
+import { emojiMark, firstEmoji, kindOf, NO_MARK, pictureMark, pictureOf, same, type Kind, type Mark } from "../stationPick.ts";
 import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
-import { Button, Card, Field, Illustration, LargeTitle, ListCard, Loading, NavBar, NavButton, PickRow, SectionHeader, Spinner, TopBack } from "./parts.tsx";
+import { Button, Card, Field, Illustration, LargeTitle, ListCard, Loading, NavBar, NavButton, PickRow, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -67,7 +68,7 @@ export function StationsScreen() {
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
           <span className={css.mStationHead}>
             <Buddy s={s} />
-            <span className={partsCss.mGrow}><b className={css.mStationName}>{s.emoji && <StationMark emoji={s.emoji} size={16} className={markCss.inline} />}{s.name}</b><span className={css.mStationSummary}>{s.summary}</span></span>
+            <span className={partsCss.mGrow}><b className={css.mStationName}>{(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={16} className={markCss.inline} />}{s.name}</b><span className={css.mStationSummary}>{s.summary}</span></span>
             {s.reconnecting && <Reconnecting />}
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </span>
@@ -276,21 +277,41 @@ function useManager(): boolean {
   return role === "owner" || role === "admin";
 }
 
-/** A station's icon picked from ours (the wide screen's popover, ../cloud/EmojiPick.tsx), or none; set at once. */
-function StationIconSheet({ s }: { s: StationView }) {
+/**
+ * A station's mark picked in a sheet (the wide screen's popover: ../cloud/MarkPick.tsx): one of still.fail's icons or an
+ * emoji (any, pasted or typed), a picture put up, or none; set at once.
+ */
+function StationMarkSheet({ s }: { s: StationView }) {
   const app = useApp();
   const act = useAct();
-  const pick = (emoji: string) => {
+  const [kind, setKind] = useState<Kind>(() => kindOf(s.emoji, s.icon));
+  const [typed, setTyped] = useState("");
+  const file = useRef<HTMLInputElement>(null);
+  const pick = (m: Mark) => {
     app.sheet(null);
-    if (emoji !== (s.emoji ?? "")) act(cloud.setStationEmoji(app.entry.account.sub, app.entry.id, s.id, emoji), t("web-mobile.stations.emojiWhat"), t("web-mobile.stations.emojiSet"));
+    if (!same(m, s.emoji, s.icon)) act(cloud.setStationMark(app.entry.account.sub, app.entry.id, s.id, m), t("web-mobile.stations.emojiWhat"), t("web-mobile.stations.emojiSet"));
   };
+  const upload = (f: Blob) => pictureOf(f).then((url) => pick(pictureMark(url)),
+    (e: unknown) => app.toast(t((e as Error).message === "too_big" ? "web-pages.stations.mark.tooBig" : "web-pages.stations.mark.unreadable")));
+  const picture = isPicture(s.icon) ? s.icon : null;
   return (
     <>
       <SheetGrab />
       <SheetHead title={t("web-mobile.stations.emojiTitle", { name: s.name })} />
       <div className={sheetsCss.mSheetScroll}>
-        <StationIconGrid emoji={s.emoji} size={24} className={css.mIconGrid} onPick={pick} />
-        {s.emoji && <PickRow label={t("web-mobile.stations.emojiClear")} onClick={() => pick("")} />}
+        <div className={css.mMarkHead}>
+          <Seg options={[t("web-pages.stations.mark.glyphs"), "Emoji"]} selected={kind === "glyph" ? 0 : 1} onSelect={(i) => setKind(i === 0 ? "glyph" : "emoji")} fill height={34} radius={17} />
+          {kind === "emoji" && (
+            <input className={css.mMarkField} value={typed} placeholder={t("web-pages.stations.emoji.paste")} aria-label={t("web-pages.stations.emoji.paste")}
+              onChange={(e) => { setTyped(e.target.value); const one = firstEmoji(e.target.value); if (one) pick(emojiMark(one)); }} />
+          )}
+        </div>
+        {kind === "glyph" ? <GlyphGrid icon={s.icon} size={24} className={css.mMarkGrid} onPick={pick} />
+          : <EmojiGrid emoji={stationGlyph(s.icon) || picture ? null : s.emoji} className={`${css.mMarkGrid} ${css.mMarkEmoji}`} onPick={pick} />}
+        <PickRow label={t(picture ? "web-pages.stations.mark.another" : "web-pages.stations.mark.upload")}
+          leading={picture ? <img src={picture} alt="" className={css.mMarkPicture} /> : <ImageUpload size={20} />} onClick={() => file.current?.click()} />
+        {(s.emoji || s.icon) && <PickRow label={t("web-mobile.stations.emojiClear")} leading={<Close size={20} />} onClick={() => pick(NO_MARK)} />}
+        <input ref={file} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
       </div>
     </>
   );
@@ -306,7 +327,8 @@ function StationMenu({ s }: { s: StationView }) {
       <div className={sheetsCss.mSheetScroll}>
         <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.stations.renameTitle"), value: s.name, placeholder: t("web-mobile.stations.renamePlaceholder"), action: t("common.save"), atOnce: "web-main.rename.failed",
           run: (name) => cloud.renameStation(me.sub, app.entry.id, s.id, name).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />
-        <PickRow label={t("web-mobile.stations.emoji")} onClick={() => app.sheet({ height: 0.62, content: () => <StationIconSheet s={s} /> })} />
+        <PickRow label={t("web-mobile.stations.emoji")} mark={(s.emoji || s.icon) ? <StationMark emoji={s.emoji} icon={s.icon} size={18} /> : undefined}
+          onClick={() => app.sheet({ height: 0.78, content: () => <StationMarkSheet s={s} /> })} />
         <PickRow label={t("web-mobile.stations.remove")} accent onClick={() => confirm(app, {
           title: t("web-mobile.stations.removeAsk", { name: s.name }), action: t("web-mobile.stations.removeAction"), danger: true,
           text: t("web-mobile.stations.removeText", { name: NAME }), atOnce: "web-mobile.workspace.removeFailed",

@@ -143,6 +143,7 @@ function message(code: string): string | null {
     forbidden: "core-misc.cloud.forbidden",
     invalid_name: "core-misc.cloud.invalid_name",
     invalid_emoji: "core-misc.cloud.invalid_emoji",
+    invalid_icon: "core-misc.cloud.invalid_icon",
     invalid_relay: "core-misc.cloud.invalid_relay",
     invalid_relays: "core-misc.cloud.invalid_relays",
     already_member: "core-misc.cloud.already_member",

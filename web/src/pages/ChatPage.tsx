@@ -626,7 +626,7 @@ function ChatStation() {
   if (!stations || stations.length < 2) return null;
   const name = station.name || host?.hostname || t("web-pages.chat.thisMachine");
   const view = stations.find((s) => s.station === station.address);
-  const tag = <span className={css.chatStation} tabIndex={view ? 0 : undefined}>{view?.emoji && <StationMark emoji={view.emoji} size={12} />}{name}</span>;
+  const tag = <span className={css.chatStation} tabIndex={view ? 0 : undefined}>{(view?.emoji || view?.icon) && <StationMark emoji={view.emoji} icon={view.icon} size={12} />}{name}</span>;
   // The station at a glance on hover (its card, StationCards.tsx); before its view comes, its host in a line.
   if (view) return <Hover content={<StationPeek s={view} settings={`${station.settings}/stations`} />}>{tag}</Hover>;
   return <Tip label={host ? `${host.hostname} · ${host.summary}` : name}>{tag}</Tip>;

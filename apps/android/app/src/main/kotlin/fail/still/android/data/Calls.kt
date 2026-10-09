@@ -481,7 +481,8 @@ class Cloud(private val core: StillFailCore, private val account: String) {
         }
     suspend fun renameStation(workspace: String, station: String, name: String) { ops.workspaceRenameStation(workspace = workspace, station = station) { this.name = name } }
     /** "" takes it away. */
-    suspend fun setStationEmoji(workspace: String, station: String, emoji: String) { ops.workspaceRenameStation(workspace = workspace, station = station) { this.emoji = emoji } }
+    /** Its icon and emoji together (web/src/stationPick.ts); "" takes either away. */
+    suspend fun setStationMark(workspace: String, station: String, emoji: String, icon: String) { ops.workspaceRenameStation(workspace = workspace, station = station) { this.emoji = emoji; this.icon = icon } }
     suspend fun removeStation(workspace: String, station: String) { ops.workspaceRemoveStation(workspace = workspace, station = station) }
     suspend fun revokeLoginSession(id: String) { ops.loginSessionRevoke(id = id) }
     /** What an invitation link leads to, for the account looking: the workspace, the role, who invited, whose email it is for. */
