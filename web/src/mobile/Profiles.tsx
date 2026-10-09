@@ -13,7 +13,7 @@ import type { Choice } from "../pages/Accounts.tsx";
 import { useProfileFlow } from "../profileFlow.ts";
 import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, useStation } from "../station.tsx";
-import { SheetGrab, SheetHead, useApp } from "./app.tsx";
+import { SheetGrab, SheetHead, useApp, type SheetSpec } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
 import { Button, FailedMark, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack, tNodes } from "./parts.tsx";
 import { useAct } from "../toast.tsx";
@@ -36,6 +36,13 @@ function useApi() {
   const station = useStation();
   const call = useStationCall(station.address);
   return useMemo(() => stationApi(call), [call]);
+}
+
+/** Opens a sheet under this page's station: the app shows sheets outside the page, where no station is in context. */
+function useStationSheet(): (spec: SheetSpec) => void {
+  const app = useApp();
+  const station = useStation();
+  return (spec) => app.sheet({ ...spec, content: () => <StationContext.Provider value={station}>{spec.content()}</StationContext.Provider> });
 }
 
 /**
@@ -161,6 +168,7 @@ export function ProfileAccountScreen() {
  * subscription is signed in (moved from here) and which stations may use it. A copy of another station's says whose. */
 function ShareRows({ p }: { p: Profile }) {
   const app = useApp();
+  const sheet = useStationSheet();
   const api = useApi();
   const act = useAct();
   const station = useStation();
@@ -194,7 +202,7 @@ function ShareRows({ p }: { p: Profile }) {
   const allowed = p.share?.allow ?? null;
   const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join("、");
   const targets = stations.filter((x) => x.id !== station.id);
-  const pick = () => app.sheet({ height: 0.6, content: () => <PickShareStations p={p} stations={stations} self={station.id} allowed={allowed} /> });
+  const pick = () => sheet({ height: 0.6, content: () => <PickShareStations p={p} stations={stations} self={station.id} allowed={allowed} /> });
   const move = () => app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab />
@@ -330,6 +338,7 @@ export function ProfileScreen() {
 
 function ProfilePage({ p }: { p: Profile }) {
   const app = useApp();
+  const sheet = useStationSheet();
   const api = useApi();
   const station = useStation();
   const overview = useOverview(station.address).value;
@@ -346,7 +355,7 @@ function ProfilePage({ p }: { p: Profile }) {
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back={station.name || "Station"} onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{accessLabel(p)}</span>}
-        trailing={copy ? undefined : <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
+        trailing={copy ? undefined : <NavButton icon={More} label={t("common.more")} onClick={() => sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
       <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
         <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
           <ProviderMark runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={26} />
@@ -406,7 +415,7 @@ function ProfilePage({ p }: { p: Profile }) {
             <SectionHeader title={t("web-mobile.profiles.env")} start={24} />
             <ListCard>
               {p.env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${css.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{e.value}</span></span></ListRow>)}
-              <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
+              <ListRow onClick={() => sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
             </ListCard>
           </>
         )}
@@ -419,6 +428,7 @@ function ProfilePage({ p }: { p: Profile }) {
 /** The core supplies the diagnosis and next step; the view opens the existing operation or editor. */
 function ProfileRecovery({ p }: { p: Profile }) {
   const app = useApp();
+  const sheet = useStationSheet();
   const station = useStation();
   const api = useApi();
   const act = useAct();
@@ -430,7 +440,7 @@ function ProfileRecovery({ p }: { p: Profile }) {
   const run = () => {
     if (issue.action === "key") ask(app, { title: t("web-mobile.profiles.newKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true, atOnce: "web-mobile.profiles.saveFailed",
       hint: t("web-mobile.profiles.recheckHint"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }) });
-    else if (issue.action === "env") app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> });
+    else if (issue.action === "env") sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> });
     else if (issue.action === "quota") act(api.refreshQuota(p.id), t("web-mobile.profiles.what.quota"), t("web-mobile.profiles.quotaUpdated"));
     else act(api.checkProfile(p.id), t("web-mobile.profiles.what.check"), t("web-mobile.profiles.checked"));
   };
