@@ -45,6 +45,6 @@ SOFTWARE.
 
 ## Installed dependencies
 
-JavaScript, Rust and Android dependencies are recorded in their package manifests and lockfiles and retain their respective licenses. Inter is supplied by `@fontsource-variable/inter` under the SIL Open Font License. Electron and application bundles include additional third-party components; preserve the notices distributed with them.
+JavaScript, Rust and Android dependencies are recorded in their package manifests and lockfiles and retain their respective licenses. Inter is supplied by `@fontsource-variable/inter` under the SIL Open Font License. The Android app carries JetBrains Mono (Copyright 2020 The JetBrains Mono Project Authors) under the SIL Open Font License 1.1; the license text ships with it in `apps/android/app/src/main/assets/licenses/JetBrainsMono-OFL.txt`. Electron and application bundles include additional third-party components; preserve the notices distributed with them.
 
 This inventory of vendored code is not a complete license inventory for compiled distributions. Review the exact dependency versions and bundled notices for each release target before redistribution.

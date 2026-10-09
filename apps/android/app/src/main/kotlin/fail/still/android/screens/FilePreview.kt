@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import fail.still.android.ui.CodeFont
 import fail.still.android.ui.keyboard
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -80,7 +81,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -945,9 +945,9 @@ private fun TextViewer(bytes: ByteArray, kind: PreviewKind, language: String?, n
                     val dark = C.dark
                     val colored = remember(t, lang, dark) { highlight(t, lang, dark) }
                     Box(Modifier.horizontalScroll(rememberScrollState()).padding(start = 32.dp, end = 32.dp, top = 80.dp + top, bottom = 64.dp + bottom)) {
-                        Text(colored, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, lineHeight = 20.sp, color = C.ink), softWrap = false)
+                        Text(colored, style = TextStyle(fontFamily = CodeFont, fontSize = 12.5.sp, lineHeight = 20.sp, color = C.ink), softWrap = false)
                     }
-                } else Text(t, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, lineHeight = 20.6.sp, color = C.ink),
+                } else Text(t, style = TextStyle(fontFamily = CodeFont, fontSize = 12.5.sp, lineHeight = 20.6.sp, color = C.ink),
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 60.dp + top, bottom = 48.dp + bottom))
             }
         }

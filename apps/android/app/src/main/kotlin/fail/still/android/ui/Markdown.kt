@@ -57,7 +57,6 @@ import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -475,14 +474,13 @@ fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Mo
             }
         }
         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp)) {
-            // The system's mono face is thin next to the web's (SF Mono, Menlo): drawn a little bolder to have its colour.
             CodeInk(code, language, dark)
         }
     }
 }
 
-/** Android's mono face has one weight; asking for more draws it emboldened (the system's fake bold). */
-val CodeWeight = FontWeight.SemiBold
+/** Code blocks' weight: the code face's regular, as the web's SF Mono / Menlo. */
+val CodeWeight = FontWeight.Normal
 
 /**
  * A table as the web draws it: in a card's frame (20 round, a faint ground), small type (13), the header row tinted
@@ -615,7 +613,7 @@ private fun TaskBox(checked: Boolean) {
 @Composable
 private fun inline(nodes: List<Node>, ctx: Ctx, task: Boolean?): AnnotatedString {
     // Inline code as the web has it: no box, the code face in its own colour, a little smaller.
-    val code = SpanStyle(fontFamily = FontFamily.Monospace, fontSize = TextUnit(0.9f, TextUnitType.Em), color = codeInline)
+    val code = SpanStyle(fontFamily = CodeFont, fontSize = TextUnit(0.9f, TextUnitType.Em), color = codeInline)
     val link = TextLinkStyles(SpanStyle(color = C.blue))
     val accent = C.accent
     val placing = ctx.placing

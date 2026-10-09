@@ -50,7 +50,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,6 +74,7 @@ import fail.still.android.data.rememberTopic
 import fail.still.android.data.errorText
 import fail.still.android.ui.C
 import fail.still.android.ui.Card
+import fail.still.android.ui.CodeFont
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.LargeTitle
@@ -499,7 +499,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     }) {
                         Column(Modifier.weight(1f)) {
                             Text(name, fontSize = 15.sp, color = C.ink)
-                            Text(p.access.key.ifEmpty { t("android-settings.profile.notSaved") }, fontSize = 13.sp, color = C.muted, fontFamily = FontFamily.Monospace)
+                            Text(p.access.key.ifEmpty { t("android-settings.profile.notSaved") }, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont)
                         }
                         // A key saved (the sheet that asked gone): a spinner until the station has it.
                         DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
@@ -514,7 +514,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                         }) {
                             Column(Modifier.weight(1f)) {
                                 Text(t("common.provider.endpoint"), fontSize = 15.sp, color = C.ink)
-                                Text(endpoint, fontSize = 13.sp, color = C.muted, fontFamily = FontFamily.Monospace)
+                                Text(endpoint, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont)
                             }
                             Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.accent)
                         }
@@ -527,8 +527,8 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     p.env.forEach { e ->
                         ListRow {
                             Column(Modifier.weight(1f)) {
-                                Text(e.key, fontSize = 15.sp, color = C.ink, fontFamily = FontFamily.Monospace)
-                                Text(e.value, fontSize = 13.sp, color = C.muted, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(e.key, fontSize = 15.sp, color = C.ink, fontFamily = CodeFont)
+                                Text(e.value, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
@@ -805,7 +805,7 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
         job.state == "verifying" -> waiting(t("android-settings.login.finishing"))
         job.state == "done" -> waiting(t("android-settings.login.adding"))
         job.state == "needs_approval" && job.url != null && job.userCode != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(job.userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = FontFamily.Monospace, color = C.ink,
+            Text(job.userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = CodeFont, color = C.ink,
                 modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(C.chip).padding(horizontal = 14.dp, vertical = 8.dp))
             Button(if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true) {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", job.userCode))
@@ -983,9 +983,9 @@ private fun ColumnScope.ConnectForm(d: ProfileFlowView, edit: (String, String) -
     if (d.showEndpoint) {
         Text(t("common.provider.endpoint"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
-            if (endpoint.isEmpty()) Text(d.tile?.endpointExample ?: "https://", color = C.subtle, fontSize = 15.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (endpoint.isEmpty()) Text(d.tile?.endpointExample ?: "https://", color = C.subtle, fontSize = 15.sp, fontFamily = CodeFont, maxLines = 1, overflow = TextOverflow.Ellipsis)
             androidx.compose.foundation.text.BasicTextField(endpoint, { endpoint = it.trim(); edit("endpoint", endpoint) }, singleLine = true, cursorBrush = androidx.compose.ui.graphics.SolidColor(C.accent),
-                textStyle = androidx.compose.ui.text.TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = FontFamily.Monospace), modifier = Modifier.fillMaxWidth())
+                textStyle = androidx.compose.ui.text.TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = CodeFont), modifier = Modifier.fillMaxWidth())
         }
         d.endpointHint?.let { Text(it, fontSize = 12.sp, color = C.muted) }
     }

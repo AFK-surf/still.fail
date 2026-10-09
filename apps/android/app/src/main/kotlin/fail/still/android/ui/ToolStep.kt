@@ -28,7 +28,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
@@ -120,7 +119,7 @@ private fun Boxed(max: Dp = 360.dp, ground: Color = codeGround, vertical: Dp = 8
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ground).heightIn(max = max).verticalScroll(rememberScrollState()).padding(horizontal = horizontal, vertical = vertical)) { content() }
 }
 
-private val mono = FontFamily.Monospace
+private val mono = CodeFont
 
 /** Highlighted code (a command, a file written, a file read), as markdown shows it but wrapping and capped in height. */
 @Composable

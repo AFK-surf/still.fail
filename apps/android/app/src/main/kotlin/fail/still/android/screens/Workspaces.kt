@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import fail.still.android.ui.CodeFont
 import fail.still.android.ui.keyboard
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -44,7 +45,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -203,10 +203,10 @@ internal fun Field(value: String, onChange: (String) -> Unit, placeholder: Strin
     Box(
         modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = if (mono) FontFamily.Monospace else null)
+        if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null)
         BasicTextField(
             value, { onChange(if (lines > 1) it else it.take(if (mono) 32 else 80)) }, singleLine = lines == 1, minLines = lines, cursorBrush = SolidColor(C.accent),
-            textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = if (mono) FontFamily.Monospace else null), modifier = Modifier.fillMaxWidth(),
+            textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null), modifier = Modifier.fillMaxWidth(),
         )
     }
 }

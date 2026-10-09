@@ -33,7 +33,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -46,6 +45,7 @@ import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.rememberTopic
 import fail.still.android.ui.C
+import fail.still.android.ui.CodeFont
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.NavBar
@@ -130,7 +130,7 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                     view!!.serial?.takeIf { view.adb == "connected" }?.let { serial ->
                         ListRow {
                             Text(t("android-misc.adb.agentsUse"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                            SelectionContainer { Text("adb -s $serial", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = C.muted) }
+                            SelectionContainer { Text("adb -s $serial", fontSize = 13.sp, fontFamily = CodeFont, color = C.muted) }
                         }
                     }
                     // What the station said, when it says more than the line above.

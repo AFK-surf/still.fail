@@ -65,7 +65,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntSize
@@ -74,6 +73,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import fail.still.android.LocalApp
 import fail.still.android.ui.C
+import fail.still.android.ui.CodeFont
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.ZoomState
@@ -298,8 +298,8 @@ internal fun VideoViewer(
                         withStyle(SpanStyle(color = Color.White.copy(alpha = 0.6f))) { append(before) }
                         withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Color(0xFFF4F4F5))) { append("${at + 1}") }
                         withStyle(SpanStyle(color = Color.White.copy(alpha = 0.6f))) { append(after) }
-                    }, fontFamily = FontFamily.Monospace, fontSize = 12.sp, maxLines = 1)
-                    else if (!read) Text(t("android-chat.video.reading"), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
+                    }, fontFamily = CodeFont, fontSize = 12.sp, maxLines = 1)
+                    else if (!read) Text(t("android-chat.video.reading"), fontFamily = CodeFont, fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     Box(
@@ -311,7 +311,7 @@ internal fun VideoViewer(
                         contentAlignment = Alignment.Center,
                     ) {
                         val r = if (rate == 1f) "1" else rate.toString().trimEnd('0')
-                        Text("$r×", fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFF4F4F5))
+                        Text("$r×", fontFamily = CodeFont, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFF4F4F5))
                     }
                     PictureButton(Icons.Camera, t("android-chat.video.saveFrame"), enabled = !playing && ready) {
                         scope.launch {
@@ -393,7 +393,7 @@ fun AudioViewer(file: File, name: String) {
                 if (player.isPlaying) { player.pause(); playing = false } else { player.start(); playing = true }
             }, contentAlignment = Alignment.Center) { IconIn(if (playing) Icons.Pause else Icons.Play, 16.dp, C.bg) }
             Box(Modifier.weight(1f)) { Timeline(0, duration * 1000, time * 1000, dark = false) { if (ready) { player.seekTo((it / 1000).toInt()); time = it / 1000 } } }
-            Text(if (failed) t("android-chat.video.playFailed") else "${short(time)} / ${short(duration)}", fontSize = 12.sp, color = C.muted, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(end = 10.dp))
+            Text(if (failed) t("android-chat.video.playFailed") else "${short(time)} / ${short(duration)}", fontSize = 12.sp, color = C.muted, fontFamily = CodeFont, modifier = Modifier.padding(end = 10.dp))
         }
     }
 }
