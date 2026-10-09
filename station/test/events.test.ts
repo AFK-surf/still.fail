@@ -219,3 +219,29 @@ test("a job's log is told now and as it grows", async () => {
   ]);
   await s.close();
 });
+
+test("what the agents spent is told at most once a minute: the first change at once, the last at the end of it", async () => {
+  const time = testClock();
+  const { events, change } = setup(time.clock);
+  const s = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  const told = () => s.got.filter((e) => e.event === "usage").length;
+  change({ type: "usage" });
+  await settle();
+  assert.equal(told(), 1);
+  // A model call every 15 s: told again once, a minute after the first.
+  for (let i = 0; i < 3; i++) {
+    await time.adjust(15_000);
+    change({ type: "usage" });
+    await settle();
+  }
+  assert.equal(told(), 1);
+  await time.adjust(15_000);
+  await settle();
+  assert.equal(told(), 2);
+  // Quiet a while: the next change is told at once.
+  await time.adjust(120_000);
+  change({ type: "usage" });
+  await settle();
+  assert.equal(told(), 3);
+  await s.close();
+});

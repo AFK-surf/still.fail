@@ -32,6 +32,10 @@ import { Fibers } from "../ops/fibers.ts";
 
 const PING_MS = 25_000;
 const HOST_MS = 10_000;
+/// What the agents spent is told at most this often (the first change at once, the last at the end of the while): it
+/// changes with every model call, some 15 s apart while agents work, and each telling has a page showing usage, and every
+/// client from before it is read only so, read all of it again (some 200 KB).
+const USAGE_EVERY_MS = 60_000;
 /// What was told is kept this long, at most this many and this much, for a stream that takes over or comes back (`since`):
 /// an hour, as a phone comes back to a chat after a while in a pocket (ten minutes, half of its streams could not be
 /// told what they missed, and read the station again).
@@ -107,6 +111,9 @@ export class Events {
   private time: Fibers;
   private timers: (() => void)[] = [];
   private lastHost = "";
+  /// When usage was last told, and the telling waiting for the end of the while (USAGE_EVERY_MS).
+  private usageTold = -Infinity;
+  private usageLater: (() => void) | null = null;
 
   constructor(deps: EventsDeps) {
     this.deps = deps;
@@ -402,13 +409,26 @@ export class Events {
         break;
       case "usage":
         // Model calls were recorded: a page showing usage reads it again (it is too big to send to everyone).
-        this.emit("usage", {});
+        this.usageChanged();
         break;
       case "processes":
       case "decisionChecks":
         this.overviewChanged();
         break;
     }
+  }
+
+  /// Usage told, at most once a USAGE_EVERY_MS.
+  private usageChanged() {
+    if (this.usageLater !== null) return;
+    const tell = () => {
+      this.usageLater = null;
+      this.usageTold = this.time.now();
+      this.emit("usage", {});
+    };
+    const wait = this.usageTold + USAGE_EVERY_MS - this.time.now();
+    if (wait <= 0) tell();
+    else this.usageLater = this.time.after(wait, tell);
   }
 
   /// Changes gathered into one round: after what happens now, once.
