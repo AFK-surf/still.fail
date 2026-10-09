@@ -238,9 +238,11 @@ that only notifications change it:
   (a thread left with none goes), and makes its `session` topic a 404 error;
   `thread` appends the new entries to that `thread` topic (those it has are
   skipped; entries past a gap wait while the gap is read, once, with
-  `?from=&to=`) and, since it does not carry unread counts, reads
-  `/threads/:id` for the `threads` and `session` topics that list it (bursts
-  coalesced over 400 ms; a 404 removes it); `thread-removed` takes the thread
+  `?from=&to=`; history older than what is held is the background's, in
+  batches) and, since it does not carry unread counts, reads `/threads/:id`
+  for the `threads` and `session` topics that list it (bursts coalesced over
+  400 ms; a 404 removes it) — unless the station tells it as the viewer has it,
+  `thread-view`, which goes in place and is not read; `thread-removed` takes the thread
   out of them, makes its `thread` topic a 404 error and forgets what is kept of
   it; `read` sets the thread's `read` there, and `unread` to 0 when it covers
   the last entry (else the thread is read again), and turns off `unread` of

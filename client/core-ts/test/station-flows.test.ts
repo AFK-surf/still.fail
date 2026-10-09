@@ -664,6 +664,26 @@ test("thread_events_append_entries_and_refresh_summaries", async () => {
   core.close();
 });
 
+test("a_thread_its_station_tells_the_summary_of_is_not_read_again", async () => {
+  const { host, core, push, read } = await ui({ ...base(), "GET /threads": [threadView(7, 3)], "GET /threads/7/entries?limit=50": { last: 3, entries: entries(1, 3) } });
+  await read();
+  const summaries = () => gets(host, "/admin/api/threads/7");
+  // Told after what was said, before or after it: put in place, not read.
+  push("thread", { id: 7, entries: [entry(4, "m4")] });
+  push("thread-view", { ...threadView(7, 4, 3, 1) });
+  push("thread-view", { ...threadView(7, 5, 3, 2) });
+  push("thread", { id: 7, entries: [entry(5, "m5")] });
+  await host.time.pass(EVENTS_COALESCE_MS + 100, 50);
+  assert.equal(summaries(), 0);
+  const t = threadsOf(core).find((x: J) => x.id === 7);
+  assert.deepEqual([t.last, t.unread], [5, 2]);
+  // A station from before tells none: read as before.
+  push("thread", { id: 7, entries: [entry(6, "m6")] });
+  await host.time.pass(EVENTS_COALESCE_MS + 100, 50);
+  assert.equal(summaries(), 1);
+  core.close();
+});
+
 test("a_gap_is_read_once_and_what_came_meanwhile_waits_for_it", async () => {
   const { host, core, push, values, read } = await ui({
     ...base(),

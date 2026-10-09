@@ -128,6 +128,8 @@ export class Link {
   /// Threads whose summaries are read again once a burst of events is over.
   readonly dirty = new Set<number>();
   flushing = false;
+  /// How far each thread went as its station last told its summary (a `thread-view`): told so, it is not read again.
+  readonly viewed = new Map<number, number>();
   /// Whether it follows jobs' logs on its stream (as it said); null until one is read.
   followsLogs: boolean | null = null;
   /// What a read of a topic failed with while nothing is held of it.
@@ -824,6 +826,15 @@ export class StationsSync {
     return `/threads/${id}/entries?from=${Math.max(below + 1, missing - PAGE + 1)}&to=${missing}`;
   }
 
+  /// Whether a thread misses entries between the lowest it holds and its latest (a gap what was told left), as against
+  /// history older than what is held (brought with the station's, #history).
+  #gapAbove(address: string, id: number): boolean {
+    const held = this.#core.data.logNumbers("entry", address, String(id));
+    if (held.length === 0) return false;
+    const missing = this.#missing(address, id, held);
+    return missing !== null && missing > held[0]!;
+  }
+
   /// Whether a thread's latest entries are not on the device: none held, or its summary goes further.
   latestMissing(address: string, id: number): boolean {
     const held = this.#core.data.logSpan("entry", address, String(id));
@@ -944,11 +955,25 @@ export class StationsSync {
         if (newest >= 0) core.data.raiseLast(address, id, newest);
         this.onTold(address, id, entries);
         // A chat let go for room (and not opened since) is not kept current: what it said is read when it is opened.
+        // A gap what was told left is read at once; history older than what is held comes with the station's (#history).
         if (!core.data.evicted("entry", address, String(id))) {
           this.putEntries(address, id, entries);
-          this.syncEntries(address, id, Priority.shown);
+          if (this.#gapAbove(address, id)) this.syncEntries(address, id, Priority.shown, true);
         }
-        this.#markDirty(address, id);
+        // Its summary for the viewer: told by the station (`thread-view`) when it tells it, else read.
+        const viewed = this.#links.get(address)?.viewed.get(id);
+        if (viewed === undefined || viewed < newest) this.#markDirty(address, id);
+        return;
+      }
+      case "thread-view": {
+        // A thread as GET /threads/:id has it for this viewer, told after something was said in it: in place, and not
+        // read again.
+        const id = u64(get(data, "id"));
+        const link = this.#links.get(address);
+        if (id === null || !link) return;
+        link.viewed.set(id, u64(get(data, "last")) ?? 0);
+        link.dirty.delete(id);
+        this.putThread(address, data);
         return;
       }
       case "thread-removed": {
