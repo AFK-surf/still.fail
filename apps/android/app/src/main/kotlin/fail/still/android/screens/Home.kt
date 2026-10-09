@@ -574,16 +574,20 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                     item.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = if (item.unread) FontWeight.SemiBold else FontWeight.Normal,
                     color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alpha(dim),
                 )
-                // The station it runs on, by its icon (the core gives one only with several stations).
-                if (hasStationMark(item.stationEmoji, item.stationIcon)) StationMark(item.stationEmoji, item.stationIcon, 12.dp, C.muted, Modifier.semantics { contentDescription = item.stationName })
-                // Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too.
-                Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
-                    val reconnecting = item.reconnecting
+                // Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. Its
+                // slot only when there is one.
+                val reconnecting = item.reconnecting
+                if (busy || failed != null || offline != null || reconnecting != null || item.connect != null) Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
                     if (busy || failed != null) DoingMark(busy, failed, 11.dp)
                     // Its station offline, or its link coming back: unplugged (a spinner is only something its person did).
                     else if (offline != null) Box(Modifier.semantics { contentDescription = offline }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
                     else if (reconnecting != null) Box(Modifier.semantics { contentDescription = reconnecting }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
                     else if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp) }
+                }
+                // The station it runs on, by its icon (the core gives one only with several stations), last and in a slot as
+                // wide as the agents' icons below, so the two stand in one column at the row's end.
+                if (hasStationMark(item.stationEmoji, item.stationIcon)) Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
+                    StationMark(item.stationEmoji, item.stationIcon, 12.dp, C.muted, Modifier.semantics { contentDescription = item.stationName })
                 }
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
