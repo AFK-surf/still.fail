@@ -160,7 +160,7 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
                 items(view.days.flatMap { it.items }.take(6), key = { "${it.station}/${it.id}" }) { item ->
                     val here = top is Screen.Chat && top.station == item.station && top.of == item.page
                     ChatRowBody(
-                        item, view.leading ?: "agents", false,
+                        item, view.leading ?: "agents", false, stationTag = view.stations.size > 1,
                         modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(if (here) C.accentBg else Color.Transparent)
                             .clickable { open = false; if (!here) app.open(Screen.Chat(item.station, item.page)) },
                     )
