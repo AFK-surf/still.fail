@@ -122,6 +122,7 @@ import fail.still.android.ui.Span
 import fail.still.android.ui.floating
 import fail.still.android.ui.floatingStill
 import fail.still.android.ui.pickable
+import fail.still.android.ui.inert
 import fail.still.android.ui.withRefs
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -317,7 +318,8 @@ private fun Annotating(station: String, of: ChatOf, m: ChatMessage, author: Stri
                     val room = width - with(density) { (32 + 14).dp.toPx() }
                     Box(Modifier.flown(key, p).scaledFrom(chatWidth.roundToInt(), (room / chatWidth).coerceAtMost(1f))) { CompositionLocalProvider(LocalPickedWords provides words) {
                         if (m.authorKind == "person") {
-                            val text = withRefs(m.text)
+                            // Its links drawn, but picked from as words (ui/Links.kt).
+                            val text = withRefs(m.text).let { remember(it) { it.inert() } }
                             val (pick, picking) = pickable(text.text)
                             Text(text, pick, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink, onTextLayout = picking)
                         } else Markdown(m.text)

@@ -3,8 +3,9 @@
 // emphasis, inline code, links and strikethrough; headings; lists (bulleted, numbered, tasks, nested) with hanging
 // indents; quotes beside a bar; code blocks with their language and a copy button on a row of their own (a finger
 // has no hover), scrolling sideways; tables that wrap between words and scroll sideways when they still do not fit;
-// rules. A link to another chat is a reference to it (chatRefs.ts), `@its title` in the accent; a ```mermaid block is
-// drawn as its chart (Viz.kt). With `placing`, the message's files its text names are drawn where it names them.
+// rules. A link to another chat is a reference to it (chatRefs.ts), `@its title` in the accent; a web address written
+// bare, or alone in inline code, is a link too (Links.kt), and a link held is its menu (open, copy); a ```mermaid block
+// is drawn as its chart (Viz.kt). With `placing`, the message's files its text names are drawn where it names them.
 //
 // Spacing is the web's: each block keeps the margins the browser gives it, and two blocks next to each other are as
 // far apart as the larger of the two margins between them (CSS margins collapse, through a list item or a quote too).
@@ -207,19 +208,21 @@ fun AnnotatedString.Builder.appendRef(title: AnnotatedString, href: String, acce
     }
 }
 
-/** Plain text (what a person wrote) with its references to chats drawn as the chips a message draws. */
+/** Plain text (what a person wrote) with its references to chats drawn as the chips a message draws, and its web addresses as links. */
 @Composable
 fun withRefs(text: String): AnnotatedString {
     val accent = C.accent
-    return remember(text, accent) {
+    val blue = C.blue
+    return remember(text, accent, blue) {
+        val link = TextLinkStyles(SpanStyle(color = blue))
         buildAnnotatedString {
             var at = 0
             for (m in REF_LINK.findAll(text)) {
-                append(text, at, m.range.first)
+                appendLinked(text.substring(at, m.range.first), link)
                 appendRef(AnnotatedString(m.groupValues[1]), m.groupValues[2], accent)
                 at = m.range.last + 1
             }
-            append(text, at, text.length)
+            appendLinked(text.substring(at), link)
         }
     }
 }
@@ -614,26 +617,30 @@ private fun TaskBox(checked: Boolean) {
 private fun inline(nodes: List<Node>, ctx: Ctx, task: Boolean?): AnnotatedString {
     // Inline code as the web has it: no box, the code face in its own colour, a little smaller.
     val code = SpanStyle(fontFamily = CodeFont, fontSize = TextUnit(0.9f, TextUnitType.Em), color = codeInline)
+    // A web address alone in code: the code's face, the link's colour (the web's `a > code`).
+    val codeLink = SpanStyle(fontFamily = CodeFont, fontSize = TextUnit(0.9f, TextUnitType.Em))
     val link = TextLinkStyles(SpanStyle(color = C.blue))
     val accent = C.accent
     val placing = ctx.placing
     return buildAnnotatedString {
         if (task != null) appendInlineContent(TASK, if (task) "[x]" else "[ ]")
-        fun walk(n: Node) {
+        // `inLink`: within a link's words, where an address is only words.
+        fun walk(n: Node, inLink: Boolean) {
             when (n) {
-                is TextNode -> append(n.literal)
-                is Code -> withStyle(code) { append(n.literal) }
-                is Emphasis -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { n.children().forEach(::walk) }
-                is StrongEmphasis -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { n.children().forEach(::walk) }
-                is Strikethrough -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { n.children().forEach(::walk) }
+                is TextNode -> if (inLink) append(n.literal) else appendLinked(n.literal, link)
+                is Code -> if (!inLink && isWebAddress(n.literal)) withLink(LinkAnnotation.Url(n.literal.trim(), link)) { withStyle(codeLink) { append(n.literal) } }
+                    else withStyle(code) { append(n.literal) }
+                is Emphasis -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { n.children().forEach { walk(it, inLink) } }
+                is StrongEmphasis -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { n.children().forEach { walk(it, inLink) } }
+                is Strikethrough -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { n.children().forEach { walk(it, inLink) } }
                 is Link -> {
                     val file = placing?.files?.get(fileNameOf(n.destination))
                     when {
                         // A link within a sentence to one of the message's files: looks like any link, opens the file.
-                        file != null -> withLink(LinkAnnotation.Clickable("file:${file.path}", link) { placing.open(file) }) { n.children().forEach(::walk) }
+                        file != null -> withLink(LinkAnnotation.Clickable("file:${file.path}", link) { placing.open(file) }) { n.children().forEach { walk(it, true) } }
                         isChatLink(n.destination) -> appendRef(buildAnnotatedString { n.children().forEach { c -> append(inlineText(c)) } }, n.destination, accent)
                         // Opened through LocalUriHandler: still.fail's own links in the app (App.kt → AppState.openLink), the rest by the system.
-                        else -> withLink(LinkAnnotation.Url(n.destination, link)) { n.children().forEach(::walk) }
+                        else -> withLink(LinkAnnotation.Url(n.destination, link)) { n.children().forEach { walk(it, true) } }
                     }
                 }
                 // An image the app cannot fetch (only the message's own files are fetched, through the station): its words, leading to it.
@@ -648,10 +655,10 @@ private fun inline(nodes: List<Node>, ctx: Ctx, task: Boolean?): AnnotatedString
                 is HardLineBreak -> append('\n')
                 is HtmlInline -> append(n.literal)
                 is TaskListItemMarker -> Unit
-                else -> n.children().forEach(::walk)
+                else -> n.children().forEach { walk(it, inLink) }
             }
         }
-        nodes.forEach(::walk)
+        nodes.forEach { walk(it, false) }
     }
 }
 
@@ -667,11 +674,13 @@ private fun inlineText(n: Node): String = when (n) {
 
 @Composable
 private fun MdText(raw: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, inline: Map<String, InlineTextContent> = emptyMap()) {
-    // A search's words in bold where it led (TextMark.kt).
-    val text = markWeight(raw)
+    // A search's words in bold where it led (TextMark.kt); on the annotate page, its links drawn but not to tap (Links.kt).
+    val text = markWeight(if (LocalPickedWords.current != null) remember(raw) { raw.inert() } else raw)
     // A passage a quote led to, marked in these words (TextMark.kt).
     val (mark, laid) = passageMark(text.text)
     // On the annotate page, a passage picked from them or noted (Pick.kt).
     val (pick, picking) = pickable(text.text)
-    Text(text, mark.then(pick), color = LocalMdInk.current ?: C.ink, fontSize = fontSize, lineHeight = lineHeight, fontWeight = fontWeight, inlineContent = inline, onTextLayout = { laid(it); picking(it) })
+    // A link held: its menu (Links.kt).
+    val (hold, held) = linkHold(text)
+    Text(text, mark.then(pick).then(hold), color = LocalMdInk.current ?: C.ink, fontSize = fontSize, lineHeight = lineHeight, fontWeight = fontWeight, inlineContent = inline, onTextLayout = { laid(it); picking(it); held(it) })
 }

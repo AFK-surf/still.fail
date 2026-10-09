@@ -1128,7 +1128,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             QuoteCards(m.quotes, jump, Alignment.Start)
             Box(hold.drawBehind { drawRoundRect(press, cornerRadius = CornerRadius(12.dp.toPx())) }) {
                 // A person's words as yours are drawn: a reference to another chat as its chip (web Chat.tsx → PersonWords).
-                if (m.authorKind == "person") { if (m.text.isNotEmpty()) { val words = fail.still.android.ui.markWeight(fail.still.android.ui.withRefs(m.text)); val (mark, laid) = passageMark(words.text); Text(words, mark, fontSize = 15.sp, lineHeight = 23.sp, color = ink.text, onTextLayout = laid) } }
+                if (m.authorKind == "person") { if (m.text.isNotEmpty()) { val words = fail.still.android.ui.markWeight(fail.still.android.ui.withRefs(m.text)); val (mark, laid) = passageMark(words.text); val (links, linked) = fail.still.android.ui.linkHold(words); Text(words, mark.then(links), fontSize = 15.sp, lineHeight = 23.sp, color = ink.text, onTextLayout = { laid(it); linked(it) }) } }
                 else AgentWords(ctx, m.text, m.attachments, draft)
             }
             // An agent's files are placed in its words (Prose.kt), the rest below them there.
@@ -1256,9 +1256,11 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         val words = fail.still.android.ui.markWeight(fail.still.android.ui.withRefs(text))
         val (mark, laid) = passageMark(words.text)
+        // A link in them held: its menu (ui/Links.kt).
+        val (links, linked) = fail.still.android.ui.linkHold(words)
         Text(
             // A lone full-width mark (？ ！ 。) sits at the left of its wide cell: proportional alternates ("palt") cut that cell to the glyph, so the bubble's padding centres it.
-            words, style = SendTextStyle.copy(color = ink.text, fontFeatureSettings = if (text.trim().let { it.codePointCount(0, it.length) == 1 && !it[0].isLetterOrDigit() }) "palt" else null), onTextLayout = { laid(it); flight?.words = it },
+            words, style = SendTextStyle.copy(color = ink.text, fontFeatureSettings = if (text.trim().let { it.codePointCount(0, it.length) == 1 && !it[0].isLetterOrDigit() }) "palt" else null), onTextLayout = { laid(it); linked(it); flight?.words = it },
             modifier = Modifier.widthIn(max = if (fieldWidth > 0) with(density) { fieldWidth.toDp() } + 28.dp else maxWidth * 0.78f).then(hold)
                 .let { m ->
                     if (flight == null || host == null) m else m.onGloballyPositioned {
@@ -1269,7 +1271,7 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
                     // Flown in piece by piece, its ground is the host's (round the words on their way); else it comes in with them.
                     val alpha = when { flight == null -> 1f; !flight.carried && host?.flight === flight && flight.pieces() != null -> 0f; else -> flight.e() }
                     drawRect(ink.neutral, alpha = alpha)
-                }.background(press).padding(horizontal = 14.dp, vertical = 8.dp).then(mark)
+                }.background(press).padding(horizontal = 14.dp, vertical = 8.dp).then(mark).then(links)
                 // On their way, its words are drawn piece by piece over the composer (ChatHost.kt FlightLayer), not here.
                 .drawWithContent { if (flight == null || host?.flight !== flight || flight.pieces() == null) drawContent() },
         )

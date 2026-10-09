@@ -20,6 +20,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onRoot
@@ -54,9 +56,10 @@ class Harness(val rule: MotionRule) {
 
     /**
      * Shows the app signed in to Fixtures' workspace, with the pages of `stack` over its list (the last on top), in the
-     * light or dark theme; lets it come to rest.
+     * light or dark theme; lets it come to rest. `uris`: what opens the links the app hands the system (by default the
+     * system's own).
      */
-    fun launch(stack: List<Screen>, dark: Boolean = false) {
+    fun launch(stack: List<Screen>, dark: Boolean = false, uris: UriHandler? = null) {
         fake.put(Topics.accounts, listOf(Fixtures.account))
         fake.put(Topics.workspaces, Fixtures.workspaces)
         fake.put(Topics.stations(Fixtures.WS), listOf(Fixtures.station))
@@ -66,7 +69,13 @@ class Harness(val rule: MotionRule) {
         rule.runOnUiThread { context.enableEdgeToEdge() }
         app = AppState(fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", fake.core))
         stack.forEach { if (it != Screen.Home) app.push(it) }
-        rule.setContent { StillFailTheme(dark) { CompositionLocalProvider(LocalApp provides app, LocalUi provides app) { StillFailApp(app) } } }
+        rule.setContent {
+            StillFailTheme(dark) {
+                CompositionLocalProvider(LocalApp provides app, LocalUi provides app) {
+                    if (uris == null) StillFailApp(app) else CompositionLocalProvider(LocalUriHandler provides uris) { StillFailApp(app) }
+                }
+            }
+        }
         settle()
     }
 

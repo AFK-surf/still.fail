@@ -13,6 +13,9 @@ interface UiHost {
 
     /** Says something at the bottom of the screen for a moment. */
     fun note(text: String)
+
+    /** The long-press menu open over everything (Sheet.kt MenuHost), or none. */
+    var menu: MenuSpec?
 }
 
 val LocalUi = staticCompositionLocalOf<UiHost> { error("no app") }

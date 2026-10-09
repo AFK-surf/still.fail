@@ -190,7 +190,7 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     /** Whether the last move went deeper, for the direction of the transition. */
     var forward by mutableStateOf(true); private set
     var sheet by mutableStateOf<SheetSpec?>(null)
-    var menu by mutableStateOf<MenuSpec?>(null)
+    override var menu by mutableStateOf<MenuSpec?>(null)
     var toast by mutableStateOf<String?>(null)
     /** One entry of an execution history in full, over everything (the sheet stays under it). */
     var reader by mutableStateOf<ReaderSpec?>(null)
