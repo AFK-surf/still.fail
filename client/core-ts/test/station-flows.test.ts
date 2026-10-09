@@ -13,7 +13,7 @@ import { SseParser } from "../src/station/sse.ts";
 import { run } from "./run.ts";
 import { base, entries, entry, overview, session, started, status, stationReplies, threadView } from "./station-fixture.ts";
 import { merge } from "../src/entries.ts";
-import { apply, call, readOf, subscribe, v } from "./helpers.ts";
+import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
 import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, READ_RETRY_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
 import { digest } from "../src/digest.ts";
@@ -22,7 +22,7 @@ import { SOCKET_OPEN_MS } from "../src/station/requests.ts";
 import { HostWire, encodeFrame, takeFrames } from "../src/station/wire.ts";
 import type { FakeHost } from "../src/testing.ts";
 
-const gets = (host: FakeHost, path: string) => host.requests.filter((r) => readOf(r)?.endsWith(path)).length;
+const gets = (host: FakeHost, path: string) => host.requests.flatMap(readsOf).filter((url) => url.endsWith(path)).length;
 const text = (b: Uint8Array | null | undefined) => (b === undefined || b === null ? undefined : new TextDecoder().decode(b));
 
 // deno-lint-ignore no-explicit-any
@@ -204,6 +204,61 @@ const heldIn = (host: FakeHost, from: number, list: string): J[] =>
     .slice(from)
     .filter((r) => r.method === "POST" && r.url.endsWith(`/admin/api/changed/${list}`))
     .map((r) => JSON.parse(new TextDecoder().decode(r.body!)).held);
+
+/// A station of `n` chats (threads 1 to n, each of `last` entries) beside its one session.
+const manyChats = (n: number, last: number): J => {
+  const answers: J = { ...base(), "GET /threads": Array.from({ length: n }, (_, i) => threadView(i + 1, last)) };
+  for (let id = 1; id <= n; id++) answers[`GET /threads/${id}/entries?limit=50`] = { last, entries: entries(1, last).map((e) => ({ ...e, thread: id })) };
+  return answers;
+};
+const batchesIn = (host: FakeHost, from = 0) => host.requests.slice(from).filter((r) => r.method === "POST" && r.url.endsWith("/admin/api/batch"));
+
+test("a_stations_history_comes_in_batches", async () => {
+  const { host, core } = await started(manyChats(60, 3));
+  // 60 chats' entries, the session's detail and its transcript's latest page: in two batches of what was 62 requests,
+  // nothing read alone.
+  const batches = batchesIn(host).map((r) => JSON.parse(new TextDecoder().decode(r.body!)).gets as string[]);
+  assert.deepEqual(batches.map((b) => b.length), [40, 22]);
+  assert.deepEqual(batches[0]!.slice(0, 3), ["/sessions/k1", "/threads/60/entries?limit=50", "/threads/59/entries?limit=50"], "the latest chats first");
+  assert.equal(batches[1]!.at(-1), "/sessions/k1/timeline?before=1000000000000000&limit=200&brief=1");
+  assert.equal(host.requests.filter((r) => r.method === "GET" && r.url.includes("/entries")).length, 0);
+  for (const id of [1, 30, 60]) assert.deepEqual(core.inner.data.logNumbers("entry", ST, String(id)), [1, 2, 3]);
+  core.close();
+});
+
+test("a_chat_opened_is_read_at_once_not_behind_the_batches", async () => {
+  const s = await ui(manyChats(60, 3), (st) => st.host.hold("/admin/api/batch"));
+  // The history's batch hangs on a slow link; a chat opened: its latest page alone, at once.
+  assert.equal(batchesIn(s.host).length, 1);
+  subscribe(s.core, s.ui, 1, { topic: "thread", station: ST, thread: 1 });
+  await s.read();
+  assert.deepEqual(nums(s.values), [1, 2, 3]);
+  assert.equal(gets(s.host, "/admin/api/threads/1/entries?limit=50"), 1);
+  s.core.close();
+});
+
+test("a_station_from_before_batches_is_read_a_request_a_read", async () => {
+  const { host, core } = await started(manyChats(3, 3), 0, undefined, (st) => (st.batches.on = false));
+  // Asked once, refused (it has no such route): each read its own request, as before.
+  const alone = (path: string) => host.requests.filter((r) => r.method === "GET" && r.url.endsWith(path)).length;
+  assert.equal(batchesIn(host).length, 1);
+  assert.deepEqual([1, 2, 3].map((id) => alone(`/admin/api/threads/${id}/entries?limit=50`)), [1, 1, 1]);
+  assert.equal(alone("/admin/api/sessions/k1"), 1);
+  for (const id of [1, 2, 3]) assert.deepEqual(core.inner.data.logNumbers("entry", ST, String(id)), [1, 2, 3]);
+  core.close();
+});
+
+test("a_read_of_the_history_that_brings_nothing_is_not_asked_again_until_the_next_sweep", async () => {
+  // A chat said to go to 5, whose station gives nothing.
+  const answers: J = { ...base(), "GET /threads": [threadView(7, 5)], "GET /threads/7/entries?limit=50": { last: 5, entries: [] } };
+  const { host, core } = await started(answers);
+  await host.time.pass(5_000, 500);
+  assert.equal(gets(host, "/admin/api/threads/7/entries?limit=50"), 1);
+  core.inner.stations.snapshot(ST);
+  await host.settle();
+  assert.equal(gets(host, "/admin/api/threads/7/entries?limit=50"), 2, "asked again in the next");
+  core.close();
+});
 
 test("lists_held_are_read_again_as_what_changed_of_them", async () => {
   const answers: J = { ...base(), "GET /sessions": [session("k1"), session("k2")], "GET /sessions/k2": { session: session("k2"), threads: [], turns: [], jobs: [] } };
@@ -625,7 +680,7 @@ test("a_gap_is_read_once_and_what_came_meanwhile_waits_for_it", async () => {
   await read();
   assert.deepEqual(nums(values), [1, 2, 3, 4, 5, 6, 7]);
   assert.equal(gets(host, "/admin/api/threads/7/entries?from=4&to=5"), 1);
-  assert.equal(host.requests.filter((r) => r.url.includes("/entries")).length, 2, JSON.stringify(host.requests.map((r) => r.url)));
+  assert.equal(entryReads(host).length, 2, JSON.stringify(entryReads(host)));
   core.close();
 });
 
@@ -671,7 +726,7 @@ async function reopen(s: { host: FakeHost; core: J }) {
   };
   return { core, ui: id, values, read };
 }
-const entryReads = (host: FakeHost, from = 0) => host.requests.slice(from).filter((r) => r.url.includes("/entries")).map((r) => r.url.replace("https://stillfail.test/admin/api", ""));
+const entryReads = (host: FakeHost, from = 0) => host.requests.slice(from).flatMap(readsOf).filter((url) => url.includes("/entries")).map((url) => url.replace("https://stillfail.test/admin/api", ""));
 const topicOf = (core: J, topic: J) => core.inner.stationTopics.compute(topic);
 
 test("session_events_update_in_place", async () => {

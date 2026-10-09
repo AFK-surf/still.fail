@@ -60,13 +60,18 @@ export function stationAnswers(host: FakeHost, station: (req: HttpRequest) => Re
 }
 
 export function count(host: FakeHost, path: string): number {
-  return host.requests.filter((r) => readOf(r)?.endsWith(path)).length;
+  return host.requests.flatMap(readsOf).filter((url) => url.endsWith(path)).length;
 }
 
-/// What a request reads, as its URL: a GET's, or the list a POST /changed/<list> asks what changed of.
-export function readOf(r: { method: string; url: string }): string | null {
-  if (r.method === "GET") return r.url;
-  return r.method === "POST" && r.url.includes("/admin/api/changed/") ? r.url.replace("/admin/api/changed/", "/admin/api/") : null;
+/// What a request reads, as URLs: a GET's own, the list a POST /changed/<list> asks what changed of, each read of a
+/// POST /batch; none for a write.
+export function readsOf(r: { method: string; url: string; body?: Uint8Array | null }): string[] {
+  if (r.method === "GET") return [r.url];
+  if (r.method !== "POST") return [];
+  if (r.url.includes("/admin/api/changed/")) return [r.url.replace("/admin/api/changed/", "/admin/api/")];
+  if (!r.url.endsWith("/admin/api/batch") || !r.body) return [];
+  const base = r.url.slice(0, -"/batch".length);
+  return ((JSON.parse(new TextDecoder().decode(r.body)) as { gets?: string[] }).gets ?? []).map((g) => base + g);
 }
 
 /// The value subscription `id` has now, deltas applied.

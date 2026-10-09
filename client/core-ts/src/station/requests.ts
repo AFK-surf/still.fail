@@ -163,6 +163,16 @@ export class Requests {
     });
   }
 
+  /// Several reads in one request (POST /batch `{ gets }`): each one's status and answer, in their order, compressed as
+  /// one. A station from before batches has no such route (`no route …`).
+  batch(station: StationAddr, gets: string[], ctx: SpanContext | null): Effect.Effect<{ status: number; body: unknown }[], CoreError> {
+    return Effect.flatMap(this.call(station, "POST", "/batch", { gets }, { quiet: true, ctx, headers: [[READS, "1"]] }), (answer) => {
+      const answers = get(answer, "answers");
+      if (!Array.isArray(answers) || answers.length !== gets.length) return Effect.fail(new CoreError("bad_response", t("station.core.badBatch")));
+      return Effect.succeed(answers.map((a) => ({ status: typeof get(a, "status") === "number" ? (get(a, "status") as number) : 500, body: get(a, "body") })));
+    });
+  }
+
   /// Opens an event stream (in the caller's scope); a non-2xx answer is an error. Its span ends once it is open.
   stream(station: StationAddr, path: string, ctx: SpanContext | null): Effect.Effect<WireReply & { came?: { bytes: number } }, CoreError, Scope.Scope> {
     return Effect.gen({ self: this }, function* () {

@@ -69,8 +69,10 @@ export function stationHost(answers: Answers) {
   signIn(host);
   const streams: { path: string; queue: Queue.Queue<Uint8Array | null>; closed: boolean }[] = [];
   host.onFetch((req: HttpRequest) => compressedFor(req, answer(req)));
-  // How it answers what changed of a list (POST /changed/<list>): `false`, as a station from before (no such route).
+  // How it answers what changed of a list (POST /changed/<list>) and several reads in one (POST /batch): `false`, as a
+  // station from before (no such route).
   const changes = { on: true };
+  const batches = { on: true };
   const answer = (req: HttpRequest): HttpResponse => {
     const path = req.url.replace("https://stillfail.test", "");
     if (path === "/v1/me") return jsonResponse(200, { workspaces: [{ id: "ws", name: "W" }], invitations: [], relay_url: null });
@@ -78,6 +80,15 @@ export function stationHost(answers: Answers) {
     const said = replies.get(host)?.(req);
     if (said instanceof Status) return jsonResponse(said.code, said.body);
     if (said !== undefined) return jsonResponse(200, said);
+    if (req.method === "POST" && path === "/admin/api/batch") {
+      if (!batches.on) return jsonResponse(404, { error: "no route POST /batch" });
+      const gets = (JSON.parse(new TextDecoder().decode(req.body ?? new Uint8Array())) as { gets: string[] }).gets;
+      const answers = gets.map((g) => {
+        const a = answer({ ...req, method: "GET", url: `https://stillfail.test/admin/api${g}`, body: null });
+        return { status: a.status, body: a.body.length > 0 ? JSON.parse(new TextDecoder().decode(a.body)) : null };
+      });
+      return jsonResponse(200, { answers });
+    }
     const list = /^\/admin\/api\/changed\/(chats|threads|sessions)(\?|$)/.exec(path);
     if (req.method === "POST" && list) {
       if (!changes.on) return jsonResponse(404, { error: `no route POST ${path.replace("/admin/api", "").split("?")[0]}` });
@@ -123,7 +134,7 @@ export function stationHost(answers: Answers) {
     const s = streams[streams.length - 1];
     Queue.offerUnsafe(s.queue, null);
   };
-  return { host, streams, push, end, gate, changes };
+  return { host, streams, push, end, gate, changes, batches };
 }
 
 /// A session as the station lists it (core/tests.rs `session`).

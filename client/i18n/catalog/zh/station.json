@@ -92,6 +92,7 @@
   "station.core.uploadOldStation": "这台 station 版本太旧，只能收 50 MB 以内的文件，先更新它",
   "station.core.localGone": "本机页面已经不再提供",
   "station.core.noChat": "没有这个对话",
+  "station.core.badBatch": "station 批量读取的回复不完整",
   "station.core.noMessageNumber": "station 的回复里没有消息序号",
   "station.core.noSoftwareId": "软件缺少标识",
   "station.core.offline": "连不上 station",

@@ -41,6 +41,14 @@ compressed (`accept-encoding: zstd`; an event stream flushed event by event and
 compressed against its last megabyte, station/src/mesh/compress.ts), and it is
 decompressed as it comes (fzstd, the same on every host: the browser and
 Hermes have no zstd of their own); a station from before sends it as it is.
+A station's history — every chat's entries (the latest chats first, a page of
+each in turn), each listed session's detail where its turns changed and the
+latest page of its transcript — is brought onto the device in the background
+in batches (`POST /batch`: some 40 reads in one request, compressed as one;
+`#history` in sync.ts), behind what is shown: a read a request, a new device
+made some 500 of them of one station. A chat opened whose latest entries are
+not there yet has that page read alone, at once; a station from before batches
+is read a request a read (asked again after an hour).
 The exceptions to
 keeping everything current: what a station's agents spent (`stationUsage`) and
 its archived chats (`archivedRows`) are read only while a page shows them (one

@@ -12,7 +12,7 @@ import { STORAGE_KEY } from "../src/accounts.ts";
 import { Core } from "../src/core.ts";
 const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
-import { account, apply, call, nowS, readOf, subscribe, v } from "./helpers.ts";
+import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
 import { base, overview, session, started, stationHost, stationReplies, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
@@ -931,7 +931,7 @@ test("a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_statio
   await host.settle();
   await host.settle();
   // What is written (a list read as what changed of it is no write).
-  const asked = host.requests.filter((r) => r.method === "POST" && r.url.includes("/admin/api/") && readOf(r) === null).map((r) => [r.url.replace("https://stillfail.test/admin/api", ""), new TextDecoder().decode(r.body!)]);
+  const asked = host.requests.filter((r) => r.method === "POST" && r.url.includes("/admin/api/") && readsOf(r).length === 0).map((r) => [r.url.replace("https://stillfail.test/admin/api", ""), new TextDecoder().decode(r.body!)]);
   assert.deepEqual(asked.map(([p]) => p), ["/sessions", "/sessions", "/threads/9/messages"]);
   // It carries the key given here: the station's rows say it of the chat made.
   assert.deepEqual(JSON.parse(asked[0][1]), { runtime: "claude", model: "opus", clientKey: key });

@@ -92,6 +92,7 @@
   "station.core.uploadOldStation": "This station is too old to take files over 50 MB; update it first",
   "station.core.localGone": "Local page no longer available",
   "station.core.noChat": "No such chat",
+  "station.core.badBatch": "Station's batched read came back incomplete",
   "station.core.noMessageNumber": "Station reply lacks a message number",
   "station.core.noSoftwareId": "Software has no id",
   "station.core.offline": "Station unreachable",

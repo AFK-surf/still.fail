@@ -53,6 +53,14 @@ export const READ_RETRIES = 5;
 const LIST_ID: Record<string, string> = { chatRows: "id", archivedRows: "id", threads: "id", sessions: "key" };
 /// A station from before POST /changed/<list> reads its lists whole, and is tried again after this.
 export const CHANGES_RETRY_MS = 3_600_000;
+/// How much of a station's history one batch asks (POST /batch, #history): a page of entries or a session's detail is
+/// one, a page of a transcript (200 steps in brief) TRANSCRIPT_COST.
+export const HISTORY_BATCH = 40;
+const TRANSCRIPT_COST = 5;
+
+/// A read of a station's history (#history): its path, how much of a batch it takes, and what its answer does (and
+/// the read after it, as a thread has more pages to bring).
+type HistoryRead = { path: string; cost: number; apply: (answer: { status: number; body: unknown }) => HistoryRead | null };
 export const RECHECKING = "等它回来确认";
 
 /// The steps in flight and the phase of a session at work, as its stream says them.
@@ -65,6 +73,8 @@ const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isIn
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 /// A row's id as text (sessions' and chats' are strings, threads' numbers).
 const idText = (v: unknown): string | null => (typeof v === "string" ? v : typeof v === "number" ? String(v) : null);
+/// The latest page of a session's transcript, in brief (what a history shows unopened).
+const latestPage = (key: string) => `/sessions/${encode(key)}/timeline?before=1000000000000000&limit=${TRANSCRIPT_PAGE}&brief=1`;
 
 /// One `step` event, as useLiveSession applies it.
 export function applyStep(view: LiveView, event: unknown, now: number): void {
@@ -132,6 +142,11 @@ export class Link {
   archivedCurrent = false;
   /// When the station said it has no POST /changed/<list> (one from before): its lists are read whole a while.
   changesRefused: number | null = null;
+  /// When the station said it has no POST /batch (one from before): its history is read a request a read a while.
+  batchRefused: number | null = null;
+  /// What is left of the sweep of its history under way (#history), and what the sweep asked (each read once).
+  history: HistoryRead[] = [];
+  readonly historyAsked = new Set<string>();
 
   constructor(address: string, addr: StationAddr, scoped: Scoped) {
     this.address = address;
@@ -474,8 +489,8 @@ export class StationsSync {
     const read = (topic: Topic, path: string) => this.#read(address, topic, path, undefined, ctx);
     const done = [
       this.#enqueue(address, "overview", p, read({ topic: "overview", station: address }, "/overview")),
-      this.#enqueue(address, "sessions", p, Effect.andThen(read({ topic: "sessions", station: address }, "/sessions"), Effect.sync(() => this.#details(address)))),
-      this.#enqueue(address, "threads", p, Effect.andThen(read({ topic: "threads", station: address }, "/threads"), Effect.sync(() => this.#entries(address)))),
+      this.#enqueue(address, "sessions", p, Effect.andThen(read({ topic: "sessions", station: address }, "/sessions"), Effect.sync(() => this.#historyStart(address)))),
+      this.#enqueue(address, "threads", p, Effect.andThen(read({ topic: "threads", station: address }, "/threads"), Effect.sync(() => this.#historyStart(address)))),
       this.#enqueue(address, "chats", p, Effect.andThen(read({ topic: "chatRows", station: address }, "/chats"), Effect.sync(() => this.openEvents(address, false)))),
       ...this.#archivedChanged(address, ctx),
       this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, "/jobs")),
@@ -649,30 +664,136 @@ export class StationsSync {
     });
   }
 
-  /// Each listed session's detail (turns, threads, jobs) where it is not held or its turns changed, and the latest page
-  /// of its transcript.
-  #details(address: string): void {
+  /// A station's history onto the device, in the background: each listed session's detail (turns, threads, jobs) where
+  /// it is not held or its turns changed, every thread's entries (the latest threads first, a page each in turn), and
+  /// the latest page of each listed session's transcript. A batch a run (POST /batch: some 40 reads in one request,
+  /// compressed as one), the task asking itself again while there is more, so what is more urgent goes between: a read
+  /// a request, a new device made some 500 of them of one station, each compressed on its own. Each read is asked once
+  /// a sweep: one that brought nothing new waits for the next. A station from before batches is read a request a read.
+  #historyStart(address: string): void {
+    const link = this.#links.get(address);
+    if (!link) return;
+    link.historyAsked.clear();
+    link.history = this.#historyReads(address);
+    this.#enqueue(address, "history", Priority.background, this.#history(address, 0));
+  }
+
+  #history(address: string, attempt: number): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      if (link.batchRefused !== null && this.#core.host.nowMs() - link.batchRefused < CHANGES_RETRY_MS) return this.#historyEach(address);
+      const batch: HistoryRead[] = [];
+      let cost = 0;
+      while (link.history.length > 0 && (batch.length === 0 || cost + link.history[0]!.cost <= HISTORY_BATCH)) {
+        const read = link.history.shift()!;
+        if (link.historyAsked.has(read.path)) continue;
+        link.historyAsked.add(read.path);
+        batch.push(read);
+        cost += read.cost;
+      }
+      if (batch.length === 0) return;
+      const answered = yield* Effect.result(this.requests.batch(link.addr, batch.map((r) => r.path), null));
+      if (answered._tag === "Failure") {
+        const e = answered.failure;
+        for (const r of batch) link.historyAsked.delete(r.path);
+        link.history.unshift(...batch);
+        if (e.status === 404 && e.message.startsWith("no route ")) {
+          link.batchRefused = this.#core.host.nowMs();
+          return this.#historyEach(address);
+        }
+        // Not answered (its link went, say): asked again a little later, a few times.
+        if ((e.status === undefined || e.status >= 500) && attempt < READ_RETRIES) {
+          const again = Effect.sleep(READ_RETRY_MS * 2 ** attempt).pipe(Effect.andThen(Effect.sync(() => void this.#enqueue(address, "history", Priority.background, this.#history(address, attempt + 1)))));
+          this.#core.runner.fork(again, link.scoped);
+        }
+        return;
+      }
+      batch.forEach((read, i) => {
+        const after = read.apply(answered.success[i]!);
+        if (after !== null && !link.historyAsked.has(after.path)) link.history.push(after);
+      });
+      // More to bring: asked again, behind what is more urgent.
+      if (link.history.length > 0) this.#enqueue(address, "history", Priority.background, this.#history(address, 0));
+    });
+  }
+
+  /// What a station's history has yet to bring onto the device, in the order it is brought: each listed session's
+  /// detail where its turns changed, each thread's next page of entries (the latest threads first), each listed
+  /// session's latest page of its transcript where none is held.
+  #historyReads(address: string): HistoryRead[] {
+    const data = this.#core.data;
+    const sessions = data.sessionsToRead(address);
+    const reads: HistoryRead[] = [];
+    for (const [key, again] of sessions) {
+      if (!again) continue;
+      const topic = { topic: "session", station: address, key };
+      reads.push({ path: `/sessions/${encode(key)}`, cost: 1, apply: (a) => (this.#took(address, topic, a), null) });
+    }
+    for (const id of data.threadIds(address)) {
+      const read = this.#entriesRead(address, id);
+      if (read !== null) reads.push(read);
+    }
+    for (const [key] of sessions) {
+      if (data.evicted("transcript", address, key) || data.logSpan("transcript", address, key) !== null) continue;
+      reads.push({ path: latestPage(key), cost: TRANSCRIPT_COST, apply: (a) => (this.#tookTranscript(address, key, a), null) });
+    }
+    return reads;
+  }
+
+  /// A thread's next page of entries as a read of its history, the read after it while pages come.
+  #entriesRead(address: string, id: number): HistoryRead | null {
+    const path = this.#entriesPath(address, id);
+    if (path === null) return null;
+    const apply = (a: { status: number; body: unknown }) => {
+      const came = this.#tookEntries(address, id, a.status >= 200 && a.status < 300 ? { ok: a.body } : { error: httpError(a.status, a.body) });
+      return came > 0 ? this.#entriesRead(address, id) : null;
+    };
+    return { path, cost: 1, apply };
+  }
+
+  /// A read of a held topic answered in a batch, as #read takes its answer (a 4xx while nothing is held is its error).
+  #took(address: string, topic: Topic, a: { status: number; body: unknown }): void {
+    const link = this.#links.get(address);
+    if (!link) return;
+    const key = topicKey(topic);
+    if (a.status >= 200 && a.status < 300) {
+      link.errors.delete(key);
+      this.#core.data.set(topic, a.body);
+    } else if (a.status >= 400 && a.status < 500 && this.#core.data.shared(topic) === undefined) {
+      link.errors.set(key, httpError(a.status, a.body));
+      this.onChange(address, "errors", key);
+    }
+  }
+
+  /// The latest page of a session's transcript answered in a batch, as `transcript` takes it.
+  #tookTranscript(address: string, key: string, a: { status: number; body: unknown }): void {
+    if (a.status < 200 || a.status >= 300) return;
+    this.#putTranscript(address, key, a.body, 0);
+  }
+
+  /// A station from before batches: its history a read a task, each its own request.
+  #historyEach(address: string): void {
+    const link = this.#links.get(address);
+    if (link) link.history = [];
     for (const [key, again] of this.#core.data.sessionsToRead(address)) {
       if (again) this.#enqueue(address, `session/${key}`, Priority.background, this.#session(address, key));
       this.syncTranscript(address, key, Priority.background - 1);
     }
+    for (const id of this.#core.data.threadIds(address)) this.syncEntries(address, id, Priority.background);
   }
 
   #session(address: string, key: string): Effect.Effect<void, CoreError> {
     return this.#read(address, { topic: "session", station: address, key }, `/sessions/${encode(key)}`);
   }
 
-  /// Every thread's entries, the latest first.
-  #entries(address: string): void {
-    for (const id of this.#core.data.threadIds(address)) this.syncEntries(address, id, Priority.background);
-  }
-
   /// Brings a thread's entries onto the device: what came after what is held, then any gap, then the pages before,
-  /// one page a run (the task asks itself again while there is more, so what is more urgent goes between).
-  syncEntries(address: string, id: number, priority: number): void {
+  /// one page a run (the task asks itself again while there is more, so what is more urgent goes between); `once`: the
+  /// next page only (a chat opened, the rest of its history coming with the station's, #history).
+  syncEntries(address: string, id: number, priority: number, once = false): void {
     // Let go for room and not opened since: left as it is (data.ts KEPT).
     if (this.#core.data.evicted("entry", address, String(id))) return;
-    this.#enqueue(address, `entries/${id}`, priority, this.#entriesPage(address, id, priority));
+    this.#enqueue(address, `entries/${id}`, priority, this.#entriesPage(address, id, priority, once));
   }
 
   /// The highest entry a thread is missing on the device, as far as it is known to go (`held`: the numbers held, in
@@ -686,45 +807,61 @@ export class StationsSync {
     return null;
   }
 
-  #entriesPage(address: string, id: number, priority: number): Effect.Effect<void, CoreError> {
+  /// The read that brings a thread's next page of entries onto the device: what came after what is held, then any gap
+  /// (from just past the held entry below it, a page at most), the latest page when none is held; null when it has
+  /// them all, or they were let go for room and it was not opened since.
+  #entriesPath(address: string, id: number): string | null {
+    const data = this.#core.data;
+    if (data.evicted("entry", address, String(id))) return null;
+    const held = data.logNumbers("entry", address, String(id));
+    if (held.length === 0) return `/threads/${id}/entries?limit=${PAGE}`;
+    const top = held[held.length - 1];
+    if (data.threadLast(address, id) > top) return `/threads/${id}/entries?after=${top}`;
+    const missing = this.#missing(address, id, held);
+    if (missing === null) return null;
+    let below = 0;
+    for (const n of held) if (n < missing && n > below) below = n;
+    return `/threads/${id}/entries?from=${Math.max(below + 1, missing - PAGE + 1)}&to=${missing}`;
+  }
+
+  /// Whether a thread's latest entries are not on the device: none held, or its summary goes further.
+  latestMissing(address: string, id: number): boolean {
+    const held = this.#core.data.logSpan("entry", address, String(id));
+    return held === null || this.#core.data.threadLast(address, id) > held.max;
+  }
+
+  #entriesPage(address: string, id: number, priority: number, once: boolean): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
-      if (!link || !this.reachable(address) || this.#core.data.evicted("entry", address, String(id))) return;
-      const data = this.#core.data;
-      const held = data.logNumbers("entry", address, String(id));
-      let path: string;
-      if (held.length === 0) path = `/threads/${id}/entries?limit=${PAGE}`;
-      else {
-        const top = held[held.length - 1];
-        const listed = data.threadLast(address, id);
-        if (listed > top) path = `/threads/${id}/entries?after=${top}`;
-        else {
-          const missing = this.#missing(address, id, held);
-          if (missing === null) return;
-          // The gap only: from just past the held entry below it, a page at most.
-          let below = 0;
-          for (const n of held) if (n < missing && n > below) below = n;
-          path = `/threads/${id}/entries?from=${Math.max(below + 1, missing - PAGE + 1)}&to=${missing}`;
-        }
-      }
+      if (!link || !this.reachable(address)) return;
+      const path = this.#entriesPath(address, id);
+      if (path === null) return;
       const answer = yield* Effect.result(this.requests.call(link.addr, "GET", path, null, { quiet: true }));
-      const topic = topicKey({ topic: "thread", station: address, thread: id });
-      if (answer._tag === "Failure") {
-        // A thread that is gone: what is held of it goes. One not to be read (no longer this viewer's): said so.
-        const status = answer.failure.status;
-        if (status === 404) this.#threadGone(address, id);
-        else if (status !== undefined && status >= 400 && status < 500 && held.length === 0) {
-          link.errors.set(topic, answer.failure);
-          this.onChange(address, "errors", topic);
-        }
-        return;
-      }
-      if (link.errors.delete(topic)) this.onChange(address, "errors", topic);
-      const entries = (get(answer.success, "entries") as unknown[] | undefined) ?? [];
-      this.putEntries(address, id, entries);
+      const entries = this.#tookEntries(address, id, answer._tag === "Success" ? { ok: answer.success } : { error: answer.failure });
       // More to bring: asked again, behind what is more urgent.
-      if (entries.length > 0 && this.#missing(address, id, data.logNumbers("entry", address, String(id))) !== null) this.syncEntries(address, id, priority);
+      if (!once && entries > 0 && this.#entriesPath(address, id) !== null) this.syncEntries(address, id, priority);
     });
+  }
+
+  /// A page of a thread's entries as the station answered it: into its log; a thread that is gone goes with what is held
+  /// of it; one not to be read (no longer this viewer's) says so while nothing of it is held. How many came.
+  #tookEntries(address: string, id: number, answer: { ok: unknown } | { error: CoreError }): number {
+    const link = this.#links.get(address);
+    if (!link) return 0;
+    const topic = topicKey({ topic: "thread", station: address, thread: id });
+    if ("error" in answer) {
+      const status = answer.error.status;
+      if (status === 404) this.#threadGone(address, id);
+      else if (status !== undefined && status >= 400 && status < 500 && this.#core.data.logSpan("entry", address, String(id)) === null) {
+        link.errors.set(topic, answer.error);
+        this.onChange(address, "errors", topic);
+      }
+      return 0;
+    }
+    if (link.errors.delete(topic)) this.onChange(address, "errors", topic);
+    const entries = (get(answer.ok, "entries") as unknown[] | undefined) ?? [];
+    this.putEntries(address, id, entries);
+    return entries.length;
   }
 
   /// Entries into a thread's log.
@@ -748,18 +885,16 @@ export class StationsSync {
       const link = this.#links.get(address);
       if (!link || !this.reachable(address)) return;
       if (before === null && this.#core.data.logSpan("transcript", address, key) !== null) return;
-      const at = before ?? 1e15;
-      const page = yield* this.requests.call(link.addr, "GET", `/sessions/${encode(key)}/timeline?before=${at}&limit=${TRANSCRIPT_PAGE}&brief=1`, null, { quiet: before === null });
-      const start = u64(get(page, "start")) ?? 0;
-      const items = (get(page, "entries") as unknown[] | undefined) ?? [];
-      if (items.length === 0) return;
-      this.#core.data.putItems(
-        "transcript",
-        address,
-        key,
-        items.map((item, i) => [start + i, item] as [number, unknown]),
-      );
+      const page = yield* this.requests.call(link.addr, "GET", before === null ? latestPage(key) : `/sessions/${encode(key)}/timeline?before=${before}&limit=${TRANSCRIPT_PAGE}&brief=1`, null, { quiet: before === null });
+      this.#putTranscript(address, key, page, 0);
     });
+  }
+
+  /// A page of a session's transcript into its log, from its `start` (else `from`).
+  #putTranscript(address: string, key: string, page: unknown, from: number): void {
+    const start = u64(get(page, "start")) ?? from;
+    const items = (get(page, "entries") as unknown[] | undefined) ?? [];
+    if (items.length > 0) this.#core.data.putItems("transcript", address, key, items.map((item, i) => [start + i, item] as [number, unknown]));
   }
 
   /// A session's transcript entries `from` to `to` whole, in place of what is held of them in brief (`history.detail`):
@@ -770,9 +905,7 @@ export class StationsSync {
       const link = this.#links.get(address);
       if (!link) return;
       const page = yield* this.requests.call(link.addr, "GET", `/sessions/${encode(key)}/timeline?from=${from}&to=${to}`, null, { quiet: true });
-      const start = u64(get(page, "start")) ?? from;
-      const items = (get(page, "entries") as unknown[] | undefined) ?? [];
-      if (items.length > 0) this.#core.data.putItems("transcript", address, key, items.map((item, i) => [start + i, item] as [number, unknown]));
+      this.#putTranscript(address, key, page, from);
     });
     return Deferred.await(this.#enqueue(address, `detail/${key}/${from}-${to}`, Priority.detail, work));
   }
@@ -1183,7 +1316,7 @@ export class StationsSync {
       if (n === null) return yield* Effect.fail(new CoreError("bad_response", t("station.core.noMessageNumber")));
       // The thread goes that far now: what came after what is held is read.
       this.#core.data.raiseLast(address, thread, n);
-      if (this.#core.data.logCount("entry", address, String(thread), n, n) === 0) yield* Effect.ignore(this.ask(address, `entries/${thread}`, this.#entriesPage(address, thread, Priority.asked)));
+      if (this.#core.data.logCount("entry", address, String(thread), n, n) === 0) yield* Effect.ignore(this.ask(address, `entries/${thread}`, this.#entriesPage(address, thread, Priority.asked, true)));
       return n;
     });
   }

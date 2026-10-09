@@ -121,6 +121,9 @@ export class StationTopics implements Owner {
       // old notification's link): the sync brings it.
       const evicted = this.#core.data.opened("entry", station, String(id), true);
       if (evicted || this.summary(station, id) === null) this.#sync.syncEntries(station, id, Priority.shown);
+      // Its latest not on the device yet: that page alone, at once. What is before it comes with the station's history,
+      // in batches behind (sync.ts #history), or as it is scrolled back to.
+      else if (this.#sync.latestMissing(station, id)) this.#sync.syncEntries(station, id, Priority.shown, true);
       this.#moveOldPlace(station, id);
     }
     if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.syncTranscript(station, topic.key as string, Priority.shown);

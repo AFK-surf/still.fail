@@ -8,11 +8,11 @@ import { HostError } from "../src/error.ts";
 import type { HttpRequest, Pull } from "../src/host.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
-import { apply, call, signIn, subscribe, v } from "./helpers.ts";
+import { apply, call, readsOf, signIn, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
 import { type Answers, base, entries, entry, overview, session, started, stationHost, threadView } from "./station-fixture.ts";
 
-const gets = (host: FakeHost, path: string) => host.requests.filter((r) => r.method === "GET" && r.url.endsWith(path)).length;
+const gets = (host: FakeHost, path: string) => host.requests.flatMap(readsOf).filter((url) => url.endsWith(path)).length;
 
 test("a_reached_station_is_linked_read_as_its_stream_opens_and_its_topics_read_only_what_is_held", async () => {
   const { host, core, streams } = await started();
