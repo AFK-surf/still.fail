@@ -364,15 +364,51 @@ test("what_is_kept_of_each_chat_is_counted_and_forgotten", async () => {
   data.putItems("entry", "w/a", "7", [[1, { text: "x".repeat(100) }], [2, { text: "y" }]]);
   data.putItems("transcript", "w/a", "k1", [[0, { a: "z".repeat(50) }]]);
   data.putItems("entry", "w/a", "8", [[1, { text: "other" }]]);
+  data.keepFile("w/a", "k1", "a.png", "thumb", "image/png", "q".repeat(1000));
   await flush();
   const usage = data.cacheUsage().sort((a, b) => a.thread - b.thread);
   assert.deepEqual(usage.map((u) => [u.thread, u.title, u.sessions]), [[7, "大视频", ["k1"]], [8, null, []]]);
-  assert.ok(usage[0]!.bytes > 150, "its entries and its session's transcript");
+  assert.ok(usage[0]!.bytes > 1150, "its entries, its session's transcript and what it shows small");
   data.forgetChat("w/a", 7);
   await flush();
   assert.equal(data.logSpan("entry", "w/a", "7"), null);
   assert.equal(data.logSpan("transcript", "w/a", "k1"), null);
+  assert.equal(data.keptFile("w/a", "k1", "a.png", "thumb"), null);
   assert.deepEqual(data.cacheUsage().map((u) => u.thread), [8]);
+  runner.shutdown();
+});
+
+test("what_chats_show_small_is_kept_and_past_its_room_the_least_lately_shown_go", async () => {
+  const { data, open, host, runner, again, db } = fresh();
+  await open();
+  const day = 86_400_000;
+  const mib = "q".repeat(1024 * 1024);
+  const kept = (name: string) => data.keptFile("w/a", "k1", name, "thumb") !== null;
+  assert.equal(kept("0.png"), false);
+  // Larger than a thumbnail is: not kept.
+  data.keepFile("w/a", "k1", "big.png", "thumb", "image/png", `${mib}q`);
+  for (let i = 0; i < 64; i++) {
+    host.advance(day);
+    data.keepFile("w/a", "k1", `${i}.png`, "thumb", "image/png", mib);
+  }
+  await flush();
+  const writes = db().writes().length;
+  assert.deepEqual(data.keptFile("w/a", "k1", "63.png", "thumb"), { type: "image/png", bytes: mib });
+  assert.deepEqual([kept("big.png"), kept("63.png")], [false, true]);
+  assert.equal(data.keptFile("w/a", "k1", "63.png", "poster"), null, "a thumbnail is not a poster");
+  await flush();
+  assert.equal(db().writes().length, writes, "shown the day it was kept: nothing written");
+  // Shown a day later, 0 is the most lately shown; past 64 MiB, the least lately shown go until 80% of it is kept.
+  host.advance(day);
+  assert.ok(kept("0.png"));
+  data.keepFile("w/a", "k1", "64.png", "thumb", "image/png", mib);
+  await run(data.written);
+  const left = Array.from({ length: 65 }, (_, i) => i).filter((i) => kept(`${i}.png`));
+  assert.deepEqual(left, [0, ...Array.from({ length: 50 }, (_, i) => 15 + i)]);
+  // Kept as the app starts anew.
+  await run(data.written);
+  const later = await again();
+  assert.ok(later.keptFile("w/a", "k1", "64.png", "thumb") !== null);
   runner.shutdown();
 });
 

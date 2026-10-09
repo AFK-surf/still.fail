@@ -854,6 +854,16 @@ export class Data {
     this.of(station)?.forgetChat(station, thread);
   }
 
+  /// What a chat shows small, as kept on the device (AccountDb.keptFile), noted as shown now.
+  keptFile(station: string, session: string, name: string, kind: string): { type: string; bytes: string } | null {
+    return this.of(station)?.keptFile(station, session, name, kind, this.#host.nowMs()) ?? null;
+  }
+
+  /// Keeps what a chat shows small (AccountDb.keepFile).
+  keepFile(station: string, session: string, name: string, kind: string, type: string, bytes: string): void {
+    this.of(station)?.keepFile(station, session, name, kind, type, bytes, this.#host.nowMs());
+  }
+
   /// What a host error is, as a note's detail.
   static detail(e: unknown): string {
     return e instanceof HostError || e instanceof Error ? e.message : String(e);

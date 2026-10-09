@@ -80,10 +80,17 @@ export function install(): void {
   };
   handlers.stationFile = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationFile" }>;
+    // A thumbnail is kept on the device: a file sent never changes (AccountDb.keptFile).
+    const kept = c.thumb ? inner.data.keptFile(c.station, c.key, c.name, "thumb") : null;
+    if (kept !== null) return Effect.succeed(kept);
     return Effect.flatMap(parse(c.station), (addr) =>
       Effect.map(
         inner.stations.requests.file(addr, c.key, c.name, c.thumb, (loaded, total) => c.progress && progress({ loaded, total }), ctx),
-        ([type, bytes]) => ({ type, bytes: base64(bytes) }),
+        ([type, bytes]) => {
+          const file = { type, bytes: base64(bytes) };
+          if (c.thumb) inner.data.keepFile(c.station, c.key, c.name, "thumb", file.type, file.bytes);
+          return file;
+        },
       ),
     );
   };
@@ -95,7 +102,17 @@ export function install(): void {
   };
   handlers.stationPoster = (inner, call, _p, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationPoster" }>;
-    return Effect.flatMap(parse(c.station), (addr) => Effect.map(inner.stations.requests.poster(addr, c.key, c.name, ctx), (bytes) => (bytes === null ? null : { type: "image/jpeg", bytes: base64(bytes) })));
+    // Kept on the device as a thumbnail is.
+    const kept = inner.data.keptFile(c.station, c.key, c.name, "poster");
+    if (kept !== null) return Effect.succeed(kept);
+    return Effect.flatMap(parse(c.station), (addr) =>
+      Effect.map(inner.stations.requests.poster(addr, c.key, c.name, ctx), (bytes) => {
+        if (bytes === null) return null;
+        const poster = { type: "image/jpeg", bytes: base64(bytes) };
+        inner.data.keepFile(c.station, c.key, c.name, "poster", poster.type, poster.bytes);
+        return poster;
+      }),
+    );
   };
   handlers.cacheUsage = (inner) => Effect.sync(() => ({ chats: inner.data.cacheUsage() }));
   handlers.cacheClear = (inner, call) => {

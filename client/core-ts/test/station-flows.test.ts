@@ -840,6 +840,38 @@ test("the_archive_is_read_only_while_a_page_shows_it", async () => {
   s.core.close();
 });
 
+test("what_a_chat_shows_small_is_read_once_and_kept_on_the_device", async () => {
+  const s = await ui({
+    ...base(),
+    "GET /sessions/k/files?name=a.png&thumb=1": "small",
+    "GET /sessions/k/files?name=a.png": "whole",
+    "GET /sessions/k/poster?name=v.mp4": "jpeg",
+  });
+  const asked = async (c: { core: J; ui: number }, id: number, name: string, params: J) => {
+    call(c.core, c.ui, id, name, params);
+    await s.host.settle();
+    return (s.host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === id && ("ok" in m || "error" in m)) as J)?.ok;
+  };
+  const thumb = { station: ST, key: "k", name: "a.png", thumb: true };
+  const poster = { station: ST, key: "k", name: "v.mp4" };
+  const small = await asked(s, 1, "station.file", thumb);
+  assert.equal(new TextDecoder().decode(Uint8Array.from(atob(small.bytes), (c) => c.charCodeAt(0))), JSON.stringify("small"));
+  assert.deepEqual(await asked(s, 2, "station.file", thumb), small, "shown again: from the device");
+  const jpeg = await asked(s, 3, "station.poster", poster);
+  assert.deepEqual(await asked(s, 4, "station.poster", poster), jpeg);
+  assert.deepEqual([gets(s.host, "/sessions/k/files?name=a.png&thumb=1"), gets(s.host, "/sessions/k/poster?name=v.mp4")], [1, 1]);
+  // The whole file is read as it is opened: not kept.
+  await asked(s, 5, "station.file", { ...thumb, thumb: false });
+  await asked(s, 6, "station.file", { ...thumb, thumb: false });
+  assert.equal(gets(s.host, "/sessions/k/files?name=a.png"), 2);
+  // The app started anew: still there.
+  const later = await reopen(s);
+  assert.deepEqual(await asked(later, 7, "station.file", thumb), small);
+  assert.deepEqual(await asked(later, 8, "station.poster", poster), jpeg);
+  assert.deepEqual([gets(s.host, "/sessions/k/files?name=a.png&thumb=1"), gets(s.host, "/sessions/k/poster?name=v.mp4")], [1, 1]);
+  later.core.close();
+});
+
 test("a_thread_opens_from_what_is_kept_and_asks_only_for_what_came_after", async () => {
   const answers: J = {
     ...base(),

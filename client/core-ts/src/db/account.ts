@@ -17,7 +17,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureKept, ensureSaid, ensureSlackSaid, migrate, versionOf } from "./schema.ts";
+import { ensureFilesKept, ensureKept, ensureSaid, ensureSlackSaid, migrate, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -202,6 +202,13 @@ class Cache {
 }
 
 const K = (...parts: (string | number)[]) => parts.join("\u0001");
+/// What chats show small, kept (`file_kept`, in characters of base64): at most this much, let go to FILES_KEPT_TO of it
+/// past that; one larger than FILE_KEPT_MOST is not kept (a thumbnail is a few dozen KB). When one was shown is noted
+/// at most once in FILE_SHOWN_EVERY: a note writes its row again, the image with it.
+const FILES_KEPT = 64 * 1024 * 1024;
+const FILES_KEPT_TO = 0.8;
+const FILE_KEPT_MOST = 1024 * 1024;
+const FILE_SHOWN_EVERY = 86_400_000;
 
 /// The tables of what this device did itself: written again on their own when a burst could not be (a full disk).
 const PRECIOUS = /^(INSERT|DELETE|UPDATE)[^(]*\b(outbox|pending|first|changing|draft|workspace_pref)\b/i;
@@ -271,6 +278,8 @@ export class AccountDb {
       } catch {
         // No room to make it: nothing is let go this time.
       }
+      // Made as the first file is kept: a database that keeps none has no room taken for it.
+      this.#filesKept = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'file_kept'").length > 0;
     } else if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said'").length > 0) {
       this.#said = "scan";
     }
@@ -1522,9 +1531,50 @@ export class AccountDb {
     });
   }
 
-  /// What this database keeps of each chat (a thread): its entries and its sessions' transcripts, in characters of
-  /// their JSON (near enough their bytes), with its title and sessions; a session's transcript counted with its first
-  /// thread. For the device's page of what it keeps (`cache.usage`).
+  // ── what chats show small (thumbnails, posters) ──
+
+  /// Whether `file_kept` is there (made as the first file is kept).
+  #filesKept = false;
+
+  /// What a chat shows small, as kept here (`kind`: thumb, poster): its type and bytes (base64), noted as shown `at`;
+  /// null when it is not kept.
+  keptFile(station: string, session: string, name: string, kind: string, at: number): { type: string; bytes: string } | null {
+    if (!this.#filesKept) return null;
+    let r: SqlRow | undefined;
+    try {
+      r = this.sql.all("SELECT type, used, bytes FROM file_kept WHERE station = ? AND session = ? AND name = ? AND kind = ?", [station, session, name, kind])[0];
+    } catch {
+      // Not made after all (the write that made it could not be kept): made again with the next one kept.
+      this.#filesKept = false;
+      return null;
+    }
+    if (r === undefined) return null;
+    if (at - Number(r[1]) >= FILE_SHOWN_EVERY) this.#write(() => this.sql.run("UPDATE file_kept SET used = ? WHERE station = ? AND session = ? AND name = ? AND kind = ?", [at, station, session, name, kind]));
+    return { type: String(r[0]), bytes: String(r[2]) };
+  }
+
+  /// Keeps what a chat shows small as its station sent it; past FILES_KEPT, the least lately shown go.
+  keepFile(station: string, session: string, name: string, kind: string, type: string, bytes: string, at: number): void {
+    if (this.readOnly || bytes.length > FILE_KEPT_MOST) return;
+    this.#write(() => {
+      if (!this.#filesKept) {
+        ensureFilesKept(this.sql);
+        this.#filesKept = true;
+      }
+      this.sql.run("INSERT OR REPLACE INTO file_kept (station, session, name, kind, type, size, used, bytes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [station, session, name, kind, type, bytes.length, at, bytes]);
+      let total = Number(this.sql.all("SELECT coalesce(sum(size), 0) FROM file_kept")[0]?.[0] ?? 0);
+      if (total <= FILES_KEPT) return;
+      for (const r of this.sql.all("SELECT station, session, name, kind, size FROM file_kept ORDER BY used")) {
+        if (total <= FILES_KEPT * FILES_KEPT_TO) break;
+        this.sql.run("DELETE FROM file_kept WHERE station = ? AND session = ? AND name = ? AND kind = ?", [r[0], r[1], r[2], r[3]]);
+        total -= Number(r[4] ?? 0);
+      }
+    });
+  }
+
+  /// What this database keeps of each chat (a thread): its entries, its sessions' transcripts and what it shows small, in
+  /// characters of their JSON (near enough their bytes), with its title and sessions; what a session has counted with
+  /// its first thread. For the device's page of what it keeps (`cache.usage`).
   cacheUsage(): { station: string; thread: number; title: string | null; sessions: string[]; bytes: number }[] {
     const out = new Map<string, { station: string; thread: number; title: string | null; sessions: string[]; bytes: number }>();
     const of = (station: string, thread: number) => {
@@ -1544,6 +1594,12 @@ export class AccountDb {
       const thread = firstThread.get(`${r[0] as string}\0${r[1] as string}`);
       if (thread !== undefined) of(r[0] as string, thread).bytes += Number(r[2] ?? 0);
     }
+    if (this.#filesKept) {
+      for (const r of this.sql.all("SELECT station, session, sum(size) FROM file_kept GROUP BY station, session")) {
+        const thread = firstThread.get(`${r[0] as string}\0${r[1] as string}`);
+        if (thread !== undefined) of(r[0] as string, thread).bytes += Number(r[2] ?? 0);
+      }
+    }
     for (const row of out.values()) {
       const json = this.sql.all("SELECT json FROM thread WHERE station = ? AND id = ?", [row.station, row.thread])[0]?.[0];
       const title = json === undefined ? undefined : (parse(json) as { title?: unknown })?.title;
@@ -1552,14 +1608,15 @@ export class AccountDb {
     return [...out.values()].filter((r) => r.bytes > 0);
   }
 
-  /// Forgets what is kept of a chat: its entries and its sessions' transcripts (read again from its station when it is
-  /// opened). What waits to be sent, drafts and the chat's row stay.
+  /// Forgets what is kept of a chat: its entries, its sessions' transcripts and what it shows small (read again from its
+  /// station when it is opened). What waits to be sent, drafts and the chat's row stay.
   forgetChat(station: string, thread: number): void {
     this.#write(() => {
       const sessions = this.sql.all("SELECT session FROM thread_member WHERE station = ? AND thread = ?", [station, thread]).map((r) => r[0] as string);
       this.#logCache.clear();
       this.#forgetEntries(station, thread);
       for (const session of sessions) if (this.sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", [station, session]) > 0) this.#tellLog("transcript", station, session);
+      if (this.#filesKept) for (const session of sessions) this.sql.run("DELETE FROM file_kept WHERE station = ? AND session = ?", [station, session]);
     });
   }
 
@@ -1582,6 +1639,7 @@ export class AccountDb {
       }
       if (this.sql.all("SELECT 1 FROM sqlite_master WHERE name = 'log_use'").length > 0) this.sql.run("DELETE FROM log_use WHERE station = ?", [station]);
       if (this.#hasSlackSaid()) this.sql.run("DELETE FROM slack_said WHERE station = ?", [station]);
+      if (this.#filesKept) this.sql.run("DELETE FROM file_kept WHERE station = ?", [station]);
       for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
       this.#cache.clear();
       this.#logCache.clear();
