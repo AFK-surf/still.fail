@@ -200,8 +200,8 @@ class DecisionsTest {
         val h = page()
         val view = DecisionsView(
             emptyList(), 0u, loading = false,
-            answered = listOf(DecisionAnswered("ws/st", "studio", null, "k1", 7, "安卓发版", 3, "先发测试版吗？", "选了「先发测试版」", "10:42")),
-            working = listOf(DecisionWorking("ws/st", "studio", null, "k2", 8, "官网首屏", "在做 · 截三种首屏")),
+            answered = listOf(DecisionAnswered("ws/st", "studio", null, null, "k1", 7, "安卓发版", 3, "先发测试版吗？", "选了「先发测试版」", "10:42")),
+            working = listOf(DecisionWorking("ws/st", "studio", null, null, "k2", 8, "官网首屏", "在做 · 截三种首屏")),
             today = DecisionsToday(1u, "6 分钟", 1u),
         )
         h.fake.put(Topics.decisions(Fixtures.WS), view)
