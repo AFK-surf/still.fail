@@ -8,6 +8,8 @@ import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
 import * as css from "./StationCards.css.ts";
 import { EmojiPick } from "./EmojiPick.tsx";
+import { StationMark } from "../StationMark.tsx";
+import { Link } from "react-router";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
@@ -18,6 +20,28 @@ export function StationList({ stations, menu, manager = false, onEmoji, emojiBus
   stations: StationView[]; menu(s: StationView): ReactNode; manager?: boolean; onEmoji?: ((s: StationView, emoji: string) => void) | undefined; emojiBusy?: ((s: StationView) => boolean) | undefined;
 }) {
   return <div className={css.cards}>{stations.map((s) => <StationCard key={s.id} s={s} menu={menu(s)} manager={manager} onEmoji={onEmoji} emojiBusy={emojiBusy?.(s) ?? false} />)}</div>;
+}
+
+/**
+ * A station at a glance, in a card that opens over where it is named (a chat's bar): its emoji and name, whether it is
+ * up and what its agents do, what the machine is, its load, this device's connection to it, and its settings.
+ */
+export function StationPeek({ s, settings }: { s: StationView; settings: string }) {
+  return (
+    <div className={css.peek}>
+      <div className={css.peekHead}>
+        <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />
+        {s.emoji && <StationMark emoji={s.emoji} size={16} />}
+        <span className={css.peekName}>{s.name}</span>
+        <span className={css.state}>{state(s)}</span>
+      </div>
+      {s.host && <span className={css.peekLine}>{machine(s.host)}</span>}
+      {s.host && <span className={css.peekLine}>{s.host.hostname} · {s.host.arch} · {s.host.emberText}</span>}
+      {s.online && s.host && <MeterChips meters={s.host.meters} />}
+      {s.online && s.net && <Net net={s.net} stacked />}
+      <Link className={css.peekLink} to={settings}>{t("web-pages.stations.peekSettings")}</Link>
+    </div>
+  );
 }
 
 /** Whether its agents are at work, or when it was last seen. */

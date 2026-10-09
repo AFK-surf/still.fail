@@ -847,6 +847,7 @@
   "web-pages.stations.away": "Offline: open {name} on that machine to reconnect",
   "web-pages.stations.connecting": "Connecting…",
   "web-pages.stations.details": "View {name} details",
+  "web-pages.stations.peekSettings": "Station settings",
   "web-pages.stations.emoji.label": "Emoji for {name}",
   "web-pages.stations.emoji.paste": "Or paste any emoji",
   "web-pages.stations.emoji.clear": "Clear",

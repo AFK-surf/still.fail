@@ -57,3 +57,10 @@ export const netRates = style({ display: "grid", gridTemplateColumns: "auto 9.5c
 export const details = style({ display: "grid", gap: "24px" });
 export const detailSection = style({ display: "grid", gap: "10px", fontSize: vars.textUi, color: vars.muted, overflowWrap: "anywhere" });
 export const detailTitle = style({ margin: "0", fontSize: vars.textBody, fontWeight: "600", color: vars.text });
+
+/** The card over a station's name in a chat's bar (StationPeek). */
+export const peek = style({ display: "flex", flexDirection: "column", gap: "8px", minWidth: "0" });
+export const peekHead = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0" });
+export const peekName = style({ fontWeight: "600", color: vars.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: "0" });
+export const peekLine = style({ fontSize: vars.textMeta, color: vars.muted, overflowWrap: "anywhere" });
+export const peekLink = style({ alignSelf: "flex-start", fontSize: vars.textMeta, color: vars.muted, selectors: { "&:hover": { color: vars.text } } });
