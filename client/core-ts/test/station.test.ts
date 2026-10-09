@@ -151,6 +151,7 @@ test("a_chat_with_something_unread_opens_at_it_and_pages_back", async () => {
 test("a_write_answers_once_what_it_touched_is_read_again", async () => {
   const answers = base();
   answers["POST /sessions/k1/stop"] = { ok: true };
+  answers["POST /sessions/k1/warm"] = { ok: true };
   const { host, core } = await started(answers);
   const ui = core.connect();
   const before = gets(host, "/admin/api/sessions");
@@ -161,6 +162,11 @@ test("a_write_answers_once_what_it_touched_is_read_again", async () => {
   // Its own detail; the lists that show it its station tells as they change.
   assert.equal(gets(host, "/admin/api/sessions"), before);
   assert.equal(gets(host, "/admin/api/sessions/k1"), 2);
+  // Warmed as someone types: nothing read, its station tells its new state.
+  const reads = host.requests.length;
+  call(core, ui, 10, "session.warm", { station: "ws/st", key: "k1" });
+  await host.settle();
+  assert.deepEqual(host.requests.slice(reads).map((r) => `${r.method} ${r.url.replace("https://stillfail.test/admin/api", "")}`), ["POST /sessions/k1/warm"]);
   core.close();
 });
 

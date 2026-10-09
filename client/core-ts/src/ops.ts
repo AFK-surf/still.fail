@@ -238,7 +238,9 @@ function stationOp(name: string, params: unknown): Request | null {
     case "session.stop":
       return op("POST", () => `/sessions/${p.at("key")}/stop`, null, process("key"));
     case "session.warm":
-      return op("POST", () => `/sessions/${p.at("key")}/warm`, null, process("key"));
+      // As a person types in its chat (once a minute), nobody waiting on it: its station tells its session's new state.
+      // It read the detail each time, a third of a phone's reads of details.
+      return op("POST", () => `/sessions/${p.at("key")}/warm`, null, NONE);
     case "session.evict":
       return op("POST", () => `/sessions/${p.at("key")}/evict`, null, process("key"));
     case "session.delete":

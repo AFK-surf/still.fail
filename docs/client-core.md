@@ -494,10 +494,11 @@ into `threads` and the `session` topics; a read position into the threads; a
 job stopped into its session's `jobs` and into `jobs` (as its `job` event
 would); otherwise the touched topics are read again (sessions → `session`,
 `sessions` and `chatRows`, and `archivedRows` while a page shows it; a
-session's process warmed, stopped or let go (`session.warm`, `session.stop`,
-`session.evict`) → its `session` alone, the lists that show it its station's
-`session` and `chat` events change; `widget.setState` → nothing, its page reads
-it; a thread answered → `chatRows` as well; connects → `overview` and
+session's process stopped or let go (`session.stop`, `session.evict`) → its
+`session` alone, the lists that show it its station's `session` and `chat`
+events change; warmed (`session.warm`, as a person types) and
+`widget.setState` → nothing (its station tells the first, a page reads the
+other); a thread answered → `chatRows` as well; connects → `overview` and
 `sessions`; profiles, Slack → `overview`; `slack.identity` → `overview` (its
 answer) and `chatRows`). A write to still.fail cloud reads the account topics
 again. The station's events bring the same a moment later.
