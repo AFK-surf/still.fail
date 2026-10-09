@@ -527,7 +527,7 @@
   "web-mobile.stations.emojiSet": "Icon set",
   "web-mobile.stations.renamePlaceholder": "Machine name, e.g. studio",
   "web-mobile.stations.renameTitle": "Station name",
-  "web-mobile.stations.runNote": "macOS (Apple silicon) or Linux, even with {name} already installed. It installs {name}, joins this workspace and runs in the background. Once joined, add a profile on its station page.",
+  "web-mobile.stations.runNote": "macOS (Apple silicon), Linux or WSL on Windows, even with {name} already installed. It installs {name}, joins this workspace and runs in the background. Once joined, add a profile on its station page.",
   "web-mobile.stations.runThis": "Run in that machine's terminal:",
   "web-mobile.stations.small": "{workspace} · {online}/{n} online",
   "web-mobile.stations.waitAdmin": "No stations yet. Ask an admin to add one.",

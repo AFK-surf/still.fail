@@ -533,7 +533,7 @@
   "android-settings.station.renameTitle": "Station name",
   "android-settings.station.renameWhat": "rename the station",
   "android-settings.station.run": "Run this in its terminal:",
-  "android-settings.station.runNote": "Works on macOS (Apple silicon) and Linux, including machines with {app} already. It installs {app}, joins this workspace and keeps running in the background. Then add profiles on its station page.",
+  "android-settings.station.runNote": "Works on macOS (Apple silicon), Linux and WSL on Windows, including machines with {app} already. It installs {app}, joins this workspace and keeps running in the background. Then add profiles on its station page.",
   "android-settings.station.wait": "No stations yet. An admin needs to add one.",
   "android-settings.station.waiting": "Waiting for the machine… Continues once the command runs · Valid for 1 hour",
   "android-settings.stations.offline": "Offline: open {app} on this machine to reconnect",

@@ -509,7 +509,7 @@
   "web-mobile.stations.emojiSet": "图标已设好",
   "web-mobile.stations.renamePlaceholder": "比如机器名：studio",
   "web-mobile.stations.renameTitle": "station 的名字",
-  "web-mobile.stations.runNote": "macOS（Apple 芯片）和 Linux 都行；装过 {name} 的机器也用这条命令。它会装好 {name}、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。",
+  "web-mobile.stations.runNote": "macOS（Apple 芯片）和 Linux 都行，Windows 在 WSL 里运行；装过 {name} 的机器也用这条命令。它会装好 {name}、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。",
   "web-mobile.stations.runThis": "在那台机器的终端里执行：",
   "web-mobile.stations.small": "{workspace} · {online}/{n} 在线",
   "web-mobile.stations.waitAdmin": "这个 workspace 还没有 station，等管理员添加。",

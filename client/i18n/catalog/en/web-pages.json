@@ -599,7 +599,7 @@
   "web-pages.settings.account.signOutHereBody": "Its workspaces disappear from here. Other accounts aren't affected.",
   "web-pages.settings.account.signedOut": "Signed out of {email}",
   "web-pages.settings.account.unnamedDevice": "Unnamed",
-  "web-pages.settings.enroll.about": "Works on macOS (Apple silicon) and Linux, including machines that already have {name}.",
+  "web-pages.settings.enroll.about": "Works on macOS (Apple silicon), Linux and WSL on Windows, including machines that already have {name}.",
   "web-pages.settings.enroll.run": "Run in a terminal on that machine",
   "web-pages.settings.enroll.waiting": "Waiting for machine",
   "web-pages.settings.enroll.waitingNote": "Continues once the command runs · Valid 1 hour",

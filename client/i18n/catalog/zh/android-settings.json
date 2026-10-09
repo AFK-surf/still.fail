@@ -494,7 +494,7 @@
   "android-settings.station.renameTitle": "station 的名字",
   "android-settings.station.renameWhat": "给 station 改名",
   "android-settings.station.run": "在那台机器的终端里执行：",
-  "android-settings.station.runNote": "macOS（Apple 芯片）和 Linux 都行；装过 {app} 的机器也用这条命令。它会装好 {app}、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。",
+  "android-settings.station.runNote": "macOS（Apple 芯片）和 Linux 都行，Windows 在 WSL 里运行；装过 {app} 的机器也用这条命令。它会装好 {app}、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。",
   "android-settings.station.wait": "这个 workspace 还没有 station，等管理员添加。",
   "android-settings.station.waiting": "等待这台机器加入… 执行命令后会自动继续 · 命令 1 小时内有效",
   "android-settings.stations.offline": "离线：在这台机器上打开 {app} 就会重新连上",

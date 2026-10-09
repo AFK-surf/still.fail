@@ -124,6 +124,10 @@ case "$os-$(uname -m)" in
   Linux-aarch64|Linux-arm64) platform=linux-arm64 ;;
   *) echo "${say("cloud.install.unsupported", { machine: "$(uname -s) $(uname -m)" })}" >&2; exit 1 ;;
 esac
+# Windows' Linux (WSL): its PATH carries Windows' own directories (/mnt/c/…), whose programs are not the agents'; its
+# systemd is off unless /etc/wsl.conf turns it on; and it runs only while Windows keeps it up (keep_wsl).
+wsl=""
+[ "$os" = Linux ] && grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null && wsl=yes
 app="$data/app"
 label="fail.still.station"
 plist="$HOME/Library/LaunchAgents/$label.plist"
@@ -135,6 +139,22 @@ old_plist="$HOME/Library/LaunchAgents/$old_label.plist"
 old_unit="ember-station.service"
 # Whether this Linux has a systemd for the user to run services in (not a container's, not another init).
 user_systemd() { command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; }
+# WSL keeps a distribution up only while something of Windows' holds it (a terminal, a wsl.exe): with none, its
+# services stop with it, and it does not start with Windows. So a wsl.exe that holds it, hidden, started at each
+# Windows sign-in from the user's Startup folder ($keeper, a script for wscript) and now. Through WSL's interop
+# (cmd.exe, wscript.exe on its PATH): none from a station's own update (no terminal of Windows' there; done before).
+keeper_sleep=3153600000
+keep_wsl() {
+  [ -n "\${WSL_DISTRO_NAME:-}" ] && command -v wslpath >/dev/null 2>&1 && command -v cmd.exe >/dev/null 2>&1 || return 1
+  appdata=$(cd / && cmd.exe /c "echo %APPDATA%" 2>/dev/null | tr -d '\\r')
+  case "$appdata" in ?:\\\\*) ;; *) return 1 ;; esac
+  startup="$(wslpath -u "$appdata")/Microsoft/Windows/Start Menu/Programs/Startup"
+  [ -d "$startup" ] || return 1
+  keeper="$startup/stillfail-station-$WSL_DISTRO_NAME.vbs"
+  keeper_win=$(wslpath -w "$keeper")
+  printf 'CreateObject("WScript.Shell").Run "wsl.exe -d ""%s"" --exec sleep %s", 0, False\\r\\n' "$WSL_DISTRO_NAME" "$keeper_sleep" > "$keeper" || return 1
+  pgrep -fx "sleep $keeper_sleep" >/dev/null 2>&1 || (cd / && cmd.exe /c wscript.exe "$keeper_win" >/dev/null 2>&1) || return 1
+}
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -193,7 +213,8 @@ prune_node() {
 
 # The agents it starts are found on this PATH (Claude Code, Codex, and what they run). Each directory once: run from
 # the station (whose PATH is this), it would otherwise grow with every update.
-agent_path=$(printf '%s' "$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH:/usr/bin:/bin" | tr ':' '\n' | awk 'NF && !seen[$0]++' | paste -sd: -)
+# In WSL, none of Windows' (a Windows npm's \`claude\` there would run Windows' Node).
+agent_path=$(printf '%s' "$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH:/usr/bin:/bin" | tr ':' '\n' | awk -v wsl="$wsl" 'NF && !(wsl && index($0, "/mnt/") == 1) && !seen[$0]++' | paste -sd: -)
 # The service's definition, as this release has it: written below, and compared with the one running now.
 if [ "$os" = Darwin ]; then
   service_file="$plist"
@@ -415,10 +436,19 @@ echo "  ${say("cloud.install.where.data", { data: "$data" })}"
 echo "  ${say("cloud.install.where.status")}"
 [ "$os" = Linux ] && [ -z "\${no_service:-}" ] && echo "  ${say("cloud.install.where.service", { unit: "$unit" })}"
 [ -n "\${lingering:-}" ] && echo "  ${say("cloud.install.where.linger", { user: "$(id -un)" })}"
-[ -n "\${no_service:-}" ] && echo "  ${say("cloud.install.where.noService")}"
+if [ -n "$wsl" ] && [ -n "\${no_service:-}" ]; then
+  echo "  ${say("cloud.install.where.wslSystemd")}"
+elif [ -n "\${no_service:-}" ]; then
+  echo "  ${say("cloud.install.where.noService")}"
+elif [ -n "$wsl" ]; then
+  # Said when it is set up, or could not be on a machine joining a workspace (an update leaves it as it was).
+  if keep_wsl; then echo "  ${say("cloud.install.where.wslKept", { distro: "\${WSL_DISTRO_NAME}" })}"
+  elif [ -n "$token" ]; then echo "  ${say("cloud.install.where.wslKeep", { distro: "\${WSL_DISTRO_NAME:-<distro>}" })}"; fi
+fi
+# The agents as the station will find them (its PATH).
 missing=""
-command -v claude >/dev/null 2>&1 || missing="$missing Claude Code"
-command -v codex >/dev/null 2>&1 || missing="$missing Codex"
+(PATH="$agent_path"; command -v claude) >/dev/null 2>&1 || missing="$missing Claude Code"
+(PATH="$agent_path"; command -v codex) >/dev/null 2>&1 || missing="$missing Codex"
 if [ -n "$missing" ]; then
   echo
   echo "${say("cloud.install.agents.missing", { missing: "${missing}" })}"

@@ -572,7 +572,7 @@
   "web-pages.settings.account.signOutHereBody": "它所在的 workspace 会从这里消失；其他已登录的账号不受影响。",
   "web-pages.settings.account.signedOut": "已退出 {email}",
   "web-pages.settings.account.unnamedDevice": "未命名设备",
-  "web-pages.settings.enroll.about": "macOS（Apple 芯片）和 Linux 都行；装过 {name} 的机器也用这条命令。",
+  "web-pages.settings.enroll.about": "macOS（Apple 芯片）和 Linux 都行，Windows 在 WSL 里运行；装过 {name} 的机器也用这条命令。",
   "web-pages.settings.enroll.run": "在那台机器的终端里执行",
   "web-pages.settings.enroll.waiting": "等待这台机器加入",
   "web-pages.settings.enroll.waitingNote": "执行命令后会自动继续 · 命令 1 小时内有效",
