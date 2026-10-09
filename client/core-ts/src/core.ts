@@ -324,8 +324,10 @@ export class Core {
       doing = inner.doing.start(name, asked, inner.host.nowMs());
       inner.store.invalidate({ topic: "doing" });
     }
-    // Each call is a trace: what it asks of stations and still.fail cloud are its spans.
+    // Each call is a trace: what it asks of stations and still.fail cloud are its spans. One that asks nothing and
+    // answers at once is not sent (trace.ts QUIET_MS).
     const span = inner.tracer.root(name, Kind.Internal);
+    span.quiet();
     const station = callStation(call);
     if (station !== null) span.set("stillfail.station", stationId(station));
     // A preview's resource: its page's progress counts it (preview-load.ts).

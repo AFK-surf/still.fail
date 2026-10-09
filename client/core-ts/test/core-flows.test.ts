@@ -221,10 +221,14 @@ test("calls_are_traces_and_nothing_goes_out_when_tracing_is_off", async () => {
     const { host, core } = await started({ ...base(), "GET /memory": { global: "" } }, 1);
     const ui = core.connect();
     call(core, ui, 1, "memory.get", { station: "ws/st" });
+    // Asking nothing, answered at once: not sent. Failing at once: sent.
+    call(core, ui, 2, "chat.place", { station: "ws/st", thread: 7, seq: 3 });
+    call(core, ui, 3, "picture", { url: "ftp://nope" });
     await host.settle();
     await host.time.pass(EXPORT_MS + 100);
     const names = exports(host).flatMap(spansOf).map((s) => s.name);
     assert.ok(names.includes("GET /admin/api/memory") && names.includes("memory.get"), JSON.stringify(names));
+    assert.ok(!names.includes("chat.place") && names.includes("picture"), JSON.stringify(names));
     core.close();
   }
   const { host, core } = await started({ ...base(), "GET /memory": { global: "" } }, 0);

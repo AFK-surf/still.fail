@@ -11,6 +11,9 @@ import { hex, toJsonBytes } from "./util.ts";
 export const SAMPLE = 1.0;
 /// Spans wait this long to go out together.
 export const EXPORT_MS = 3_000;
+/// A call that asked nothing of the network and answered well within this is not recorded (`Span.quiet`): a scroll
+/// position kept, the focus moving, a draft saved were 41% of a phone's spans, each sent up every few seconds.
+export const QUIET_MS = 100;
 const MAX_BUFFER = 1_000;
 
 type Anchor = { wallMs: number; monoMs: number };
@@ -21,11 +24,14 @@ export class SpanContext {
   readonly span: Uint8Array;
   readonly sampled: boolean;
   readonly anchor: Anchor;
-  constructor(trace: Uint8Array, span: Uint8Array, sampled: boolean, anchor: Anchor) {
+  /// How many spans were started under its trace's root, the trace over (a quiet root asked nothing when none).
+  readonly under: { spans: number };
+  constructor(trace: Uint8Array, span: Uint8Array, sampled: boolean, anchor: Anchor, under: { spans: number } = { spans: 0 }) {
     this.trace = trace;
     this.span = span;
     this.sampled = sampled;
     this.anchor = anchor;
+    this.under = under;
   }
 
   /// The W3C `traceparent` header for requests made under this span.
@@ -95,7 +101,7 @@ export class Tracer {
   /// The root of a new trace that is always recorded.
   always(name: string, kind: Kind): Span {
     const span = this.#start(name, kind, null);
-    span.context = new SpanContext(span.context.trace, span.context.span, true, span.context.anchor);
+    span.context = new SpanContext(span.context.trace, span.context.span, true, span.context.anchor, span.context.under);
     return span;
   }
 
@@ -103,7 +109,10 @@ export class Tracer {
     const span = new Uint8Array(8);
     this.#host.randomBytes(span);
     let context: SpanContext;
-    if (parent) context = new SpanContext(parent.trace, span, parent.sampled, parent.anchor);
+    if (parent) {
+      parent.under.spans++;
+      context = new SpanContext(parent.trace, span, parent.sampled, parent.anchor, parent.under);
+    }
     else {
       const trace = new Uint8Array(16);
       this.#host.randomBytes(trace);
@@ -156,6 +165,7 @@ export class Span {
   #attributes: unknown[] = [];
   #error = false;
   #ended = false;
+  #quiet = false;
 
   constructor(tracer: Tracer, host: Host, context: SpanContext, parent: Uint8Array | null, name: string, kind: Kind, startMs: number) {
     this.#tracer = tracer;
@@ -176,11 +186,17 @@ export class Span {
     this.#error = true;
   }
 
+  /// Not recorded if it ends well within QUIET_MS with nothing started under it (a call that asked nothing).
+  quiet(): void {
+    this.#quiet = true;
+  }
+
   end(): void {
     if (this.#ended) return;
     this.#ended = true;
     if (!this.context.sampled) return;
     const endMs = this.#host.monotonicMs();
+    if (this.#quiet && !this.#error && this.context.under.spans === 0 && endMs - this.#startMs < QUIET_MS) return;
     const anchor = this.context.anchor;
     const nanos = (mono: number) => {
       const n = Math.max((anchor.wallMs + (mono - anchor.monoMs)) * 1e6, 0);
