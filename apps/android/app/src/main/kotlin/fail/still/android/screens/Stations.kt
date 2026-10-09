@@ -319,14 +319,20 @@ internal fun ChatStationChip(address: String) {
     val list = stations.value ?: return
     if (list.size < 2) return
     val s = list.firstOrNull { it.station == address } ?: return
+    StationTag(s.name, s.emoji, s.icon, Modifier.clickable { openStationPeek(app, address) })
+}
+
+/** A station named in a small outlined tag, its icon before its name: in a chat's bar (ChatStationChip) and on a chat's row in the lists. */
+@Composable
+internal fun StationTag(name: String, emoji: String?, icon: String?, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(50)
     Row(
-        Modifier.widthIn(max = 104.dp).clip(shape).border(1.dp, C.line, shape).clickable { openStationPeek(app, address) }
-            .padding(horizontal = 8.dp, vertical = 2.dp).semantics { contentDescription = s.name },
+        Modifier.widthIn(max = 104.dp).clip(shape).border(1.dp, C.line, shape).then(modifier)
+            .padding(horizontal = 8.dp, vertical = 2.dp).semantics { contentDescription = name },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        if (hasStationMark(s.emoji, s.icon)) StationMark(s.emoji, s.icon, 12.dp, C.muted)
-        Text(s.name, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (hasStationMark(emoji, icon)) StationMark(emoji, icon, 12.dp, C.muted)
+        Text(name, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

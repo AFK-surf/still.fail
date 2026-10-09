@@ -126,7 +126,6 @@ import fail.still.android.data.state
 import fail.still.android.ui.Badge
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
-import fail.still.android.ui.StationMark
 import fail.still.android.ui.hasStationMark
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Illustration
@@ -412,9 +411,9 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
             },
         )
     })
-    if (!archivable) return ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onStateLine = { line = it }, modifier = body)
+    if (!archivable) return ChatRowBody(item, view.leading ?: "agents", held || menuOpen, stationTag = view.stations.size > 1, busy = rowBusy(app, item), failed = rowFailed(app, item), onStateLine = { line = it }, modifier = body)
     SwipeToArchive(item, motion) {
-        ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, onStateLine = { line = it }, modifier = body)
+        ChatRowBody(item, view.leading ?: "agents", held || menuOpen, stationTag = view.stations.size > 1, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, onStateLine = { line = it }, modifier = body)
     }
 }
 
@@ -548,9 +547,9 @@ private fun rowBusy(app: AppState, item: ChatItem): Boolean =
 private fun rowFailed(app: AppState, item: ChatItem): String? =
     app.failedOf(setOf("chat.pin", "chat.archive"), "station" to item.station, "session" to item.session)
 
-/** What a row shows, `lead` leading who is in it (RowPicture.kt); the time while it is `held`; `busy`: a spinner where its mark goes; `failed`: a red mark there a moment (DoingMark). */
+/** What a row shows, `lead` leading who is in it (RowPicture.kt); its station in a tag with `stationTag` (the list has several); the time while it is `held`; `busy`: a spinner where its mark goes; `failed`: a red mark there a moment (DoingMark). */
 @Composable
-internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Boolean = false, failed: String? = null, onArchive: (() -> Unit)? = null, onStateLine: (Rect) -> Unit = {}, modifier: Modifier = Modifier) {
+internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, stationTag: Boolean = hasStationMark(item.stationEmoji, item.stationIcon), busy: Boolean = false, failed: String? = null, onArchive: (() -> Unit)? = null, onStateLine: (Rect) -> Unit = {}, modifier: Modifier = Modifier) {
     Box(
         Modifier.fillMaxWidth().height(66.dp).background(if (held) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
             .then(modifier),
@@ -574,17 +573,18 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                     item.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = if (item.unread) FontWeight.SemiBold else FontWeight.Normal,
                     color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alpha(dim),
                 )
-                // The station it runs on, by its icon (the core gives one only with several stations).
-                if (hasStationMark(item.stationEmoji, item.stationIcon)) StationMark(item.stationEmoji, item.stationIcon, 12.dp, C.muted, Modifier.semantics { contentDescription = item.stationName })
-                // Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too.
-                Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
-                    val reconnecting = item.reconnecting
+                // Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. Its
+                // slot only when there is one.
+                val reconnecting = item.reconnecting
+                if (busy || failed != null || offline != null || reconnecting != null || item.connect != null) Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
                     if (busy || failed != null) DoingMark(busy, failed, 11.dp)
                     // Its station offline, or its link coming back: unplugged (a spinner is only something its person did).
                     else if (offline != null) Box(Modifier.semantics { contentDescription = offline }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
                     else if (reconnecting != null) Box(Modifier.semantics { contentDescription = reconnecting }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
                     else if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp) }
                 }
+                // The station it runs on, in a tag with its name at the row's end, only with several stations.
+                if (stationTag) StationTag(item.stationName, item.stationEmoji, item.stationIcon, Modifier.alpha(dim))
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Box(Modifier.weight(1f).alpha(dim), contentAlignment = Alignment.CenterStart) {
