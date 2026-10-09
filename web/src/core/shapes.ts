@@ -54,19 +54,38 @@ export interface AdbShareView {
 /** How full something is. */
 export type Level = "ok" | "amber" | "red";
 
-export interface AgentCardRow {
-	label: string;
-	value: string;
-	/** Worth a look (a quota or context running out, an account that cannot run): its colour. */
-	level?: Level;
+export interface AgentCardMeter {
+	percent: number;
+	text: string;
+	level: Level;
+	/** Its whole is not known (a context whose window the runtime does not tell): `text` alone. */
+	unknown?: boolean;
+}
+
+export interface AgentCardNote {
+	text: string;
+	level: Level;
 }
 
 /**
- * A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): only what it has, a
- * row each: how much it has done, what that cost and used, its account and what is left of it, its jobs, what is wrong.
+ * A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): each part only when it
+ * has one. Its account and what is left of it are the chat's agent's (`ChatAgent::account`).
  */
 export interface AgentCardView {
-	rows: AgentCardRow[];
+	/** Its turns, and how long the finished ones took: 8 轮 · 共干了 1 小时 12 分. */
+	work?: string;
+	/** What its calls would cost at API prices ($4.20, ≥$4.20 with some unpriced). */
+	cost?: string;
+	/** Its tokens in and out: 输入 1.2M · 输出 34K. */
+	tokens?: string;
+	/** How much of what it sent was read from the cache. */
+	cache?: AgentCardMeter;
+	/** The context it carries on with, against its model's window (amber from 80%, red from 95%). */
+	context?: AgentCardMeter;
+	/** Its jobs at work now: 服务在线：web · 在盯着：CI. */
+	jobs?: string;
+	/** What is wrong (an account that cannot run, the disk filling up); a quota running out is its account's windows'. */
+	attention: AgentCardNote[];
 }
 
 /** A runtime. */

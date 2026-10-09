@@ -110,13 +110,8 @@
     "other": "{n} people stuck after sign-in"
   },
   "core-views.admin.todo.stuck_hint": "Grant access or see where they're stuck",
+  "core-views.agent.context": "{used} / {window}",
   "core-views.agent.hours": "{h}h {m}m",
-  "core-views.agent.label.account": "Account",
-  "core-views.agent.label.attention": "Heads-up",
-  "core-views.agent.label.jobs": "Jobs",
-  "core-views.agent.label.quota": "Quota",
-  "core-views.agent.label.tokens": "Tokens",
-  "core-views.agent.label.work": "Work",
   "core-views.agent.minutes": "{m}m",
   "core-views.agent.running": {
     "one": "1 job running",

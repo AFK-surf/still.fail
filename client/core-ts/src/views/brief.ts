@@ -1,6 +1,6 @@
-// An agent of a chat in brief, for its card over its avatar (the `agentCard` view, web AgentCard.tsx): a row for each
-// thing worth knowing of it that it has, labelled: how much it has done, what that cost and used (cache hits, how full
-// its context is), the account it runs on and what is left of it, its jobs at work, and what is wrong.
+// An agent of a chat in brief, for its card over its avatar (the `agentCard` view, web AgentCard.tsx): how much it has
+// done, what that cost and used (its tokens, the cache's hit rate, how full its context is), its jobs at work, and what
+// is wrong.
 import * as format from "../format.ts";
 import { usageOf } from "../history.ts";
 import { t } from "../i18n.ts";
@@ -46,49 +46,39 @@ export function jobsText(list: unknown): string | null {
   return parts.length ? parts.join(" · ") : null;
 }
 
-type Row = { label: string; value: string; level?: "amber" | "red" };
+type Level = "ok" | "amber" | "red";
+type Meter = { percent: number; text: string; level: Level };
 
 /// How full a context is that is worth a look, and one about to be compacted.
 const CONTEXT_AMBER = 80;
 const CONTEXT_RED = 95;
 
-/// The card of `agent` (a chat's agent, ViewsInner `agent`), with its live usage (none before it is read).
-export function card(agent: J, live: J): { rows: Row[] } {
-  const rows: Row[] = [];
-  const work = workText(get(agent, "turns"));
-  if (work !== null) rows.push({ label: t("core-views.agent.label.work"), value: work });
+/// The card of `agent` (a chat's agent, ViewsInner `agent`), with its live usage (none before it is read): each part
+/// only when it has one. Its account and what is left of it the card takes from the agent as it is.
+export function card(agent: J, live: J): J {
+  const out: J = { work: workText(get(agent, "turns")), jobs: jobsText(get(agent, "jobs")), attention: [] };
   const u = get(live, "usage");
-  const calls = typeof get(u, "modelCalls") === "number" ? u.modelCalls : 0;
-  if (calls > 0) {
-    const { context, contextPercent, cost } = usageOf(live);
-    if (cost !== null) rows.push({ label: t("core-logic.history.usage.cost"), value: cost });
-    const input = typeof u.inputTokens === "number" ? u.inputTokens : 0;
-    const output = typeof u.outputTokens === "number" ? u.outputTokens : 0;
-    rows.push({ label: t("core-views.agent.label.tokens"), value: t("core-views.agent.tokens", { input: format.compactNumber(input), output: format.compactNumber(output) }) });
-    if (input > 0) rows.push({ label: t("core-logic.history.usage.hit_rate"), value: `${format.round(((typeof u.cachedTokens === "number" ? u.cachedTokens : 0) / input) * 100)}%` });
-    if (context !== null) {
-      const level = contextPercent === null ? null : contextPercent >= CONTEXT_RED ? "red" : contextPercent >= CONTEXT_AMBER ? "amber" : null;
-      rows.push({ label: t("core-logic.history.usage.context"), value: context, ...(level ? { level } : {}) });
+  const n = (k: string): number => (typeof get(u, k) === "number" ? u[k] : 0);
+  if (n("modelCalls") > 0) {
+    const { contextPercent, cost } = usageOf(live);
+    out.cost = cost;
+    out.tokens = t("core-views.agent.tokens", { input: format.compactNumber(n("inputTokens")), output: format.compactNumber(n("outputTokens")) });
+    if (n("inputTokens") > 0) {
+      const percent = format.round((n("cachedTokens") / n("inputTokens")) * 100);
+      out.cache = { percent, text: `${percent}%`, level: "ok" } satisfies Meter;
+    }
+    if (typeof get(u, "contextTokens") === "number") {
+      const used = format.compactNumber(n("contextTokens"));
+      out.context = contextPercent !== null
+        ? { percent: contextPercent, text: t("core-views.agent.context", { used, window: format.compactNumber(n("contextWindow")) }), level: contextPercent >= CONTEXT_RED ? "red" : contextPercent >= CONTEXT_AMBER ? "amber" : "ok" } satisfies Meter
+        : { percent: 0, text: used, level: "ok" } satisfies Meter;
+      if (contextPercent === null) out.context.unknown = true;
     }
   }
-  const account = get(agent, "account") ?? get(agent, "profile");
-  const name = get(account, "name");
-  if (typeof name === "string" && name) rows.push({ label: t("core-views.agent.label.account"), value: name });
-  const attention = arr(get(agent, "attention"));
-  const quota = get(get(agent, "account"), "quotaLine");
-  if (typeof get(quota, "text") === "string") {
-    // When a window runs low, when it fills again (its attention says).
-    const refills = attention.filter((a) => get(a, "kind") === "quota" && typeof get(a, "more") === "string").map((a) => a.more as string);
-    const level = get(quota, "level");
-    rows.push({ label: t("core-views.agent.label.quota"), value: [quota.text, ...refills].join(" · "), ...(level === "amber" || level === "red" ? { level } : {}) });
+  // What is wrong, but a quota running out: its account's windows say that.
+  for (const a of arr(get(agent, "attention"))) {
+    if (get(a, "kind") === "quota") continue;
+    out.attention.push({ text: String(get(a, "text") ?? ""), level: get(a, "kind") === "disk" ? "amber" : "red" });
   }
-  const jobsNow = jobsText(get(agent, "jobs"));
-  if (jobsNow !== null) rows.push({ label: t("core-views.agent.label.jobs"), value: jobsNow });
-  for (const a of attention) {
-    // A quota running out is in its row already.
-    if (get(a, "kind") === "quota" && typeof get(quota, "text") === "string") continue;
-    const level = get(get(a, "quota"), "level") ?? (get(a, "kind") === "disk" ? "amber" : "red");
-    rows.push({ label: t("core-views.agent.label.attention"), value: String(get(a, "text") ?? ""), level });
-  }
-  return { rows };
+  return out;
 }

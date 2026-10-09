@@ -1284,12 +1284,23 @@ export const SHAPES: Record<string, Shape> = {
     ["jobs", vec("Job"), { doc: "Its background jobs, newest first; those with a port are web services, shown by their names." }],
   ], { doc: "An agent of a chat: its session, the connect that started it, its profile, and what it can move to." }),
   AgentCardView: struct([
-    ["rows", vec("AgentCardRow")],
-  ], { doc: "A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): only what it has, a\nrow each: how much it has done, what that cost and used, its account and what is left of it, its jobs, what is wrong." }),
-  AgentCardRow: struct([
-    ["label", "String"],
-    ["value", "String"],
-    ["level", opt("Level"), { doc: "Worth a look (a quota or context running out, an account that cannot run): its colour." }],
+    ["work", opt("String"), { doc: "Its turns, and how long the finished ones took: 8 轮 · 共干了 1 小时 12 分." }],
+    ["cost", opt("String"), { doc: "What its calls would cost at API prices ($4.20, ≥$4.20 with some unpriced)." }],
+    ["tokens", opt("String"), { doc: "Its tokens in and out: 输入 1.2M · 输出 34K." }],
+    ["cache", opt("AgentCardMeter"), { doc: "How much of what it sent was read from the cache." }],
+    ["context", opt("AgentCardMeter"), { doc: "The context it carries on with, against its model's window (amber from 80%, red from 95%)." }],
+    ["jobs", opt("String"), { doc: "Its jobs at work now: 服务在线：web · 在盯着：CI." }],
+    ["attention", vec("AgentCardNote"), { doc: "What is wrong (an account that cannot run, the disk filling up); a quota running out is its account's windows'." }],
+  ], { doc: "A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): each part only when it\nhas one. Its account and what is left of it are the chat's agent's (`ChatAgent::account`)." }),
+  AgentCardMeter: struct([
+    ["percent", "f64"],
+    ["text", "String"],
+    ["level", "Level"],
+    ["unknown", opt("bool"), { doc: "Its whole is not known (a context whose window the runtime does not tell): `text` alone." }],
+  ]),
+  AgentCardNote: struct([
+    ["text", "String"],
+    ["level", "Level"],
   ]),
   AgentWait: struct([
     ["since", "i64", { client: "I54" }],

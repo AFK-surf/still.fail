@@ -46,7 +46,7 @@ function valueOf(topic: Topic): unknown {
     case "slackApp": return station.slackApp();
     case "live": return chat ? liveView(chat) : null;
     case "history": return chat ? historyView(chat) : null;
-    case "agentCard": return chat ? agentCardView(chat, station.runs()) : null;
+    case "agentCard": return chat ? agentCardView(chat) : null;
     case "host": return station.host();
     case "connects": return station.connects();
     case "stations": return [station.stationView()];

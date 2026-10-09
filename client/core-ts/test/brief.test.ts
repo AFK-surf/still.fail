@@ -25,23 +25,23 @@ test("jobs_at_work_by_what_they_are", () => {
   );
 });
 
-test("the_card_has_a_row_for_each_thing_it_has", () => {
+test("the_card_says_what_it_did_cost_and_used", () => {
   const agent = {
     turns: [turn(0, 5), turn(10 * MIN, 7)],
-    account: { name: "lin@acme.dev", quotaLine: { text: "5 小时剩 12%", level: "red" } },
-    attention: [
-      { kind: "quota", text: "5 小时剩余 12%", more: "2 小时后恢复", quota: { level: "red" } },
-      { kind: "disk", text: "磁盘剩 8 GB" },
-    ],
+    attention: [{ kind: "quota", text: "5 小时剩余 12%", quota: { level: "red" } }, { kind: "disk", text: "磁盘剩 8 GB" }, { kind: "account", text: "「lin」要重新登录" }],
     jobs: [{ name: "web", state: "running", port: 5173 }],
   };
   const live = { usage: { modelCalls: 40, inputTokens: 1_200_000, cachedTokens: 1_080_000, outputTokens: 34_000, contextTokens: 190_000, contextWindow: 200_000, cost: 4.2, unpricedCalls: 0 } };
-  const rows = card(agent, live).rows.map((r) => [r.label, r.value, r.level ?? null]);
-  assert.deepEqual(rows.map((r) => r[0]), ["工作", "费用估算", "Token", "缓存命中率", "上下文", "账号", "额度", "后台", "注意"]);
-  assert.deepEqual(rows.find((r) => r[0] === "缓存命中率"), ["缓存命中率", "90%", null]);
-  assert.equal(rows.find((r) => r[0] === "上下文")?.[2], "red");
-  assert.deepEqual(rows.find((r) => r[0] === "额度"), ["额度", "5 小时剩 12% · 2 小时后恢复", "red"]);
-  assert.deepEqual(rows.at(-1), ["注意", "磁盘剩 8 GB", "amber"]);
-  // Before its first turn and its usage is read: nothing but its account.
-  assert.deepEqual(card({ turns: [], profile: { name: "lin" }, attention: [], jobs: [] }, null).rows.map((r) => r.label), ["账号"]);
+  const c = card(agent, live);
+  assert.equal(c.work, "2 轮 · 共干了 12 分钟");
+  assert.equal(c.cost, "$4.20");
+  assert.equal(c.tokens, "输入 1.2M · 输出 34K");
+  assert.deepEqual(c.cache, { percent: 90, text: "90%", level: "ok" });
+  assert.deepEqual(c.context, { percent: 95, text: "190K / 200K", level: "red" });
+  assert.equal(c.jobs, "服务在线：web");
+  // A quota running out is its account's windows' to say.
+  assert.deepEqual(c.attention, [{ text: "磁盘剩 8 GB", level: "amber" }, { text: "「lin」要重新登录", level: "red" }]);
+  // Before its first turn and its usage is read: nothing.
+  const none = card({ turns: [], attention: [], jobs: [] }, null);
+  assert.deepEqual([none.work, none.cost, none.cache, none.context, none.jobs, none.attention], [null, undefined, undefined, undefined, null, []]);
 });

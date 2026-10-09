@@ -62,18 +62,38 @@ data class AdbShareView (
 typealias Level = String
 
 @Serializable
-data class AgentCardRow (
-	val label: String,
-	val value: String,
-	/// Worth a look (a quota or context running out, an account that cannot run): its colour.
-	val level: Level? = null
+data class AgentCardMeter (
+	val percent: Double,
+	val text: String,
+	val level: Level,
+	/// Its whole is not known (a context whose window the runtime does not tell): `text` alone.
+	val unknown: Boolean? = null
 )
 
-/// A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): only what it has, a
-/// row each: how much it has done, what that cost and used, its account and what is left of it, its jobs, what is wrong.
+@Serializable
+data class AgentCardNote (
+	val text: String,
+	val level: Level
+)
+
+/// A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): each part only when it
+/// has one. Its account and what is left of it are the chat's agent's (`ChatAgent::account`).
 @Serializable
 data class AgentCardView (
-	val rows: List<AgentCardRow>
+	/// Its turns, and how long the finished ones took: 8 轮 · 共干了 1 小时 12 分.
+	val work: String? = null,
+	/// What its calls would cost at API prices ($4.20, ≥$4.20 with some unpriced).
+	val cost: String? = null,
+	/// Its tokens in and out: 输入 1.2M · 输出 34K.
+	val tokens: String? = null,
+	/// How much of what it sent was read from the cache.
+	val cache: AgentCardMeter? = null,
+	/// The context it carries on with, against its model's window (amber from 80%, red from 95%).
+	val context: AgentCardMeter? = null,
+	/// Its jobs at work now: 服务在线：web · 在盯着：CI.
+	val jobs: String? = null,
+	/// What is wrong (an account that cannot run, the disk filling up); a quota running out is its account's windows'.
+	val attention: List<AgentCardNote>
 )
 
 /// A runtime.

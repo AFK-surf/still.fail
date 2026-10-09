@@ -241,19 +241,15 @@ export interface Runs { choices: ModelOption[]; profile: Profile }
 
 /** An agent's card as the core words it (views/brief.ts): a turn for each message of a person's, a few minutes and a
  * few hundred thousand tokens each. */
-export function agentCardView(chat: DemoChat, runs?: Runs): AgentCardView {
+export function agentCardView(chat: DemoChat): AgentCardView {
   const turns = chat.messages.filter((m) => m.authorKind === "person").length;
-  if (turns === 0) return { rows: [] };
-  const input = turns * 420;
+  if (turns === 0) return { attention: [] };
+  const context = turns * 19;
   return {
-    rows: [
-      { label: "工作", value: `${turns} 轮 · 共干了 ${turns * 7} 分钟` },
-      { label: "费用估算", value: `$${(turns * 0.62).toFixed(2)}` },
-      { label: "Token", value: `输入 ${input}K · 输出 ${turns * 11}K` },
-      { label: "缓存命中率", value: "91%" },
-      { label: "上下文", value: `${turns * 38}K / 200K（${turns * 19}%）` },
-      ...(runs && chat.model.runtime === "claude" ? [{ label: "账号", value: runs.profile.name }, { label: "额度", value: "5 小时剩 72% · 本周剩 64%" }] : []),
-    ],
+    work: `${turns} 轮 · 共干了 ${turns * 7} 分钟`, cost: `$${(turns * 0.62).toFixed(2)}`, tokens: `输入 ${turns * 420}K · 输出 ${turns * 11}K`,
+    cache: { percent: 91, text: "91%", level: "ok" },
+    context: { percent: context, text: `${turns * 38}K / 200K`, level: context >= 95 ? "red" : context >= 80 ? "amber" : "ok" },
+    attention: [],
   };
 }
 
