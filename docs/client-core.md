@@ -41,9 +41,10 @@ compressed (`accept-encoding: zstd`; an event stream flushed event by event and
 compressed against its last megabyte, station/src/mesh/compress.ts), and it is
 decompressed as it comes (fzstd, the same on every host: the browser and
 Hermes have no zstd of their own); a station from before sends it as it is.
-The one exception to
-keeping everything current: what a station's agents spent (`stationUsage`) is
-read only while a page shows it.
+The exceptions to
+keeping everything current: what a station's agents spent (`stationUsage`) and
+its archived chats (`archivedRows`) are read only while a page shows them (one
+that changed meanwhile is read as a page shows it again).
 
 Topics are keyed collections (`src/collections.ts`): a change to a record
 recomputes only the items that read it, and a subscription that says `keyed`
@@ -151,7 +152,7 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s) / `error` + message |
 | `overview` | `station` | the admin API's `/overview` |
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
-| `archivedRows` | `station` | `/chats?archived=1`: the station's archived chats (read again after `chat.archive`, `session.delete`) |
+| `archivedRows` | `station` | `/chats?archived=1`: the station's archived chats. Read only while a page shows it (every chat ever archived: read with each snapshot and archiving, it was a large part of what a slow link carried): again after `chat.archive`, `session.delete` while shown, else marked to be read as it is next shown |
 | `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, people, first person message, `last` entry, `lastMessage`, the viewer's `read` and `unread`), latest message first |
 | `chatRows` | `station` | `/chats`: the viewer's sidebar rows as the station puts them together (`ChatRow`; docs/station-storage.md, The sidebar) |
 | `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns, jobs }` (no messages, no transcript) |
@@ -476,10 +477,14 @@ edits) becomes the `overview`; a thread (`chat.forSession`, a new chat) goes
 into `threads` and the `session` topics; a read position into the threads; a
 job stopped into its session's `jobs` and into `jobs` (as its `job` event
 would); otherwise the touched topics are read again (sessions → `session`,
-`sessions` and `chatRows`; a thread answered → `chatRows` as well; connects →
-`overview` and `sessions`; profiles, Slack → `overview`; `slack.identity` →
-`overview` (its answer) and `chatRows`). A write to still.fail cloud reads the
-account topics again. The station's events bring the same a moment later.
+`sessions` and `chatRows`, and `archivedRows` while a page shows it; a
+session's process warmed, stopped or let go (`session.warm`, `session.stop`,
+`session.evict`) → its `session` alone, the lists that show it its station's
+`session` and `chat` events change; `widget.setState` → nothing, its page reads
+it; a thread answered → `chatRows` as well; connects → `overview` and
+`sessions`; profiles, Slack → `overview`; `slack.identity` → `overview` (its
+answer) and `chatRows`). A write to still.fail cloud reads the account topics
+again. The station's events bring the same a moment later.
 
 ## Layout
 

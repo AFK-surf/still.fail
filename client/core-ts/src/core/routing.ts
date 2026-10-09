@@ -14,6 +14,7 @@ import type { Source, Value } from "../store.ts";
 export interface Owner {
   owns(topic: Topic): boolean;
   start?(topic: Topic): void;
+  resume?(topic: Topic): void;
   stop?(topic: Topic): void;
   compute?(topic: Topic): Value | undefined;
 }
@@ -33,6 +34,10 @@ export class Router implements Source {
     if (owner?.start) owner.start(topic);
     // Computed when it goes out: its first value now.
     this.#core.store.invalidate(topic);
+  }
+
+  resume(topic: Topic): void {
+    this.owners.find((o) => o.owns(topic))?.resume?.(topic);
   }
 
   stop(topic: Topic): void {

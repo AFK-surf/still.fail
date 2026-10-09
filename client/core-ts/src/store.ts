@@ -35,6 +35,8 @@ export function sameValue(a: Value | undefined, b: Value | undefined): boolean {
 export interface Source {
   /// The topic got its first subscriber: fetch it and keep it current.
   start(topic: Topic): void;
+  /// The topic is subscribed to or watched again in the while it is kept after the last went (not started anew).
+  resume?(topic: Topic): void;
   /// Nobody has subscribed for a while: stop streams and timers for it.
   stop(topic: Topic): void;
   /// The current value of a topic marked stale, as it goes out; undefined while it has none.
@@ -148,11 +150,13 @@ export class Store {
       entry = { topic, subscribers: [], watchers: [], stale: false, emitScheduled: false, idle: null };
       this.#topics.set(key, entry);
     }
+    const resumed = entry.idle !== null;
     entry.subscribers.push([client, id, keyed]);
     entry.idle = null;
     const cached = entry.sent;
     if (cached !== undefined) this.host.emit(client, to(whole(cached), id));
     if (started) this.#start(topic);
+    else if (resumed) this.#source?.resume?.(topic);
     this.#tick();
   }
 
@@ -209,9 +213,11 @@ export class Store {
       entry = { topic, subscribers: [], watchers: [], stale: false, emitScheduled: false, idle: null };
       this.#topics.set(key, entry);
     }
+    const resumed = entry.idle !== null;
     entry.watchers.push([id, onChange]);
     entry.idle = null;
     if (started) this.#start(topic);
+    else if (resumed) this.#source?.resume?.(topic);
     return new Watch(this, topic, id);
   }
 
@@ -297,6 +303,12 @@ export class Store {
   /// Whether a UI subscribes to the topic now.
   subscribed(topic: Topic): boolean {
     return (this.#topics.get(topicKey(topic))?.subscribers.length ?? 0) > 0;
+  }
+
+  /// Whether anything shows the topic now: a UI subscribes to it, or a view built from it is watched (a page open).
+  inUse(topic: Topic): boolean {
+    const entry = this.#topics.get(topicKey(topic));
+    return entry !== undefined && (entry.subscribers.length > 0 || entry.watchers.length > 0);
   }
 
   /// Topics with at least one subscriber (or within their eviction grace).

@@ -206,11 +206,14 @@ test("writes_bring_what_they_touch_up_to_date", async () => {
   const perform = (name: string, params: J) => run(core.inner.stations.perform(op(name, params), null));
   await host.settle();
   assert.notEqual(core.inner.data.get({ topic: "session", station: ST, key: "k 1" }), undefined);
-  const [s, k, o, other] = ["/admin/api/sessions", "/admin/api/sessions/k%201", "/admin/api/overview", "/admin/api/sessions/other"].map((p) => gets(host, p));
+  const [s, k, o, other, chats] = ["/admin/api/sessions", "/admin/api/sessions/k%201", "/admin/api/overview", "/admin/api/sessions/other", "/admin/api/chats"].map((p) => gets(host, p));
   await perform("session.stop", { key: "k 1" });
   await host.settle();
-  assert.equal(gets(host, "/admin/api/sessions"), s + 1);
+  // Its process stopped: its own detail read again before the call answers; the lists that show it its station tells
+  // as they change, and are not read whole again.
+  assert.equal(gets(host, "/admin/api/sessions"), s);
   assert.equal(gets(host, "/admin/api/sessions/k%201"), k + 1);
+  assert.equal(gets(host, "/admin/api/chats"), chats);
   assert.equal(gets(host, "/admin/api/sessions/other"), other);
   assert.equal(gets(host, "/admin/api/overview"), o);
   // A profile edit answers the overview: that is the record now, nothing is read again.
@@ -790,7 +793,51 @@ test("what_the_agents_spent_is_read_only_while_a_page_shows_it", async () => {
   subscribe(core, ui, 3, { topic: "stationUsage", station: ST });
   await host.settle();
   assert.equal(usage(), 3, "changed while not shown: read as it is shown again");
+  // The page of usage (a view made from it) shows it as well.
+  core.receive(ui, { kind: "unsubscribe", id: 3, unsubscribe: true });
+  await host.time.pass(EVICT_AFTER_MS + 500, 500);
+  subscribe(core, ui, 4, { topic: "usage", scope: "ws" });
+  await host.settle();
+  assert.equal(usage(), 3);
+  push("usage", {});
+  await host.settle();
+  assert.equal(usage(), 4, "changed while the page shows it: read");
   core.close();
+});
+
+test("the_archive_is_read_only_while_a_page_shows_it", async () => {
+  const s = await ui({ ...base(), "POST /threads/7/archive": { ok: true } });
+  // Its stream comes back told what it missed, as in the test before.
+  s.gate.resumes = true;
+  Queue.offerUnsafe(s.streams.at(-1)!.queue, new TextEncoder().encode(`id: 1f2e3d4c.1\nevent: overview\ndata: {}\n\n`));
+  const archived = () => gets(s.host, "/chats?archived=1");
+  const archive = async (id: number) => {
+    call(s.core, s.ui, id, "chat.archive", { station: ST, session: "k1", thread: 7, archived: true });
+    await s.read();
+  };
+  const shown = async (id: number) => {
+    subscribe(s.core, s.ui, id, { topic: "archive", scope: "ws" });
+    await s.read();
+  };
+  const left = async (id: number) => {
+    s.core.receive(s.ui, { kind: "unsubscribe", id, unsubscribe: true });
+    await s.host.time.pass(EVICT_AFTER_MS + 500, 500);
+  };
+  assert.equal(archived(), 0, "not shown as the station is read");
+  await archive(1);
+  assert.equal(archived(), 0, "nor as a chat is archived");
+  await shown(2);
+  assert.equal(archived(), 1, "shown: read");
+  await archive(3);
+  assert.equal(archived(), 2, "and again as one is archived while it is shown");
+  await left(2);
+  await shown(4);
+  assert.equal(archived(), 2, "shown again, unchanged since: what is held is current");
+  await left(4);
+  await archive(5);
+  await shown(6);
+  assert.equal(archived(), 3, "one archived while not shown: read as it is shown again");
+  s.core.close();
 });
 
 test("a_thread_opens_from_what_is_kept_and_asks_only_for_what_came_after", async () => {

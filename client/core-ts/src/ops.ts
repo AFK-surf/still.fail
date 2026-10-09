@@ -12,6 +12,8 @@ export type Target = { station: string } | { cloud: string };
 export type Effect =
   | { kind: "none" }
   | { kind: "session"; key: string | null }
+  /// What its process does (warm, stopped, let go): its station tells the lists that show it as they change.
+  | { kind: "process"; key: string }
   | { kind: "thread"; archived: boolean }
   | { kind: "connect"; id: string | null }
   | { kind: "overview" }
@@ -220,6 +222,7 @@ function stationOp(name: string, params: unknown): Request | null {
     return { target: { station }, method, path: path(), body, fallback: null, effect };
   };
   const session = (k: string): Effect => ({ kind: "session", key: p.word(k) });
+  const process = (k: string): Effect => ({ kind: "process", key: p.word(k) ?? "" });
   const connect = (k: string): Effect => ({ kind: "connect", id: p.word(k) });
   const optU64 = (k: string) => {
     const v = p.v[k];
@@ -233,11 +236,11 @@ function stationOp(name: string, params: unknown): Request | null {
     case "tools.setAccess":
       return op("PUT", () => "/tools/access", p.pick(["access"]), OVERVIEW);
     case "session.stop":
-      return op("POST", () => `/sessions/${p.at("key")}/stop`, null, session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/stop`, null, process("key"));
     case "session.warm":
-      return op("POST", () => `/sessions/${p.at("key")}/warm`, null, session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/warm`, null, process("key"));
     case "session.evict":
-      return op("POST", () => `/sessions/${p.at("key")}/evict`, null, session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/evict`, null, process("key"));
     case "session.delete":
       return op("DELETE", () => `/sessions/${p.at("key")}`, null, session("key"));
     case "session.settings":
@@ -290,7 +293,8 @@ function stationOp(name: string, params: unknown): Request | null {
     case "widget.state":
       return op("GET", () => `/sessions/${p.at("key")}/widget-state?path=${p.at("path")}`, null, NONE);
     case "widget.setState":
-      return op("PUT", () => `/sessions/${p.at("key")}/widget-state`, p.pick(["path", "state"]), session("key"));
+      // A widget's own state: nothing a list shows (its page reads it, `widget.state`).
+      return op("PUT", () => `/sessions/${p.at("key")}/widget-state`, p.pick(["path", "state"]), NONE);
     case "machineSessions.list":
       return op("GET", () => "/machine-sessions", null, NONE);
     case "machineSessions.read":

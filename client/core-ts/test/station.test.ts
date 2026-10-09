@@ -158,7 +158,8 @@ test("a_write_answers_once_what_it_touched_is_read_again", async () => {
   await host.settle();
   const answer = host.takeEmitted().find(([, m]) => m.id === 9);
   assert.deepEqual(answer?.[1], { id: 9, ok: { ok: true } });
-  assert.equal(gets(host, "/admin/api/sessions"), before + 1);
+  // Its own detail; the lists that show it its station tells as they change.
+  assert.equal(gets(host, "/admin/api/sessions"), before);
   assert.equal(gets(host, "/admin/api/sessions/k1"), 2);
   core.close();
 });

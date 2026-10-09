@@ -121,6 +121,8 @@ export class Link {
   hostSaved = 0;
   /// Whether the usage held is as the station has it: read since it last said its usage changed.
   usageCurrent = false;
+  /// Whether the archived chats held are as the station has them: read since anything could have changed them.
+  archivedCurrent = false;
 
   constructor(address: string, addr: StationAddr, scoped: Scoped) {
     this.address = address;
@@ -453,7 +455,7 @@ export class StationsSync {
       this.#enqueue(address, "sessions", p, Effect.andThen(read({ topic: "sessions", station: address }, "/sessions"), Effect.sync(() => this.#details(address)))),
       this.#enqueue(address, "threads", p, Effect.andThen(read({ topic: "threads", station: address }, "/threads"), Effect.sync(() => this.#entries(address)))),
       this.#enqueue(address, "chats", p, Effect.andThen(read({ topic: "chatRows", station: address }, "/chats"), Effect.sync(() => this.openEvents(address, false)))),
-      this.#enqueue(address, "archived", Priority.background, read({ topic: "archivedRows", station: address }, "/chats?archived=1")),
+      ...this.#archivedChanged(address, ctx),
       this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, "/jobs")),
       this.#enqueue(address, "footprint", Priority.background, read({ topic: "footprint", station: address }, "/footprint")),
       ...this.#usageChanged(address, ctx),
@@ -532,8 +534,32 @@ export class StationsSync {
   #usageChanged(address: string, ctx: SpanContext | null = null): Deferred.Deferred<void, CoreError>[] {
     const link = this.#links.get(address);
     if (link) link.usageCurrent = false;
-    if (!this.#core.store.subscribed({ topic: "stationUsage", station: address })) return [];
+    if (!this.#core.store.inUse({ topic: "stationUsage", station: address })) return [];
     return [this.#enqueue(address, "usage", Priority.background, this.#usage(address, ctx))];
+  }
+
+  /// The station's archived chats may have changed: read while a page shows them (the archive), else only marked to be
+  /// read once one does. Every chat ever archived: read with each snapshot and archiving, it was a large part of what a
+  /// slow link carried for a page seldom opened.
+  #archivedChanged(address: string, ctx: SpanContext | null = null): Deferred.Deferred<void, CoreError>[] {
+    const link = this.#links.get(address);
+    if (link) link.archivedCurrent = false;
+    if (!this.#core.store.inUse({ topic: "archivedRows", station: address })) return [];
+    return [this.#enqueue(address, "archived", Priority.background, this.#archived(address, ctx))];
+  }
+
+  /// A page shows the station's archived chats: read, unless what is held is as the station has it.
+  archivedShown(address: string): void {
+    const link = this.#links.get(address);
+    if (link && !link.archivedCurrent) this.#enqueue(address, "archived", Priority.shown, this.#archived(address));
+  }
+
+  #archived(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
+    return Effect.suspend(() => {
+      const link = this.#links.get(address);
+      if (link) link.archivedCurrent = true;
+      return this.#read(address, { topic: "archivedRows", station: address }, "/chats?archived=1", undefined, ctx);
+    });
   }
 
   /// A page shows the station's usage: read, unless what is held is as the station has it.
@@ -966,6 +992,12 @@ export class StationsSync {
       const reads: [string, Effect.Effect<void, CoreError>][] = [];
       const read = (what: string, topic: Topic, path: string) => reads.push([what, this.#read(address, topic, path)]);
       const rows = () => read("chats", { topic: "chatRows", station: address }, "/chats");
+      // The archive: read again before the call answers only while a page shows it, else marked to be (#archivedChanged).
+      const archived = () => {
+        const link = this.#links.get(address);
+        if (link) link.archivedCurrent = false;
+        if (this.#core.store.inUse({ topic: "archivedRows", station: address })) reads.push(["archived", this.#archived(address)]);
+      };
       switch (effect.kind) {
         case "none":
           return;
@@ -973,12 +1005,18 @@ export class StationsSync {
           if (effect.key !== null) reads.push([`session/${effect.key}`, this.#session(address, effect.key)]);
           read("sessions", { topic: "sessions", station: address }, "/sessions");
           rows();
-          read("archived", { topic: "archivedRows", station: address }, "/chats?archived=1");
+          archived();
           read("footprint", { topic: "footprint", station: address }, "/footprint");
           const thread = get(answer, "thread");
           if (isObject(thread)) this.putThread(address, thread);
           break;
         }
+        // Its process warmed, stopped or let go: its own detail before the call answers; the lists that show it (its
+        // summary, its chat's row, the overview's counts) its station tells as they change. Read whole again, they were
+        // most of what warming a chat as it opened cost on a slow link.
+        case "process":
+          if (effect.key !== "") reads.push([`session/${effect.key}`, this.#session(address, effect.key)]);
+          break;
         case "thread": {
           let rowsRead = false;
           if (get(answer, "surface") !== undefined) {
@@ -991,7 +1029,7 @@ export class StationsSync {
           }
           if (get(answer, "dismissed") !== undefined) rowsRead = true;
           if (rowsRead || effect.archived) rows();
-          if (effect.archived) read("archived", { topic: "archivedRows", station: address }, "/chats?archived=1");
+          if (effect.archived) archived();
           break;
         }
         case "connect":

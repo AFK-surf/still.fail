@@ -156,6 +156,9 @@ core 这边怎么做到「一行变只算一行」：
 - 规则 6：Rust 的话题在被订阅时才去读（`Stations::start` → `refetch`，`start_topic` → `spawn_refresh`，chat 打开时
   `open_thread` 读窗口，`job`/`jobLog`/`slackApp`/`footprint`/`stationUsage`/`loginSessions`/`admin` 都是订阅时读）；TS 的订阅
   只读记录，读请求都由同步调度器发起，订阅和 `client.focus` 只调高相关任务的优先级。
+- 规则 6 的例外：`stationUsage`（约 200 KB，每次模型调用都变）和 `archivedRows`（所有归档过的对话）只在有页面显示时读
+  （`Store.inUse`：有订阅或有 view 在看）；没显示时变了只记下，显示时再读（`sync.ts` 的 `usageShown`/`archivedShown`，
+  由话题开始时，或在它的保留期内又被显示时的 `Source.resume` 触发）。
 - 规则 6：Rust 的 `sync.rs` 只同步 workspace、station 的 rows/sessions/threads/overview 和在跑的 agent 的 live；消息由
   `warm` 顺带拉。TS 的同步调度器同步全部业务数据（含每个 chat 的 entries），按优先级排队。
 - 规则 6：cloud 的 `/v1/events` socket 在账号登录期间一直开着（Rust 只在有 account 话题时开）；账号的 workspace 列表一变，
