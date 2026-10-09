@@ -44,6 +44,7 @@ import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
 import { autoArchive } from "./lifecycle.ts";
 import { fromPeer } from "./messages.ts";
+import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
 import { forPeer, READ } from "./others.ts";
 import { FILE, fileForPeer, PUT, putForPeer } from "./peer-files.ts";
 import { reviewUndecided, startReview } from "./review.ts";
@@ -184,6 +185,10 @@ export const AgentsLive = (control: Control) =>
             return fileForPeer(hub, request);
           case PUT:
             return putForPeer(hub, peer, request);
+          case CREATE:
+            return createForPeer(hub, peer, request);
+          case NOTICE:
+            return noticeForPeer(hub, peer, request);
           default:
             return fromPeer(hub, peer, request);
         }

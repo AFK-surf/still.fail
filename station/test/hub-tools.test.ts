@@ -11,6 +11,8 @@ import { cardArg, optionsArg } from "../src/sessions/args.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer } from "../src/sessions/messages.ts";
+import { CREATE, MAX_OPEN, NOTICE, createForPeer, noticeForPeer } from "../src/sessions/opened.ts";
+import { stationLang, tr } from "../src/ops/i18n.ts";
 import { forPeer } from "../src/sessions/others.ts";
 import { FETCHED, fileForPeer, putForPeer } from "../src/sessions/peer-files.ts";
 import { packWorkspaceIf } from "../src/sessions/archive.ts";
@@ -36,7 +38,7 @@ test("every tool has a name, a description and an object's input schema; the cha
   const ours = [...chatTools(r.hub), ...archiveTools(r.hub), ...stationTools(() => null), ...adbTools(() => [], () => null), ...feedbackTools(r.store, () => null, () => null)];
   assert.deepEqual(
     chatTools(r.hub).map((t) => t.name),
-    ["chat_post", "slack_api", "chat_state", "chat_history", "chat_list", "chat_read", "session_send", "session_history"],
+    ["chat_post", "slack_api", "chat_state", "chat_history", "chat_list", "chat_read", "session_send", "chat_create", "session_history"],
   );
   assert.equal(new Set(ours.map((t) => t.name)).size, ours.length, "no name twice");
   for (const tool of ours) {
@@ -797,6 +799,167 @@ test("files go between stations: a chat's attachments come with reading it, and 
   }
   assert.ok(Buffer.concat(chunks).equals(big));
   await r.close();
+});
+
+// ── chat_create ──
+
+/// The fake runtime session of session `key`.
+const runtimeOf = (r: Rig, key: string) => {
+  const found = [...r.claude.sessions, ...r.codex.sessions].filter((s) => s.options.key === key).at(-1);
+  if (!found) throw new Error(`no runtime session of ${key}`);
+  return found;
+};
+
+test("an agent opens a chat here: it begins with its message, goes to its starter, and tells it how each turn ends", async () => {
+  const r = new Rig({ link: true });
+  const a = say("<@UBOT> ship it");
+  await r.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  const linkA = `https://ember.test/o/ws/st/${keyA.replaceAll(":", "%3A")}`;
+  writeFileSync(join(r.session(keyA).workspace, "notes.txt"), "the plan");
+  const sessions = r.store.listSessions().length;
+  const said = await r.call(keyA, "chat_create", { key: "android", text: "build the android app", title: "安卓构建", files: ["notes.txt"] });
+  assert.equal(r.store.listSessions().length, sessions + 1);
+  const opened = r.store.openedBy(keyA);
+  assert.equal(opened.length, 1);
+  const child = opened[0]!.child;
+  assert.ok(said.includes(`https://ember.test/o/ws/st/${child.replaceAll(":", "%3A")}`) && said.includes("this station"), said);
+  // A chat of its own, started by whoever started the opener's, with the opener's runtime.
+  const row = r.session(child);
+  assert.equal(row.runtime, "claude");
+  const thread = r.store.homeChat(child)!;
+  assert.equal(thread.title, "安卓构建");
+  assert.equal(thread.createdBy, r.thread("C1", a.threadTs).createdBy);
+  // Its first message: the opener's, headed as its opening, with the file; handed to its agent.
+  const [first] = r.said(thread.id);
+  const [before, after] = tr(stationLang(), "station.session.openedBy", { from: "\u0000" }).split("\u0000");
+  assert.deepEqual([first!.authorKind, first!.author], ["agent", keyA]);
+  assert.ok(first!.text.startsWith(`${before}[`) && first!.text.endsWith(`](${linkA})${after}\n\nbuild the android app`), first!.text);
+  assert.deepEqual(first!.attachments.map((f) => f.name), ["notes.txt"]);
+  assert.ok(first!.attachments[0]!.path.startsWith(join(row.workspace, "uploads")));
+  await settle();
+  assert.ok(runtimeOf(r, child).prompts[0]!.includes("build the android app"));
+  // Said in the opener's chat, for people.
+  const notice = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
+  assert.equal(notice.authorKind, "ember");
+  assert.ok(notice.text.includes(`<https://ember.test/o/ws/st/${child.replaceAll(":", "%3A")}|安卓构建>`), notice.text);
+  // The same key again: that chat, nothing new.
+  const again = await r.call(keyA, "chat_create", { key: "android", text: "build the android app" });
+  assert.ok(again.includes("already opened"), again);
+  assert.equal(r.store.listSessions().length, sessions + 1);
+  assert.equal(r.said(thread.id).length, 1);
+  // It opens none itself.
+  assert.ok((await r.refused(child, "chat_create", { key: "more", text: "and more" })).includes("opens none"));
+  // Its turn ends all_done: the opener is told, with its done.
+  await r.call(child, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "built", kind: "all_done", done: "安卓包已经构建好，apk 在 uploads 里" });
+  runtimeOf(r, child).complete();
+  await settle();
+  const told = [...runtimeOf(r, keyA).steers, ...runtimeOf(r, keyA).prompts.slice(1)].join("\n");
+  assert.ok(matches(told, ["安卓构建", "all_done", "安卓包已经构建好"]), told);
+  assert.equal(r.store.openedBy(keyA)[0]!.state, "all_done");
+  await r.close();
+});
+
+test("an agent keeps at most a few chats it opened going at once", async () => {
+  const r = new Rig({ link: true });
+  const a = say("<@UBOT> split it up");
+  await r.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  for (let i = 0; i < MAX_OPEN; i++) await r.call(keyA, "chat_create", { key: `part-${i}`, text: `part ${i}` });
+  assert.ok((await r.refused(keyA, "chat_create", { key: "one-more", text: "one more" })).includes("have not ended all_done"));
+  // One that ended all_done leaves room.
+  r.store.setOpenedState("", r.store.openedBy(keyA)[0]!.child, "all_done");
+  await r.call(keyA, "chat_create", { key: "one-more", text: "one more" });
+  // So does one archived.
+  assert.ok((await r.refused(keyA, "chat_create", { key: "two-more", text: "two more" })).includes("have not ended all_done"));
+  r.store.setArchived(r.store.openedBy(keyA)[1]!.child, true, "manual");
+  await r.call(keyA, "chat_create", { key: "two-more", text: "two more" });
+  assert.ok((await r.refused(keyA, "chat_create", { text: "no key" })).includes("key is required"));
+  await r.close();
+});
+
+test("an agent opens a chat on another station: made there once per key, its first message and files sent once, its turns told back", async () => {
+  // "near" opens a chat on "far" (named studio); each answers the other as the transport would.
+  const near = new Rig({ link: true });
+  const far = new Rig({ link: true });
+  const a = say("<@UBOT> test on the mac");
+  await near.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  const asked: string[] = [];
+  let farDown = false;
+  near.hub.onPeer(async (station, request) => {
+    if (request.method === "peers") return { workspace: "ws", stations: [{ id: "st", name: "ccvm" }, { id: "far", name: "Studio" }], current: true };
+    assert.equal(station, "far");
+    asked.push(request.method);
+    if (farDown) throw new Error("peer unavailable");
+    if (request.method === CREATE) return createForPeer(far.hub, "near", request);
+    if (request.method === "session.put") return putForPeer(far.hub, "near", request);
+    return fromPeer(far.hub, "near", request);
+  });
+  far.hub.onPeer(async (station, request) => {
+    assert.equal(station, "near");
+    assert.equal(request.method, NOTICE);
+    return noticeForPeer(near.hub, "far", request);
+  });
+  writeFileSync(join(near.session(keyA).workspace, "plan.txt"), "run them all");
+  const said = await near.call(keyA, "chat_create", { key: "tests", station: "studio", text: "run the tests", title: "跑测试", files: ["plan.txt"] });
+  assert.deepEqual(asked, [CREATE, "session.put", "session.message"]);
+  assert.ok(said.includes("station far"), said);
+  const [child] = far.store.listSessions().map((s) => s.key);
+  assert.ok(child !== undefined && far.store.openerOf(child)!.parent === keyA);
+  assert.deepEqual(near.store.openedBy(keyA).map((o) => [o.childStation, o.child]), [["far", child]]);
+  const thread = far.store.homeChat(child!)!;
+  assert.equal(thread.title, "跑测试");
+  assert.equal(thread.createdBy, near.thread("C1", a.threadTs).createdBy);
+  const [first] = far.said(thread.id);
+  assert.equal(first!.author, `near/${keyA}`);
+  const opening = tr(stationLang(), "station.session.openedBy", { from: "\u0000" }).split("\u0000")[0]!;
+  assert.ok(first!.text.startsWith(`${opening}[`) && first!.text.includes(`](https://ember.test/o/ws/st/${keyA.replaceAll(":", "%3A")})`) && first!.text.endsWith("run the tests"), first!.text);
+  assert.deepEqual(first!.attachments.map((f) => f.name), ["plan.txt"]);
+  // Again with the key: the same chat, and its first message is not sent twice.
+  asked.length = 0;
+  near.store.db.prepare("DELETE FROM opened_chats").run();
+  await near.call(keyA, "chat_create", { key: "tests", station: "far", text: "run the tests" });
+  assert.deepEqual(asked, [CREATE]);
+  assert.equal(far.store.listSessions().length, 1);
+  assert.equal(far.said(thread.id).length, 1);
+  // Its turn ends needing a person: the opener there is told.
+  await far.call(child!, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "which device?", kind: "need_human", need: "选一台测试机" });
+  await settle();
+  runtimeOf(far, child!).complete();
+  await settle();
+  const told = [...runtimeOf(near, keyA).steers, ...runtimeOf(near, keyA).prompts.slice(1)].join("\n");
+  assert.ok(matches(told, ["跑测试", "needs a person", "选一台测试机"]), told);
+  assert.equal(near.store.openedBy(keyA)[0]!.state, "need_human");
+  // Only the station a chat was opened on tells of it.
+  assert.throws(() => noticeForPeer(near.hub, "elsewhere", { session: child, to: keyA, state: "all_done" }), /opened no chat/);
+  // When the opener cannot be told, its chat says so; nothing is sent again.
+  far.hub.onPeer(async () => {
+    throw new Error("peer unavailable");
+  });
+  sayIn(far.hub, thread.id, "lee@example.com", "the pixel one");
+  await settle();
+  await far.call(child!, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "done", kind: "all_done", done: "测试全部通过，结果贴在上面" });
+  runtimeOf(far, child!).complete();
+  await settle();
+  const last = far.said(thread.id).at(-1)!;
+  assert.ok(last.authorKind === "ember" && last.text.includes("peer unavailable"), last.text);
+  // A station that cannot be reached: not opened, and it says how to go on.
+  farDown = true;
+  const down = await near.refused(keyA, "chat_create", { key: "again", station: "far", text: "x" });
+  assert.ok(down.includes("same key"), down);
+  // One from before chats can be opened there says so.
+  near.hub.onPeer(async (_station, request) => {
+    if (request.method === "peers") return { stations: [{ id: "far", name: "Studio" }] };
+    throw new Refused("remote tasks are not enabled for this source station");
+  });
+  assert.ok((await near.refused(keyA, "chat_create", { key: "old", station: "far", text: "x" })).includes("not updated yet"));
+  assert.ok((await near.refused(keyA, "chat_create", { key: "nowhere", station: "mars", text: "x" })).includes("Studio"));
+  await near.close();
+  await far.close();
 });
 
 // ── the archive suggestion after all_done ──

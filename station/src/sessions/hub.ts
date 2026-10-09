@@ -43,6 +43,7 @@ import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths } from "./agent-home.ts";
 import { startsAfresh } from "./afresh.ts";
 import { serves } from "./pool.ts";
+import { settled } from "./opened.ts";
 import { imageSize } from "./image-size.ts";
 
 type Json = any;
@@ -827,6 +828,7 @@ export class Hub {
           }
         }
       },
+      settled: (key, state, words) => settled(this, key, state, words),
       toolStatus,
       nextTs: () => this.nextTs(),
       clock: this.clock,

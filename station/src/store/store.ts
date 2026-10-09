@@ -20,11 +20,11 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { archiveText, readArchive, threadFile, writeCompressed } from "./archive.ts";
 import {
   type Attachment, type AutoTitle, type CardAnswer, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
-  type MessageRow, type NewMessage, type NewSession, type PendingMessage, type ProcessRow, type ProfileStatus,
+  type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type ProcessRow, type ProfileStatus,
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
-  toMessage, toSession, toSessionThread, toThread, toTurnSummary,
+  toMessage, toOpened, toSession, toSessionThread, toThread, toTurnSummary,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addWatchColumn } from "./schema.ts";
 import * as usage from "./usage.ts";
@@ -260,6 +260,38 @@ export class Store {
   /// The profile a runtime session of the session last ran on, if known.
   ranOn(key: string, id: string): string | null {
     return this.#one("SELECT profile FROM runtime_sessions WHERE session_key = ? AND id = ?", key, id)?.profile ?? null;
+  }
+
+  // ── chats agents opened (opened_chats; sessions/opened.ts) ──
+
+  /// Records a chat opened for a session: by its station and key, and its parent's ('' for this station).
+  insertOpened(o: Omit<Opened, "state" | "createdAt">): void {
+    this.#run(
+      `INSERT INTO opened_chats (child_station, child, parent_station, parent, key, title, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      o.childStation, o.child, o.parentStation, o.parent, o.key, o.title, o.link, this.now(),
+    );
+  }
+
+  /// The chat a parent opened with `key` on `childStation`, if it has.
+  openedWith(parentStation: string, parent: string, key: string, childStation: string): Opened | null {
+    const r = this.#one("SELECT * FROM opened_chats WHERE parent_station = ? AND parent = ? AND key = ? AND child_station = ?", parentStation, parent, key, childStation);
+    return r ? toOpened(r) : null;
+  }
+
+  /// Who opened session `child` of this station, if another agent did.
+  openerOf(child: string): Opened | null {
+    const r = this.#one("SELECT * FROM opened_chats WHERE child_station = '' AND child = ?", child);
+    return r ? toOpened(r) : null;
+  }
+
+  /// The chats this station's session `parent` opened, the first first.
+  openedBy(parent: string): Opened[] {
+    return this.#all("SELECT * FROM opened_chats WHERE parent_station = '' AND parent = ? ORDER BY created_at, rowid", parent).map(toOpened);
+  }
+
+  /// How a chat opened from here last ended a turn, as its station told.
+  setOpenedState(childStation: string, child: string, state: string): void {
+    this.#run("UPDATE opened_chats SET state = ? WHERE child_station = ? AND child = ?", state, childStation, child);
   }
 
   /// The runtime sessions the session has run in, the first first, ending with the one it runs in now.

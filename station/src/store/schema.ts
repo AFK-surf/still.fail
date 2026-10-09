@@ -275,6 +275,22 @@ CREATE TABLE IF NOT EXISTS usage_files (
   offset INTEGER NOT NULL,
   model TEXT
 );
+-- Chats an agent opened for another (chat_create, sessions/opened.ts): the session opened (child) and the one that
+-- opened it (parent), each by its station ('' for this one) and key, with the key the opener gave the call. The station
+-- of either keeps a row: the child's to tell its parent how its turns end, the parent's to know its children by.
+CREATE TABLE IF NOT EXISTS opened_chats (
+  child_station TEXT NOT NULL,
+  child TEXT NOT NULL,
+  parent_station TEXT NOT NULL,
+  parent TEXT NOT NULL,
+  key TEXT NOT NULL,
+  title TEXT,
+  link TEXT,
+  state TEXT,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (child_station, child)
+);
+CREATE INDEX IF NOT EXISTS opened_chats_by_key ON opened_chats (parent_station, parent, key, child_station);
 `;
 
 /// Each message as it reads now: its latest edit's words, files and quotes.

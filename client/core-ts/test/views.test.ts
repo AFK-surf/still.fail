@@ -233,6 +233,9 @@ test("another_chats_agent_goes_by_that_chats_name_without_the_header_line", () =
   for (const [text, title] of [
     ["来自 [发版 0.1.1780](https://x/o/w/s/a)：\n\n回归过了吗？", "发版 0.1.1780"],
     ["From <https://x/o/w/s/a|Release>:\n\n回归过了吗？", "Release"],
+    // The first message of a chat it opened (chat_create).
+    ["由 [发版 0.1.1780](https://x/o/w/s/a) 开的 chat：\n\n回归过了吗？", "发版 0.1.1780"],
+    ["Opened by [Release](https://x/o/w/s/a):\n\n回归过了吗？", "Release"],
   ]) {
     const message: J = { authorKind: "agent", author: "far/a", text, agentIdentity: { model: "claude-opus-5-5" } };
     shownMessage(message, agents, null, [], [], [], undefined);
