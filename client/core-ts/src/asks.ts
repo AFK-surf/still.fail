@@ -17,6 +17,9 @@ type J = any;
 const CLOUD_HOSTS = ["app.still.fail", "ember.3720.org"];
 const UPDATE_EVERY_MS = 60 * 60 * 1000;
 const PICTURES = 256;
+/// A picture that could not be fetched is not asked for again for this long: a Google account's, where Google cannot be
+/// reached, waited 15 s each time it was drawn, about half of a phone's.
+export const PICTURE_RETRY_MS = 10 * 60_000;
 
 type Picture = Deferred.Deferred<[string, Uint8Array], CoreError>;
 
@@ -28,6 +31,8 @@ export class Asks {
   readonly #brings: Brings;
   readonly #releases = new Map<string, [number, J]>();
   readonly #pictures = new Map<string, Picture>();
+  /// Pictures that could not be fetched: when, and why.
+  readonly #pictureFailed = new Map<string, [number, CoreError]>();
 
   constructor(host: Host, brings: Brings) {
     this.#host = host;
@@ -93,6 +98,8 @@ export class Asks {
   picture(url: string): Effect.Effect<[string, Uint8Array], CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (!(url.startsWith("https://") || url.startsWith("http://"))) return yield* Effect.fail(CoreError.invalid(t("core-misc.ask.bad_picture_url")));
+      const failed = this.#pictureFailed.get(url);
+      if (failed !== undefined && this.#host.nowMs() - failed[0] < PICTURE_RETRY_MS) return yield* Effect.fail(failed[1]);
       let picture = this.#pictures.get(url);
       if (!picture) {
         const made = Deferred.makeUnsafe<[string, Uint8Array], CoreError>();
@@ -110,8 +117,11 @@ export class Asks {
       const got = yield* Effect.result(Deferred.await(picture));
       if (got._tag === "Failure") {
         if (this.#pictures.get(url) === picture) this.#pictures.delete(url);
+        if (this.#pictureFailed.size >= PICTURES) this.#pictureFailed.clear();
+        this.#pictureFailed.set(url, [this.#host.nowMs(), got.failure]);
         return yield* Effect.fail(got.failure);
       }
+      this.#pictureFailed.delete(url);
       return got.success;
     });
   }

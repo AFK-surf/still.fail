@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { Accounts } from "../src/accounts.ts";
-import { Asks, buddies, devCloud, linkTarget } from "../src/asks.ts";
+import { Asks, PICTURE_RETRY_MS, buddies, devCloud, linkTarget } from "../src/asks.ts";
 import { parseAsk } from "../src/asks-parse.ts";
 import { HostError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
@@ -56,7 +56,11 @@ test("a_newer_app_is_asked_for_at_most_hourly_and_a_picture_once", async () => {
   assert.deepEqual([...b[1]], [1, 2, 3]);
   await run(asks.picture("https://p.test/a.png"));
   assert.equal(host.requests.filter((r) => r.url === "https://p.test/a.png").length, 1);
+  // One that could not be fetched (a Google account's where Google cannot be reached) is not asked again a while.
   await assert.rejects(run(asks.picture("https://p.test/gone.png")));
+  await assert.rejects(run(asks.picture("https://p.test/gone.png")));
+  assert.equal(host.requests.filter((r) => r.url.endsWith("gone.png")).length, 1);
+  host.advance(PICTURE_RETRY_MS);
   await assert.rejects(run(asks.picture("https://p.test/gone.png")));
   assert.equal(host.requests.filter((r) => r.url.endsWith("gone.png")).length, 2);
   await assert.rejects(run(asks.picture("file:///etc/passwd")));
