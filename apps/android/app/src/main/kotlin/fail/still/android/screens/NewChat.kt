@@ -8,7 +8,9 @@ import fail.still.android.BuildConfig
 import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.ComposerCorner
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import fail.still.android.ui.floatingStill
+import fail.still.android.ui.floating
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.compositeOver
 import fail.still.android.ui.Ease
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -111,10 +113,7 @@ fun NewChatScreen(current: WorkspaceEntry, host: Host, leaving: Boolean = false)
     val chat by rememberTopic<NewChatView>(app.core, Topics.newChat(scope))
     val choice = chat.value
     val onStation = { id: String -> app.pickNew(scope) { put("station", id) } }
-    // What the composer frosts, under it: this page (its own paper) until it leaves.
-    // Keep the source attached through the hand-off: the chat's source is only ready after layout.
-    // Removing it here leaves the composer's glass without a recorded source for one frame.
-    Column(Modifier.fillMaxSize().hazeSource(host.haze).then(if (leaving) Modifier else Modifier.background(C.bg))) {
+    Column(Modifier.fillMaxSize().then(if (leaving) Modifier else Modifier.background(C.bg))) {
         // Gone at once as it leaves (the chat has its own bar), its room kept so the scene leaves from where it was.
         Box(Modifier.alpha(if (leaving) 0f else 1f)) { NavBar(t("common.cancel"), app::pop, t("android-chat.new.title")) }
         val view = choice?.station
@@ -161,67 +160,80 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
     val lift = with(androidx.compose.ui.platform.LocalDensity.current) { 32.dp.toPx() }
     val up = { if (leaving) Ease.Arrive.transform((host.leave.value / SCENE_LEAVE_MS).coerceIn(0f, 1f)) else 0f }
     val fade = { if (leaving) Ease.LeaveFade.transform((host.leave.value / 80f).coerceIn(0f, 1f)) else 0f }
-    Column(Modifier.weight(1f).graphicsLayer { val a = up(); translationY = -lift * a; scaleX = 1f - 0.04f * a; scaleY = scaleX; alpha = 1f - a }.verticalScroll(rememberScrollState())) {
-        Column(Modifier.fillMaxWidth().padding(start = 30.dp, end = 30.dp, top = 30.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 230.dp)
-            Text(t("android-chat.new.heading"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.padding(top = 6.dp))
-            Text(t("android-chat.new.sub", "station" to view.name), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
-            choice.frequent?.takeIf { it.isNotEmpty() }?.let { combos ->
-                Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(t("android-chat.new.frequent"), fontSize = 12.sp, color = C.muted)
-                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        combos.forEach { combo ->
-                            Text(combo.label, fontSize = 13.sp, lineHeight = 18.sp, color = if (combo.selected) C.ink else C.muted,
-                                modifier = Modifier.semantics { selected = combo.selected }.clip(RoundedCornerShape(18.dp))
-                                    .background(C.ink.copy(alpha = if (combo.selected) 0.10f else 0.04f))
-                                    .clickable(enabled = !leaving) { app.pickNew(workspace) {
-                                        put("model", combo.model); put("runtime", combo.runtime); put("effort", combo.effort)
-                                    } }.padding(horizontal = 10.dp, vertical = 8.dp))
+    // What stands at the foot (the choices, the composer's room) is over the scene, which runs on under them: they frost it.
+    var foot by remember { mutableStateOf(0) }
+    Box(Modifier.weight(1f).fillMaxWidth()) {
+        // What the composer and the choices frost: the scene (its own paper) until it leaves.
+        // Keep the source attached through the hand-off: the chat's source is only ready after layout.
+        // Removing it here leaves the composer's glass without a recorded source for one frame.
+        Box(Modifier.matchParentSize().hazeSource(host.haze).then(if (leaving) Modifier else Modifier.background(C.bg))) {
+            Column(Modifier.fillMaxSize().graphicsLayer { val a = up(); translationY = -lift * a; scaleX = 1f - 0.04f * a; scaleY = scaleX; alpha = 1f - a }.verticalScroll(rememberScrollState())) {
+                Column(Modifier.fillMaxWidth().padding(start = 30.dp, end = 30.dp, top = 30.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 230.dp)
+                    Text(t("android-chat.new.heading"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.padding(top = 6.dp))
+                    Text(t("android-chat.new.sub", "station" to view.name), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+                    choice.frequent?.takeIf { it.isNotEmpty() }?.let { combos ->
+                        Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(t("android-chat.new.frequent"), fontSize = 12.sp, color = C.muted)
+                            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                combos.forEach { combo ->
+                                    Text(combo.label, fontSize = 13.sp, lineHeight = 18.sp, color = if (combo.selected) C.ink else C.muted,
+                                        modifier = Modifier.semantics { selected = combo.selected }.clip(RoundedCornerShape(18.dp))
+                                            .background(C.ink.copy(alpha = if (combo.selected) 0.10f else 0.04f))
+                                            .clickable(enabled = !leaving) { app.pickNew(workspace) {
+                                                put("model", combo.model); put("runtime", combo.runtime); put("effort", combo.effort)
+                                            } }.padding(horizontal = 10.dp, vertical = 8.dp))
+                                }
+                            }
+                        }
+                    }
+                    choice.problem?.let { Text(it, fontSize = 13.sp, color = if (choice.waiting) C.muted else C.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp)) }
+                    // No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too).
+                    val overview = view.overview
+                    if (overview != null && choice.blocked == "profile") {
+                        Text(t("android-chat.new.profile.text", "station" to view.name), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+                        Button(t("android-chat.new.profile.add"), primary = true) { app.push(Screen.NewProfile(view.station)) }
+                        Column(Modifier.fillMaxWidth().padding(top = 12.dp)) { MachineLoginOffers(view.station, overview, inset = 0.dp) }
+                    }
+                    // The machine's own Claude Code and Codex sessions, to go on with one (web/src/MachineSessions.tsx).
+                    if (overview != null && choice.blocked != "profile") MachineSessionsOffer(view)
+                }
+                // Its end clear of what stands at the foot.
+                Spacer(Modifier.height(with(androidx.compose.ui.platform.LocalDensity.current) { foot.toDp() }))
+            }
+        }
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { foot = it.height }) {
+            // Chosen anyway (it is the person's call), but said: what is sent waits for its quota.
+            if (!leaving) choice.spent?.let { spent ->
+                Text(
+                    spent,
+                    fontSize = 13.sp, color = C.ink,
+                    modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f).compositeOver(C.bg)).padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+            // The choices, over the composer (the host's, a floating capsule as in a chat), with room for it below.
+            Column(Modifier.fillMaxWidth().graphicsLayer { alpha = 1f - fade() }.padding(start = 10.dp, end = 10.dp, top = 8.dp)) {
+                // One line that fits the width, no scrolling: where it runs, and what it runs on as one control (web/src/ModelTriple.tsx),
+                // cut short rather than pushed off the edge. Room above and below for the chips' shadows.
+                Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Chooser(haze, { StationMark(view.emoji, view.icon, 14.dp, C.ink, none = Icons.Server) }, view.name, Modifier.widthIn(max = 128.dp)) { pickStation(app, stations, view.station, onStation) }
+                    val p = choice.pick
+                    if (runtime == null || model == null || p == null || p.options.isEmpty()) {
+                        // Nothing to choose from: the chooser leads to where models are enabled.
+                        Chooser(haze, null, t("android-chat.new.noModels"), Modifier.weight(1f, fill = false)) { app.push(Screen.Profiles()) }
+                    } else {
+                        Chooser(haze, { MakerIcon(p.valueOption?.maker ?: entry.maker, runtime, 14.dp) }, tripleLabel(p), Modifier.weight(1f, fill = false), chevron = true) {
+                            openRunPicker(app, view.station)
                         }
                     }
                 }
             }
-            choice.problem?.let { Text(it, fontSize = 13.sp, color = if (choice.waiting) C.muted else C.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp)) }
-            // No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too).
-            val overview = view.overview
-            if (overview != null && choice.blocked == "profile") {
-                Text(t("android-chat.new.profile.text", "station" to view.name), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
-                Button(t("android-chat.new.profile.add"), primary = true) { app.push(Screen.NewProfile(view.station)) }
-                Column(Modifier.fillMaxWidth().padding(top = 12.dp)) { MachineLoginOffers(view.station, overview, inset = 0.dp) }
-            }
-            // The machine's own Claude Code and Codex sessions, to go on with one (web/src/MachineSessions.tsx).
-            if (overview != null && choice.blocked != "profile") MachineSessionsOffer(view)
+            // The composer's room: as tall as it was when the page began to leave (it changes shape under what leaves).
+            val room = remember { mutableStateOf(0) }
+            if (!leaving) room.value = host.composerHeight
+            Spacer(Modifier.height(with(androidx.compose.ui.platform.LocalDensity.current) { room.value.toDp() }))
         }
     }
-    // Chosen anyway (it is the person's call), but said: what is sent waits for its quota.
-    if (!leaving) choice.spent?.let { spent ->
-        Text(
-            spent,
-            fontSize = 13.sp, color = C.ink,
-            modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 8.dp),
-        )
-    }
-    // The choices, over the composer (the host's, a floating capsule as in a chat), with room for it below.
-    Column(Modifier.fillMaxWidth().graphicsLayer { alpha = 1f - fade() }.padding(start = 10.dp, end = 10.dp, top = 8.dp)) {
-        // One line that fits the width, no scrolling: where it runs, and what it runs on as one control (web/src/ModelTriple.tsx),
-        // cut short rather than pushed off the edge. Room above and below for the chips' shadows.
-        Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Chooser(haze, { StationMark(view.emoji, view.icon, 14.dp, C.ink, none = Icons.Server) }, view.name, Modifier.widthIn(max = 128.dp)) { pickStation(app, stations, view.station, onStation) }
-            val p = choice.pick
-            if (runtime == null || model == null || p == null || p.options.isEmpty()) {
-                // Nothing to choose from: the chooser leads to where models are enabled.
-                Chooser(haze, null, t("android-chat.new.noModels"), Modifier.weight(1f, fill = false)) { app.push(Screen.Profiles()) }
-            } else {
-                Chooser(haze, { MakerIcon(p.valueOption?.maker ?: entry.maker, runtime, 14.dp) }, tripleLabel(p), Modifier.weight(1f, fill = false), chevron = true) {
-                    openRunPicker(app, view.station)
-                }
-            }
-        }
-    }
-    // The composer's room: as tall as it was when the page began to leave (it changes shape under what leaves).
-    val room = remember { mutableStateOf(0) }
-    if (!leaving) room.value = host.composerHeight
-    Spacer(Modifier.height(with(androidx.compose.ui.platform.LocalDensity.current) { room.value.toDp() }))
     if (leaving) return
     host.spec = ComposerSpec(
         station = view.station, here = null, draft = draft, placeholder = t("android-chat.new.placeholder"),
@@ -254,9 +266,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
 
 @Composable
 private fun Chooser(haze: HazeState, leading: (@Composable () -> Unit)?, label: String, modifier: Modifier = Modifier, chevron: Boolean = false, onClick: () -> Unit) {
-    // The same glass as the composer's capsule under it.
+    // The same glass as the composer's capsule under it, over the scene running on under both.
     Row(
-        modifier.height(30.dp).floatingStill(RoundedCornerShape(15.dp)).clickable(onClick = onClick).padding(horizontal = 11.dp),
+        modifier.height(30.dp).floating(haze, RoundedCornerShape(15.dp)).clickable(onClick = onClick).padding(horizontal = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         leading?.invoke()

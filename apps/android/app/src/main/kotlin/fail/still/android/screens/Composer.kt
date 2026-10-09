@@ -84,6 +84,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -142,8 +143,11 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 // ── the draft ──────────────────────────────────────────────────────────
 
-/** A file on its way to the station: uploading, uploaded, or failed. */
-class Pending(val id: Long, val name: String, val size: Long, val preview: ImageBitmap?) {
+/**
+ * A file on its way to the station: uploading, uploaded, or failed. `local`: a picture's bytes as picked (one read
+ * whole), what the viewer shows it from before it is sent (no session keeps it yet), with its size.
+ */
+class Pending(val id: Long, val name: String, val size: Long, val preview: ImageBitmap?, val local: ByteArray? = null, val width: Int? = null, val height: Int? = null) {
     var done by mutableStateOf<Attachment?>(null)
     /** How much of it the station has, as it goes up in parts. */
     var sent by mutableStateOf<Long?>(null)
@@ -486,7 +490,7 @@ fun photoPicked(bitmap: Bitmap): Picked {
 /** Files go to the station as soon as they are added, and wait there in no chat: the message that sends them takes them
  * into its chat (a new chat is made only then). A chat's draft is kept once the file is up. */
 fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: CoroutineScope) {
-    val p = Pending(System.nanoTime(), picked.name, picked.size, picked.preview)
+    val p = Pending(System.nanoTime(), picked.name, picked.size, picked.preview, picked.bytes.takeIf { picked.preview != null && it.isNotEmpty() }, picked.width, picked.height)
     draft.files += p
     if (picked.size > MAX_FILE || (picked.bytes.isEmpty() && picked.open == null && picked.size > 0)) { p.error = t("android-chat.file.tooBig"); return }
     scope.launch {
@@ -585,10 +589,11 @@ fun DraftExtras(draft: Draft, host: Host? = null) {
             }
         }
     }
+    val station = host?.spec?.station
     if (draft.files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         draft.files.forEach { f ->
             val remove = { draft.files.remove(f); Unit }
-            if (f.preview != null) Box(Modifier.sendTile(host, f.id).size(56.dp).clip(InComposer).background(C.chip)) {
+            if (f.preview != null) Box(Modifier.draftPicture(f, station).sendTile(host, f.id).size(56.dp).clip(InComposer).background(C.chip)) {
                 Image(f.preview, f.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 if (f.done == null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (f.error != null) 0.5f else 0.25f)), contentAlignment = Alignment.Center) {
                     if (f.error != null) Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp) else CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 1.5.dp)
@@ -601,6 +606,26 @@ fun DraftExtras(draft: Draft, host: Host? = null) {
             }
         }
     }
+}
+
+/**
+ * A picture waiting in the composer: tapped, shown whole in the viewer (growing out of its tile), from the bytes picked
+ * (web Chat.tsx PendingFile: `draft:<id>`, no session's). Nothing to mark it into: it is already in the draft.
+ */
+@Composable
+private fun Modifier.draftPicture(f: Pending, station: String?): Modifier {
+    val bytes = f.local
+    if (station == null || bytes == null) return this
+    var open by remember(f.id) { mutableStateOf(false) }
+    val file = remember(f.id) { Attachment(f.name, "draft:${f.id}", f.size, f.width?.toLong(), f.height?.toLong()) }
+    val id = FileViewers.id(station, "", file.path)
+    ForgetThumb(id)
+    if (open) FilePreview(station, "", file, canDraft = false) { open = false }
+    return viewerThumb(id, with(LocalDensity.current) { (ComposerCorner - ComposerInset).toPx() }) { f.preview }
+        .clickable {
+            FileData.keep(FileData.id(station, "", file, thumb = false), bytes)
+            open = true
+        }
 }
 
 /**

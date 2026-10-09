@@ -163,6 +163,9 @@ internal object FileData {
 
     fun kept(id: String): ByteArray? = kept.get(id)
 
+    /** Bytes this device already has (a picture in the composer, not sent yet), for the viewer to read as fetched. */
+    fun keep(id: String, bytes: ByteArray) { kept.put(id, bytes) }
+
     /** The file (`thumb`: as a chat shows an image), fetched once however many ask. Call on the main thread. */
     fun fetch(app: AppState, station: String, key: String, file: Attachment, thumb: Boolean): Deferred<ByteArray> {
         val id = id(station, key, file, thumb)

@@ -174,10 +174,10 @@ private sealed interface FileLoad {
  * one before or after. Back (or ×) closes it.
  */
 @Composable
-fun FilePreview(station: String, key: String, file: Attachment, gallery: () -> List<Shown> = { emptyList() }, onClose: () -> Unit) {
+fun FilePreview(station: String, key: String, file: Attachment, gallery: () -> List<Shown> = { emptyList() }, canDraft: Boolean = true, onClose: () -> Unit) {
     // Drawn by ViewerHost, a layer of the app's own window over the pages (not a dialog's window of its own): it can grow
     // out of the thumbnail in the chat and shrink back into it. Here it only says it is open, while it is.
-    val open = remember { ViewerOpen(station, Shown(key, file), gallery) }
+    val open = remember { ViewerOpen(station, Shown(key, file), gallery, canDraft) }
     open.onClose = onClose
     DisposableEffect(open) {
         FileViewers.shown = open
@@ -193,7 +193,8 @@ private const val CLOSE_MS = 280
 /** Opened or closed with no thumbnail on the screen: the web's fade (FilePreview.css.ts fp: 140ms ease-out). */
 private const val FADE_MS = 140
 
-internal class ViewerOpen(val station: String, val opened: Shown, val gallery: () -> List<Shown>) {
+/** `canDraft`: marks on it can go into its chat's draft (not a picture that is in a draft already). */
+internal class ViewerOpen(val station: String, val opened: Shown, val gallery: () -> List<Shown>, val canDraft: Boolean = true) {
     var onClose: () -> Unit = {}
 }
 
@@ -370,7 +371,7 @@ private fun ViewerLayer(open: ViewerOpen) {
             // Its own: no touch reaches the page under it.
             .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false) } },
     ) {
-        Viewer(open.station, open.opened, open.gallery, ::close, flight, closing) { current = it }
+        Viewer(open.station, open.opened, open.gallery, ::close, flight, closing, open.canDraft) { current = it }
     }
 }
 
@@ -378,7 +379,7 @@ private fun ViewerLayer(open: ViewerOpen) {
 private fun known(s: Shown) = kindOf(s.file.name).kind.let { it == PreviewKind.Image || it == PreviewKind.Video }
 
 @Composable
-private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, onClose: () -> Unit, flight: ViewerFlight, closing: Boolean, onShown: (Shown) -> Unit) {
+private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, onClose: () -> Unit, flight: ViewerFlight, closing: Boolean, canDraft: Boolean, onShown: (Shown) -> Unit) {
     val app = LocalApp.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -581,7 +582,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                     modifier = Modifier.weight(1f).padding(end = 12.dp))
                 if (coming && progress != null) Progress(progress, file.size, dark = true, inBar = true)
                 when {
-                    marks.on -> MarksActions(marks, canDraft = true,
+                    marks.on -> MarksActions(marks, canDraft = canDraft,
                         onDownload = { if (bytes != null) scope.launch { finish(marks, bytes, zoom, file) { p, _ -> app.toast = if (marks.save(context, p.name)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") } } },
                         onDraft = {
                             // Into the draft of the chat whose agent keeps the image: its page takes it (Preview.kt → TakeDraftOffers).

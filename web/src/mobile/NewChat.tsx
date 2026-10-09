@@ -90,6 +90,18 @@ function NewChatOn({ choice, view, stations, pick, create }: {
   };
   useLayoutEffect(() => use({ station: view.station, placeholder: t("web-mobile.newChat.placeholder"), offline: false, send }));
   const scene = useRef<HTMLDivElement>(null);
+  // The scene's end clear of the choices standing over it, whatever their height.
+  const foot = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = foot.current;
+    const body = scene.current;
+    if (!el || !body) return;
+    const set = () => body.style.setProperty("--m-new-foot", `${el.offsetHeight}px`);
+    set();
+    const observer = new ResizeObserver(set);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   return (
     <>
       <div className={css.mNewBody} ref={scene} data-made-leave="up">
@@ -101,29 +113,31 @@ function NewChatOn({ choice, view, stations, pick, create }: {
         {/* No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too). */}
         {choice.blocked === "profile" && <NoProfile view={view} />}
       </div>
-      {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
-      {choice.spent && <p className={css.mNewSpent}>{choice.spent}</p>}
-      {/* The choices, then the composer as a floating capsule, as in a chat. */}
-      <div className={css.mNewBottom} data-made-leave="fade">
-        <div className={css.mChoosers}>
-          <Chooser leading={<StationMark emoji={view.emoji} icon={view.icon} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
-          {!runtime || !model ? (
-            // Nothing to choose from: the chooser leads to where models are enabled.
-            <Chooser label={t("web-mobile.newChat.noModels")} onClick={() => app.push(app.at("/settings/profiles"))} />
-          ) : (
-            <>
-              <Chooser leading={<MakerIcon maker={entry.maker} runtime={runtime} size={14} />} label={entry.name}
-                onClick={() => pickModel(app, view, model, (m) => pick({ model: m.model }))} />
-              {/* The runtime only when the model runs on more than one. */}
-              {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={14} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
-                onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt as RuntimeKind }))} />}
-              <Chooser label={effort || t("web-mobile.newChat.effortDefault")} onClick={() => pickEffort(app, choice.efforts, effort, (e) => pick({ effort: e || null }))} />
-              {choice.pick?.fastAvailable && <Chooser label={choice.fast == null ? t("web-mobile.newChat.fastPlan") : choice.fast ? "Fast" : t("web-mobile.newChat.fastStandard")} onClick={() => app.sheet({ height: 0.36, content: () => <>
-                <SheetGrab /><SheetHead title={t("web-mobile.newChat.speed")} />
-                <div className={sheetsCss.mSheetScroll}>{([null, false, true] as const).map((fast) => <PickRow key={String(fast)} label={fast === null ? t("web-mobile.newChat.fastPlan") : fast ? "Fast" : t("web-mobile.newChat.fastStandard")} sub={fast ? t("web-mobile.newChat.fastNote") : undefined} checked={(choice.fast ?? null) === fast} onClick={() => { pick({ fast }); app.sheet(null); }} />)}</div>
-              </> })} />}
-            </>
-          )}
+      <div className={css.mNewFoot} ref={foot}>
+        {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
+        {choice.spent && <p className={css.mNewSpent}>{choice.spent}</p>}
+        {/* The choices, then the composer as a floating capsule, as in a chat. */}
+        <div className={css.mNewBottom} data-made-leave="fade">
+          <div className={css.mChoosers}>
+            <Chooser leading={<StationMark emoji={view.emoji} icon={view.icon} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
+            {!runtime || !model ? (
+              // Nothing to choose from: the chooser leads to where models are enabled.
+              <Chooser label={t("web-mobile.newChat.noModels")} onClick={() => app.push(app.at("/settings/profiles"))} />
+            ) : (
+              <>
+                <Chooser leading={<MakerIcon maker={entry.maker} runtime={runtime} size={14} />} label={entry.name}
+                  onClick={() => pickModel(app, view, model, (m) => pick({ model: m.model }))} />
+                {/* The runtime only when the model runs on more than one. */}
+                {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={14} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
+                  onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt as RuntimeKind }))} />}
+                <Chooser label={effort || t("web-mobile.newChat.effortDefault")} onClick={() => pickEffort(app, choice.efforts, effort, (e) => pick({ effort: e || null }))} />
+                {choice.pick?.fastAvailable && <Chooser label={choice.fast == null ? t("web-mobile.newChat.fastPlan") : choice.fast ? "Fast" : t("web-mobile.newChat.fastStandard")} onClick={() => app.sheet({ height: 0.36, content: () => <>
+                  <SheetGrab /><SheetHead title={t("web-mobile.newChat.speed")} />
+                  <div className={sheetsCss.mSheetScroll}>{([null, false, true] as const).map((fast) => <PickRow key={String(fast)} label={fast === null ? t("web-mobile.newChat.fastPlan") : fast ? "Fast" : t("web-mobile.newChat.fastStandard")} sub={fast ? t("web-mobile.newChat.fastNote") : undefined} checked={(choice.fast ?? null) === fast} onClick={() => { pick({ fast }); app.sheet(null); }} />)}</div>
+                </> })} />}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </>
