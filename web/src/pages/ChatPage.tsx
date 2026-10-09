@@ -16,6 +16,8 @@ import type { ChatJobsView } from "../core/shapes.ts";
 import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, useStations, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
+import { StationPeek } from "../cloud/StationCards.tsx";
+import { Hover } from "../Peeks.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
 import { ChatPanel, goToNeighbour } from "../Chat.tsx";
@@ -623,12 +625,11 @@ function ChatStation() {
   const host = useHost(station.address).value;
   if (!stations || stations.length < 2) return null;
   const name = station.name || host?.hostname || t("web-pages.chat.thisMachine");
-  const emoji = stations.find((s) => s.station === station.address)?.emoji;
-  return (
-    <Tip label={host ? `${host.hostname} · ${host.summary}` : name}>
-      <span className={css.chatStation}>{emoji && <StationMark emoji={emoji} size={12} />}{name}</span>
-    </Tip>
-  );
+  const view = stations.find((s) => s.station === station.address);
+  const tag = <span className={css.chatStation} tabIndex={view ? 0 : undefined}>{view?.emoji && <StationMark emoji={view.emoji} size={12} />}{name}</span>;
+  // The station at a glance on hover (its card, StationCards.tsx); before its view comes, its host in a line.
+  if (view) return <Hover content={<StationPeek s={view} settings={`${station.settings}/stations`} />}>{tag}</Hover>;
+  return <Tip label={host ? `${host.hostname} · ${host.summary}` : name}>{tag}</Tip>;
 }
 
 /**

@@ -787,6 +787,7 @@
   "web-pages.stations.away": "离线：在那台机器上打开 {name}，它就会重新连上",
   "web-pages.stations.connecting": "正在连接…",
   "web-pages.stations.details": "查看 {name} 详情",
+  "web-pages.stations.peekSettings": "机器设置",
   "web-pages.stations.emoji.label": "给 {name} 选个 emoji",
   "web-pages.stations.emoji.paste": "或粘贴任意 emoji",
   "web-pages.stations.emoji.clear": "清除",

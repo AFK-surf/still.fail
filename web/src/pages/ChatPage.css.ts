@@ -18,6 +18,10 @@ export const chatStation = style({
   flex: "none", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   padding: "1px 7px", border: `1px solid ${vars.line}`, borderRadius: "999px",
   color: vars.muted, fontSize: vars.textMeta, lineHeight: vars.leadingMeta, cursor: "default",
+  selectors: {
+    "&:hover, &[data-state=open]": { color: vars.text, borderColor: vars.lineStrong },
+    "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "2px" },
+  },
 });
 export const pageBarActions = style({
   gridColumn: "3", justifySelf: "end", display: "flex", gap: "2px",
