@@ -26,9 +26,10 @@ const inner = `calc(${vars.rMenu} - 6px)`;
 export const kinds = style({ alignSelf: "stretch", borderRadius: inner, cornerShape: vars.cornerShape });
 globalStyle(`${kinds} ${segmentedThumb}`, { borderRadius: `calc(${inner} - 3px)`, cornerShape: vars.cornerShape });
 export const field = style({ width: "100%", height: "32px" });
-globalStyle(`input${field}${field}`, { borderRadius: inner, cornerShape: vars.cornerShape, borderColor: vars.line });
-// On the panel's glass the settings' dark focus line is too heavy: a step up from the resting line, as the switch's.
-globalStyle(`input${field}${field}:hover, input${field}${field}:focus`, { borderColor: vars.lineStrong });
+// Sunk into the panel as the switch's track is (its tint, no line): a white field on the glass stood out in light.
+globalStyle(`input${field}${field}`, {
+  borderRadius: inner, cornerShape: vars.cornerShape, border: "0", background: `color-mix(in srgb, ${vars.text} 6%, transparent)`,
+});
 export const grid = style({ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "2px" });
 /** Emoji are pictures: drawn a step above the title's size, as large as the icons look. */
 export const emojiGrid = style({ fontSize: `calc(${vars.textTitle} * 1.25)`, lineHeight: "1" });
