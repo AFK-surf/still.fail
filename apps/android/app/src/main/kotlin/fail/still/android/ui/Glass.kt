@@ -20,11 +20,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
-import androidx.compose.ui.graphics.Brush
-import dev.chrisbanes.haze.HazeProgressive
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import dev.chrisbanes.haze.hazeEffect
 
 /** A bar at the top of the page, over the list that `state` is the source of: frosted, a hairline along its bottom. */
@@ -44,25 +39,15 @@ fun Modifier.glass(state: HazeState): Modifier {
     }
 }
 
-/**
- * The same glass as a band along the page's foot (a new chat's choices and composer stand on it), with no line: over its
- * top `fade` it comes in, its blur growing from none to all of it and its tint with it (drawn over the blur as a
- * gradient: Haze's tint is the same all over, and in at once it drew a line there), what runs under it going into the
- * frost rather than under an edge.
- */
+/** The same glass as a band along the page's foot (a new chat's choices and composer stand on it), with no line. */
 @Composable
-fun Modifier.glassFoot(state: HazeState, fade: Dp): Modifier {
+fun Modifier.glassFoot(state: HazeState): Modifier {
     val bg = C.bg
-    val end = with(LocalDensity.current) { fade.toPx() }
     return hazeEffect(state) {
         backgroundColor = bg
-        tints = emptyList()
+        tints = listOf(HazeTint(bg.copy(alpha = 0.7f)))
         blurRadius = cssBlur(24f)
         noiseFactor = 0f
-        progressive = HazeProgressive.verticalGradient(easing = LinearEasing, startY = 0f, startIntensity = 0f, endY = end, endIntensity = 1f)
-    }.drawWithContent {
-        drawRect(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg.copy(alpha = 0.7f)), startY = 0f, endY = end))
-        drawContent()
     }
 }
 

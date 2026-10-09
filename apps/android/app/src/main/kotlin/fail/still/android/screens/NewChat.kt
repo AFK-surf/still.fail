@@ -203,9 +203,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                 Spacer(Modifier.height(with(androidx.compose.ui.platform.LocalDensity.current) { foot.toDp() }))
             }
         }
-        // A band of glass of its own, from a little above the choices to the screen's end, coming in over its top:
-        // what runs under it is frosted all over, not seen between the choices; it goes with them as the page leaves.
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { foot = it.height }.graphicsLayer { alpha = 1f - fade() }.glassFoot(haze, FOOT_FADE).padding(top = FOOT_FADE)) {
+        // A band of glass of its own, from the choices to the screen's end: what runs under it is frosted all over,
+        // not seen between the choices; it goes with them as the page leaves.
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { foot = it.height }.graphicsLayer { alpha = 1f - fade() }.glassFoot(haze)) {
             // Chosen anyway (it is the person's call), but said: what is sent waits for its quota.
             if (!leaving) choice.spent?.let { spent ->
                 Text(
@@ -266,9 +266,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
         },
     )
 }
-
-/** How far over its top a new chat's band of glass comes in. */
-private val FOOT_FADE = 40.dp
 
 @Composable
 private fun Chooser(haze: HazeState, leading: (@Composable () -> Unit)?, label: String, modifier: Modifier = Modifier, chevron: Boolean = false, onClick: () -> Unit) {
