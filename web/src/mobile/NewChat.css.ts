@@ -13,15 +13,21 @@ export const mNewBody = style({
 });
 /**
  * A band of glass from a little above the choices to the screen's end (the composer on it too), with no line: over its
- * top 32px it comes in (masked), from none to all of it; what runs under it is frosted all over.
+ * top 40px it comes in, a light blur first and then the whole of it with its tint (two layers, each masked in: CSS has
+ * no blur that grows), what runs under it going into the frost rather than under an edge.
  */
 export const mNewFoot = style({
-  position: "absolute", left: "0", right: "0", bottom: "0", paddingTop: "32px", paddingBottom: "var(--m-bottom)",
+  position: "absolute", left: "0", right: "0", bottom: "0", paddingTop: "40px", paddingBottom: "var(--m-bottom)",
   display: "flex", flexDirection: "column", isolation: "isolate",
   "::before": {
     content: '""', position: "absolute", inset: "0", zIndex: "-1",
+    WebkitBackdropFilter: "blur(6px)", backdropFilter: "blur(6px)",
+    maskImage: "linear-gradient(to bottom, transparent, black 16px)", WebkitMaskImage: "linear-gradient(to bottom, transparent, black 16px)",
+  },
+  "::after": {
+    content: '""', position: "absolute", inset: "0", zIndex: "-1",
     background: "color-mix(in srgb, var(--m-bg) 70%, transparent)", WebkitBackdropFilter: "blur(24px)", backdropFilter: "blur(24px)",
-    maskImage: "linear-gradient(to bottom, transparent, black 32px)", WebkitMaskImage: "linear-gradient(to bottom, transparent, black 32px)",
+    maskImage: "linear-gradient(to bottom, transparent 8px, black 40px)", WebkitMaskImage: "linear-gradient(to bottom, transparent 8px, black 40px)",
   },
 });
 export const mNewProblem = style({

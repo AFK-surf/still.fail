@@ -268,7 +268,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
 }
 
 /** How far over its top a new chat's band of glass comes in. */
-private val FOOT_FADE = 32.dp
+private val FOOT_FADE = 40.dp
 
 @Composable
 private fun Chooser(haze: HazeState, leading: (@Composable () -> Unit)?, label: String, modifier: Modifier = Modifier, chevron: Boolean = false, onClick: () -> Unit) {
