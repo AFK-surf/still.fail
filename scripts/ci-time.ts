@@ -16,6 +16,9 @@ export const BUDGET = {
   /** A branch or main that checked the Android app (check-android): its Gradle run alone is ~2 min (2026-10-07: the app
    * one module of ~31k lines, compiled then linted, one after the other). */
   android: 240,
+  /** A branch that built the Windows app and tried it on Windows (windows-smoke): its build, its upload and then the
+   * smoke, one after another, ~280 s (2026-10-09). */
+  windows: 330,
   /** main, releasing apps or the station: the check, the API, then the releases side by side (Android's the longest). */
   release: 480,
 } as const;
@@ -41,7 +44,11 @@ export function timing(id: string, attempt?: number) {
   const start = jobs.map((j) => j.started_at).sort()[0]!;
   const end = jobs.map((j) => j.completed_at).sort().at(-1)!;
   const branchKind = run.head_branch !== "main" ? "branch" : jobs.some((j) => RELEASES.has(j.name)) ? "release" : "main";
-  const kind = branchKind !== "release" && jobs.some((j) => j.name === "check-android") ? "android" : branchKind;
+  const kind =
+    branchKind === "release" ? branchKind
+    : jobs.some((j) => j.name === "windows-smoke") ? "windows"
+    : jobs.some((j) => j.name === "check-android") ? "android"
+    : branchKind;
   const steps = jobs
     .flatMap((j) => (j.steps ?? []).filter((s) => s.started_at && s.completed_at).map((s) => ({ job: j.name, step: s.name, seconds: secs(s.started_at!, s.completed_at!) })))
     .sort((a, b) => b.seconds - a.seconds)
