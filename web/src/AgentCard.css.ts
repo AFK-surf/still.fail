@@ -23,8 +23,6 @@ export const status = style({
 
 export const elapsed = style({ color: vars.muted, fontVariantNumeric: "tabular-nums" });
 
-const levels = { "&[data-level=amber]": { color: vars.amber }, "&[data-level=red]": { color: vars.red } };
-
 /** The cost to the right of its name. */
 export const headCost = style({ marginLeft: "auto", paddingLeft: "12px", fontWeight: "500", fontVariantNumeric: "tabular-nums" });
 
@@ -32,8 +30,9 @@ export const headCost = style({ marginLeft: "auto", paddingLeft: "12px", fontWei
 export const tiles = style({ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0, 1fr))", gap: "6px" });
 export const tile = style({
   display: "flex", flexDirection: "column", gap: "1px", minWidth: "0", padding: "7px 9px", borderRadius: "8px", background: vars.hover,
-  selectors: { "&[data-level=amber] b": { color: vars.amber }, "&[data-level=red] b": { color: vars.red } },
 });
+globalStyle(`${tile}[data-level=amber] b`, { color: vars.amber });
+globalStyle(`${tile}[data-level=red] b`, { color: vars.red });
 globalStyle(`${tile} b`, { fontSize: vars.textTitle, lineHeight: vars.leadingTitle, fontWeight: "600", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
 globalStyle(`${tile} small`, { fontSize: vars.textCaption, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 
@@ -62,5 +61,5 @@ export const quiet = style({ margin: "0", fontSize: vars.textMeta, color: vars.m
 /** Its jobs, and what is wrong in its level's colour. */
 export const notes = style({ display: "flex", flexDirection: "column", gap: "2px", fontSize: vars.textMeta, color: vars.muted });
 globalStyle(`${notes} > span`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-globalStyle(`${notes} > span[data-level=amber]`, levels["&[data-level=amber]"]);
-globalStyle(`${notes} > span[data-level=red]`, levels["&[data-level=red]"]);
+globalStyle(`${notes} > span[data-level=amber]`, { color: vars.amber });
+globalStyle(`${notes} > span[data-level=red]`, { color: vars.red });
