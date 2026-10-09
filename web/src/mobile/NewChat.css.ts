@@ -11,11 +11,18 @@ export const mNewBody = style({
   gap: "6px", padding: "30px 30px calc(10px + var(--m-new-foot, var(--m-bottom)))", marginBottom: "calc(-1 * var(--m-bottom))",
   textAlign: "center",
 });
-/** A band of glass from the choices to the screen's end (the composer on it too): what runs under it is frosted all over. */
+/**
+ * A band of glass from a little above the choices to the screen's end (the composer on it too), with no line: over its
+ * top 24px it comes in (masked), from none to all of it; what runs under it is frosted all over.
+ */
 export const mNewFoot = style({
-  position: "absolute", left: "0", right: "0", bottom: "0", paddingBottom: "var(--m-bottom)", display: "flex", flexDirection: "column",
-  background: "color-mix(in srgb, var(--m-bg) 70%, transparent)", WebkitBackdropFilter: "blur(24px)", backdropFilter: "blur(24px)",
-  boxShadow: "inset 0 0.5px 0 var(--m-line)",
+  position: "absolute", left: "0", right: "0", bottom: "0", paddingTop: "24px", paddingBottom: "var(--m-bottom)",
+  display: "flex", flexDirection: "column", isolation: "isolate",
+  "::before": {
+    content: '""', position: "absolute", inset: "0", zIndex: "-1",
+    background: "color-mix(in srgb, var(--m-bg) 70%, transparent)", WebkitBackdropFilter: "blur(24px)", backdropFilter: "blur(24px)",
+    maskImage: "linear-gradient(to bottom, transparent, black 24px)", WebkitMaskImage: "linear-gradient(to bottom, transparent, black 24px)",
+  },
 });
 export const mNewProblem = style({
   marginTop: "6px !important", fontSize: `${vars.textMeta} !important`, color: "var(--m-red)",
