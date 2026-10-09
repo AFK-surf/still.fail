@@ -22,15 +22,15 @@ final class ChatComposerGeometryTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(input.effect as? UIGlassEffect).isInteractive)
     }
 
-    @MainActor func testProgressiveHeaderUsesOnlyOneMaskedBackdropPass() throws {
-        let header = ProgressiveBlurView(frame: CGRect(x: 0, y: 0, width: 390, height: 132))
-        header.layoutIfNeeded()
-        let material = try XCTUnwrap(header.subviews.compactMap { $0 as? UIVisualEffectView }.first)
-        XCTAssertEqual(header.subviews.compactMap { $0 as? UIVisualEffectView }.count, 1)
-        let mask = try XCTUnwrap(material.layer.mask as? CAGradientLayer)
-        XCTAssertEqual(mask.frame, header.bounds)
-        XCTAssertEqual(mask.locations?.last?.doubleValue, 1)
-        XCTAssertEqual(material.frame, header.bounds)
+    @MainActor func testChatHeaderUsesSystemScrollEdgeEffect() {
+        let controller = ChatTimelineController()
+        controller.loadViewIfNeeded()
+        let scrollView = controller.contentScrollView(for: .top)
+        XCTAssertNotNil(scrollView)
+        XCTAssertTrue(scrollView?.topEdgeEffect.style === UIScrollEdgeEffect.Style.soft)
+        XCTAssertEqual(scrollView?.topEdgeEffect.isHidden, false)
+        // The composer retains its own glass surfaces without a full-width bottom effect.
+        XCTAssertEqual(scrollView?.bottomEdgeEffect.isHidden, true)
     }
 
     @MainActor func testAttachmentAndInputSurfacesShareHeightAcrossWidthsAndDraftSizes() throws {

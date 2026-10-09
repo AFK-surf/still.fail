@@ -196,8 +196,6 @@ struct ChatView: View {
         .background(Color(uiColor: .systemBackground))
         .navigationTitle(value.text("title", fallback: L10n.text("会话")))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .background { ProgressiveHeaderBlur().frame(width: 0, height: 0).allowsHitTesting(false) }
         // safeAreaBar paints a full-width system backdrop. A plain inset keeps
         // the area around the floating native glass surfaces transparent.
         .safeAreaInset(edge: .bottom, spacing: 0) {

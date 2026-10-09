@@ -95,7 +95,8 @@ struct ConversationsView: View {
                     onRename: { renameRow = $0 },
                     onArchive: askToArchive,
                     onPin: pin,
-                    onRetry: retryConnections
+                    onRetry: retryConnections,
+                    onRefresh: refreshConnections
                 )
                 .ignoresSafeArea(.container, edges: [.top, .bottom])
                 .safeAreaInset(edge: .top, spacing: 0) {
@@ -113,8 +114,6 @@ struct ConversationsView: View {
                 }
             }
             .background(Color(uiColor: .systemBackground))
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .background { ProgressiveHeaderBlur().frame(width: 0, height: 0).allowsHitTesting(false) }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -365,9 +364,16 @@ struct ConversationsView: View {
             "visible": .bool(true), "focused": .bool(true), "chat": .null])
     }
     private func retryConnections() {
-        Task { await operation.run {
-            _ = try await store.call("client.wake", params: ["away": .number(0), "network": .bool(true), "retry": .bool(true)])
-        } }
+        Task { await wakeConnections(retry: true) }
+    }
+    private func refreshConnections() async {
+        // A manual refresh reopens live streams too, catching up from their last event.
+        await wakeConnections(retry: false)
+    }
+    private func wakeConnections(retry: Bool) async {
+        await operation.run {
+            _ = try await store.call("client.wake", params: ["away": .number(0), "network": .bool(true), "retry": .bool(retry)])
+        }
     }
     private func emptyState(_ value: JSONValue) -> ConversationEmptyState {
         if value.flag("loading") || value["note"].flag("reading") { return .loading }
@@ -399,7 +405,7 @@ struct ConversationListRow: Identifiable, Equatable {
         return route.thread == nil || route.thread == self.route.thread
     }
     var editable: Bool { !value.flag("pending") && value.text("offline").isEmpty }
-    /// Where the chat came from, as web's sidebar marks it at the title's end: a chat a
+    /// Where the chat came from, displayed beside the participant avatars: a chat a
     /// connect brought in (Slack, the only kind there is so far), named by `originText`.
     var source: ConversationSource? {
         guard !value.text("connect").isEmpty || !value["origin"].objectValue.isEmpty else { return nil }
@@ -570,10 +576,11 @@ private struct ConversationTable: UIViewControllerRepresentable {
     let onArchive: (ConversationListRow) -> Void
     let onPin: (ConversationListRow) -> Void
     let onRetry: () -> Void
+    let onRefresh: () async -> Void
     func makeUIViewController(context: Context) -> ConversationTableController { ConversationTableController() }
     func updateUIViewController(_ controller: ConversationTableController, context: Context) {
         controller.onSelect = onSelect; controller.onRename = onRename; controller.onArchive = onArchive
-        controller.onPin = onPin; controller.onRetry = onRetry
+        controller.onPin = onPin; controller.onRetry = onRetry; controller.onRefresh = onRefresh
         controller.busy = busy
         controller.update(sections: sections, selected: selected, empty: empty, locale: locale)
     }
@@ -585,6 +592,8 @@ private final class ConversationTableController: UITableViewController {
     var onArchive: ((ConversationListRow) -> Void)?
     var onPin: ((ConversationListRow) -> Void)?
     var onRetry: (() -> Void)?
+    var onRefresh: (() async -> Void)?
+    private var refreshing = false
     var busy = false
     private var sections: [ConversationListSection] = []
     private var rows: [String: ConversationListRow] = [:]
@@ -600,7 +609,13 @@ private final class ConversationTableController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         tableView.backgroundColor = .systemBackground
+        useSystemHeaderEffect(for: tableView)
         tableView.separatorStyle = .none
+        tableView.alwaysBounceVertical = true
+        let refresh = UIRefreshControl()
+        refresh.accessibilityIdentifier = "conversations.refresh"
+        refresh.addTarget(self, action: #selector(refreshList), for: .valueChanged)
+        refreshControl = refresh
         tableView.rowHeight = UITableView.automaticDimension
         tableView.estimatedRowHeight = 74
         tableView.sectionHeaderTopPadding = 0
@@ -617,6 +632,18 @@ private final class ConversationTableController: UITableViewController {
             guard let self, let row = self.rows[id], let cell = table.dequeueReusableCell(withIdentifier: "conversation", for: path) as? ConversationCell else { return nil }
             cell.configure(row)
             return cell
+        }
+    }
+    @objc private func refreshList() {
+        guard !refreshing else { return }
+        guard !busy, let onRefresh else { refreshControl?.endRefreshing(); return }
+        refreshing = true
+        Task { @MainActor [weak self] in
+            defer {
+                self?.refreshing = false
+                self?.refreshControl?.endRefreshing()
+            }
+            await onRefresh()
         }
     }
     func update(sections next: [ConversationListSection], selected: ChatRoute?, empty: ConversationEmptyState, locale: String) {
@@ -737,10 +764,10 @@ private final class ConversationTableController: UITableViewController {
 private final class ConversationCell: UITableViewCell {
     private let titleLabel = UILabel()
     private let summaryLabel = UILabel()
+    private let timeLabel = UILabel()
     private let participants = ConversationAsideView(frame: .zero)
     private let mark = UIView()
     private let accessory = UIImageView()
-    private let sourceIcon = UIImageView()
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let highlight = UIView()
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -752,15 +779,13 @@ private final class ConversationCell: UITableViewCell {
         highlight.layer.cornerRadius = 14; highlight.layer.cornerCurve = .continuous
         let selected = UIView(); selected.addSubview(highlight)
         selectedBackgroundView = selected
-        let top = UIStackView(arrangedSubviews: [titleLabel, spinner, sourceIcon, accessory]); top.alignment = .center; top.spacing = 6
+        let top = UIStackView(arrangedSubviews: [titleLabel, spinner, accessory, timeLabel]); top.alignment = .center; top.spacing = 6
         let bottom = UIStackView(arrangedSubviews: [summaryLabel, participants]); bottom.alignment = .center; bottom.spacing = 10
         let stack = UIStackView(arrangedSubviews: [top, bottom]); stack.axis = .vertical; stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview(stack)
         mark.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview(mark)
         let accessoryWidth = accessory.widthAnchor.constraint(equalToConstant: 13)
         accessoryWidth.priority = .init(999)
-        let sourceWidth = sourceIcon.widthAnchor.constraint(equalToConstant: 13)
-        sourceWidth.priority = .init(999)
         NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 11),
@@ -769,21 +794,22 @@ private final class ConversationCell: UITableViewCell {
             mark.widthAnchor.constraint(equalToConstant: 7), mark.heightAnchor.constraint(equalToConstant: 7),
             mark.centerXAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
             mark.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            accessoryWidth, accessory.heightAnchor.constraint(equalToConstant: 13),
-            sourceWidth, sourceIcon.heightAnchor.constraint(equalToConstant: 13)])
+            accessoryWidth, accessory.heightAnchor.constraint(equalToConstant: 13)])
         mark.layer.cornerRadius = 3.5
         for label in [titleLabel, summaryLabel] {
             label.numberOfLines = 1; label.lineBreakMode = .byTruncatingTail; label.adjustsFontForContentSizeCategory = true
         }
+        timeLabel.font = UIFontMetrics(forTextStyle: .caption1).scaledFont(for: .systemFont(ofSize: 12))
+        timeLabel.adjustsFontForContentSizeCategory = true
+        timeLabel.textColor = .tertiaryLabel
+        timeLabel.numberOfLines = 1
         summaryLabel.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(for: .systemFont(ofSize: 14))
         summaryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         participants.setContentCompressionResistancePriority(.required, for: .horizontal)
         participants.setContentHuggingPriority(.required, for: .horizontal)
         titleLabel.setContentHuggingPriority(.init(1), for: .horizontal)
-        sourceIcon.contentMode = .scaleAspectFit; sourceIcon.tintColor = .secondaryLabel
-        sourceIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 11, weight: .medium)
-        [accessory, spinner, sourceIcon].forEach { $0.setContentHuggingPriority(.required, for: .horizontal); $0.setContentCompressionResistancePriority(.required, for: .horizontal) }
+        [accessory, spinner, timeLabel].forEach { $0.setContentHuggingPriority(.required, for: .horizontal); $0.setContentCompressionResistancePriority(.required, for: .horizontal) }
         accessory.tintColor = .tertiaryLabel; accessory.contentMode = .scaleAspectFit
         accessory.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
         spinner.hidesWhenStopped = true; spinner.transform = CGAffineTransform(scaleX: 0.7, y: 0.7)
@@ -799,7 +825,10 @@ private final class ConversationCell: UITableViewCell {
         let unread = row.value.flag("unread")
         titleLabel.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: .systemFont(ofSize: 16, weight: unread ? .bold : .semibold))
         titleLabel.text = row.title; summaryLabel.text = row.summary
-        participants.configure(ConversationParticipants(row))
+        timeLabel.text = L10n.projected(row.value["time"]["lastActiveAt"].text("ago"))
+        timeLabel.isHidden = timeLabel.text?.isEmpty != false
+        timeLabel.accessibilityIdentifier = "conversation.time.\(row.value.text("id"))"
+        participants.configure(ConversationParticipants(row), source: row.source, id: row.value.text("id"))
         participants.accessibilityIdentifier = "conversation.participants.\(row.value.text("id"))"
         titleLabel.accessibilityIdentifier = "conversation.title.\(row.value.text("id"))"
         summaryLabel.accessibilityIdentifier = "conversation.summary.\(row.value.text("id"))"
@@ -813,19 +842,14 @@ private final class ConversationCell: UITableViewCell {
         let offline = !row.value.text("offline").isEmpty || !row.value.text("reconnecting").isEmpty
         accessory.image = UIImage(systemName: offline ? "network.slash" : "pin.fill")
         accessory.isHidden = !offline && !row.value.flag("pinned")
-        // Offline wins the spot, as on the web: the unplugged mark says more than the source.
-        let source = offline ? nil : row.source
-        sourceIcon.image = source?.image; sourceIcon.isHidden = source == nil
-        sourceIcon.alpha = subdued ? 0.55 : 1
-        sourceIcon.accessibilityIdentifier = "conversation.source.\(row.value.text("id"))"
         if row.value.flag("pending") { spinner.startAnimating() } else { spinner.stopAnimating() }
         accessibilityIdentifier = "conversation.open.\(row.value.text("id"))"
-        accessibilityLabel = [row.title, row.source?.text ?? "", row.summary, row.metadata, L10n.projected(row.value.text("offline")), L10n.projected(row.value.text("reconnecting"))].filter { !$0.isEmpty }.joined(separator: ", ")
+        accessibilityLabel = [row.title, row.source?.text ?? "", timeLabel.text ?? "", row.summary, row.metadata, L10n.projected(row.value.text("offline")), L10n.projected(row.value.text("reconnecting"))].filter { !$0.isEmpty }.joined(separator: ", ")
         accessibilityTraits = [.button]
     }
 }
 
-/// Matches web/src/RowPicture.tsx: one icon per maker/runtime and a small overlapping people group.
+/// One icon per maker/runtime and the people participating in the conversation.
 private struct ConversationParticipants: Equatable {
     struct Model: Equatable { let maker: String; let runtime: String; let label: String }
     struct Person: Equatable {
@@ -873,6 +897,8 @@ private struct ConversationParticipants: Equatable {
 }
 
 private final class ConversationAsideView: UIStackView {
+    private static let iconSpacing: CGFloat = 4
+    private let sourceIcon = UIImageView()
     private let models = UIStackView()
     private let people = UIStackView()
     private let modelIcons = (0..<3).map { _ in UIImageView() }
@@ -882,15 +908,15 @@ private final class ConversationAsideView: UIStackView {
     private var previous: ConversationParticipants?
     override init(frame: CGRect) {
         super.init(frame: frame)
-        axis = .horizontal; alignment = .center; spacing = 7
-        models.axis = .horizontal; models.alignment = .center; models.spacing = 4
-        people.axis = .horizontal; people.alignment = .center; people.spacing = -3
-        for icon in modelIcons {
+        axis = .horizontal; alignment = .center; spacing = Self.iconSpacing
+        models.axis = .horizontal; models.alignment = .center; models.spacing = Self.iconSpacing
+        people.axis = .horizontal; people.alignment = .center; people.spacing = Self.iconSpacing
+        for icon in [sourceIcon] + modelIcons {
             icon.contentMode = .scaleAspectFit; icon.tintColor = .secondaryLabel
             let width = icon.widthAnchor.constraint(equalToConstant: 16)
             width.priority = .init(999); width.isActive = true
             icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
-            models.addArrangedSubview(icon)
+            if icon !== sourceIcon { models.addArrangedSubview(icon) }
         }
         for icon in personIcons {
             let width = icon.widthAnchor.constraint(equalToConstant: 20)
@@ -904,16 +930,20 @@ private final class ConversationAsideView: UIStackView {
             label.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
         models.addArrangedSubview(moreModels); people.addArrangedSubview(morePeople)
-        people.setCustomSpacing(4, after: personIcons[2])
-        addArrangedSubview(models); addArrangedSubview(people)
+        addArrangedSubview(sourceIcon); addArrangedSubview(models); addArrangedSubview(people)
     }
     required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    func configure(_ value: ConversationParticipants) {
+    func configure(_ value: ConversationParticipants, source: ConversationSource?, id: String) {
+        sourceIcon.image = source?.image
+        sourceIcon.isHidden = source == nil
+        sourceIcon.accessibilityIdentifier = "conversation.source.\(id)"
+        sourceIcon.accessibilityLabel = source?.text
+        isHidden = source == nil && value.models.isEmpty && value.people.isEmpty
         guard previous != value else { return }
         previous = value
-        if (arrangedSubviews.first === people) != value.peopleFirst {
+        if (arrangedSubviews.dropFirst().first === people) != value.peopleFirst {
             removeArrangedSubview(models); removeArrangedSubview(people)
-            insertArrangedSubview(value.peopleFirst ? people : models, at: 0)
+            insertArrangedSubview(value.peopleFirst ? people : models, at: 1)
             addArrangedSubview(value.peopleFirst ? models : people)
         }
         for (index, icon) in modelIcons.enumerated() {
@@ -933,7 +963,6 @@ private final class ConversationAsideView: UIStackView {
         morePeople.text = "+\(max(0, value.people.count - 3))"
         morePeople.isHidden = value.people.count <= 3
         models.isHidden = value.models.isEmpty; people.isHidden = value.people.isEmpty
-        isHidden = value.models.isEmpty && value.people.isEmpty
     }
     func clear() {
         previous = nil

@@ -119,12 +119,11 @@ struct NewChatView: View {
                 }.padding(24).frame(maxWidth: 720).frame(maxWidth: .infinity)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: flow.outgoing)
             }.defaultScrollAnchor(.bottom).scrollDismissesKeyboard(.interactively)
+                .scrollEdgeEffectStyle(.soft, for: .top)
                 .ignoresSafeArea(.container, edges: .top)
         }
         .background(Color(uiColor: .systemBackground))
         .navigationTitle("新建会话").navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .background { ProgressiveHeaderBlur().frame(width: 0, height: 0).allowsHitTesting(false) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 12) {
                 choices

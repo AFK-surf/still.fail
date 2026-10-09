@@ -201,7 +201,8 @@ final class ChatTimelineController: UIViewController, UICollectionViewDelegate, 
         view.addSubview(collection); collection.backgroundColor = .clear; collection.delegate = self; collection.prefetchDataSource = self
         collection.keyboardDismissMode = .interactive; collection.alwaysBounceVertical = true
         collection.contentInsetAdjustmentBehavior = .always
-        collection.topEdgeEffect.isHidden = true; collection.bottomEdgeEffect.isHidden = true
+        useSystemHeaderEffect(for: collection)
+        collection.bottomEdgeEffect.isHidden = true
         collection.selfSizingInvalidation = .enabled
         collection.accessibilityIdentifier = "chat.messages"
         collection.register(ChatTimelineCell.self, forCellWithReuseIdentifier: "message")
