@@ -200,7 +200,7 @@ function ShareRows({ p }: { p: Profile }) {
   }
   const shared = p.share !== undefined;
   const allowed = p.share?.allow ?? null;
-  const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join("、");
+  const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join(t("web-main.list.separator"));
   const targets = stations.filter((x) => x.id !== station.id);
   const pick = () => sheet({ height: 0.6, content: () => <PickShareStations p={p} stations={stations} self={station.id} allowed={allowed} /> });
   const move = () => app.sheet({ height: 0.5, content: () => (
@@ -238,7 +238,7 @@ function ShareRows({ p }: { p: Profile }) {
           <ListRow onClick={pick}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
               <span className={listsCss.mRowTitle}>{t("web-pages.profiles.share.stations")}</span>
-              {(p.share?.users?.length ?? 0) > 0 && <span className={listsCss.mRowNote}>{t("web-pages.profiles.share.users", { stations: p.share!.users!.map((u) => stations.find((x) => x.id === u)?.name ?? u.slice(0, 8)).join("、") })}</span>}
+              {(p.share?.users?.length ?? 0) > 0 && <span className={listsCss.mRowNote}>{t("web-pages.profiles.share.users", { stations: p.share!.users!.map((u) => stations.find((x) => x.id === u)?.name ?? u.slice(0, 8)).join(t("web-main.list.separator")) })}</span>}
             </span>
             <span className={listsCss.mRowNote}>{names}</span>
             <ChevronRight size={14} className={partsCss.mSubtle} />
@@ -830,7 +830,7 @@ export function NewProfileScreen() {
     <div className={pagesCss.mScreen}>
       <NavBar back={d && d.step !== "pick" ? t("common.back") : t("common.cancel")} onBack={leave} title={d?.title ?? t("web-mobile.newChat.addProfile")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
-        {!d ? <Loading text={t("web-mobile.profiles.loading")} /> : d.step === "pick" ? (
+        {!d ? <Loading text={t("web-pages.profiles.loading")} /> : d.step === "pick" ? (
           <>
             <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{d.hint}</p>
             {overview && <div><MachineLoginOffers inForm logins={overview.machineLogins} onSignIn={(c) => edit({ provider: c === "claude-sub" ? "anthropic" : "openai", method: "plan" })} /></div>}

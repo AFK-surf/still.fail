@@ -587,7 +587,7 @@ export function NewConnectScreen() {
             <b className={sheetsCss.mFormLabel}>{t("web-mobile.workspaces.name")}</b>
             <Field value={appSettings.name} onChange={(v) => setAppSettings({ ...appSettings, name: v, displayName: v })} placeholder={NAME} />
             <b className={sheetsCss.mFormLabel}>{t("web-mobile.connects.description")}</b>
-            <Field value={appSettings.description} onChange={(v) => setAppSettings({ ...appSettings, description: v })} placeholder="Coding agent in your threads" />
+            <Field value={appSettings.description} onChange={(v) => setAppSettings({ ...appSettings, description: v })} placeholder={t("web-pages.slackApp.descriptionPlaceholder")} />
             <AppLook settings={appSettings} onChange={setAppSettings} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
             {iconError && <p className={partsCss.mError}>{iconError}</p>}
             <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>{t("web-mobile.connects.scopesNote")}</p>

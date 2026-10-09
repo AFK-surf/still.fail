@@ -336,7 +336,7 @@ export function parseCall(name: string, params: unknown): Call {
       const version = p.version as string | null;
       const action = p.action as string;
       if (!["open", "close", "dismiss"].includes(action) || (action === "dismiss" && (version === null || version === "" || new TextEncoder().encode(version).length > 200))) {
-        throw CoreError.invalid("参数不对：更新提示的操作或版本无效");
+        throw CoreError.invalid(t("core-misc.call.bad_update_notice"));
       }
       return { kind: "stationUpdateNotice", station: p.station as string, action, version };
     }

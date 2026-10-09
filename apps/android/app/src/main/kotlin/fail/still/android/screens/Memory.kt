@@ -173,7 +173,7 @@ private fun SkillRow(skill: SkillFile, station: String, names: Map<String, Strin
                 Switch(on)
             }
             val conflicts = skill.share?.conflicts.orEmpty()
-            if (conflicts.isNotEmpty()) Text("${t("web-main.memory.share.conflict")}: ${conflicts.joinToString("、")}", fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(start = 38.dp, end = 12.dp, top = 6.dp))
+            if (conflicts.isNotEmpty()) Text(t("web-main.memory.share.conflicts", "names" to conflicts.joinToString(t("web-main.list.separator"))), fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(start = 38.dp, end = 12.dp, top = 6.dp))
         }
         if (open) Markdown((skill.body ?: skill.text).ifEmpty { t("android-misc.memory.empty") }, Modifier.padding(start = 38.dp, end = 12.dp, top = 12.dp, bottom = 18.dp), size = 14)
     }

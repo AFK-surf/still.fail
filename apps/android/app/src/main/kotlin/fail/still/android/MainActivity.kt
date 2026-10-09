@@ -114,6 +114,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Crashes.install(applicationContext)
         StillFailCore.onFailed = { reason -> Crashes.coreFailed(applicationContext, reason) }
+        StillFailCore.restartedText = { t("android-misc.core.restarted") }
         fail.still.android.data.I18n.load(applicationContext)
         lifecycleScope.launch {
             val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA)

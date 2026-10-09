@@ -251,6 +251,15 @@
   },
   "core-views.present.profile.blocked": "Suspended",
   "core-views.present.profile.decision_pending": "Finding the decision models…",
+  "core-views.present.profile.decision.no_probabilities": "This sign-in offers no decision probabilities",
+  "core-views.present.profile.decision.none_verified": "No decision model verified yet",
+  "core-views.present.profile.decision.signed_out": "Checked for decisions once the account is back",
+  "core-views.present.profile.decision.address": "This profile's API address can't be checked for decisions",
+  "core-views.present.profile.decision.found": {
+    "one": "Found 1 decision model",
+    "other": "Found {n} decision models"
+  },
+  "core-views.present.profile.decision.changed": "Profile changed; waiting for the automatic check",
   "core-views.present.profile.models": {
     "one": "{enabled}/1 model on",
     "other": "{enabled}/{n} models on"
@@ -309,6 +318,7 @@
     "other": "{n} stations with issues"
   },
   "core-views.station.unreachable": "Can't reach {name}",
+  "core-views.station.not_listed": "This station isn't in the list",
   "core-views.usage.archived": "Archived",
   "core-views.usage.basis": "Subscriptions aren't billed per token; cost is estimated at standard API prices, without surcharges",
   "core-views.usage.by.chats": "By chat",

@@ -55,6 +55,15 @@ test("words_in_english", () => {
   assert.equal(f.timeUntilIn("en", now + 3 * 60 * MINUTE, now), "in 3 hr");
   assert.equal(f.refillsInLang("en", now + 185 * MINUTE, now), "Refills in 3 hr 5 min");
   assert.equal(f.refillsInLang("en", now + 25 * 60 * MINUTE, now), "Refills in 1 day 1 hr");
+  // The station names quota windows in Chinese; they are said in the viewer's language, and still marked.
+  assert.equal(f.windowName("5 小时", "en"), "5 hours");
+  assert.equal(f.windowName("1 小时", "en"), "1 hour");
+  assert.equal(f.windowName("3 天", "en"), "3 days");
+  assert.equal(f.windowName("每周 · Opus", "en"), "Weekly · Opus");
+  assert.equal(f.windowName("每月", "en"), "Monthly");
+  assert.equal(f.windowName("5 小时", "zh"), "5 小时");
+  assert.equal(f.windowName("Spark", "en"), "Spark");
+  assert.deepEqual(f.windowMark(f.windowName("3 天", "en")), ["3D", 1]);
 });
 
 test("spellings_of_one_model_share_a_key", () => {

@@ -3,6 +3,7 @@
 // workspace's owner or admin). Grey but for what wants doing: a newer version out, an update going on, one that failed.
 package fail.still.android.screens
 
+import fail.still.android.data.I18n
 import fail.still.android.data.t
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -60,7 +61,7 @@ fun Versions(station: String, updates: List<SoftwareVersion>?, manager: Boolean,
     val checked = updates.first().checkedAt
     val channel = updates.firstOrNull { it.id == "station" }?.channel
     val auto = updates.firstOrNull { it.id == "station" }?.auto
-    SectionHeader(t("android-misc.versions.title"), checked?.let { t("android-misc.versions.lastChecked", "time" to DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))) }, start = 24.dp)
+    SectionHeader(t("android-misc.versions.title"), checked?.let { t("android-misc.versions.lastChecked", "time" to DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, appLocale()).format(Date(it))) }, start = 24.dp)
     ListCard {
         updates.forEach { v ->
             VersionRow(v, manager, busy = updating == v.id) {
@@ -90,7 +91,7 @@ fun Versions(station: String, updates: List<SoftwareVersion>?, manager: Boolean,
             })) {
                 Column(Modifier.weight(1f)) {
                     Text(t("android-misc.versions.auto"), fontSize = 15.sp, color = C.ink)
-                    Text(if (updates.firstOrNull { it.id == "station" }?.idleOnly == true) "有客户端连接或 agent 工作时不自动更新，连续空闲 5 分钟后更新" else t("android-misc.versions.auto.text"), fontSize = 13.sp, color = C.muted)
+                    Text(if (updates.firstOrNull { it.id == "station" }?.idleOnly == true) t("android-misc.versions.auto.idle") else t("android-misc.versions.auto.text"), fontSize = 13.sp, color = C.muted)
                 }
                 Switch(on)
             }
@@ -173,4 +174,9 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
 private fun Latest(version: String) = Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
     IconIn(Icons.ArrowRight, 18.dp, C.accentInk)
     Text(version, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
+}
+
+/** The phone's locale when it is in the app's language, else that language's: dates as the words around them are. */
+private fun appLocale(): java.util.Locale = java.util.Locale.getDefault().let {
+    if (I18n.langOf(it.toLanguageTag()) == I18n.lang) it else java.util.Locale.forLanguageTag(if (I18n.lang == "zh") "zh-CN" else "en")
 }

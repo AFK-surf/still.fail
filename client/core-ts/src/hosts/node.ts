@@ -173,7 +173,7 @@ export class NodeHost implements Host {
           throw e;
         }
       },
-      (e) => `读不了：${e.message}`,
+      (e) => t("core-misc.host.storage.read", { error: e.message }),
     );
   }
 
@@ -192,12 +192,12 @@ export class NodeHost implements Host {
         }
         await rename(partial, path);
       },
-      (e) => `写不进去：${e.message}`,
+      (e) => t("core-misc.host.storage.write", { error: e.message }),
     );
   }
 
   storageDelete(key: string): Effect.Effect<void, HostError> {
-    return this.#file(() => rm(this.path(key), { force: true }), (e) => `删不掉：${e.message}`);
+    return this.#file(() => rm(this.path(key), { force: true }), (e) => t("core-misc.host.storage.delete", { error: e.message }));
   }
 
   /// The former records store (`core.db`, its `records` table), opened to be read; none when there is none.
@@ -228,7 +228,7 @@ export class NodeHost implements Host {
           (r) => [r.key, new Uint8Array(r.value)] as [string, Uint8Array],
         );
       },
-      catch: (e) => new HostError(`数据库出错：${(e as Error).message}`),
+      catch: (e) => new HostError(t("core-misc.host.db_error", { error: (e as Error).message })),
     });
   }
 
@@ -264,7 +264,7 @@ export class NodeHost implements Host {
         this.#open.delete(path);
         for (const end of ["", "-wal", "-shm", "-journal"]) rmSync(`${path}${end}`, { force: true });
       },
-      catch: (e) => new HostError(`删不掉：${(e as Error).message}`),
+      catch: (e) => new HostError(t("core-misc.host.storage.delete", { error: (e as Error).message })),
     });
   }
 

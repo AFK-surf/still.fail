@@ -46,6 +46,7 @@ function windows(list: Record<string, unknown>[], c: Clock): void {
     const label = str(w.label) ?? "";
     const used = typeof w.usedPercent === "number" ? w.usedPercent : 0;
     const [mark, order] = format.windowMark(label);
+    w.label = format.windowName(label);
     w.mark = mark;
     w.order = order;
     const [left, level] = leftLevel(used);
@@ -588,7 +589,11 @@ export function profile(p: J): void {
     const f = get(o.check, "decision") ?? null;
     o.decisionOnly = true;
     o.decisionModels = get(f, "state") === "ready" ? (get(f, "models") ?? []) : [];
-    o.decisionText = str(get(f, "detail")) || t("core-views.present.profile.decision_pending");
+    // Said in the viewer's language from what the station names (`reason`); a station from before that, as it said it.
+    const reason = str(get(f, "reason")) ?? "";
+    o.decisionText = DECISION_REASONS.includes(reason)
+      ? t(`core-views.present.profile.decision.${reason}`, { n: o.decisionModels.length })
+      : str(get(f, "detail")) || t("core-views.present.profile.decision_pending");
   }
   o.uses = usesList;
   const kind = get(o.access, "kind");
@@ -924,6 +929,9 @@ function archivePolicy(p: J, c: Clock): void {
   const when = typeof change.at === "number" ? format.relativeTime(change.at, c.now, c.offsetMin) : "";
   p.changeText = [t("core-views.policy.changedBy", { who }), when, str(change.summary)].filter((x) => x !== "").join(" · ");
 }
+
+/// The station's reasons for what a profile can decide with (station/src/sessions/decision.ts), each said in words.
+const DECISION_REASONS = ["no_probabilities", "signed_out", "address", "found", "none_verified", "changed"];
 
 /// What the archive check made of a chat (its row's `archiveCheck`), in a line under the agent's all-done post.
 export function archiveCheck(v: J): J | null {

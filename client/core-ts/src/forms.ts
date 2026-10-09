@@ -103,7 +103,7 @@ export class DecisionForms {
     const key = topicKey(topic);
     if (action === "edit") this.value(topic);
     const existing = this.#drafts.get(key);
-    if (existing && existing.owner !== owner) throw CoreError.invalid("不是这个页面的自动决策草稿");
+    if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-misc.decisionForm.notYours"));
     if (action === "drop") {
       existing?.watch.drop();
       this.#drafts.delete(key);
@@ -119,12 +119,12 @@ export class DecisionForms {
       this.#drafts.set(key, d);
     }
     if (action === "edit") {
-      if (d.pending) throw CoreError.invalid("请等保存完成");
+      if (d.pending) throw CoreError.invalid(t("core-misc.decisionForm.wait"));
       if (isObject(patch)) {
         if (patch.pickOpen === true) d.pickedModel = str(d.value.model);
         if (typeof patch.pickModel === "string") {
           const models = arr(get(get(overviewOf(this.#store, station), "automaticDecisions"), "models"));
-          if (!models.some((m) => get(m, "id") === patch.pickModel)) throw CoreError.invalid("这个决策模型已不可用");
+          if (!models.some((m) => get(m, "id") === patch.pickModel)) throw CoreError.invalid(t("core-misc.decisionForm.modelGone"));
           d.pickedModel = patch.pickModel;
         }
         if (patch.pickConfirm === true && d.pickedModel !== null) {
@@ -142,10 +142,10 @@ export class DecisionForms {
 
   begin(topic: Topic, owner: ClientId): J {
     const d = this.#drafts.get(topicKey(topic));
-    if (!d || d.owner !== owner) throw CoreError.invalid("自动决策草稿已关闭");
-    if (d.pending) throw CoreError.invalid("正在保存");
+    if (!d || d.owner !== owner) throw CoreError.invalid(t("core-misc.decisionForm.closed"));
+    if (d.pending) throw CoreError.invalid(t("core-misc.policy.saving"));
     const m = str(d.value.model) === "" ? null : d.value.model;
-    if (d.value.enabled === true && m === null) throw CoreError.invalid("请选择用于完成检查的模型");
+    if (d.value.enabled === true && m === null) throw CoreError.invalid(t("core-misc.decisionForm.pickModel"));
     d.pending = true;
     d.value.pending = true;
     this.#store.invalidate(topic);

@@ -84,19 +84,19 @@ export const routes = ({ accounts, sharing, overview }: AccountsRouteDeps): Rout
     route("POST", /^\/logins$/, (r) => answer(async (a) => ok(await a.newLogin(input(r), r.viewer, r.lang)))),
     route("PUT", /^\/*automatic-decisions\/*$/, (r) =>
       answer(async (a) => {
-        a.putAutomaticDecisions(input(r), r.viewer);
+        a.putAutomaticDecisions(input(r), r.viewer, r.lang);
         return ok(await view(r));
       }),
     ),
     route("PUT", /^\/*automatic-decisions\/+policy\/*$/, (r) =>
       answer(async (a) => {
-        a.putArchivePolicy(input(r), r.viewer);
+        a.putArchivePolicy(input(r), r.viewer, r.lang);
         return ok(await view(r));
       }),
     ),
     route("POST", /^\/*automatic-decisions\/+review\/*$/, (r) =>
       answer(async (a) => {
-        const queued = a.reviewUndecided(r.viewer);
+        const queued = a.reviewUndecided(r.viewer, r.lang);
         return ok({ queued, overview: await view(r) });
       }),
     ),

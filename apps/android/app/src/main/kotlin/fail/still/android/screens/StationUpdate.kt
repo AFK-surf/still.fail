@@ -37,6 +37,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import fail.still.android.LocalApp
 import fail.still.android.data.StationUpdateNotice
+import fail.still.android.data.t
 import fail.still.android.ui.C
 import fail.still.android.ui.CodeFont
 import fail.still.android.ui.IconIn
@@ -53,7 +54,7 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
     val app = LocalApp.current
     val busy = app.isDoing("software.update", "station" to station, "id" to "station")
     val failed = app.failedOf("software.update", "station" to station, "id" to "station")
-    fun control(action: String) { app.act("设置更新提醒") { app.core.call("station.updateNotice", buildJsonObject { put("station", station); put("action", action); put("version", notice.version) }) } }
+    fun control(action: String) { app.act(t("android-misc.stationUpdate.noticeWhat")) { app.core.call("station.updateNotice", buildJsonObject { put("station", station); put("action", action); put("version", notice.version) }) } }
     val accent = if (notice.tone == "trouble") C.red else C.accentInk
     val density = LocalDensity.current
     val gap = with(density) { (-4).dp.roundToPx() }
@@ -96,15 +97,15 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
                             } else Text(notice.text, fontSize = 13.sp, lineHeight = 19.sp, fontWeight = FontWeight.Medium, color = C.ink)
                             notice.detail?.let { Text(it, fontSize = 12.sp, lineHeight = 17.sp, color = C.muted) }
                         }
-                        Box(Modifier.size(32.dp).offset(y = (-6).dp).semantics { contentDescription = if (notice.dismissible == true) "不再提醒此版本" else "收起更新详情" }.clickable(role = Role.Button) { control(if (notice.dismissible == true) "dismiss" else "close") }, contentAlignment = Alignment.Center) { IconIn(Icons.Close, 14.dp, C.muted) }
+                        Box(Modifier.size(32.dp).offset(y = (-6).dp).semantics { contentDescription = if (notice.dismissible == true) t("android-misc.stationUpdate.dismiss") else t("android-misc.stationUpdate.collapse") }.clickable(role = Role.Button) { control(if (notice.dismissible == true) "dismiss" else "close") }, contentAlignment = Alignment.Center) { IconIn(Icons.Close, 14.dp, C.muted) }
                     }
                     if (notice.tone == "busy" && notice.station != null) UpdateBar(notice.percent)
                     val versions = listOfNotNull(notice.from, notice.to).joinToString(" → ")
                     if (versions.isNotEmpty() || notice.canUpdate == true) Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(versions, Modifier.weight(1f), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = CodeFont, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (notice.canUpdate == true) Row(Modifier.clip(CircleShape).background(C.accentBg).clickable(enabled = !busy, role = Role.Button) { app.act("更新 station") { app.api(station).updateSoftware("station") } }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (notice.canUpdate == true) Row(Modifier.clip(CircleShape).background(C.accentBg).clickable(enabled = !busy, role = Role.Button) { app.act(t("android-misc.stationUpdate.updateWhat")) { app.api(station).updateSoftware("station") } }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             DoingMark(busy, failed, 12.dp)
-                            Text(if (busy) "更新中" else if (notice.tone == "trouble") "重试" else "现在更新", fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
+                            Text(if (busy) t("android-misc.stationUpdate.updating") else if (notice.tone == "trouble") t("common.retry") else t("android-misc.stationUpdate.updateNow"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
                         }
                     }
                 }

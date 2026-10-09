@@ -269,6 +269,16 @@
   "core-logic.format.weekday.4": "Thursday",
   "core-logic.format.weekday.5": "Friday",
   "core-logic.format.weekday.6": "Saturday",
+  "core-logic.format.window.hours": {
+    "one": "{n} hour",
+    "other": "{n} hours"
+  },
+  "core-logic.format.window.days": {
+    "one": "{n} day",
+    "other": "{n} days"
+  },
+  "core-logic.format.window.weekly": "Weekly",
+  "core-logic.format.window.monthly": "Monthly",
   "core-logic.history.did.agent": {
     "one": "sent 1 subagent",
     "other": "sent {n} subagents"

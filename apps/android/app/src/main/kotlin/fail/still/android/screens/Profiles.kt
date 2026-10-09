@@ -274,7 +274,7 @@ private fun ShareSection(current: WorkspaceEntry, s: StationView, p: Profile) {
     val allowed = share?.allow
     val sharing = app.isDoing("profile.share", "station" to s.station, "id" to p.id)
     val moving = app.isDoing("profile.move", "station" to s.station, "id" to p.id)
-    val names = if (allowed == null) t("web-pages.profiles.share.everyStation") else stations.filter { it.id in allowed || it.id == s.id }.joinToString("、") { it.name }
+    val names = if (allowed == null) t("web-pages.profiles.share.everyStation") else stations.filter { it.id in allowed || it.id == s.id }.joinToString(t("web-main.list.separator")) { it.name }
     val targets = stations.filter { it.id != s.id }
     ListCard {
         ListRow(onClick = if (sharing) null else ({
@@ -300,7 +300,7 @@ private fun ShareSection(current: WorkspaceEntry, s: StationView, p: Profile) {
                 Column(Modifier.weight(1f)) {
                     Text(t("web-pages.profiles.share.stations"), fontSize = 15.sp, color = C.ink)
                     val users = share?.users.orEmpty()
-                    if (users.isNotEmpty()) Text(t("web-pages.profiles.share.users", "stations" to users.joinToString("、") { u -> stations.firstOrNull { it.id == u }?.name ?: u.take(8) }), fontSize = 13.sp, color = C.muted)
+                    if (users.isNotEmpty()) Text(t("web-pages.profiles.share.users", "stations" to users.joinToString(t("web-main.list.separator")) { u -> stations.firstOrNull { it.id == u }?.name ?: u.take(8) }), fontSize = 13.sp, color = C.muted)
                 }
                 Text(names, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 IconIn(Icons.ChevronRight, 14.dp, C.subtle)
@@ -421,7 +421,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                             else DoingMark(false, app.failedOf(setOf("profile.check", "profile.quota"), "station" to address, "id" to p.id), 12.dp)
                         }
                         Text(
-                            (p.check?.detail?.replace(Regex("^可用[，,]\\s*"), "") ?: t("android-settings.profile.notChecked")) + (p.check?.time?.get("checkedAt")?.let { t("android-settings.profile.checkedAt", "ago" to it.ago) } ?: ""),
+                            (p.check?.detail?.replace(Regex("^(可用[，,]|Works,)\\s*"), "") ?: t("android-settings.profile.notChecked")) + (p.check?.time?.get("checkedAt")?.let { t("android-settings.profile.checkedAt", "ago" to it.ago) } ?: ""),
                             fontSize = 13.sp, color = C.muted,
                         )
                     }

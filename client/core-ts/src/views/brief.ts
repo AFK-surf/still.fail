@@ -40,8 +40,8 @@ export function jobsText(list: unknown): string | null {
   const watching = names((job) => jobs.isWatch(job) && jobs.tone(job) === "live");
   const running = names((job) => !jobs.isWatch(job) && jobs.tone(job) === "live");
   const parts: string[] = [];
-  if (services.length) parts.push(t("core-views.agent.services", { names: services.join("、") }));
-  if (watching.length) parts.push(t("core-views.agent.watching", { names: watching.join("、") }));
+  if (services.length) parts.push(t("core-views.agent.services", { names: services.join(t("core-views.list_separator")) }));
+  if (watching.length) parts.push(t("core-views.agent.watching", { names: watching.join(t("core-views.list_separator")) }));
   if (running.length) parts.push(t("core-views.agent.running", { n: running.length }));
   return parts.length ? parts.join(" · ") : null;
 }

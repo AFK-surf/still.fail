@@ -61,6 +61,9 @@ class StillFailCore internal constructor(
         /** Told why each time the core dies and is started again (the app reports it: Crashes.kt), from the core's lane. */
         @Volatile var onFailed: ((String) -> Unit)? = null
 
+        /** What calls in flight fail with when the core is started again, in the app's language (the app sets it). */
+        @Volatile var restartedText: () -> String = { "核心已重启，请重试" }
+
         /**
          * One per process. `cloudOrigin` e.g. "https://app.still.fail" (the emulator reaches a dev cloud at
          * http://10.0.2.2:8787); `beta`: the beta app's core (client/core-ts Host.beta).
@@ -270,7 +273,7 @@ class StillFailCore internal constructor(
         replyIds.clear()
         progress.clear()
         queue.clear()
-        failed.forEach { it.completeExceptionally(CoreException("core_restarted", "核心已重启，请重试", null)) }
+        failed.forEach { it.completeExceptionally(CoreException("core_restarted", restartedText(), null)) }
         for (sub in subs.values) sub.value = null
         retry()
     }

@@ -682,7 +682,7 @@ fun NewConnectScreen(station: String) {
                     FormLabel(t("android-settings.slack.name"))
                     Field(draft.name, { draft.name = it }, BuildConfig.APP_NAME)
                     FormLabel(t("android-settings.flow.description"))
-                    Field(draft.description, { draft.description = it }, "Coding agent in your threads")
+                    Field(draft.description, { draft.description = it }, t("android-settings.slack.descriptionPlaceholder"))
                     AppLook(draft, icon, { i, e -> icon = i; flow.edit { put("icon", i?.data); put("iconError", e) } }, fresh = true)
                     iconError?.let { Text(it, fontSize = 13.sp, color = C.red) }
                     Text(t("android-settings.flow.permsNote"), fontSize = 13.sp, color = C.muted)

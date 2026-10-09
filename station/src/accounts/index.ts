@@ -676,7 +676,7 @@ export class Accounts {
     check.decision = await this.discoverFn(profile, check);
     // A profile edited during the probe does not inherit the previous account's capabilities.
     const now = this.profile(id);
-    if (!now || fingerprint(now) !== fingerprint(profile)) throw new Refusal(409, "Profile 已修改，请重新检查");
+    if (!now || fingerprint(now) !== fingerprint(profile)) throw new Refusal(409, tr(lang, "station.profile.changedRecheck"));
     this.keepCheck(id, check);
     // One never asked yet (just made, however): its allowance now, not at the next round.
     if (check.state === "ok" && !this.quotas.has(id)) this.background.spawn(() => this.refreshQuota(id));
@@ -803,17 +803,17 @@ export class Accounts {
   }
 
   /// PUT /automatic-decisions (a workspace manager's).
-  putAutomaticDecisions(input: Record<string, unknown>, viewer: Viewer) {
-    if (!manages(viewer)) throw new Refusal(403, "只有 workspace 管理员能配置自动决策");
+  putAutomaticDecisions(input: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
+    if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.decisions.managersOnly"));
     try {
       checkAutomaticDecisions(input);
     } catch {
-      throw new Refusal(400, "自动决策配置格式不正确");
+      throw new Refusal(400, tr(lang, "station.decisions.badSettings"));
     }
     const rule: Json = isObject(input.completion) ? input.completion : {};
     const config = { completion: { enabled: rule.enabled === true, model: typeof rule.model === "string" ? rule.model : null } };
     if (config.completion.enabled && !this.decisionModels().some((m) => m.id === config.completion.model)) {
-      throw new Refusal(400, "请选择现有 Profile 中已验证可用的决策模型");
+      throw new Refusal(400, tr(lang, "station.decisions.pickVerified"));
     }
     this.save(viewer, "automatic decisions", (raw) => {
       raw.automaticDecisions = config;
@@ -821,19 +821,19 @@ export class Accounts {
   }
 
   /// POST /automatic-decisions/review: the done chats no decision has answered, reviewed now in the background; how many.
-  reviewUndecided(viewer: Viewer): number {
-    if (!manages(viewer)) throw new Refusal(403, "只有 workspace 管理员能触发自动决策");
+  reviewUndecided(viewer: Viewer, lang: Lang = stationLang()): number {
+    if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.decisions.managersOnlyReview"));
     const review = this.deps.reviewUndecided;
-    if (!review) throw new Refusal(503, "这台 station 暂不支持手动检查");
-    if (!hubConfig(this.deps.config.raw(), this.deps.data).automaticDecisions.completion.enabled) throw new Refusal(409, "先启用并保存这条规则");
+    if (!review) throw new Refusal(503, tr(lang, "station.decisions.reviewUnsupported"));
+    if (!hubConfig(this.deps.config.raw(), this.deps.data).automaticDecisions.completion.enabled) throw new Refusal(409, tr(lang, "station.decisions.enableFirst"));
     const queued = review();
-    if (queued === null) throw new Refusal(409, "配置的模型在现有 Profile 中暂不可用");
+    if (queued === null) throw new Refusal(409, tr(lang, "station.decisions.modelUnavailable"));
     return queued;
   }
 
   /// POST /automatic-decisions/refresh: every profile checked again (four at a time).
   async refreshDecisionModels(viewer: Viewer, lang: Lang = stationLang()) {
-    if (!manages(viewer)) throw new Refusal(403, "只有 workspace 管理员能刷新决策模型");
+    if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.decisions.managersOnlyRefresh"));
     const ids = this.profiles().map((p) => p.id);
     const errors: unknown[] = [];
     let next = 0;
@@ -930,8 +930,8 @@ export class Accounts {
 
   /// PUT /automatic-decisions/policy (a workspace manager's): the policy in words and its options; the done chats are
   /// checked again under it.
-  putArchivePolicy(input: Record<string, unknown>, viewer: Viewer) {
-    if (!manages(viewer)) throw new Refusal(403, "只有 workspace 管理员能改归档策略");
+  putArchivePolicy(input: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
+    if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.decisions.managersOnlyPolicy"));
     let changed: string | null;
     try {
       changed = savePolicy(this.deps.store, input, { kind: "person", email: viewer.email, name: viewer.name || null });
@@ -958,7 +958,7 @@ export class Accounts {
       if (check) {
         checkView = structuredClone(check);
         if (isObject(checkView.decision)) delete checkView.decision.fingerprint;
-        if (check.decision && check.decision.fingerprint !== fingerprint(p)) checkView.decision = { state: "pending", detail: "Profile 已修改，等待自动检查" };
+        if (check.decision && check.decision.fingerprint !== fingerprint(p)) checkView.decision = { state: "pending", detail: "Profile 已修改，等待自动检查", reason: "changed" };
       }
       return {
         id: p.id, name: p.name, runtime: p.runtime, runtimes: p.runtimes,

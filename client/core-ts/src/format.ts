@@ -151,6 +151,16 @@ export function refillsInLang(lang: Lang, ms: number, now: number): string {
   return h === 0 ? tr(lang, "core-logic.format.refill.days", { n: Math.trunc(hours / 24) }) : tr(lang, "core-logic.format.refill.days_hours", { n: Math.trunc(hours / 24), h });
 }
 
+/// A quota window's label in the viewer's language: the station names them in Chinese (5 小时, 每周 · Opus, 每月, 3 天);
+/// one it does not name so is shown as it is.
+export function windowName(label: string, lang: Lang = current()): string {
+  const m = /^([0-9]+) (小时|天)(.*)$/.exec(label);
+  if (m) return tr(lang, m[2] === "小时" ? "core-logic.format.window.hours" : "core-logic.format.window.days", { n: Number(m[1]) }) + m[3];
+  if (label.startsWith("每周")) return tr(lang, "core-logic.format.window.weekly") + label.slice(2);
+  if (label.startsWith("每月")) return tr(lang, "core-logic.format.window.monthly") + label.slice(2);
+  return label;
+}
+
 /// A quota window marked by its length (5H, W, M, 3D), and where it goes among the others.
 export function windowMark(label: string): [string, number] {
   if (label.startsWith("每月") || label.startsWith("Monthly")) return ["M", 3];

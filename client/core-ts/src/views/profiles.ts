@@ -68,9 +68,9 @@ export function workspaceProfiles(stations: J[]): J {
     const allow: string[] | null = share && Array.isArray(share.allow) ? share.allow : null;
     const parts: string[] = [];
     if (members.length === 1 && !share) parts.push(t("core-views.profiles.only", { station: String(s.name) }));
-    else if (subscription) parts.push(t("core-views.profiles.signedIn", { station: signedIn.join("、") }));
-    else if (!share) parts.push(t("core-views.profiles.on", { stations: members.map((m) => m.stationName).join("、") }));
-    if (allow !== null) parts.push(t("core-views.profiles.allowed", { stations: allow.map(name).join("、") }));
+    else if (subscription) parts.push(t("core-views.profiles.signedIn", { station: signedIn.join(t("core-views.list_separator")) }));
+    else if (!share) parts.push(t("core-views.profiles.on", { stations: members.map((m) => m.stationName).join(t("core-views.list_separator")) }));
+    if (allow !== null) parts.push(t("core-views.profiles.allowed", { stations: allow.map(name).join(t("core-views.list_separator")) }));
     const host = share ? String(share.host) : String(s.id);
     const kind = group(p);
     items.push({
@@ -117,7 +117,7 @@ function member(s: J, p: J, name: (id: string) => string, byId: Map<string, J>):
   const users: string[] = role === "host" && Array.isArray(share.users) ? share.users.map((u: string) => name(u)) : [];
   let about: string;
   if (role === "user") about = t(subscription ? "core-views.profiles.borrows" : "core-views.profiles.copyOf", { station: name(String(share.host)) });
-  else if (role === "host") about = users.length > 0 ? t(subscription ? "core-views.profiles.lends" : "core-views.profiles.sharedWith", { stations: users.join("、") }) : t("core-views.profiles.sharedNone");
+  else if (role === "host") about = users.length > 0 ? t(subscription ? "core-views.profiles.lends" : "core-views.profiles.sharedWith", { stations: users.join(t("core-views.list_separator")) }) : t("core-views.profiles.sharedNone");
   else about = t(subscription ? "core-views.profiles.ownLogin" : "core-views.profiles.ownKey");
   return {
     station: String(s.station),

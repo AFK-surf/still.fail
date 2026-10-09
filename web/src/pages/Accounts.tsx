@@ -211,7 +211,7 @@ function ShareSection({ profile }: { profile: Profile }) {
   }
   const shared = share !== undefined;
   const allowed = share?.allow ?? null;
-  const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join("、");
+  const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join(t("web-main.list.separator"));
   const describe = !shared
     ? t("web-pages.profiles.share.onlyHere", { station: station.name })
     : subscription ? t("web-pages.profiles.share.lent") : t("web-pages.profiles.share.copied");
@@ -230,7 +230,7 @@ function ShareSection({ profile }: { profile: Profile }) {
       )}
       <div className={pagesCss.cardRow}>
         <span className={pagesCss.cardRowText}><b>{t("web-pages.profiles.share.stations")}</b>
-          {(share?.users?.length ?? 0) > 0 && <span className={shellCss.muted}>{t("web-pages.profiles.share.users", { stations: share!.users!.map((u) => stations.find((x) => x.id === u)?.name ?? u.slice(0, 8)).join("、") })}</span>}</span>
+          {(share?.users?.length ?? 0) > 0 && <span className={shellCss.muted}>{t("web-pages.profiles.share.users", { stations: share!.users!.map((u) => stations.find((x) => x.id === u)?.name ?? u.slice(0, 8)).join(t("web-main.list.separator")) })}</span>}</span>
         <span className={css.shareValue}>{names}</span>
         <Button variant="ghost" disabled={sharing} onClick={() => setPicking(true)}>{t("web-pages.profiles.share.change")}</Button>
       </div>

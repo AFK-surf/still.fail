@@ -103,6 +103,10 @@ test("a_profile_says_what_it_can_do_from_where_its_provider_speaks", () => {
   const jev: J = { runtimes: [], access: { kind: "env", provider: "jev" }, check: { state: "ok", decision: { state: "ready", detail: "已识别 1 个决策模型", models: ["jev-latest"] } } };
   p.profile(jev);
   assert.deepEqual([jev.decisionOnly, jev.decisionModels, jev.decisionText], [true, ["jev-latest"], "已识别 1 个决策模型"]);
+  // Said from the station's reason, not its Chinese detail.
+  const found: J = { runtimes: [], access: { kind: "env", provider: "jev" }, check: { state: "ok", decision: { state: "ready", detail: "x", reason: "found", models: ["jev-latest", "jev-mini"] } } };
+  p.profile(found);
+  assert.equal(found.decisionText, "已识别 2 个决策模型");
   const waiting: J = { runtimes: [], access: { kind: "env", provider: "jev" }, check: { state: "ok" } };
   p.profile(waiting);
   assert.deepEqual([waiting.decisionModels, waiting.decisionText], [[], "正在识别决策模型…"]);

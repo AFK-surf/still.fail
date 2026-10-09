@@ -57,7 +57,7 @@ export function attention(overview: J, session: J, now: number): J[] {
         const used = typeof get(w, "usedPercent") === "number" ? w.usedPercent : 0;
         const left0 = 100 - used;
         if (left0 > LOW_LEFT) continue;
-        const label = str(get(w, "label")) ?? "";
+        const label = format.windowName(str(get(w, "label")) ?? "");
         const left = format.round(Math.max(left0, 0));
         const resets = get(w, "resetsAt");
         const until = typeof resets === "number" && Number.isInteger(resets) ? resets : null;
@@ -227,7 +227,7 @@ export function quotaLine(quota: J): J {
   }
   const shown = windows
     .map((w) => {
-      const label = str(get(w, "label")) ?? "";
+      const label = format.windowName(str(get(w, "label")) ?? "");
       const [left, level] = present.leftLevel(typeof get(w, "usedPercent") === "number" ? w.usedPercent : 0);
       return { label, left, level, order: format.windowMark(label)[1] };
     })

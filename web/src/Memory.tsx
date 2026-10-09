@@ -45,7 +45,7 @@ export function SkillRow({ skill, station, changed }: { skill: SkillFile; statio
         <div className={css.memoryShare}>
           <SwitchRow title={t("web-main.memory.share.switch")} checked={share?.role === "host"} busy={sharing} disabled={sharing}
             onChange={(on) => act(stationApi(call).shareSkill(skill.name, on, null).then(() => changed?.()), t("web-main.memory.share.switch"))} />
-          {(share?.conflicts?.length ?? 0) > 0 && <p className={css.memoryConflict}>{t("web-main.memory.share.conflict")}: {share!.conflicts!.join("、")}</p>}
+          {(share?.conflicts?.length ?? 0) > 0 && <p className={css.memoryConflict}>{t("web-main.memory.share.conflicts", { names: share!.conflicts!.join(t("web-main.list.separator")) })}</p>}
         </div>
       )}
       {open && <div className={`${css.memoryDoc} ${conversationCss.markdown}`}><Prose>{(skill.body ?? skill.text) || t("web-main.memory.empty")}</Prose></div>}

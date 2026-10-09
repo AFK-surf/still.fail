@@ -23,6 +23,7 @@ import androidx.compose.ui.zIndex
 import fail.still.android.data.ChatItem
 import fail.still.android.data.Maker
 import fail.still.android.data.Person
+import fail.still.android.data.t
 import fail.still.android.ui.Avatar
 import fail.still.android.ui.C
 import fail.still.android.ui.MakerIcon
@@ -66,7 +67,7 @@ fun RowAside(item: ChatItem, lead: String, modifier: Modifier = Modifier) {
 @Composable
 private fun Agents(item: ChatItem, groups: List<AgentGroup>) {
     val rest = groups.size - 3
-    Row(Modifier.semantics { contentDescription = item.agents.joinToString("、") { it.agentText } }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(Modifier.semantics { contentDescription = item.agents.joinToString(t("web-main.list.separator")) { it.agentText } }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         groups.take(3).forEach { g -> MakerIcon(g.maker, g.runtime, 14.dp) }
         if (rest > 0) Text("+$rest", fontSize = 12.sp, color = C.muted)
     }
