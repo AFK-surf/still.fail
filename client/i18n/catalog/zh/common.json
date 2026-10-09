@@ -27,5 +27,9 @@
   "common.provider.usesHint": "Claude Code 要服务商的 Anthropic 接口，Codex 要 Responses 接口；只有聊天补全接口的，用于自动决策",
   "common.decision": "自动决策",
   "common.decisionLong": "可用于自动决策",
-  "common.recommended": "推荐"
+  "common.recommended": "推荐",
+  "common.link.open": "打开链接",
+  "common.link.copy": "复制链接",
+  "common.link.copied": "已复制链接",
+  "common.link.copyFailed": "没能复制链接：{error}"
 }

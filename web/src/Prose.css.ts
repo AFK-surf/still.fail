@@ -18,6 +18,9 @@ export const fileLink = style({
   display: "inline", padding: 0, border: 0, background: "none", font: "inherit", color: vars.blue, cursor: "pointer", textAlign: "inherit",
 });
 
+/** A web address in what a person wrote (withBareLinks): a link as one in markdown is. */
+export const bareLink = style({ color: vars.blue });
+
 /** A message the agent sent: a plain card so its content (code, tables, chips) keeps its own colours. */
 /** Code blocks: a quiet frame, the language and a copy button above, highlighting in the page's own tones. */
 /** Code: a quiet tinted block, no frame; language and copy sit in the corner and come forward on hover. */

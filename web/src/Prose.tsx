@@ -3,7 +3,7 @@
 // Grammars load on demand, one chunk per language, with Shiki's JavaScript
 // regex engine so no wasm is fetched.
 import { Check, Copy } from "./icons.tsx";
-import { isValidElement, memo, useEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react";
+import { Fragment, isValidElement, memo, useEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { HighlighterCore } from "shiki/core";
@@ -12,6 +12,7 @@ import { inlineFile, inlineFiles } from "./Prose.css.ts";
 import * as css from "./Prose.css.ts";
 import { RefChip } from "./ChatRef.tsx";
 import { isChatLink } from "./chatRefs.ts";
+import { bareLinks } from "./bareLinks.ts";
 import { FileRef, LinkHover, pathIn } from "./Peeks.tsx";
 import { Tip } from "./ui.tsx";
 import { failure, useToast } from "./toast.tsx";
@@ -19,19 +20,23 @@ import { Mermaid } from "./Viz.tsx";
 import { t } from "./i18n.ts";
 
 /** GFM's links found in bare text end only at a space, so in Chinese they swallow the words after them
- * (`（https://…/2854）已改到`); a link is one written as [label](url) or <url>, and a bare one stays text. */
-function noBareLinks() {
-  type Node = { type: string; children?: Node[]; position?: { start: { offset?: number } } };
+ * (`（https://…/2854）已改到`): a bare address is linked where a reader sees it end (bareLinks.ts) instead, and
+ * `www.…` and e-mail addresses stay text. [label](url) and <url> are links as written. */
+function linkBare() {
+  type Node = { type: string; value?: string; url?: string; title?: null; children?: Node[]; position?: { start: { offset?: number } } };
   return (tree: Node, file: { value: unknown }) => {
     const source = String(file.value);
-    const unwrap = (nodes: Node[]): Node[] => nodes.flatMap((n) => {
-      // Bare ones come from GFM without a position (www.…) or start at the URL itself.
+    const within = (nodes: Node[], inLink: boolean): Node[] => nodes.flatMap((n) => {
+      // GFM's own bare ones come without a position (www.…) or start at the address itself: their words, read again.
       const start = n.position?.start.offset;
-      if (n.type === "link" && (start === undefined || (source[start] !== "[" && source[start] !== "<"))) return unwrap(n.children ?? []);
-      if (n.children) n.children = unwrap(n.children);
+      if (n.type === "link" && (start === undefined || (source[start] !== "[" && source[start] !== "<"))) return within(n.children ?? [], inLink);
+      if (n.type === "text" && !inLink) {
+        return bareLinks(n.value ?? "").map((part): Node => (typeof part === "string" ? { type: "text", value: part } : { type: "link", url: part.url, title: null, children: [{ type: "text", value: part.url }] }));
+      }
+      if (n.children) n.children = within(n.children, inLink || n.type === "link" || n.type === "linkReference");
       return [n];
     });
-    if (tree.children) tree.children = unwrap(tree.children);
+    if (tree.children) tree.children = within(tree.children, false);
   };
 }
 
@@ -132,11 +137,12 @@ const components: Components = {
   },
 };
 
-/** A link in a message as it is drawn (but one naming the message's own files, which Prose places). */
+/** A link in a message as it is drawn (but one naming the message's own files, which Prose places). A web page opens in
+ * a tab of its own, not in place of the app (the desktop app's opens in the browser, as before). */
 function link(props: ComponentProps<"a">) {
   const href = props.href ?? "";
   if (isChatLink(href)) return <RefChip title={props.children} href={href} />;
-  if (/^https?:\/\//i.test(href)) return <LinkHover href={href} label={textOf(props.children)}><a {...props} title={undefined} /></LinkHover>;
+  if (/^https?:\/\//i.test(href)) return <LinkHover href={href} label={textOf(props.children)}><a {...props} title={undefined} target="_blank" rel="noopener noreferrer" /></LinkHover>;
   const file = /^[a-z][\w+.-]*:/i.test(href) ? null : pathIn(safeDecode(href));
   if (file) return <FileRef path={file.path} line={file.line} words={props.children}>{props.children}</FileRef>;
   return <Tip label={props.title}><a {...props} title={undefined} /></Tip>;
@@ -149,6 +155,11 @@ const safeDecode = (s: string) => {
     return s;
   }
 };
+
+/** Plain words (what a person wrote) with their bare addresses as the links a message draws (bareLinks.ts). */
+export function withBareLinks(text: string): ReactNode {
+  return bareLinks(text).map((part, i) => (typeof part === "string" ? part : <Fragment key={i}>{link({ href: part.url, className: css.bareLink, children: part.url })}</Fragment>));
+}
 
 /** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`. */
 function nameOf(url: string): string {
@@ -216,5 +227,5 @@ export const Prose = memo(function Prose({ children, files, file }: { children: 
   }, [placing]);
   // Links to the files are kept as written (the default would empty a file:// one); any other goes through the default.
   const url = (u: string) => (files?.has(nameOf(u)) ? u : defaultUrlTransform(u));
-  return <Markdown remarkPlugins={[remarkGfm, noBareLinks]} components={withFiles} urlTransform={url}>{children}</Markdown>;
+  return <Markdown remarkPlugins={[remarkGfm, linkBare]} components={withFiles} urlTransform={url}>{children}</Markdown>;
 });

@@ -1,7 +1,7 @@
 // Referring to another chat from the composer: `@` and a few letters of its title list the station's chats (the core's
 // `chatSearch`), and the one chosen goes into the text as a chip (chatRefs.ts), sent as a link, [its title](its page).
 // The agent reads that chat by the link (the station's chat_read and session_history tools).
-import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { Fragment, useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { useHref } from "react-router";
 import { useChats, useChatSearch, useStations, type ChatItem } from "./api.ts";
 import { ChatMark, stateLine } from "./ChatMark.tsx";
@@ -92,9 +92,9 @@ const safeDecode = (s: string) => {
   }
 };
 
-/** Plain text with its references (links to chats) drawn as chips. */
-export function WithRefs({ text }: { text: string }) {
-  return <>{splitBy(text, REF_LINK).map((part, i) => (typeof part === "string" ? part : <RefChip key={i} title={part[1]} href={part[2]!} />))}</>;
+/** Plain text with its references (links to chats) drawn as chips; the words between them as `words` draws them. */
+export function WithRefs({ text, words = (part) => part }: { text: string; words?: (part: string) => ReactNode }) {
+  return <>{splitBy(text, REF_LINK).map((part, i) => (typeof part === "string" ? <Fragment key={i}>{words(part)}</Fragment> : <RefChip key={i} title={part[1]} href={part[2]!} />))}</>;
 }
 
 /**

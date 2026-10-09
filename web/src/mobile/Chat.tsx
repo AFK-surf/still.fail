@@ -14,7 +14,7 @@ import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
-import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
+import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, Copy, External, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { Glyph } from "../StationMark.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
@@ -268,9 +268,12 @@ function plain(text: string): string {
 
 /**
  * Long-press on a message in the list (a right click with a mouse): its page, to pick passages of it to say something
- * about or to copy (Annotate.tsx). Not on what does its own thing in it (a name, a quote, a file).
+ * about or to copy (Annotate.tsx). Not on what does its own thing in it (a name, a quote, a file). Long-press on a web
+ * link in it: the link's menu instead (open it, copy it), as the Android app has it; a right click there is the
+ * browser's own menu, with its link items.
  */
 function useHold(list: RefObject<HTMLElement | null>, messages: ChatMessage[], onHold: (ts: string) => void) {
+  const app = useApp();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const touched = useRef(false);
   const shown = useRef(messages);
@@ -291,19 +294,40 @@ function useHold(list: RefObject<HTMLElement | null>, messages: ChatMessage[], o
     navigator.vibrate?.(10);
     onHold(m.ts);
   };
+  /** The web link pressed in one of the messages (a reference to a chat too), or null. */
+  const linkAt = (event: React.SyntheticEvent) => {
+    const a = (event.target as Element).closest?.<HTMLAnchorElement>("a[href]");
+    return a && /^https?:\/\//i.test(a.getAttribute("href") ?? "") && a.closest("[data-author][data-ts]") && list.current?.contains(a) ? a : null;
+  };
+  const linkMenu = (a: HTMLAnchorElement, x: number, y: number) => {
+    navigator.vibrate?.(10);
+    // Under the line held (over it when there is no room below), centred on the finger: the menu is 180 wide (app.tsx MenuHost).
+    const line = [...a.getClientRects()].find((r) => y >= r.top && y <= r.bottom) ?? a.getBoundingClientRect();
+    const failed = (e: unknown) => app.toast(t("common.link.copyFailed", { error: e instanceof Error ? e.message : String(e) }));
+    app.menu({ anchor: new DOMRect(x - 90, line.top, 0, line.height), items: [
+      // As a tap on it: still.fail's own open here (the list's onClick), any other in a tab of its own.
+      { label: t("common.link.open"), icon: <External size={16} />, action: () => a.click() },
+      { label: t("common.link.copy"), icon: <Copy size={16} />, action: () => { navigator.clipboard.writeText(a.href).then(() => app.toast(t("common.link.copied")), failed); } },
+    ] });
+  };
   const cancel = () => clearTimeout(timer.current);
   // A finger holds for the menu; a mouse right-clicks for it (and selects words to quote a passage of them).
   return {
     onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
       touched.current = e.pointerType !== "mouse";
       cancel();
-      const at = touched.current ? held(e) : null;
-      if (at) timer.current = setTimeout(() => open(at), 480);
+      if (!touched.current) return;
+      const link = linkAt(e);
+      const at = link ? null : held(e);
+      const { clientX: x, clientY: y } = e;
+      if (link) timer.current = setTimeout(() => linkMenu(link, x, y), 480);
+      else if (at) timer.current = setTimeout(() => open(at), 480);
     },
     onPointerUp: cancel, onPointerCancel: cancel,
     onPointerMove: (e: React.PointerEvent) => { if (Math.abs(e.movementY) > 4 || Math.abs(e.movementX) > 4) cancel(); },
     // A right click opens it; a long press, where the browser asks for its own menu too, already has.
     onContextMenu: (e: React.MouseEvent<HTMLElement>) => {
+      if (!touched.current && linkAt(e)) return;
       const at = held(e);
       if (!at) return;
       e.preventDefault();

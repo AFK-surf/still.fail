@@ -14,7 +14,7 @@ import { chatOfLink } from "./chatRefs.ts";
 import { PathSession } from "./Peeks.tsx";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
-import { placeFiles, Prose } from "./Prose.tsx";
+import { placeFiles, Prose, withBareLinks } from "./Prose.tsx";
 import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
 import { imageBox } from "./imageBox.ts";
@@ -1073,9 +1073,9 @@ export function MineBubble({ text }: { text: string }) {
 }
 
 /** What a person wrote, as every message of a person's draws it (their own in its bubble, someone else's as it is):
- * plain text, its references to chats as chips. */
+ * plain text, its references to chats as chips and its web addresses as links. */
 export function PersonWords({ text }: { text: string }) {
-  return <div className={chatCss2.msgPlain}><WithRefs text={text} /></div>;
+  return <div className={chatCss2.msgPlain}><WithRefs text={text} words={withBareLinks} /></div>;
 }
 
 /**
