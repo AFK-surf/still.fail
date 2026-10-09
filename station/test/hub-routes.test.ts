@@ -16,6 +16,8 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
 import { Store, newMessage } from "../src/store/store.ts";
+import { digest } from "../src/read/digest.ts";
+import { isDeepStrictEqual } from "node:util";
 import { FakeDriver, settle } from "./hub-fakes.ts";
 
 const viewer = { sub: "u", email: "a@x", name: "A", role: "member", workspace: "w", device: "d" };
@@ -397,6 +399,47 @@ test("a file a message names by its path: its peek and the file whole, only with
     const [, whole] = await r.ask("GET", `/sessions/${key}/open`, undefined, [["path", "src/a.ts"]]);
     assert.equal(Buffer.from(whole.bytes, "base64").toString("utf8").split("\n").length, 40);
     assert.equal(whole.name, "a.ts");
+  } finally {
+    await r.close();
+  }
+});
+
+test("a row's digest is the core's, whatever the order of its fields", () => {
+  // The values client/core-ts/test/station-flows.test.ts takes: the core makes the same digests.
+  const v = { b: [1, "x", null, true, { z: 2, y: [] }], a: { d: 1.5, c: '中文 \u2028 "q"' }, e: -0 };
+  const w = { e: 0, a: { c: '中文 \u2028 "q"', d: 1.5 }, b: [1, "x", null, true, { y: [], z: 2 }] };
+  assert.deepEqual([digest(v), digest(w), digest({ k: 1 }), digest({ k: 2 })], ["txw0i07ix8", "txw0i07ix8", "1x451bsuzqf", "1jui8glvs7p"]);
+});
+
+test("a list read as what changed of it: its order, and the rows the client does not hold as they are", async () => {
+  const r = rig();
+  try {
+    const made: any[] = [];
+    for (const title of ["a", "b", "c"]) made.push((await r.ask("POST", "/sessions", { runtime: "claude", title }))[1]);
+    const lists: [string, string, [string, string][]][] = [["chats", "id", []], ["chats", "id", [["archived", "1"]]], ["threads", "id", []], ["sessions", "key", []]];
+    const read = async () => Promise.all(lists.map(async ([list, , query]) => (await r.ask("GET", `/${list}`, undefined, query))[1] as any[]));
+    // Held as read, each row's fields in another order.
+    const heldOf = (rows: any[], id: string) => Object.fromEntries(rows.map((x) => [String(x[id]), digest(Object.fromEntries(Object.entries(x).reverse()))]));
+    const before = await read();
+    for (const [i, [list, id, query]] of lists.entries()) {
+      assert.deepEqual(await r.ask("POST", `/changed/${list}`, { held: heldOf(before[i]!, id) }, query), [200, { order: before[i]!.map((x) => x[id]), rows: [] }], list);
+      assert.deepEqual(await r.ask("POST", `/changed/${list}`, { held: {} }, query), [200, { order: before[i]!.map((x) => x[id]), rows: before[i] }], list);
+    }
+    // a renamed, b archived, c as it was.
+    assert.equal((await r.ask("PUT", `/threads/${made[0].thread.id}/title`, { title: "renamed" }))[0], 200);
+    assert.equal((await r.ask("POST", `/sessions/${made[1].key}/archive`))[0], 200);
+    const now = await read();
+    for (const [i, [list, id, query]] of lists.entries()) {
+      const was = new Map(before[i]!.map((x) => [String(x[id]), x]));
+      const [status, changed] = await r.ask("POST", `/changed/${list}`, { held: heldOf(before[i]!, id) }, query);
+      assert.equal(status, 200);
+      assert.deepEqual(changed.order, now[i]!.map((x) => x[id]), list);
+      assert.deepEqual(changed.rows, now[i]!.filter((x) => !isDeepStrictEqual(was.get(String(x[id])), x)), list);
+    }
+    const [, chats] = await r.ask("POST", "/changed/chats", { held: heldOf(before[0]!, "id") });
+    assert.deepEqual([[...chats.order].sort(), chats.rows.map((x: any) => x.id)], [[made[0].key, made[2].key].sort(), [made[0].key]], "c held as it is: not sent");
+    assert.deepEqual(await r.ask("POST", "/changed/chats", { held: [] }), [400, { error: "held: each held row's digest by its id" }]);
+    assert.deepEqual(await r.ask("POST", "/changed/chats", "{"), [400, { error: "held: each held row's digest by its id" }]);
   } finally {
     await r.close();
   }

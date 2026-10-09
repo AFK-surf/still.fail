@@ -27,10 +27,12 @@ import { readOnly } from "../mesh/credential.ts";
 /// What a read-only member (a viewer, contract §4) may still ask besides reads: marks of their own (read, kept,
 /// dismissed), which change nothing anyone else sees.
 const OWN_MARKS = /^\/*threads\/+[^/]+\/+(read|dismissed|closed-card)(?:\/.*)?$/;
+/// Reads that send what the client holds (routes/changed.ts).
+const READS = /^\/*changed\/+(chats|threads|sessions)$/;
 
-/// Whether `r` is one a read-only member may make: reads (GET, HEAD), and their own marks.
+/// Whether `r` is one a read-only member may make: reads (GET, HEAD, and a list's changes), and their own marks.
 export function readOnlyMay(r: { method: string; path: string }): boolean {
-  return r.method === "GET" || r.method === "HEAD" || (r.method === "PUT" && OWN_MARKS.test(r.path));
+  return r.method === "GET" || r.method === "HEAD" || (r.method === "PUT" && OWN_MARKS.test(r.path)) || (r.method === "POST" && READS.test(r.path));
 }
 
 export type Handler = (r: Request, args: string[]) => Promise<Answer>;

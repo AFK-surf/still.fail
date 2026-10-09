@@ -7,6 +7,7 @@ import { access, mkdir, open, readdir, readFile, stat, writeFile } from "node:fs
 import { dirname } from "node:path";
 import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
+import { changed } from "./changed.ts";
 import { ioMessage } from "../../read/sessions.ts";
 import { dir as thumbsDir, thumbnail, wanted as wantedThumb } from "../../sessions/thumbs.ts";
 import { poster, wanted as wantedPoster } from "../../sessions/posters.ts";
@@ -212,12 +213,13 @@ async function openFile(read: Tools["read"], r: Request, key: string): Promise<A
   }
 }
 
+const sessionsOf = (r: Request) => ({ connect: param(r, "connect") ?? null, archived: param(r, "archived") === "1", lang: r.lang });
+const threadsOf = (r: Request) => ({ viewer: r.viewer, session: param(r, "session") ?? null, lang: r.lang });
+
 export const routes = ({ read, agents }: Tools): Route[] => [
-  {
-    method: "GET",
-    pattern: /^\/sessions$/,
-    handle: (r) => read(r, "sessions", { connect: param(r, "connect") ?? null, archived: param(r, "archived") === "1", lang: r.lang }),
-  },
+  { method: "GET", pattern: /^\/sessions$/, handle: (r) => read(r, "sessions", sessionsOf(r)) },
+  { method: "POST", pattern: /^\/changed\/sessions$/, handle: (r) => changed(read, r, "sessions", sessionsOf(r), "key") },
+  { method: "POST", pattern: /^\/changed\/threads$/, handle: (r) => changed(read, r, "threads", threadsOf(r), "id") },
   {
     method: "GET",
     pattern: /^\/*sessions\/+([^/]+)(?:\/+([^/]+))?(?:\/.*)?$/,
@@ -236,7 +238,7 @@ export const routes = ({ read, agents }: Tools): Route[] => [
       return noRoute(r);
     },
   },
-  { method: "GET", pattern: /^\/threads$/, handle: (r) => read(r, "threads", { viewer: r.viewer, session: param(r, "session") ?? null, lang: r.lang }) },
+  { method: "GET", pattern: /^\/threads$/, handle: (r) => read(r, "threads", threadsOf(r)) },
   {
     // GET /threads/:id/entries is the chats' (routes/chats.ts); any other action is none, once the thread is there.
     method: "GET",

@@ -215,6 +215,15 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   `ok` and `ts`), a thought by its first line. `?from=a&to=b` reads entries a
   to b whole (both included, at most 1000), as such a step is opened.
 - `GET /chats` — the viewer's sidebar items (The sidebar, below).
+- `POST /changed/chats`, `/changed/threads`, `/changed/sessions` (each with
+  its GET's query) `{ held }` — what changed of the list since what the
+  client holds: `held` is each held row's digest by its id (a session's
+  `key`), the digest the row's JSON with its keys sorted, hashed (cyrb53, 53
+  bits, base 36: read/digest.ts; the core's digest.ts is the same, both
+  tested on the same values). The answer is `{ order, rows }`: the list's
+  ids in order, and the rows whose digest differs or that are not held. A
+  client whose stream could not be resumed reads its lists so; it only
+  reads, and a read-only member may ask it.
 - `PUT /me/slack/:user` / `DELETE /me/slack/:user` — the viewer says a Slack
   user is them ("这是我"), or no longer ("不是我"); nothing checks it. The
   answer is the overview, whose `slackUsers` lists the viewer's Slack users.

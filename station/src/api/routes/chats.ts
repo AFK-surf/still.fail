@@ -1,9 +1,13 @@
 // The chat list and a chat's messages (admin/mod.rs: GET /chats, GET /threads/:id/entries).
 import { type Request, error, param } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
+import { changed } from "./changed.ts";
+
+const chatsOf = (r: Request) => ({ viewer: r.viewer, archived: param(r, "archived") === "1" });
 
 export const routes = ({ read }: Tools): Route[] => [
-  { method: "GET", pattern: /^\/chats$/, handle: (r: Request) => read(r, "chats", { viewer: r.viewer, archived: param(r, "archived") === "1" }) },
+  { method: "GET", pattern: /^\/chats$/, handle: (r: Request) => read(r, "chats", chatsOf(r)) },
+  { method: "POST", pattern: /^\/changed\/chats$/, handle: (r: Request) => changed(read, r, "chats", chatsOf(r), "id") },
   {
     method: "GET",
     pattern: /^\/threads\/([^/]+)\/entries$/,
