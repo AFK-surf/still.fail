@@ -18,6 +18,8 @@ import { useShortcut } from "./keymap.ts";
 import { useListMotion } from "./listMotion.ts";
 import { LOCAL_MS, MOVE, reducedMotion } from "./motion.ts";
 import { Time } from "./ui.tsx";
+import { StationMark } from "./StationMark.tsx";
+import * as markCss from "./StationMark.css.ts";
 import * as css from "./DecisionDesk.css.ts";
 import * as deckCss from "./Decisions.css.ts";
 import * as nav from "./Sidebar.css.ts";
@@ -143,7 +145,7 @@ export function DecisionRows({ active, page }: { active: boolean; page: string }
             onMouseDown={(e) => e.preventDefault()} onClick={() => choose(x)}>
             <span className={css.question}>{question(x)}</span>
             <span className={css.meta}>
-              <span className={css.metaWhere}>{x.title} · {x.stationEmoji ? `${x.stationEmoji} ` : ""}{x.stationName}</span>
+              <span className={css.metaWhere}>{x.title} · {x.stationEmoji && <StationMark emoji={x.stationEmoji} size={12} className={markCss.inline} />}{x.stationName}</span>
               <Time className={css.metaTime} stamp={x.message.time?.createdAt} fixed />
             </span>
           </button>
@@ -174,7 +176,7 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
         <div className={css.barLead}>
           {d && <>
             <button type="button" className={css.barChat} onClick={() => onOpen(path)} title={t("web-main.decisions.openChat")}>{d.title}</button>
-            <span className={css.barStation}>{d.stationEmoji ? `${d.stationEmoji} ` : ""}{d.stationName}</span>
+            <span className={css.barStation}>{d.stationEmoji && <StationMark emoji={d.stationEmoji} size={12} className={markCss.inline} />}{d.stationName}</span>
           </>}
         </div>
         <div className={css.barActions}>

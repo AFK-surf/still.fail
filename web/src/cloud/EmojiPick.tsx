@@ -1,45 +1,44 @@
-// A station's emoji (the settings' stations): a square before its name; pressed, a few to pick from, a field taking any
-// one pasted or typed, and a way to have none. Those who may not change it see only the one it has.
+// A station's icon (the settings' stations): a square before its name; pressed, our icons to pick from and a way to have
+// none. What is kept is the emoji each stands for (older clients show it). Those who may not change it see only the one it has.
 import { useState } from "react";
 import { Popover } from "radix-ui";
-import { Close, Plus } from "../icons.tsx";
-import { Tip } from "../ui.tsx";
-import { Glyph } from "../StationMark.tsx";
+import { Close, Plus, STATION_ICONS } from "../icons.tsx";
+import { StationMark } from "../StationMark.tsx";
 import { t } from "../i18n.ts";
 import * as controlsCss from "../styles/controls.css.ts";
 import * as css from "./EmojiPick.css.ts";
 
-const CHOICES = ["🖥️", "💻", "🍎", "🐧", "🪟", "☁️", "🏠", "🏢", "🚀", "⚡", "🔥", "🧪", "🛠️", "🐳", "🦀", "🐙", "🌲", "🌊", "🌙", "☀️", "🍊", "🍋", "🍇", "🐱"];
-
-/** The first emoji of what was typed, as a person sees one (a flag, a family are one); null for none. */
-function first(text: string): string | null {
-  const one = [...new Intl.Segmenter().segment(text.trim())][0]?.segment;
-  return one && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(one) ? one : null;
-}
+const bare = (emoji: string) => emoji.replace(/️/g, "");
 
 export function EmojiPick({ emoji, name, editable, busy, onPick }: { emoji: string | null | undefined; name: string; editable: boolean; busy?: boolean; onPick(emoji: string): void }) {
   const [open, setOpen] = useState(false);
-  const [typed, setTyped] = useState("");
-  if (!editable) return emoji ? <span className={css.shown} aria-hidden="true"><Glyph emoji={emoji} /></span> : null;
-  const choose = (e: string) => { setOpen(false); setTyped(""); if (e !== (emoji ?? "")) onPick(e); };
+  if (!editable) return emoji ? <span className={css.shown} aria-hidden="true"><StationMark emoji={emoji} size={16} /></span> : null;
+  const choose = (e: string) => { setOpen(false); if (e !== (emoji ?? "")) onPick(e); };
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button type="button" className={css.slot} data-set={emoji ? "" : undefined} disabled={busy} aria-label={t("web-pages.stations.emoji.label", { name })}>
-          {emoji ? <Glyph emoji={emoji} /> : <Plus size={14} />}
+          {emoji ? <StationMark emoji={emoji} size={16} /> : <Plus size={14} />}
         </button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className={`${controlsCss.popover} ${controlsCss.popoverSolid} ${css.pick}`} align="start" sideOffset={6} collisionPadding={8}>
-          {/* One grid, the field and its clearing in its last row: the field spans the columns the button leaves. */}
-          <form className={css.grid} onSubmit={(ev) => { ev.preventDefault(); const one = first(typed); if (one) choose(one); }}>
-            {CHOICES.map((e) => <button key={e} type="button" className={css.choice} aria-pressed={e === emoji} onClick={() => choose(e)}><Glyph emoji={e} /></button>)}
-            <input className={`${controlsCss.input} ${css.field}`} data-alone={emoji ? undefined : ""} value={typed} placeholder={t("web-pages.stations.emoji.paste")} aria-label={t("web-pages.stations.emoji.paste")}
-              onChange={(ev) => { setTyped(ev.target.value); const one = first(ev.target.value); if (one) choose(one); }} />
-            {emoji && <Tip label={t("web-pages.stations.emoji.clear")}><button type="button" className={`${css.choice} ${css.clear}`} aria-label={t("web-pages.stations.emoji.clear")} onClick={() => choose("")}><Close size={16} /></button></Tip>}
-          </form>
+        <Popover.Content className={`${controlsCss.popover} ${css.pick}`} align="start" sideOffset={6} collisionPadding={8}>
+          <StationIconGrid emoji={emoji} size={18} onPick={choose} />
+          {emoji && <button type="button" className={`${controlsCss.menuItem} ${css.clear}`} onClick={() => choose("")}><Close size={16} />{t("web-pages.stations.emoji.clear")}</button>}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+/** Our icons to pick from, the one it has marked (the phone's sheet has the same, larger: `className`). */
+export function StationIconGrid({ emoji, size, className, onPick }: { emoji: string | null | undefined; size: number; className?: string; onPick(emoji: string): void }) {
+  const kept = emoji ? bare(emoji) : null;
+  return (
+    <div className={`${css.grid}${className ? ` ${className}` : ""}`} role="group">
+      {STATION_ICONS.map(({ emoji: e, name, Icon }) => (
+        <button key={name} type="button" className={css.choice} aria-label={e} aria-pressed={bare(e) === kept} onClick={() => onPick(e)}><Icon size={size} /></button>
+      ))}
+    </div>
   );
 }

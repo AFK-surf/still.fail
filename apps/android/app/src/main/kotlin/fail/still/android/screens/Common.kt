@@ -35,10 +35,10 @@ fun DoingMark(running: Boolean, failed: String?, size: Dp = 14.dp) {
 
 /**
  * A row of a picking sheet: what, a line under it, and a check on the chosen one; `busy`: what it set going is under way
- * (a spinner, not tapped again); `failed`: it failed a moment ago (DoingMark).
+ * (a spinner, not tapped again); `failed`: it failed a moment ago (DoingMark); `mark`: drawn before what (a station's icon).
  */
 @Composable
-fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enabled: Boolean = true, busy: Boolean = false, failed: String? = null, color: Color = C.ink, leading: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enabled: Boolean = true, busy: Boolean = false, failed: String? = null, color: Color = C.ink, leading: (@Composable () -> Unit)? = null, mark: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
     Column(Modifier.padding(horizontal = 12.dp)) {
         Row(
             Modifier.fillMaxWidth().clickable(enabled = enabled && !busy, onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
@@ -46,7 +46,11 @@ fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enable
         ) {
             leading?.invoke()
             Column(Modifier.weight(1f)) {
-                Text(label, fontSize = 15.sp, color = if (enabled) color else C.subtle)
+                if (mark == null) Text(label, fontSize = 15.sp, color = if (enabled) color else C.subtle)
+                else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    mark()
+                    Text(label, fontSize = 15.sp, color = if (enabled) color else C.subtle)
+                }
                 if (sub != null) Text(sub, fontSize = 12.sp, color = C.muted)
             }
             if (busy || failed != null) DoingMark(busy, failed)

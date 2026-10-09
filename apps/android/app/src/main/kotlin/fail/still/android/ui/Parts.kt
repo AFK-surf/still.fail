@@ -450,6 +450,20 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
 @Composable
 fun IconIn(icon: ImageVector, size: Dp = 18.dp, tint: Color = C.ink, modifier: Modifier = Modifier) = Icon(icon, null, modifier.size(size), tint = tint)
 
+/**
+ * A station where it is named: the icon its workspace gave it (what is kept is the emoji it stands for, StationIcons), else
+ * `none` (nothing when null). An emoji picked before there were icons shows as the emoji (web/src/StationMark.tsx).
+ */
+@Composable
+fun StationMark(emoji: String?, size: Dp, tint: Color, modifier: Modifier = Modifier, none: ImageVector? = null) {
+    val icon = StationIcons.of(emoji)
+    when {
+        icon != null -> Icon(icon, null, modifier.size(size), tint = tint)
+        emoji != null -> Text(emoji, fontSize = (size.value * 0.9f).sp, lineHeight = size.value.sp, modifier = modifier)
+        none != null -> Icon(none, null, modifier.size(size), tint = tint)
+    }
+}
+
 // ── navigation ─────────────────────────────────────────────────────────
 
 /** Back, in the accent color, with where it goes back to. */

@@ -1,7 +1,7 @@
 // Home is the `chats` view as the Android app lists it (apps/android/…/screens/Home.kt): one kind of item, newest first
 // and grouped by day. A fixed head (settings · workspace · the filter · stations) and the new-chat button floating
 // at the bottom. The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with nothing to wait for.
-import { Glyph } from "../StationMark.tsx";
+import { StationMark } from "../StationMark.tsx";
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
 import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
@@ -375,8 +375,8 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         {/* The mark in a 10px column (its dots are 8px, its rings 10), the one the state line's icon stands in. */}
         {chatTone(item) && <span className={css.mMarkSlot}><ChatMark item={item} inline /></span>}
         <span className={css.mChatTitle} data-unread={item.unread || undefined}>{item.title}</span>
-        {/* The station it runs on, by its emoji (the core gives one only with several stations). */}
-        {item.stationEmoji && <span className={css.mChatStation} aria-label={item.stationName}><Glyph emoji={item.stationEmoji} /></span>}
+        {/* The station it runs on, by its icon (the core gives one only with several stations). */}
+        {item.stationEmoji && <span className={css.mChatStation} aria-label={item.stationName}><StationMark emoji={item.stationEmoji} size={12} /></span>}
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
         {busy ? <span className={css.mChatMark} aria-label={t("web-mobile.home.busy")}><Spinner size={12} /></span>
           : failed !== undefined ? <span className={css.mChatMark}><FailedMark error={failed} size={12} /></span>

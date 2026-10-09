@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -36,6 +37,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +67,7 @@ import fail.still.android.ui.Avatar
 import fail.still.android.ui.C
 import fail.still.android.ui.CodeFont
 import fail.still.android.ui.IconIn
+import fail.still.android.ui.StationMark
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.Icons
 import fail.still.android.ui.LargeTitle
@@ -74,6 +79,7 @@ import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
+import fail.still.android.ui.StationIcons
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
@@ -551,7 +557,40 @@ fun FirstStation(current: WorkspaceEntry) {
     }
 }
 
-/** A station's own actions: its name, its emoji, and removing it from the workspace. */
+/** A station's icon, picked from ours (the web's popover: web/src/cloud/EmojiPick.tsx) or none; set at once. */
+private fun openStationIcons(app: AppState, current: WorkspaceEntry, s: StationView) {
+    val cloud = Cloud(app.core, current.account.sub)
+    val kept = s.emoji?.replace("\uFE0F", "")
+    val pick = { emoji: String ->
+        app.sheet = null
+        if (emoji != (s.emoji ?: "")) app.act(t("android-settings.station.emojiWhat"), t("android-settings.station.emojiSet")) { cloud.setStationEmoji(current.workspace.id, s.id, emoji) }
+    }
+    app.sheet = SheetSpec(0.62f) {
+        SheetGrab()
+        SheetHead(t("android-settings.station.emojiTitle", "name" to s.name))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            // Six to a row, wide enough for a thumb; the one it has on the accent's wash.
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                StationIcons.all.chunked(6).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        row.forEach { (emoji, icon) ->
+                            val on = emoji.replace("\uFE0F", "") == kept
+                            Box(
+                                Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(14.dp)).background(if (on) C.accentBg else Color.Transparent)
+                                    .clickable { pick(emoji) }.semantics { contentDescription = emoji },
+                                contentAlignment = Alignment.Center,
+                            ) { IconIn(icon, 24.dp, if (on) C.accent else C.ink) }
+                        }
+                        repeat(6 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            }
+            if (s.emoji != null) PickRow(t("android-settings.station.emojiClear")) { pick("") }
+        }
+    }
+}
+
+/** A station's own actions: its name, its icon, and removing it from the workspace. */
 fun openStationMenu(app: AppState, current: WorkspaceEntry, s: StationView) {
     val cloud = Cloud(app.core, current.account.sub)
     app.sheet = SheetSpec(0.34f) {
@@ -559,7 +598,7 @@ fun openStationMenu(app: AppState, current: WorkspaceEntry, s: StationView) {
         SheetHead(s.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             PickRow(t("android-settings.station.rename")) { ask(app, t("android-settings.station.renameTitle"), s.name, t("android-settings.station.renamePlaceholder"), t("common.save"), what = t("android-settings.station.renameWhat")) { cloud.renameStation(current.workspace.id, s.id, it); app.toast = t("android-settings.renamed") } }
-            PickRow(t("android-settings.station.emoji")) { ask(app, t("android-settings.station.emojiTitle", "name" to s.name), s.emoji ?: "", t("android-settings.station.emojiPlaceholder"), t("common.save"), what = t("android-settings.station.emojiWhat"), empty = true) { cloud.setStationEmoji(current.workspace.id, s.id, it); app.toast = t("android-settings.station.emojiSet") } }
+            PickRow(t("android-settings.station.emoji"), mark = s.emoji?.let { e -> { StationMark(e, 15.dp, C.ink) } }) { openStationIcons(app, current, s) }
             PickRow(t("android-settings.station.removeRow"), color = C.red) {
                 confirm(app, t("android-settings.station.removeTitle", "name" to s.name), t("android-settings.station.removeText", "app" to BuildConfig.APP_NAME), t("android-settings.station.remove"), danger = true,
                     what = t("android-settings.station.removeWhat"), then = app::pop) {

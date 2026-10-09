@@ -122,3 +122,62 @@ object Icons {
     /** Every icon by its name in design/icons, as the core names them (activity rows). */
     val byName = mapOf("agent" to Agent, "archive" to Archive, "arrow-down" to ArrowDown, "arrow-left" to ArrowLeft, "arrow-right" to ArrowRight, "arrow-up-right" to ArrowUpRight, "arrow-up" to ArrowUp, "bell" to Bell, "bot" to Bot, "boxes" to Boxes, "brain" to Brain, "camera" to Camera, "chart" to Chart, "chat" to Chat, "chats" to Chats, "check-circle" to CheckCircle, "check" to Check, "chevron-down" to ChevronDown, "chevron-left" to ChevronLeft, "chevron-right" to ChevronRight, "chevron-up" to ChevronUp, "chevrons-up-down" to ChevronsUpDown, "close" to Close, "command" to Command, "compose" to Compose, "copy" to Copy, "cursor" to Cursor, "devices" to Devices, "download" to Download, "edit" to Edit, "expand" to Expand, "external" to External, "eye" to Eye, "file" to File, "filter" to Filter, "image-upload" to ImageUpload, "info" to Info, "key" to Key, "landscape" to Landscape, "ling" to Ling, "log-in" to LogIn, "log-out" to LogOut, "minus" to Minus, "monitor" to Monitor, "more" to More, "move" to Move, "num-1" to Num1, "num-2" to Num2, "num-3" to Num3, "num-4" to Num4, "num-5" to Num5, "num-6" to Num6, "num-7" to Num7, "num-8" to Num8, "num-9" to Num9, "num-more" to NumMore, "option-1" to Option1, "option-2" to Option2, "option-3" to Option3, "option-4" to Option4, "option-5" to Option5, "option-6" to Option6, "other" to Other, "panel-close" to PanelClose, "panel-open" to PanelOpen, "pause" to Pause, "photo" to Photo, "pin" to Pin, "play" to Play, "plug" to Plug, "plus" to Plus, "power" to Power, "quote" to Quote, "read" to Read, "received" to Received, "redo" to Redo, "refresh" to Refresh, "retry" to Retry, "said" to Said, "scribble" to Scribble, "search" to Search, "send" to Send, "server" to Server, "settings" to Settings, "shield-check" to ShieldCheck, "sliders" to Sliders, "sparks" to Sparks, "square" to Square, "stop" to Stop, "text" to Text, "think" to Think, "thread" to Thread, "ticket" to Ticket, "trash" to Trash, "unplug" to Unplug, "user-plus" to UserPlus, "user" to User, "users" to Users, "wait" to Wait, "web" to Web, "zou" to Zou)
 }
+
+/** The icons a station can have (design/station-icons), in the picker's order, each by the emoji kept for it: older clients show the emoji. */
+object StationIcons {
+    val all: List<Pair<String, ImageVector>> = listOf(
+        "🖥️" to icon("desktop", listOf("M6 4h12a3 3 0 0 1 3 3v6a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-6a3 3 0 0 1 3 -3Z", "M9 20H16 M12 16V20 M6.5 8H10 M6.5 11H8"), listOf()),
+        "💻" to icon("laptop", listOf("M5 15V6Q5 4 7 4H17Q19 4 19 6V15 M2.5 16H21.5L20 19Q19.5 20 18 20H6Q4.5 20 4 19Z M10 16H14"), listOf()),
+        "🪟" to icon("window", listOf("M4 4.5L20 3V20.5L4 19Z M11 4V19.5 M4 11.5H20"), listOf()),
+        "🏠" to icon("home", listOf("M2.5 11L11 3.5Q12 2.5 13 3.5L21.5 11 M5 9V20H19V9 M10 20V14H14V20 M17 6V3"), listOf()),
+        "🏢" to icon("tower", listOf("M5 21V5L18 3V21 M3 21H21 M9 8H10 M14 7H15 M9 12H10 M14 11H15 M9 16H10 M14 15H15 M11 21V19"), listOf()),
+        "🗼" to icon("lighthouse", listOf("M8 9H16L18 21H6Z M8 9V5L12 2.5L16 5V9 M7 15H17 M3 7H4 M20 7H21"), listOf()),
+        "⛺" to icon("camp", listOf("M3 20L12 4L21 20Z M8 20L12 12L16 20 M12 4L10.5 2.5 M12 4L13.5 2.5"), listOf()),
+        "🚀" to icon("rocket", listOf("M9 15Q8 7 19.5 3Q21 15 13 16Z M9 10L4.5 11L3 16L9 15 M16 14L15 20L10 21L11 16 M7 18L4 21", "M13.9 8.5a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0Z"), listOf()),
+        "☁️" to icon("cloud", listOf("M6.5 18Q2.5 18 2.5 14Q2.5 10 7 10Q7 4.5 12.5 4.5Q17 4.5 18 10Q21.5 10.5 21.5 14Q21.5 18 17 18Z"), listOf()),
+        "⚡" to icon("lightning", listOf("M14 2.5L4.5 13H11L9.5 21.5L20 10.5H13Z"), listOf()),
+        "🔥" to icon("fire", listOf("M12 2.5Q14 8 17 10L19 7Q24 18 15 21Q6 23 4 15Q3 11 8 7Q7 12 10 13Q14 10 12 2.5Z"), listOf()),
+        "🌙" to icon("moon", listOf("M19.5 15.5Q12 17 9 10Q7.5 6 10 3Q2.5 5 3 12.5Q3.5 21 12 21Q17.5 21 19.5 15.5Z"), listOf("M16.7 5a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0Z")),
+        "☀️" to icon("sun", listOf("M7.5 12a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0 -9 0Z", "M12 2V4 M12 20V22 M2 12H4 M20 12H22 M5 5L6.5 6.5 M17.5 17.5L19 19 M5 19L6.5 17.5 M17.5 6.5L19 5"), listOf()),
+        "🌧️" to icon("rain", listOf("M6 14Q2.5 14 3 10.5Q3.5 8 7 8Q7.5 3 12.5 3Q17 3 18 8Q21 8 21 11Q21 14 18 14Z M7 18L6 21 M12.5 17L11.5 20 M18 18L17 21"), listOf()),
+        "❄️" to icon("snow", listOf("M12 3V21 M4.2 7.5L19.8 16.5 M4.2 16.5L19.8 7.5 M9 4.5L12 7L15 4.5 M9 19.5L12 17L15 19.5 M4 11L7.5 9.5L7 6 M17 18L16.5 14.5L20 13 M4 13L7.5 14.5L7 18 M17 6L16.5 9.5L20 11"), listOf()),
+        "💨" to icon("wind", listOf("M3 8H14Q18 8 18 5Q18 2 15 3 M3 12H18Q22 12 22 8 M5 16H13Q17 16 17 19Q17 22 13.5 21"), listOf()),
+        "🌲" to icon("pine", listOf("M12 2.5L6.5 9H9L4.5 14H8L3.5 19H20.5L16 14H19.5L15 9H17.5Z M12 19V22"), listOf()),
+        "🌊" to icon("wave", listOf("M2.5 18Q6 17 8 11Q11 2 19.5 5Q13 6 13 11Q13 15 18 15Q20 15 21.5 13 M3 21Q7 22 11 19Q16 22 21 19"), listOf()),
+        "🏔️" to icon("mountain", listOf("M2.5 20L9.5 5L14 13L17 8L21.5 20Z M6.5 11.5L9.5 13L12 10 M14 13L16 16"), listOf()),
+        "🌋" to icon("volcano", listOf("M2.5 21L8 10Q12 12 16 10L21.5 21Z M8 10L10 16L13 13L15 18 M12 7V2.5 M6 7L4 4 M18 7L20 4"), listOf()),
+        "🪐" to icon("planet", listOf("M5 13Q2 15 3 17Q5 20 14 15Q23 10 21 7Q20 6 17 7", "M18.5 11.5A7 7 0 1 0 9 18 M18 14.5Q16.5 18 13 18.5"), listOf()),
+        "⭐" to icon("star", listOf("M12 2.5L15 8.5L21.5 9.5L17 14L18 21L12 17.5L6 21L7 14L2.5 9.5L9 8.5Z"), listOf()),
+        "🧪" to icon("flask", listOf("M14 3L21 7 M15 3.5L6 16Q3.5 20 7 21Q9 22 11 19L20 6.5 M11 9.5L16 13"), listOf("M7.9 16a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z")),
+        "🛠️" to icon("tools", listOf("M4 3L3 7Q3 10 7 10Q11 10 11 7V4L8 6L6 5Z M7 10L17.5 21 M3 21L11 13 M14 10L18 6 M15 3L21 9 M14 4L16 2.5"), listOf()),
+        "🐧" to icon("penguin", listOf("M6 17Q4 14 6 10V8Q6 3 11 3Q16 3 16 8L20 10L16 12V17Q16 21 11 21Q6 21 6 17Z M7 10Q9 11 9 15 M5 21H8 M14 21H17"), listOf("M11.5 7a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z")),
+        "🐳" to icon("whale", listOf("M3 12Q3 7 9 7Q15 7 16 14Q20 14 21 9L21.5 16Q18 21 11 20Q3 20 3 12Z M9 4V2.5 M6 4L4.5 3 M12 4L13.5 3 M10 17Q12 18 13 16"), listOf("M5.5 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z")),
+        "🦀" to icon("crab", listOf("M6 13Q12 9 18 13V16Q18 20 12 20Q6 20 6 16Z M7 13L4 10 M17 13L20 10 M3 4Q0 10 5 10Q9 9 6 4 M18 4Q15 9 19 10Q24 10 21 4 M3 17L6 16 M18 16L21 17 M4 21L7 19 M17 19L20 21"), listOf()),
+        "🐙" to icon("octopus", listOf("M6 13V9Q6 3 12 3Q18 3 18 9V14Q18 18 21 15 M6 13Q6 18 3 16 M9 15V18Q9 22 5 20 M15 15V18Q15 22 19 20 M12 16V21"), listOf("M8.5 10a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M13.5 10a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z")),
+        "🐱" to icon("cat", listOf("M4 12L3.5 3.5L9 7Q12 5.5 15 7L20.5 3.5L20 12Q22 21 12 21Q2 21 4 12Z M7 13H8 M16 13H17", "M10 16H14L12 18Z"), listOf()),
+        "🦊" to icon("fox", listOf("M3 3L10 7H14L21 3L20 14L12 21L4 14Z M4 10Q10 10 12 18Q14 10 20 10"), listOf("M10.8 18.5a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0Z")),
+        "🐰" to icon("rabbit", listOf("M7 11Q2 3 5 2.5Q8 2 10 10 M14 10Q13 2 16 2.5Q19 3 17 11 Q21 13 20 17Q19 21 12 21Q5 21 4 17Q3 13 7 11", "M11 18H13"), listOf("M7.5 15a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M14.5 15a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z")),
+        "🐌" to icon("snail", listOf("M3 13a6 6 0 1 0 12 0a6 6 0 1 0 -12 0Z", "M9 10Q5 10 6 14Q7 17 11 15 M4 19Q8 22 16 20Q20 19 20 14V11 M17 8L20 11L22 8"), listOf()),
+        "🍎" to icon("apple", listOf("M12 7Q5 3 4 10Q3 16 7 20Q9 22 12 20Q15 22 17 20Q21 16 20 10Q19 3 12 7Z M12 7Q11 3 14 2.5", "M14 4Q16 1.5 19 3Q17 6 14 4Z"), listOf()),
+        "🍊" to icon("orange", listOf("M5 14a7 7 0 1 0 14 0a7 7 0 1 0 -14 0Z", "M12 7V4 M12 4Q16 1 20 4Q16 7 12 4"), listOf("M7.65 15a0.85 0.85 0 1 0 1.7 0a0.85 0.85 0 1 0 -1.7 0Z", "M9.65 17.5a0.85 0.85 0 1 0 1.7 0a0.85 0.85 0 1 0 -1.7 0Z")),
+        "🍋" to icon("lemon", listOf("M3 14Q2 6 11 4Q14 3 17 4L20 3.5L20.5 7Q23 15 14 19Q11 21 7 20L3.5 21L3 17Z M7 12Q7 8 11 7"), listOf()),
+        "🍇" to icon("grapes", listOf("M4 9a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z", "M12 9a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z", "M8 15a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z", "M8.5 19Q11.5 24 14.5 19 M11.5 5.5Q11 2 15 2.5"), listOf()),
+        "🍒" to icon("cherries", listOf("M2.5 16.5a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z", "M13.5 16.5a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z", "M6.5 12.5Q13 10 14 3Q15 8 17.5 12.5 M14 3Q7 1.5 5 5Q10 7 14 3"), listOf()),
+        "🍐" to icon("pear", listOf("M12 6Q8 5 8 10Q8 12 5 15Q1 21 12 21Q23 21 19 15Q16 12 16 10Q16 5 12 6Z M12 6Q11 2 14 2.5 M7 17Q7 19 10 19"), listOf()),
+        "🍄" to icon("mushroom", listOf("M3 13Q3 3 12 3Q21 3 21 13Z M9 13L8 20Q12 22 16 20L15 13"), listOf("M6.8 9a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0Z", "M12.8 6.5a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0Z", "M16 10a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z")),
+        "🌵" to icon("cactus", listOf("M9 21V6Q9 2.5 12 2.5Q15 2.5 15 6V21 M9 14H6Q3 14 3 11V8 M15 17H18Q21 17 21 14V11 M7 21H17"), listOf()),
+        "☕" to icon("coffee", listOf("M3 9H17V16Q17 20 10 20Q3 20 3 16Z M17 10H19Q23 10 21 14Q20 16 17 16 M7 5V3 M12 5V2.5"), listOf()),
+        "🫖" to icon("teapot", listOf("M8 8Q5 11 7 17Q8 20 13 20Q20 20 20 15Q20 11 17 8Z M9 5H16 M12.5 5V3 M7 16Q3 14 2.5 9L6 10 M19 9Q24 9 21 15"), listOf()),
+        "🔑" to icon("key", listOf("M3 8a5 5 0 1 0 10 0a5 5 0 1 0 -10 0Z", "M11.5 11.5L21 21 M16 16L19 13 M19 19L22 16"), listOf("M5.4 6.5a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z")),
+        "🧲" to icon("magnet", listOf("M4 4H9V13Q9 17 12 17Q15 17 15 13V4H20V13Q20 22 12 22Q4 22 4 13Z M4 9H9 M15 9H20"), listOf()),
+        "💎" to icon("diamond", listOf("M3 8L7 3H17L21 8L12 21Z M3 8H21 M8 8L12 21L16 8 M8 8L10 3 M16 8L14 3"), listOf()),
+        "👻" to icon("ghost", listOf("M4 20V11Q4 3 12 3Q20 3 20 11V20L16 17L12 21L8 17Z", "M11 14H13"), listOf("M7.8 10a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0Z", "M13.8 10a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0Z")),
+        "🐟" to icon("fish", listOf("M3 12Q10 2 17 10L21 6V18L17 14Q10 22 3 12Z M12 7Q15 12 12 17"), listOf("M6 11a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z")),
+        "🐢" to icon("turtle", listOf("M3 15Q3 6 10 6Q17 6 17 15Z M17 13V11Q17 8 19.5 8Q22 8 22 11Q22 15 17 15 M6 15L5 19H8 M14 15L15 19H18 M8 6.5L11 10L10 15 M11 10H15"), listOf()),
+    )
+
+    private val byEmoji = all.associate { (e, v) -> e.replace("\uFE0F", "") to v }
+
+    /** The icon for an emoji kept, with or without its variation selector; null for one not drawn here. */
+    fun of(emoji: String?): ImageVector? = emoji?.let { byEmoji[it.replace("\uFE0F", "")] }
+}

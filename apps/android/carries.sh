@@ -6,4 +6,4 @@
 # apps/android/not-carried.txt says it does not carry.
 here=$(dirname "$0")
 grep -vE "$(grep -v '^#' "$here/not-carried.txt" | paste -sd'|' -)" \
-  | grep -qE '^(apps/android|client|web/src/viz|web/public/avatars|design/icons)/|^scripts/(icons\.py|release\.sh|native\.ts)$'
+  | grep -qE '^(apps/android|client|web/src/viz|web/public/avatars|design/icons|design/station-icons)/|^scripts/(icons\.py|release\.sh|native\.ts)$'

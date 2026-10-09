@@ -4,7 +4,7 @@ import type { SVGProps } from "react";
 /** An icon's props: its size (px), its line's weight, and whatever an <svg> takes. */
 export type IconProps = Omit<SVGProps<SVGSVGElement>, "ref"> & { size?: number | string; strokeWidth?: number | string };
 
-function Svg({ size = 24, strokeWidth = 1.75, children, ...rest }: IconProps & { children: React.ReactNode }) {
+export function Svg({ size = 24, strokeWidth = 1.75, children, ...rest }: IconProps & { children: React.ReactNode }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...rest}>
@@ -521,3 +521,247 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "web": Web,
   "zou": Zou,
 };
+
+function StationDesktop(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="4" width="18" height="12" rx="3" /><path d="M9 20H16 M12 16V20 M6.5 8H10 M6.5 11H8" /></Svg>;
+}
+
+function StationLaptop(props: IconProps) {
+  return <Svg {...props}><path d="M5 15V6Q5 4 7 4H17Q19 4 19 6V15 M2.5 16H21.5L20 19Q19.5 20 18 20H6Q4.5 20 4 19Z M10 16H14" /></Svg>;
+}
+
+function StationWindow(props: IconProps) {
+  return <Svg {...props}><path d="M4 4.5L20 3V20.5L4 19Z M11 4V19.5 M4 11.5H20" /></Svg>;
+}
+
+function StationHome(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 11L11 3.5Q12 2.5 13 3.5L21.5 11 M5 9V20H19V9 M10 20V14H14V20 M17 6V3" /></Svg>;
+}
+
+function StationTower(props: IconProps) {
+  return <Svg {...props}><path d="M5 21V5L18 3V21 M3 21H21 M9 8H10 M14 7H15 M9 12H10 M14 11H15 M9 16H10 M14 15H15 M11 21V19" /></Svg>;
+}
+
+function StationLighthouse(props: IconProps) {
+  return <Svg {...props}><path d="M8 9H16L18 21H6Z M8 9V5L12 2.5L16 5V9 M7 15H17 M3 7H4 M20 7H21" /></Svg>;
+}
+
+function StationCamp(props: IconProps) {
+  return <Svg {...props}><path d="M3 20L12 4L21 20Z M8 20L12 12L16 20 M12 4L10.5 2.5 M12 4L13.5 2.5" /></Svg>;
+}
+
+function StationRocket(props: IconProps) {
+  return <Svg {...props}><path d="M9 15Q8 7 19.5 3Q21 15 13 16Z M9 10L4.5 11L3 16L9 15 M16 14L15 20L10 21L11 16 M7 18L4 21" /><circle cx="15.5" cy="8.5" r="1.6" /></Svg>;
+}
+
+function StationCloud(props: IconProps) {
+  return <Svg {...props}><path d="M6.5 18Q2.5 18 2.5 14Q2.5 10 7 10Q7 4.5 12.5 4.5Q17 4.5 18 10Q21.5 10.5 21.5 14Q21.5 18 17 18Z" /></Svg>;
+}
+
+function StationLightning(props: IconProps) {
+  return <Svg {...props}><path d="M14 2.5L4.5 13H11L9.5 21.5L20 10.5H13Z" /></Svg>;
+}
+
+function StationFire(props: IconProps) {
+  return <Svg {...props}><path d="M12 2.5Q14 8 17 10L19 7Q24 18 15 21Q6 23 4 15Q3 11 8 7Q7 12 10 13Q14 10 12 2.5Z" /></Svg>;
+}
+
+function StationMoon(props: IconProps) {
+  return <Svg {...props}><path d="M19.5 15.5Q12 17 9 10Q7.5 6 10 3Q2.5 5 3 12.5Q3.5 21 12 21Q17.5 21 19.5 15.5Z" /><circle cx="18" cy="5" r="1.3" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationSun(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="4.5" /><path d="M12 2V4 M12 20V22 M2 12H4 M20 12H22 M5 5L6.5 6.5 M17.5 17.5L19 19 M5 19L6.5 17.5 M17.5 6.5L19 5" /></Svg>;
+}
+
+function StationRain(props: IconProps) {
+  return <Svg {...props}><path d="M6 14Q2.5 14 3 10.5Q3.5 8 7 8Q7.5 3 12.5 3Q17 3 18 8Q21 8 21 11Q21 14 18 14Z M7 18L6 21 M12.5 17L11.5 20 M18 18L17 21" /></Svg>;
+}
+
+function StationSnow(props: IconProps) {
+  return <Svg {...props}><path d="M12 3V21 M4.2 7.5L19.8 16.5 M4.2 16.5L19.8 7.5 M9 4.5L12 7L15 4.5 M9 19.5L12 17L15 19.5 M4 11L7.5 9.5L7 6 M17 18L16.5 14.5L20 13 M4 13L7.5 14.5L7 18 M17 6L16.5 9.5L20 11" /></Svg>;
+}
+
+function StationWind(props: IconProps) {
+  return <Svg {...props}><path d="M3 8H14Q18 8 18 5Q18 2 15 3 M3 12H18Q22 12 22 8 M5 16H13Q17 16 17 19Q17 22 13.5 21" /></Svg>;
+}
+
+function StationPine(props: IconProps) {
+  return <Svg {...props}><path d="M12 2.5L6.5 9H9L4.5 14H8L3.5 19H20.5L16 14H19.5L15 9H17.5Z M12 19V22" /></Svg>;
+}
+
+function StationWave(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 18Q6 17 8 11Q11 2 19.5 5Q13 6 13 11Q13 15 18 15Q20 15 21.5 13 M3 21Q7 22 11 19Q16 22 21 19" /></Svg>;
+}
+
+function StationMountain(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 20L9.5 5L14 13L17 8L21.5 20Z M6.5 11.5L9.5 13L12 10 M14 13L16 16" /></Svg>;
+}
+
+function StationVolcano(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 21L8 10Q12 12 16 10L21.5 21Z M8 10L10 16L13 13L15 18 M12 7V2.5 M6 7L4 4 M18 7L20 4" /></Svg>;
+}
+
+function StationPlanet(props: IconProps) {
+  return <Svg {...props}><path d="M5 13Q2 15 3 17Q5 20 14 15Q23 10 21 7Q20 6 17 7" /><path d="M18.5 11.5A7 7 0 1 0 9 18 M18 14.5Q16.5 18 13 18.5" /></Svg>;
+}
+
+function StationStar(props: IconProps) {
+  return <Svg {...props}><path d="M12 2.5L15 8.5L21.5 9.5L17 14L18 21L12 17.5L6 21L7 14L2.5 9.5L9 8.5Z" /></Svg>;
+}
+
+function StationFlask(props: IconProps) {
+  return <Svg {...props}><path d="M14 3L21 7 M15 3.5L6 16Q3.5 20 7 21Q9 22 11 19L20 6.5 M11 9.5L16 13" /><circle cx="9" cy="16" r="1.1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationTools(props: IconProps) {
+  return <Svg {...props}><path d="M4 3L3 7Q3 10 7 10Q11 10 11 7V4L8 6L6 5Z M7 10L17.5 21 M3 21L11 13 M14 10L18 6 M15 3L21 9 M14 4L16 2.5" /></Svg>;
+}
+
+function StationPenguin(props: IconProps) {
+  return <Svg {...props}><path d="M6 17Q4 14 6 10V8Q6 3 11 3Q16 3 16 8L20 10L16 12V17Q16 21 11 21Q6 21 6 17Z M7 10Q9 11 9 15 M5 21H8 M14 21H17" /><circle cx="12.5" cy="7" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationWhale(props: IconProps) {
+  return <Svg {...props}><path d="M3 12Q3 7 9 7Q15 7 16 14Q20 14 21 9L21.5 16Q18 21 11 20Q3 20 3 12Z M9 4V2.5 M6 4L4.5 3 M12 4L13.5 3 M10 17Q12 18 13 16" /><circle cx="6.5" cy="12" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationCrab(props: IconProps) {
+  return <Svg {...props}><path d="M6 13Q12 9 18 13V16Q18 20 12 20Q6 20 6 16Z M7 13L4 10 M17 13L20 10 M3 4Q0 10 5 10Q9 9 6 4 M18 4Q15 9 19 10Q24 10 21 4 M3 17L6 16 M18 16L21 17 M4 21L7 19 M17 19L20 21" /></Svg>;
+}
+
+function StationOctopus(props: IconProps) {
+  return <Svg {...props}><path d="M6 13V9Q6 3 12 3Q18 3 18 9V14Q18 18 21 15 M6 13Q6 18 3 16 M9 15V18Q9 22 5 20 M15 15V18Q15 22 19 20 M12 16V21" /><circle cx="9.5" cy="10" r="1" fill="currentColor" stroke="none" /><circle cx="14.5" cy="10" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationCat(props: IconProps) {
+  return <Svg {...props}><path d="M4 12L3.5 3.5L9 7Q12 5.5 15 7L20.5 3.5L20 12Q22 21 12 21Q2 21 4 12Z M7 13H8 M16 13H17" /><path d="M10 16H14L12 18Z" /></Svg>;
+}
+
+function StationFox(props: IconProps) {
+  return <Svg {...props}><path d="M3 3L10 7H14L21 3L20 14L12 21L4 14Z M4 10Q10 10 12 18Q14 10 20 10" /><circle cx="12" cy="18.5" r="1.2" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationRabbit(props: IconProps) {
+  return <Svg {...props}><path d="M7 11Q2 3 5 2.5Q8 2 10 10 M14 10Q13 2 16 2.5Q19 3 17 11 Q21 13 20 17Q19 21 12 21Q5 21 4 17Q3 13 7 11" /><circle cx="8.5" cy="15" r="1" fill="currentColor" stroke="none" /><circle cx="15.5" cy="15" r="1" fill="currentColor" stroke="none" /><path d="M11 18H13" /></Svg>;
+}
+
+function StationSnail(props: IconProps) {
+  return <Svg {...props}><circle cx="9" cy="13" r="6" /><path d="M9 10Q5 10 6 14Q7 17 11 15 M4 19Q8 22 16 20Q20 19 20 14V11 M17 8L20 11L22 8" /></Svg>;
+}
+
+function StationApple(props: IconProps) {
+  return <Svg {...props}><path d="M12 7Q5 3 4 10Q3 16 7 20Q9 22 12 20Q15 22 17 20Q21 16 20 10Q19 3 12 7Z M12 7Q11 3 14 2.5" /><path d="M14 4Q16 1.5 19 3Q17 6 14 4Z" /></Svg>;
+}
+
+function StationOrange(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="14" r="7" /><path d="M12 7V4 M12 4Q16 1 20 4Q16 7 12 4" /><circle cx="8.5" cy="15" r="0.85" fill="currentColor" stroke="none" /><circle cx="10.5" cy="17.5" r="0.85" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationLemon(props: IconProps) {
+  return <Svg {...props}><path d="M3 14Q2 6 11 4Q14 3 17 4L20 3.5L20.5 7Q23 15 14 19Q11 21 7 20L3.5 21L3 17Z M7 12Q7 8 11 7" /></Svg>;
+}
+
+function StationGrapes(props: IconProps) {
+  return <Svg {...props}><circle cx="7.5" cy="9" r="3.5" /><circle cx="15.5" cy="9" r="3.5" /><circle cx="11.5" cy="15" r="3.5" /><path d="M8.5 19Q11.5 24 14.5 19 M11.5 5.5Q11 2 15 2.5" /></Svg>;
+}
+
+function StationCherries(props: IconProps) {
+  return <Svg {...props}><circle cx="6.5" cy="16.5" r="4" /><circle cx="17.5" cy="16.5" r="4" /><path d="M6.5 12.5Q13 10 14 3Q15 8 17.5 12.5 M14 3Q7 1.5 5 5Q10 7 14 3" /></Svg>;
+}
+
+function StationPear(props: IconProps) {
+  return <Svg {...props}><path d="M12 6Q8 5 8 10Q8 12 5 15Q1 21 12 21Q23 21 19 15Q16 12 16 10Q16 5 12 6Z M12 6Q11 2 14 2.5 M7 17Q7 19 10 19" /></Svg>;
+}
+
+function StationMushroom(props: IconProps) {
+  return <Svg {...props}><path d="M3 13Q3 3 12 3Q21 3 21 13Z M9 13L8 20Q12 22 16 20L15 13" /><circle cx="8" cy="9" r="1.2" fill="currentColor" stroke="none" /><circle cx="14" cy="6.5" r="1.2" fill="currentColor" stroke="none" /><circle cx="17" cy="10" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationCactus(props: IconProps) {
+  return <Svg {...props}><path d="M9 21V6Q9 2.5 12 2.5Q15 2.5 15 6V21 M9 14H6Q3 14 3 11V8 M15 17H18Q21 17 21 14V11 M7 21H17" /></Svg>;
+}
+
+function StationCoffee(props: IconProps) {
+  return <Svg {...props}><path d="M3 9H17V16Q17 20 10 20Q3 20 3 16Z M17 10H19Q23 10 21 14Q20 16 17 16 M7 5V3 M12 5V2.5" /></Svg>;
+}
+
+function StationTeapot(props: IconProps) {
+  return <Svg {...props}><path d="M8 8Q5 11 7 17Q8 20 13 20Q20 20 20 15Q20 11 17 8Z M9 5H16 M12.5 5V3 M7 16Q3 14 2.5 9L6 10 M19 9Q24 9 21 15" /></Svg>;
+}
+
+function StationKey(props: IconProps) {
+  return <Svg {...props}><circle cx="8" cy="8" r="5" /><path d="M11.5 11.5L21 21 M16 16L19 13 M19 19L22 16" /><circle cx="6.5" cy="6.5" r="1.1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationMagnet(props: IconProps) {
+  return <Svg {...props}><path d="M4 4H9V13Q9 17 12 17Q15 17 15 13V4H20V13Q20 22 12 22Q4 22 4 13Z M4 9H9 M15 9H20" /></Svg>;
+}
+
+function StationDiamond(props: IconProps) {
+  return <Svg {...props}><path d="M3 8L7 3H17L21 8L12 21Z M3 8H21 M8 8L12 21L16 8 M8 8L10 3 M16 8L14 3" /></Svg>;
+}
+
+function StationGhost(props: IconProps) {
+  return <Svg {...props}><path d="M4 20V11Q4 3 12 3Q20 3 20 11V20L16 17L12 21L8 17Z" /><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none" /><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none" /><path d="M11 14H13" /></Svg>;
+}
+
+function StationFish(props: IconProps) {
+  return <Svg {...props}><path d="M3 12Q10 2 17 10L21 6V18L17 14Q10 22 3 12Z M12 7Q15 12 12 17" /><circle cx="7" cy="11" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationTurtle(props: IconProps) {
+  return <Svg {...props}><path d="M3 15Q3 6 10 6Q17 6 17 15Z M17 13V11Q17 8 19.5 8Q22 8 22 11Q22 15 17 15 M6 15L5 19H8 M14 15L15 19H18 M8 6.5L11 10L10 15 M11 10H15" /></Svg>;
+}
+
+/** The icons a station can have (design/station-icons), in the picker's order, each by the emoji kept for it: older clients show the emoji. */
+export const STATION_ICONS: readonly { emoji: string; name: string; Icon: (props: IconProps) => React.JSX.Element }[] = [
+  { emoji: "🖥️", name: "desktop", Icon: StationDesktop },
+  { emoji: "💻", name: "laptop", Icon: StationLaptop },
+  { emoji: "🪟", name: "window", Icon: StationWindow },
+  { emoji: "🏠", name: "home", Icon: StationHome },
+  { emoji: "🏢", name: "tower", Icon: StationTower },
+  { emoji: "🗼", name: "lighthouse", Icon: StationLighthouse },
+  { emoji: "⛺", name: "camp", Icon: StationCamp },
+  { emoji: "🚀", name: "rocket", Icon: StationRocket },
+  { emoji: "☁️", name: "cloud", Icon: StationCloud },
+  { emoji: "⚡", name: "lightning", Icon: StationLightning },
+  { emoji: "🔥", name: "fire", Icon: StationFire },
+  { emoji: "🌙", name: "moon", Icon: StationMoon },
+  { emoji: "☀️", name: "sun", Icon: StationSun },
+  { emoji: "🌧️", name: "rain", Icon: StationRain },
+  { emoji: "❄️", name: "snow", Icon: StationSnow },
+  { emoji: "💨", name: "wind", Icon: StationWind },
+  { emoji: "🌲", name: "pine", Icon: StationPine },
+  { emoji: "🌊", name: "wave", Icon: StationWave },
+  { emoji: "🏔️", name: "mountain", Icon: StationMountain },
+  { emoji: "🌋", name: "volcano", Icon: StationVolcano },
+  { emoji: "🪐", name: "planet", Icon: StationPlanet },
+  { emoji: "⭐", name: "star", Icon: StationStar },
+  { emoji: "🧪", name: "flask", Icon: StationFlask },
+  { emoji: "🛠️", name: "tools", Icon: StationTools },
+  { emoji: "🐧", name: "penguin", Icon: StationPenguin },
+  { emoji: "🐳", name: "whale", Icon: StationWhale },
+  { emoji: "🦀", name: "crab", Icon: StationCrab },
+  { emoji: "🐙", name: "octopus", Icon: StationOctopus },
+  { emoji: "🐱", name: "cat", Icon: StationCat },
+  { emoji: "🦊", name: "fox", Icon: StationFox },
+  { emoji: "🐰", name: "rabbit", Icon: StationRabbit },
+  { emoji: "🐌", name: "snail", Icon: StationSnail },
+  { emoji: "🍎", name: "apple", Icon: StationApple },
+  { emoji: "🍊", name: "orange", Icon: StationOrange },
+  { emoji: "🍋", name: "lemon", Icon: StationLemon },
+  { emoji: "🍇", name: "grapes", Icon: StationGrapes },
+  { emoji: "🍒", name: "cherries", Icon: StationCherries },
+  { emoji: "🍐", name: "pear", Icon: StationPear },
+  { emoji: "🍄", name: "mushroom", Icon: StationMushroom },
+  { emoji: "🌵", name: "cactus", Icon: StationCactus },
+  { emoji: "☕", name: "coffee", Icon: StationCoffee },
+  { emoji: "🫖", name: "teapot", Icon: StationTeapot },
+  { emoji: "🔑", name: "key", Icon: StationKey },
+  { emoji: "🧲", name: "magnet", Icon: StationMagnet },
+  { emoji: "💎", name: "diamond", Icon: StationDiamond },
+  { emoji: "👻", name: "ghost", Icon: StationGhost },
+  { emoji: "🐟", name: "fish", Icon: StationFish },
+  { emoji: "🐢", name: "turtle", Icon: StationTurtle },
+];

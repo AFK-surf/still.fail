@@ -126,6 +126,7 @@ import fail.still.android.data.state
 import fail.still.android.ui.Badge
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
+import fail.still.android.ui.StationMark
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.MakerIcon
@@ -572,8 +573,8 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                     item.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = if (item.unread) FontWeight.SemiBold else FontWeight.Normal,
                     color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alpha(dim),
                 )
-                // The station it runs on, by its emoji (the core gives one only with several stations).
-                item.stationEmoji?.let { e -> Text(e, fontSize = 12.sp, lineHeight = 14.sp, modifier = Modifier.semantics { contentDescription = item.stationName }) }
+                // The station it runs on, by its icon (the core gives one only with several stations).
+                item.stationEmoji?.let { e -> StationMark(e, 12.dp, C.muted, Modifier.semantics { contentDescription = item.stationName }) }
                 // Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too.
                 Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
                     val reconnecting = item.reconnecting

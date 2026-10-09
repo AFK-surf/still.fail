@@ -1,5 +1,8 @@
 import { style } from "@vanilla-extract/css";
 
+/** Its icon in a line of text, before the station's name: on the text's middle, a space's width from the name. */
+export const inline = style({ display: "inline-block", verticalAlign: "-0.125em", marginRight: "0.3em" });
+
 // The emoji drawn in an icon's box: as wide and tall as the icon it stands for, centred, not cut.
 export const emoji = style({
   display: "inline-grid", placeItems: "center", flex: "none", lineHeight: "1", overflow: "visible",

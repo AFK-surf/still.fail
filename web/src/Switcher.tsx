@@ -12,6 +12,8 @@ import { useShortcut } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { stationBase } from "./station.tsx";
 import { ModelLogo, Time } from "./ui.tsx";
+import { StationMark } from "./StationMark.tsx";
+import * as markCss from "./StationMark.css.ts";
 import * as css from "./Switcher.css.ts";
 
 import { NAME } from "./channel.ts";
@@ -101,7 +103,7 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
             <ChatPicture item={item} />
             <span className={css.title} data-unread={item.unread || undefined}>{item.title}</span>
             <span className={css.meta}>
-              <span>{item.stationEmoji ? `${item.stationEmoji} ` : ""}{item.stationName}</span>
+              <span>{item.stationEmoji && <StationMark emoji={item.stationEmoji} size={12} className={markCss.inline} />}{item.stationName}</span>
               <Time stamp={item.time?.lastActiveAt} fixed />
             </span>
           </div>

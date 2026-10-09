@@ -1,4 +1,5 @@
 import { useDoing } from "../doing.ts";
+import { useAct } from "../toast.tsx";
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
 // with the buddy's face for its state and its load as rings; one station's page is the machine (its load, network,
 // versions), with how many connects and profiles run on it (settings' lists have them, ./Settings.tsx).
@@ -18,6 +19,9 @@ import { GoRow } from "./Settings.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
 import { Net } from "../cloud/StationCards.tsx";
+import { StationIconGrid } from "../cloud/EmojiPick.tsx";
+import { StationMark } from "../StationMark.tsx";
+import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
 import { Button, Card, Field, Illustration, LargeTitle, ListCard, Loading, NavBar, NavButton, PickRow, SectionHeader, Spinner, TopBack } from "./parts.tsx";
@@ -63,7 +67,7 @@ export function StationsScreen() {
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
           <span className={css.mStationHead}>
             <Buddy s={s} />
-            <span className={partsCss.mGrow}><b className={css.mStationName}>{s.emoji ? `${s.emoji} ${s.name}` : s.name}</b><span className={css.mStationSummary}>{s.summary}</span></span>
+            <span className={partsCss.mGrow}><b className={css.mStationName}>{s.emoji && <StationMark emoji={s.emoji} size={16} className={markCss.inline} />}{s.name}</b><span className={css.mStationSummary}>{s.summary}</span></span>
             {s.reconnecting && <Reconnecting />}
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </span>
@@ -272,6 +276,26 @@ function useManager(): boolean {
   return role === "owner" || role === "admin";
 }
 
+/** A station's icon picked from ours (the wide screen's popover, ../cloud/EmojiPick.tsx), or none; set at once. */
+function StationIconSheet({ s }: { s: StationView }) {
+  const app = useApp();
+  const act = useAct();
+  const pick = (emoji: string) => {
+    app.sheet(null);
+    if (emoji !== (s.emoji ?? "")) act(cloud.setStationEmoji(app.entry.account.sub, app.entry.id, s.id, emoji), t("web-mobile.stations.emojiWhat"), t("web-mobile.stations.emojiSet"));
+  };
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-mobile.stations.emojiTitle", { name: s.name })} />
+      <div className={sheetsCss.mSheetScroll}>
+        <StationIconGrid emoji={s.emoji} size={24} className={css.mIconGrid} onPick={pick} />
+        {s.emoji && <PickRow label={t("web-mobile.stations.emojiClear")} onClick={() => pick("")} />}
+      </div>
+    </>
+  );
+}
+
 function StationMenu({ s }: { s: StationView }) {
   const app = useApp();
   const me = app.entry.account;
@@ -282,8 +306,7 @@ function StationMenu({ s }: { s: StationView }) {
       <div className={sheetsCss.mSheetScroll}>
         <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.stations.renameTitle"), value: s.name, placeholder: t("web-mobile.stations.renamePlaceholder"), action: t("common.save"), atOnce: "web-main.rename.failed",
           run: (name) => cloud.renameStation(me.sub, app.entry.id, s.id, name).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />
-        <PickRow label={t("web-mobile.stations.emoji")} onClick={() => ask(app, { title: t("web-mobile.stations.emojiTitle", { name: s.name }), value: s.emoji ?? "", placeholder: t("web-mobile.stations.emojiPlaceholder"), action: t("common.save"), empty: true,
-          run: (emoji) => cloud.setStationEmoji(me.sub, app.entry.id, s.id, emoji).then(() => app.toast(t("web-mobile.stations.emojiSet"))) })} />
+        <PickRow label={t("web-mobile.stations.emoji")} onClick={() => app.sheet({ height: 0.62, content: () => <StationIconSheet s={s} /> })} />
         <PickRow label={t("web-mobile.stations.remove")} accent onClick={() => confirm(app, {
           title: t("web-mobile.stations.removeAsk", { name: s.name }), action: t("web-mobile.stations.removeAction"), danger: true,
           text: t("web-mobile.stations.removeText", { name: NAME }), atOnce: "web-mobile.workspace.removeFailed",

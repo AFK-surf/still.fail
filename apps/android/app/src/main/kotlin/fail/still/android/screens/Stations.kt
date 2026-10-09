@@ -69,6 +69,7 @@ import fail.still.android.data.rememberTopic
 import fail.still.android.ui.C
 import fail.still.android.ui.Card
 import fail.still.android.ui.IconIn
+import fail.still.android.ui.StationMark
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.LargeTitle
@@ -128,7 +129,10 @@ fun StationsScreen(current: WorkspaceEntry) {
                         Buddy(s)
                         Column(Modifier.weight(1f)) {
                             // Line heights set: a line in Chinese is otherwise a little taller than one in Latin.
-                            Text(s.emoji?.let { "$it ${s.name}" } ?: s.name, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                s.emoji?.let { StationMark(it, 16.dp, C.ink) }
+                                Text(s.name, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                             Text(s.summary, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         if (s.reconnecting == true) Reconnecting()
@@ -304,7 +308,7 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
 internal fun toneDot(tone: String): String = when (tone) { "green" -> "online"; "red" -> "error"; "neutral" -> "offline"; else -> "busy" }
 
 /**
- * The station a chat runs on, in its bar once its workspace has more than one: its emoji and name, short; a tap opens
+ * The station a chat runs on, in its bar once its workspace has more than one: its icon and name, short; a tap opens
  * its card (the web's is a hover card over the same tag: web/src/cloud/StationCards.tsx StationPeek).
  */
 @Composable
@@ -320,7 +324,7 @@ internal fun ChatStationChip(address: String) {
             .padding(horizontal = 8.dp, vertical = 2.dp).semantics { contentDescription = s.name },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        s.emoji?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp) }
+        s.emoji?.let { StationMark(it, 12.dp, C.muted) }
         Text(s.name, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -331,7 +335,7 @@ fun openStationPeek(app: AppState, address: String) {
         val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(address.substringBefore('/')))
         val s = stations.value?.firstOrNull { it.station == address }
         SheetGrab()
-        SheetHead(s?.let { st -> st.emoji?.let { "$it ${st.name}" } ?: st.name } ?: stationName(address))
+        SheetHead(s?.name ?: stationName(address), lead = s?.emoji?.let { e -> { StationMark(e, 17.dp, C.ink) } })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (s != null) Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(s.summary, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)

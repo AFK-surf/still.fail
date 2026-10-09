@@ -16,7 +16,7 @@ import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, Copy, External, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
-import { Glyph } from "../StationMark.tsx";
+import { StationMark } from "../StationMark.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
 import { GoRow } from "./Settings.tsx";
 import { LoadingPill, PlaceholderMessages } from "./Loading.tsx";
@@ -144,7 +144,7 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
 }
 
 /**
- * The station the chat runs on, after its title once the workspace has more than one: its emoji and name; a tap opens its
+ * The station the chat runs on, after its title once the workspace has more than one: its icon and name; a tap opens its
  * card in a sheet (the wide screen's is a hover card over the same tag, ../cloud/StationCards.tsx StationPeek).
  */
 function StationChip({ station }: { station: string }) {
@@ -154,7 +154,7 @@ function StationChip({ station }: { station: string }) {
   if (!stations || stations.length < 2 || !s) return null;
   return (
     <button type="button" className={css.mBarStation} aria-label={s.name} onClick={() => app.sheet({ height: 0.55, content: () => <StationSheet station={station} /> })}>
-      {s.emoji && <Glyph emoji={s.emoji} />}<span>{s.name}</span>
+      {s.emoji && <StationMark emoji={s.emoji} size={12} />}<span>{s.name}</span>
     </button>
   );
 }

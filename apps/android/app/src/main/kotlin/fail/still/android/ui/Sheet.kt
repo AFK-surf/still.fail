@@ -216,8 +216,9 @@ fun SheetGrab() {
 }
 
 @Composable
-fun SheetHead(title: String, trailing: (@Composable () -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+fun SheetHead(title: String, trailing: (@Composable () -> Unit)? = null, lead: (@Composable () -> Unit)? = null) {
+    Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        lead?.invoke()
         Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.weight(1f))
         trailing?.invoke()
     }

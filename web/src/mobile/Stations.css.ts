@@ -40,3 +40,5 @@ globalStyle(`${mStationOffline} button${connectionRetry}`, { marginTop: "6px", f
 export const mStationLine = style({ display: "block", paddingTop: "8px", fontSize: vars.textMeta, lineHeight: "18px", color: "var(--m-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
 globalStyle(`${mStationLine}[data-unknown] i`, { display: "inline-block", verticalAlign: "middle", height: "10px", borderRadius: "5px", background: "color-mix(in srgb, var(--m-line) 70%, transparent)" });
 globalStyle(`${mStationHead} ${mGrow}`, { display: "flex", flexDirection: "column" });
+/** The icons to pick from in the sheet: six to a row, wide enough for a thumb. */
+export const mIconGrid = style({ gridTemplateColumns: "repeat(6, 1fr)", gap: "4px", padding: "4px 16px 12px" });
