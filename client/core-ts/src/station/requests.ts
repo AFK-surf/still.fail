@@ -161,7 +161,7 @@ export class Requests {
   }
 
   /// Opens an event stream (in the caller's scope); a non-2xx answer is an error. Its span ends once it is open.
-  stream(station: StationAddr, path: string, ctx: SpanContext | null): Effect.Effect<WireReply, CoreError, Scope.Scope> {
+  stream(station: StationAddr, path: string, ctx: SpanContext | null): Effect.Effect<WireReply & { came?: { bytes: number } }, CoreError, Scope.Scope> {
     return Effect.gen({ self: this }, function* () {
       const status = this.#status(station);
       const waiting = status.begin({ station: station.toString() }, stationWhat("GET", path), false);
@@ -181,9 +181,10 @@ export class Requests {
         const data = parseJson(bytes);
         return yield* Effect.fail(httpError(reply.status, data === undefined ? {} : data));
       }
-      // What comes on it is no longer waited on, only counted (as it came over the link), and decompressed.
-      const body = { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && status.received(null, chunk.length))) };
-      return { ...reply, body: plain({ ...reply, body }) };
+      // What comes on it is no longer waited on, only counted (as it came over the link: `came`), and decompressed.
+      const came = { bytes: 0 };
+      const body = { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && (status.received(null, chunk.length), (came.bytes += chunk.length)))) };
+      return { ...reply, body: plain({ ...reply, body }), came };
     });
   }
 

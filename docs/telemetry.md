@@ -73,7 +73,7 @@ user-facing operation:
 | --- | --- |
 | `chat.open`, `chats.open`, `stations.open`, `connects.open` | a view's first subscriber, until its first value goes out (the requests that make it are read inside it; a chat's agents too, when the value that names them is computed while it is still opening) |
 | the call's name: `chat.send`, `chat.older`, `chat.read`, `job.stop`, `workspace.rename`, … | every call, until it answers |
-| `station.connect`, `station.reconnect` | a station's events stream opening (when a view asked for it, `station.connect` is part of that view's trace), and opening again after it was down, until everything it may have missed is read again |
+| `station.connect`, `station.reconnect` | a station's events stream opening (when a view asked for it, `station.connect` is part of that view's trace), and opening again after it was down, until everything it may have missed is read again. `stillfail.resumed`: the station told what came since the last event heard (nothing is read again); a reconnect says how the stream before it went: `stillfail.previous.end` (why it ended), `stillfail.previous.lasted_ms`, and what came on it, `stillfail.previous.bytes` (over the link, compressed), `stillfail.previous.read_bytes` (as read) and `stillfail.previous.events` |
 
 Inside a trace:
 

@@ -309,7 +309,8 @@ export class StationsSync {
     return Effect.gen(function* () {
       let first = true;
       let handing = handover;
-      let previous: [string, number] | null = null;
+      /// How the stream before this one ended: why, how long it lasted, what came on it (over the link, and as read).
+      let previous: { why: string; lasted: number; bytes: number; read: number; events: number } | null = null;
       let misses = 0;
       let reached = false;
       for (;;) {
@@ -319,8 +320,13 @@ export class StationsSync {
         first = false;
         span.set("stillfail.station", address);
         if (previous) {
-          span.set("stillfail.previous.end", previous[0]);
-          span.set("stillfail.previous.lasted_ms", Math.round(previous[1]));
+          span.set("stillfail.previous.end", previous.why);
+          span.set("stillfail.previous.lasted_ms", Math.round(previous.lasted));
+          if (previous.events > 0 || previous.bytes > 0) {
+            span.set("stillfail.previous.bytes", previous.bytes);
+            span.set("stillfail.previous.read_bytes", previous.read);
+            span.set("stillfail.previous.events", previous.events);
+          }
         }
         // Each try in a scope of its own: the stream closes with it.
         const ended = yield* Effect.scoped(
@@ -383,6 +389,9 @@ export class StationsSync {
             handing = false;
             const parser = new SseParser();
             const openedAt = core.host.nowMs();
+            // What came on it, for the span of the stream after it.
+            let read = 0;
+            let events = 0;
             let why = "ended";
             let heard = openedAt;
             const replaced = self.wire.replaced ? self.wire.replaced(link.addr).pipe(Effect.as({ replaced: true } as const)) : Effect.never;
@@ -411,7 +420,9 @@ export class StationsSync {
               if (chunk === null) break;
               heard = core.host.nowMs();
               link.heard = heard;
+              read += chunk.length;
               for (const [name, data, id] of parser.feed(chunk)) {
+                events++;
                 // Not all that was missed could be told: read again (once for this stream).
                 if (name === "missed") {
                   if (!snapshotted) self.snapshot(address);
@@ -424,14 +435,16 @@ export class StationsSync {
             link.heard = null;
             const woke = why === GONE || why === NETWORK || why === t("station.core.replaced");
             self.setLink(address, { state: "reconnecting", message: why === "ended" ? t("station.core.disconnected") : why });
-            return { again: woke, why, lasted: core.host.nowMs() - openedAt } as const;
+            return { again: woke, why, lasted: core.host.nowMs() - openedAt, bytes: opened.success.came?.bytes ?? read, read, events } as const;
           }),
         );
         if ("done" in ended) return;
         if ("again" in ended) {
-          previous = [ended.why ?? "", "lasted" in ended ? (ended.lasted ?? 0) : 0];
+          previous = "lasted" in ended
+            ? { why: ended.why ?? "", lasted: ended.lasted ?? 0, bytes: ended.bytes ?? 0, read: ended.read ?? 0, events: ended.events ?? 0 }
+            : { why: ended.why ?? "", lasted: 0, bytes: 0, read: 0, events: 0 };
           if (ended.again) continue;
-        } else previous = [ended.failed, 0];
+        } else previous = { why: ended.failed, lasted: 0, bytes: 0, read: 0, events: 0 };
         // Not reached: less and less often. A UI back after being away wants it now.
         const wait = Math.min(RECONNECT_MS * 2 ** Math.min(Math.max(misses - 1, 0), 8), RECONNECT_MAX_MS);
         const woken = yield* Effect.raceFirst(Effect.sleep(wait).pipe(Effect.as(false)), core.wakes.next.pipe(Effect.as(true)));
