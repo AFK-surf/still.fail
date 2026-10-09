@@ -379,6 +379,14 @@ export class Events {
           void this.deps.readers
             .read("entries", { viewer: who.viewer, thread: change.id, params: [["from", String(first)], ["to", String(last)]] }, who.lang)
             .then((text) => this.emit("thread", { id: change.id, entries: JSON.parse(text).entries }), (e) => log.warn("events", "thread event not sent", { error: (e as Error).message }));
+          // And to each viewer, the thread as GET /threads/:id has it for them (their read position, their unread count):
+          // a client puts it in place rather than read it again after every message (a phone did some two a minute).
+          for (const { viewer, lang } of this.viewers(who)) {
+            void this.deps.readers.read("thread", { viewer, id: change.id, lang }, lang).then(
+              (text) => this.emit("thread-view", JSON.parse(text), (c) => c.viewer.email === viewer.email && c.lang === lang),
+              () => {},
+            );
+          }
         }
         this.rowsChanged(null);
         break;
@@ -429,6 +437,12 @@ export class Events {
     const wait = this.usageTold + USAGE_EVERY_MS - this.time.now();
     if (wait <= 0) tell();
     else this.usageLater = this.time.after(wait, tell);
+  }
+
+  /// Each viewer and language streams are followed in (who followed last, while none is), once.
+  private viewers(who: { viewer: Viewer; lang: Lang }): { viewer: Viewer; lang: Lang }[] {
+    const seen = new Set<string>();
+    return (this.clients.length > 0 ? this.clients : [who]).filter((c) => !seen.has(`${c.viewer.email}\0${c.lang}`) && seen.add(`${c.viewer.email}\0${c.lang}`));
   }
 
   /// Changes gathered into one round: after what happens now, once.

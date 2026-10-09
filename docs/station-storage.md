@@ -378,6 +378,7 @@ when it is small:
 | `session` | the session summary (row, state warm/cold/running, last turn, creator, participants) |
 | `session-removed` | `{ key }` |
 | `thread` | `{ id, entries: [appended entries, contiguous] }`; `entries: []` when its sessions changed |
+| `thread-view` | after a `thread` with entries, the thread as `GET /threads/:id` has it for the viewer (their read position and unread count; only to that viewer and language): a client puts it in place rather than read it |
 | `thread-removed` | `{ id }`: it went with every entry (a deleted session took it along) |
 | `read` | `{ viewer, thread, n }` (only to that viewer) |
 | `chat` | an item of the viewer's sidebar, new or changed (only to that viewer) |

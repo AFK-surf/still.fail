@@ -24,6 +24,7 @@ function setup(clock?: Clock.Clock) {
       if (op === "chats") return JSON.stringify(rows[args.viewer.email] ?? []);
       if (op === "summary") return JSON.stringify({ key: args.key });
       if (op === "entries") return JSON.stringify({ entries: [{ n: 1, text: "hi" }] });
+      if (op === "thread") return JSON.stringify({ id: args.id, last: 1, unread: 1, for: args.viewer.email });
       throw new Error(op);
     },
   };
@@ -134,7 +135,9 @@ test("a stream that takes over from what is not kept any more, or another run's,
   await settle();
   change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
   await settle();
-  const [three, four] = old.got.filter((e) => e.event === "thread").map((e) => e.id!);
+  const [three] = old.got.filter((e) => e.event === "thread").map((e) => e.id!);
+  // The last it heard (thread 4's summary to its viewer came after thread 4).
+  const four = old.got.findLast((e) => e.id)!.id!;
   const told = async (since: string) => {
     const s = reader((await events.open(viewer("a@x"), "zh", false, [], [], since)).body as AsyncIterable<Buffer>);
     await settle();
@@ -182,6 +185,7 @@ test("a stream that comes back after its link went is told what was told meanwhi
   const told = back.got.filter((e) => e.event).map((e) => [e.event, e.event === "thread" ? e.data.id : e.event === "session" ? e.data.key : e.data]);
   assert.deepEqual(told, [
     ["thread", 4],
+    ["thread-view", { id: 4, last: 1, unread: 1, for: "a@x" }],
     ["session", "s2"],
     // Its sidebar and overview, as they changed while none of its viewer's streams was there to be told.
     ["overview", { running: 1 }],
@@ -244,4 +248,18 @@ test("what the agents spent is told at most once a minute: the first change at o
   await settle();
   assert.equal(told(), 3);
   await s.close();
+});
+
+test("after something is said in a thread, each viewer is told it as GET /threads/:id has it for them", async () => {
+  const { events, change } = setup(testClock().clock);
+  const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  const b = reader((await events.open(viewer("b@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
+  await settle();
+  const views = (s: typeof a) => s.got.filter((e) => e.event === "thread-view").map((e) => [e.data.id, e.data.for]);
+  assert.deepEqual(views(a), [[4, "a@x"]]);
+  assert.deepEqual(views(b), [[4, "b@x"]]);
+  assert.ok(a.got.some((e) => e.event === "thread"));
+  await a.close();
+  await b.close();
 });
