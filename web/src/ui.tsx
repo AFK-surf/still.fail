@@ -6,7 +6,7 @@ import { shortcutOf, useKeymap, type Action } from "./keymap.ts";
 import { useBackClose } from "./backClose.ts";
 import { setPrefs, usePrefs } from "./prefs.ts";
 import type { Badge, Maker, Stamp } from "./api.ts";
-import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, Wait, Info, More, Plug, Sliders } from "./icons.tsx";
+import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, Wait, Info, More, Plug, Refresh, Sliders } from "./icons.tsx";
 import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
@@ -495,15 +495,27 @@ export function Loading({ label = t("common.loading"), fill = true, detail }: { 
 }
 
 /**
+ * How long a splash may stand before it offers to load the page again: past it, something is stuck (a core that never
+ * answers, a load that never ends), and an app on the home screen has no reload of its own.
+ */
+const SPLASH_STUCK_MS = 10_000;
+
+/**
  * The app starting (or waiting for what every page needs): the buddy, floating. What it waits for is said only when
- * it takes a while (after a second), or at once when `now` (a failure).
+ * it takes a while (after a second), or at once when `now` (a failure); standing too long, it offers a reload.
  */
 export function Splash({ label, now = false, children }: { label?: string; now?: boolean; children?: ReactNode }) {
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setStuck(true), SPLASH_STUCK_MS);
+    return () => clearTimeout(timer);
+  }, []);
   return (
     <div className="splash" role="status" aria-live="polite">
       <Mark size={56} className="splash-mark" />
       {label && <p className={css.splashLabel} data-now={now || undefined}>{label}</p>}
       {children}
+      {stuck && <button type="button" className={css.splashReload} onClick={() => location.reload()}><Refresh size={14} />{t("common.reload")}</button>}
     </div>
   );
 }

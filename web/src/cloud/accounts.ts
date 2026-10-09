@@ -6,7 +6,7 @@ import { core, useTopic } from "../core/react.ts";
 import { doingMatches, failed, useDoing, useDoingList } from "../doing.ts";
 import { failure, useToast } from "../toast.tsx";
 import { t } from "../i18n.ts";
-import { signedOut, telemetrySettled, track } from "../telemetry.ts";
+import { signedOut, telemetrySettled, track, trackNow } from "../telemetry.ts";
 
 /** A signed-in account, as the `accounts` topic lists it. */
 export interface Account {
@@ -36,7 +36,7 @@ export async function signIn(returnTo = location.pathname + location.search + lo
 /** Finishes a sign-in on /auth/callback. Returns where to go next. */
 export async function completeSignIn(): Promise<string> {
   const { return_to } = await core().call("auth.complete", { query: location.search }) as { return_to: string };
-  track("sign_in");
+  trackNow("sign_in");
   // The page goes on to return_to at once: the event must be with posthog-js by then.
   await telemetrySettled();
   return return_to;

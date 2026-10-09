@@ -258,6 +258,12 @@ export const splashLabel = style({
     "&[data-now]": { animation: "none" },
   },
 });
+/** Offered once a splash has stood too long: loading the page again, as an app on the home screen has no reload of its own. */
+export const splashReload = style({
+  display: "inline-flex", alignItems: "center", gap: "6px", height: "32px", padding: "0 14px", border: "0", borderRadius: "999px",
+  background: `color-mix(in srgb, ${vars.text} 6%, transparent)`, color: vars.text, font: "inherit", fontSize: vars.textUi, cursor: "pointer",
+  animation: `${appearKeyframes} 200ms ease-out both`,
+});
 export const skeletonRow = style({
   display: "grid", gap: "6px", padding: "9px 10px", animation: `${appearKeyframes} 0s linear 400ms both`,
 });

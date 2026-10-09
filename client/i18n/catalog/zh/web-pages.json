@@ -701,6 +701,8 @@
   "web-pages.signIn.passwordField": "密码",
   "web-pages.signIn.passwordSubmit": "登录",
   "web-pages.signIn.signingIn": "正在登录…",
+  "web-pages.signIn.slow": "比平时慢，可以重新加载试试",
+  "web-pages.signIn.restart": "回到首页重新登录",
   "web-pages.signIn.title": "登录 {name}",
   "web-pages.slackApp.accessToken": "这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。",
   "web-pages.slackApp.add": "加上",

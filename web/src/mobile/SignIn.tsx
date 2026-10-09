@@ -1,10 +1,13 @@
 // Signing in on a narrow screen, as the Android app has it (apps/android/…/screens/SignIn.kt).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "../cloud/accounts.ts";
 import { Illustration } from "./parts.tsx";
 import * as rootCss from "./styles/root.css.ts";
 import * as css from "./SignIn.css.ts";
 import { t } from "../i18n.ts";
+
+/** How long the button waits for the page to leave for Google's before it is a button again. */
+const OPENING_MS = 10_000;
 
 export function MobileSignIn() {
   const [busy, setBusy] = useState(false);
@@ -14,6 +17,20 @@ export function MobileSignIn() {
     setBusy(true); setError(null);
     signIn().catch((e: unknown) => { setBusy(false); setError(t("web-mobile.signIn.failed", { error: e instanceof Error ? e.message : String(e) })); });
   };
+  // Back here without having signed in (an app on the home screen opens Google's page over itself, and that was closed;
+  // the browser's back), or never left: the button is a button again.
+  useEffect(() => {
+    if (!busy) return;
+    const back = () => { if (document.visibilityState === "visible") setBusy(false); };
+    const timer = setTimeout(() => setBusy(false), OPENING_MS);
+    addEventListener("pageshow", back);
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      clearTimeout(timer);
+      removeEventListener("pageshow", back);
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, [busy]);
   return (
     <div className={`${rootCss.m} ${css.mSignIn}`}>
       <Illustration name="sign-in" width={300} />

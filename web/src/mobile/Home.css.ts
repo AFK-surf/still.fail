@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import { spinKeyframes } from "../styles/keyframes.css.ts";
 
 export const mDot = style({
   width: "7px", height: "7px", borderRadius: "50%", background: "var(--m-accent)", flex: "none",
@@ -25,6 +26,24 @@ export const mHomePane = style({
     },
   },
 });
+/**
+ * A list pulled down from its top (./pull.ts): a frosted disc in the middle of the gap the list leaves under the bar,
+ * its arrow turning as it opens, in the accent once letting go reloads, spinning as it does.
+ */
+export const mPull = style({
+  vars: { "--pull": "0", "--gap": "0px" },
+  position: "absolute", top: "calc(var(--m-top) + 58px)", left: "50%", zIndex: "2", display: "grid", placeItems: "center",
+  width: "36px", height: "36px", marginLeft: "-18px", borderRadius: "50%", color: "var(--m-subtle)", pointerEvents: "none",
+  opacity: "var(--pull)", transform: "translateY(calc(var(--gap) / 2 - 18px)) scale(calc(.6 + var(--pull) * .4))",
+  transition: "opacity 200ms var(--m-ease), transform 200ms var(--m-ease), color 120ms",
+  selectors: {
+    // With the finger, not behind it.
+    "&[data-pulling]": { transition: "color 120ms" },
+    "&[data-ready]": { color: "var(--m-accent)" },
+  },
+});
+globalStyle(`${mPull} > svg`, { transform: "rotate(calc(var(--pull) * 270deg))" });
+globalStyle(`${mPull}[data-reloading] > svg`, { animation: `${spinKeyframes} 700ms linear infinite` });
 export const mHomeBar = style({
   position: "absolute", top: "0", left: "0", right: "0", zIndex: "3", display: "flex", alignItems: "center",
   gap: "10px", padding: "calc(var(--m-top) + 8px) 16px 8px",

@@ -761,6 +761,8 @@
   "web-pages.signIn.passwordField": "Password",
   "web-pages.signIn.passwordSubmit": "Sign in",
   "web-pages.signIn.signingIn": "Signing in…",
+  "web-pages.signIn.slow": "This is taking longer than usual. Try reloading",
+  "web-pages.signIn.restart": "Back to the start and sign in again",
   "web-pages.signIn.title": "Sign in to {name}",
   "web-pages.slackApp.accessToken": "That's the Access Token. Use the Refresh Token below it (xoxe-1-…).",
   "web-pages.slackApp.add": "Add",

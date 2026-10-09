@@ -10,7 +10,7 @@ import type { FoundMessage } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
 import { Marked } from "../Marked.tsx";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Check, Copy, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Search, Settings, Unplug, Zou } from "../icons.tsx";
+import { Archive, Check, Copy, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Refresh, Search, Settings, Unplug, Zou } from "../icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
@@ -27,6 +27,7 @@ import { LoadingPill, PlaceholderRows } from "./Loading.tsx";
 import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
+import { usePullToReload } from "./pull.ts";
 import * as css from "./Home.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -53,17 +54,20 @@ export function Home() {
   // The lists away while it is open; back as it starts to close, with its field.
   const [away, setAway] = useState(false);
   const search = (at: DOMRect) => { setSearching(at); setAway(true); };
+  // Pulled down from its top, a list loads the page again (./pull.ts).
+  const pull = usePullToReload(css.mHomePane);
   return (
     <div className={css.mHome} data-searching={searching ? "" : undefined} data-away={away ? "" : undefined}>
       {none ? (
-        <div className={css.mHomePanes}><div className={css.mHomePane} style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
+        <div className={css.mHomePanes} {...pull.handlers}><div className={css.mHomePane} style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
       ) : (
-        <div className={css.mHomePanes} data-filter={filter}>
+        <div className={css.mHomePanes} data-filter={filter} {...pull.handlers}>
           <ChatPane chats={all} filter="all" onSearch={search} />
           <ChatPane chats={mine} filter="mine" onSearch={search} />
           <ChatPane chats={watching} filter="watching" onSearch={search} />
         </div>
       )}
+      <div ref={pull.mark} className={`${css.mPull} ${pagesCss.mFloating}`} aria-hidden="true"><Refresh size={18} /></div>
       {/* The lists run under both bars, which are frosted glass over them. */}
       <header className={`${css.mHomeBar} ${pagesCss.mGlass}`}>
         <button type="button" className={`${barsCss.mNavButton} ${css.mHomeMe}`} onClick={() => app.push(app.at("/settings"))} aria-label={t("web-mobile.settings.title")}>

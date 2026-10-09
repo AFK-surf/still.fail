@@ -124,6 +124,14 @@ export function track(event: string, properties: Record<string, string | number 
   use((ph) => ph.capture(event, properties));
 }
 
+/**
+ * A product event sent at once rather than with the next batch: for one the page leaves (or is left) right after,
+ * which a batch would lose (the sign-ins Safari and Edge finished came without their sign_in).
+ */
+export function trackNow(event: string, properties: Record<string, string | number | boolean> = {}): void {
+  use((ph) => ph.capture(event, properties, { send_instantly: true, transport: "sendBeacon" }));
+}
+
 export function captureException(error: unknown, properties: Record<string, string> = {}): void {
   use((ph) => ph.captureException(error, properties));
 }

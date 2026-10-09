@@ -1,7 +1,7 @@
 import { AutomaticDecisionCompletionScreen, AutomaticDecisionPolicyScreen, AutomaticDecisionsScreen } from "./AutomaticDecisions.tsx";
 // A workspace on a narrow screen: the Android app's pages (./app.tsx), at the desktop's addresses where it has them, so
 // a link opens the same thing on either.
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Navigate, Route, Routes, useParams, type Location } from "react-router";
 import { useStations } from "../api.ts";
 import { StationContext, stationBase, type Station } from "../station.tsx";
@@ -23,9 +23,12 @@ import { NewProfileScreen, ProfileAccountScreen, ProfileScreen, ProfilesScreen }
 import { AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
 import { ChangelogScreen } from "./Changelog.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
+import { identify } from "../telemetry.ts";
 import { t } from "../i18n.ts";
 
 export function MobileWorkspace({ entry }: { entry: Entry }) {
+  // Who is using the page, as the wide screen's shell says it (cloud/workspace.tsx): a phone's events were anonymous.
+  useEffect(() => identify(entry.account), [entry.account]);
   const found = useStations(entry.id);
   const stations = useMemo<Station[] | undefined>(() => found.value?.map((s) => ({
     id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${entry.id}/settings`,

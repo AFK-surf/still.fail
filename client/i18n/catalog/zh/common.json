@@ -31,5 +31,6 @@
   "common.link.open": "打开链接",
   "common.link.copy": "复制链接",
   "common.link.copied": "已复制链接",
-  "common.link.copyFailed": "没能复制链接：{error}"
+  "common.link.copyFailed": "没能复制链接：{error}",
+  "common.reload": "重新加载"
 }

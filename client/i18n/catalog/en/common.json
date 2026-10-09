@@ -31,5 +31,6 @@
   "common.link.open": "Open link",
   "common.link.copy": "Copy link",
   "common.link.copied": "Link copied",
-  "common.link.copyFailed": "Couldn't copy the link: {error}"
+  "common.link.copyFailed": "Couldn't copy the link: {error}",
+  "common.reload": "Reload"
 }

@@ -33,6 +33,8 @@
   <!-- The splash (src/ui.tsx, Splash) as the first paint, before any script: the app replaces it when it draws. -->
   <div id="app"><div class="splash" role="status"><img class="splash-mark" id="splash-mark" src="/mark.svg" width="56" height="56" alt=""></div></div>
   <script>try{var t=document.documentElement.dataset.theme;if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.getElementById("splash-mark").src=document.getElementById("splash-mark").src.replace(/mark\.svg$/,"mark-dark.svg")}catch(e){}</script>
+  <!-- Still this splash after a while (the app's scripts never ran: a load that hung): a way to load the page again, as an app on the home screen has no reload of its own. -->
+  <script>setTimeout(function(){var m=document.getElementById("splash-mark");if(!m)return;var b=document.createElement("button");b.type="button";b.textContent=/^zh/i.test(navigator.language)?"重新加载":"Reload";b.style.cssText="margin-top:8px;height:32px;padding:0 14px;border:0;border-radius:999px;background:rgba(128,128,128,.14);color:inherit;font:inherit;font-size:14px";b.onclick=function(){location.reload()};m.parentNode.appendChild(b)},15000)</script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

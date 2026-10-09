@@ -1,7 +1,7 @@
 // Pieces shared by still.fail cloud's pages and the admin's console: people's
 // avatars, the sign-in page and where a sign-in comes back to.
 import { useEffect, useState, type ReactNode } from "react";
-import { Key } from "../icons.tsx";
+import { Key, Refresh } from "../icons.tsx";
 import { Button } from "../ui.tsx";
 import { completeSignIn, passwordSignIn, useSignIn } from "./accounts.ts";
 import { useDoing } from "../doing.ts";
@@ -11,6 +11,8 @@ import * as cloudCss from "../styles/cloud.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./gate.css.ts";
 import { NAME } from "./beta.tsx";
+import { standalone } from "../standalone.ts";
+import { trackNow } from "../telemetry.ts";
 import { t } from "../i18n.ts";
 
 export function Avatar({ account, size = 24 }: { account: { name: string; email: string; picture: string }; size?: number }) {
@@ -75,18 +77,52 @@ function PasswordSignIn() {
   );
 }
 
-/** /auth/callback: finishes the sign-in, then goes where it started. */
+/** How long the sign-in's last step may take before the page offers a way out: it takes a second or two. */
+const SIGNING_IN_MS = 8000;
+
+/**
+ * /auth/callback: finishes the sign-in, then goes where it started. Taking far longer than it does (its core never
+ * answering), it says so and offers to load the page again or to start over: an app on the home screen has no reload
+ * of its own, and was stuck at 正在登录… for good (2026-10-09).
+ */
 export function Callback() {
   const [error, setError] = useState<string | null>(null);
+  const [slow, setSlow] = useState(false);
   const signIn = useSignIn();
   useEffect(() => {
-    completeSignIn().then((next) => location.replace(next), (e: Error) => setError(e.message));
+    const timer = setTimeout(() => { setSlow(true); void signInStuck(); }, SIGNING_IN_MS);
+    completeSignIn().then((next) => location.replace(next), (e: Error) => setError(e.message)).finally(() => clearTimeout(timer));
+    return () => clearTimeout(timer);
   }, []);
   return (
     <div className={shellCss.gate}>
       <Illustration name="sign-in" />
       <h1>{error ? t("web-pages.signIn.failed") : t("web-pages.signIn.signingIn")}</h1>
       {error && <><p>{error}</p><Button variant="primary" busy={signIn.busy} onClick={() => void signIn.signIn("/")}>{t("web-pages.signIn.again")}</Button></>}
+      {!error && slow && (
+        <>
+          <p>{t("web-pages.signIn.slow")}</p>
+          <div className={css.ways}>
+            <Button variant="primary" icon={Refresh} onClick={() => location.reload()}>{t("common.reload")}</Button>
+            <Button variant="ghost" onClick={() => location.replace("/")}>{t("web-pages.signIn.restart")}</Button>
+          </div>
+        </>
+      )}
     </div>
   );
+}
+
+/**
+ * The sign-in's last step stuck: told to telemetry with what holds the lock the core runs under (core/worker.ts) and
+ * how many pages' workers are alive, and whether the page is an app on the home screen, to tell why it is.
+ */
+async function signInStuck(): Promise<void> {
+  const locks = await navigator.locks?.query().catch(() => null);
+  const core = (list: LockInfo[] | undefined) => list?.filter((l) => l.name === "stillfail-core").length ?? 0;
+  trackNow("sign_in_stuck", {
+    standalone: standalone(),
+    coreHeld: core(locks?.held) > 0,
+    coreWaiting: core(locks?.pending),
+    workers: locks?.held?.filter((l) => l.name?.startsWith("stillfail-tab-")).length ?? 0,
+  });
 }
