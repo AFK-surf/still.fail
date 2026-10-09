@@ -444,3 +444,28 @@ test("a list read as what changed of it: its order, and the rows the client does
     await r.close();
   }
 });
+
+test("several reads in one: each answered as its GET is, in their order, only the reads of a history", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
+    const id = made.thread.id;
+    r.store.insertMessage(newMessage(id, "1.2", "person", "a@x", "hi"));
+    const key = encodeURIComponent(made.key);
+    const gets = [`/threads/${id}/entries?limit=50`, `/threads/${id}`, `/sessions/${key}`, `/sessions/${key}/timeline?before=1000000000000000&limit=200&brief=1`, "/threads/999/entries?after=0", "/usage?from=0", "/events", `/sessions/${key}/files?name=x`];
+    const [status, batch] = await r.ask("POST", "/batch", { gets });
+    assert.equal(status, 200);
+    assert.equal(batch.answers.length, gets.length);
+    for (const [i, get] of gets.slice(0, 5).entries()) {
+      const [path, query] = get.split("?");
+      const [s, body] = await r.ask("GET", path!, undefined, [...new URLSearchParams(query ?? "")]);
+      assert.deepEqual(batch.answers[i], { status: s, body }, get);
+    }
+    assert.equal(batch.answers[4].status, 404);
+    for (const [i, get] of gets.slice(5).entries()) assert.deepEqual(batch.answers[5 + i], { status: 400, body: { error: `not read in a batch: ${get.split("?")[0]}` } });
+    assert.deepEqual(await r.ask("POST", "/batch", { gets: Array.from({ length: 65 }, () => `/threads/${id}`) }), [400, { error: "gets: at most 64 paths to read" }]);
+    assert.deepEqual(await r.ask("POST", "/batch", "{"), [400, { error: "gets: at most 64 paths to read" }]);
+  } finally {
+    await r.close();
+  }
+});

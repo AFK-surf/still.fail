@@ -3,7 +3,7 @@
 // is not here answers 404 as an unknown route does.
 import type { Readers } from "../read/pool.ts";
 import { HttpError } from "../read/views.ts";
-import { type Answer, type Request, error, json } from "./request.ts";
+import { type Answer, type Request, error, json, queryPairs } from "./request.ts";
 import { routes as chats } from "./routes/chats.ts";
 import { routes as usage } from "./routes/usage.ts";
 import { routes as sessions } from "./routes/sessions.ts";
@@ -27,8 +27,13 @@ import { readOnly } from "../mesh/credential.ts";
 /// What a read-only member (a viewer, contract §4) may still ask besides reads: marks of their own (read, kept,
 /// dismissed), which change nothing anyone else sees.
 const OWN_MARKS = /^\/*threads\/+[^/]+\/+(read|dismissed|closed-card)(?:\/.*)?$/;
-/// Reads that send what the client holds (routes/changed.ts).
-const READS = /^\/*changed\/+(chats|threads|sessions)$/;
+/// Reads that send what the client holds (routes/changed.ts), and several reads in one (`batch`).
+const READS = /^\/*(changed\/+(chats|threads|sessions)|batch)$/;
+/// What a batch may read (POST /batch): the history a client brings onto its device in the background, each a read
+/// whose answer is JSON. At most BATCH_MOST of them, BATCH_AT_ONCE at a time.
+const BATCHED = [/^\/threads\/\d+\/entries$/, /^\/threads\/\d+$/, /^\/sessions\/[^/]+$/, /^\/sessions\/[^/]+\/timeline$/];
+const BATCH_MOST = 64;
+const BATCH_AT_ONCE = 4;
 
 /// Whether `r` is one a read-only member may make: reads (GET, HEAD, and a list's changes), and their own marks.
 export function readOnlyMay(r: { method: string; path: string }): boolean {
@@ -166,6 +171,7 @@ export class Admin {
   private async answer(r: Request): Promise<Answer> {
     // A viewer reads: no message sent, nothing changed (previews included).
     if (readOnly(r.viewer) && !readOnlyMay(r)) return error(403, "read-only members cannot change this station");
+    if (r.method === "POST" && /^\/*batch$/.test(r.path)) return this.batch(r);
     // A web service on this machine, through its preview's path: any method, its answer as it comes.
     const preview = previewTarget(r.path);
     if (preview !== null) {
@@ -181,5 +187,37 @@ export class Admin {
       if (found) return route.handle(r, found.slice(1));
     }
     return error(404, `no route ${r.method} ${r.path}`);
+  }
+
+  /// Several reads in one (POST /batch `{ gets }`, each a path with its query): each answered as its GET is, all in one
+  /// answer, `{ answers: [{ status, body }] }` in their order, and compressed as one. A client brings a station's history
+  /// onto its device so in the background: a read a request, a new device made some 500 of them for one station, each
+  /// compressed on its own (and not at all under 512 bytes). Only the reads in BATCHED.
+  private async batch(r: Request): Promise<Answer> {
+    if (r.body.length > 1_000_000) return error(413, "request too large");
+    let gets: unknown;
+    try {
+      gets = (JSON.parse(r.body.toString("utf8")) as { gets?: unknown }).gets;
+    } catch {
+      gets = undefined;
+    }
+    if (!Array.isArray(gets) || gets.length > BATCH_MOST || gets.some((g) => typeof g !== "string")) return error(400, `gets: at most ${BATCH_MOST} paths to read`);
+    const paths = gets as string[];
+    const answers: string[] = [];
+    let next = 0;
+    const work = async () => {
+      for (let i = next++; i < paths.length; i = next++) {
+        const at = paths[i]!.indexOf("?");
+        const path = at < 0 ? paths[i]! : paths[i]!.slice(0, at);
+        const a = BATCHED.some((p) => p.test(path))
+          ? await this.answer({ ...r, method: "GET", path, query: at < 0 ? [] : queryPairs(paths[i]!.slice(at + 1)), search: at < 0 ? "" : paths[i]!.slice(at), body: Buffer.alloc(0) })
+          : error(400, `not read in a batch: ${path}`);
+        const text = Buffer.isBuffer(a.body) ? a.body.toString("utf8") : "";
+        const isJson = Buffer.isBuffer(a.body) && (a.headers["content-type"] ?? "").startsWith("application/json") && text !== "";
+        answers[i] = `{"status":${a.status},"body":${isJson ? text : JSON.stringify(text)}}`;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(BATCH_AT_ONCE, paths.length) }, work));
+    return json(200, `{"answers":[${answers.join(",")}]}`);
   }
 }

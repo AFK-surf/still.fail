@@ -143,6 +143,7 @@ test("a viewer reads and keeps their own marks, and changes nothing else", () =>
   assert.ok(readOnlyMay({ method: "PUT", path: "/threads/3/read" }));
   // A list read with what the client holds.
   assert.ok(readOnlyMay({ method: "POST", path: "/changed/threads" }));
+  assert.ok(readOnlyMay({ method: "POST", path: "/batch" }));
   assert.ok(!readOnlyMay({ method: "POST", path: "/changed/usage" }));
   assert.ok(!readOnlyMay({ method: "POST", path: "/threads/3/messages" }));
   assert.ok(!readOnlyMay({ method: "POST", path: "/sessions" }));

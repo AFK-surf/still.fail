@@ -215,6 +215,12 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   `ok` and `ts`), a thought by its first line. `?from=a&to=b` reads entries a
   to b whole (both included, at most 1000), as such a step is opened.
 - `GET /chats` — the viewer's sidebar items (The sidebar, below).
+- `POST /batch {gets}` — several reads in one: each path (with its query) is
+  answered as its GET is, and the answer is `{ answers: [{ status, body }] }`
+  in their order, compressed as one. Only the reads a client brings a
+  station's history onto its device with: a thread's entries, a thread, a
+  session, a session's timeline (any other is `400`); at most 64, four at a
+  time. It only reads: a read-only member may ask it.
 - `POST /changed/chats`, `/changed/threads`, `/changed/sessions` (each with
   its GET's query) `{ held }` — what changed of the list since what the
   client holds: `held` is each held row's digest by its id (a session's
