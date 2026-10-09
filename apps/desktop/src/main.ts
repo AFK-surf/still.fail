@@ -89,6 +89,8 @@ function carryOverUserData(): void {
 // the released app's.
 if (process.env.STILLFAIL_USER_DATA) app.setPath("userData", process.env.STILLFAIL_USER_DATA);
 else if (!BETA) carryOverUserData();
+// Windows shows an app's notices under its AppUserModelID, the installer's shortcut's (package.json build.appId).
+if (process.platform === "win32") app.setAppUserModelId(BETA ? "fail.still.desktop.beta" : "fail.still.desktop");
 
 // A standard, secure origin: the page's absolute paths, storage and clipboard work as on https://.
 protocol.registerSchemesAsPrivileged([
@@ -706,9 +708,12 @@ function menuItem(action: (typeof MENU_ACTIONS)[number], state: MenuState): Elec
   };
 }
 
-/** The menu bar (macOS; elsewhere the app keeps Electron's own), in the app's language, with the page's actions. */
+/**
+ * The menu bar (macOS), in the app's language, with the page's actions. Elsewhere the window has none: the page has
+ * all its actions and keys itself (web/src/keymap.ts), and Electron's own would be a row of English menus over it.
+ */
 function setMenu(): void {
-  if (process.platform !== "darwin") return;
+  if (process.platform !== "darwin") return Menu.setApplicationMenu(null);
   const state = frontState();
   menuKeys = JSON.stringify(state.keys);
   const item = (action: (typeof MENU_ACTIONS)[number]) => menuItem(action, state);
@@ -919,16 +924,16 @@ function wholeImage(page: WebContents, src: string): Promise<Uint8Array<ArrayBuf
 }
 
 /**
- * A window of the app at `path`. The app's own window has no title bar: its buttons sit in the page's top row (44 px,
- * web/src/styles), centred on it. A page of the app opened in a new window (a web service's page of its own) has one:
- * its page has no row for them.
+ * A window of the app at `path`. On macOS the app's own window has no title bar: its buttons sit in the page's top row
+ * (44 px, web/src/styles), centred on it. A page of the app opened in a new window (a web service's page of its own)
+ * has one: its page has no row for them. Elsewhere every window has the system's (preload.ts `frame`).
  */
 function open(path = "/", titled = false): BrowserWindow {
   const window = new BrowserWindow({
     width: titled ? 1100 : 1280,
     height: 820,
     show: false,
-    ...(titled ? {} : { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 15 } } as const),
+    ...(titled || process.platform !== "darwin" ? {} : { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 15 } } as const),
     webPreferences: { preload: join(__dirname, "preload.js"), sandbox: true, contextIsolation: true },
   });
   window.once("ready-to-show", () => window.show());

@@ -8,8 +8,8 @@
   <script>try{[localStorage,sessionStorage].forEach(function(s){try{if(s.getItem("stillfail.renamed"))return;var k=[],i;for(i=0;i<s.length;i++)if(s.key(i).indexOf("ember.")===0)k.push(s.key(i));k.forEach(function(o){var n="stillfail."+o.slice(6);if(s.getItem(n)===null)s.setItem(n,s.getItem(o))});s.setItem("stillfail.renamed","1")}catch(e){}})}catch(e){}</script>
   <!-- The appearance chosen (src/theme.ts) before the first paint: a page that paints light and then turns dark blinks. -->
   <script>try{var a=localStorage.getItem("stillfail.appearance");if(a==="light"||a==="dark")document.documentElement.dataset.theme=a}catch(e){}</script>
-  <!-- In the desktop app (its preload gives stillfailDesktop) the window has no title bar: the page's top row is it (its styles). -->
-  <script>if("stillfailDesktop"in window)document.documentElement.dataset.desktop="";try{if(localStorage.getItem("stillfail.sidebar")==="closed")document.documentElement.dataset.sidebar="closed"}catch(e){}</script>
+  <!-- In the desktop app on macOS (its preload gives stillfailDesktop, frame "inset") the window has no title bar: the page's top row is it (its styles). -->
+  <script>if("stillfailDesktop"in window&&stillfailDesktop.frame!=="system")document.documentElement.dataset.desktop="";try{if(localStorage.getItem("stillfail.sidebar")==="closed")document.documentElement.dataset.sidebar="closed"}catch(e){}</script>
   <title>still.fail</title>
   <meta name="description" content="still.fail — 一直在干活的编码 agent">
   <!-- 以 / 开头的 public 文件，Vite 会按 base 补全路径 -->

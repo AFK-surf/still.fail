@@ -16,6 +16,11 @@ const desktop = {
   },
   /** The cloud's origin: its links (https://…/o/…) are the app's own. */
   cloudOrigin: ipcRenderer.sendSync("app:cloud-origin") as string,
+  /**
+   * The window's frame: `inset` (macOS) has no title bar, its buttons in the page's top row, which drags it
+   * (web/index.html data-desktop); `system` (Windows) has the system's title bar over the page.
+   */
+  frame: process.platform === "darwin" ? "inset" : "system",
   /** This build's version (0.1.<commits>). */
   version: ipcRenderer.sendSync("app:version") as string,
   /** The beta app (「youdid.wtf」, beside the released one: main.ts BETA). */

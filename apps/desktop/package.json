@@ -75,6 +75,15 @@
       },
       "artifactName": "stillfail-${version}-${arch}-mac.${ext}"
     },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "icon.png",
+      "artifactName": "stillfail-${version}-${arch}-win.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    },
     "publish": {
       "provider": "generic",
       "url": "https://app.still.fail/releases/desktop",

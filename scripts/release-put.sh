@@ -1,7 +1,7 @@
 #!/bin/sh
 # Puts releases made into a directory (scripts/release.sh or .github/release-desktop.py with RELEASE_DIR) in the
 # cloud's releases bucket, under the same names: the files first, side by side, then the feeds that say they are out
-# (station*.json, android/…/latest.json, desktop/*-mac.yml), so nothing points at a file not there yet.
+# (station*.json, android/…/latest.json, desktop/*.yml), so nothing points at a file not there yet.
 # CI builds the releases beside the check: an app's files, named by their version, are put by its own job at once
 # (nothing points at them yet: --files); the station's, named the same each time, and every feed, once the check
 # passed (.github/workflows/pipeline.yml, put). --files takes each file it put out of the directory, leaving the feeds
@@ -44,7 +44,7 @@ type_of() {
     *) echo application/octet-stream ;;
   esac
 }
-feed() { case $1 in station*.json | */latest.json | desktop/*-mac.yml) return 0 ;; *) return 1 ;; esac; }
+feed() { case $1 in station*.json | */latest.json | desktop/*.yml) return 0 ;; *) return 1 ;; esac; }
 # What a pass puts: a Node first (a station's release that names it is fetched by its fixed name, not through a feed),
 # then the other files, then the feeds.
 pass_of() { case $1 in node/*) echo node ;; *) if feed "$1"; then echo feeds; else echo files; fi ;; esac; }

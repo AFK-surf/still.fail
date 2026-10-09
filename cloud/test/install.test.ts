@@ -52,6 +52,13 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   assert.equal(releaseType("desktop/stillfail-mac.yml"), "text/yaml; charset=utf-8");
   assert.equal(releaseType("desktop/stillfail-0.1.1092-arm64-mac.zip"), "application/zip");
   assert.equal(releaseType("desktop/stillfail-0.1.1092-arm64-mac.zip.blockmap"), "application/octet-stream");
+  // The Windows app's: its feed (named by the channel alone), its installer and that one's blockmap.
+  assert.equal(releaseType("desktop/stillfail.yml"), "text/yaml; charset=utf-8");
+  assert.equal(releaseType("desktop/stillfail-beta.yml"), "text/yaml; charset=utf-8");
+  assert.equal(releaseType("desktop/stillfail-0.1.2400-x64-win.exe"), "application/vnd.microsoft.portable-executable");
+  assert.equal(releaseType("desktop/stillfail-beta-0.1.2400-x64-win.exe.blockmap"), "application/octet-stream");
+  assert.equal(releaseType("desktop/stillfail-0.1.2400-arm64-win.exe"), null);
+  assert.equal(releaseType("desktop/other.yml"), null);
   // The old app's feed is not served: it is replaced by hand.
   assert.equal(releaseType("desktop/latest-mac.yml"), null);
   assert.equal(releaseType("desktop/ember-0.1.1092-arm64-mac.zip"), null);

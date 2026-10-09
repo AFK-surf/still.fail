@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Build and sign on the organization's Mac runner; never publish an unsigned update."""
+"""Build and sign on the organization's Mac runner; never publish an unsigned macOS update.
+
+The Windows app is built here too (apps/desktop/build.sh --win, from the Mac), not signed yet: no Windows code-signing
+certificate has been provisioned, and an unsigned installer only makes SmartScreen warn on its first run."""
 import argparse
 import base64
 import fcntl
@@ -72,9 +75,15 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
         env['RELEASE_DIR'] = str(Path(directory) / 'releases')
         run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop'], cwd=root, env=env)
         run(['codesign', '--verify', '--deep', '--strict', str(root / 'apps/desktop/out/mac-arm64' / ('still.fail.app' if args.stable else 'youdid.wtf.app'))])
+        # After the Mac's check: build.sh starts by clearing out/.
+        run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop-win'], cwd=root, env=env)
         version = subprocess.check_output(['git', 'rev-list', '--count', 'HEAD'], cwd=root, text=True).strip()
         archive = f'stillfail{suffix}-0.1.{version}-arm64-mac.zip'
-        for name, mime in ((archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8')):
+        installer = f'stillfail{suffix}-0.1.{version}-x64-win.exe'
+        for name, mime in (
+            (archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8'),
+            (installer, 'application/vnd.microsoft.portable-executable'), (installer + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}.yml', 'text/yaml; charset=utf-8'),
+        ):
             path = Path(env['RELEASE_DIR']) / 'desktop' / name
             if not path.is_file(): raise SystemExit('Expected desktop artifact missing: ' + name)
             if args.out:

@@ -27,7 +27,7 @@ permissions:
 env:
   # The native parts a branch's checks and builds use (the Linux station parts are built and published from main; the
   # Linux check's mesh addon is built on a branch that changed it).
-  BRANCH_NATIVES: mesh:darwin-arm64 dock:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64
+  BRANCH_NATIVES: mesh:darwin-arm64 dock:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64 mesh:win32-x64
 jobs:
   # Every job runs on Blacksmith's machines or mini1, not on GitHub's own: when GitHub's runners were short (Actions
   # degraded, 2026-10-05), a job waiting for one held each run 15 minutes and was cancelled, nothing released.
@@ -45,6 +45,7 @@ jobs:
       station: ${{ steps.plan.outputs.station }}
       android: ${{ steps.plan.outputs.android }}
       desktop: ${{ steps.plan.outputs.desktop }}
+      windows: ${{ steps.plan.outputs.windows }}
       natives: ${{ steps.natives.outputs.natives }}
     steps:
       - uses: actions/checkout@v5
@@ -88,6 +89,10 @@ jobs:
           # The desktop app carries the core, the web app and a station: any of them changed is a new app.
           desktop=false
           if has '^(apps/desktop/|client/|web/|station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native)\.ts$)'; then desktop=true; fi
+          # A branch's Windows app and its smoke run (windows-build, windows-smoke): only for what is Windows' own in it,
+          # the app's code and its iroh addon (a change to the web app it carries is the Mac app's check too).
+          windows=false
+          if has '^(apps/desktop/|station/native/mesh/|vendor/|scripts/native\.ts$|\.github/windows-smoke\.ps1$)'; then windows=true; fi
           {
             echo "range=$range"
             echo "parts=${static[*]}"
@@ -97,6 +102,7 @@ jobs:
             echo "station=$station"
             echo "android=$android"
             echo "desktop=$desktop"
+            echo "windows=$windows"
           } >> "$GITHUB_OUTPUT"
           echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android desktop=$desktop relay=$relay"
 
@@ -264,6 +270,46 @@ jobs:
           (cd apps/desktop && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           UNSIGNED=1 sh apps/desktop/build.sh --beta
           ls -la apps/desktop/out/*.zip
+
+  # The Windows app (beta, unsigned), built on mini1 beside mac-build, for windows-smoke: a branch's, when it changes
+  # what is Windows' own in it (plan: windows).
+  windows-build:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && needs.plan.outputs.windows == 'true' }}
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/natives
+      - name: The desktop app for Windows (beta, unsigned)
+        run: |
+          pnpm install --frozen-lockfile --prefer-offline > /dev/null
+          (cd apps/desktop && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh apps/desktop/build.sh --beta --win
+          mkdir -p "$RUNNER_TEMP/win" && cp apps/desktop/out/*-win.exe "$RUNNER_TEMP/win/"
+      - uses: actions/upload-artifact@v4
+        with: { name: "desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/win", retention-days: 3 }
+
+  # The Windows app on a Windows machine (GitHub's: neither Blacksmith nor mini1 has one), a branch's only: installed,
+  # its iroh addon loaded by its Electron, started and its window photographed (.github/windows-smoke.ps1).
+  windows-smoke:
+    needs: [plan, windows-build]
+    if: ${{ !cancelled() && needs.windows-build.result == 'success' }}
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with: { sparse-checkout: .github }
+      - uses: actions/download-artifact@v4
+        with: { name: "desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/win" }
+      - name: Install, load, start
+        shell: pwsh
+        run: ./.github/windows-smoke.ps1 -Dir "$env:RUNNER_TEMP/win"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: "windows-smoke-${{ github.sha }}", path: "${{ runner.temp }}/smoke", if-no-files-found: ignore, retention-days: 7 }
 
   api:
     needs: [plan, check, check-linux, check-android]

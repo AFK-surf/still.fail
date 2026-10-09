@@ -2,7 +2,8 @@
 // is named by a key, the hash of all that goes into it (its sources, as git has them, not its tests, and every vendored
 // crate it uses; its Cargo.lock; the Rust toolchain; the target; how it is built), and found, in this order, in
 //   1. the cache on this machine, which every worktree shares: ~/Library/Caches/stillfail-native (macOS),
-//      $XDG_CACHE_HOME/stillfail-native or ~/.cache/stillfail-native (Linux), or $STILLFAIL_NATIVE_CACHE;
+//      $XDG_CACHE_HOME/stillfail-native or ~/.cache/stillfail-native (Linux), %LOCALAPPDATA%\stillfail-native (Windows),
+//      or $STILLFAIL_NATIVE_CACHE;
 //   2. $STILLFAIL_NATIVE_INBOX, a directory of artifacts (CI: those a branch's natives job built, as a run artifact);
 //   3. the release `native-artifacts` of AFK-surf/still.fail on GitHub (public: plain HTTPS, no login), which CI
 //      publishes to from main;
@@ -46,7 +47,7 @@ const REPO = process.env.STILLFAIL_NATIVE_REPO ?? "AFK-surf/still.fail";
 const RELEASE = process.env.STILLFAIL_NATIVE_RELEASE ?? "native-artifacts";
 const VENDORED = ["vendor/iroh", "vendor/iroh-mdns-address-lookup", "vendor/noq-udp", "vendor/swarm-discovery"];
 
-type Target = "darwin-arm64" | "linux-x64" | "linux-arm64" | "wasm32" | "android-arm64";
+type Target = "darwin-arm64" | "linux-x64" | "linux-arm64" | "win32-x64" | "wasm32" | "android-arm64";
 type Part = {
   /// What the artifact holds.
   files: (target: Target) => string[];
@@ -67,12 +68,14 @@ const host = (): Target => {
   if (os === "darwin" && cpu === "arm64") return "darwin-arm64";
   if (os === "linux" && cpu === "x64") return "linux-x64";
   if (os === "linux" && cpu === "arm64") return "linux-arm64";
+  if (os === "win32" && cpu === "x64") return "win32-x64";
   throw new Error(`no native parts for ${os}-${cpu}`);
 };
 const TRIPLES: Record<string, string> = {
   "darwin-arm64": "aarch64-apple-darwin",
   "linux-x64": "x86_64-unknown-linux-gnu",
   "linux-arm64": "aarch64-unknown-linux-gnu",
+  "win32-x64": "x86_64-pc-windows-gnu",
   "android-arm64": "aarch64-linux-android",
 };
 const TRIPLE = (t: Target): string => TRIPLES[t] ?? fail(`no Rust target for ${t}`);
@@ -82,7 +85,8 @@ function fail(message: string): never {
 const STATION: Target[] = ["darwin-arm64", "linux-x64", "linux-arm64"];
 
 /// A Rust crate of its own (station/native/*), for a station platform: Linux from a Mac with cargo-zigbuild, for
-/// glibc 2.28 and later (Debian 10, Ubuntu 20.04, RHEL 8 on).
+/// glibc 2.28 and later (Debian 10, Ubuntu 20.04, RHEL 8 on); Windows (the desktop app's mesh only) with it too, as
+/// MinGW's (napi-rs finds Node's symbols in the process at run time, so no MSVC import library is needed).
 function stationCrate(dir: string, artifact: (t: Target) => string, name: string, extra: string[] = []): Part {
   return {
     files: () => [name],
@@ -91,20 +95,34 @@ function stationCrate(dir: string, artifact: (t: Target) => string, name: string
     recipe: (t) => ({ cargo: cargoCommand(t), artifact: artifact(t), name }),
     build(t, out) {
       const target = targetDir(join(ROOT, dir, "target"), basename(dir));
-      cargo(cargoCommand(t), join(ROOT, dir), { CARGO_TARGET_DIR: target });
+      cargo(cargoCommand(t), join(ROOT, dir), { CARGO_TARGET_DIR: target, ...(t === "win32-x64" ? noLibnode(target) : {}) });
       copyFileSync(join(target, TRIPLE(t), "release", artifact(t)), join(out, name));
     },
   };
 }
+/// napi-build links a MinGW addon to libnode.dll, which neither Node nor Electron has on Windows: their Node-API is in
+/// the executable, and napi-sys (dyn-symbols, its default) looks every function up there when the addon loads. So it
+/// is given an empty import library to link (nothing is taken from it) and a libnode.dll to find beside it.
+function noLibnode(target: string): Record<string, string> {
+  const dir = join(target, "no-libnode");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "libnode.dll"), "");
+  writeFileSync(join(dir, "libnode.a"), "!<arch>\n");
+  return { LIBNODE_PATH: dir };
+}
 const cargoCommand = (t: Target, more: string[] = []) =>
   t === "darwin-arm64"
     ? ["build", "--release", "--locked", ...more, "--target", TRIPLE(t)]
-    : ["zigbuild", "--release", "--locked", ...more, "--target", `${TRIPLE(t)}.2.28`];
+    : ["zigbuild", "--release", "--locked", ...more, "--target", t === "win32-x64" ? TRIPLE(t) : `${TRIPLE(t)}.2.28`];
+
+const MESH_LIB = (t: Target) => (t === "darwin-arm64" ? "libstillfail_mesh.dylib" : t === "win32-x64" ? "stillfail_mesh.dll" : "libstillfail_mesh.so");
 
 const PARTS: Record<string, Part> = {
   // The station's iroh and image codecs, a Node addon (docs/station-ts-native.md §3); the desktop's core uses it too.
   mesh: {
-    ...stationCrate("station/native/mesh", (t) => (t === "darwin-arm64" ? "libstillfail_mesh.dylib" : "libstillfail_mesh.so"), "mesh.node", VENDORED),
+    ...stationCrate("station/native/mesh", MESH_LIB, "mesh.node", VENDORED),
+    // Windows for the desktop app's core only: the station does not run there yet.
+    targets: [...STATION, "win32-x64"],
     env: "STILLFAIL_MESH_NATIVE",
   },
   // The TypeScript station's launcher (§2) and an agent's runner (§1).
@@ -247,7 +265,7 @@ function inputs(paths: string[]): [string, string][] {
 }
 function key(part: string, target: Target): string {
   const p = P(part);
-  const what = { part, target, toolchain: TOOLCHAIN, zig: target.startsWith("linux") ? ZIG : undefined, recipe: p.recipe(target), files: p.files(target), inputs: inputs(p.inputs ?? []) };
+  const what = { part, target, toolchain: TOOLCHAIN, zig: target.startsWith("linux") || target === "win32-x64" ? ZIG : undefined, recipe: p.recipe(target), files: p.files(target), inputs: inputs(p.inputs ?? []) };
   return createHash("sha256").update(JSON.stringify(what)).digest("hex").slice(0, 24);
 }
 const asset = (part: string, target: Target, k: string) => `${part}-${target}-${k}.tar.gz`;
@@ -255,7 +273,9 @@ const asset = (part: string, target: Target, k: string) => `${part}-${target}-${
 // ── the cache ──
 
 const CACHE = process.env.STILLFAIL_NATIVE_CACHE ??
-  (osPlatform() === "darwin" ? join(homedir(), "Library/Caches/stillfail-native") : join(process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"), "stillfail-native"));
+  (osPlatform() === "darwin" ? join(homedir(), "Library/Caches/stillfail-native")
+    : osPlatform() === "win32" ? join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData/Local"), "stillfail-native")
+    : join(process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"), "stillfail-native"));
 const cached = (part: string, target: Target, k: string) => join(CACHE, part, `${target}-${k}`);
 const log = (msg: string) => process.stderr.write(`native: ${msg}\n`);
 

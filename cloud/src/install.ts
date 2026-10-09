@@ -57,11 +57,17 @@ const APP_FILES: [RegExp, string][] = [
   // channel stillfail-beta) and the Android one's, with the builds they name (stillfail-beta-…).
   [/^station-beta\.json$/, "application/json"],
   [/^desktop\/stillfail-beta-mac\.yml$/, "text/yaml; charset=utf-8"],
+  [/^desktop\/stillfail-beta\.yml$/, "text/yaml; charset=utf-8"],
   [/^android\/beta\/latest\.json$/, "application/json"],
   [/^desktop\/stillfail-mac\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/stillfail-(beta-)?[0-9.]+-arm64-mac\.zip$/, "application/zip"],
   // Its blockmap, for the updater to download only what changed since the zip it has (releases.ts).
   [/^desktop\/stillfail-(beta-)?[0-9.]+-arm64-mac\.zip\.blockmap$/, "application/octet-stream"],
+  // The Windows app's (apps/desktop/build.sh --win): its feed (electron-updater's, named by the channel alone), its NSIS
+  // installer and that one's blockmap.
+  [/^desktop\/stillfail\.yml$/, "text/yaml; charset=utf-8"],
+  [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
+  [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
   [/^android\/latest\.json$/, "application/json"],
   // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
   [/^android\/(stillfail|ember|stillfail-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],

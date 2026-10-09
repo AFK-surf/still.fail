@@ -2,7 +2,9 @@
 # Builds the still.fail station's releases (the station in TypeScript, laid out by scripts/station-bundle.sh) and puts
 # them in the cloud's releases bucket, where install.sh (cloud/src/install.ts) gets them: darwin-arm64, linux-x64 and
 # linux-arm64, each with its Node and its native parts (prebuilt for that platform: scripts/native.ts).
-# The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip, its blockmap and stillfail-mac.yml, in desktop/) and
+# The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip, its blockmap and stillfail-mac.yml, in desktop/),
+# `desktop-win` (build.sh --win, from the Mac too: the NSIS installer stillfail-<version>-x64-win.exe, its blockmap and
+# stillfail.yml, in desktop/; not signed yet) and
 # `android` (apps/android/build.py --release: stillfail-<n>.apk and latest.json, in android/). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
 #   release.sh [--beta] [PLATFORM…]   (default: the station's three; desktop and android only when named)
@@ -101,6 +103,16 @@ for platform in $platforms; do
       feed="stillfail${beta:+-beta}-mac.yml"
       put "$root/apps/desktop/out/$zip" "desktop/$zip" application/zip
       put "$root/apps/desktop/out/$zip.blockmap" "desktop/$zip.blockmap" application/octet-stream
+      put "$root/apps/desktop/out/$feed" "desktop/$feed" "text/yaml; charset=utf-8"
+      ;;
+    desktop-win)
+      # The Windows app on stillfail.yml; with --beta the beta app on stillfail-beta.yml (electron-updater's feed for
+      # Windows is named by the channel alone).
+      sh "$root/apps/desktop/build.sh" --win ${beta:+--beta}
+      exe="stillfail${beta:+-beta}-0.1.$build-x64-win.exe"
+      feed="stillfail${beta:+-beta}.yml"
+      put "$root/apps/desktop/out/$exe" "desktop/$exe" application/vnd.microsoft.portable-executable
+      put "$root/apps/desktop/out/$exe.blockmap" "desktop/$exe.blockmap" application/octet-stream
       put "$root/apps/desktop/out/$feed" "desktop/$feed" "text/yaml; charset=utf-8"
       ;;
     android)

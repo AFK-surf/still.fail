@@ -3,7 +3,7 @@
 //!   station and a TS one, or two Node processes during a handover, never pack the same room at once);
 //! - local Markdown links (mesh/app/src/local_links.rs `prepare`), read with pulldown-cmark as the Rust reads them.
 use std::fs::{File, OpenOptions};
-use std::os::fd::AsRawFd;
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -26,15 +26,17 @@ impl FileLock {
     }
 }
 
-/// archive.rs `file_lock`: the lock file made (0600, never truncated) and an exclusive flock taken on it, waited for
-/// off the JS thread.
+/// archive.rs `file_lock`: the lock file made (0600, never truncated) and an exclusive lock taken on it (flock on Unix,
+/// LockFileEx on Windows: std's `File::lock`), waited for off the JS thread.
 #[napi]
 pub async fn file_lock(path: String) -> napi::Result<FileLock> {
     tokio::task::spawn_blocking(move || -> std::io::Result<FileLock> {
-        let file = OpenOptions::new().create(true).append(true).mode(0o600).open(&path)?;
-        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
+        let mut options = OpenOptions::new();
+        options.create(true).append(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let file = options.open(&path)?;
+        file.lock()?;
         Ok(FileLock { file: Mutex::new(Some(file)) })
     })
     .await

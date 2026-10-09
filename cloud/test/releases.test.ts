@@ -110,6 +110,13 @@ test("/releases/latest/<app> goes to the app's latest build, as its updater's fe
     const android = await h.fetch("/releases/latest/android", { redirect: "manual" });
     assert.equal(new URL(android.headers.get("location")!, "http://x").pathname, "/releases/android/stillfail-1200.apk");
     assert.equal((await h.fetch("/releases/latest/windows", { redirect: "manual" })).status, 404);
+    assert.equal((await h.fetch("/releases/latest/win", { redirect: "manual" })).status, 404, "no Windows app released yet");
+    await bucket.put("desktop/stillfail.yml", "version: 0.1.1200\nfiles:\n  - url: stillfail-0.1.1200-x64-win.exe\n    size: 5\npath: stillfail-0.1.1200-x64-win.exe\nsha512: x\n");
+    await bucket.put("desktop/stillfail-beta.yml", "version: 0.1.1201\npath: stillfail-beta-0.1.1201-x64-win.exe\n");
+    const win = await h.fetch("/releases/latest/win", { redirect: "manual" });
+    assert.equal(new URL(win.headers.get("location")!, "http://x").pathname, "/releases/desktop/stillfail-0.1.1200-x64-win.exe");
+    const winBeta = await h.fetch("/releases/latest/win-beta", { redirect: "manual" });
+    assert.equal(new URL(winBeta.headers.get("location")!, "http://x").pathname, "/releases/desktop/stillfail-beta-0.1.1201-x64-win.exe");
   } finally {
     await h.close();
   }
