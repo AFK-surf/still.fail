@@ -20,7 +20,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.HazeProgressive
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import dev.chrisbanes.haze.hazeEffect
@@ -55,7 +55,9 @@ fun Modifier.glassFoot(state: HazeState, fade: Dp): Modifier {
         tints = listOf(HazeTint(bg.copy(alpha = 0.7f)))
         blurRadius = cssBlur(24f)
         noiseFactor = 0f
-        progressive = HazeProgressive.verticalGradient(startY = 0f, startIntensity = 0f, endY = end, endIntensity = 1f)
+        // All of it fading in (its frost and its tint together, as the web phone's mask), not only its blur growing:
+        // that cut what ran under it at the band's top and smeared it grey.
+        mask = Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = 0f, endY = end)
     }
 }
 
