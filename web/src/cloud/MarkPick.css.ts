@@ -23,7 +23,8 @@ const inner = `calc(${vars.rMenu} - 6px)`;
 export const kinds = style({ alignSelf: "stretch" });
 export const field = style({ width: "100%", height: "32px" });
 export const grid = style({ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "2px" });
-export const emojiGrid = style({ fontSize: "20px", lineHeight: "1" });
+/** Emoji are pictures: drawn a step above the title's size, as large as the icons look. */
+export const emojiGrid = style({ fontSize: `calc(${vars.textTitle} * 1.25)`, lineHeight: "1" });
 export const choice = style({
   aspectRatio: "1", display: "grid", placeItems: "center", padding: "0", border: "0",
   borderRadius: inner, background: "none", color: vars.muted, cursor: "pointer", cornerShape: vars.cornerShape,

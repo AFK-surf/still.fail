@@ -48,7 +48,7 @@ function MarkPanel({ emoji, icon, onPick }: { emoji: string | null | undefined; 
   const picture = isPicture(icon) ? icon : null;
   return (
     <div className={css.panel} onPaste={(e) => { const f = pastedPicture(e.clipboardData); if (f) { e.preventDefault(); upload(f); } }}>
-      <Segmented className={css.kinds} label={t("web-pages.stations.mark.kind")} value={kind} onChange={setKind}
+      <Segmented<Kind> className={css.kinds} label={t("web-pages.stations.mark.kind")} value={kind} onChange={setKind}
         options={[{ value: "glyph", label: t("web-pages.stations.mark.glyphs") }, { value: "emoji", label: "Emoji" }]} />
       {kind === "emoji" && (
         <form onSubmit={(ev) => { ev.preventDefault(); const one = firstEmoji(typed); if (one) onPick(emojiMark(one)); }}>

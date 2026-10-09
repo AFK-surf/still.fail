@@ -44,10 +44,10 @@ globalStyle(`${mStationHead} ${mGrow}`, { display: "flex", flexDirection: "colum
 export const mMarkHead = style({ display: "flex", flexDirection: "column", gap: "10px", padding: "0 18px 10px" });
 export const mMarkField = style({
   height: "40px", padding: "0 16px", border: "0", borderRadius: "999px", outline: "none",
-  background: "color-mix(in srgb, var(--m-ink) 6%, transparent)", color: "var(--m-ink)", fontSize: "16px",
+  background: "color-mix(in srgb, var(--m-ink) 6%, transparent)", color: "var(--m-ink)", fontSize: vars.textInput,
 });
 /** The grid: six to a row, wide enough for a thumb. */
 export const mMarkGrid = style({ gridTemplateColumns: "repeat(6, 1fr)", gap: "4px", padding: "0 14px 10px" });
 globalStyle(`${mMarkGrid} > button:not([aria-pressed=true])`, { color: "var(--m-ink)" });
-export const mMarkEmoji = style({ fontSize: "26px" });
+export const mMarkEmoji = style({ fontSize: `calc(${vars.textTitle} * 1.6)` });
 export const mMarkPicture = style({ width: "20px", height: "20px", objectFit: "cover", borderRadius: "24%" });
