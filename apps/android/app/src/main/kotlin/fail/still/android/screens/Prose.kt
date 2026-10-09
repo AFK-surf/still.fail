@@ -75,7 +75,7 @@ private fun OpenedFile(ctx: Here, file: Attachment, onClose: () -> Unit) {
     val owner = ctx.owner(file)
     if (owner != null && HTML.containsMatchIn(file.name)) return VizOpen(ctx.station, owner, file, onClose)
     // Any other opens in the file preview (FilePreview.kt), as a tap on it below the text does.
-    if (owner != null) return FilePreview(ctx.station, owner, file, { ctx.images() }, onClose)
+    if (owner != null) return FilePreview(ctx.station, owner, file, { ctx.images() }, onClose = onClose)
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
             Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose),
