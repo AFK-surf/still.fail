@@ -54,10 +54,14 @@ Object.assign(window, { ready: true });
   assert(choosers.bottom <= composer.top + 0.5, `the choices stand just over the composer (${choosers.bottom} > ${composer.top})`);
   const scroll = await page.evaluate(() => { const b = document.getElementById('body'); return b.scrollHeight - b.clientHeight; });
   assert(scroll > 0, 'the scene is taller than its room');
+  // Painted (backdrop filters too) before it is pictured.
+  const painted = () => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  await painted();
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/new-chat-foot-top.png` });
   await page.evaluate(() => { const b = document.getElementById('body'); b.scrollTop = b.scrollHeight; });
   const last = await rect('last');
   assert(last.bottom <= foot.top + 0.5, `scrolled to its end, its last line is clear of the choices (${last.bottom} > ${foot.top})`);
+  await painted();
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/new-chat-foot-end.png` });
   console.log('PASS the scene runs under the choices and the composer, its end clear of them');
 } finally {
