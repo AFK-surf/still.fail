@@ -4,6 +4,13 @@
 // have them, SettingsHome.kt).
 package fail.still.android.screens
 
+import androidx.compose.foundation.border
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import fail.still.android.AppState
+import fail.still.android.ui.SheetGrab
+import fail.still.android.ui.SheetHead
+import fail.still.android.ui.SheetSpec
 import fail.still.android.BuildConfig
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.widthIn
@@ -173,10 +180,10 @@ private fun StationBody(s: StationView) {
  * whether known yet or not (grey bars until it is); reconnecting, as last heard, faded.
  */
 @Composable
-private fun StationFigures(s: StationView) {
+private fun StationFigures(s: StationView, processes: Boolean = true) {
     val host = s.host
     val net = s.net
-    val processes = s.overview?.processesText?.takeIf { it.isNotEmpty() }
+    val running = s.overview?.processesText?.takeIf { it.isNotEmpty() }
     Column(Modifier.alpha(if (s.reconnecting == true) 0.45f else 1f)) {
         Box(Modifier.padding(vertical = 4.dp).height(20.dp)) {
             if (host != null) MeterChips(host.meters)
@@ -191,7 +198,7 @@ private fun StationFigures(s: StationView) {
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(132.dp); Bar(132.dp) }
             }
         }
-        Line(processes, 120.dp, Modifier.padding(top = 4.dp))
+        if (processes) Line(running, 120.dp, Modifier.padding(top = 4.dp))
     }
 }
 
@@ -295,3 +302,44 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
 
 /** A check's tone as a presence dot: green up, red failing, the rest on its way or unknown. */
 internal fun toneDot(tone: String): String = when (tone) { "green" -> "online"; "red" -> "error"; "neutral" -> "offline"; else -> "busy" }
+
+/**
+ * The station a chat runs on, in its bar once its workspace has more than one: its emoji and name, short; a tap opens
+ * its card (the web's is a hover card over the same tag: web/src/cloud/StationCards.tsx StationPeek).
+ */
+@Composable
+internal fun ChatStationChip(address: String) {
+    val app = LocalApp.current
+    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(address.substringBefore('/')))
+    val list = stations.value ?: return
+    if (list.size < 2) return
+    val s = list.firstOrNull { it.station == address } ?: return
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier.widthIn(max = 104.dp).clip(shape).border(1.dp, C.line, shape).clickable { openStationPeek(app, address) }
+            .padding(horizontal = 8.dp, vertical = 2.dp).semantics { contentDescription = s.name },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        s.emoji?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp) }
+        Text(s.name, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** A station's card, from a chat's bar: whether it is up and what its agents do, its machine and network, and its page. */
+fun openStationPeek(app: AppState, address: String) {
+    app.sheet = SheetSpec(0.5f) {
+        val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(address.substringBefore('/')))
+        val s = stations.value?.firstOrNull { it.station == address }
+        SheetGrab()
+        SheetHead(s?.let { st -> st.emoji?.let { "$it ${st.name}" } ?: st.name } ?: stationName(address))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (s != null) Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(s.summary, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
+                // What its agents' processes are is on its page, a tap away.
+                if (s.online) StationFigures(s, processes = false)
+                else Text(t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
+            }
+            ListCard { GoRow(t("android-chat.station.details")) { app.sheet = null; app.push(Screen.Station(address)) } }
+        }
+    }
+}

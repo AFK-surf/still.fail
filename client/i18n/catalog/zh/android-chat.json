@@ -14,6 +14,7 @@
   "android-chat.annotate.write": "写批注（可以不写）",
   "android-chat.annotate.you": "你",
   "android-chat.archive": "归档",
+  "android-chat.station.details": "机器详情",
   "android-chat.archive.ask": "归档「{title}」？",
   "android-chat.archive.named": "归档「{title}」",
   "android-chat.archive.verb": "归档",
