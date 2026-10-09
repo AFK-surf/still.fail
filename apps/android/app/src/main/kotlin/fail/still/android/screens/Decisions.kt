@@ -136,7 +136,7 @@ private val Digits = listOf(Icons.Option1, Icons.Option2, Icons.Option3, Icons.O
 @Composable
 internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier, enabled: Boolean = true, busy: String? = null, onPick: (DecisionOption) -> Unit) {
     val hairline = C.ink.copy(alpha = 0.07f)
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.chip).padding(vertical = 4.dp)) {
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.chip)) {
         options.forEachIndexed { i, o ->
             val strong = o.recommended == true
             val free = enabled && busy == null
@@ -144,7 +144,8 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
             Row(
                 Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.5f)
                     .clickable(enabled = free, interactionSource = remember(o.label) { MutableInteractionSource() }, indication = ripple(color = C.ink)) { onPick(o) }
-                    .padding(start = 14.dp, end = 18.dp, top = 10.dp, bottom = 10.dp)
+                    // The card's room above the first and below the last is theirs: the ripple reaches its edge.
+                    .padding(start = 14.dp, end = 18.dp, top = if (i == 0) 14.dp else 10.dp, bottom = if (i == options.lastIndex) 14.dp else 10.dp)
                     .semantics(mergeDescendants = true) {},
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {

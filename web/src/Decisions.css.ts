@@ -13,7 +13,7 @@ const chip = `var(--m-chip, color-mix(in srgb, ${vars.text} 7%, transparent))`;
 
 export const options = style({
   display: "flex", flexDirection: "column", width: "fit-content", minWidth: "min(100%, 460px)", maxWidth: "100%",
-  boxSizing: "border-box", marginTop: "8px", padding: "4px 0", overflow: "hidden", borderRadius: vars.rCard,
+  boxSizing: "border-box", marginTop: "8px", overflow: "hidden", borderRadius: vars.rCard,
   cornerShape: vars.cornerShape, background: `var(--m-chip, color-mix(in srgb, ${vars.text} 5%, transparent))`,
 });
 
@@ -25,6 +25,9 @@ export const choice = style({
   transition: `background-color ${vars.dur}, opacity ${vars.dur}`,
   selectors: {
     "&:hover:not(:disabled)": { background: vars.hover },
+    // The card's room above the first and below the last is theirs, so that the hover reaches its edge.
+    "&:first-child": { paddingTop: "14px" },
+    "&:last-child": { paddingBottom: "14px" },
     // A hairline between two, from the labels' edge.
     "& + &::before": {
       content: '""', position: "absolute", top: "0", left: "46px", right: "18px", height: "1px",
@@ -56,7 +59,10 @@ export const choiceLabel = style({
 // Its own line height, the type's: the label's 20px around a smaller type would make the line a pixel taller.
 export const choiceRecommended = style({ marginLeft: "8px", color: vars.accentText, fontSize: vars.textMeta, lineHeight: "1", fontWeight: "500" });
 /** Being sent: a small ring at the option's right, level with its label. */
-export const choiceSpinner = style({ position: "absolute", right: "18px", top: "14px" });
+export const choiceSpinner = style({
+  position: "absolute", right: "18px", top: "14px",
+  selectors: { [`${choice}:first-child > &`]: { top: "18px" } },
+});
 globalStyle(`${choiceSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
 export const choiceDetail = style({ gridColumn: "2", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere" });
 
