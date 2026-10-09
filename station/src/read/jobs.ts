@@ -93,24 +93,31 @@ export function openJobs(s: Store, viewer: Viewer, lang: Lang): Json[] {
   setLang(lang);
   const open = store.listJobs(s, null).filter((j) => j.state === "running" || (j.port !== null && j.state === "exited"));
   if (open.length === 0) return [];
-  // An archived chat first, so a listed one showing the same session wins; a chat that is the session's own wins
-  // over one it only takes part in.
-  const found = new Map<string, [boolean, Json]>();
-  const rows: [boolean, Json][] = [...chats(s, viewer, true).map((c): [boolean, Json] => [true, c]), ...chats(s, viewer, false).map((c): [boolean, Json] => [false, c])];
-  for (const [archived, chat] of rows) {
-    const shownChat = { id: chat.id ?? null, title: chat.title ?? null, archived };
-    for (const agent of Array.isArray(chat.agents) ? chat.agents : []) {
-      const key = agent?.key;
-      if (typeof key !== "string") continue;
-      const own = chat.session === key;
-      const was = found.get(key);
-      if (own || was === undefined || !was[0]) found.set(key, [own, shownChat]);
+  // Each job's chat: the session's own over one it only takes part in, a listed one over an archived one (the last of
+  // each, as the sidebar lists them). The archive's rows are read only for a session whose own chat is not listed: they
+  // are the slow part (every chat ever made), and a job's session is mostly its listed chat's own.
+  const keys = new Set(open.map((j) => j.sessionKey));
+  const scan = (archived: boolean) => {
+    const own = new Map<string, Json>();
+    const any = new Map<string, Json>();
+    for (const chat of chats(s, viewer, archived)) {
+      const shownChat = { id: chat.id ?? null, title: chat.title ?? null, archived };
+      for (const agent of Array.isArray(chat.agents) ? chat.agents : []) {
+        const key = agent?.key;
+        if (typeof key !== "string" || !keys.has(key)) continue;
+        any.set(key, shownChat);
+        if (chat.session === key) own.set(key, shownChat);
+      }
     }
-  }
+    return { own, any };
+  };
+  const listed = scan(false);
+  const archived = [...keys].some((key) => !listed.own.has(key)) ? scan(true) : null;
   return open.map((j) => {
     const v = shown(s, j);
-    const chat = found.get(j.sessionKey);
-    if (chat !== undefined) v.chat = chat[1];
+    const k = j.sessionKey;
+    const chat = listed.own.get(k) ?? archived?.own.get(k) ?? listed.any.get(k) ?? archived?.any.get(k);
+    if (chat !== undefined) v.chat = chat;
     return v;
   });
 }
