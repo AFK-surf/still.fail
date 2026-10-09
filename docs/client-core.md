@@ -206,7 +206,7 @@ that only notifications change it:
   station's run and the event's number in it, `<run>.<n>`): one taking over
   from a stream still open, and one coming back after its link went (on a
   weak link that is every minute or so: the link moves to a better way, or
-  loses its way). The station keeps what it told for ten minutes (while
+  loses its way). The station keeps what it told for an hour (while
   nobody follows too, for one coming back) and tells what came after first,
   with the same ids, then the viewer's sidebar rows and overview as they
   changed meanwhile, and answers `stillfail-resumed: 1`: nothing is read

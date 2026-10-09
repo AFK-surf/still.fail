@@ -370,7 +370,7 @@ per session, one `overview`, one round of sidebar items. Per-session live steps 
 
 Each event has an `id:` of the station's run and its number in it
 (`<run>.<n>`; one number for an event told to everyone, whichever streams
-it went to). What is told is kept ten minutes (at most 4000 events and 8 MB),
+it went to). What is told is kept an hour (at most 20,000 events and 8 MB),
 so a client's stream that takes over from another (the client opens a new one
 whenever what it follows changes, and lets the old one go once the new one is
 open), or comes back after its link went, asks `/events?since=<the last id it
@@ -379,7 +379,7 @@ sidebar rows and overview where they changed meanwhile, and the answer says
 `stillfail-resumed: 1` (the client reads nothing again); or `missed` (`{}`)
 when that is not all kept, or was another run's, and the client reads the
 station again. So that one coming back misses nothing, what is told is still
-made and kept for ten minutes after the last stream went; past that, nothing
+made and kept for an hour after the last stream went; past that, nothing
 before can be resumed. A viewer's sidebar rows and overview are told against
 what their streams were told last (one telling, in each language, for all
 their streams, kept like the rest); a stream that starts afresh reads their

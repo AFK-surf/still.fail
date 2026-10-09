@@ -142,8 +142,8 @@ test("a stream that takes over from what is not kept any more, or another run's,
     return s.got.filter((e) => e.event === "thread" || e.event === "missed").map((e) => (e.event === "thread" ? e.data.id : e.event));
   };
   assert.deepEqual(await told(`${"0a0a0a0a"}.1`), ["missed"], "another run's");
-  // Ten minutes on, more told: 3 and 4 are let go.
-  await time.adjust(601_000);
+  // An hour on, more told: 3 and 4 are let go.
+  await time.adjust(3_601_000);
   change({ type: "thread", id: 5, entries: [{ n: 1 } as any] });
   await settle();
   change({ type: "thread", id: 6, entries: [{ n: 1 } as any] });
@@ -194,7 +194,7 @@ test("a stream that comes back after its link went is told what was told meanwhi
   assert.equal(back.got.filter((e) => e.event === "overview").length, 1);
   await back.close();
   // Past KEPT_MS with nobody: what was told is let go, and one coming back from before reads the station again.
-  await time.adjust(601_000);
+  await time.adjust(3_601_000);
   const late = await open(back.got.findLast((e) => e.id)!.id!);
   await settle();
   assert.equal(late.resumed, false);

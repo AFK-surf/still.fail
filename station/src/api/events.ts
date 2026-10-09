@@ -32,9 +32,11 @@ import { Fibers } from "../ops/fibers.ts";
 
 const PING_MS = 25_000;
 const HOST_MS = 10_000;
-/// What was told is kept this long, at most this many and this much, for a stream that takes over or comes back (`since`).
-const KEPT_MS = 600_000;
-const KEPT_MOST = 4_000;
+/// What was told is kept this long, at most this many and this much, for a stream that takes over or comes back (`since`):
+/// an hour, as a phone comes back to a chat after a while in a pocket (ten minutes, half of its streams could not be
+/// told what they missed, and read the station again).
+const KEPT_MS = 3_600_000;
+const KEPT_MOST = 20_000;
 const KEPT_BYTES = 8 * 1024 * 1024;
 /// A stream's answer when it was told first what came after `since` (the client then reads nothing again).
 export const RESUMED = "stillfail-resumed";
