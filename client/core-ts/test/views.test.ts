@@ -533,6 +533,12 @@ test("chats_puts_together_the_online_stations", async () => {
   assert.deepEqual([items[0].station, items[1].station, items[1].stationName], ["ws/a", "ws/b", "beta"]);
   const shown = { ...structuredClone(slack), station: "ws/a", stationName: "alpha", state: null, agents: [{ key: "s1", runtime: "claude", model: "opus", process: "cold", pending: 0 }] };
   assert.deepEqual(plain(items[2]), plain(shown));
+  // A station given an emoji: its rows carry it (the rows made before are made again), and the stations list too.
+  const withEmoji = stations(t.nowS());
+  withEmoji.stations[1].emoji = "🍎";
+  t.set(workspace(), withEmoji);
+  await t.read(u, 1);
+  assert.deepEqual(u.value.days[0].items.map((i: J) => i.stationEmoji ?? null), [null, "🍎", null]);
   t.set(link("ws/b"), { state: "offline" });
   await t.read(u, 1);
   v = u.value;

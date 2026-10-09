@@ -85,7 +85,7 @@ export interface OperationParams {
   "workspace.setRole": { workspace: string; member: string; role?: string | null | undefined };
   "workspace.removeMember": { workspace: string; member: string };
   "workspace.enroll": { workspace: string; name?: string | null | undefined };
-  "workspace.renameStation": { workspace: string; station: string; name?: string | null | undefined };
+  "workspace.renameStation": { workspace: string; station: string; name?: string | null | undefined; emoji?: string | null | undefined };
   "workspace.removeStation": { workspace: string; station: string };
   "invitation.preview": { token?: string | null | undefined };
   "invitation.accept": { id?: string | null | undefined; token?: string | null | undefined };

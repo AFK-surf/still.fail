@@ -143,7 +143,7 @@ export function DecisionRows({ active, page }: { active: boolean; page: string }
             onMouseDown={(e) => e.preventDefault()} onClick={() => choose(x)}>
             <span className={css.question}>{question(x)}</span>
             <span className={css.meta}>
-              <span className={css.metaWhere}>{x.title} · {x.stationName}</span>
+              <span className={css.metaWhere}>{x.title} · {x.stationEmoji ? `${x.stationEmoji} ` : ""}{x.stationName}</span>
               <Time className={css.metaTime} stamp={x.message.time?.createdAt} fixed />
             </span>
           </button>
@@ -174,7 +174,7 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
         <div className={css.barLead}>
           {d && <>
             <button type="button" className={css.barChat} onClick={() => onOpen(path)} title={t("web-main.decisions.openChat")}>{d.title}</button>
-            <span className={css.barStation}>{d.stationName}</span>
+            <span className={css.barStation}>{d.stationEmoji ? `${d.stationEmoji} ` : ""}{d.stationName}</span>
           </>}
         </div>
         <div className={css.barActions}>

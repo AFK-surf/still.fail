@@ -134,7 +134,7 @@ export const PARAMS: Record<string, string> = {
   "workspace.setRole": "workspace:string member:string role?:string",
   "workspace.removeMember": "workspace:string member:string",
   "workspace.enroll": "workspace:string name?:string",
-  "workspace.renameStation": "workspace:string station:string name?:string",
+  "workspace.renameStation": "workspace:string station:string name?:string emoji?:string",
   "workspace.removeStation": "workspace:string station:string",
   "invitation.preview": "token?:string",
   "invitation.accept": "id?:string token?:string",
@@ -434,7 +434,7 @@ function cloudOp(name: string, params: unknown): Request | null {
     case "workspace.enroll":
       return op("POST", () => `${ws()}/enrollments`, p.pick(["name"]));
     case "workspace.renameStation":
-      return op("PATCH", () => `${ws()}/stations/${p.at("station")}`, p.pick(["name"]));
+      return op("PATCH", () => `${ws()}/stations/${p.at("station")}`, p.pick(["name", "emoji"]));
     case "workspace.removeStation":
       return op("DELETE", () => `${ws()}/stations/${p.at("station")}`, null);
     case "invitation.preview":

@@ -139,6 +139,16 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     await expect(on, { alice: [ws], bob: [ws] }, "rename station");
     await first.ping!();
     assert.equal(first.frames!.at(-1).name, "big studio", "the station learns its new name");
+    // Its emoji: one, kept with it for everyone; "" takes it away; anything not an emoji is refused.
+    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "🍎🍊" });
+    await expect(on, { alice: [ws], bob: [ws] }, "station emoji");
+    seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
+    assert.deepEqual([seen.name, seen.emoji], ["big studio", "🍎"]);
+    assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "ab" })).status, 400);
+    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "" });
+    await expect(on, { alice: [ws], bob: [ws] }, "station emoji cleared");
+    seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
+    assert.equal(seen.emoji, null);
 
     first.ws!.close(1000);
     await (await directory(h)).left(station.id);

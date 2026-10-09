@@ -1203,6 +1203,8 @@ export interface ChatItem {
 	origin?: Origin;
 	station: string;
 	stationName: string;
+	/** Its station's emoji, when its workspace gave it one and has more stations than it. */
+	stationEmoji?: string;
 	/** block | run | failed */
 	state?: Badge;
 	/** Where it came from (Slack · workspace · #channel), for a Slack chat. */
@@ -1798,6 +1800,8 @@ export interface Counts {
 export interface DecisionAnswered {
 	station: string;
 	stationName: string;
+	/** Its station's emoji, when its workspace gave it one. */
+	stationEmoji?: string;
 	session: string;
 	thread: number;
 	title: string;
@@ -1815,6 +1819,8 @@ export interface DecisionAnswered {
 export interface DecisionItem {
 	station: string;
 	stationName: string;
+	/** Its station's emoji, when its workspace gave it one. */
+	stationEmoji?: string;
 	/** Its chat's item id (its session's key): what its page opens by. */
 	session: string;
 	thread: number;
@@ -1845,6 +1851,8 @@ export interface DecisionItem {
 export interface DecisionWorking {
 	station: string;
 	stationName: string;
+	/** Its station's emoji, when its workspace gave it one. */
+	stationEmoji?: string;
 	session: string;
 	thread: number;
 	title: string;
@@ -2589,6 +2597,8 @@ export interface StationView {
 	station: string;
 	id: string;
 	name: string;
+	/** The one its workspace gave it (the settings), shown where it is named; none when none. */
+	emoji?: string;
 	/** Its line in a list: offline since when, or what it is and whether its agents work. */
 	summary: string;
 	/** Its buddy's face: offline | working | idle; and what it is under its name (its processor, else 在线/离线). */

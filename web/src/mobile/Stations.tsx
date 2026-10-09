@@ -63,7 +63,7 @@ export function StationsScreen() {
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
           <span className={css.mStationHead}>
             <Buddy s={s} />
-            <span className={partsCss.mGrow}><b className={css.mStationName}>{s.name}</b><span className={css.mStationSummary}>{s.summary}</span></span>
+            <span className={partsCss.mGrow}><b className={css.mStationName}>{s.emoji ? `${s.emoji} ${s.name}` : s.name}</b><span className={css.mStationSummary}>{s.summary}</span></span>
             {s.reconnecting && <Reconnecting />}
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </span>
@@ -282,6 +282,8 @@ function StationMenu({ s }: { s: StationView }) {
       <div className={sheetsCss.mSheetScroll}>
         <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.stations.renameTitle"), value: s.name, placeholder: t("web-mobile.stations.renamePlaceholder"), action: t("common.save"), atOnce: "web-main.rename.failed",
           run: (name) => cloud.renameStation(me.sub, app.entry.id, s.id, name).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />
+        <PickRow label={t("web-mobile.stations.emoji")} onClick={() => ask(app, { title: t("web-mobile.stations.emojiTitle", { name: s.name }), value: s.emoji ?? "", placeholder: t("web-mobile.stations.emojiPlaceholder"), action: t("common.save"), empty: true,
+          run: (emoji) => cloud.setStationEmoji(me.sub, app.entry.id, s.id, emoji).then(() => app.toast(t("web-mobile.stations.emojiSet"))) })} />
         <PickRow label={t("web-mobile.stations.remove")} accent onClick={() => confirm(app, {
           title: t("web-mobile.stations.removeAsk", { name: s.name }), action: t("web-mobile.stations.removeAction"), danger: true,
           text: t("web-mobile.stations.removeText", { name: NAME }), atOnce: "web-mobile.workspace.removeFailed",

@@ -108,7 +108,7 @@ fun confirm(app: AppState, title: String, text: String, action: String, danger: 
 }
 
 /** Asks for a line (a name); `run` gets it trimmed. With `what`, as [confirm]: closes at once and goes on by itself. */
-fun ask(app: AppState, title: String, value: String, placeholder: String, action: String, secret: Boolean = false, hint: String? = null, what: String? = null, run: suspend (String) -> Unit) {
+fun ask(app: AppState, title: String, value: String, placeholder: String, action: String, secret: Boolean = false, hint: String? = null, what: String? = null, empty: Boolean = false, run: suspend (String) -> Unit) {
     app.sheet = SheetSpec(0.42f) {
         val scope = rememberCoroutineScope()
         var text by remember { mutableStateOf(value) }
@@ -123,7 +123,7 @@ fun ask(app: AppState, title: String, value: String, placeholder: String, action
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button(t("common.cancel"), primary = false) { app.sheet = null }
-                Button(action, primary = true, busy = busy, enabled = text.isNotBlank() && text.trim() != value) {
+                Button(action, primary = true, busy = busy, enabled = (empty || text.isNotBlank()) && text.trim() != value) {
                     val line = text.trim()
                     if (what != null) { app.sheet = null; app.act(what) { run(line) } }
                     else operation.run { run(line); app.sheet = null }
@@ -551,7 +551,7 @@ fun FirstStation(current: WorkspaceEntry) {
     }
 }
 
-/** A station's own actions: its name, and removing it from the workspace. */
+/** A station's own actions: its name, its emoji, and removing it from the workspace. */
 fun openStationMenu(app: AppState, current: WorkspaceEntry, s: StationView) {
     val cloud = Cloud(app.core, current.account.sub)
     app.sheet = SheetSpec(0.34f) {
@@ -559,6 +559,7 @@ fun openStationMenu(app: AppState, current: WorkspaceEntry, s: StationView) {
         SheetHead(s.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             PickRow(t("android-settings.station.rename")) { ask(app, t("android-settings.station.renameTitle"), s.name, t("android-settings.station.renamePlaceholder"), t("common.save"), what = t("android-settings.station.renameWhat")) { cloud.renameStation(current.workspace.id, s.id, it); app.toast = t("android-settings.renamed") } }
+            PickRow(t("android-settings.station.emoji")) { ask(app, t("android-settings.station.emojiTitle", "name" to s.name), s.emoji ?: "", t("android-settings.station.emojiPlaceholder"), t("common.save"), what = t("android-settings.station.emojiWhat"), empty = true) { cloud.setStationEmoji(current.workspace.id, s.id, it); app.toast = t("android-settings.station.emojiSet") } }
             PickRow(t("android-settings.station.removeRow"), color = C.red) {
                 confirm(app, t("android-settings.station.removeTitle", "name" to s.name), t("android-settings.station.removeText", "app" to BuildConfig.APP_NAME), t("android-settings.station.remove"), danger = true,
                     what = t("android-settings.station.removeWhat"), then = app::pop) {

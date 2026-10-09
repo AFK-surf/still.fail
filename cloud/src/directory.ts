@@ -123,6 +123,8 @@ export class Directory extends DurableObject<Env> {
     if (!this.#rows("PRAGMA table_info(workspaces)").some((r) => r.name === "relays")) this.#run("ALTER TABLE workspaces ADD COLUMN relays TEXT");
     // Nor did push keep a device's language, before there were languages.
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "lang")) this.#run("ALTER TABLE push ADD COLUMN lang TEXT");
+    // Nor had stations an emoji (one, picked in the settings; null for none), before they could have.
+    if (!this.#rows("PRAGMA table_info(stations)").some((r) => r.name === "emoji")) this.#run("ALTER TABLE stations ADD COLUMN emoji TEXT");
     this.migrateFreePlan();
   }
 
@@ -369,7 +371,7 @@ export class Directory extends DurableObject<Env> {
     const members = this.#rows(`
       SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
       FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
-    const stations = this.#rows("SELECT id, name, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", id) as unknown as StationView[];
+    const stations = this.#rows("SELECT id, name, emoji, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", id) as unknown as StationView[];
     const invitations = MANAGERS.includes(role)
       ? this.#rows("SELECT id, role, email, created_by, expires_at FROM invitations WHERE workspace = ? AND expires_at > ? ORDER BY expires_at", id, nowSeconds()) as unknown as InvitationView[]
       : [];
@@ -592,11 +594,16 @@ export class Directory extends DurableObject<Env> {
     return { workspace: row!.workspace as string, workspace_name: w.name as string, name: row!.name as string };
   }
 
-  renameStation(sub: string, workspace: string, station: string, name: string): WorkspaceView {
+  /** A new name, a new emoji (null or "" takes it away), or both; what is not given stays. */
+  updateStation(sub: string, workspace: string, station: string, input: { name?: unknown; emoji?: unknown }): WorkspaceView {
     this.#role(sub, workspace, MANAGERS);
-    this.#run("UPDATE stations SET name = ? WHERE id = ? AND workspace = ?", cleanName(name) ?? fail(400, "invalid_name"), station, workspace);
+    const name = input.name === undefined ? undefined : cleanName(input.name) ?? fail(400, "invalid_name");
+    const emoji = input.emoji === undefined ? undefined : input.emoji === null || input.emoji === "" ? null : cleanEmoji(input.emoji) ?? fail(400, "invalid_emoji");
+    if (name === undefined && emoji === undefined) fail(400, "invalid_name");
+    if (name !== undefined) this.#run("UPDATE stations SET name = ? WHERE id = ? AND workspace = ?", name, station, workspace);
+    if (emoji !== undefined) this.#run("UPDATE stations SET emoji = ? WHERE id = ? AND workspace = ?", emoji, station, workspace);
     this.#changed(workspace, false);
-    this.#sendState(station);
+    if (name !== undefined) this.#sendState(station);
     return this.workspace(sub, workspace);
   }
 
@@ -787,7 +794,7 @@ export class Directory extends DurableObject<Env> {
     };
     const members = group<AdminWorkspace["members"][number]>(this.#rows(`SELECT m.workspace, m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name,
       COALESCE(u.picture, '') AS picture, m.role, m.added_at, u.last_seen FROM members m LEFT JOIN users u ON u.sub = m.sub ORDER BY m.added_at`));
-    const stations = group<StationView>(this.#rows("SELECT workspace, id, name, enrolled_at, enrolled_by, last_seen, version FROM stations ORDER BY enrolled_at"));
+    const stations = group<StationView>(this.#rows("SELECT workspace, id, name, emoji, enrolled_at, enrolled_by, last_seen, version FROM stations ORDER BY enrolled_at"));
     const invitations = group<AdminWorkspace["invitations"][number]>(this.#rows(`SELECT i.workspace, i.id, i.role, i.email, i.created_by, i.expires_at,
       COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.expires_at > ? ORDER BY i.expires_at`, now));
     // As #plan has it, in the same read.
@@ -1068,4 +1075,11 @@ function cleanName(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const clean = value.trim().replace(/\s+/g, " ");
   return clean && clean.length <= 80 ? clean : null;
+}
+
+/** One emoji, as a person sees one (a flag, a family, a skin tone are one): the first, else null. */
+function cleanEmoji(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const first = [...new Intl.Segmenter().segment(value.trim())][0]?.segment;
+  return first && first.length <= 32 && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(first) ? first : null;
 }

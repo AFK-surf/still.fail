@@ -7,7 +7,7 @@ import { FrequentCombos } from "../FrequentCombos.tsx";
 import type { NewChatView } from "../core/shapes.ts";
 import { useNewChat, type PickPatch } from "../pick.ts";
 import { RUNTIME_LABEL } from "../format.ts";
-import { Server } from "../icons.tsx";
+import { StationMark } from "../StationMark.tsx";
 import { sendDraft } from "../Chat.tsx";
 import { useEnsureChat, type Made } from "../NewChat.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
@@ -106,7 +106,7 @@ function NewChatOn({ choice, view, stations, pick, create }: {
       {/* The choices, then the composer as a floating capsule, as in a chat. */}
       <div className={css.mNewBottom} data-made-leave="fade">
         <div className={css.mChoosers}>
-          <Chooser leading={<Server size={14} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
+          <Chooser leading={<StationMark emoji={view.emoji} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
           {!runtime || !model ? (
             // Nothing to choose from: the chooser leads to where models are enabled.
             <Chooser label={t("web-mobile.newChat.noModels")} onClick={() => app.push(app.at("/settings/profiles"))} />
@@ -139,7 +139,7 @@ function pickStation(app: MobileApp, stations: StationView[], current: string, o
   app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab /><SheetHead title={t("web-mobile.newChat.pickStation")} />
-      <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.name} sub={s.summary} checked={s.station === current} leading={<Buddy s={s} size={36} />} onClick={() => { onPick(s.id); app.sheet(null); }} />)}</div>
+      <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.emoji ? `${s.emoji} ${s.name}` : s.name} sub={s.summary} checked={s.station === current} leading={<Buddy s={s} size={36} />} onClick={() => { onPick(s.id); app.sheet(null); }} />)}</div>
     </>
   ) });
 }

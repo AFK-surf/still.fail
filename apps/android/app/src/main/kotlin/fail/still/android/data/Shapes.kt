@@ -1226,6 +1226,8 @@ data class ChatItem (
 	val origin: Origin? = null,
 	val station: String,
 	val stationName: String,
+	/// Its station's emoji, when its workspace gave it one and has more stations than it.
+	val stationEmoji: String? = null,
 	/// block | run | failed
 	val state: Badge? = null,
 	/// Where it came from (Slack · workspace · #channel), for a Slack chat.
@@ -1790,6 +1792,8 @@ data class Counts (
 data class DecisionAnswered (
 	val station: String,
 	val stationName: String,
+	/// Its station's emoji, when its workspace gave it one.
+	val stationEmoji: String? = null,
 	val session: String,
 	val thread: Long,
 	val title: String,
@@ -1806,6 +1810,8 @@ data class DecisionAnswered (
 data class DecisionItem (
 	val station: String,
 	val stationName: String,
+	/// Its station's emoji, when its workspace gave it one.
+	val stationEmoji: String? = null,
 	/// Its chat's item id (its session's key): what its page opens by.
 	val session: String,
 	val thread: Long,
@@ -1833,6 +1839,8 @@ data class DecisionItem (
 data class DecisionWorking (
 	val station: String,
 	val stationName: String,
+	/// Its station's emoji, when its workspace gave it one.
+	val stationEmoji: String? = null,
 	val session: String,
 	val thread: Long,
 	val title: String,
@@ -2618,6 +2626,8 @@ data class StationView (
 	val station: String,
 	val id: String,
 	val name: String,
+	/// The one its workspace gave it (the settings), shown where it is named; none when none.
+	val emoji: String? = null,
 	/// Its line in a list: offline since when, or what it is and whether its agents work.
 	val summary: String,
 	/// Its buddy's face: offline | working | idle; and what it is under its name (its processor, else 在线/离线).

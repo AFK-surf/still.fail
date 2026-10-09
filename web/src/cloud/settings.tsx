@@ -440,16 +440,26 @@ function WorkspaceProfileRow({ entry, workspace }: { entry: WorkspaceProfile; wo
   );
 }
 
+/** A station as it will be once its new emoji is there ("": none). */
+function shownAs(s: StationView, emoji: string | undefined): StationView {
+  if (emoji === undefined) return s;
+  const { emoji: _, ...rest } = s;
+  return emoji ? { ...rest, emoji } : rest;
+}
+
 function Stations({ view, account, manager, stations }: { view: WorkspaceView; account: Account; manager: boolean; stations: StationView[] }) {
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<StationView | null>(null);
   const remove = useAction((s: StationView) => cloud.removeStation(account.sub, view.id, s.id));
   const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name));
   const renaming = (s: StationView) => rename.busy && rename.arg?.id === s.id;
+  const emoji = useAction(({ id, emoji }: { id: string; emoji: string }) => cloud.setStationEmoji(account.sub, view.id, id, emoji));
+  const picking = (s: StationView) => emoji.busy && emoji.arg?.id === s.id;
   return (
     <Section title={t("web-pages.settings.stations.count", { n: stations.length })} actions={manager && <><JoinThisMac account={account} workspace={view.id} /><Button icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.settings.stations.add")}</Button></>}>
       {/* A name or a removal on its way shows at once, a ring beside its menu until the cloud has it (a red mark a moment if not). */}
-      <StationList stations={stations.map((s) => (renaming(s) ? { ...s, name: rename.arg!.name } : s))} manager={manager} menu={(s) => manager && <>
+      <StationList stations={stations.map((s) => shownAs(renaming(s) ? { ...s, name: rename.arg!.name } : s, picking(s) ? emoji.arg!.emoji : undefined))} manager={manager}
+        onEmoji={manager ? (s, e) => void emoji.run({ id: s.id, emoji: e }) : undefined} emojiBusy={picking} menu={(s) => manager && <>
         <DoingMark calls={["workspace.renameStation", "workspace.removeStation"]} on={{ account: account.sub, workspace: view.id, station: s.id }} className={controlsCss.iconSpinner} size={14}
           label={renaming(s) ? t("web-pages.settings.stations.renaming") : t("web-main.activity.busy")} />
         <Menu items={[
@@ -457,6 +467,7 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
           { label: t("web-pages.settings.stations.remove"), icon: Trash, danger: true, onSelect: () => setRemoving(s) },
         ]} />
       </>} />
+      {emoji.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.stations.emoji.failed", { name: stations.find((s) => s.id === emoji.arg?.id)?.name ?? "station", error: emoji.error.message })}</p>}
       {rename.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.stations.renameFailed", { name: stations.find((s) => s.id === rename.arg?.id)?.name ?? "station", error: rename.error.message })}</p>}
       {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)} onConfirm={() => { if (removing) void remove.run(removing); setRemoving(null); }}

@@ -21,7 +21,7 @@ import { receiveTraces } from "./tracing";
 const STATUS: Record<string, number> = {
   workspace_not_found: 404, member_not_found: 404, user_not_found: 404, station_not_found: 404, invitation_not_found: 404, enrollment_not_found: 404,
   forbidden: 403, invitation_for_other_email: 403,
-  already_member: 409, invalid_name: 400, invalid_role: 400, invalid_email: 400, invalid_relay: 400, invalid_relays: 400,
+  already_member: 409, invalid_name: 400, invalid_emoji: 400, invalid_role: 400, invalid_email: 400, invalid_relay: 400, invalid_relays: 400,
   last_owner: 409,
   too_many_workspaces: 429, too_many_invitations: 429, too_many_members: 429, too_many_stations: 429,
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
@@ -214,7 +214,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     });
   }
   if (kind === "stations" && target && validKeyHex(target)) {
-    if (!action && method === "PATCH") return directory(() => dir.renameStation(sub, ws, target, text("name")));
+    if (!action && method === "PATCH") return directory(() => dir.updateStation(sub, ws, target, { name: input.name, emoji: input.emoji }));
     if (!action && method === "DELETE") return directory(() => dir.removeStation(sub, ws, target));
   }
   return reply({ error: "not_found" }, 404);
