@@ -217,7 +217,8 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
 - `GET /chats` — the viewer's sidebar items (The sidebar, below).
 - `POST /batch {gets}` — several reads in one: each path (with its query) is
   answered as its GET is, and the answer is `{ answers: [{ status, body }] }`
-  in their order, compressed as one. Only the reads a client brings a
+  in their order, compressed as one and harder than other answers (zstd level
+  9: nobody waits on it). Only the reads a client brings a
   station's history onto its device with: a thread's entries, a thread, a
   session, a session's timeline (any other is `400`); at most 64, four at a
   time. It only reads: a read-only member may ask it.

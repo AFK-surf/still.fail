@@ -27,6 +27,15 @@ test("a whole JSON answer is compressed for a client that asks so, and only then
   assert.equal(await compressed(small, asks, "/threads/1"), small);
 });
 
+test("several reads in one are compressed harder: nobody waits on them", async () => {
+  const pages = Array.from({ length: 40 }, (_, p) => ({ status: 200, body: { last: 50, entries: Array.from({ length: 50 }, (_, i) => ({ n: i + 1, thread: p, kind: "message", authorKind: i % 2 ? "agent" : "person", author: i % 2 ? "ember:c-00be6a2584" : "a@x.com", text: `第 ${p}.${i} 条：${"部署 station 之后看日志 ".repeat(1 + ((p * 7 + i) % 5))}${(p * 131 + i * 17) % 997}`, attachments: [], quotes: [], at: 1791478600000 + p * 1000 + i })) } }));
+  const answer = json({ answers: pages });
+  const batch = await compressed(answer, asks, "/batch");
+  const one = await compressed(answer, asks, "/threads/1/entries");
+  assert.deepEqual(JSON.parse(zstdDecompressSync(batch.body as Buffer).toString()), { answers: pages });
+  assert.ok((batch.body as Buffer).length < (one.body as Buffer).length, `${(batch.body as Buffer).length} < ${(one.body as Buffer).length}`);
+});
+
 test("an event stream is compressed event by event, each whole as it arrives, and let go of at once", async () => {
   const events = [
     ...Array.from({ length: 50 }, (_, i) => `id: 1f2e3d4c.${i}\nevent: session\ndata: ${JSON.stringify({ key: `ember:c-${i % 5}`, turns: i, process: "warm" })}\n\n`),

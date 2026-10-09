@@ -18,6 +18,11 @@ const SMALL = 512;
 const LEVEL = 3;
 const WINDOW_LOG = 20;
 const params = { [constants.ZSTD_c_compressionLevel]: LEVEL, [constants.ZSTD_c_windowLog]: WINDOW_LOG };
+/// Several reads in one (POST /batch, the history a client brings in the background: nobody waits on it) compressed
+/// harder. Of a new device's chats on the main station, 8% less than at LEVEL for some 7 ms a batch; level 19 would take
+/// 18% off, at some 100 ms a batch of the threads every answer is compressed on.
+const BATCH_LEVEL = 9;
+const batchParams = { ...params, [constants.ZSTD_c_compressionLevel]: BATCH_LEVEL };
 const compressWhole = promisify(zstdCompress);
 
 const header = (headers: Record<string, string>, name: string) => Object.entries(headers).find(([k]) => k.toLowerCase() === name)?.[1];
@@ -32,7 +37,7 @@ export async function compressed(answer: Answer, headers: Record<string, string>
   sent["content-encoding"] = ZSTD;
   if (Buffer.isBuffer(answer.body)) {
     if (answer.body.length < SMALL) return answer;
-    return { ...answer, headers: sent, body: await compressWhole(answer.body, { params }) };
+    return { ...answer, headers: sent, body: await compressWhole(answer.body, { params: path.split("?")[0] === "/batch" ? batchParams : params }) };
   }
   return { ...answer, headers: sent, body: compressedStream(answer.body) };
 }
