@@ -355,25 +355,21 @@ describe("updates", { concurrency: true }, () => {
     assert.equal(beta.toUpdateTo(), null);
   });
 
-  test("automatic updates wait for clients and turns, then a quiet period", async (t) => {
+  test("automatic updates wait for turns and a quiet period, not for clients only watching", async (t) => {
     const dir = temp();
     const updates = installed(dir, "1300", null);
     t.after(() => updates.close());
     new ConfigFile(dir).update((raw) => (raw.autoUpdate = true));
     updates.stationWith("0.1.1310");
-    let clients = true;
     let running = false;
-    updates.whileInUse(() => clients);
     updates.countRunning(() => (running ? 1 : 0));
+    // Quiet a while, whoever has a stream open: updated.
     updates.backdateUse(5 * 60_000);
-    assert.equal(updates.toUpdateTo(), null, "a client is still using it");
-    clients = false;
-    assert.equal(updates.toUpdateTo(), null, "closing the client does not update immediately");
-    updates.backdateUse(5 * 60_000);
+    assert.equal(updates.toUpdateTo(), "0.1.1310");
     running = true;
-    assert.equal(updates.toUpdateTo(), null, "a Slack turn also postpones the update");
+    assert.equal(updates.toUpdateTo(), null, "a turn (a Slack one too) postpones the update");
     running = false;
-    assert.equal(updates.toUpdateTo(), null);
+    assert.equal(updates.toUpdateTo(), null, "and the quiet period begins again after it");
     updates.backdateUse(5 * 60_000);
     assert.equal(updates.toUpdateTo(), "0.1.1310");
     updates.used();

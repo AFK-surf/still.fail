@@ -112,8 +112,6 @@ export type UpdatesOptions = {
   claudeReleases?: string;
   /// How many turns run now (the hub's), for what a drain waits on and an automatic update waits for.
   running?: () => number;
-  /// Whether a client is connected (the event streams): an automatic update waits for it to leave.
-  inUse?: () => boolean;
   /// Told when a runtime was installed or updated here (the machine's logins read again).
   runtimeChanged?: () => void;
   timing?: Partial<Timing>;
@@ -194,7 +192,6 @@ export class Updates {
   tried: string | null = null;
   private lastCheck: number | null = null;
   private running: () => number;
-  private inUse: () => boolean;
   private runtimeChanged: () => void;
   // Long-lived work, and time: fibers in this part's scope on its clock, ended with it.
   private fibers: Fibers;
@@ -217,7 +214,6 @@ export class Updates {
     this.claudeReleases = o.claudeReleases ?? "https://downloads.claude.ai/claude-code-releases";
     this.timing = { ...TIMING, ...o.timing };
     this.running = o.running ?? (() => 0);
-    this.inUse = o.inUse ?? (() => false);
     this.runtimeChanged = o.runtimeChanged ?? (() => {});
     // Read before an update can replace the release.
     this.installed = releaseChannel(this.app) ?? channelOf(this.config.raw(), this.app);
@@ -230,11 +226,6 @@ export class Updates {
   /// How many turns run now, for what an update waits on when it has to restart the station.
   countRunning(running: () => number) {
     this.running = running;
-  }
-
-  /// Connected clients count as use: an automatic update waits for them to leave.
-  whileInUse(inUse: () => boolean) {
-    this.inUse = inUse;
   }
 
   /// What to do when a runtime was installed or updated from here.
@@ -513,8 +504,11 @@ export class Updates {
 
   // ---- updating by itself ----
 
+  /// Quiet: no turn runs, and nothing was asked of it a while (idleFor). A client only watching (its event stream
+  /// open, a page left open on a desk) is no use: waited for, a station watched all day was not updated for days. It
+  /// takes them a reconnect, and their lists read as what changed of them.
   private idle(): boolean {
-    if (this.running() > 0 || this.inUse()) {
+    if (this.running() > 0) {
       this.used();
       return false;
     }
