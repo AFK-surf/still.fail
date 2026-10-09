@@ -36,14 +36,16 @@ export const historySummary = style({
   minWidth: "0", overflow: "hidden", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", display: "inline-flex",
   alignItems: "center", gap: "12px", flexWrap: "wrap",
 });
-export const sideTabAgent = style({ display: "inline-flex", alignItems: "center", gap: "6px", lineHeight: "1" });
-/** A tab is as wide as its label in the active weight, active or not: choosing one does not move the others. */
+export const sideTabAgent = style({ minWidth: "0", display: "inline-flex", alignItems: "center", gap: "6px", lineHeight: "1" });
+/** A tab is as wide as its label in the active weight, active or not: choosing one does not move the others. With
+ * many tabs they narrow, each label on one line, cut short with an ellipsis (its tip says it whole). */
 export const sideTabText = style({
-  display: "inline-flex", flexDirection: "column",
+  display: "inline-block", minWidth: "0", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis",
+  lineHeight: "1.3",
   selectors: {
     "&::after": {
-      content: "attr(data-text)", height: "0", overflow: "hidden", visibility: "hidden", fontWeight: "500",
-      userSelect: "none", pointerEvents: "none",
+      content: "attr(data-text)", display: "block", height: "0", overflow: "hidden", visibility: "hidden",
+      fontWeight: "500", userSelect: "none", pointerEvents: "none",
     },
   },
 });
@@ -98,7 +100,7 @@ export const sideTabList = style({
   flex: "none",
 });
 export const sideTab = style({
-  display: "inline-flex", alignItems: "center", height: "30px", padding: "0 12px", border: "0",
+  minWidth: "0", display: "inline-flex", alignItems: "center", height: "30px", padding: "0 12px", border: "0",
   borderRadius: `calc(10px * ${vars.cornerScale})`, background: "none", color: vars.muted, fontSize: vars.textUi,
   cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
@@ -141,7 +143,7 @@ export const detailLink = style({
   },
 });
 export const sideTabWrap = style({
-  display: "inline-flex", alignItems: "center", borderRadius: `calc(10px * ${vars.cornerScale})`,
+  minWidth: "0", display: "inline-flex", alignItems: "center", borderRadius: `calc(10px * ${vars.cornerScale})`,
   cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover },
@@ -149,7 +151,7 @@ export const sideTabWrap = style({
   },
 });
 export const sideTabClose = style({
-  display: "grid", placeItems: "center", width: "20px", height: "20px", marginRight: "5px", border: "0",
+  flex: "none", display: "grid", placeItems: "center", width: "20px", height: "20px", marginRight: "5px", border: "0",
   borderRadius: `calc(6px * ${vars.cornerScale})`, background: "none", color: vars.muted, cursor: "pointer",
   cornerShape: vars.cornerShape,
   selectors: {
@@ -168,6 +170,7 @@ globalStyle(`${jobsPanel} section`, { display: "flex", flexDirection: "column" }
 globalStyle(`${jobsPanel} section + section`, { marginTop: "6px" });
 globalStyle(`${detailRow} dt`, { color: vars.muted });
 globalStyle(`${detailsList} ${muted}`, { fontSize: vars.textMeta });
+globalStyle(`${sideTabAgent} > :not(${sideTabText})`, { flex: "none" });
 globalStyle(`${sideTabWrap} ${sideTab}`, { background: "none !important", paddingRight: "4px" });
 globalStyle(`${sidePanel} ${resizeHandle}`, {
   "@media": {

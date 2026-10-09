@@ -21,7 +21,10 @@ export const previewAddress = style({
     "&:focus-within": { background: vars.canvas, boxShadow: `0 0 0 1.5px ${vars.fieldFocus}` },
   },
 });
-export const previewHost = style({ fontSize: vars.textUi, fontWeight: "500", color: vars.text, whiteSpace: "nowrap" });
+export const previewHost = style({
+  minWidth: "0", overflow: "hidden", fontSize: vars.textUi, fontWeight: "500", color: vars.text, whiteSpace: "nowrap",
+  textOverflow: "ellipsis",
+});
 export const previewPage = style({
   position: "fixed", inset: "0", display: "flex", flexDirection: "column", background: vars.canvas,
 });
