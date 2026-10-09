@@ -26,10 +26,10 @@ const inner = `calc(${vars.rMenu} - 6px)`;
 export const kinds = style({ alignSelf: "stretch", borderRadius: inner, cornerShape: vars.cornerShape });
 globalStyle(`${kinds} ${segmentedThumb}`, { borderRadius: `calc(${inner} - 3px)`, cornerShape: vars.cornerShape });
 export const field = style({ width: "100%", height: "32px" });
-// Sunk into the panel as the switch's track is (its tint, no line): a white field on the glass stood out in light.
-globalStyle(`input${field}${field}`, {
-  borderRadius: inner, cornerShape: vars.cornerShape, border: "0", background: `color-mix(in srgb, ${vars.text} 6%, transparent)`,
-});
+// A field's line, on the glass itself: a white field on it stood out in light, and with no line it read as no field. The
+// settings' dark focus line is too heavy here: hover and focus take the hover's.
+globalStyle(`input${field}${field}`, { borderRadius: inner, cornerShape: vars.cornerShape, background: "transparent", borderColor: vars.lineStrong });
+globalStyle(`input${field}${field}:hover, input${field}${field}:focus`, { borderColor: vars.fieldHover });
 export const grid = style({ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "2px" });
 /** Emoji are pictures: drawn a step above the title's size, as large as the icons look. */
 export const emojiGrid = style({ fontSize: `calc(${vars.textTitle} * 1.25)`, lineHeight: "1" });
