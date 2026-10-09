@@ -11,6 +11,7 @@
 import { transitionTo } from "../ui.tsx";
 import { said, ToastTo } from "../toast.tsx";
 import { afterBack, useBackClose } from "../backClose.ts";
+import { backPage } from "../backPage.ts";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
@@ -160,7 +161,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
     },
     current: top.location.pathname,
     // Back through the pages opened here; from the first one (opened by a link), to the list.
-    pop: () => afterBack(() => (pages.length > 1 ? navigate(-1) : navigate(home, { replace: true }))),
+    pop: () => afterBack(() => (pages.length > 1 ? backPage(() => navigate(-1)) : navigate(home, { replace: true }))),
     // One page becoming another (a new chat its chat): crossfaded, what both have (the composer) moving between them.
     // The wait for a closing sheet's back is inside the crossfade, which starts a frame later: a sheet closed in the same
     // tap (another workspace from the workspace sheet) starts its back in between, and replacing before that back lands
