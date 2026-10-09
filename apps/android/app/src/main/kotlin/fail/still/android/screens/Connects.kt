@@ -48,7 +48,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,6 +76,7 @@ import fail.still.android.data.WorkspaceView
 import fail.still.android.data.rememberTopic
 import fail.still.android.ui.Avatar
 import fail.still.android.ui.C
+import fail.still.android.ui.CodeFont
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.LargeTitle
@@ -515,9 +515,9 @@ private fun openTokens(app: AppState, station: String, connect: Connect) {
 @Composable
 internal fun SecretField(value: String, onChange: (String) -> Unit, placeholder: String) {
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
-        if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = CodeFont, maxLines = 1, overflow = TextOverflow.Ellipsis)
         BasicTextField(value, { onChange(it.trim()) }, singleLine = true, cursorBrush = SolidColor(C.accent), visualTransformation = PasswordVisualTransformation(),
-            textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = FontFamily.Monospace), modifier = Modifier.fillMaxWidth())
+            textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = CodeFont), modifier = Modifier.fillMaxWidth())
     }
 }
 

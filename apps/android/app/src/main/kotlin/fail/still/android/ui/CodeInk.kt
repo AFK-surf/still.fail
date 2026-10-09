@@ -47,7 +47,7 @@ internal fun CodeInk(code: String, language: String?, dark: Boolean) {
     val direction = LocalLayoutDirection.current
     val fonts = LocalFontFamilyResolver.current
     // Match the Text this replaces, including the theme's inherited paragraph settings.
-    val style = LocalTextStyle.current.merge(TextStyle(color = C.ink, fontFamily = FontFamily.Monospace,
+    val style = LocalTextStyle.current.merge(TextStyle(color = C.ink, fontFamily = CodeFont,
         fontWeight = CodeWeight, fontSize = 12.5.sp, lineHeight = 20.sp))
     val key = remember(code, language, dark, style, density.density, density.fontScale, direction, fonts) {
         CodeKey(code, language?.lowercase(), dark, style, density.density, density.fontScale, direction, fonts)

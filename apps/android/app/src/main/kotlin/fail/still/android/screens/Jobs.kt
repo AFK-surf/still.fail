@@ -44,7 +44,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -60,6 +59,7 @@ import fail.still.android.data.JobLogView
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
 import fail.still.android.ui.C
+import fail.still.android.ui.CodeFont
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Mono
@@ -282,7 +282,7 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
                 Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(min = 120.dp).clip(RoundedCornerShape(16.dp)).background(C.ink.copy(alpha = 0.05f))
                     .verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
-                Text(if (log == null) t("android-misc.reading") else text?.ifEmpty { t("android-misc.jobs.noOutput") } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = FontFamily.Monospace)
+                Text(if (log == null) t("android-misc.reading") else text?.ifEmpty { t("android-misc.jobs.noOutput") } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)
             }
         }
         if (running) Row(

@@ -29,7 +29,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
@@ -39,6 +38,7 @@ import androidx.compose.ui.window.PopupProperties
 import fail.still.android.LocalApp
 import fail.still.android.data.StationUpdateNotice
 import fail.still.android.ui.C
+import fail.still.android.ui.CodeFont
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Raised
@@ -101,7 +101,7 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
                     if (notice.tone == "busy" && notice.station != null) UpdateBar(notice.percent)
                     val versions = listOfNotNull(notice.from, notice.to).joinToString(" → ")
                     if (versions.isNotEmpty() || notice.canUpdate == true) Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(versions, Modifier.weight(1f), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = FontFamily.Monospace, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(versions, Modifier.weight(1f), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = CodeFont, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (notice.canUpdate == true) Row(Modifier.clip(CircleShape).background(C.accentBg).clickable(enabled = !busy, role = Role.Button) { app.act("更新 station") { app.api(station).updateSoftware("station") } }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             DoingMark(busy, failed, 12.dp)
                             Text(if (busy) "更新中" else if (notice.tone == "trouble") "重试" else "现在更新", fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.accentInk)

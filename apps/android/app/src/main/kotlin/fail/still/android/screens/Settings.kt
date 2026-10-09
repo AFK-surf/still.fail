@@ -39,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -62,6 +61,7 @@ import fail.still.android.data.WorkspaceView
 import fail.still.android.data.rememberTopic
 import fail.still.android.ui.Avatar
 import fail.still.android.ui.C
+import fail.still.android.ui.CodeFont
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.Icons
@@ -142,7 +142,7 @@ fun CommandBox(text: String) {
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface2).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(text, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = FontFamily.Monospace, color = C.ink, modifier = Modifier.weight(1f))
+        Text(text, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = CodeFont, color = C.ink, modifier = Modifier.weight(1f))
         Box(
             Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(C.chip).clickable {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", text))
