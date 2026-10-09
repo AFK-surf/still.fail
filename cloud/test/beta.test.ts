@@ -141,6 +141,7 @@ test("the test channel's pages are the web app's, not to be indexed, and say the
       const page = await h.fetchBeta(path);
       assert.equal(page.status, 200);
       assert.equal(page.headers.get("x-robots-tag"), "noindex, nofollow");
+      assert.equal(page.headers.get("cache-control"), "no-store");
       // Named the test channel's before any script runs: the title and the link previews' tags, not the URLs.
       const named = INDEX.replace("<title>still.fail", "<title>youdid.wtf").replace('content="still.fail —', 'content="youdid.wtf —');
       assert.equal(await page.text(), named.replace("<head>", `<head><meta name="stillfail-beta" content="${h.origin}">`), path);
