@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useMemo, useRef } from "react";
 import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
+import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
 import { t } from "./i18n.ts";
@@ -136,6 +136,11 @@ export function useChatJobs(station: string, of: { thread: number } | { session:
 /** A job as it is now (null: none). */
 export function useJob(station: string, id: string | null): TopicState<Job> {
   return useTopic<Job>(id ? { topic: "job", station, id } : null);
+}
+
+/** A chat's agent in brief, for its card over its avatar (AgentCard.tsx). */
+export function useAgentCard(station: string, key: string): TopicState<AgentCardView> {
+  return useTopic<AgentCardView>({ topic: "agentCard", station, key });
 }
 
 export function useHistory(station: string, key: string): TopicState<HistoryView> {

@@ -51,6 +51,24 @@ export interface AdbShareView {
 	pairPort?: number;
 }
 
+/** How full something is. */
+export type Level = "ok" | "amber" | "red";
+
+export interface AgentCardRow {
+	label: string;
+	value: string;
+	/** Worth a look (a quota or context running out, an account that cannot run): its colour. */
+	level?: Level;
+}
+
+/**
+ * A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): only what it has, a
+ * row each: how much it has done, what that cost and used, its account and what is left of it, its jobs, what is wrong.
+ */
+export interface AgentCardView {
+	rows: AgentCardRow[];
+}
+
 /** A runtime. */
 export type RuntimeKind = "claude" | "codex";
 
@@ -251,9 +269,6 @@ export interface Attachment {
 	/** An image's ThumbHash (base64): a blurred likeness of it, shown until it loads. */
 	thumbhash?: string;
 }
-
-/** How full something is. */
-export type Level = "ok" | "amber" | "red";
 
 /** A window of a session's account running out, as its ring draws it. */
 export interface QuotaAttention {
@@ -1071,10 +1086,6 @@ export interface ChatAgent {
 	threads: ChatThread[];
 	/** Its background jobs, newest first; those with a port are web services, shown by their names. */
 	jobs: Job[];
-	/** How much it has done, for its card: its turns, and how long the finished ones took (8 轮 · 共干了 1 小时 12 分). */
-	workText?: string;
-	/** Its jobs at work now, for its card (服务在线：web · 在盯着：CI). Absent when none is. */
-	jobsText?: string;
 }
 
 /** An agent of a sidebar row, with what its mark shows. */

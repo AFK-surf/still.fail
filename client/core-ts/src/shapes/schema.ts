@@ -1282,9 +1282,15 @@ export const SHAPES: Record<string, Shape> = {
     ["turns", vec("TurnRecord")],
     ["threads", vec("ChatThread")],
     ["jobs", vec("Job"), { doc: "Its background jobs, newest first; those with a port are web services, shown by their names." }],
-    ["workText", opt("String"), { doc: "How much it has done, for its card: its turns, and how long the finished ones took (8 轮 · 共干了 1 小时 12 分)." }],
-    ["jobsText", opt("String"), { doc: "Its jobs at work now, for its card (服务在线：web · 在盯着：CI). Absent when none is." }],
   ], { doc: "An agent of a chat: its session, the connect that started it, its profile, and what it can move to." }),
+  AgentCardView: struct([
+    ["rows", vec("AgentCardRow")],
+  ], { doc: "A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): only what it has, a\nrow each: how much it has done, what that cost and used, its account and what is left of it, its jobs, what is wrong." }),
+  AgentCardRow: struct([
+    ["label", "String"],
+    ["value", "String"],
+    ["level", opt("Level"), { doc: "Worth a look (a quota or context running out, an account that cannot run): its colour." }],
+  ]),
   AgentWait: struct([
     ["since", "i64", { client: "I54" }],
     ["seconds", opt("i64"), { client: opt("I54") }],

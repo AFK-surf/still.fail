@@ -320,14 +320,32 @@ export function presentHistory(live: J, cx: Context): J {
   const pushedNow = pushed(live, cx.runtime);
   const liveSteps = pushedNow.liveSteps.map(({ id, text }) => ({ id, text }));
   const phase = pushedNow.phase;
+  const { usage, usageLine } = usageOf(live);
+  const loaded = flag(live, "loaded");
+  let edge: string;
+  let empty: boolean;
+  if (!loaded && shown.length === 0) [edge, empty] = [t("core-logic.history.edge.loading"), true];
+  else if (shown.length === 0 && liveSteps.length === 0 && phase === null && base === 0) {
+    const why = flag(live, "offline") ? "core-logic.history.edge.offline" : cx.started ? "core-logic.history.edge.missing" : "core-logic.history.edge.not_started";
+    [edge, empty] = [t(why), true];
+  } else if (base > 0) [edge, empty] = [t("core-logic.history.edge.earlier"), false];
+  else [edge, empty] = [t("core-logic.history.edge.start"), false];
+  return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0 };
+}
+
+/// What a session's calls used (its live `usage`), as its history shows it: label and value rows, and in a line; and on
+/// their own, what its card shows of it (views/brief.ts): the context it carries (how full its window is, when known)
+/// and the cost. Nothing before the station has counted any.
+export function usageOf(live: J): { usage: J[] | null; usageLine: string | null; context: string | null; contextPercent: number | null; cost: string | null } {
   const u = live?.usage;
   const isUsage = u !== null && typeof u === "object" && !Array.isArray(u);
   const n = (k: string): number => (isUsage && typeof u[k] === "number" ? u[k] : 0);
   // The context and the cost come from stations since; an older one's usage has neither.
   const has = (k: string): boolean => isUsage && typeof u[k] === "number";
+  const contextPercent = has("contextTokens") && n("modelCalls") > 0 && n("contextWindow") > 0 ? format.round((n("contextTokens") / n("contextWindow")) * 100) : null;
   const context = has("contextTokens") && n("modelCalls") > 0
-    ? n("contextWindow") > 0
-      ? t("core-logic.history.usage.context.of", { n: format.compactNumber(n("contextTokens")), window: format.compactNumber(n("contextWindow")), percent: format.round((n("contextTokens") / n("contextWindow")) * 100) })
+    ? contextPercent !== null
+      ? t("core-logic.history.usage.context.of", { n: format.compactNumber(n("contextTokens")), window: format.compactNumber(n("contextWindow")), percent: contextPercent })
       : format.compactNumber(n("contextTokens"))
     : null;
   const cost = has("cost") && n("modelCalls") > 0
@@ -364,16 +382,7 @@ export function presentHistory(live: J, cx: Context): J {
         return [line, ...more].join(" · ");
       })()
     : null;
-  const loaded = flag(live, "loaded");
-  let edge: string;
-  let empty: boolean;
-  if (!loaded && shown.length === 0) [edge, empty] = [t("core-logic.history.edge.loading"), true];
-  else if (shown.length === 0 && liveSteps.length === 0 && phase === null && base === 0) {
-    const why = flag(live, "offline") ? "core-logic.history.edge.offline" : cx.started ? "core-logic.history.edge.missing" : "core-logic.history.edge.not_started";
-    [edge, empty] = [t(why), true];
-  } else if (base > 0) [edge, empty] = [t("core-logic.history.edge.earlier"), false];
-  else [edge, empty] = [t("core-logic.history.edge.start"), false];
-  return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0 };
+  return { usage, usageLine, context, contextPercent, cost };
 }
 
 /// A group of the history; `base`: the transcript entry its timeline starts at (what a step's or thought's `entries` count

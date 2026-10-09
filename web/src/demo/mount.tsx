@@ -14,7 +14,7 @@ import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
-import { addItem, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY } from "./fixtures.ts";
+import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
 import { RealStillFail, askForReal } from "./real.tsx";
 import * as station from "./station.ts";
@@ -46,6 +46,7 @@ function valueOf(topic: Topic): unknown {
     case "slackApp": return station.slackApp();
     case "live": return chat ? liveView(chat) : null;
     case "history": return chat ? historyView(chat) : null;
+    case "agentCard": return chat ? agentCardView(chat, station.runs()) : null;
     case "host": return station.host();
     case "connects": return station.connects();
     case "stations": return [station.stationView()];

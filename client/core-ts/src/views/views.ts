@@ -31,7 +31,7 @@ import { usageView } from "./usage.ts";
 import { workspaceProfiles } from "./profiles.ts";
 import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes } from "./models.ts";
-import { jobsText, workText } from "./brief.ts";
+import * as brief from "./brief.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -46,7 +46,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "stations", "profiles", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "stations", "profiles", "connects", "chat", "history", "agentCard", "archive", "workspaceMarks", "decisions", "chatJobs", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -498,6 +498,14 @@ export class Views implements Owner {
         return [{ topic: "chat", station, thread: view.thread ?? null, session: view.session ?? null }];
       case "workspaceMarks":
         return this.#marksSources();
+      case "agentCard":
+        return [
+          { topic: "live", station, key: view.key },
+          { topic: "session", station, key: view.key },
+          { topic: "sessions", station },
+          { topic: "chatRows", station },
+          { topic: "overview", station },
+        ];
       case "history":
         return [
           { topic: "live", station, key: view.key },
@@ -721,6 +729,12 @@ export class Views implements Owner {
       }
       case "history":
         return this.#history(view.station as string, view.key as string);
+      case "agentCard": {
+        const agent = this.agent(view.station as string, view.key as string);
+        if (agent === null) return undefined;
+        const live = this.value({ topic: "live", station: view.station as string, key: view.key as string });
+        return { ok: brief.card(agent, live !== undefined && "ok" in live ? live.ok : null) };
+      }
       case "archive":
         return archive(this, this.local, view.scope as string, this.#core.host);
       case "workspaceMarks":
@@ -1357,8 +1371,6 @@ export class Views implements Owner {
       turns: structuredClone(get(detail, "turns") ?? []),
       threads: structuredClone(get(detail, "threads") ?? []),
       jobs: structuredClone(get(detail, "jobs") ?? []),
-      workText: workText(turns),
-      jobsText: jobsText(get(detail, "jobs")),
     };
   }
 

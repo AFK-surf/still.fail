@@ -58,6 +58,24 @@ data class AdbShareView (
 	val pairPort: UInt? = null
 )
 
+/// How full something is.
+typealias Level = String
+
+@Serializable
+data class AgentCardRow (
+	val label: String,
+	val value: String,
+	/// Worth a look (a quota or context running out, an account that cannot run): its colour.
+	val level: Level? = null
+)
+
+/// A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): only what it has, a
+/// row each: how much it has done, what that cost and used, its account and what is left of it, its jobs, what is wrong.
+@Serializable
+data class AgentCardView (
+	val rows: List<AgentCardRow>
+)
+
 /// A runtime.
 typealias RuntimeKind = String
 
@@ -263,9 +281,6 @@ data class Attachment (
 	/// An image's ThumbHash (base64): a blurred likeness of it, shown until it loads.
 	val thumbhash: String? = null
 )
-
-/// How full something is.
-typealias Level = String
 
 /// A window of a session's account running out, as its ring draws it.
 @Serializable
@@ -1091,11 +1106,7 @@ data class ChatAgent (
 	val turns: List<TurnRecord>,
 	val threads: List<ChatThread>,
 	/// Its background jobs, newest first; those with a port are web services, shown by their names.
-	val jobs: List<Job>,
-	/// How much it has done, for its card: its turns, and how long the finished ones took (8 轮 · 共干了 1 小时 12 分).
-	val workText: String? = null,
-	/// Its jobs at work now, for its card (服务在线：web · 在盯着：CI). Absent when none is.
-	val jobsText: String? = null
+	val jobs: List<Job>
 )
 
 /// An agent of a sidebar row, with what its mark shows.

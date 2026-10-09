@@ -2,7 +2,7 @@
 // chat is kept as it stands (its messages, its execution history, whether its agent is at work); main.tsx turns them
 // into the topics the app reads, and story.ts plays what happens in them.
 import type {
-  ChatAgent, ChatItem, ChatMessage, ChatView, ChatsView, ModelOption, Outgoing, Profile, HistoryGroup, HistoryItem, HistoryStep, HistoryView, Live,
+  AgentCardView, ChatAgent, ChatItem, ChatMessage, ChatView, ChatsView, ModelOption, Outgoing, Profile, HistoryGroup, HistoryItem, HistoryStep, HistoryView, Live,
   Maker, Person, RowAgent, RuntimeKind, Session, Stamp,
 } from "../core/shapes.ts";
 
@@ -239,10 +239,27 @@ export function chatsView(chats: DemoChat[]): ChatsView {
 /** What an agent's model control offers, and the account it runs on: the station's (station.ts). */
 export interface Runs { choices: ModelOption[]; profile: Profile }
 
+/** An agent's card as the core words it (views/brief.ts): a turn for each message of a person's, a few minutes and a
+ * few hundred thousand tokens each. */
+export function agentCardView(chat: DemoChat, runs?: Runs): AgentCardView {
+  const turns = chat.messages.filter((m) => m.authorKind === "person").length;
+  if (turns === 0) return { rows: [] };
+  const input = turns * 420;
+  return {
+    rows: [
+      { label: "工作", value: `${turns} 轮 · 共干了 ${turns * 7} 分钟` },
+      { label: "费用估算", value: `$${(turns * 0.62).toFixed(2)}` },
+      { label: "Token", value: `输入 ${input}K · 输出 ${turns * 11}K` },
+      { label: "缓存命中率", value: "91%" },
+      { label: "上下文", value: `${turns * 38}K / 200K（${turns * 19}%）` },
+      ...(runs && chat.model.runtime === "claude" ? [{ label: "账号", value: runs.profile.name }, { label: "额度", value: "5 小时剩 72% · 本周剩 64%" }] : []),
+    ],
+  };
+}
+
 export function chatView(chat: DemoChat, runs?: Runs): ChatView {
   const created = chat.messages[0]?.createdAt ?? Date.now();
   const last = chat.messages.at(-1)?.seq ?? 0;
-  const turns = chat.messages.filter((m) => m.authorKind === "person").length;
   const agent: ChatAgent = {
     session: session(chat), status: chat.running ? "running" : chat.blocked ? "block" : chat.failed ? "failed" : "final",
     ...(chat.running ? { badge: "run" as const, since: chat.running.since, ...(chat.running.started ? { started: true } : {}) } : chat.blocked ? { badge: "block" as const } : chat.failed ? { badge: "failed" as const } : {}),
@@ -252,8 +269,6 @@ export function chatView(chat: DemoChat, runs?: Runs): ChatView {
       profiles: [{ id: runs.profile.id, name: runs.profile.name, current: true, kind: runs.profile.access.kind, runtime: "claude" as const }],
     } : { profiles: [], choices: [] }),
     attention: chat.failed ? [{ kind: "account", text: "账号被停用" }] : [], turns: [], threads: [], jobs: [],
-    // As the core words it (views/brief.ts): a turn for each message of a person's, a few minutes each.
-    ...(turns > 0 ? { workText: `${turns} 轮 · 共干了 ${turns * 7} 分钟` } : {}),
   };
   // A chat the visitor started is theirs.
   const creator = chat.people[0] ?? { id: "local", name: "你", via: "local", shown: { name: "你", display: "你", mine: true } };

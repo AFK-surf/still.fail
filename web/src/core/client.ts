@@ -71,6 +71,8 @@ export type Topic =
   // A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new).
   | { topic: "pick"; station: string; of: string }
   // A chat's services and background jobs as its pages show them (the same thread or session as its `chat`).
+  // A chat's agent in brief, for its card over its avatar: what it did, cost and used, its account and quota, its jobs.
+  | { topic: "agentCard"; station: string; key: string }
   | { topic: "chatJobs"; station: string; thread: number }
   | { topic: "chatJobs"; station: string; session: string }
   // The services and jobs left up a long while on the scope's stations that are up.

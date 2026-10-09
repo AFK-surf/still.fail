@@ -135,6 +135,7 @@ const SHAPED: Record<string, Ty> = {
   newChat: "NewChatView",
   pick: "PickView",
   chatJobs: "ChatJobsView",
+  agentCard: "AgentCardView",
   longJobs: "LongJobsView",
   profiles: "ProfilesView",
   usage: "UsageView",
