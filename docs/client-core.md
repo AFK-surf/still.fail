@@ -209,8 +209,10 @@ that only notifications change it:
   does not.
 - Station topics: while any topic of a station is live, the station's
   `/events` stream is held open, with `?host=1` while a `host` topic is live
-  (the stream is opened anew when that changes, and when the sessions it
-  follows do; the old one closes once the new one is open). Every stream
+  (the stream is opened anew when that changes, and when it is to follow a
+  session it does not, one at work or shown; one it follows that no longer
+  is stays followed until then; the old one closes once the new one is
+  open). Every stream
   after the first asks `since=<the last event id heard>` (an id is the
   station's run and the event's number in it, `<run>.<n>`): one taking over
   from a stream still open, and one coming back after its link went (on a

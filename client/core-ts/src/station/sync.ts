@@ -77,6 +77,12 @@ export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number |
 /// What a station's `/events` stream is opened for: host samples, the sessions followed as they run, the jobs' logs.
 export type EventsFor = { host: boolean; live: string[]; logs: [string, number][] };
 
+/// Whether a stream opened for `open` gives what `wants` asks: the same host samples and logs, and every session it
+/// asks among those it follows. One that follows more is kept: a session no longer at work or shown says little more.
+function covers(open: EventsFor, wants: EventsFor): boolean {
+  return open.host === wants.host && equal(open.logs, wants.logs) && wants.live.every((key) => open.live.includes(key));
+}
+
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 /// A row's id as text (sessions' and chats' are strings, threads' numbers).
@@ -331,13 +337,14 @@ export class StationsSync {
     return { host: shown.host, live: [...live].sort(), logs: [...shown.logs].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1])) };
   }
 
-  /// Opens the station's stream for what it is wanted for now, unless it is already open for that (or `anew`): the
-  /// new one opens first, and the old one goes once it has.
+  /// Opens the station's stream for what it is wanted for now, unless the one open gives that (or `anew`): the new one
+  /// opens first, and the old one goes once it has. An agent ending its turn opens none: as agents started and ended
+  /// turns, a client's stream to a busy station was opened anew some 90 times an hour.
   openEvents(address: string, anew: boolean): void {
     const link = this.#links.get(address);
     if (!link || !this.reachable(address)) return;
     const wants = this.#wants(address);
-    if (!anew && link.events && equal(link.events.wants, wants)) return;
+    if (!anew && link.events && covers(link.events.wants, wants)) return;
     // Handed over from a stream that is open and heard lately (wanted for more or less now): it kept the records
     // current until the new one opens, so the new one reads nothing again. One quiet past a keepalive may have died
     // unnoticed (the device asleep): what it may have missed is read.

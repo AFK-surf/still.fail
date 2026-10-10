@@ -1816,3 +1816,27 @@ test("a_station_not_reached_for_long_is_tried_seldom_though_the_cloud_says_it_is
   assert.equal(core.inner.data.record("link", ST), "online");
   core.close();
 });
+
+test("an_agent_ending_its_turn_keeps_the_stream_one_starting_opens_it_anew", async () => {
+  const { host, core, push, streams } = await started();
+  const open = () => streams.filter((s) => !s.closed).map((s) => s.path);
+  const row = (id: string, agents: unknown[]) => push("chat", { id, thread: Number(id), session: `s${id}`, title: "部署", lastActiveAt: 1, agents });
+  row("7", [{ key: "k", process: "running" }]);
+  await host.settle();
+  await host.settle();
+  assert.deepEqual(open(), ["/events?live=k&from=0&last=200&brief=1"]);
+  const opened = streams.length;
+  // Its turn over: the stream goes on as it is, still following it.
+  row("7", [{ key: "k", process: "warm" }]);
+  await host.settle();
+  await host.settle();
+  assert.equal(streams.length, opened);
+  assert.deepEqual(open(), ["/events?live=k&from=0&last=200&brief=1"]);
+  // Another at work: a stream for what is wanted now, without the one done.
+  row("8", [{ key: "j", process: "running" }]);
+  await host.settle();
+  await host.settle();
+  assert.equal(streams.length, opened + 1);
+  assert.deepEqual(open(), ["/events?live=j&from=0&last=200&brief=1"]);
+  core.close();
+});
