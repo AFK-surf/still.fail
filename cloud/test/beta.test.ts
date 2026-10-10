@@ -214,6 +214,40 @@ test("the test channel's releases: served by name, installed with ?channel=beta,
   }
 });
 
+test("a station added on the test channel installs the test channel's release, and joins the main host", async () => {
+  const h = await harness();
+  try {
+    const aliceTokens = await h.login("alice");
+    assert.equal((await h.as(aliceTokens, "admin")("POST", `/v1/admin/users/${aliceTokens.subject}/beta`, { on: true })).status, 200);
+    const alice = h.as(aliceTokens);
+    const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as { id: string }).id;
+    type Made = { token: string; install: string; installWindows: string; command: string };
+    const enroll = async (call: typeof alice, headers?: Record<string, string>) => {
+      const made = headers
+        ? await h.fetch(`/v1/workspaces/${w}/enrollments`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${aliceTokens.access_token}`, ...headers }, body: JSON.stringify({ name: "s" }) })
+        : await call("POST", `/v1/workspaces/${w}/enrollments`, { name: "s" });
+      assert.equal(made.status, 200);
+      return (await made.json()) as Made;
+    };
+    // The main host: as before (the stable release).
+    const stable = await enroll(alice);
+    assert.equal(stable.install, `curl -fsSL ${h.origin}/install.sh | sh -s -- ${stable.token}`);
+    assert.equal(stable.installWindows, `& ([scriptblock]::Create((irm ${h.origin}/install.ps1))) ${stable.token}`);
+    // The test channel's host, and a beta app on the main host: the test channel's release (quoted for zsh, whose `?`
+    // is a pattern), from the main host, which the station joins.
+    for (const made of [await enroll(h.as(aliceTokens, "beta")), await enroll(alice, { "x-stillfail-channel": "beta" })]) {
+      assert.equal(made.install, `curl -fsSL '${h.origin}/install.sh?channel=beta' | sh -s -- ${made.token}`);
+      assert.equal(made.installWindows, `& ([scriptblock]::Create((irm '${h.origin}/install.ps1?channel=beta'))) ${made.token}`);
+      assert.equal(made.command, `stillfail station enroll ${h.origin} ${made.token}`);
+    }
+    // What those URLs serve: the test channel's installers.
+    assert.match(await (await h.fetch("/install.ps1?channel=beta")).text(), /^\$channel = if \(\$env:STILLFAIL_CHANNEL\) \{ \$env:STILLFAIL_CHANNEL \} else \{ 'beta' \}$/m);
+    assert.match(await (await h.fetch("/install.ps1")).text(), /else \{ 'stable' \}$/m);
+  } finally {
+    await h.close();
+  }
+});
+
 test("without BETA_ORIGIN there is no test channel", () => {
   assert.equal(betaOrigin({}), null);
   assert.equal(betaOrigin({ BETA_ORIGIN: " " }), null);

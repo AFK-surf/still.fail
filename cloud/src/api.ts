@@ -6,7 +6,7 @@
 // routes to (index.ts).
 import { isAdmin } from "./admin";
 import { bearerToken, clock, denied, readJson, reply, verifyToken, type Claims } from "./auth";
-import { header, publicOrigins, signedMessages } from "./compat";
+import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
 import type { FeedbackStatus } from "./types";
@@ -200,8 +200,12 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (kind === "enrollments" && !target && method === "POST") {
     return directory(async () => {
       const made = await dir.createEnrollment(sub, ws, text("name"));
-      // A machine without still.fail installs it and joins at once; one with it joins.
-      return { ...made, install: `curl -fsSL ${env.PUBLIC_ORIGIN}/install.sh | sh -s -- ${made.token}`, installWindows: `& ([scriptblock]::Create((irm ${env.PUBLIC_ORIGIN}/install.ps1))) ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
+      // A machine without still.fail installs it and joins at once; one with it joins. Asked on the test channel (its
+      // host, or a beta app's call): its release (index.ts ?channel=beta), the URL quoted (zsh takes `?` for a
+      // pattern); the station joins PUBLIC_ORIGIN either way.
+      const beta = url.origin === betaOrigin(env) || header(request, "channel") === "beta";
+      const at = (script: string) => (beta ? `'${env.PUBLIC_ORIGIN}/${script}?channel=beta'` : `${env.PUBLIC_ORIGIN}/${script}`);
+      return { ...made, install: `curl -fsSL ${at("install.sh")} | sh -s -- ${made.token}`, installWindows: `& ([scriptblock]::Create((irm ${at("install.ps1")}))) ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
     });
   }
   // A mstill.fail's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
