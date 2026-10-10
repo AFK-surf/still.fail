@@ -207,14 +207,31 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   // and past a third of the way (or flung) it goes, from where the finger left it.
   const home_ = isHome(top);
   const swiping = useRef<{ x: number; y: number; at: number; dx: number; tapped: boolean } | null>(null);
+  // Where the finger has the page now. Each move puts it (and the page under it) there itself, once a frame, rather than
+  // through a render of the shell; a render meanwhile draws them where this says.
+  const dragged = useRef(0);
+  const pageEls = useRef(new Map<string, HTMLDivElement>());
+  const step = useRef(0);
+  const follow = () => {
+    if (step.current) return;
+    step.current = requestAnimationFrame(() => {
+      step.current = 0;
+      if (!swiping.current) return;
+      const { top, pages } = now.current;
+      const page = pageEls.current.get(top.key), under = pages.at(-2) && pageEls.current.get(pages.at(-2)!.key);
+      if (page) page.style.transform = `translateX(${dragged.current}px)`;
+      if (under) under.style.transform = `translateX(calc(-30% + ${dragged.current * 0.3}px))`;
+    });
+  };
   const swipeProps = home_ ? {} : {
     onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.pointerType !== "touch" || sheet || reader) return;
       swiping.current = { x: e.clientX, y: e.clientY, at: e.timeStamp, dx: 0, tapped: true };
-      e.currentTarget.setPointerCapture(e.pointerId);
+      dragged.current = 0;
       // The page and the one under it made ready to move as the finger lands (each a layer of its own, the one under
       // drawn), not on its first move: that move would wait for both to be drawn.
       setSwipe(0);
+      e.currentTarget.setPointerCapture(e.pointerId);
     },
     onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
       const s = swiping.current;
@@ -222,21 +239,26 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
       s.dx = Math.max(0, e.clientX - s.x);
       // A drag stays a drag even when it is vertical or the finger comes back to where it started.
       if (Math.hypot(e.clientX - s.x, e.clientY - s.y) >= 6) s.tapped = false;
-      setSwipe(s.dx);
+      dragged.current = s.dx;
+      follow();
     },
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       const s = swiping.current;
       swiping.current = null;
+      cancelAnimationFrame(step.current);
+      step.current = 0;
       if (!s) return;
+      dragged.current = s.dx;
       const flung = s.dx > 40 && s.dx / Math.max(1, e.timeStamp - s.at) > 0.6;
       if (s.dx > window.innerWidth / 3 || flung) {
         // Held where it is (and the page under it) until the back lands, then on from there (the effect above): not
         // sprung back meanwhile, nor started over.
         from.current = s.dx;
+        setSwipe(s.dx);
         app.pop();
         const leaving = top.key;
         setTimeout(() => { if (now.current.top.key === leaving && from.current === s.dx) { from.current = 0; setSwipe(null); } }, 1000);
-      } else setSwipe(null);
+      } else { dragged.current = 0; setSwipe(null); }
       // A tap, not a swipe: it is for what lies under the strip (the bar's back button reaches into it).
       if (s.tapped && Math.hypot(e.clientX - s.x, e.clientY - s.y) < 6) {
         const strip = e.currentTarget;
@@ -246,7 +268,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
         under?.closest<HTMLElement>("button, a[href], [role=button]")?.click();
       }
     },
-    onPointerCancel: () => { swiping.current = null; setSwipe(null); },
+    onPointerCancel: () => { swiping.current = null; cancelAnimationFrame(step.current); step.current = 0; dragged.current = 0; setSwipe(null); },
   };
 
   // The page leaving on the way back is no longer in the list; it is drawn until it has gone.
@@ -265,8 +287,8 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
             // still reverses the page's original entry direction.
             const way = moving && !moving.forward && from.current > 0 ? "side" : moving ? (moving.forward ? moving.to : moving.from).way : "side";
             const style: React.CSSProperties & Record<string, string | number> = { zIndex: moving ? (p.key === (moving.forward ? moving.to.key : moving.from.key) ? 2 : 1) : isTop ? 1 : 0 };
-            if (swipe !== null && isTop) style.transform = `translateX(${swipe}px)`;
-            if (role === "peek") style.transform = `translateX(calc(-30% + ${swipe! * 0.3}px))`;
+            if (swipe !== null && isTop) style.transform = `translateX(${dragged.current}px)`;
+            if (role === "peek") style.transform = `translateX(calc(-30% + ${dragged.current * 0.3}px))`;
             // A page swiped back leaves from where the finger let it go, the one under it comes on from where it showed,
             // in what is left of the time.
             if (moving && !moving.forward && from.current > 0 && (role === "out" || role === "in")) {
@@ -275,7 +297,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
               style.animationDuration = `${Math.round(300 * Math.max(0.5, 1 - from.current / window.innerWidth))}ms`;
             }
             return (
-              <div key={p.key} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
+              <div key={p.key} ref={(el) => { if (el) pageEls.current.set(p.key, el); else pageEls.current.delete(p.key); }} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
                 data-swiping={(swipe !== null && isTop) || undefined} style={style}>
                 <PageBody location={p.location} routes={routes} />
               </div>
