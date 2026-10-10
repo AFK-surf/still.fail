@@ -30,13 +30,13 @@ import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 import { ReadWhole, useWhole } from "./brief.ts";
 /**
- * The session as it ran: the main view of a session. `summary` says who it is (in the head), `actions` what can be done
- * to it right now (stop a turn, release the process), `details` unfolds under the head. Given `tools` (a place in the
- * row above it, its tab's), the actions and the details' switch go there, and the head shows only for a `summary`. With its chat's `title`, each
+ * The session as it ran: the main view of a session. `summary` says what needs seeing to (in the head), `details`
+ * unfolds under the head. Given `tools` (a place in the row above it, its tab's), the details' switch goes there, and
+ * the head shows only for a `summary`. With its chat's `title`, each
  * item offers its link (opening the history there), to paste into another chat.
  */
-export function History({ station, sessionKey, summary, actions, details, tools, focus, title }: {
-  station: string; sessionKey: string; summary?: ReactNode; actions?: ReactNode; details?: ReactNode; title?: string | undefined;
+export function History({ station, sessionKey, summary, details, tools, focus, title }: {
+  station: string; sessionKey: string; summary?: ReactNode; details?: ReactNode; title?: string | undefined;
   tools?: HTMLElement | null;
   /** An entry to bring into view (n changes each time it is asked for). */
   focus?: { entry: number; n: number } | null;
@@ -94,7 +94,6 @@ export function History({ station, sessionKey, summary, actions, details, tools,
   if (seen.current === Number.POSITIVE_INFINITY && history?.loaded) seen.current = items.at(-1)?.entries[1] ?? -1;
   const usage = history?.usage;
   const headTools = <>
-    {actions}
     {(usage || details) && (
       <button type="button" className={controlsCss.textToggle} aria-expanded={usageOpen} onClick={() => setUsageOpen(!usageOpen)}>
         {t("web-main.history.details")} <ChevronDown {...ICON} size={14} className={usageOpen ? css.flip : undefined} />
