@@ -8,15 +8,22 @@
 
 mod data;
 mod log;
+#[cfg(unix)]
 mod ports;
+#[cfg_attr(windows, path = "run_windows.rs")]
 mod run;
 
 use std::ffi::OsString;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 
 /// Where Node and the station's script are in the release (`--app`).
+#[cfg(unix)]
 const NODE_IN_APP: &str = "node/bin/node";
+/// Node's own Windows layout: node.exe at the top of its directory.
+#[cfg(windows)]
+const NODE_IN_APP: &str = "node/node.exe";
 const MAIN_IN_APP: &str = "station/main.js";
 /// Node to run instead of the release's (tests, development).
 const NODE_VAR: &str = "STILLFAIL_NODE";
@@ -79,7 +86,16 @@ fn main() {
                 eprintln!("the release this binary belongs to (with {MAIN_IN_APP}) was not found; give it as --app DIR");
                 std::process::exit(1);
             });
-            let error = std::process::Command::new(node(&app)).arg(main_js(&app)).args(&given).exec();
+            let mut command = std::process::Command::new(node(&app));
+            command.arg(main_js(&app)).args(&given);
+            #[cfg(unix)]
+            let error = command.exec();
+            // No exec on Windows: Node runs as a child, its code this process's.
+            #[cfg(windows)]
+            let error = match command.status() {
+                Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+                Err(error) => error,
+            };
             eprintln!("{} did not run: {error}", node(&app).display());
             std::process::exit(1);
         }

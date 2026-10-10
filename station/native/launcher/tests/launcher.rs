@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 //! The launcher run as launchd runs it, with a stand-in for the station's Node side (fixtures/main.js) on a real Node
 //! ($STILLFAIL_NODE, else the build machine's). Each test has its own data directory; the launcher binds its ports
 //! where it finds them free (port 0), so no other program can take them first.
