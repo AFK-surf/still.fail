@@ -176,7 +176,7 @@ globalStyle(`${detailRow} dt`, { color: vars.muted });
 globalStyle(`${detailsList} ${muted}`, { fontSize: vars.textMeta });
 globalStyle(`${sideTabAgent} > :not(${sideTabText})`, { flex: "none" });
 globalStyle(`${sideTabWrap} ${sideTab}`, { background: "none !important", paddingRight: "4px" });
-/** Without a close button (the chat's own agent): its whole padding. */
+/** Without a button after it (a chat with one agent): its whole padding. */
 globalStyle(`${sideTabWrap} ${sideTab}:only-child`, { paddingRight: "12px" });
 globalStyle(`${sidePanel} ${resizeHandle}`, {
   "@media": {
@@ -197,3 +197,6 @@ export const titleBtn = style({
 // The title keeps its width; its button's box reaches 8px past it each side (cut short with it), and a little more room
 // before what follows.
 globalStyle(`${pageBarTitle} h1:has(> ${titleBtn})`, { overflow: "visible", marginRight: "4px" });
+/** An agent in the history tab's switch: its name, how it stands under it. */
+export const agentSwitchText = style({ display: "grid", flex: "1", minWidth: "0", lineHeight: "18px" });
+export const agentSwitchState = style({ fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "260px" });

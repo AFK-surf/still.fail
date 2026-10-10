@@ -181,7 +181,7 @@
   "web-pages.chat.archiveFailed": "没能归档：{error}",
   "web-pages.chat.archived": "已归档",
   "web-pages.chat.close": "关闭 {name}",
-  "web-pages.chat.closeHistory": "关闭 {agent} 的执行历史",
+  "web-pages.chat.switchAgent": "切换 agent",
   "web-pages.chat.closeJobs": "关闭任务",
   "web-pages.chat.closePanel": "收起侧栏",
   "web-pages.chat.evict": "释放进程",

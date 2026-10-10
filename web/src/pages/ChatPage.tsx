@@ -1,13 +1,13 @@
 import { StationUpdate } from "../StationUpdate.tsx";
 // A chat: a thread (a Slack thread or a chat on still.fail's page) with its people
-// and agents. The messages are the page; each agent's execution history can
-// be opened beside them, one tab per agent.
+// and agents. The messages are the page; its agents' execution histories can
+// be opened beside them, in one tab that switches between them.
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
-import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
+import { Archive, Boxes, Check, ChevronDown, Close, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
-import { Popover, Tabs } from "radix-ui";
+import { DropdownMenu, Popover, Tabs } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { PENDING } from "../lastChat.ts";
@@ -101,8 +101,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   }, [made, stationKey]);
   const agents = chatView.value?.agents ?? [];
   const lives = useLives(station.address, agents.map((a) => a.session.key));
-  // One history tab per agent, by session key; each but the first agent's can be closed (the panel's switch closes
-  // that), and with none open the panel goes away.
+  // One history tab, by the session key of the agent it shows: picking another agent puts that one's in its place. It
+  // is not closed alone (the panel's switch closes it), and with no tab open the panel goes away.
   // Each chat keeps its own tabs. One not opened before opens none (its agents' histories open from them when wanted),
   // except an agent with no chat yet, here or in Slack (the core's `noChat`): its page shows its history. Where the
   // panel would lie over the chat (the styles' `max-width: 1100px`), none opens by itself: the chat comes first.
@@ -123,9 +123,12 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     for (const job of jobs) if (job.open === false) closePreview(previewKey(station.address, job.id));
   }, [jobs, station.address]);
   const known = agents.length ? tabs.filter((key) => key === JOBS || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
-  // The panel open always has the first agent's history, first: it is not closed alone (as the panel would bring it back).
-  const own = agents[0]?.session.key;
-  const open = own && known.length && !known.includes(own) ? [own, ...known] : known;
+  // The panel open always has the history tab, first: the agent in front, else the first one kept (tabs kept before
+  // there was one may name several), else the chat's own (agents[0]).
+  const isAgent = (key: string) => agents.some((a) => a.session.key === key);
+  const viewed = agents.length && known.length
+    ? (active && known.includes(active) && isAgent(active) ? active : known.find(isAgent) ?? agents[0]!.session.key) : null;
+  const open = viewed ? [viewed, ...known.filter((key) => !isAgent(key))] : known;
   // The job picked in the 任务 tab.
   const [jobPicked, pickJob] = useState<string | null>(null);
   const shown = active && open.includes(active) ? active : open[0] ?? null;
@@ -193,6 +196,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   }, [sliding]);
   const openTab = (key: string) => {
     if (open.length === 0 && !reducedMotion()) setOpening(true);
+    // An agent's history takes the history tab's place.
+    if (isAgent(key)) return commit([key, ...open.filter((tab) => !isAgent(tab))], key);
     commit(open.includes(key) ? open : [...open, key], key);
   };
   const closeTab = (key: string) => {
@@ -206,7 +211,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     if (job) pickJob(job);
     openTab(JOBS);
   };
-  const toggleHistory = (key: string) => (open.includes(key) && shown === key ? closeTab(key) : openTab(key));
+  const toggleHistory = (key: string) => (open.includes(key) && shown === key ? saveTabs([]) : openTab(key));
   // An activity row: its agent's history, open at that entry.
   const [focus, setFocus] = useState<{ key: string; entry: number; n: number } | null>(null);
   // A link that names a web service of the chat's (`?service=<job>`, a service's link in Slack): its tab, open.
@@ -273,10 +278,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   useShortcut("chat.stop", running.length ? () => {
     act(Promise.all(running.map((a) => api.stop(a.session.key))), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"));
   } : null);
-  // The history tab in front closes the panel; else the first agent's opens.
+  // The history tab in front closes the panel; else it comes to the front, the chat's own agent's if not open.
   useShortcut("chat.history", agents[0] ? () => {
-    const front = agents.find((a) => a.session.key === shown);
-    if (front) saveTabs([]); else openTab(agents[0]!.session.key);
+    if (shown && isAgent(shown)) saveTabs([]); else openTab(viewed ?? agents[0]!.session.key);
   } : null);
   useShortcut("chat.jobs", () => (shown === JOBS ? closeTab(JOBS) : openJobs()));
   useShortcut("panel.close", open.length ? () => saveTabs([]) : null);
@@ -420,8 +424,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                       <Tip label={label} cut><Tabs.Trigger className={css.sideTab} value={key}>
                         <span className={css.sideTabAgent}><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={14} /><span className={css.sideTabText} data-text={label}>{label}</span></span>
                       </Tabs.Trigger></Tip>
-                      {/* The chat's own agent's history is the panel's: the panel's switch closes it, not a tab's. */}
-                      {a !== agents[0] && <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.closeHistory", { agent: label })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>}
+                      {/* The panel's switch closes it, not a tab's; with more agents than one, it switches between them. */}
+                      {agents.length > 1 && <AgentSwitch agents={agents} shown={key} onPick={openTab} />}
                     </span>
                   );
                 })}
@@ -471,6 +475,31 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           </Tabs.Root>
         )}
     </div>
+  );
+}
+
+/** The history tab's switch: each of the chat's agents, how it stands, the one shown checked. */
+function AgentSwitch({ agents, shown, onPick }: { agents: ChatAgent[]; shown: string; onPick(key: string): void }) {
+  return (
+    <DropdownMenu.Root modal={false}>
+      <Tip label={t("web-pages.chat.switchAgent")}>
+        <DropdownMenu.Trigger className={css.sideTabClose} aria-label={t("web-pages.chat.switchAgent")}><ChevronDown size={12} strokeWidth={2} /></DropdownMenu.Trigger>
+      </Tip>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} align="start" sideOffset={4} collisionPadding={8}>
+          {agents.map((a) => (
+            <DropdownMenu.Item key={a.session.key} className={controlsCss.menuItem} onSelect={() => onPick(a.session.key)}>
+              <AgentMark maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={18} />
+              <span className={css.agentSwitchText}>
+                <span>{a.session.agentText}</span>
+                <span className={css.agentSwitchState}>{a.session.statusText}</span>
+              </span>
+              {a.session.key === shown && <Check size={14} strokeWidth={2} />}
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 
