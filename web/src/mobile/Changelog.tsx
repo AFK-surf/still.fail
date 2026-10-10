@@ -37,10 +37,12 @@ export function ChangelogScreen() {
             <ListCard>
               {day.entries.map((item) => (
                 <div key={item.version} className={css.mChange}>
-                  {item.text.map((line, i) => <span key={i} className={css.mLine}>{line}</span>)}
+                  {item.lines.map((line, i) => (
+                    <span key={i} className={css.mLine}>{line.label && <span className={css.mKind} data-kind={line.kind ?? undefined}>{line.label}</span>}{line.text}</span>
+                  ))}
                   <span className={css.mMeta}>
-                    {item.place && <span>{item.place}</span>}
-                    <span data-has={item.has == null ? undefined : String(item.has)}>{item.note}</span>
+                    <span>{item.versionName}</span>
+                    {item.note && <span data-has={item.has == null ? undefined : String(item.has)}>{item.note}</span>}
                   </span>
                 </div>
               ))}

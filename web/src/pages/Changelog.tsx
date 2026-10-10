@@ -31,9 +31,9 @@ export function ChangelogPage({ back }: { back: string }) {
           <h1>{t("web-pages.settings.nav.changelog")}</h1>
           {view?.build != null && <p className={shellCss.muted}>{t("web-pages.changelog.build", { build: view.build })}</p>}
         </div>
-        {tab && <Segmented className={css.tabs} label={t("web-pages.settings.nav.changelog")} value={tab.part} onChange={setPart}
-          options={view!.tabs.map((x) => ({ value: x.part, label: x.label }))} />}
       </header>
+      {tab && <Segmented className={css.tabs} label={t("web-pages.settings.nav.changelog")} value={tab.part} onChange={setPart}
+        options={view!.tabs.map((x) => ({ value: x.part, label: x.label }))} />}
       {!view || view.loading ? <Loading label={t("web-pages.settings.reading")} fill={false} />
         : view.error ? <p className={controlsCss.fieldError}>{view.error}</p>
         : !tab || tab.days.length === 0 ? <p className={shellCss.muted}>{t("web-pages.changelog.empty")}</p>
@@ -47,14 +47,18 @@ export function ChangelogPage({ back }: { back: string }) {
   );
 }
 
+/** One change: each line with its kind before it, the version at the end of the first; under them, what is not out yet. */
 function Change({ item }: { item: ChangelogItem }) {
   return (
     <div className={css.change}>
-      {item.text.map((line, i) => <p key={i} className={css.line}>{line}</p>)}
-      <p className={css.meta}>
-        {item.place && <span>{item.place}</span>}
-        <span className={css.note} data-has={item.has == null ? undefined : String(item.has)}>{item.note}</span>
-      </p>
+      {item.lines.map((line, i) => (
+        <div key={i} className={css.row}>
+          <span className={css.kind} data-kind={line.kind ?? undefined}>{line.label}</span>
+          <p className={css.line}>{line.text}</p>
+          {i === 0 && <span className={css.version}>{item.versionName}</span>}
+        </div>
+      ))}
+      {item.note && <p className={css.note} data-has={item.has == null ? undefined : String(item.has)}>{item.note}</p>}
     </div>
   );
 }

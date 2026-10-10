@@ -537,15 +537,25 @@ export interface Buddy {
 }
 
 /**
- * One change: its lines for people, the version it came in, where it is (`place`: the parts and version, empty when
- * it needed no release), whether this app has it (`has`: absent when it is not this app's), and what that means
- * (`note`: 你的版本已包含, 更新到 0.1.n 后就有, 还没发布, 已发布, 已上线); `mine`: it is this app's.
+ * A change's line: its kind (`new`, `improve` or `fix`, from how it was written: 新功能：, 改进：, 修复：) and the
+ * kind's name, then the rest; no kind, and all of it, when it starts otherwise.
+ */
+export interface ChangelogLine {
+	kind?: string;
+	label: string;
+	text: string;
+}
+
+/**
+ * One change: its lines for people (`text` as written, `lines` with their kind apart), the version it came in,
+ * whether this app has it (`has`: absent in another tab, or when it is not this app's), and what is not out yet
+ * (`note`: 更新到 0.1.n 后就有, 刷新页面后就有, 还没发布; empty when it is out); `mine`: it is this app's.
  */
 export interface ChangelogItem {
 	version: number;
 	versionName: string;
 	text: string[];
-	place: string;
+	lines: ChangelogLine[];
 	has?: boolean;
 	note: string;
 	mine: boolean;
