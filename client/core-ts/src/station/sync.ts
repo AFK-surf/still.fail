@@ -137,6 +137,10 @@ export class Link {
   /// The last event its streams gave, by its id: the station's run and its number in it (a station from before has
   /// none). A stream taking over from another asks for what came after it (`since`).
   lastEvent: { run: string; n: number } | null = null;
+  /// The last event as written down with what it told (`heard`); `restored`: it was, by a core before this one, and no
+  /// stream has opened since.
+  keptEvent: { run: string; n: number } | null = null;
+  restored = false;
   /// Sessions at work as their stream says (steps, phase, rate, usage).
   readonly lives = new Map<string, LiveView>();
   /// Threads whose summaries are read again once a burst of events is over.
@@ -267,6 +271,12 @@ export class StationsSync {
     }
     const link = new Link(address, addr, core.runner.child());
     this.#links.set(address, link);
+    // The last event it told a core before this one, written down with what it told: the first stream asks what came
+    // after it, and nothing is read again when the station still has that (the app started again within the hour).
+    const heard = core.data.record("heard", address);
+    if (typeof heard === "string") heardEvent(link, heard);
+    link.keptEvent = link.lastEvent;
+    link.restored = link.lastEvent !== null;
     // How it was last time, until the link finds out anew: kept in its workspace's database, there as the link is.
     const last = core.data.record("link", address);
     if (last === "online" || last === "offline") link.state = { state: "connecting", last };
@@ -457,9 +467,13 @@ export class StationsSync {
             // `missed` when it cannot tell all it missed).
             const resumed = since !== null && replyHeader(opened.success, RESUMED) === "1";
             span.set("stillfail.resumed", resumed);
+            if (link.restored) span.set("stillfail.restored", true);
             span.end();
             let snapshotted = !handing && !resumed;
             if (snapshotted) self.snapshot(address, span.context);
+            // Taken up from where a core before this one was: its history is swept as a reading of everything would.
+            else if (link.restored) self.#historyStart(address);
+            link.restored = false;
             handing = false;
             const parser = new SseParser();
             const openedAt = core.host.nowMs();
@@ -503,6 +517,11 @@ export class StationsSync {
                   snapshotted = true;
                 } else self.onEvent(address, name, data);
                 if (id !== undefined) heardEvent(link, id);
+              }
+              // Written down in the same write as what the events changed: a core after this one takes up from it.
+              if (link.lastEvent !== link.keptEvent && link.lastEvent !== null) {
+                core.data.put("heard", address, `${link.lastEvent.run}.${link.lastEvent.n}`);
+                link.keptEvent = link.lastEvent;
               }
             }
             if (link.generation !== generation) return { done: true } as const;

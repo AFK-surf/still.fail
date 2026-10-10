@@ -217,7 +217,12 @@ that only notifications change it:
   station's run and the event's number in it, `<run>.<n>`): one taking over
   from a stream still open, and one coming back after its link went (on a
   weak link that is every minute or so: the link moves to a better way, or
-  loses its way). The station keeps what it told for an hour (while
+  loses its way). So does the first, when a core before this one heard
+  one: the last id is written down in the same write as what its event
+  changed (the `heard` record), and an app started again within the hour
+  (a phone lets its process go often) reads nothing again either; taken up
+  so, the station's history is swept as after reading everything. The
+  station keeps what it told for an hour (while
   nobody follows too, for one coming back) and tells what came after first,
   with the same ids, then the viewer's sidebar rows and overview as they
   changed meanwhile, and answers `stillfail-resumed: 1`: nothing is read
