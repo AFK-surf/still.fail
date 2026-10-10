@@ -835,12 +835,16 @@ function setMenu(): void {
 
 function keepUpdated(): void {
   if (!app.isPackaged) return;
-  download = () => void autoUpdater.downloadUpdate().catch(() => {});
+  // The feed is asked again first: what a check found hours ago is often not the latest any more (the beta app gets a
+  // build a commit), and the build downloaded would ask for the next one as soon as it opened.
+  download = () => void autoUpdater.checkForUpdates().then(() => autoUpdater.downloadUpdate()).catch(() => {});
   autoUpdater.setFeedURL({ provider: "generic", url: `${CLOUD_ORIGIN}/releases/desktop`, channel: BETA ? "stillfail-beta" : "stillfail" });
   autoUpdater.logger = null;
   autoUpdater.autoDownload = false;
   autoUpdater.on("update-available", ({ version }) => {
-    if (update?.version !== version) sayUpdate({ phase: "available", version });
+    if (update?.version === version) return;
+    // Found by the check a download starts with: the download goes on, of this one.
+    sayUpdate(update?.phase === "downloading" ? { ...update, version } : { phase: "available", version });
   });
   autoUpdater.on("download-progress", ({ percent }) => {
     if (update?.phase === "downloading") sayUpdate({ ...update, percent: Math.floor(percent) });
