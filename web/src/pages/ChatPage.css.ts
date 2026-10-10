@@ -176,6 +176,8 @@ globalStyle(`${detailRow} dt`, { color: vars.muted });
 globalStyle(`${detailsList} ${muted}`, { fontSize: vars.textMeta });
 globalStyle(`${sideTabAgent} > :not(${sideTabText})`, { flex: "none" });
 globalStyle(`${sideTabWrap} ${sideTab}`, { background: "none !important", paddingRight: "4px" });
+/** Without a close button (the chat's own agent): its whole padding. */
+globalStyle(`${sideTabWrap} ${sideTab}:only-child`, { paddingRight: "12px" });
 globalStyle(`${sidePanel} ${resizeHandle}`, {
   "@media": {
     "(max-width: 1100px)": {
