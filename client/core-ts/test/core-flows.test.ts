@@ -1414,3 +1414,16 @@ test("automatic_decision_drafts_require_a_model_and_preserve_failed_saves", asyn
   assert.equal(forms.value(topic), null);
   core.close();
 });
+
+test("the_spans_a_core_sends_say_which_build_of_its_app_it_is_once_its_ui_has_said", async () => {
+  const { host, core } = await started(base(), 1);
+  const ui = core.connect();
+  call(core, ui, 1, "client.device", { app: "android", build: "0.1.2420" });
+  await host.settle();
+  await host.time.pass(EXPORT_MS + 100);
+  const sent = exports(host);
+  assert.equal(sent.length, 1);
+  const resource = JSON.parse(new TextDecoder().decode(sent[0].body!)).resourceSpans[0].resource.attributes as J[];
+  assert.deepEqual(resource.find((a) => a.key === "service.version")?.value, { stringValue: "0.1.2420" });
+  core.close();
+});

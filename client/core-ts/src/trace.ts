@@ -56,6 +56,9 @@ export class Tracer {
   #buffer: unknown[] = [];
   #scheduled = false;
   #export: Export | null = null;
+  /// The app's build, once its UI has said it (`client.device`): Axiom's `service.version`, which tells what an
+  /// update changed from what older builds still running do.
+  #version = "";
 
   constructor(host: Host, runner: Runner, sample: number) {
     this.#host = host;
@@ -65,6 +68,10 @@ export class Tracer {
 
   setExport(e: Export): void {
     this.#export = e;
+  }
+
+  setVersion(version: string): void {
+    this.#version = version;
   }
 
   current(): SpanContext | null {
@@ -144,7 +151,7 @@ export class Tracer {
     const body = {
       resourceSpans: [
         {
-          resource: { attributes: [attribute("service.name", service.name), attribute("os.type", service.os)] },
+          resource: { attributes: [attribute("service.name", service.name), attribute("os.type", service.os), ...(this.#version ? [attribute("service.version", this.#version)] : [])] },
           scopeSpans: [{ scope: { name: "stillfail-core" }, spans }],
         },
       ],
