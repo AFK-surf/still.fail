@@ -541,20 +541,22 @@ function JoinThisMac({ account, workspace, className }: { account: Account; work
 /** An enrollment's command (Windows' too, from a cloud that gives it), and that the station is awaited. */
 function EnrollSteps({ enrollment }: { enrollment: { install: string; installWindows?: string } }) {
   return (
-    <>
-      <p>{t("web-pages.settings.enroll.run")}<About>{t("web-pages.settings.enroll.about", { name: NAME })}</About></p>
-      <CopyCommand text={enrollment.install} />
+    <div className={css.enroll}>
+      <div className={css.enrollStep}>
+        <p className={css.enrollLabel}>{t("web-pages.settings.enroll.run")}<About>{t("web-pages.settings.enroll.about", { name: NAME })}</About></p>
+        <CopyCommand text={enrollment.install} />
+      </div>
       {enrollment.installWindows && (
-        <>
-          <p>{t("web-pages.settings.enroll.windows")}</p>
+        <div className={css.enrollStep} data-shell="powershell">
+          <p className={css.enrollLabel}>{t("web-pages.settings.enroll.windows")}</p>
           <CopyCommand text={enrollment.installWindows} />
-        </>
+        </div>
       )}
       <div className={css.enrollWait} role="status">
         <span className={waitingCss.spinner} aria-hidden="true" />
         <span><strong>{t("web-pages.settings.enroll.waiting")}</strong><span className={shellCss.muted}>{t("web-pages.settings.enroll.waitingNote")}</span></span>
       </div>
-    </>
+    </div>
   );
 }
 
