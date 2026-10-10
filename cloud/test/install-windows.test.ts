@@ -18,6 +18,12 @@ test("the Windows installer has every placeholder filled, in both languages and 
   assert.match(windowsInstallScript("https://ember.test", "stable", "en"), /\('[^']*\{0\}[^']*' -f \$nodeVersion\)/);
 });
 
+test("the Windows installer keeps its state in its own scope", () => {
+  // It runs as a script block (`& ([scriptblock]::Create(...))`): $script: and $global: there are its caller's, so a
+  // function setting one leaves the installer's variable as it was.
+  assert.deepEqual(windowsInstallScript("https://ember.test").match(/\$(script|global):\w+/gi) ?? [], []);
+});
+
 test("the Windows installer is one PowerShell parses", { skip: spawnSync("powershell", ["-NoProfile", "-Command", "exit 0"]).status !== 0 && "no PowerShell" }, () => {
   const dir = mkdtempSync(join(tmpdir(), "install-ps1-"));
   try {

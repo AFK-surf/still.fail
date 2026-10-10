@@ -128,25 +128,109 @@ if (-not $Token -and $station -and $haveTask -and (Test-Path $version) -and ((Ge
   exit 0
 }
 
-# Stopped before its files are replaced: the launcher ended (its task too), and the station, its control pipe closed,
-# stops by itself; whatever of it is left after 30 s is ended.
-Step 'restart'
-if ($station -or $haveTask) {
-  Say (__SAY(cloud.install.win.stopping))
-  if ($haveTask) { Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue }
-  if ($station) { Stop-Process -Id $station.ProcessId -Force -ErrorAction SilentlyContinue }
-  $ours = { Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($app) -and $_.Name -in 'node.exe', 'stillfail-station.exe', 'stillfail-station-w.exe' } }
-  $deadline = (Get-Date).AddSeconds(30)
-  while ((& $ours) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
-  & $ours | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+# What the scheduled task runs (registered below): a task running it already is handed over to, not registered anew.
+$launch = Join-Path $app 'mesh\\target\\release\\stillfail-station-w.exe'
+$arguments = 'run --app "' + $app + '" --data "' + $data + '"'
+$sameTask = $false
+if ($haveTask) {
+  $runs = @((Get-ScheduledTask -TaskName $task).Actions)[0]
+  $sameTask = [bool]($runs -and $runs.Execute -eq $launch -and $runs.Arguments -eq $arguments)
 }
 New-Item -ItemType Directory -Force $data | Out-Null
-# The release before goes aside: its runners (agents', jobs') go on running from there, which Windows lets a directory
-# be moved but not removed for; what no runner holds any more is removed, now or at a next update.
+# The release before goes aside: its runners (agents', jobs') and the launcher go on running from there, which Windows
+# lets a directory be moved but not removed for; what nothing holds any more is removed, now or at a next update.
 $old = { Get-ChildItem $data -Directory -Filter 'app.old*' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
-& $old
-if (Test-Path $app) { Move-Item $app ($app + '.old-' + (Get-Date -Format 'yyyyMMddHHmmss')) }
-Move-Item $new $app
+# What Swap did, kept in a table it changes (this runs as a script block, where $script: is its caller's scope).
+$swap = @{ done = $false; aside = $null }
+function Swap {
+  & $old
+  if (Test-Path $app) { $swap.aside = $app + '.old-' + (Get-Date -Format 'yyyyMMddHHmmss'); Move-Item $app $swap.aside }
+  Move-Item $new $app
+  $swap.done = $true
+}
+# A line on the running launcher's own pipe (launcher/src/run_windows.rs control_pipe): handover, drain.
+function Ask([string]$op) {
+  try {
+    $pipe = New-Object System.IO.Pipes.NamedPipeClientStream('.', ('stillfail-launcher-' + $station.ProcessId), [System.IO.Pipes.PipeDirection]::Out)
+    $pipe.Connect(5000)
+    $line = [Text.Encoding]::UTF8.GetBytes('{"op":"' + $op + '"}' + [char]10)
+    $pipe.Write($line, 0, $line.Length)
+    $pipe.Flush()
+    $pipe.Dispose()
+    return $true
+  } catch {
+    return $false
+  }
+}
+function Said { try { Get-Content (Join-Path $run 'station.json') -Raw | ConvertFrom-Json } catch { $null } }
+
+# Handed over without stopping (as install.sh does): the new release goes where the old one was, and the launcher,
+# which stays, starts it beside the one serving; that one hands its sessions over once the new one is up, and the
+# station's ports stay the launcher's throughout. Said done when station.json says a new start of the same launcher.
+$handed = ''
+if (-not $Token -and $station -and $sameTask -and $said.handoff -eq 1) {
+  $started = $said.startedAt
+  Remove-Item (Join-Path $run 'handoff-failed') -ErrorAction SilentlyContinue
+  Step 'handoff'
+  Say (__SAY(cloud.install.handoff.start))
+  Swap
+  if (Ask 'handover') {
+    $deadline = (Get-Date).AddSeconds(120)
+    while ((Get-Date) -lt $deadline) {
+      Start-Sleep 1
+      $now = Said
+      if ($now -and $now.startedAt -ne $started) {
+        # The same launcher: handed over. Another: it went down mid-way and its task started the new release.
+        $handed = if ($now.pid -eq $said.pid) { 'yes' } else { 'restarted' }
+        break
+      }
+      if (Test-Path (Join-Path $run 'handoff-failed')) { break }
+    }
+  }
+  if (-not $handed) {
+    $why = Get-Content (Join-Path $run 'handoff-failed') -Raw -ErrorAction SilentlyContinue
+    $now = Said
+    if ($why -and $swap.aside -and (Get-Process -Id $station.ProcessId -ErrorAction SilentlyContinue) -and $now -and $now.startedAt -eq $started) {
+      # The new release did not come up and the old one serves on: it stays, and so does its release.
+      $why = $why.Trim()
+      $failed = $app + '.failed'
+      Remove-Item $failed -Recurse -Force -ErrorAction SilentlyContinue
+      Move-Item $app $failed
+      Move-Item $swap.aside $app
+      Remove-Item $failed -Recurse -Force -ErrorAction SilentlyContinue
+      Fail (__SAY(cloud.install.handoff.keptOld, why=$why))
+    }
+    if ($why) { $why = $why.Trim(); [Console]::Error.WriteLine(__SAY(cloud.install.handoff.failed, why=$why)) }
+    else { [Console]::Error.WriteLine(__SAY(cloud.install.handoff.noAnswer)) }
+  }
+}
+
+if (-not $handed) {
+  # Restarted once no turn runs (at most 10 minutes; it takes no new ones meanwhile), where the launcher drains.
+  if ($station -and $said.drain -eq 1 -and -not $env:STILLFAIL_NO_DRAIN) {
+    Remove-Item (Join-Path $run 'drained') -ErrorAction SilentlyContinue
+    if (Ask 'drain') {
+      Step 'drain'
+      Say (__SAY(cloud.install.drain))
+      $deadline = (Get-Date).AddSeconds(630)
+      while ((Get-Date) -lt $deadline -and -not (Test-Path (Join-Path $run 'drained')) -and (Get-Process -Id $station.ProcessId -ErrorAction SilentlyContinue)) { Start-Sleep 1 }
+    }
+  }
+  # Stopped before its files are replaced: the launcher ended (its task too), and the station, its control pipe closed,
+  # stops by itself; whatever of it is left after 30 s is ended.
+  Step 'restart'
+  if ($station -or $haveTask) {
+    Say (__SAY(cloud.install.win.stopping))
+    if ($haveTask) { Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue }
+    if ($station) { Stop-Process -Id $station.ProcessId -Force -ErrorAction SilentlyContinue }
+    # By <app> in their command lines: the release's, and one moved aside (app.old-…) on a handover that failed.
+    $ours = { Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($app) -and $_.Name -in 'node.exe', 'stillfail-station.exe', 'stillfail-station-w.exe' } }
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((& $ours) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    & $ours | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  }
+  if (-not $swap.done) { Swap }
+}
 & $old
 # The Nodes no release here runs on any more.
 Get-ChildItem (Join-Path $data 'node') -Directory -ErrorAction SilentlyContinue | Where-Object { $_.FullName -ne $nodeDir } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
@@ -172,26 +256,25 @@ if ($Token) {
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-# At sign-in, with no window; started again a minute after it ends (the launcher itself starts its station again).
-$launch = Join-Path $app 'mesh\\target\\release\\stillfail-station-w.exe'
-$arguments = 'run --app "' + $app + '" --data "' + $data + '"'
-try {
+# At sign-in, with no window; started again a minute after it ends (the launcher itself starts its station again). A
+# station handed over runs on as its task started it.
+$taskSaid = __SAY(cloud.install.win.task, task=$task)
+if (-not $handed) { try {
   $action = New-ScheduledTaskAction -Execute $launch -Argument $arguments -WorkingDirectory $data
   $trigger = New-ScheduledTaskTrigger -AtLogOn -User ([Security.Principal.WindowsIdentity]::GetCurrent().Name)
   $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -StartWhenAvailable
   $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
   Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
   Start-ScheduledTask -TaskName $task
-  $taskSaid = __SAY(cloud.install.win.task, task=$task)
 } catch {
   $why = $_.Exception.Message
   [Console]::Error.WriteLine(__SAY(cloud.install.win.taskFailed, why=$why))
   Start-Process -FilePath $launch -ArgumentList $arguments -WindowStyle Hidden
   $taskSaid = $null
-}
+} }
 
 Say ''
-Say (__SAY(cloud.install.installed))
+if ($handed -eq 'yes') { Say (__SAY(cloud.install.updated)) } else { Say (__SAY(cloud.install.installed)) }
 Say ('  ' + __SAY(cloud.install.win.where.app, app=$app))
 Say ('  ' + __SAY(cloud.install.where.data, data=$data))
 Say ('  ' + __SAY(cloud.install.where.status))

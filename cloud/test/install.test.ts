@@ -190,3 +190,42 @@ test("the release says which channel it came from, for the station to go back fr
     m.done();
   }
 });
+
+test("a handover the new release cannot take leaves the station running on the old release, not restarted", () => {
+  const m = machine();
+  const data = join(m.home, ".stillfail");
+  let pid = 0;
+  try {
+    mkdirSync(join(data, "mesh"), { recursive: true });
+    writeFileSync(join(data, "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    assert.equal(m.run().status, 0, "installed, with its service");
+    writeFileSync(join(data, "app", "VERSION"), "old\n");
+    // The running station, as ps tells it: asked to hand over (SIGUSR2), it says its new Node did not come up.
+    const fake = join(m.root, "stillfail-station");
+    writeFileSync(
+      fake,
+      `#!/bin/sh\ntrap 'echo "the new release did not start" > "${data}/run/handoff-failed"' USR2\ntouch "${m.root}/listening"\nwhile :; do sleep 0.2; done\n`,
+      { mode: 0o755 },
+    );
+    // Not this process's child (the installer runs while this waits, so none is reaped here): one that has ended goes.
+    pid = Number(execFileSync("sh", ["-c", `"${fake}" </dev/null >/dev/null 2>&1 & echo $!`], { encoding: "utf8" }));
+    while (!existsSync(join(m.root, "listening"))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    mkdirSync(join(data, "run"), { recursive: true });
+    const said = `{"pid": ${pid}, "startedAt": 1700000000000, "handoff": 1, "drain": 1}`;
+    writeFileSync(join(data, "run", "station.json"), said);
+    writeFileSync(join(m.home, "said"), "");
+
+    const update = m.run();
+    assert.equal(update.status, 1, update.out);
+    assert.match(update.out, /the new release did not start/);
+    assert.match(update.out, /没能交接.*原来的 station 照常运行|Not handed over.*runs on as before/);
+    assert.equal(readFileSync(join(data, "app", "VERSION"), "utf8"), "old\n", "the old release back in its place");
+    assert.ok(!existsSync(join(data, "app.old")) && !existsSync(join(data, "app.failed")));
+    assert.ok(process.kill(pid, 0), "the station still runs");
+    assert.doesNotMatch(update.said, /launchctl (bootout|bootstrap)/, "and is not restarted");
+    assert.equal(readFileSync(join(data, "run", "station.json"), "utf8"), said);
+  } finally {
+    if (pid) process.kill(pid, "SIGKILL");
+    m.done();
+  }
+});

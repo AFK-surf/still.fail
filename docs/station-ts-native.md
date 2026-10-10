@@ -69,15 +69,19 @@ runner → 客户端：
 
 控制管道上 Node → 启动器：`{"ready":true,"version":"0.1.x"}`、`{"drained":"idle"|"timeout"}`（启动器照 Rust 版写 `run/drained`）。
 
-**生命周期只有一份**（`src/lifecycle.rs`）：上面第 4–7 步（ready、退避重启、连续失败放弃、交接、drain、停止和超时强杀、跟随父进程）是一个与平台无关的状态机，它的测试在三个平台上都会跑。`run.rs`（Unix）和 `run_windows.rs` 只负责三件事：起进程、在控制通道上收发消息、把事件（某行消息、进程结束、停止）告诉状态机。改重启、取消或超时策略只改这一处。各平台不同的只有两点：Windows 不发起交接，判断父进程是否还在时 Unix 用 `getppid` 有没有变，Windows 等父进程的句柄。
+**生命周期只有一份**（`src/lifecycle.rs`）：上面第 4–7 步（ready、退避重启、连续失败放弃、交接、drain、停止和超时强杀、跟随父进程）是一个与平台无关的状态机，它的测试在三个平台上都会跑。`run.rs`（Unix）和 `run_windows.rs` 只负责三件事：起进程、在控制通道上收发消息、把事件（某行消息、进程结束、停止）告诉状态机。改重启、取消或超时策略只改这一处。各平台不同的只有两点：端口怎么交给 Node（Unix 传 fd，Windows 由启动器转发，见下），判断父进程是否还在时 Unix 用 `getppid` 有没有变，Windows 等父进程的句柄。
+
+交接时“热好了”和“接管了”是两回事：新 Node 说 ready 只表示它能接手；旧 Node 交出会话并退出、新 Node 接上之后，它才开始调度（同一时刻只有一个 Node 在调度）。交接失败（新 Node 起不来、超时）时旧的照常服务，启动器写 `run/handoff-failed`；安装器（两个平台一样）看到它、且 station 还是原来那次启动（pid 活着、`startedAt` 没变），就把旧发布挪回原位、报告失败退出，**不会重启进一个起不来的新版本**。
 
 ### Windows（`src/run_windows.rs`）
 
 只有 `run` 的最小版本，其余命令照旧交给 Node（没有 exec，Node 作为子进程跑，退出码照传）：
 
 - 锁用 `File::try_lock`（LockFileEx），拿不到退出码 3。
-- Node 自己 bind 端口（Windows 上 Node 不支持 `listen({fd})`），所以**没有交接**：不起新 Node 旁接，重启时端口有短暂空档；`handover`/SIGUSR1/SIGUSR2 都没有。
+- 端口：Windows 上 Node 不支持 `listen({fd})`，所以启动器自己占着 MCP 端口和回环口（规则同 Unix），在中间转发（`src/proxy.rs`）。Node 以 `--launcher-ports <mcp>,<回环口>` 启动，自己听 `127.0.0.1:0`，对外（agent 的 MCP 地址、`run/ports.json`）仍说启动器的端口；门开好后在控制通道上说 `{"serving":"mcp"|"admin","port":N}`。启动器只把连接转给**已经接管**的那个 Node（交接中热好的新 Node 说了也先不转）。
+- 转发只管自己的连接：已经建立的连接留在原来的 Node 上，不重放，旧 Node 退出时随之断开（要客户端重新连）；交接空档里新来的连接最多等 60 秒（`ENTRANCE_WAIT`），等到接管的 Node 就转过去，等不到就关掉。所以承诺的是“任务继续、入口不变”，不是“完全无感”。
 - 控制通道是命名管道 `\\.\pipe\stillfail-launcher-<pid>-<n>`（只给当前用户），以 `--launcher-pipe` 交给 Node（`src/ops/launcher.ts`），两边的消息同 Unix。
+- 没有信号，安装器、`stillfail channel` 改用启动器自己的管道 `\\.\pipe\stillfail-launcher-<pid>`（只给当前用户）发一行 `{"op":"handover"|"drain"|"hup"|"stop"}`，对应 Unix 的 SIGUSR2/SIGUSR1/SIGHUP/SIGTERM（TS 侧在 `platform.askLauncher`）。
 - ^C / 控制台关闭 / `--with-parent` 的父进程没了：交给共用的状态机，和 Unix 的 SIGTERM 一样处理。Node 在自己的进程组里，^C 只到启动器。
 - Node 意外退出、退避、放弃：同 Unix（共用的状态机）。
 - Node 在发布目录里是 `node/node.exe`（Node 官方 Windows 包的布局）。
@@ -86,7 +90,8 @@ runner → 客户端：
 安装、自启动、更新（`cloud/src/install-windows.ts`，`/install.ps1`）：
 - 发布包 `stillfail-station-win32-x64.zip`（`scripts/station-bundle.sh win32-x64`），native 部分由 `scripts/native.ts` 在 Mac 上用 cargo-zigbuild 交叉编译（`x86_64-pc-windows-gnu`），和 macOS/Linux 一样走缓存/CI。
 - 自启动是当前用户的计划任务（登录时、不需要管理员），结束后 1 分钟再起。`STILLFAIL_TASK`/`STILLFAIL_BIN` 让一台测试 station 用自己的任务名和命令目录，记在 `<data>/windows.json` 里，之后的更新（包括 station 自己发起的）沿用。
-- 更新先停（停任务、结束 launcher，按命令行里含 `<app>` 等 Node 退出），旧发布挪到 `app.old-<时间>`（还在跑的 runner 让目录删不掉，挪可以），下次再清。
+- 更新同 install.sh：station 在跑、计划任务没变、`station.json` 说 `handoff:1` 时，旧发布挪到 `app.old-<时间>`（还在跑的启动器、runner 让目录删不掉，挪可以），新发布放到原位，请启动器交接；`startedAt` 变了、pid 没变就是交接成功，启动器不重启。交接失败且旧的还在服务：挪回旧发布、报告失败。其余情况（第一次装、任务变了、交接失败且旧的已经不在）先 drain，再停（停任务、结束 launcher，按命令行里含 `<app>` 等 Node 退出）、换发布、重启。
+- 安装器在 PowerShell 里作为脚本块运行（`& ([scriptblock]::Create(...))`），那里的 `$script:` 是调用者的作用域：函数要改的状态放在一个哈希表里（`cloud/test/install-windows.test.ts` 守着不出现 `$script:`/`$global:`）。
 - station 从页面上自更新（`updates.ts` 的 `startInstaller`）：写 `run/update.ps1`，复制 `stillfail-station-w.exe` 到 `run/`，注册一次性计划任务「<station 的任务名> update」去跑它，跑完自己删掉任务；`update.step`/`update.log`/`update.exit` 同 Unix。不用 WMI 的 `Win32_Process.Create`：那样起 PowerShell 会被安全软件拒（实测“Access is denied”）。
 
 ### 从 Rust 版切过来

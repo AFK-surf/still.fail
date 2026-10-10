@@ -314,6 +314,13 @@ if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_servic
   if [ -n "$handed" ]; then
     rm -rf "$app.old"
     prune_node
+  elif [ -f "$data/run/handoff-failed" ] && kill -0 "$pid" 2>/dev/null && [ "$(said startedAt)" = "$started" ]; then
+    # The new release did not come up and the old one serves on: it stays, and so does its release.
+    rm -rf "$app.failed"
+    mv "$app" "$app.failed" && mv "$app.old" "$app"
+    rm -rf "$app.failed"
+    echo "${say("cloud.install.handoff.keptOld", { why: '$(cat "$data/run/handoff-failed")' })}" >&2
+    exit 1
   elif [ -f "$data/run/handoff-failed" ]; then
     echo "${say("cloud.install.handoff.failed", { why: '$(cat "$data/run/handoff-failed")' })}" >&2
   elif [ "$(said startedAt)" != "$started" ]; then
