@@ -601,9 +601,12 @@
   "web-pages.settings.account.unnamedDevice": "Unnamed",
   "web-pages.settings.enroll.about": "macOS (Apple silicon), Linux and Windows all work; machines that already have {name} use this command too.",
   "web-pages.settings.enroll.run": "Run in a terminal on that machine",
+  "web-pages.settings.enroll.system": "The station's system",
+  "web-pages.settings.enroll.unix": "macOS / Linux",
+  "web-pages.settings.enroll.windowsTab": "Windows",
   "web-pages.settings.enroll.waiting": "Waiting for machine",
   "web-pages.settings.enroll.waitingNote": "Continues once the command runs · Valid 1 hour",
-  "web-pages.settings.enroll.windows": "Windows: run in PowerShell",
+  "web-pages.settings.enroll.windows": "Run in PowerShell on that machine",
   "web-pages.settings.members.add": "Add members",
   "web-pages.settings.members.addLead": "Added straight to “{workspace}”. People who've signed in to {name} join now; others join on first sign-in with that email.",
   "web-pages.settings.members.addN": {

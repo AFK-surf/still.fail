@@ -18,6 +18,8 @@ export const firstThisMac = style({ marginTop: "12px" });
 export const enroll = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "20px" });
 /** The command under what to do with it. */
 export const enrollStep = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "8px" });
+/** Which system's command it is (macOS and Linux's, Windows'): as wide as its options. */
+export const enrollSystem = style({ justifySelf: "start" });
 export const enrollLabel = style({ display: "flex", alignItems: "center", gap: "4px", margin: "0", fontSize: vars.textUi, fontWeight: "500" });
 /** Calm, not a warning: a line around it, the spinner the only colour. */
 export const enrollWait = style({
@@ -36,6 +38,7 @@ export const memoryStationName = style({ margin: "0 0 8px", fontSize: vars.textT
 globalStyle(`${groupHead} ${runtimeLogo}`, { alignSelf: "center" });
 /** As tall as the field beside it. */
 globalStyle(`${onboardingRow} ${btn}`, { height: "auto" });
+globalStyle(`${enrollSystem} > button`, { whiteSpace: "nowrap", padding: "0 14px" });
 globalStyle(`${enrollWait} strong`, { fontWeight: "600" });
 globalStyle(`${enrollWait} ${muted}`, { fontSize: vars.textMeta });
 globalStyle(`${enroll} ${command}`, { padding: "8px 8px 8px 16px", boxShadow: `inset 0 0 0 1px ${vars.line}` });
