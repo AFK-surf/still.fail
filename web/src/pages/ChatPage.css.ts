@@ -10,6 +10,8 @@ export const agentMarkBtn = style({
   display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer", borderRadius: "6px",
   selectors: {
     "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "2px" },
+    // Its history is the one shown beside the chat (among several agents).
+    "&[data-on]": { boxShadow: `0 0 0 2px ${vars.accent}` },
   },
 });
 /** The machine it runs on, beside the title: a quiet tag. */
@@ -176,7 +178,7 @@ globalStyle(`${detailRow} dt`, { color: vars.muted });
 globalStyle(`${detailsList} ${muted}`, { fontSize: vars.textMeta });
 globalStyle(`${sideTabAgent} > :not(${sideTabText})`, { flex: "none" });
 globalStyle(`${sideTabWrap} ${sideTab}`, { background: "none !important", paddingRight: "4px" });
-/** Without a close button (the chat's own agent): its whole padding. */
+/** Without a close button (the history's): its whole padding. */
 globalStyle(`${sideTabWrap} ${sideTab}:only-child`, { paddingRight: "12px" });
 globalStyle(`${sidePanel} ${resizeHandle}`, {
   "@media": {
@@ -201,3 +203,9 @@ export const titleBtn = style({
 globalStyle(`${pageBarTitle} h1:has(> ${titleBtn})`, { overflow: "visible", marginRight: "4px" });
 /** Ending its warm process, in its details' line: a link's look, as the profile's beside it. */
 export const evict = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
+/** An agent's card, from its avatar in the bar: who it is and how it stands, then what can be done. */
+export const agentCard = style({ display: "grid", gap: "10px" });
+export const agentCardHead = style({ display: "flex", alignItems: "center", gap: "10px", minWidth: "0" });
+export const agentCardWho = style({ display: "grid", gap: "2px", minWidth: "0", fontSize: vars.textUi });
+globalStyle(`${agentCardWho} > *`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const agentCardActions = style({ display: "flex", gap: "6px", justifyContent: "flex-end" });
