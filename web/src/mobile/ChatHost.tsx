@@ -133,7 +133,9 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, uplo
     };
     set();
     const observer = new ResizeObserver(() => {
-      const moving = frame.current ? settling(frame.current) : null;
+      // A new chat's choices sit just above the composer: they must follow its height while it moves, or the
+      // growing box covers them. There is no long message list to invalidate on that page.
+      const moving = !page.hasAttribute("data-new") && frame.current ? settling(frame.current) : null;
       if (!moving) return set();
       if (waiting) return;
       waiting = true;
