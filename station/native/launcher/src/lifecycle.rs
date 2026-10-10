@@ -41,7 +41,17 @@ pub struct Times {
     pub parent: Duration,
     /// How long run/drained stays when nobody stops the station (the Rust station's DRAINED_LIMIT).
     pub drained: Duration,
+    /// A Node's, once it serves (ready, or handed over to), to take over: serve every entrance (TAKEN_OVER). The old one
+    /// exiting (`exit`) and Node waiting for it (agents.ts PREVIOUS_LIMIT_MS, 40 s) fit in it.
+    pub take: Duration,
+    /// After a handover whose new Node did not take over, the wait before a Node is started again: the installer's to
+    /// put the release from before back (the old Node is gone by then; this way the next one runs on it).
+    pub rollback: Duration,
 }
+
+/// What a Node serves once it has taken over the station: the agents' door (after the sessions are taken up) and the
+/// loopback port. Until then it is not "up" for station.json (an installer's handover is not done).
+const TAKEN_OVER: [&str; 2] = ["admin", "mcp"];
 
 /// Starts in a row that end before Node says ready, after which the launcher gives up (the service starts it again).
 pub const START_FAILURES: u32 = 5;
@@ -49,7 +59,7 @@ pub const START_FAILURES: u32 = 5;
 impl Times {
     pub fn of_env() -> Times {
         let s = Duration::from_secs;
-        let mut times = Times { ready: s(60), exit: s(30), stop: s(30), backoff: s(1), backoff_max: s(60), stable: s(60), parent: s(2), drained: s(300) };
+        let mut times = Times { ready: s(60), exit: s(30), stop: s(30), backoff: s(1), backoff_max: s(60), stable: s(60), parent: s(2), drained: s(300), take: s(90), rollback: s(10) };
         for pair in std::env::var("STILLFAIL_LAUNCHER_TIMES").unwrap_or_default().split(',') {
             let Some((key, ms)) = pair.split_once('=') else { continue };
             let Ok(ms) = ms.trim().parse::<u64>() else { continue };
@@ -62,6 +72,8 @@ impl Times {
                 "stable" => &mut times.stable,
                 "parent" => &mut times.parent,
                 "drained" => &mut times.drained,
+                "take" => &mut times.take,
+                "rollback" => &mut times.rollback,
                 _ => continue,
             };
             *slot = Duration::from_millis(ms);
@@ -102,6 +114,20 @@ pub struct Node<P> {
     version: String,
     /// The ports it said it serves on (`{"serving":<name>,"port":<n>}`): once it has taken over, as its own.
     served: Vec<(String, u16)>,
+    /// Serving, not taken over yet: by when it must have.
+    take_by: Option<Instant>,
+    /// Taken over: station.json says its start.
+    taken: bool,
+    /// It came in by a handover (a failure to take over is the handover's).
+    handed: bool,
+    /// Being ended for not taking over.
+    given_up: bool,
+}
+
+impl<P> Node<P> {
+    fn serves_all(&self) -> bool {
+        TAKEN_OVER.iter().all(|name| self.served.iter().any(|(n, _)| n == name))
+    }
 }
 
 /// Which of the launcher's Nodes: the one serving, the one starting beside it (a handover), the one handing over.
@@ -127,6 +153,8 @@ pub struct Lifecycle<O: Os> {
     failures: u32,
     backoff_step: u32,
     drained_at: Option<Instant>,
+    /// No Node started before then (Times::rollback).
+    restart_floor: Option<Instant>,
     /// --with-parent: when the parent is looked for next.
     parent_at: Option<Instant>,
     /// The launcher's exit once nothing runs.
@@ -148,13 +176,49 @@ impl<O: Os> Lifecycle<O> {
             failures: 0,
             backoff_step: 0,
             drained_at: None,
+            restart_floor: None,
             parent_at,
             exit: 0,
         }
     }
 
     fn node(process: O::Node) -> Node<O::Node> {
-        Node { process, ready: None, version: String::new(), served: vec![] }
+        Node { process, ready: None, version: String::new(), served: vec![], take_by: None, taken: false, handed: false, given_up: false }
+    }
+
+    /// The Node serving has taken over once it serves every entrance and the one before it is gone: station.json says
+    /// its start then (not at ready: an installer takes that for a handover done).
+    fn check_taken(&mut self) {
+        if self.retiring.is_some() || self.stopping.is_some() {
+            return;
+        }
+        let Some(node) = self.current.as_mut() else { return };
+        if node.taken || node.ready.is_none() || !node.serves_all() {
+            return;
+        }
+        node.taken = true;
+        node.take_by = None;
+        log::info(&format!("Node {} has taken over", node.process.pid()));
+        self.failures = 0;
+        self.say_started();
+    }
+
+    /// The Node serving did not take over (`why`): ended, and started again as after a crash; after a handover, once
+    /// the installer has had the time to put the release before back.
+    fn take_failed(&mut self, why: &str) {
+        let Some(node) = self.current.as_mut() else { return };
+        node.take_by = None;
+        node.given_up = true;
+        let pid = node.process.pid();
+        log::warn(&format!("Node {pid} did not take over: {why}; ending it"));
+        if node.handed {
+            self.handoff_failed(&format!("the new station did not take over: {why}"));
+            self.restart_floor = Some(self.os.now() + self.times.rollback);
+        }
+        let Lifecycle { os, current, .. } = self;
+        if let Some(node) = current.as_mut() {
+            os.kill(&mut node.process);
+        }
     }
 
     /// The serving Node changed (from one that served on `before`): each entrance goes to the one serving now, where it
@@ -201,8 +265,10 @@ impl<O: Os> Lifecycle<O> {
     fn schedule_restart(&mut self) {
         let delay = self.times.backoff.saturating_mul(1 << self.backoff_step.min(16)).min(self.times.backoff_max);
         self.backoff_step += 1;
-        log::info(&format!("starting Node again in {} ms", delay.as_millis()));
-        self.restart_at = Some(self.os.now() + delay);
+        let now = self.os.now();
+        let at = (now + delay).max(self.restart_floor.take().unwrap_or(now));
+        log::info(&format!("starting Node again in {} ms", at.saturating_duration_since(now).as_millis()));
+        self.restart_at = Some(at);
     }
 
     /// station.json says this Node's start: the installer takes a new startedAt with the same pid for "handed over".
@@ -265,6 +331,7 @@ impl<O: Os> Lifecycle<O> {
                 return;
             }
             let now = self.os.now();
+            let take = self.times.take;
             let Some(node) = self.node_mut(slot) else { return };
             if node.ready.is_some() {
                 return;
@@ -274,9 +341,10 @@ impl<O: Os> Lifecycle<O> {
             log::info(&format!("Node {} ready (version {})", node.process.pid(), node.version));
             match slot {
                 Slot::Current => {
-                    // Started fine; the backoff goes back only once it has served `stable` (crashed()).
-                    self.failures = 0;
-                    self.say_started();
+                    // Up; started fine once it has taken over (the backoff goes back only once it has served
+                    // `stable`: crashed()).
+                    node.take_by = Some(now + take);
+                    self.check_taken();
                 }
                 Slot::Next => self.hand_over(),
                 Slot::Retiring => {}
@@ -289,6 +357,15 @@ impl<O: Os> Lifecycle<O> {
             log::info(&format!("Node {} serves {name} on port {port}", node.process.pid()));
             if slot == Slot::Current {
                 self.os.route(name, Some(port));
+                self.check_taken();
+            }
+        } else if let Some(why) = message["failed"].as_str() {
+            // It could not take over (Node: the agents' side did not start).
+            // Before or after ready; not one being ended already.
+            if slot == Slot::Current && self.current.as_ref().is_some_and(|n| !n.taken && !n.given_up) {
+                self.take_failed(why);
+            } else {
+                log::warn(&format!("Node failed: {why}"));
             }
         } else if let Some(said) = message["drained"].as_str().filter(|_| slot == Slot::Current) {
             log::info(&format!("drained ({said})"));
@@ -301,8 +378,10 @@ impl<O: Os> Lifecycle<O> {
 
     /// The new Node is ready: it serves, and the old one is told to hand over and go.
     fn hand_over(&mut self) {
-        let Some((next, _, _)) = self.next.take() else { return };
+        let Some((mut next, _, _)) = self.next.take() else { return };
         self.restart_at = None;
+        next.handed = true;
+        next.take_by = Some(self.os.now() + self.times.take);
         let old = self.current.replace(next);
         // The entrances leave the old one: they go to the new one where it serves already, else wait until it does
         // (it takes over once the old one has handed its sessions over).
@@ -314,10 +393,7 @@ impl<O: Os> Lifecycle<O> {
                 self.retiring = Some((old, self.os.now() + self.times.exit));
             }
             // The old one had crashed meanwhile: nothing to wait for.
-            None => {
-                self.failures = 0;
-                self.say_started();
-            }
+            None => self.check_taken(),
         }
     }
 
@@ -390,9 +466,7 @@ impl<O: Os> Lifecycle<O> {
             Some(Slot::Retiring) => {
                 self.retiring = None;
                 log::info(&format!("Node {pid} handed over and {how}"));
-                if self.stopping.is_none() && self.current.as_ref().is_some_and(|n| n.ready.is_some()) {
-                    self.say_started();
-                }
+                self.check_taken();
             }
             None => {}
         }
@@ -405,7 +479,8 @@ impl<O: Os> Lifecycle<O> {
         if self.next.is_some() {
             return;
         }
-        match node.ready {
+        // One that never took over did not start (counted towards giving up), ready or not.
+        match node.ready.filter(|_| node.taken) {
             Some(at) => {
                 self.failures = 0;
                 if self.os.now().saturating_duration_since(at) >= self.times.stable {
@@ -429,6 +504,12 @@ impl<O: Os> Lifecycle<O> {
             self.os.kill(&mut node.process);
             let why = format!("the new station (pid {pid}) was not ready within {} s", self.times.ready.as_secs_f32());
             self.handoff_failed(&why);
+        }
+        if self.stopping.is_none()
+            && let Some(by) = self.current.as_ref().and_then(|n| n.take_by)
+            && now >= by
+        {
+            self.take_failed(&format!("not within {} s", self.times.take.as_secs_f32()));
         }
         if let Some((node, by)) = &mut self.retiring
             && now >= *by
@@ -475,6 +556,7 @@ impl<O: Os> Lifecycle<O> {
         [
             self.next.as_ref().filter(|n| !n.2).map(|n| n.1),
             self.retiring.as_ref().map(|n| n.1),
+            self.current.as_ref().and_then(|n| n.take_by).filter(|_| self.stopping.is_none()),
             self.stopping,
             self.restart_at,
             self.drained_at.map(|at| at + self.times.drained),
@@ -577,7 +659,7 @@ mod tests {
         let run = data.join("run");
         std::fs::create_dir_all(&run).unwrap();
         let fake = Fake { dir: data, now: Instant::now(), pid: 100, told: vec![], killed: vec![], parent_gone: false, routes: vec![] };
-        let times = Times { ready: s(60), exit: s(30), stop: s(30), backoff: s(1), backoff_max: s(4), stable: s(60), parent: s(2), drained: s(300) };
+        let times = Times { ready: s(60), exit: s(30), stop: s(30), backoff: s(1), backoff_max: s(4), stable: s(60), parent: s(2), drained: s(300), take: s(90), rollback: s(10) };
         let mut station = Lifecycle::new(fake, times, run, with_parent);
         station.start();
         station
@@ -592,6 +674,17 @@ mod tests {
         fn pass(&mut self, by: Duration) {
             self.os.now += by;
             self.tick();
+        }
+
+        /// The Node in `slot` ready and serving both entrances (mcp on `base` + 1, admin on `base` + 2).
+        fn up(&mut self, slot: Slot, version: &str, base: u16) {
+            self.said(slot, ready(version));
+            self.serves(slot, base);
+        }
+
+        fn serves(&mut self, slot: Slot, base: u16) {
+            self.said(slot, json!({"serving": "admin", "port": base + 2}));
+            self.said(slot, json!({"serving": "mcp", "port": base + 1}));
         }
 
         /// The Node started last.
@@ -622,7 +715,7 @@ mod tests {
     fn a_handover_lets_the_old_node_go_once_the_new_one_is_ready() {
         let mut station = station("handover", false);
         let old = station.last();
-        station.said(Slot::Current, ready("0.1.0"));
+        station.up(Slot::Current, "0.1.0", 5000);
         assert_eq!(station.station_json()["version"], "0.1.0");
         assert_eq!(station.station_json()["pid"], std::process::id());
         station.start_next();
@@ -642,17 +735,90 @@ mod tests {
         station.pass(MS);
         assert_eq!(station.os.killed, [old]);
         station.ended(old, KILLED);
+        // Gone; the new one is ready, not yet serving: not handed over yet (an installer reads station.json for it).
+        assert_eq!(station.station_json()["version"], "0.1.0");
+        station.said(Slot::Current, serving("admin", 6002));
+        assert_eq!(station.station_json()["version"], "0.1.0", "the agents' door not open yet");
+        station.said(Slot::Current, serving("mcp", 6001));
         assert_eq!(station.station_json()["version"], "0.2.0");
         assert_eq!(station.station_json()["pid"], std::process::id());
         assert!(station.file("handoff-failed").is_none());
         assert!(station.told(new).is_empty() && station.stopping.is_none());
+        // Taken over: no deadline is left.
+        station.pass(s(3600));
+        assert_eq!(station.os.killed, [old]);
+        assert_eq!(station.serving(), new);
+    }
+
+    #[test]
+    fn a_new_node_that_does_not_take_over_is_ended_and_one_started_again_after_the_rollback_wait() {
+        let mut station = station("nottaken", false);
+        let old = station.last();
+        station.up(Slot::Current, "0.1.0", 5000);
+        let first = station.file("station.json");
+        station.start_next();
+        let new = station.last();
+        // Ready, the old one hands over and goes, the new one says its loopback port; its agents' side never comes up.
+        station.said(Slot::Next, ready("0.2.0"));
+        station.said(Slot::Current, serving("admin", 6002));
+        station.ended(old, EXITED_0);
+        station.pass(s(90) - MS);
+        assert!(station.os.killed.is_empty() && station.file("handoff-failed").is_none());
+        assert_eq!(station.file("station.json"), first, "not said handed over");
+        station.pass(MS);
+        assert_eq!(station.os.killed, [new]);
+        assert!(station.file("handoff-failed").unwrap().contains("did not take over"));
+        station.ended(new, KILLED);
+        // Started again (on whatever release is at --app then), not before the installer could put the old one back.
+        station.pass(s(10) - MS);
+        assert_eq!(station.last(), new);
+        station.pass(MS);
+        let again = station.last();
+        assert_ne!(again, new);
+        station.up(Slot::Current, "0.1.0", 7000);
+        assert_ne!(station.file("station.json"), first);
+        assert_eq!(station.serving(), again);
+    }
+
+    #[test]
+    fn a_new_node_that_says_it_failed_to_take_over_is_ended_at_once() {
+        let mut station = station("failedtake", false);
+        let old = station.last();
+        station.up(Slot::Current, "0.1.0", 5000);
+        station.start_next();
+        let new = station.last();
+        station.said(Slot::Next, ready("0.2.0"));
+        station.ended(old, EXITED_0);
+        station.said(Slot::Current, json!({"failed": "the agents' side did not start: boom"}));
+        assert_eq!(station.os.killed, [new]);
+        assert!(station.file("handoff-failed").unwrap().contains("boom"));
+        // Said once more as it goes: nothing more.
+        station.said(Slot::Current, json!({"failed": "again"}));
+        assert_eq!(station.os.killed, [new]);
+    }
+
+    #[test]
+    fn a_node_that_never_takes_over_after_a_plain_start_is_started_again_and_counts_towards_giving_up() {
+        let mut station = station("nottaken-start", false);
+        for start in 1..=5 {
+            let node = station.last();
+            station.said(Slot::Current, ready("0.1.0"));
+            station.pass(s(90));
+            assert_eq!(station.os.killed.last(), Some(&node));
+            station.ended(node, KILLED);
+            if start < 5 {
+                station.pass(s(4));
+            }
+        }
+        assert!(station.file("handoff-failed").is_none(), "no handover's");
+        assert_eq!(station.finished(), Some(1));
     }
 
     #[test]
     fn a_new_node_never_ready_is_given_up_and_the_old_one_serves_on() {
         let mut station = station("handfail", false);
         let old = station.last();
-        station.said(Slot::Current, ready("0.1.0"));
+        station.up(Slot::Current, "0.1.0", 5000);
         let first = station.file("station.json");
         station.start_next();
         let new = station.last();
@@ -675,6 +841,7 @@ mod tests {
         assert_eq!(station.told(old), ["handover"]);
         station.ended(old, EXITED_0);
         assert_eq!(station.serving(), again);
+        station.serves(Slot::Current, 6000);
         assert_eq!(station.station_json()["version"], "0.2.0");
     }
 
@@ -682,7 +849,7 @@ mod tests {
     fn a_new_node_that_ends_before_it_is_ready_fails_the_handover() {
         let mut station = station("handend", false);
         let old = station.last();
-        station.said(Slot::Current, ready("0.1.0"));
+        station.up(Slot::Current, "0.1.0", 5000);
         station.start_next();
         station.ended(station.last(), EXITED_1);
         assert!(station.file("handoff-failed").unwrap().contains("exited with 1 before it was ready"));
@@ -694,7 +861,7 @@ mod tests {
     fn a_stop_during_a_handover_stops_both_and_kills_what_does_not_stop_in_time() {
         let mut station = station("stopboth", false);
         let old = station.last();
-        station.said(Slot::Current, ready("0.1.0"));
+        station.up(Slot::Current, "0.1.0", 5000);
         station.start_next();
         let new = station.last();
         station.stop();
@@ -719,7 +886,7 @@ mod tests {
         // take the backoff back to the first: only serving `stable` does.
         for expected in [1000, 2000, 4000, 4000] {
             let node = station.last();
-            station.said(Slot::Current, ready("0.1.0"));
+            station.up(Slot::Current, "0.1.0", 5000);
             station.ended(node, EXITED_1);
             station.pass(Duration::from_millis(expected) - MS);
             assert_eq!(station.last(), node, "not again before {expected} ms");
@@ -728,7 +895,7 @@ mod tests {
         }
         // One that served for `stable` before it crashed: back to the first backoff.
         let node = station.last();
-        station.said(Slot::Current, ready("0.1.0"));
+        station.up(Slot::Current, "0.1.0", 5000);
         station.pass(s(60));
         station.ended(node, EXITED_1);
         station.pass(s(1) - MS);
@@ -757,7 +924,7 @@ mod tests {
     fn with_parent_it_stops_once_the_parent_is_gone() {
         let mut station = station("parent", true);
         let node = station.last();
-        station.said(Slot::Current, ready("0.1.0"));
+        station.up(Slot::Current, "0.1.0", 5000);
         for _ in 0..30 {
             station.pass(s(2));
         }
@@ -830,7 +997,7 @@ mod tests {
     fn drain_and_hup_go_to_node_and_drained_is_taken_back_when_nobody_stops_it() {
         let mut station = station("drain", false);
         let node = station.last();
-        station.said(Slot::Current, ready("0.1.0"));
+        station.up(Slot::Current, "0.1.0", 5000);
         station.ask("drain");
         station.ask("hup");
         assert_eq!(station.told(node), ["drain", "hup"]);

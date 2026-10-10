@@ -17,6 +17,8 @@ export type Control = {
   ready(version: string): void;
   /// Serving on `port` (the agents' door: once the sessions are taken over): the launcher's entrance goes there.
   serving(name: "mcp" | "admin", port: number): void;
+  /// Could not take over (the agents' side did not start): the launcher ends this process and starts one again.
+  failed(why: string): void;
   drained(how: "idle" | "timeout"): void;
   on(op: "handover" | "stop" | "drain" | "hup", f: () => void): void;
 };
@@ -32,7 +34,7 @@ export function launcher(args: string[]): Control {
   if (!handed && pipe === undefined) {
     // On its own: SIGTERM and ^C stop it, as they would through a launcher.
     for (const signal of ["SIGTERM", "SIGINT"] as const) process.on(signal, () => handlers.get("stop")?.forEach((f) => f()));
-    return { ready() {}, serving() {}, drained() {}, on };
+    return { ready() {}, serving() {}, failed() {}, drained() {}, on };
   }
   const given = flag(args, "--launcher-ports")?.split(",").map(Number);
   const ports = given && given.length === 2 && given.every((n) => Number.isInteger(n) && n > 0) ? { mcp: given[0]!, admin: given[1]! } : undefined;
@@ -63,6 +65,7 @@ export function launcher(args: string[]): Control {
     ports,
     ready: (version) => say({ ready: true, version }),
     serving: (name, port) => say({ serving: name, port }),
+    failed: (why) => say({ failed: why }),
     drained: (how) => say({ drained: how }),
     on,
   };

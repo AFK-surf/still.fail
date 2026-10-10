@@ -376,7 +376,10 @@ export const AgentsLive = (control: Control) =>
           await jobs.stopAll("the station was removed from its workspace");
         }
       };
-      yield* Effect.forkScoped(Effect.promise(() => start().catch((e) => log.error("hub", "the agents' side did not start", { error: (e as Error).message }))));
+      yield* Effect.forkScoped(Effect.promise(() => start().catch((e) => {
+        log.error("hub", "the agents' side did not start", { error: (e as Error).message });
+        control.failed(`the agents' side did not start: ${(e as Error).message}`);
+      })));
 
       // What the agents spent, read from their transcripts: now, and after each turn ends.
       const usage = new UsageCounter({ store, config: () => ({ dataDir: data, profiles: settings().profiles }), clock: hub.clock });

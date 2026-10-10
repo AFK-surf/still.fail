@@ -218,7 +218,7 @@ test("a handover the new release cannot take leaves the station running on the o
     const update = m.run();
     assert.equal(update.status, 1, update.out);
     assert.match(update.out, /the new release did not start/);
-    assert.match(update.out, /没能交接.*原来的 station 照常运行|Not handed over.*runs on as before/);
+    assert.match(update.out, /没能交接.*station 继续用原来的版本运行|Not handed over.*runs on the one before/);
     assert.equal(readFileSync(join(data, "app", "VERSION"), "utf8"), "old\n", "the old release back in its place");
     assert.ok(!existsSync(join(data, "app.old")) && !existsSync(join(data, "app.failed")));
     assert.ok(process.kill(pid, 0), "the station still runs");

@@ -303,7 +303,8 @@ if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_servic
   step handoff
   echo "${say("cloud.install.handoff.start")}"
   kill -USR2 "$pid"
-  for _ in $(seq 1 120); do
+  # The new one's 60 s to be ready and 90 s to take over (launcher/src/lifecycle.rs Times), and some.
+  for _ in $(seq 1 180); do
     sleep 1
     if [ "$(said startedAt)" != "$started" ]; then
       [ "$(said pid)" = "$pid" ] && handed=yes
@@ -315,9 +316,11 @@ if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_servic
     rm -rf "$app.old"
     prune_node
   elif [ -f "$data/run/handoff-failed" ] && kill -0 "$pid" 2>/dev/null && [ "$(said startedAt)" = "$started" ]; then
-    # The new release did not come up and the old one serves on: it stays, and so does its release.
+    # The new release did not come up or take over, and the station is the launcher it was: the release before goes
+    # back, for the Node serving on it (one that did not get ready) or the one the launcher starts after a while (one
+    # that did not take over, its old one gone; Times::rollback).
     rm -rf "$app.failed"
-    mv "$app" "$app.failed" && mv "$app.old" "$app"
+    mv "$app" "$app.failed" && { mv "$app.old" "$app" || mv "$app.failed" "$app"; }
     rm -rf "$app.failed"
     echo "${say("cloud.install.handoff.keptOld", { why: '$(cat "$data/run/handoff-failed")' })}" >&2
     exit 1
