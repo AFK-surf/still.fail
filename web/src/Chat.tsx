@@ -202,6 +202,8 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
   onArchive?: (() => void) | undefined;
 }) {
   const { messages, divider, shown, rowOf, caughtAgent, poseOf } = rows;
+  const api = useApi();
+  const act = useAct();
   const here = (key: string | undefined) => key !== undefined && chat.agents.some((a) => a.session.key === key);
   // Where a decision's options answer: none while nothing can be sent.
   const thread = chat.offline || chat.archived ? null : chat.thread?.id ?? null;
@@ -244,7 +246,8 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
       {chat.outbox.map((o) => <OutboxRow key={o.id} o={o} to={to} locked={chat.offline || !!chat.archived} owner={owner} />)}
       {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
       {shown.map(({ agent, leaving }) => (
-        <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
+        <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)}
+          {...(chat.agents.length > 1 ? { onStop: () => act(api.stop(agent.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked")) } : {})} />
       ))}
     </ChatAgents.Provider>
   );
@@ -2183,7 +2186,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
  * in, the line growing from its avatar; it leaves fading and folding its room away; for a message to come out of its
  * avatar the line folds to the avatar. Each of these goes from wherever it shows, cut off by the next or not.
  */
-function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
+function Activity({ agent, leaving, caught, pose, onOpen, onStop }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean }; onOpen(): void; onStop?: () => void }) {
   const wait = agent.wait;
   const now = useSteady(wait ? { key: "wait", text: wait.text ?? t("web-main.activity.waiting") } : agent.activity?.now ?? { key: "busy", text: t("web-main.activity.busy") });
   const row = useRef<HTMLDivElement>(null);
@@ -2214,6 +2217,7 @@ function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork
   });
   return (
     <div ref={row} className={`${conversationCss.msg} ${css.agentActivity}`} data-transient="" data-agent={agent.key} data-caught={caught} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
+      <div className={css.activityRow}>
       <button ref={line} type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
         <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span></span>
         <span ref={tail} className={css.activityTail}>
@@ -2226,6 +2230,12 @@ function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork
             : agent.since ? <span className={css.activityElapsed}><Elapsed since={agent.since} /></span> : null}
         </span>
       </button>
+      {onStop && (
+        <Tip label={t("web-main.activity.stop", { who: agent.who })}>
+          <button type="button" className={css.activityStop} aria-label={t("web-main.activity.stop", { who: agent.who })} onClick={onStop}><Stop size={12} fill="currentColor" /></button>
+        </Tip>
+      )}
+      </div>
     </div>
   );
 }
