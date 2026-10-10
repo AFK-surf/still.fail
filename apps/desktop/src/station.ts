@@ -50,10 +50,11 @@ function inUse(path: string): boolean {
   }
 }
 
-/** Where this machine's station stands (LocalStation.place): `workspace` is the one it is, or was, in. */
+/** Where this machine's station stands (LocalStation.place): `workspace` is the one it is, or was, in, as `station`. */
 export interface Place {
   state: "off" | "running" | "removed";
   workspace?: string;
+  station?: string;
 }
 
 export class LocalStation {
@@ -110,9 +111,10 @@ export class LocalStation {
       return (error as NodeJS.ErrnoException).code === "ENOENT" ? { state: "off" } : { state: "running" };
     }
     try {
-      const state = JSON.parse(text) as { workspace?: unknown; removed_at?: unknown };
+      const state = JSON.parse(text) as { workspace?: unknown; station?: unknown; removed_at?: unknown };
       const workspace = typeof state.workspace === "string" && state.workspace ? { workspace: state.workspace } : {};
-      return { state: state.removed_at == null ? "running" : "removed", ...workspace };
+      const station = typeof state.station === "string" && state.station ? { station: state.station } : {};
+      return { state: state.removed_at == null ? "running" : "removed", ...workspace, ...station };
     } catch {
       return { state: "running" };
     }

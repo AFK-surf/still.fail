@@ -671,7 +671,13 @@
   "web-main.preview.openFailed": "Couldn't open {name}: {error}",
   "web-main.preview.more": "{count} more",
   "web-main.preview.binary": "Binary file",
-  "web-main.preview.clickToOpen": "Click to open",
+  "web-main.preview.items": {
+    "one": "{count} item",
+    "other": "{count} items"
+  },
+  "web-main.preview.copyPath": "Copy path",
+  "web-main.preview.reveal": "Show in {app}",
+  "web-main.preview.revealFailed": "Couldn't show {path} in {app}",
   "web-main.history.stepReading": "Loading…",
   "web-main.history.stepUnread": "Couldn't load: {error}"
 }

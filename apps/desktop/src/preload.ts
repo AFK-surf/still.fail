@@ -14,6 +14,8 @@ const desktop = {
     state: (): Promise<unknown> => ipcRenderer.invoke("station:state"),
     join: (account: string, workspace: string): Promise<unknown> => ipcRenderer.invoke("station:join", account, workspace),
   },
+  /** A file or directory of this machine (its station's) shown in Finder: a directory opened, a file selected in its own (main.ts). */
+  reveal: (path: string): Promise<boolean> => ipcRenderer.invoke("file:reveal", path),
   /** The cloud's origin: its links (https://…/o/…) are the app's own. */
   cloudOrigin: ipcRenderer.sendSync("app:cloud-origin") as string,
   /**

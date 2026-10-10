@@ -397,7 +397,7 @@ export function sessionPlace(s: Store, key: string, given: string, lang: Lang): 
   const tilde = asked.startsWith("~/") && home !== "";
   const relative = !tilde && !isAbsolute(asked);
   const full = tilde ? join(home, asked.slice(2)) : relative ? join(base, asked) : asked;
-  const path = canonical(clean(full)) ?? (relative ? inRepositories([row.workspace, row.cwd], asked) : null);
+  const path = canonical(clean(full)) ?? (relative ? inRepositories([row.workspace, row.cwd], asked) ?? inRepositories([join(s.dataDir, "repos")], asked, true) : null);
   if (path === null) throw notFound();
   const roots = [row.workspace, row.cwd, join(s.dataDir, "repos"), agentHomeOf(s.dataDir)].flatMap((r) => (r ? [canonical(r)] : [])).filter((r): r is string => r !== null);
   if (!roots.some((r) => within(path, r))) throw new HttpError(403, tr("station.files.outside"));
@@ -415,8 +415,10 @@ const listed = new Map<string, { at: number; files: string[] }>();
 
 /// A relative path not under the working directory, as agents write one from inside a repository (`ifc/a.ex` for
 /// `<workspace>/cue/apps/x/lib/ifc/a.ex`): the file of a repository in `dirs` (one of them, or two levels below)
-/// whose path ends with it; the shortest, when several do. Null when none does.
-function inRepositories(dirs: (string | null)[], given: string): string | null {
+/// whose path ends with it; the shortest, when several do. Null when none does. `latest`: of several repositories that
+/// have it, the one last fetched or checked out (the station's clones, <data>/repos: an old copy of a project beside
+/// the one worked on has the same files).
+function inRepositories(dirs: (string | null)[], given: string, latest = false): string | null {
   const tail = clean(given).slice(1);
   if (tail === "" || tail.endsWith("/")) return null;
   const repos = new Set<string>();
@@ -433,6 +435,7 @@ function inRepositories(dirs: (string | null)[], given: string): string | null {
   };
   for (const dir of dirs) if (dir) look(dir, 2);
   let best: string | null = null;
+  let bestAt = -1;
   for (const repo of repos) {
     let seen = listed.get(repo);
     if (!seen || store.nowMs() - seen.at > 60_000) {
@@ -444,11 +447,26 @@ function inRepositories(dirs: (string | null)[], given: string): string | null {
       }
       listed.set(repo, seen);
     }
+    const at = latest ? touched(repo) : 0;
     for (const f of seen.files) {
-      if ((f === tail || f.endsWith(`/${tail}`)) && (best === null || repo.length + f.length < best.length)) best = join(repo, f);
+      if (!(f === tail || f.endsWith(`/${tail}`))) continue;
+      if (best === null || at > bestAt || (at === bestAt && repo.length + f.length < best.length)) [best, bestAt] = [join(repo, f), at];
     }
   }
   return best === null ? null : canonical(best);
+}
+
+/// When a repository was last fetched, checked out or committed to (its git directory's files), in ms.
+function touched(repo: string): number {
+  let at = 0;
+  for (const f of ["FETCH_HEAD", "HEAD", "index"]) {
+    try {
+      at = Math.max(at, statSync(join(repo, ".git", f)).mtimeMs);
+    } catch {
+      // Not there (a repository never fetched).
+    }
+  }
+  return at;
 }
 
 /// GET /sessions/:key/files?name&thumb=1 (files.rs `session_file`): a file sent to the session, for previews: only from
