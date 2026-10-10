@@ -173,7 +173,7 @@ globalStyle(`${jobDetailHead} ${segmented}`, {
   width: "120px", flex: "none",
   vars: { "--pad": "2px" },
 });
-globalStyle(`${jobDetailHead} ${segmentedOption}`, { height: "24px", fontSize: vars.textMeta });
+globalStyle(`${jobDetailHead} ${segmentedOption}`, { height: "24px", padding: "0", fontSize: vars.textMeta });
 globalStyle(`${jobDetail} > ${jobLast}`, { margin: "8px 0 12px" });
 /** Here rather than with its class: it comes after .job-notices li, and wins over it. */
 globalStyle(`${detailsList} li`, { display: "grid", gap: "2px" });

@@ -226,7 +226,7 @@ globalStyle(`${fpHead} ${segmented}`, {
   width: "120px",
   vars: { "--pad": "2px" },
 });
-globalStyle(`${fpHead} ${segmentedOption}`, { height: "26px", fontSize: vars.textMeta });
+globalStyle(`${fpHead} ${segmentedOption}`, { height: "26px", padding: "0", fontSize: vars.textMeta });
 globalStyle(`${fpZoom} ${iconBtn}:disabled`, { opacity: ".35", cursor: "default", background: "none" });
 globalStyle(`${fpAudio} audio`, { width: "100%" });
 globalStyle(`${fpCode} ${codeBlock}`, { margin: "0", border: "0", borderRadius: "0", background: "none" });

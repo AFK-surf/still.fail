@@ -74,8 +74,11 @@ export const select = style({
 });
 /** The track tints whatever it sits on; the chosen option's ground is a thumb that slides. */
 /** As tall as its options wherever it sits (a stretching row would make the track taller than them and the thumb with it). */
+// Equal columns, as wide as the widest option: the thumb is one column wide, so options as wide as their own text
+// (flex) put it off them wherever a font sets one label wider than its share, as Windows' do.
 export const segmented = style({
-  position: "relative", isolation: "isolate", display: "flex", alignItems: "center", alignSelf: "center",
+  position: "relative", isolation: "isolate", display: "grid", gridAutoFlow: "column", gridAutoColumns: "minmax(0, 1fr)",
+  alignItems: "center", alignSelf: "center",
   height: "max-content", padding: "var(--pad)", gap: "var(--gap)", borderRadius: "999px",
   background: `color-mix(in srgb, ${vars.text} 6%, transparent)`,
   vars: { "--pad": "3px", "--gap": "2px" },
@@ -92,7 +95,8 @@ export const segmentedThumb = style({
   },
 });
 export const segmentedOption = style({
-  flex: "1", height: "30px", border: "0", borderRadius: "999px", background: "transparent", color: vars.muted,
+  height: "30px", padding: "0 12px", border: "0", borderRadius: "999px", background: "transparent", color: vars.muted,
+  whiteSpace: "nowrap",
   fontSize: vars.textUi, cursor: "pointer", transition: `color ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&:hover:not([data-state=\"on\"])": { color: vars.text },
