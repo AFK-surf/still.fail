@@ -9,6 +9,7 @@
   "web-main.act.failed": "Couldn't {what}: {error}",
   "web-main.act.unconfirmed": "Tried to {what}: {error}",
   "web-main.activity.busy": "Working",
+  "web-main.activity.stop": "Stop {who}",
   "web-main.activity.waiting": "Waiting",
   "web-main.ago.days": {
     "one": "1 day ago",
@@ -207,6 +208,7 @@
   "web-main.composer.pressToTypeCjk": "Press {key} to type",
   "web-main.composer.refFailed": "Couldn't link \"{title}\": {error}",
   "web-main.composer.send": "Send",
+  "web-main.composer.stop": "Stop",
   "web-main.composer.stillUploading": "Still uploading",
   "web-main.copyFailed": "Couldn't copy: {error}",
   "web-main.core.cancelled": "Cancelled",
@@ -669,7 +671,13 @@
   "web-main.preview.openFailed": "Couldn't open {name}: {error}",
   "web-main.preview.more": "{count} more",
   "web-main.preview.binary": "Binary file",
-  "web-main.preview.clickToOpen": "Click to open",
+  "web-main.preview.items": {
+    "one": "{count} item",
+    "other": "{count} items"
+  },
+  "web-main.preview.copyPath": "Copy path",
+  "web-main.preview.reveal": "Show in {app}",
+  "web-main.preview.revealFailed": "Couldn't show {path} in {app}",
   "web-main.history.stepReading": "Loading…",
   "web-main.history.stepUnread": "Couldn't load: {error}"
 }

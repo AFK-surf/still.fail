@@ -526,6 +526,8 @@ export interface StillFailDesktop {
     /** Joins it to `workspace` as `account`, even if it joined one before (not over one it is in): its state after, or why not. */
     join(account: string, workspace: string): Promise<{ station: CarriedStation } | { error: string } | null>;
   };
+  /** Shows a file of this machine in Finder (a directory opened): false when it is not there; an app from before it has none. */
+  reveal?(path: string): Promise<boolean>;
   /** The window's frame: `inset` (macOS, no title bar: the page's top row is it), `system` (Windows); none from apps before it, all inset. */
   frame?: "inset" | "system";
   /** The cloud's origin (https://app.still.fail): its links are the app's own, though the app is at app://ember. */
@@ -589,6 +591,8 @@ export interface CarriedStation {
   carried: boolean;
   state: "off" | "running" | "removed";
   workspace?: string;
+  /** Its key in that workspace (an app from before it says none). */
+  station?: string;
 }
 
 /** What a check asked for now found: the newer build (`latest`), none (neither), or why it could not tell. */

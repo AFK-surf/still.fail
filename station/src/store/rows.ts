@@ -264,6 +264,19 @@ export function toSession(r: Json): SessionRow {
   };
 }
 
+/// A chat an agent opened for another (opened_chats): each side by its station ('' for this one) and session key.
+export type Opened = {
+  childStation: string; child: string; parentStation: string; parent: string; key: string; title: string | null;
+  link: string | null; state: string | null; createdAt: number;
+};
+
+export function toOpened(r: Json): Opened {
+  return {
+    childStation: r.child_station, child: r.child, parentStation: r.parent_station, parent: r.parent, key: r.key, title: r.title,
+    link: r.link, state: r.state, createdAt: r.created_at,
+  };
+}
+
 export function toThread(r: Json): ThreadRow {
   return {
     id: r.id, surface: r.surface, channel: r.channel, threadTs: r.thread_ts, title: r.title, autoTitle: r.auto_title,

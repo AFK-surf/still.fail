@@ -16,6 +16,7 @@ import {
 import { join, sep } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
+import { niced } from "../ops/nice.ts";
 import { startLasting } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
 import { linkSync } from "../ops/links.ts";
@@ -312,8 +313,9 @@ export class Jobs {
     if (job.port !== null) env.PORT = String(job.port);
     // A group of its own (detached: pgid = its pid; on Windows the job of the runner it runs under), not ended with the
     // station. The shell appends to the log itself: Git's sh on Windows cannot write to a file Node opened for
-    // appending (its handle may only append).
-    const child = startLasting(platform.posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log], {
+    // appending (its handle may only append). Lower than the station (ops/nice.ts): nice runs the shell in its own
+    // process, the pid the same.
+    const child = startLasting(...niced(platform.posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log]), {
       cwd: job.cwd, env, stdio: "ignore",
     });
     child.on("error", () => {});

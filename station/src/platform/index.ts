@@ -53,6 +53,9 @@ export type Platform = {
   /// A command as a group of its own, ended whole (as spawned detached on Unix; under `stillfail-runner --job` on
   /// Windows).
   grouped(program: string, args: string[]): [string, string[]];
+  /// A command started `by` lower in CPU priority than this process (ops/nice.ts): under nice where there is one; as
+  /// it is on Windows (no nice).
+  lowered(program: string, args: string[], by: number): [string, string[]];
   /// A shell script at `path` runnable by name from any shell: on Windows a `.cmd` beside it too, running it with the
   /// POSIX shell, or doing nothing when `noop`. The name a program is to be given for it (the .cmd on Windows).
   makeCommand(path: string, script: string, noop?: boolean): string;

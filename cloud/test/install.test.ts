@@ -76,8 +76,10 @@ test("the releases bucket serves the station's releases and the apps' builds, an
 /**
  * Runs the installer on a machine made up in a temporary directory: its HOME, a release of a stand-in command (it says
  * what it was asked), and launchctl, curl and uname that say what they were asked (a Mac, whatever runs the test).
+ * `os` "linux" or "wsl" makes it a Linux (x64) instead, with a systemd for the user (`systemd`) or none; "wsl" is
+ * Windows' Linux (its kernel says microsoft) with Windows' cmd.exe and wslpath, its drive C: in <root>/c.
  */
-function machine() {
+function machine(os: "mac" | "linux" | "wsl" = "mac", systemd = true) {
   const root = mkdtempSync(join(tmpdir(), "install-test-"));
   const home = join(root, "home");
   const stub = join(root, "stub");
@@ -92,9 +94,25 @@ function machine() {
   const tool = (name: string, body: string) => writeFileSync(join(stub, name), `#!/bin/sh\necho "${name} $*" >> "$HOME/said"\n${body}`, { mode: 0o755 });
   tool("launchctl", '[ "$1" = print ] && exit 1\nexit 0\n');
   tool("curl", `while [ $# -gt 0 ]; do [ "$1" = -o ] && cp "${join(root, "release.tar.gz")}" "$2"; shift; done\n`);
-  tool("uname", '[ "$1" = -m ] && echo arm64 || echo Darwin\n');
+  if (os === "mac") tool("uname", '[ "$1" = -m ] && echo arm64 || echo Darwin\n');
+  else tool("uname", '[ "$1" = -m ] && echo x86_64 || echo Linux\n');
+  const osrelease = join(root, "osrelease");
+  writeFileSync(osrelease, os === "wsl" ? "6.6.87.2-microsoft-standard-WSL2\n" : "6.8.0-45-generic\n");
+  tool("systemctl", systemd ? "exit 0\n" : "exit 1\n");
+  tool("loginctl", "exit 0\n");
+  if (os === "wsl") {
+    mkdirSync(join(root, "c/Users/kim/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup"), { recursive: true });
+    tool("cmd.exe", 'case "$*" in *APPDATA*) printf \'%s\\r\\n\' \'C:\\Users\\kim\\AppData\\Roaming\' ;; esac\n');
+    tool("wslpath", `case $1 in
+  -u) printf '%s\\n' "$2" | sed -e 's#^C:#${root}/c#' -e 's#\\\\#/#g' ;;
+  -w) printf '%s\\n' "$2" | sed -e 's#^${root}/c#C:#' -e 's#/#\\\\#g' ;;
+esac
+`);
+    tool("pgrep", "exit 1\n");
+  }
   const run = (args: string[] = [], env: Record<string, string> = {}) => {
-    const done = spawnSync("sh", ["-c", installScript("https://app.still.fail"), "sh", ...args], {
+    const script = installScript("https://app.still.fail").replaceAll("/proc/sys/kernel/osrelease", osrelease);
+    const done = spawnSync("sh", ["-c", script, "sh", ...args], {
       // Only these: not the caller's (an agent's STILLFAIL_DATA or EMBER_DATA would aim it at the real station).
       env: { HOME: home, PATH: `${stub}:/usr/bin:/bin:/usr/sbin:/sbin`, ...env } as unknown as NodeJS.ProcessEnv,
       encoding: "utf8",
@@ -103,6 +121,46 @@ function machine() {
   };
   return { root, home, run, done: () => rmSync(root, { recursive: true, force: true }) };
 }
+
+test("in WSL the station runs without Windows' PATH, and Windows keeps WSL up from its sign-in on", () => {
+  const m = machine("wsl");
+  try {
+    const done = m.run(["tok"], { WSL_DISTRO_NAME: "Ubuntu", PATH: `${join(m.root, "stub")}:/usr/bin:/bin:/mnt/c/Program Files/nodejs:/mnt/c/Windows` });
+    assert.equal(done.status, 0, done.out);
+    const unit = readFileSync(join(m.home, ".config/systemd/user/stillfail-station.service"), "utf8");
+    const path = /^Environment=PATH=(.*)$/m.exec(unit)?.[1] ?? "";
+    assert.match(path, /\/usr\/bin/);
+    assert.doesNotMatch(path, /\/mnt\//, "none of Windows' directories");
+    const keeper = join(m.root, "c/Users/kim/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/stillfail-station-Ubuntu.vbs");
+    assert.equal(readFileSync(keeper, "utf8"), 'CreateObject("WScript.Shell").Run "wsl.exe -d ""Ubuntu"" --exec sleep 3153600000", 0, False\r\n');
+    // Started now too, as at the next sign-in.
+    assert.match(done.said, /cmd\.exe \/c wscript\.exe C:\\Users\\kim\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\stillfail-station-Ubuntu\.vbs/);
+    assert.match(done.out, /stillfail-station-Ubuntu\.vbs/);
+    assert.match(done.said, /systemctl --user enable stillfail-station\.service/);
+  } finally {
+    m.done();
+  }
+  const bare = machine("wsl", false);
+  try {
+    // No systemd: run in the background, and told how to turn it on (no keeper: nothing would start it with WSL).
+    const done = bare.run(["tok"], { WSL_DISTRO_NAME: "Ubuntu" });
+    assert.equal(done.status, 0, done.out);
+    assert.match(done.out, /\/etc\/wsl\.conf/);
+    assert.doesNotMatch(done.said, /wscript/);
+  } finally {
+    bare.done();
+  }
+  const linux = machine("linux");
+  try {
+    // Another Linux keeps its PATH as it is and hears nothing of WSL.
+    const done = linux.run(["tok"], { PATH: `${join(linux.root, "stub")}:/usr/bin:/bin:/mnt/tools/bin` });
+    assert.equal(done.status, 0, done.out);
+    assert.match(readFileSync(join(linux.home, ".config/systemd/user/stillfail-station.service"), "utf8"), /^Environment=PATH=.*:\/mnt\/tools\/bin/m);
+    assert.doesNotMatch(done.out, /WSL/);
+  } finally {
+    linux.done();
+  }
+});
 
 test("an install from before the rename is moved, not installed beside it", () => {
   const m = machine();

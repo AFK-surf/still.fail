@@ -11,6 +11,9 @@ export const mPage = style({
     "&[data-role=\"peek\"]": { pointerEvents: "none" },
     "&[data-role=\"top\"]:not([data-swiping])": { transition: "transform 200ms var(--m-standard)" },
     "&[data-swiping]": { boxShadow: "-8px 0 24px rgba(0, 0, 0, .12)" },
+    // Moved by the finger (a transform set at each move, not an animation): each its own layer, only moved, not drawn
+    // anew at every move (with the frosted glass on it).
+    "&[data-swiping], &[data-role=\"peek\"]": { willChange: "transform" },
     // Side by side: the new page pushes in whole from the right, the old goes out whole to the left (and back the other way).
     "&[data-way=\"side\"][data-forward][data-role=\"in\"]": { animation: `${mFromRightKeyframes} 300ms var(--m-standard) both` },
     "&[data-way=\"side\"][data-forward][data-role=\"out\"]": { animation: `${mToLeftKeyframes} 300ms var(--m-standard) both` },
@@ -31,8 +34,14 @@ export const mPage = style({
     },
   },
 });
+// As wide as Safari's own edge gesture reaches in, which a touch here keeps from starting (app.tsx EdgeStrip).
+// A page under the one on top is kept as it was left, not drawn: what moves on it (spinners, a station's glyph
+// breathing, images' waiting blots) stands still meanwhile rather than being worked out every frame unseen.
+globalStyle(`${mPage}[data-role="under"] *, ${mPage}[data-role="under"] *::before, ${mPage}[data-role="under"] *::after`, {
+  animationPlayState: "paused !important" as "paused",
+});
 export const mEdge = style({
-  display: "none", position: "absolute", top: "0", bottom: "0", left: "0", zIndex: "40", width: "14px",
+  display: "none", position: "absolute", top: "0", bottom: "0", left: "0", zIndex: "40", width: "20px",
   touchAction: "none",
   "@media": {
     "(pointer: coarse)": {

@@ -8,7 +8,7 @@ import { HoverCard } from "radix-ui";
 import { stationApi, useStationCall } from "./api.ts";
 import type { Attachment } from "./core/shapes.ts";
 import { FilePreview, fileSize, type LocalFile } from "./FilePreview.tsx";
-import { File as FileIcon, Web } from "./icons.tsx";
+import { Check, Copy, File as FileIcon, Folder, Web } from "./icons.tsx";
 import { lang, t } from "./i18n.ts";
 import { useStation } from "./station.tsx";
 import { failure, useToast } from "./toast.tsx";
@@ -109,7 +109,8 @@ export function warm(key: string, read: () => Promise<unknown>): void {
   ).finally(() => { entry.at = Date.now(); entry.reading = false; changed(key, entry); });
 }
 
-function useRead<T>(key: string, read: () => Promise<T>): Read<T> {
+/** Follows what is kept of `key`, reading nothing. */
+function useEntry(key: string): Entry | undefined {
   useSyncExternalStore(
     useCallback((on: () => void) => {
       let set = watchers.get(key);
@@ -119,8 +120,12 @@ function useRead<T>(key: string, read: () => Promise<T>): Read<T> {
     }, [key]),
     () => entries.get(key)?.version ?? -1,
   );
+  return entries.get(key);
+}
+
+function useRead<T>(key: string, read: () => Promise<T>): Read<T> {
+  const e = useEntry(key);
   useEffect(() => warm(key, read), [key]); // eslint-disable-line react-hooks/exhaustive-deps
-  const e = entries.get(key);
   if (e?.has) return { state: "ready", value: e.value as T };
   if (e?.error !== undefined && !e.reading) return { state: "error", message: e.error };
   return { state: "loading" };
@@ -274,7 +279,11 @@ type Peek = {
 };
 type Opened = { name: string; path: string; type: string; size: number; bytes: string };
 
-/** A file a message names by its path: a chip with its icon and name, its card on hover, the file itself on a click. */
+/**
+ * A file a message names by its path: a chip with its icon and the path as written (chipPath; a directory's once its
+ * card has read it as one, written with a `/` or not), its card on hover, the file itself on a click (a directory on
+ * this machine: Finder). Copied with the text around it, it is the path as written, whole (`data-copy`, copied below).
+ */
 export function FileRef({ path, line, children, words }: { path: string; line: number | null; children: ReactNode; /** A link's own words, shown instead of the file's name. */ words?: ReactNode }) {
   const owner = useContext(PathSession);
   const session = owner?.key ?? null;
@@ -282,13 +291,24 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
   const station = { address: owner?.station ?? here };
   const api = stationApi(useStationCall(station.address));
   const toast = useToast();
+  const local = useOnThisMachine(station.address);
+  const key = peekKey(station.address, session ?? "", path, line);
+  const kept = useEntry(key);
+  const peeked = kept?.has ? (kept.value as Peek) : null;
   const [opened, setOpened] = useState<{ file: Attachment; local: LocalFile } | null>(null);
   useEffect(() => () => { if (opened) URL.revokeObjectURL(opened.local.url); }, [opened]);
-  if (session === null) return <code>{children}</code>;
-  const dir = path.endsWith("/");
   const name = path.replace(/\/$/, "").split("/").at(-1) || path;
+  const peek = () => { if (session !== null) warm(key, () => api.filePeek<Peek>(session, path, line)); };
+  // A name with no extension is as often a directory's as a file's: read at once, so the chip is drawn as what it is.
+  useEffect(() => { if (!path.endsWith("/") && !/\.[A-Za-z0-9]{1,10}$/.test(name)) peek(); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (session === null) return <code>{children}</code>;
+  const dir = path.endsWith("/") || peeked?.kind === "dir";
+  const whole = typeof children === "string" ? children.trim() : `${path}${line !== null ? `:${line}` : ""}`;
   const open = () => {
-    if (dir) return;
+    if (dir) {
+      if (local) void reveal(peeked?.path ?? path, toast);
+      return;
+    }
     void api.fileOpen<Opened>(session, path).then((f) => {
       const bin = atob(f.bytes);
       const bytes = new Uint8Array(bin.length);
@@ -297,12 +317,13 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
       setOpened({ file: { name: f.name, path: f.path, size: f.size }, local: { blob, url: URL.createObjectURL(blob) } });
     }, (e: unknown) => toast(t("web-main.preview.openFailed", { name, error: failure(e) })));
   };
+  const Icon = dir ? Folder : FileIcon;
   return (
     <>
-      <Hover warm={() => warm(peekKey(station.address, session, path, line), () => api.filePeek<Peek>(session, path, line))} content={<FileCard session={session} station={station.address} path={path} line={line} />}>
-        <button type="button" className={css.fileChip} onClick={open} data-dir={dir || undefined}>
-          <FileIcon size={12} className={css.fileChipIcon} />
-          <span className={css.fileChipName}>{words ?? (dir ? `${name}/` : name)}</span>
+      <Hover warm={peek} content={<FileCard session={session} station={station.address} path={path} line={line} local={local} />}>
+        <button type="button" className={css.fileChip} onClick={open} data-dir={dir || undefined} data-opens={!dir || local || undefined} data-copy={words === undefined ? whole : undefined}>
+          <Icon size={12} className={css.fileChipIcon} />
+          <span className={css.fileChipName}>{words ?? `${chipPath(path)}${dir && !path.endsWith("/") ? "/" : ""}`}</span>
           {line !== null && words === undefined && <span className={css.fileChipLine}>:{line}</span>}
         </button>
       </Hover>
@@ -311,25 +332,101 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
   );
 }
 
-function FileCard({ session, station, path, line }: { session: string; station: string; path: string; line: number | null }) {
+/** A path as it is shown: a home directory (/Users/<name>, /home/<name>) as `~`. */
+function shownPath(path: string): string {
+  return path.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, "~");
+}
+
+/** A path as a chip shows it, as the message wrote it (shownPath): a long one cut in its middle, its first two parts and last two kept. */
+function chipPath(path: string): string {
+  const short = shownPath(path);
+  const slash = short.endsWith("/") ? "/" : "";
+  const parts = short.replace(/\/$/, "").split("/");
+  if (short.length <= 48 || parts.length <= 5) return short;
+  return `${parts.slice(0, 2).join("/")}/…/${parts.slice(-2).join("/")}${slash}`;
+}
+
+// The station of the machine the desktop app is on ("<workspace>/<station>"), asked of it once; null in a browser, or an
+// app that cannot show files.
+let thisMachine: Promise<string | null> | null = null;
+
+/** Whether `address` is the station of the machine the page is on (the desktop app's): its files can be shown in Finder. */
+function useOnThisMachine(address: string): boolean {
+  const [here, setHere] = useState<string | null>(null);
+  useEffect(() => {
+    const desktop = window.stillfailDesktop;
+    if (!desktop?.reveal || !desktop.station) return;
+    thisMachine ??= desktop.station.state().then((s) => (s?.workspace && s.station ? `${s.workspace}/${s.station}` : null), () => null);
+    let live = true;
+    void thisMachine.then((a) => { if (live) setHere(a); });
+    return () => { live = false; };
+  }, []);
+  return here !== null && here === address;
+}
+
+/** What shows the machine's files: Finder on a Mac, Explorer on Windows. */
+const FILES_APP = typeof navigator !== "undefined" && /Windows/.test(navigator.userAgent) ? "Explorer" : "Finder";
+
+async function reveal(path: string, toast: (message: string) => void): Promise<void> {
+  const shown = await window.stillfailDesktop?.reveal?.(path).catch(() => false);
+  if (!shown) toast(t("web-main.preview.revealFailed", { path: shownPath(path), app: FILES_APP }));
+}
+
+/** A file's whole path, and showing it in Finder when it is on this machine (a relative one cannot be). */
+function PathActions({ path, local }: { path: string; local: boolean }) {
+  const toast = useToast();
+  const [copied, setCopied] = useState(false);
+  const copy = () => void navigator.clipboard.writeText(path).then(() => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) })));
+  return (
+    <span className={css.actions}>
+      <button type="button" className={css.action} onClick={copy}>{copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("web-main.preview.copyPath")}</button>
+      {local && (path.startsWith("/") || path.startsWith("~/")) && (
+        <button type="button" className={css.action} onClick={() => void reveal(path, toast)}><Folder size={12} />{t("web-main.preview.reveal", { app: FILES_APP })}</button>
+      )}
+    </span>
+  );
+}
+
+// Copying a stretch of a message: its file chips are their paths as written, not cut as they show.
+if (typeof document !== "undefined") {
+  document.addEventListener("copy", (e) => {
+    const selection = document.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !e.clipboardData) return;
+    const part = selection.getRangeAt(0).cloneContents();
+    const chips = part.querySelectorAll<HTMLElement>("[data-copy]");
+    if (chips.length === 0) return;
+    for (const chip of chips) chip.replaceWith(chip.dataset.copy ?? "");
+    // Laid out (off the screen) for its text as it reads, its blocks on lines of their own.
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;left:-100000px;top:0;";
+    box.append(part);
+    document.body.append(box);
+    e.clipboardData.setData("text/plain", box.innerText);
+    e.clipboardData.setData("text/html", box.innerHTML);
+    box.remove();
+    e.preventDefault();
+  });
+}
+
+function FileCard({ session, station, path, line, local }: { session: string; station: string; path: string; line: number | null; local: boolean }) {
   const api = stationApi(useStationCall(station));
   const read = useRead<Peek>(peekKey(station, session, path, line), () => api.filePeek<Peek>(session, path, line));
   if (read.state === "loading") return <CardSkeleton />;
   if (read.state === "error") return (
     <div className={css.rich}>
-      <div className={css.meta}><FileIcon size={12} /><span className={css.ref}>{path}</span></div>
+      <FileHead name={path.replace(/\/$/, "").split("/").at(-1) || path} dir={path.endsWith("/")} path={path} />
       <p className={css.note}>{read.message}</p>
+      <div className={css.facts}><PathActions path={path} local={local} /></div>
     </div>
   );
   const p = read.value;
-  const folder = p.path.slice(0, p.path.length - p.name.length).replace(/\/$/, "");
+  const dir = p.kind === "dir";
   return (
     <div className={css.rich}>
-      <div className={css.meta}>
-        <span className={css.ref} title={p.path}><FileIcon size={12} className={css.refIcon} />{folder.split("/").slice(-3).join("/")}</span>
-        <span className={css.time}>{ago(p.mtime)}</span>
-      </div>
-      <span className={css.title} title={p.path}>{p.kind === "dir" ? `${p.name}/` : p.name}{p.lines?.at ? `:${p.lines.at}` : ""}</span>
+      <FileHead name={`${p.name}${p.lines?.at ? `:${p.lines.at}` : ""}`} dir={dir} path={p.path} time={ago(p.mtime)} />
       {p.kind === "text" && p.lines && p.lines.text.length > 0 && (
         <pre className={css.lines}>
           {p.lines.text.map((l, i) => {
@@ -339,17 +436,35 @@ function FileCard({ session, station, path, line }: { session: string; station: 
         </pre>
       )}
       {p.kind === "image" && p.image && <img className={css.thumb} src={`data:${p.image.type};base64,${p.image.data}`} alt="" />}
-      {p.kind === "dir" && p.entries && (
+      {dir && p.entries && p.entries.length > 0 && (
         <ul className={css.entries}>
-          {p.entries.map((e) => <li key={e}>{e}</li>)}
-          {(p.count ?? 0) > p.entries.length && <li className={css.note}>{t("web-main.preview.more", { count: (p.count ?? 0) - p.entries.length })}</li>}
+          {p.entries.map((e) => {
+            const EntryIcon = e.endsWith("/") ? Folder : FileIcon;
+            return <li key={e} className={css.entry}><EntryIcon size={12} className={css.entryIcon} /><span className={css.entryName}>{e.replace(/\/$/, "")}</span></li>;
+          })}
         </ul>
       )}
       <div className={css.facts}>
-        {p.kind !== "dir" && <span className={css.chip}>{fileSize(p.size)}</span>}
+        {dir && <span>{t("web-main.preview.items", { count: p.count ?? p.entries?.length ?? 0 })}</span>}
+        {!dir && <span className={css.chip}>{fileSize(p.size)}</span>}
         {p.kind === "binary" && <span className={css.chip}>{t("web-main.preview.binary")}</span>}
-        {p.kind !== "dir" && <span>{t("web-main.preview.clickToOpen")}</span>}
+        <PathActions path={p.path} local={local} />
       </div>
+    </div>
+  );
+}
+
+/** A file's card's head: its icon, name and age; under them its whole path, to be read and selected. */
+function FileHead({ name, dir, path, time }: { name: string; dir: boolean; path: string; time?: string | null }) {
+  const Icon = dir ? Folder : FileIcon;
+  return (
+    <div className={css.fileHead}>
+      <div className={css.fileTitle}>
+        <Icon size={14} className={css.fileTitleIcon} />
+        <span className={css.title}>{dir ? `${name}/` : name}</span>
+        {time && <span className={css.fileTime}>{time}</span>}
+      </div>
+      <span className={css.filePath}>{shownPath(path)}</span>
     </div>
   );
 }

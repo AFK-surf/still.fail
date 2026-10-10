@@ -286,6 +286,9 @@ globalStyle(`${msgImageWait}[data-likeness]`, { backgroundSize: "cover", backgro
 // Not to be had (fetching it failed): the box stays as it waited, still, and says so.
 globalStyle(`${msgImage}[data-failed]`, { cursor: "pointer" });
 globalStyle(`${msgImage}[data-failed] ${msgImageWait} i`, { animation: "none" });
+// Far from the screen (before it is near enough to load), still: blurred blots drifting where no one sees them cost a
+// phone every frame all the same.
+globalStyle(`${msgImage}:not([data-near]) ${msgImageWait} i`, { animationPlayState: "paused" });
 export const msgImageUnavailable = style({
   position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
   gap: "6px", fontSize: vars.textMeta, color: vars.muted, background: `color-mix(in oklab, ${vars.neutralBg} 70%, transparent)`,
@@ -636,3 +639,13 @@ export const waitingDismiss = style({
 
 /** What is said right on top of the composer's box (ComposerProps `above`): as wide as it, a little inset. */
 export const composerAbove = style({ margin: "0 12px 6px" });
+/** The activity line and, for one of several agents, its own stop: shown on hover. */
+export const activityRow = style({ display: "flex", alignItems: "center", gap: "4px", minWidth: "0" });
+export const activityStop = style({
+  display: "grid", placeItems: "center", width: "22px", height: "22px", padding: "0", border: "0", borderRadius: "6px",
+  background: "none", color: vars.muted, cursor: "pointer", opacity: "0", transition: "opacity 120ms",
+  selectors: {
+    [`${activityRow}:hover &, &:focus-visible`]: { opacity: "1" },
+    "&:hover": { background: vars.hover, color: vars.text },
+  },
+});

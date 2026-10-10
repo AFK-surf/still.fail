@@ -111,7 +111,8 @@ no query), `http.response.status_code`, sizes (`http.request.body.size`,
 before it opened), `error.type`. Never message content, titles, file names or
 emails. `service.name` says which hop: `ember-web`, `ember-native`,
 `stillfail-cloud`, `ember-mesh` (historical cloud spans use `ember-cloud`); a station's spans also carry the
-resource attribute `ember.station`.
+resource attribute `ember.station`, and a client's `service.version`, its app's build (`0.1.2420`) once its UI has
+said it (`client.device`).
 
 Times: the web core times with `performance.now()`, native with a monotonic
 clock (`Host::monotonic_ms`), converted to Unix nanoseconds from the wall

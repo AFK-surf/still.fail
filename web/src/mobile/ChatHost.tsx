@@ -5,14 +5,14 @@
 import { ArchiveNotice } from "../ArchiveNotice.tsx";
 import { WaitingBar } from "../Chat.tsx";
 import type { ChatWaiting } from "../core/shapes.ts";
-import { createContext, useContext, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { ChatScreen, openAttach, openedAs, useComposerBar, type Draft } from "./Chat.tsx";
 import { ComposerExtras } from "../Chat.tsx";
 import { useDraft } from "../draft.ts";
-import { useMorph } from "../morph.ts";
+import { settling, useMorph } from "../morph.ts";
 import { useStationCall, type Attachment } from "../api.ts";
 import { NewChatScreen } from "./NewChat.tsx";
 import { Loading } from "./parts.tsx";
@@ -21,6 +21,16 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import { t } from "../i18n.ts";
+
+// The composer's height, set at its page's root (MobileComposer), as that element's own; the room it leaves a chat's
+// list, a length worked out there and inherited (ChatHost.css.ts): one changing with the other only past a few lines.
+// A browser without registered properties inherits both as they are, as before.
+for (const property of [
+  { name: "--m-bottom", syntax: "<length>", inherits: false, initialValue: "72px" },
+  { name: "--m-composer-room", syntax: "<length>", inherits: true, initialValue: "0px" },
+]) {
+  try { globalThis.CSS?.registerProperty?.(property); } catch { /* registered already (a module loaded again) */ }
+}
 
 /** What the composer writes to, as the page above it says. */
 export interface HostComposer {
@@ -41,7 +51,8 @@ export interface HostComposer {
   type?(): void;
 }
 
-interface Host { draft: Draft; use(spec: HostComposer): void }
+/** The same while the page is (what is typed changes `now` alone): the page above is not drawn again at each key. */
+interface Host { now: RefObject<Draft>; use(spec: HostComposer): void }
 const HostContext = createContext<Host | null>(null);
 
 /** The page's composer: its draft, and where the page says what it writes to. */
@@ -67,11 +78,11 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   // The callbacks as the page last gave them; what it shows, as state (changing only when it does).
   const latest = useRef<HostComposer | null>(null);
   const [shown, setShown] = useState<Shown | null>(null);
-  const use = (spec: HostComposer) => {
+  const use = useCallback((spec: HostComposer) => {
     latest.current = spec;
     setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.archived === spec.archived && sameWaiting(was.waiting, spec.waiting) ? was
       : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, waiting: spec.waiting ?? null, ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
-  };
+  }, []);
   const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
   // The host is outside the chat's StationContext: what it writes goes to the station the page says (a new chat's, as
   // picked), else the chat's, by its address, not the context's.
@@ -86,13 +97,15 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const now = useRef(draft);
   now.current = draft;
   const root = useRef<HTMLDivElement>(null);
-  const body = id === undefined ? <NewChatScreen />
+  const host = useMemo<Host>(() => ({ now, use }), [use]);
+  // The same element while the page is the same, so typing (this drawing again) leaves it as it is.
+  const body = useMemo(() => id === undefined ? <NewChatScreen />
     : !stations ? <Loading text={t("web-mobile.reading")} />
     : !station ? <Loading text={t("web-mobile.noStation")} />
-    : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>;
+    : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>, [id, stations, station]);
   const composer = shown && <MobileComposer shown={shown} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} />;
   return (
-    <HostContext.Provider value={{ draft, use }}>
+    <HostContext.Provider value={host}>
       <div className={css.mChatHost} ref={root} data-new={id === undefined || undefined}>
         {body}
         {/* Once shown, it stays (the page above changing hands it on); in its station (the chats its @ offers). */}
@@ -113,14 +126,31 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, uplo
   const upload = draft.add;
   const locked = shown.offline || !!shown.archived || draft.starting;
   const capsule = useRef<HTMLDivElement>(null);
+  // The capsule itself, the box that changes shape (useMorph, below).
+  const frame = useRef<HTMLDivElement>(null);
   // What is above keeps its end clear of the capsule, whatever its height.
   useLayoutEffect(() => {
     const el = capsule.current;
     const page = root.current;
     if (!el || !page) return;
-    const set = () => page.style.setProperty("--m-bottom", `${el.offsetHeight}px`);
+    // Every element of the page inherits it: each change has the whole page's style worked out anew (a long chat's, all
+    // its messages). So it changes once the capsule has its new shape, not at every frame of its motion there (morph.ts).
+    let waiting = false;
+    const set = () => {
+      waiting = false;
+      const height = `${el.offsetHeight}px`;
+      if (page.style.getPropertyValue("--m-bottom") !== height) page.style.setProperty("--m-bottom", height);
+    };
     set();
-    const observer = new ResizeObserver(set);
+    const observer = new ResizeObserver(() => {
+      // A new chat's choices sit just above the composer: they must follow its height while it moves, or the
+      // growing box covers them. There is no long message list to invalidate on that page.
+      const moving = !page.hasAttribute("data-new") && frame.current ? settling(frame.current) : null;
+      if (!moving) return set();
+      if (waiting) return;
+      waiting = true;
+      void moving.then(set, set);
+    });
     observer.observe(el);
     return () => observer.disconnect();
   }, [root]);
@@ -130,7 +160,6 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, uplo
   });
   // Growing or shrinking (a line more, a file, a quote, sent and emptied) in one motion, as the wide screen's
   // (morph.ts): after the text box has taken its height (useComposerBar), so that it is read with it.
-  const frame = useRef<HTMLDivElement>(null);
   useMorph(frame, `${expanded}|${draft.text}|${draft.files.length}|${draft.quotes.length}|${draft.error}|${shown.offline}|${shown.archived}`);
   return (
     <div className={`${inline ? css.mInlineComposer : `${css.mComposer} ${css.mHostComposer}`} ${rootCss.wide}`} ref={capsule}>

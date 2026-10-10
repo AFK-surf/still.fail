@@ -886,11 +886,16 @@ export const SHAPES: Record<string, Shape> = {
   ChangelogView: struct([
     ["app", "String", { default: true }],
     ["build", opt("i64"), { client: opt("I54") }],
-    ["days", vec("ChangelogDay")],
+    ["tabs", vec("ChangelogTab")],
     ["news", opt("ChangelogNews")],
     ["loading", "bool", { default: true }],
     ["error", opt("String")],
-  ], { doc: "What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`\n(web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes by day, newest\nfirst; what this app got since the changelog was last shown here (`news`, until `changelog.seen`); `loading` while\nfirst read, `error` when it could not be and none was kept." }),
+  ], { doc: "What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`\n(web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes in a tab a part,\nthis app's first, by day, newest first; what this app got since the changelog was last shown here (`news`, until\n`changelog.seen`); `loading` while first read, `error` when it could not be and none was kept." }),
+  ChangelogTab: struct([
+    ["part", "String"],
+    ["label", "String"],
+    ["days", vec("ChangelogDay")],
+  ], { doc: "A part's changes (`part`: desktop, web, android, station or cloud; the desktop's include the web's), under\nits name.", keepNone: true }),
   ChangelogDay: struct([
     ["label", "String"],
     ["entries", vec("ChangelogItem")],
@@ -899,11 +904,16 @@ export const SHAPES: Record<string, Shape> = {
     ["version", "i64", { client: "I54" }],
     ["versionName", "String"],
     ["text", vec("String")],
-    ["place", "String"],
+    ["lines", vec("ChangelogLine")],
     ["has", opt("bool")],
     ["note", "String"],
     ["mine", "bool"],
-  ], { doc: "One change: its lines for people, the version it came in, where it is (`place`: the parts and version, empty when\nit needed no release), whether this app has it (`has`: absent when it is not this app's), and what that means\n(`note`: 你的版本已包含, 更新到 0.1.n 后就有, 还没发布, 已发布, 已上线); `mine`: it is this app's." }),
+  ], { doc: "One change: its lines for people (`text` as written, `lines` with their kind apart), the version it came in,\nwhether this app has it (`has`: absent in another tab, or when it is not this app's), and what is not out yet\n(`note`: 更新到 0.1.n 后就有, 刷新页面后就有, 还没发布; empty when it is out); `mine`: it is this app's." }),
+  ChangelogLine: struct([
+    ["kind", opt("String")],
+    ["label", "String"],
+    ["text", "String"],
+  ], { doc: "A change's line: its kind (`new`, `improve` or `fix`, from how it was written: 新功能：, 改进：, 修复：) and the\nkind's name, then the rest; no kind, and all of it, when it starts otherwise.", keepNone: true }),
   ChangelogNews: struct([
     ["build", opt("String")],
     ["entries", vec("ChangelogItem")],

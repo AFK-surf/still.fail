@@ -1,10 +1,10 @@
 import { AutomaticDecisionCompletionScreen, AutomaticDecisionPolicyScreen, AutomaticDecisionsScreen } from "./AutomaticDecisions.tsx";
 // A workspace on a narrow screen: the Android app's pages (./app.tsx), at the desktop's addresses where it has them, so
 // a link opens the same thing on either.
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect } from "react";
 import { Navigate, Route, Routes, useParams, type Location } from "react-router";
 import { useStations } from "../api.ts";
-import { StationContext, stationBase, type Station } from "../station.tsx";
+import { StationContext, useStationList, type Station } from "../station.tsx";
 import { MobileShell, type Entry } from "./app.tsx";
 import { AnnotateScreen } from "./Annotate.tsx";
 import { ArchiveScreen } from "./Archive.tsx";
@@ -30,10 +30,9 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
   // Who is using the page, as the wide screen's shell says it (cloud/workspace.tsx): a phone's events were anonymous.
   useEffect(() => identify(entry.account), [entry.account]);
   const found = useStations(entry.id);
-  const stations = useMemo<Station[] | undefined>(() => found.value?.map((s) => ({
-    id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${entry.id}/settings`,
-  })), [found.value, entry.id]);
-  const routes = (location: Location) => (
+  const stations = useStationList(found.value, entry.id);
+  // The same while the stations are: a page is drawn again when what it is given changes, not whenever this is.
+  const routes = useCallback((location: Location) => (
     <Routes location={location}>
       <Route index element={<Home />} />
       {/* A new chat and a chat are one page (ChatHost.tsx): as one becomes the other, its composer stays. */}
@@ -76,7 +75,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       {/* What the narrow app has no page for (the desktop's settings, a station's bare address) is the list. */}
       <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
     </Routes>
-  );
+  ), [stations, entry.id]);
   return <MobileShell entry={entry} routes={routes} recent={() => <Recent />} />;
 }
 

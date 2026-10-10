@@ -10,6 +10,8 @@ export const agentMarkBtn = style({
   display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer", borderRadius: "6px",
   selectors: {
     "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "2px" },
+    // Its history is the one shown beside the chat (among several agents).
+    "&[data-on]": { boxShadow: `0 0 0 2px ${vars.accent}` },
   },
 });
 /** The machine it runs on, beside the title: a quiet tag. */
@@ -176,6 +178,8 @@ globalStyle(`${detailRow} dt`, { color: vars.muted });
 globalStyle(`${detailsList} ${muted}`, { fontSize: vars.textMeta });
 globalStyle(`${sideTabAgent} > :not(${sideTabText})`, { flex: "none" });
 globalStyle(`${sideTabWrap} ${sideTab}`, { background: "none !important", paddingRight: "4px" });
+/** Without a close button (the history's): its whole padding. */
+globalStyle(`${sideTabWrap} ${sideTab}:only-child`, { paddingRight: "12px" });
 globalStyle(`${sidePanel} ${resizeHandle}`, {
   "@media": {
     "(max-width: 1100px)": {
@@ -183,6 +187,8 @@ globalStyle(`${sidePanel} ${resizeHandle}`, {
     },
   },
 });
+/** What the history in front can do (History.tsx `tools`), between the tabs and the panel's switch; empty, nothing. */
+export const sideTools = style({ display: "flex", flex: "none", selectors: { "&:empty": { display: "none" } } });
 globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "auto", padding: "0", borderBottom: "0" });
 /** The chat's title when it can be renamed: pressed, it turns into the field (Rename.css.ts titleInputBar) in the same box. */
 export const titleBtn = style({
@@ -195,3 +201,36 @@ export const titleBtn = style({
 // The title keeps its width; its button's box reaches 8px past it each side (cut short with it), and a little more room
 // before what follows.
 globalStyle(`${pageBarTitle} h1:has(> ${titleBtn})`, { overflow: "visible", marginRight: "4px" });
+/** Ending its warm process, in its details' line: a link's look, as the profile's beside it. */
+export const evict = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
+/** An agent's card, from its avatar in the bar (in Hover's card): its state and how long, what it runs, what it does. */
+export const agentCard = style({ display: "flex", flexDirection: "column", gap: "8px", minWidth: "0" });
+export const agentCardMeta = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", fontSize: vars.textMeta, color: vars.muted });
+/** A tinted pill, its colours the session's tone. */
+export const agentCardState = style({
+  flex: "none", padding: "1px 8px", borderRadius: "999px", background: vars.neutralBg, color: vars.muted, fontWeight: "500",
+  whiteSpace: "nowrap",
+  selectors: {
+    '&[data-tone="accent"]': { background: vars.accentBg, color: vars.accentText },
+    '&[data-tone="blue"]': { background: vars.blueBg, color: vars.blue },
+    '&[data-tone="green"]': { background: vars.greenBg, color: vars.green },
+    '&[data-tone="red"]': { background: vars.redBg, color: vars.red },
+  },
+});
+export const agentCardWhere = style({ flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const agentCardTime = style({ flex: "none", fontVariantNumeric: "tabular-nums" });
+export const agentCardWho = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontWeight: "500" });
+globalStyle(`${agentCardWho} > span`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const agentCardNow = style({
+  margin: "0", color: vars.text, overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: "3", WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+});
+export const agentCardFoot = style({
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", minHeight: "26px", paddingTop: "8px",
+  borderTop: `1px solid ${vars.line}`, fontSize: vars.textMeta, color: vars.subtle,
+});
+export const agentCardStop = style({
+  display: "inline-flex", alignItems: "center", gap: "5px", height: "24px", padding: "0 10px", border: "0", borderRadius: "999px",
+  background: vars.redBg, color: vars.red, font: "inherit", fontWeight: "500", cursor: "pointer",
+  selectors: { "&:hover": { background: `color-mix(in srgb, ${vars.red} 22%, transparent)` } },
+});

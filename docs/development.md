@@ -119,6 +119,7 @@ ending, against a budget, in the run's summary, with a warning when over. The bu
 | A branch | 180 s | ~100 s with caches warm |
 | main, releasing nothing | 180 s | ~100 s |
 | A branch or main that checked the Android app (`check-android`) | 240 s | ~190 s (2026-10-07) |
+| A branch that tried the Windows app on Windows (`windows-smoke`) | 330 s | ~280 s (2026-10-09) |
 | main, releasing apps or the station | 480 s | — |
 
 `node scripts/ci-time.ts <run id>` prints any run's jobs and longest steps. A run over its budget is a regression to

@@ -381,14 +381,15 @@ function Timeline({ start, end, now, onSeek }: { start: number; end: number; now
     return start + Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * span;
   };
   const dragging = useRef(false);
-  const where = `${Math.min(100, Math.max(0, ((now - start) / span) * 100))}%`;
+  const share = Math.min(1, Math.max(0, (now - start) / span));
+  // Moved as it plays (each frame of the video), not laid out anew: the played part scaled, the head slid along.
   return (
     <div ref={box} className={css.vvTimeline} role="slider" aria-label={t("web-main.video.position")} aria-valuemin={0} aria-valuemax={Math.round(span * 1000)} aria-valuenow={Math.round((now - start) * 1000)}
       onPointerDown={(e) => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); dragging.current = true; onSeek(at(e.clientX)); }}
       onPointerMove={(e) => { if (dragging.current) onSeek(at(e.clientX)); }}
       onPointerUp={() => { dragging.current = false; }} onPointerCancel={() => { dragging.current = false; }}>
-      <span className={css.vvTrack}><span className={css.vvPlayed} style={{ width: where }} /></span>
-      <span className={css.vvHead} style={{ left: where }} />
+      <span className={css.vvTrack}><span className={css.vvPlayed} style={{ transform: `scaleX(${share})` }} /></span>
+      <span className={css.vvHeadRail} style={{ transform: `translateX(${share * 100}%)` }}><span className={css.vvHead} /></span>
     </div>
   );
 }

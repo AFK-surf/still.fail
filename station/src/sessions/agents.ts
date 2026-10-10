@@ -44,6 +44,7 @@ import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
 import { autoArchive } from "./lifecycle.ts";
 import { fromPeer } from "./messages.ts";
+import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
 import { forPeer, READ } from "./others.ts";
 import { FILE, fileForPeer, PUT, putForPeer } from "./peer-files.ts";
 import { reviewUndecided, startReview } from "./review.ts";
@@ -184,6 +185,10 @@ export const AgentsLive = (control: Control) =>
             return fileForPeer(hub, request);
           case PUT:
             return putForPeer(hub, peer, request);
+          case CREATE:
+            return createForPeer(hub, peer, request);
+          case NOTICE:
+            return noticeForPeer(hub, peer, request);
           default:
             return fromPeer(hub, peer, request);
         }
@@ -200,7 +205,7 @@ export const AgentsLive = (control: Control) =>
         ...jobTools(jobs, (key) => store.getSession(key)?.workspace ?? null),
       ];
       // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
-      // itself while nothing runs and nobody looks (auto update).
+      // itself while nothing runs and nothing is asked of it (auto update), watched or not.
       const updates = makeUpdates({
         app,
         data,
@@ -208,7 +213,6 @@ export const AgentsLive = (control: Control) =>
         // Where its releases are: still.fail cloud's origin, Comma's `/stations` (ControlPlane.releaseBase).
         origin: () => plane.releaseBase(),
         running: () => hub.running(),
-        inUse: () => events.inUse(),
       });
       updates.start();
       // `stillfail update --beta|--stable` asks a running station by SIGHUP (run/channel-ask).

@@ -1097,8 +1097,15 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   answersOf(host, values);
   const c = v(values, 2);
   assert.deepEqual([c.app, c.build, c.loading], ["android", 1320, false]);
-  assert.equal(c.days[0].label, "今天");
-  assert.deepEqual(c.days[0].entries.map((e: J) => e.note), ["还没发布", "更新到 0.1.1330 后就有", "还没发布", "你的版本已包含"]);
+  // A tab a part, this app's first; the desktop's carries the web's.
+  assert.deepEqual(c.tabs.map((x: J) => [x.part, x.label]), [["android", "安卓"], ["desktop", "桌面"], ["web", "网页"], ["station", "Station"], ["cloud", "云端"]]);
+  const notes = (part: string) => c.tabs.find((x: J) => x.part === part).days.flatMap((d: J) => d.entries.map((e: J) => e.note));
+  assert.equal(c.tabs[0].days[0].label, "今天");
+  assert.deepEqual(notes("android"), ["还没发布", "更新到 0.1.1330 后就有", ""]);
+  // Another part's tab says what is not out of that part.
+  assert.deepEqual(notes("desktop"), [""]);
+  assert.deepEqual(notes("station"), ["还没发布"]);
+  assert.deepEqual(notes("cloud"), []);
   // The first build seen here: nothing is news.
   assert.equal(c.news, undefined, JSON.stringify(c));
   // Updated, the app started again: what it brought, until seen.
@@ -1412,5 +1419,18 @@ test("automatic_decision_drafts_require_a_model_and_preserve_failed_saves", asyn
   assert.equal(forms.value(topic).dirty, false);
   forms.change(topic, ui, "drop", {});
   assert.equal(forms.value(topic), null);
+  core.close();
+});
+
+test("the_spans_a_core_sends_say_which_build_of_its_app_it_is_once_its_ui_has_said", async () => {
+  const { host, core } = await started(base(), 1);
+  const ui = core.connect();
+  call(core, ui, 1, "client.device", { app: "android", build: "0.1.2420" });
+  await host.settle();
+  await host.time.pass(EXPORT_MS + 100);
+  const sent = exports(host);
+  assert.equal(sent.length, 1);
+  const resource = JSON.parse(new TextDecoder().decode(sent[0].body!)).resourceSpans[0].resource.attributes as J[];
+  assert.deepEqual(resource.find((a) => a.key === "service.version")?.value, { stringValue: "0.1.2420" });
   core.close();
 });

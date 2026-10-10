@@ -4,7 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { sentImage, sentImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
-import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
+import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "./icons.tsx";
 import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
@@ -20,7 +20,7 @@ import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, 
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
-import { useStickToBottom } from "./scroll.ts";
+import { firstReaching, ticking, useStickToBottom, watchChildren } from "./scroll.ts";
 import { animate, arrive, EASE_OUT, follower, moveState, type AnimationPlaybackControls, type Follower } from "./motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
@@ -96,6 +96,14 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   const rows = useMessageList(list, floor, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives);
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
   const keeper = chat.agents[0]?.session.key ?? null;
+  // Its agents at work, stopped from the composer (as the chat.stop shortcut does): one function all along, so the
+  // composer is not drawn again for it.
+  const act = useAct();
+  const working = chat.agents.filter((a) => a.status === "running" || a.status === "queued").map((a) => a.session.key);
+  const stopping = useRef(working);
+  stopping.current = working;
+  const [stopAll] = useState(() => () => act(Promise.all(stopping.current.map((key) => api.stop(key))), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked")));
+  const stoppable = working.length > 0 && !chat.offline && !chat.archived;
   const ownerOf = (file: Attachment) => ownerIn(chat, file);
   // The messages are kept as they are while nothing they show changes (MessageRow): what they are handed stays the same
   // function, the latest one behind it, and `owners` says when whose files are whose has changed.
@@ -143,7 +151,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused} above={waitingBar}
-        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
+        {...(stoppable ? { onStop: stopAll } : {})} locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
 }
@@ -158,8 +166,10 @@ export function WaitingBar({ station, thread, waiting }: { station: string; thre
   const [gone, setGone] = useState<number | null>(null);
   if (gone === waiting.seq) return null;
   const lead = waiting.card ? t("web-main.chat.waiting.card") : t("web-main.chat.waiting.lead");
+  // Pressed with the cursor in the box, it keeps it there: the box losing it would fold to its one line and slide this
+  // down from under the pointer before the click lands.
   return (
-    <div className={css.waitingBar} role="status">
+    <div className={css.waitingBar} role="status" onMouseDown={(e) => e.preventDefault()}>
       <button type="button" className={css.waitingText} title={t("web-main.chat.waiting.go")} onClick={() => jumpTo({ station, thread, seq: waiting.seq })}>
         <Bell size={14} /><span><b>{lead}</b>{waiting.text && <span>{waiting.text}</span>}</span>
       </button>
@@ -194,6 +204,8 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
   onArchive?: (() => void) | undefined;
 }) {
   const { messages, divider, shown, rowOf, caughtAgent, poseOf } = rows;
+  const api = useApi();
+  const act = useAct();
   const here = (key: string | undefined) => key !== undefined && chat.agents.some((a) => a.session.key === key);
   // Where a decision's options answer: none while nothing can be sent.
   const thread = chat.offline || chat.archived ? null : chat.thread?.id ?? null;
@@ -236,7 +248,8 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
       {chat.outbox.map((o) => <OutboxRow key={o.id} o={o} to={to} locked={chat.offline || !!chat.archived} owner={owner} />)}
       {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
       {shown.map(({ agent, leaving }) => (
-        <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
+        <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)}
+          {...(chat.agents.length > 1 ? { onStop: () => act(api.stop(agent.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked")) } : {})} />
       ))}
     </ChatAgents.Provider>
   );
@@ -722,7 +735,7 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
   /** Where the reader is: the message at the pane's top and its offset, and the last message if at the end. */
   const where = useCallback((pane: HTMLElement) => {
     const top = pane.getBoundingClientRect().top;
-    const first = [...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)].find((m) => m.getBoundingClientRect().bottom > top);
+    const first = firstReaching([...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)], top);
     const end = !latest.current.short && pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2;
     return first ? { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top, bottom: end ? lastTs(pane) : null } : null;
   }, []);
@@ -741,13 +754,13 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     if (!pane) return;
     // Told once the pane comes to rest, after it has been put where it was left (before that, it is not the reader's).
     let rest: ReturnType<typeof setTimeout> | undefined;
+    // Measured once it rests, not at every step of a scroll (the page going away meanwhile measures it then, below).
     const record = () => {
-      const at = where(pane);
-      if (at) leftAt.set(key, at);
       clearTimeout(rest);
       rest = setTimeout(() => {
-        const now = restored.current && pane.isConnected ? where(pane) : null;
-        if (now) tell(now);
+        const now = pane.isConnected ? where(pane) : null;
+        if (now) leftAt.set(key, now);
+        if (now && restored.current) tell(now);
       }, REST_MS);
     };
     pane.addEventListener("scroll", record, { passive: true });
@@ -1244,10 +1257,13 @@ function ProseWithFiles({ owner, text, files, session = null, from }: {
     // A local page knows only its own station: the link's station is taken to be it.
     return of ? { key: of.id, ...(here.includes("/") && of.station !== here ? { station: of.station } : {}) } : null;
   }, [session, from, here]);
+  // The same function while `owner` is: a new one each render would have Prose parse the text again whenever this
+  // draws (its station's context changing draws every message's).
+  const file = useCallback((f: Attachment, as: "shown" | "link", words?: ReactNode) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />, [owner]);
   return (
     <>
       <div className={conversationCss.markdown}>
-        <PathSession.Provider value={paths}><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />}>{text}</Prose></PathSession.Provider>
+        <PathSession.Provider value={paths}><Prose files={placed} file={file}>{text}</Prose></PathSession.Provider>
       </div>
       <Files owner={owner} files={rest} />
     </>
@@ -1348,7 +1364,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
       <>
         <button ref={box} type="button" className={look.image} data-send-image={sentImageKey(file.path)} onClick={() => (url || failed) && setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
           data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
-          data-loaded={loaded ?? undefined} data-failed={failed || undefined}>
+          data-loaded={loaded ?? undefined} data-failed={failed || undefined} data-near={near || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} fit={letterbox} />}
           {failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>{t("web-main.file.noPreview")}</span></span>}
           {url && <img src={url} alt={file.name} onLoad={shown} />}
@@ -1432,17 +1448,23 @@ export interface ComposerProps {
   draftKey?: string;
   /** A key whose draft goes on from what is typed now, instead of its own (a new chat becoming its chat). */
   carry?: MutableRefObject<string | null>;
+  /** While its agents work: with nothing typed, the send button stops them instead. */
+  onStop?: () => void;
 }
+
+/** The quotes of a composer whose page holds none (a new chat's): the same array each time, or its draft would go to the
+ * core again (`draft.put`) at every render. */
+const NO_QUOTES: DraftQuote[] = [];
 
 export function Composer(props: ComposerProps) {
   const api = useApi();
-  const { draftKey, carry, quotes = [], setQuotes = () => {} } = props;
+  const { draftKey, carry, quotes = NO_QUOTES, setQuotes = () => {} } = props;
   const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}), upload: (file, onProgress) => api.uploadFile(file, onProgress), quotes: [quotes, setQuotes] });
   return <ComposerView {...props} draft={draft} />;
 }
 
 /** The chat's composer, also used where a page sends its draft as a reply to a decision. */
-export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
+export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey, onStop }: ComposerProps & {
   draft: Draft; submitDraft?: (draft: Draft) => void;
 }) {
   const api = useApi();
@@ -1521,11 +1543,17 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
             </button>
           </Tip>
           {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
-          <Tip label={draft.uploading ? t("web-main.composer.stillUploading") : t("web-main.composer.send")}>
+          {onStop && !draft.starting && text.trim() === "" && files.length === 0 ? (
+            <Tip label={t("web-main.composer.stop")} shortcut="chat.stop">
+              <button type="button" className={css.sendBtn} data-stop="" aria-label={t("web-main.composer.stop")} onClick={(e) => { e.stopPropagation(); onStop(); }}>
+                <Stop size={14} fill="currentColor" />
+              </button>
+            </Tip>
+          ) : <Tip label={draft.uploading ? t("web-main.composer.stillUploading") : t("web-main.composer.send")}>
             <button type="submit" className={css.sendBtn} disabled={!ready} aria-label={t("web-main.composer.send")} aria-busy={draft.starting || undefined}>
               {draft.starting ? <span className={waitingCss.spinner} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
             </button>
-          </Tip>
+          </Tip>}
         </div>
       </form>
       {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
@@ -1893,10 +1921,15 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>) {
       for (const [el, row] of rows) if (!seen.has(el)) { row.y.stop(); rows.delete(el); }
     };
     const resize = new ResizeObserver(check);
-    const watch = () => { resize.disconnect(); resize.observe(pane); for (const child of pane.children) resize.observe(child); };
-    const mutations = new MutationObserver(() => { watch(); check(); });
+    const watched = watchChildren(pane, resize);
+    const mutations = new MutationObserver((all) => {
+      const records = all.filter((r) => !ticking(r.target));
+      if (!records.length) return;
+      watched.update(records);
+      check();
+    });
     mutations.observe(pane, { childList: true, subtree: true, characterData: true });
-    watch();
+    watched.all();
     check();
     return () => {
       resize.disconnect();
@@ -2167,7 +2200,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
  * in, the line growing from its avatar; it leaves fading and folding its room away; for a message to come out of its
  * avatar the line folds to the avatar. Each of these goes from wherever it shows, cut off by the next or not.
  */
-function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
+function Activity({ agent, leaving, caught, pose, onOpen, onStop }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean }; onOpen(): void; onStop?: () => void }) {
   const wait = agent.wait;
   const now = useSteady(wait ? { key: "wait", text: wait.text ?? t("web-main.activity.waiting") } : agent.activity?.now ?? { key: "busy", text: t("web-main.activity.busy") });
   const row = useRef<HTMLDivElement>(null);
@@ -2198,6 +2231,7 @@ function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork
   });
   return (
     <div ref={row} className={`${conversationCss.msg} ${css.agentActivity}`} data-transient="" data-agent={agent.key} data-caught={caught} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
+      <div className={css.activityRow}>
       <button ref={line} type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
         <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span></span>
         <span ref={tail} className={css.activityTail}>
@@ -2210,6 +2244,12 @@ function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork
             : agent.since ? <span className={css.activityElapsed}><Elapsed since={agent.since} /></span> : null}
         </span>
       </button>
+      {onStop && (
+        <Tip label={t("web-main.activity.stop", { who: agent.who })}>
+          <button type="button" className={css.activityStop} aria-label={t("web-main.activity.stop", { who: agent.who })} onClick={onStop}><Stop size={12} fill="currentColor" /></button>
+        </Tip>
+      )}
+      </div>
     </div>
   );
 }
@@ -2255,13 +2295,25 @@ export function useSteady(now: { key: string; text: string }) {
 
 /** Seconds (then minutes) since a moment, ticking; at most `most` seconds. */
 export function Elapsed({ since, most }: { since: number; most?: number }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+  const shown = () => {
+    const s = Math.max(0, Math.floor((Date.now() - since) / 1000));
+    return span(most === undefined ? s : Math.min(s, most));
+  };
+  // Its words changed in place each second, not drawn by React: nothing around it is drawn again, and the lists that
+  // watch what changes in them pass over it (`data-ticking`, scroll.ts).
+  const [first] = useState(shown);
+  const el = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const tick = () => {
+      const words = el.current?.firstChild;
+      const now = shown();
+      if (words && words.nodeValue !== now) words.nodeValue = now;
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, []);
-  const s = Math.max(0, Math.floor((now - since) / 1000));
-  return <>{span(most === undefined ? s : Math.min(s, most))}</>;
+  }, [since, most]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <span ref={el} data-ticking="">{first}</span>;
 }
 
 /** How long a wait has gone on, ticking, at most its limit, with the limit: 1m 20s / 10m. */

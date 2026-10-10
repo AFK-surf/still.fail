@@ -11,6 +11,7 @@
 stillfail-runner --dir <run/runners> --id <id> [--cwd <dir>] -- <program> <args…>
 ```
 - 环境变量原样传给 agent（station 在启动 runner 时就把 agent 的环境配好）。
+- station 用 `nice -n 10` 启动 runner（`STILLFAIL_AGENT_NICE` 可改，0 不降；Windows 不降），agent 和它起的子进程（构建、浏览器）都比 station 低一档 CPU 优先级：机器被 agent 的活占满时，station 自己回请求、推变化不被拖住（`station/src/ops/nice.ts`）；后台任务（jobs）同样。
 - runner 先 `setsid()`（离开 station 的进程组和会话，launchd 结束 station 时不会带走它），再 fork 出 agent：agent 自己 `setpgid(0,0)` 成一个进程组（station 按 pgid 结束 agent 及其子进程，与现在一样）。
 - 写 `<dir>/<id>.json`（0600，原子写）：`{"id","runner":pid,"pid":agent pid,"pgid","startedAt":ms,"program","args","socket":"<dir>/<id>.sock","out":"<dir>/<id>.out","err":"<dir>/<id>.err"}`。
 - agent 的 stdout、stderr 原样追加到 `<id>.out`、`<id>.err`（不改内容）。stdin 由 runner 持有。

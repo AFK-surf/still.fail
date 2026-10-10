@@ -108,9 +108,9 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   const list = useRef<HTMLDivElement>(null);
   const floor = useRef<HTMLDivElement>(null);
   // The page's composer is its host's (ChatHost.tsx): kept as a new chat becomes this chat.
-  const { draft, use } = useHost();
+  const { now: draft, use } = useHost();
   const here: Here = { station: station.address, key: sessionKey, view };
-  useComposer(view, here, draft, use, list);
+  useComposer(view, here, use, list);
   return (
     <div className={chatCss.mChat}>
       <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} stationName={station.name} />
@@ -189,7 +189,7 @@ export function BarFrame({ title, more, onMore, trailing, children }: { title: s
 
 /** The wide screen's list (../Chat.tsx's ChatRows), in the page: over it, the bar; under it, the composer. */
 function Messages({ view, lives, list, floor, draft, here, stationName }: {
-  view: ChatView; lives: ReturnType<typeof useLives>; list: RefObject<HTMLDivElement | null>; floor: RefObject<HTMLDivElement | null>; draft: Draft; here: Here;
+  view: ChatView; lives: ReturnType<typeof useLives>; list: RefObject<HTMLDivElement | null>; floor: RefObject<HTMLDivElement | null>; draft: RefObject<Draft>; here: Here;
   stationName?: string | undefined;
 }) {
   const app = useApp();
@@ -205,7 +205,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
   const [stable] = useState(() => ({
     owner: (file: Parameters<typeof ownerIn>[1]) => ownerIn(latest.current.here.view, file),
     open: (key: string) => { const { app, here } = latest.current; openHistory(app, here.station, here.key, key); },
-    quote: (q: Omit<Quote, "comment">) => latest.current.draft.quote(q),
+    quote: (q: Omit<Quote, "comment">) => latest.current.draft.current.quote(q),
     images: () => latest.current.images(),
     hold: (ts: string) => { const { app, here } = latest.current; app.push(annotatePath(here.station, here.key, ts)); },
     archive: () => latest.current.archive(),
@@ -406,7 +406,7 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
  * it (a failure shows there too). Before the agent has a chat, what is sent waits in its outbox while the core has the
  * station make one, bound to the agent, and the page stays (the core shows the chat at the same address).
  */
-function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
+function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
   const api = useApi();
   const keeper = view.agents[0]?.session.key ?? null;
   const warmed = useRef(0);

@@ -97,6 +97,9 @@ export type SessionDeps = {
   restoreArchive(key: string): void | Promise<void>;
   /// An archived session's process is gone: its files may go to cold storage now (session.rs `clean_archive`).
   cleanArchive?(key: string): void | Promise<void>;
+  /// A turn ended as its opener (an agent that opened its chat) is told: all_done or need_human with its words, or
+  /// failed or stopped.
+  settled?(key: string, state: "all_done" | "need_human" | "failed" | "stopped", words: string | null): void;
   /// Turns are held (the station is about to stop or hand over): none starts, messages stay pending.
   held(): boolean;
   /// Stopped while it waits: ends the session's jobs that would bring it back.
@@ -797,6 +800,18 @@ export class SessionActor {
       if (stopRequested) await this.notice(t("station.notice.stopped"));
     }
 
+    // Told to whoever opened its chat: how the turn ended, when it ended in a state or did not get there.
+    if (turn) {
+      const ended = turn.declared?.kind === "all_done" ? "all_done" : turn.declared?.kind === "need_help" ? "need_human" : outcome.kind === "failed" ? "failed" : outcome.kind === "aborted" && stopRequested ? "stopped" : null;
+      if (ended !== null) {
+        const words = ended === "failed" ? (outcome.kind === "failed" ? outcome.message : null) : (store.lastTurn(this.key)?.need ?? null);
+        try {
+          this.deps.settled?.(this.key, ended, words);
+        } catch (error) {
+          log.warn("session", "the opener of its chat was not told", { session: this.key, error: (error as Error).message });
+        }
+      }
+    }
     if (store.pendingMessages(this.key).length > 0) return this.pump();
     if (this.notices.length > 0) return this.giveNotices();
     const declared = turn?.declared ?? null;

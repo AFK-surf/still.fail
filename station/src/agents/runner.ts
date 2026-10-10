@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
 import { join } from "node:path";
+import { niced } from "../ops/nice.ts";
 import { platform } from "../platform/index.ts";
 import { runnerBinary } from "../platform/processes.ts";
 
@@ -37,7 +38,9 @@ export const listening = (info: RunnerInfo) => !platform.runnerSocketVisible || 
 /// Starts `program` under a runner, its environment `env` (the agent's whole environment), in `cwd`.
 export function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string): Promise<RunnerInfo> {
   return new Promise((resolve, reject) => {
-    const child = spawn(runnerBinary(), ["--dir", runnersDir(data), "--id", id, "--cwd", cwd, "--", program, ...args], {
+    // Lower than the station (ops/nice.ts), the runtime it starts and what that starts too.
+    const [command, given] = niced(runnerBinary(), ["--dir", runnersDir(data), "--id", id, "--cwd", cwd, "--", program, ...args]);
+    const child = spawn(command, given, {
       env,
       stdio: ["ignore", "pipe", "pipe"],
       detached: true,

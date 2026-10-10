@@ -1,9 +1,11 @@
 // The agents' tools for their conversations (the Rust station's hub.rs `tools`): chat_post, chat_state, chat_history,
-// chat_list, chat_read, session_send, session_history. Names, descriptions and input schemas are the Rust station's,
-// byte for byte (test/hub-tools.test.ts reads them from hub.rs and compares); what they do is src/sessions/.
+// chat_list, chat_read, session_send, session_history, and chat_create (sessions/opened.ts), which came after the Rust.
+// Names, descriptions and input schemas are the Rust station's, byte for byte (test/hub-tools.test.ts reads them from
+// hub.rs and compares); what they do is src/sessions/.
 import { chatHistory, chatPost, chatState } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
+import { chatCreate } from "../sessions/opened.ts";
 import type { Args } from "../sessions/args.ts";
 import { chatList, chatRead, elsewhere, readAfar, sessionHistory } from "../sessions/others.ts";
 import { suggestArchive } from "../sessions/review.ts";
@@ -322,6 +324,61 @@ export const SESSION_SEND = {
   },
 };
 
+export const CHAT_CREATE = {
+  name: "chat_create",
+  description:
+    "Open a new still.fail chat with an agent of its own, on this station or another station of the workspace, for work that should go on visibly beside yours (a part to do in parallel, something another machine is better placed for). It begins with your message, headed as opened by your chat; whoever started your chat is its starter, so what it asks goes to them. Each time a turn of it ends all_done or need_human (or fails, or a person stops it), you are told with its done or need: to wait for it, end your turn waiting. Write to its agent with session_send to its link. Nothing is retried by itself: when an answer was uncertain, call again with the same key, which gives the chat made then (and sends its first message once) rather than opening another. A chat opened this way opens none itself.",
+  inputSchema: {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string",
+        "description": "A name of your choosing for this chat (e.g. build-android): the same key again gives the same chat; a new one opens another."
+      },
+      "text": {
+        "type": "string",
+        "description": "The first message, standing on its own: what its agent is to do and what it needs to do it (it does not see your chat). Markdown."
+      },
+      "title": {
+        "type": "string",
+        "description": "The chat's name in still.fail lists: a few words, in the language people use (at most 120 characters). Its agent names it when left out."
+      },
+      "station": {
+        "type": "string",
+        "description": "Another station of the workspace to open it on, by its name or id (station_list lists them). Left out: this station."
+      },
+      "runtime": {
+        "type": "string",
+        "enum": [
+          "claude",
+          "codex"
+        ],
+        "description": "Its agent's runtime. Default: yours."
+      },
+      "model": {
+        "type": "string",
+        "description": "Its agent's model. Default: yours (where that station runs it; else its default)."
+      },
+      "effort": {
+        "type": "string",
+        "description": "Its agent's reasoning effort. Default: yours, with your model."
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Absolute local paths of files to attach to the first message (at most 10, each up to 50 MB): copied to that chat, and its agent gets their paths there."
+      }
+    },
+    "required": [
+      "key",
+      "text"
+    ],
+    "additionalProperties": false
+  },
+};
+
 export const SESSION_HISTORY = {
   name: "session_history",
   description:
@@ -382,6 +439,7 @@ export function chatTools(hub: Hub): Tool[] {
     { ...CHAT_LIST, run: async (key, args) => chatList(hub, key, args) },
     { ...CHAT_READ, run: (key, args) => afar(hub, key, "chat_read", args) ?? chatRead(hub, key, args) },
     { ...SESSION_SEND, run: (key, args) => sessionSend(hub, key, args) },
+    { ...CHAT_CREATE, run: (key, args) => chatCreate(hub, key, args) },
     { ...SESSION_HISTORY, run: async (key, args) => afar(hub, key, "session_history", args) ?? sessionHistory(hub, args) },
   ];
 }

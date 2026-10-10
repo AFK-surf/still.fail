@@ -1,7 +1,7 @@
 // macOS and Linux (and another Unix as Linux): process groups and signals, /bin/sh, `/` paths, links. What the two
 // differ in (how the machine reads: sysctl and vm_stat, or /proc; the keychain and QuickLook) is said here too.
 import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
-import { chmodSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { cpus as cpuList, release, type as osType } from "node:os";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
@@ -186,6 +186,7 @@ export const unix: Platform = {
   runnable: (command, args) => ({ file: command, args }),
   posixShell: () => "/bin/sh",
   grouped: (program, args) => [program, args],
+  lowered: (program, args, by) => (by === 0 || !existsSync("/usr/bin/nice") ? [program, args] : ["/usr/bin/nice", ["-n", String(by), program, ...args]]),
   makeCommand(path, script) {
     writeFileSync(path, script);
     chmodSync(path, 0o755);

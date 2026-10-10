@@ -77,9 +77,11 @@ export const vvTrack = style({
     [`${vvTimeline}:hover &`]: { height: "6px", borderRadius: "3px" },
   },
 });
-export const vvPlayed = style({ position: "absolute", inset: "0 auto 0 0", background: vars.text });
+export const vvPlayed = style({ position: "absolute", inset: "0", transformOrigin: "left", background: vars.text });
+/** As wide as the timeline, slid along it (VideoViewer.tsx): the head at its start is where the video is. */
+export const vvHeadRail = style({ position: "absolute", inset: "0", pointerEvents: "none" });
 export const vvHead = style({
-  position: "absolute", top: "50%", width: "12px", height: "12px", borderRadius: "50%", background: vars.text,
+  position: "absolute", top: "50%", left: "0", width: "12px", height: "12px", borderRadius: "50%", background: vars.text,
   transform: "translate(-50%, -50%)", pointerEvents: "none", boxShadow: "0 1px 4px rgba(0, 0, 0, .35)",
 });
 globalStyle(`${vv} ${iconBtn}:disabled`, { opacity: ".35", cursor: "default", background: "none" });

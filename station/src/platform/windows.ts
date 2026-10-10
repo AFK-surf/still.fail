@@ -320,6 +320,7 @@ export const windows: Platform = {
   /// Under `stillfail-runner --job`, whose job holds the command and all it starts (what a shell execs, its parent
   /// gone, too), ended whole when the runner is.
   grouped: (program, args) => [runnerBinary(), ["--job", "--", program, ...args]],
+  lowered: (program, args) => [program, args],
   /// Windows runs no script by its #!: a .cmd beside it hands it to Git's sh (or does nothing).
   makeCommand(path, script, noop) {
     writeFileSync(path, script);

@@ -4,7 +4,11 @@ import { vars } from "../styles/tokens.css.ts";
 /** A new chat and a chat: one page, what is above and one composer at the foot (ChatHost.tsx; --m-bottom is its height). */
 export const mChatHost = style({
   position: "absolute", inset: "0",
+  // --m-bottom is this element's own, not inherited, and --m-composer-room a length worked out here (both registered,
+  // ChatHost.tsx): the composer's height changing changes what a chat's elements inherit only when the room it leaves
+  // does, rather than having every message's style worked out anew. A new chat's page reads the height itself.
   vars: { "--m-bottom": "72px", "--m-composer-room": "max(var(--m-bottom), calc(110px + var(--m-foot)))" },
+  selectors: { "&[data-new]": { vars: { "--m-new-bottom": "var(--m-bottom)" } } },
   "@media": {
     // Wider (app.tsx WIDE): a new chat keeps a column up to 680 wide in the middle, with at least 72 of room either
     // side, its composer too; a chat is the screen's width.

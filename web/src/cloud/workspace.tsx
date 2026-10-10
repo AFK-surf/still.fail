@@ -29,7 +29,7 @@ import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
-import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, type Station } from "../station.tsx";
+import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
 import { toMadeChat } from "../Chat.tsx";
@@ -56,15 +56,14 @@ import { tx } from "./words.tsx";
 /** The workspace in view and the signed-in account that reaches it. */
 export interface WorkspaceEntry { id: string; name: string; account: Account }
 
+const NO_STATIONS: Station[] = [];
+
 interface InvitationEntry extends PendingInvitation { account: Account }
 
 export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   const view = useWorkspace(entry.id).value;
   const found = useStations(entry.id);
-  const stations = useMemo<Station[]>(() => (found.value ?? []).map((s) => ({
-    id: s.id, name: s.name, online: s.online,
-    address: s.station, base: stationBase(s.station), settings: `/w/${entry.id}/settings`,
-  })), [found.value, entry.id]);
+  const stations = useStationList(found.value, entry.id) ?? NO_STATIONS;
   const path = useLocation().pathname;
   const navigate = useNavigate();
   useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/chats\/.+)$/.test(p));

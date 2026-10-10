@@ -7,7 +7,7 @@ import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { ChevronDown, ChevronRight, Copy, Wait, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
 import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryStep, type HistoryView, type Place } from "./api.ts";
 import { ICON, IconButton, Pill, SlackLogo, Tip } from "./ui.tsx";
@@ -30,12 +30,14 @@ import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 import { ReadWhole, useWhole } from "./brief.ts";
 /**
- * The session as it ran: the main view of a session. `summary` says who it is (in the head), `actions` what can be done
- * to it right now (stop a turn, release the process), `details` unfolds under the head. With its chat's `title`, each
+ * The session as it ran: the main view of a session. `summary` says what needs seeing to (in the head), `details`
+ * unfolds under the head. Given `tools` (a place in the row above it, its tab's), the details' switch goes there, and
+ * the head shows only for a `summary`. With its chat's `title`, each
  * item offers its link (opening the history there), to paste into another chat.
  */
-export function History({ station, sessionKey, summary, actions, details, focus, title }: {
-  station: string; sessionKey: string; summary?: ReactNode; actions?: ReactNode; details?: ReactNode; title?: string | undefined;
+export function History({ station, sessionKey, summary, details, tools, focus, title }: {
+  station: string; sessionKey: string; summary?: ReactNode; details?: ReactNode; title?: string | undefined;
+  tools?: HTMLElement | null;
   /** An entry to bring into view (n changes each time it is asked for). */
   focus?: { entry: number; n: number } | null;
 }) {
@@ -91,23 +93,26 @@ export function History({ station, sessionKey, summary, actions, details, focus,
   const seen = useRef(Number.POSITIVE_INFINITY);
   if (seen.current === Number.POSITIVE_INFINITY && history?.loaded) seen.current = items.at(-1)?.entries[1] ?? -1;
   const usage = history?.usage;
+  const headTools = <>
+    {(usage || details) && (
+      <button type="button" className={controlsCss.textToggle} aria-expanded={usageOpen} onClick={() => setUsageOpen(!usageOpen)}>
+        {t("web-main.history.details")} <ChevronDown {...ICON} size={14} className={usageOpen ? css.flip : undefined} />
+      </button>
+    )}
+  </>;
 
   return (
     // The paths its agent writes are its session's files (Peeks.tsx).
     <PathSession.Provider value={paths}>
     <ReadWhole.Provider value={detail}>
     <section className={css.history} aria-label={t("web-main.history.label")}>
-      <header className={css.historyHead}>
-        <div className={css.historyIdentity}>{summary}</div>
-        <div className={css.historyTools}>
-          {actions}
-          {(usage || details) && (
-            <button type="button" className={controlsCss.textToggle} aria-expanded={usageOpen} onClick={() => setUsageOpen(!usageOpen)}>
-              {t("web-main.history.details")} <ChevronDown {...ICON} size={14} className={usageOpen ? css.flip : undefined} />
-            </button>
-          )}
-        </div>
-      </header>
+      {(tools === undefined || summary) && (
+        <header className={css.historyHead}>
+          <div className={css.historyIdentity}>{summary}</div>
+          {tools === undefined && <div className={css.historyTools}>{headTools}</div>}
+        </header>
+      )}
+      {tools && createPortal(<div className={css.historyTools}>{headTools}</div>, tools)}
       {usageOpen && details && <div className={css.historyDetails}>{details}</div>}
       {usageOpen && usage && !details && (
         <dl className={css.usage}>{usage.map((u) => <div key={u.label}><dt>{u.label}</dt><dd>{u.value}</dd></div>)}</dl>

@@ -35,6 +35,10 @@ export const RECONNECT_MAX_MS = 60_000;
 export const OFFLINE_RETRY_MS = 10 * 60_000;
 /// How many tries in a row a station that was up may miss before it is taken for down.
 export const MISSES = 3;
+/// A station not reached this many tries in a row (some ten minutes of trying) is tried as seldom as one the cloud says
+/// is not online, though it says it is: one too old to take this client's access, or one that lost its relay, was
+/// dialled by every client about once a minute, some 1,600 dials a day for one such station.
+export const LONG_MISSES = 12;
 export const LINK_KEY = "link";
 /// Where a station's last host sample is kept (`host/<address>`), so its figures show from before it is reached again;
 /// written at most every HOST_SAVE_MS.
@@ -72,6 +76,12 @@ export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number |
 
 /// What a station's `/events` stream is opened for: host samples, the sessions followed as they run, the jobs' logs.
 export type EventsFor = { host: boolean; live: string[]; logs: [string, number][] };
+
+/// Whether a stream opened for `open` gives what `wants` asks: the same host samples and logs, and every session it
+/// asks among those it follows. One that follows more is kept: a session no longer at work or shown says little more.
+function covers(open: EventsFor, wants: EventsFor): boolean {
+  return open.host === wants.host && equal(open.logs, wants.logs) && wants.live.every((key) => open.live.includes(key));
+}
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
@@ -127,6 +137,10 @@ export class Link {
   /// The last event its streams gave, by its id: the station's run and its number in it (a station from before has
   /// none). A stream taking over from another asks for what came after it (`since`).
   lastEvent: { run: string; n: number } | null = null;
+  /// The last event as written down with what it told (`heard`); `restored`: it was, by a core before this one, and no
+  /// stream has opened since.
+  keptEvent: { run: string; n: number } | null = null;
+  restored = false;
   /// Sessions at work as their stream says (steps, phase, rate, usage).
   readonly lives = new Map<string, LiveView>();
   /// Threads whose summaries are read again once a burst of events is over.
@@ -257,6 +271,14 @@ export class StationsSync {
     }
     const link = new Link(address, addr, core.runner.child());
     this.#links.set(address, link);
+    // The last event it told a core before this one, written down with what it told: the first stream asks what came
+    // after it, and nothing is read again when the station still has that (the app started again within the hour). Not
+    // when its lists are not held (a database begun anew): they are read.
+    const heard = core.data.record("heard", address);
+    const held = (["chats", "sessions", "threads"] as const).every((list) => core.data.listed(address, list));
+    if (typeof heard === "string" && held) heardEvent(link, heard);
+    link.keptEvent = link.lastEvent;
+    link.restored = link.lastEvent !== null;
     // How it was last time, until the link finds out anew: kept in its workspace's database, there as the link is.
     const last = core.data.record("link", address);
     if (last === "online" || last === "offline") link.state = { state: "connecting", last };
@@ -327,13 +349,14 @@ export class StationsSync {
     return { host: shown.host, live: [...live].sort(), logs: [...shown.logs].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1])) };
   }
 
-  /// Opens the station's stream for what it is wanted for now, unless it is already open for that (or `anew`): the
-  /// new one opens first, and the old one goes once it has.
+  /// Opens the station's stream for what it is wanted for now, unless the one open gives that (or `anew`): the new one
+  /// opens first, and the old one goes once it has. An agent ending its turn opens none: as agents started and ended
+  /// turns, a client's stream to a busy station was opened anew some 90 times an hour.
   openEvents(address: string, anew: boolean): void {
     const link = this.#links.get(address);
     if (!link || !this.reachable(address)) return;
     const wants = this.#wants(address);
-    if (!anew && link.events && equal(link.events.wants, wants)) return;
+    if (!anew && link.events && covers(link.events.wants, wants)) return;
     // Handed over from a stream that is open and heard lately (wanted for more or less now): it kept the records
     // current until the new one opens, so the new one reads nothing again. One quiet past a keepalive may have died
     // unnoticed (the device asleep): what it may have missed is read.
@@ -446,9 +469,13 @@ export class StationsSync {
             // `missed` when it cannot tell all it missed).
             const resumed = since !== null && replyHeader(opened.success, RESUMED) === "1";
             span.set("stillfail.resumed", resumed);
+            if (link.restored) span.set("stillfail.restored", true);
             span.end();
             let snapshotted = !handing && !resumed;
             if (snapshotted) self.snapshot(address, span.context);
+            // Taken up from where a core before this one was: its history is swept as a reading of everything would.
+            else if (link.restored) self.#historyStart(address);
+            link.restored = false;
             handing = false;
             const parser = new SseParser();
             const openedAt = core.host.nowMs();
@@ -493,6 +520,11 @@ export class StationsSync {
                 } else self.onEvent(address, name, data);
                 if (id !== undefined) heardEvent(link, id);
               }
+              // Written down in the same write as what the events changed: a core after this one takes up from it.
+              if (link.lastEvent !== link.keptEvent && link.lastEvent !== null) {
+                core.data.put("heard", address, `${link.lastEvent.run}.${link.lastEvent.n}`);
+                link.keptEvent = link.lastEvent;
+              }
             }
             if (link.generation !== generation) return { done: true } as const;
             link.heard = null;
@@ -508,9 +540,9 @@ export class StationsSync {
             : { why: ended.why ?? "", lasted: 0, bytes: 0, read: 0, events: 0 };
           if (ended.again) continue;
         } else previous = { why: ended.failed, lasted: 0, bytes: 0, read: 0, events: 0 };
-        // Not reached: less and less often, and seldom while still.fail cloud says it is not online. A UI back after
-        // being away wants it now, and so does the cloud saying it is back.
-        const offline = self.#cloudSaysOffline(address);
+        // Not reached: less and less often, and seldom while still.fail cloud says it is not online or it has not been
+        // reached for long. A UI back after being away wants it now, and so does the cloud saying it is back.
+        const offline = self.#cloudSaysOffline(address) || misses >= LONG_MISSES;
         const wait = offline ? OFFLINE_RETRY_MS : Math.min(RECONNECT_MS * 2 ** Math.min(Math.max(misses - 1, 0), 8), RECONNECT_MAX_MS);
         const back = self.#backOf(address);
         const woken = yield* Effect.raceFirst(Effect.sleep(wait).pipe(Effect.as(false)), Effect.raceFirst(core.wakes.next.pipe(Effect.as(true)), Deferred.await(back).pipe(Effect.as(true))));

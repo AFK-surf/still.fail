@@ -1,7 +1,7 @@
 // Which station a piece of the client talks to. A workspace has several, and
 // one page shows them together. Components read the station from context: its
 // address (how the client core names it) and its base path (which prefixes links).
-import { createContext, useContext } from "react";
+import { createContext, useContext, useRef } from "react";
 import { useParams } from "react-router";
 import { setPrefs, usePrefs } from "./prefs.ts";
 
@@ -22,6 +22,24 @@ export interface Station {
 /** Where a station's profiles are listed: the workspace's one Profile page (every station's, each with its own add button). */
 export function profilesPage(station: Station): string {
   return `${station.settings}/profiles`;
+}
+
+/**
+ * A workspace's stations as pages take them (`views`: the core's `stations`), the same objects (and list) while what they
+ * hold is: the core's view changes much more often than that (its overview, its agents starting and stopping), and a
+ * new station each time would draw every page under it again, every message of a chat.
+ */
+export function useStationList(views: readonly { id: string; name: string; online: boolean; station: string }[] | undefined, workspace: string): Station[] | undefined {
+  const kept = useRef<Station[] | undefined>(undefined);
+  const settings = `/w/${workspace}/settings`;
+  const was = kept.current;
+  const next = views?.map((v) => {
+    const old = was?.find((s) => s.id === v.id);
+    return old && old.name === v.name && old.online === v.online && old.address === v.station && old.settings === settings ? old
+      : { id: v.id, name: v.name, online: v.online, address: v.station, base: stationBase(v.station), settings };
+  });
+  if (!(next && was && next.length === was.length && next.every((s, i) => s === was[i]))) kept.current = next;
+  return kept.current;
 }
 
 /** Path prefix of a station's pages, from its address. */

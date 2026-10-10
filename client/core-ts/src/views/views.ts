@@ -129,7 +129,8 @@ export function chatTitle(thread: J): string {
   return t("core-views.no_messages");
 }
 
-/// What a message another chat's agent sent (session_send) is headed with: its chat's title and link, and the message.
+/// What a message another chat's agent sent (session_send, or the first of a chat it opened with chat_create) is headed
+/// with: its chat's title and link, and the message.
 export function sentFrom(text: string): [string, string, string] | null {
   const at = text.indexOf("\n\n");
   if (at < 0) return null;
@@ -138,6 +139,8 @@ export function sentFrom(text: string): [string, string, string] | null {
   let named: string | null = null;
   if (head.startsWith("来自 ") && head.endsWith("：")) named = head.slice(3, -1);
   else if (head.startsWith("From ") && head.endsWith(":")) named = head.slice(5, -1);
+  else if (head.startsWith("由 ") && head.endsWith(" 开的 chat：")) named = head.slice(2, -" 开的 chat：".length);
+  else if (head.startsWith("Opened by ") && head.endsWith(":")) named = head.slice(10, -1);
   if (named === null) return null;
   let title: string;
   let link: string;

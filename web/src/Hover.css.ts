@@ -44,6 +44,21 @@ export const rich = style({ display: "flex", flexDirection: "column", gap: "8px"
 export const meta = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", fontSize: vars.textMeta, color: vars.muted });
 export const ref = style({ flex: "1 1 auto", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const refIcon = style({ verticalAlign: "-1px", marginRight: "4px" });
+/** A file's card's head: its icon, name and age; its whole path under them, wrapped wherever it must be, selectable. */
+export const fileHead = style({ display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" });
+export const fileTitle = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
+export const fileTime = style({ flex: "0 0 auto", marginLeft: "auto", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });
+export const fileTitleIcon = style({ flex: "0 0 auto", color: vars.muted });
+export const filePath = style({
+  fontFamily: vars.fontMono, fontSize: vars.textCaption, color: vars.muted, overflowWrap: "anywhere", userSelect: "text", WebkitUserSelect: "text",
+});
+/** What can be done with a file's path (copied, shown in Finder), at the end of its facts. */
+export const actions = style({ display: "inline-flex", gap: "2px", marginLeft: "auto" });
+export const action = style({
+  display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 6px", border: "0", borderRadius: "6px", background: "transparent",
+  color: vars.muted, font: "inherit", cursor: "pointer", whiteSpace: "nowrap",
+  selectors: { "&:hover": { background: vars.hover, color: vars.text } },
+});
 export const time = style({ flex: "0 0 auto", marginLeft: "auto", whiteSpace: "nowrap" });
 /** A tinted pill: its glyph and the state's name, its colours by `data-state`. */
 export const state = style({
@@ -78,7 +93,14 @@ export const line = style({ display: "flex", paddingRight: "8px", selectors: { "
 export const lineNo = style({ flex: "0 0 auto", width: "34px", paddingRight: "8px", textAlign: "right", color: vars.muted, userSelect: "none" });
 export const lineText = style({ overflow: "hidden", textOverflow: "ellipsis" });
 export const thumb = style({ display: "block", maxWidth: "100%", maxHeight: "180px", borderRadius: "8px", margin: "0 auto", background: vars.hover });
-export const entries = style({ margin: "0", padding: "0", listStyle: "none", fontFamily: vars.fontMono, fontSize: vars.textCaption, lineHeight: "1.6", color: vars.text });
+/** A directory's entries, in two columns, each with its icon. */
+export const entries = style({
+  display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "2px 12px", margin: "0", padding: "6px 8px", borderRadius: "8px",
+  background: vars.hover, listStyle: "none", fontFamily: vars.fontMono, fontSize: vars.textCaption, lineHeight: "1.55", color: vars.text,
+});
+export const entry = style({ display: "flex", alignItems: "center", gap: "5px", minWidth: "0" });
+export const entryIcon = style({ flex: "0 0 auto", color: vars.muted });
+export const entryName = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const note = style({ margin: "0", color: vars.muted });
 
 // ---- while it is read: bars where its lines will be ----
@@ -100,8 +122,8 @@ export const fileChip = style({
   lineHeight: "inherit", cursor: "pointer", verticalAlign: "baseline", textAlign: "left",
   selectors: {
     "&:hover": { background: `color-mix(in srgb, ${vars.muted} 24%, transparent)` },
-    // A directory opens nothing: its card is all there is.
-    "&[data-dir]": { cursor: "default" },
+    // A directory opens nothing (but in Finder, on this machine): its card is all there is.
+    "&[data-dir]:not([data-opens])": { cursor: "default" },
   },
 });
 export const fileChipIcon = style({ alignSelf: "center", flex: "0 0 auto", color: vars.muted });

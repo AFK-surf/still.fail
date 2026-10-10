@@ -9,6 +9,7 @@
   "web-main.act.failed": "没能{what}：{error}",
   "web-main.act.unconfirmed": "{what}：{error}",
   "web-main.activity.busy": "处理中",
+  "web-main.activity.stop": "停止 {who}",
   "web-main.activity.waiting": "等待中",
   "web-main.ago.days": "{n} 天前",
   "web-main.ago.hours": "{n} 小时前",
@@ -186,6 +187,7 @@
   "web-main.composer.pressToTypeCjk": "按{key}输入",
   "web-main.composer.refFailed": "没能引用「{title}」：{error}",
   "web-main.composer.send": "发送",
+  "web-main.composer.stop": "停止",
   "web-main.composer.stillUploading": "文件还在上传",
   "web-main.copyFailed": "没能复制：{error}",
   "web-main.core.cancelled": "已取消",
@@ -603,7 +605,10 @@
   "web-main.preview.openFailed": "没能打开 {name}：{error}",
   "web-main.preview.more": "还有 {count} 项",
   "web-main.preview.binary": "二进制文件",
-  "web-main.preview.clickToOpen": "点击打开",
+  "web-main.preview.items": "共 {count} 项",
+  "web-main.preview.copyPath": "复制路径",
+  "web-main.preview.reveal": "在 {app} 中显示",
+  "web-main.preview.revealFailed": "没能在 {app} 中显示 {path}",
   "web-main.history.stepReading": "正在读取…",
   "web-main.history.stepUnread": "没读到：{error}"
 }

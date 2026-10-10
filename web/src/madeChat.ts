@@ -50,7 +50,7 @@ export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElemen
   const pictures = picturesIn(composer, layer, z);
   sending = { field, from: textAt(field), top: composer.getBoundingClientRect().top, stand, pictures, release: hold.detail.release };
   field.dataset.madeField = "";
-  document.documentElement.dataset.madeHint = "hidden";
+  field.dataset.madeHint = "hidden";
 }
 
 /** The images going with the message, drawn in `layer` (at `z`) where their thumbnails are in `composer`, cropped as there. */
@@ -103,7 +103,7 @@ export function notSent(): void {
   sending.stand?.remove();
   for (const picture of sending.pictures) picture.stand.remove();
   delete sending.field.dataset.madeField;
-  delete document.documentElement.dataset.madeHint;
+  delete sending.field.dataset.madeHint;
   sending = null;
 }
 
@@ -231,7 +231,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     }
     // The composer's hint comes in once the words are out of it (above its top edge), not while they pass over it.
     const out = () => {
-      if (!copy.isConnected || copy.getBoundingClientRect().bottom <= top) delete root.dataset.madeHint;
+      if (!copy.isConnected || copy.getBoundingClientRect().bottom <= top) { if (now) delete now.field.dataset.madeHint; }
       else requestAnimationFrame(out);
     };
     requestAnimationFrame(out);
@@ -251,7 +251,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
       delete list.dataset.madeList;
     }
     delete root.dataset.made;
-    delete root.dataset.madeHint;
+    if (now) delete now.field.dataset.madeHint;
   });
 }
 
@@ -299,14 +299,14 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
   const stand = standIn(field, text, layer, z);
   const pictures = picturesIn(composer, layer, z);
   if (!stand && !pictures.length) return;
-  const root = document.documentElement;
   const mine = `.${msgCss.msgMine}`;
   const before = new Set(list.querySelectorAll(mine));
   const from = textAt(field);
   field.dataset.madeField = "";
   // Only words pass over the hint; images alone leave it where it is.
-  if (stand) root.dataset.madeHint = "hidden";
-  root.dataset.sent = "";
+  // On the field, not the page's root: a mark there has every element's style worked out anew (a long chat's, at once).
+  if (stand) field.dataset.madeHint = "hidden";
+  field.dataset.sent = "";
   // The rows it went into (the outbox's, then the message that takes its place): hidden while their copy is on its way,
   // and never easing in by themselves.
   const rows: HTMLElement[] = [];
@@ -325,6 +325,8 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
   let copy: HTMLElement | null = null;
   let of: HTMLElement | null = null;
   let ground = "";
+  /** Where the copy was set down (in the layer), its width: from there it is only moved (a transform), not laid out anew. */
+  let set: { left: number; top: number; width: number } | null = null;
   let clock: Animation | null = null;
   let frame = 0;
   let over = false;
@@ -340,12 +342,12 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     stand?.remove();
     for (const picture of pictures) picture.stand.remove();
     for (const el of rows) delete el.dataset.sendCovered;
-    delete root.dataset.madeHint;
+    delete field.dataset.madeHint;
     // The hint eases back (data-sent), then the field is as it was.
     setTimeout(() => {
       if (flying) return;
       delete field.dataset.madeField;
-      delete root.dataset.sent;
+      delete field.dataset.sent;
     }, 200);
   };
   // Where the row is now, its copy drawn so far on its way from the composer.
@@ -364,6 +366,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
       }
       if (copy) copy.replaceWith(next); else ghost.append(next);
       copy = next;
+      set = null;
       if (!ground) {
         const bubble = copy.querySelector(`.${conversationCss.msgBubble}`);
         ground = bubble ? getComputedStyle(bubble).backgroundColor : "";
@@ -374,15 +377,21 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     const box = layer.getBoundingClientRect();
     const { up, across } = flight(clock.effect?.getComputedTiming().progress ?? 1);
     const e = Math.min(1, across);
-    Object.assign(copy.style, { position: "absolute", left: `${at.left - box.left}px`, top: `${at.top - box.top}px`, width: `${at.width}px`, margin: "0" });
+    // Set down once where the row is (again only if its width changes); followed from there by a transform alone, on a
+    // layer of its own: moving it each frame lays nothing out and draws nothing anew (a phone's frames go on that).
+    if (!set || Math.abs(set.width - at.width) > 0.5) {
+      set = { left: at.left - box.left, top: at.top - box.top, width: at.width };
+      Object.assign(copy.style, { position: "absolute", left: `${set.left}px`, top: `${set.top}px`, width: `${set.width}px`, margin: "0", willChange: "transform" });
+    }
+    const dx = at.left - box.left - set.left, dy = at.top - box.top - set.top;
     if (words) {
       const to = textAt(words);
       const s = from.size / to.size + (1 - from.size / to.size) * up;
       Object.assign(copy.style, {
         transformOrigin: `${to.x - at.left}px ${to.y - at.top}px`,
-        transform: `translate(${(from.x - to.x) * (1 - across)}px, ${(from.y - to.y) * (1 - up)}px) scale(${s})`,
+        transform: `translate(${dx + (from.x - to.x) * (1 - across)}px, ${dy + (from.y - to.y) * (1 - up)}px) scale(${s})`,
       });
-    }
+    } else copy.style.transform = `translate(${dx}px, ${dy}px)`;
     // Each image from its thumbnail to its place in the row as it is now: across and up as the words go, its box
     // growing from the thumbnail's to its own.
     for (const picture of pictures) {
@@ -404,7 +413,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     // (Its own delay kept: "sending" shows when the row's does.)
     for (const el of copy.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)) el.style.opacity = `${e}`;
     // Out of the composer (its top edge as it is now): its hint comes back.
-    if (words && root.dataset.madeHint && copy.getBoundingClientRect().bottom <= composer.getBoundingClientRect().top) delete root.dataset.madeHint;
+    if (words && field.dataset.madeHint && copy.getBoundingClientRect().bottom <= composer.getBoundingClientRect().top) delete field.dataset.madeHint;
   };
   const tick = () => { place(); frame = requestAnimationFrame(tick); };
   // The row comes as the list is drawn anew: its copy takes the words' place before the frame is painted.

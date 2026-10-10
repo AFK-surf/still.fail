@@ -1,5 +1,6 @@
 // What changed in still.fail, for people (changelog.rs; the `changelog` topic, docs/changelog.md): still.fail cloud's
-// changelog with what each part has out on this app's channel, by day, newest first; and what this app got since it
+// changelog with what each part has out on this app's channel, one tab a part (this app's first), by day, newest first;
+// and what this app got since it
 // was last shown here (`news`, until `changelog.seen`). Kept on the device (table `changelog`). The sync reads it as
 // the core starts and each time still.fail cloud's events socket opens (rule 6: never because it is shown); `app.update`
 // reads it too when it finds a build of this app the changelog kept was read before (`brings`).
@@ -27,15 +28,34 @@ function partsOf(app: string): string[] {
   return app === "android" ? ["android"] : app === "desktop" ? ["web", "desktop"] : app === "web" ? ["web"] : [];
 }
 
-function partName(part: string): string {
-  if (part === "web" || part === "android" || part === "desktop") return t(`core-misc.changelog.part.${part}`);
-  return part;
+/// The changelog's tabs, this app's first, and the parts each shows: the desktop app carries the web's; the cloud's
+/// has the changes that needed no release too.
+const TABS = ["desktop", "web", "android", "station", "cloud"];
+const ownTab = (app: string) => (TABS.includes(app) ? app : "web");
+function tabsOf(app: string): string[] {
+  const own = ownTab(app);
+  return [own, ...TABS.filter((tab) => tab !== own)];
+}
+const tabParts = (tab: string) => (tab === "desktop" ? ["web", "desktop"] : [tab]);
+function inTab(tab: string, parts: string[]): boolean {
+  return (tab === "cloud" && parts.length === 0) || parts.some((p) => tabParts(tab).includes(p));
+}
+
+/// A line's kind, from how it starts (修复：, 改进：, 新功能：; docs/changelog.md), and the rest of it.
+const KINDS: [RegExp, string][] = [[/^(新功能|新增)[：:]\s*/, "new"], [/^(改进|优化|调整|移除)[：:]\s*/, "improve"], [/^修复[：:]\s*/, "fix"]];
+function line(text: string): J {
+  for (const [start, kind] of KINDS) {
+    const m = start.exec(text);
+    if (m && m[0].length < text.length) return { kind, label: t(`core-misc.changelog.kind.${kind}`), text: text.slice(m[0].length) };
+  }
+  return { label: "", text };
 }
 
 const int = (v: J): number | null => (typeof v === "number" && Number.isInteger(v) ? v : null);
 
-/// One change as this app shows it.
-export function item(entry: J, app: string, build: number | null, released: J): J {
+/// One change as this app shows it in a tab (this app's by default): whether this app has it, in its own; in another,
+/// only what is not out yet of that tab's parts. Nothing is said of what is out.
+export function item(entry: J, app: string, build: number | null, released: J, tab: string = ownTab(app)): J {
   const version = int(get(entry, "version"));
   if (version === null) return null;
   const textList = get(entry, "text");
@@ -43,23 +63,17 @@ export function item(entry: J, app: string, build: number | null, released: J): 
   const text = textList.filter((x): x is string => typeof x === "string");
   if (text.length === 0) return null;
   const parts: string[] = arr(get(entry, "parts")).filter((p): p is string => typeof p === "string");
-  const ours = partsOf(app);
-  const mine = parts.filter((p) => ours.includes(p));
+  const mine = parts.filter((p) => partsOf(app).includes(p));
   const out = (part: string) => part === "cloud" || ((int(get(released, part)) ?? -Infinity) >= version);
   const name = `0.1.${version}`;
-  const names = parts.filter((p) => p !== "cloud").map(partName);
-  const cloudOnly = parts.length === 0 || (parts.length === 1 && parts[0] === "cloud");
-  const place = cloudOnly ? "" : t("core-misc.changelog.place", { parts: names.join(t("core-misc.changelog.and")), version: name });
-  let has: boolean | null;
-  let note: string;
-  if (cloudOnly) [has, note] = [null, t("core-misc.changelog.live")];
-  else if (mine.length > 0) {
-    if (build !== null && build >= version) [has, note] = [true, t("core-misc.changelog.have")];
+  let has: boolean | null = null;
+  let note = "";
+  if (tab === ownTab(app) && mine.length > 0) {
+    if (build !== null && build >= version) has = true;
     else if (mine.every(out)) [has, note] = [false, app === "web" ? t("core-misc.changelog.reload") : t("core-misc.changelog.update", { version: name })];
     else [has, note] = [false, t("core-misc.changelog.unreleased")];
-  } else if (parts.every(out)) [has, note] = [null, t("core-misc.changelog.released")];
-  else [has, note] = [null, t("core-misc.changelog.unreleased")];
-  return { version, versionName: name, text, place, has, note, mine: mine.length > 0 };
+  } else if (!parts.filter((p) => tabParts(tab).includes(p)).every(out)) note = t("core-misc.changelog.unreleased");
+  return { version, versionName: name, text, lines: text.map(line), has, note, mine: mine.length > 0 };
 }
 
 export class Changelog implements Owner {
@@ -142,23 +156,28 @@ export class Changelog implements Owner {
     const build = int(get(device, "build"));
     const seen = int(this.#data.record(TABLE, "seen"));
     const feed = this.#data.record(TABLE, "feed") as J;
-    if (feed === undefined) return { app, build, days: [], loading: !this.#failed, error: this.#failed ? t("core-misc.changelog.unreadable") : null };
+    if (feed === undefined) return { app, build, tabs: [], loading: !this.#failed, error: this.#failed ? t("core-misc.changelog.unreadable") : null };
     const released = get(feed, "released") ?? null;
     const now = this.#host.nowMs();
     const offset = this.#host.utcOffsetMin(now);
-    const days: J[] = [];
     const news: J[] = [];
+    const tabs = tabsOf(app).map((part) => ({ part, label: t(`core-misc.changelog.tab.${part}`), days: [] as J[] }));
     for (const entry of arr(get(feed, "entries")).slice(0, SHOWN)) {
       const it = item(entry, app, build, released);
       if (it === null) continue;
       const version = it.version as number;
-      if (it.mine && build !== null && version <= build && seen !== null && version > seen && news.length < NEWS) news.push(structuredClone(it));
+      if (it.mine && build !== null && version <= build && seen !== null && version > seen && news.length < NEWS) news.push(it);
       const ms = (typeof get(entry, "at") === "number" ? entry.at : 0) * 1000;
       const label = format.dayLabel(ms, now, offset);
-      const last = days[days.length - 1];
-      if (last && last.label === label) last.entries.push(it);
-      else days.push({ label, entries: [it] });
+      const parts: string[] = arr(get(entry, "parts")).filter((p): p is string => typeof p === "string");
+      for (const tab of tabs) {
+        if (!inTab(tab.part, parts)) continue;
+        const shown = item(entry, app, build, released, tab.part);
+        const last = tab.days[tab.days.length - 1];
+        if (last && last.label === label) last.entries.push(shown);
+        else tab.days.push({ label, entries: [shown] });
+      }
     }
-    return { app, build, days, news: news.length > 0 ? { build: build !== null ? `0.1.${build}` : null, entries: news } : null, loading: false };
+    return { app, build, tabs, news: news.length > 0 ? { build: build !== null ? `0.1.${build}` : null, entries: news } : null, loading: false };
   }
 }

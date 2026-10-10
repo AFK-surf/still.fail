@@ -15,7 +15,7 @@ import { base, entries, entry, overview, session, started, status, stationReplie
 import { merge } from "../src/entries.ts";
 import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
-import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
+import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RETRY_MS, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
 import { SOCKET_OPEN_MS } from "../src/station/requests.ts";
@@ -1796,4 +1796,75 @@ test("how_a_station_was_last_time_is_there_as_its_link_starts_and_an_old_file_of
   assert.equal(third.inner.data.record("link", ST), "offline");
   assert.equal(host.stored(`${LINK_KEY}/${ST}`), undefined);
   third.close();
+});
+
+test("a_station_not_reached_for_long_is_tried_seldom_though_the_cloud_says_it_is_online", async () => {
+  const { host, core, gate } = await started(base(), 0, undefined, (s) => (s.gate.stream = "fail"));
+  const tries = () => host.requests.filter((r) => r.url.includes("/admin/api/events")).length;
+  // Tried less and less often, at most RECONNECT_MAX_MS apart: its LONG_MISSES-th miss some seven minutes in…
+  await host.time.pass(LONG_MISSES * RECONNECT_MAX_MS, 1_000);
+  assert.equal(tries(), LONG_MISSES);
+  // …and then not for OFFLINE_RETRY_MS, as one the cloud says is not online.
+  await host.time.pass(4 * RECONNECT_MAX_MS, 1_000);
+  assert.equal(tries(), LONG_MISSES);
+  await host.time.pass(OFFLINE_RETRY_MS - 4 * RECONNECT_MAX_MS, 1_000);
+  assert.equal(tries(), LONG_MISSES + 1);
+  // Reached at the try after.
+  gate.stream = "open";
+  await host.time.pass(OFFLINE_RETRY_MS / 2 + 30_000, 1_000);
+  assert.equal(tries(), LONG_MISSES + 2);
+  assert.equal(core.inner.data.record("link", ST), "online");
+  core.close();
+});
+
+test("an_agent_ending_its_turn_keeps_the_stream_one_starting_opens_it_anew", async () => {
+  const { host, core, push, streams } = await started();
+  const open = () => streams.filter((s) => !s.closed).map((s) => s.path);
+  const row = (id: string, agents: unknown[]) => push("chat", { id, thread: Number(id), session: `s${id}`, title: "部署", lastActiveAt: 1, agents });
+  row("7", [{ key: "k", process: "running" }]);
+  await host.settle();
+  await host.settle();
+  assert.deepEqual(open(), ["/events?live=k&from=0&last=200&brief=1"]);
+  const opened = streams.length;
+  // Its turn over: the stream goes on as it is, still following it.
+  row("7", [{ key: "k", process: "warm" }]);
+  await host.settle();
+  await host.settle();
+  assert.equal(streams.length, opened);
+  assert.deepEqual(open(), ["/events?live=k&from=0&last=200&brief=1"]);
+  // Another at work: a stream for what is wanted now, without the one done.
+  row("8", [{ key: "j", process: "running" }]);
+  await host.settle();
+  await host.settle();
+  assert.equal(streams.length, opened + 1);
+  assert.deepEqual(open(), ["/events?live=j&from=0&last=200&brief=1"]);
+  core.close();
+});
+
+test("a_core_started_again_takes_its_stations_up_from_the_last_event_kept_and_reads_nothing_again_when_told", async () => {
+  for (const resumes of [true, false]) {
+    const { host, core, streams, gate } = await started();
+    gate.resumes = resumes;
+    await host.settle();
+    // An event with its id, as a station tells it: written down with what it changed.
+    const open = streams.filter((s) => !s.closed).at(-1)!;
+    const row = { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [] };
+    Queue.offerUnsafe(open.queue, new TextEncoder().encode(`id: 1a.7\nevent: chat\ndata: ${JSON.stringify(row)}\n\n`));
+    await host.settle();
+    await run(core.inner.data.written);
+    core.close();
+    const before = host.requests.length;
+    const again = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+    again.connect();
+    await host.settle();
+    await host.settle();
+    const asked = host.requests.slice(before).map((r) => r.url.replace("https://stillfail.test/admin/api", "")).filter((u) => !u.startsWith("http"));
+    assert.ok(asked.some((u) => u.startsWith("/events") && u.includes("since=1a.7")), JSON.stringify(asked));
+    const lists = asked.filter((u) => ["/overview", "/chats", "/sessions", "/threads", "/jobs"].includes(u) || u.startsWith("/changed/"));
+    // Told what came after it: nothing read again. Not told so (more than an hour later, the station started again):
+    // everything is, as before.
+    if (resumes) assert.deepEqual(lists, [], JSON.stringify(asked));
+    else assert.ok(lists.includes("/overview"), JSON.stringify(asked));
+    again.close();
+  }
 });

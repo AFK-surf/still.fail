@@ -25,17 +25,22 @@ const MAX_TEXT = 200_000;
 
 const chars = (s: string) => Array.from(s).length;
 
-/// Who a message comes from, as its header shows it: the sender's chat by its title, linked when it has a link.
-function header(surface: string, title: string, link: string | null): string {
-  let from: string;
-  if (link !== null && surface === STILLFAIL_SURFACE) from = `[${title.replace(/[[\]]/g, "")}](${link})`;
-  else if (link !== null) from = `<${link}|${title.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("|", "/")}>`;
-  else from = title;
-  return tr(stationLang(), "station.session.from", { from });
+/// A chat by its title, linked when it has a link, as written on `surface` (Markdown in still.fail chats, Slack's
+/// mrkdwn elsewhere).
+export function chatNamed(surface: string, title: string, link: string | null): string {
+  if (link !== null && surface === STILLFAIL_SURFACE) return `[${title.replace(/[[\]]/g, "")}](${link})`;
+  if (link !== null) return `<${link}|${title.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("|", "/")}>`;
+  return title;
+}
+
+/// Who a message comes from, as its header shows it: the sender's chat by its title, linked when it has a link. The
+/// first message of a chat an agent opened (chat_create) says it opened it.
+function header(surface: string, title: string, link: string | null, opened = false): string {
+  return tr(stationLang(), opened ? "station.session.openedBy" : "station.session.from", { from: chatNamed(surface, title, link) });
 }
 
 /// The sender's chat as a message from it is headed: its title, and its link once the station is in a workspace.
-function sender(hub: Hub, key: string): [string, string | null] {
+export function sender(hub: Hub, key: string): [string, string | null] {
   const row = hub.store.getSession(key);
   if (!row) throw new Error("unknown session");
   let thread = null;
@@ -117,16 +122,19 @@ export async function fromPeer(hub: Hub, peer: string, request: Json): Promise<J
   const files = claim(hub, peer, from, targets[0] ?? target, request?.files);
   const title = typeof request?.from?.title === "string" && request.from.title.trim() !== "" ? request.from.title : from;
   const link = typeof request?.from?.link === "string" && request.from.link !== "" ? request.from.link : null;
+  // The first message of a chat that session opened here (chat_create there): headed as its opening.
+  const opener = hub.store.openerOf(target);
+  const opened = request?.opened === true && opener !== null && opener.parentStation === peer && opener.parent === from;
   // Not a session of this station: by its station and key, so it is never taken for one.
-  const place = await postFrom(hub, thread, `${peer}/${from}`, title, link, text, targets, files);
+  const place = await postFrom(hub, thread, `${peer}/${from}`, title, link, text, targets, files, opened);
   return { thread: place };
 }
 
-/// Posts `text` from `author` in `thread`, headed with where it comes from, with `given` files, and hands it to
-/// `targets`. Its address.
-async function postFrom(hub: Hub, thread: SessionThread, author: string, title: string, link: string | null, text: string, targets: string[], given: Attachment[] = []): Promise<string> {
+/// Posts `text` from `author` in `thread`, headed with where it comes from (as its opening when `opened`), with `given`
+/// files, and hands it to `targets`. Its address.
+export async function postFrom(hub: Hub, thread: SessionThread, author: string, title: string, link: string | null, text: string, targets: string[], given: Attachment[] = [], opened = false): Promise<string> {
   const row = thread.thread;
-  let said = `${header(row.surface, title, link)}\n\n${text}`;
+  let said = `${header(row.surface, title, link, opened)}\n\n${text}`;
   const files = await keep(given, thumbsDir(hub.config().dataDir));
   const here = { channel: row.channel, threadTs: row.threadTs };
   const chat = hub.chat(thread.connect);

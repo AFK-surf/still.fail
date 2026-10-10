@@ -157,7 +157,7 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `accounts` | — | signed-in accounts (no tokens) |
 | `workspaces` | — | every workspace of every account, with its account and pending invitations |
 | `workspace` | `workspace` | the workspace view (members, stations) |
-| `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s; every 10 minutes while still.fail cloud says the station is not online, and at once when it says it is back or the UI comes back) / `error` + message |
+| `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s; every 10 minutes while still.fail cloud says the station is not online or after 12 tries in a row missed, and at once when the cloud says it is back or the UI comes back) / `error` + message |
 | `overview` | `station` | the admin API's `/overview` |
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
 | `archivedRows` | `station` | `/chats?archived=1`: the station's archived chats. Read only while a page shows it (every chat ever archived: read with each snapshot and archiving, it was a large part of what a slow link carried): again after `chat.archive`, `session.delete` while shown, else marked to be read as it is next shown |
@@ -209,13 +209,20 @@ that only notifications change it:
   does not.
 - Station topics: while any topic of a station is live, the station's
   `/events` stream is held open, with `?host=1` while a `host` topic is live
-  (the stream is opened anew when that changes, and when the sessions it
-  follows do; the old one closes once the new one is open). Every stream
+  (the stream is opened anew when that changes, and when it is to follow a
+  session it does not, one at work or shown; one it follows that no longer
+  is stays followed until then; the old one closes once the new one is
+  open). Every stream
   after the first asks `since=<the last event id heard>` (an id is the
   station's run and the event's number in it, `<run>.<n>`): one taking over
   from a stream still open, and one coming back after its link went (on a
   weak link that is every minute or so: the link moves to a better way, or
-  loses its way). The station keeps what it told for an hour (while
+  loses its way). So does the first, when a core before this one heard
+  one: the last id is written down in the same write as what its event
+  changed (the `heard` record), and an app started again within the hour
+  (a phone lets its process go often) reads nothing again either; taken up
+  so, the station's history is swept as after reading everything. The
+  station keeps what it told for an hour (while
   nobody follows too, for one coming back) and tells what came after first,
   with the same ids, then the viewer's sidebar rows and overview as they
   changed meanwhile, and answers `stillfail-resumed: 1`: nothing is read
