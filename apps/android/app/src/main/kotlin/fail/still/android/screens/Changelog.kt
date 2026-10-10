@@ -23,6 +23,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,9 +36,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +52,7 @@ import fail.still.android.AppState
 import fail.still.android.LocalApp
 import fail.still.android.Screen
 import fail.still.android.data.ChangelogItem
+import fail.still.android.data.ChangelogLine
 import fail.still.android.data.ChangelogView
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
@@ -96,18 +105,40 @@ fun ChangelogScreen() {
     }
 }
 
-/** One change: its lines, then where it is and whether this app has it (in the accent: an update would bring it). */
-/** The place and the note each stay on one line; when both don't fit, the note moves below whole. */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+/** One change: each line led by its kind on a small tinted label (the accent's for something new), then its version and
+ *  what is not out yet (in the accent: an update would bring it). */
 @Composable
 private fun Change(item: ChangelogItem) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        item.text.forEach { Text(it, fontSize = 15.sp, lineHeight = 21.sp, color = C.ink) }
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (item.place.isNotEmpty()) Text(item.place, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
-            Text(item.note, fontSize = 13.sp, lineHeight = 18.sp, color = if (item.has == false) C.accentInk else C.muted, softWrap = false)
+        item.lines.forEach { Line(it) }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(item.versionName, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
+            if (item.note.isNotEmpty()) Text(item.note, fontSize = 13.sp, lineHeight = 18.sp, color = if (item.has == false) C.accentInk else C.muted)
         }
     }
+}
+
+/** A line, its kind's label inline before it so the text wraps under it. */
+@Composable
+private fun Line(line: ChangelogLine) {
+    if (line.label.isEmpty()) {
+        Text(line.text, fontSize = 15.sp, lineHeight = 21.sp, color = C.ink)
+        return
+    }
+    val labelStyle = TextStyle(fontSize = 13.sp, lineHeight = 19.sp)
+    val measurer = rememberTextMeasurer()
+    val width = with(LocalDensity.current) { (measurer.measure(line.label, labelStyle).size.width.toDp() + 12.dp + 6.dp).toSp() }
+    val new = line.kind == "new"
+    val text = buildAnnotatedString {
+        appendInlineContent("kind", line.label)
+        append(line.text)
+    }
+    val kind = InlineTextContent(Placeholder(width, 19.sp, PlaceholderVerticalAlign.TextCenter)) {
+        Box(Modifier.padding(end = 6.dp).fillMaxSize().clip(RoundedCornerShape(6.dp)).background(if (new) C.accentBg else C.chip), contentAlignment = Alignment.Center) {
+            Text(line.label, style = labelStyle, color = if (new) C.accentInk else C.muted, maxLines = 1, softWrap = false)
+        }
+    }
+    Text(text, fontSize = 15.sp, lineHeight = 21.sp, color = C.ink, inlineContent = mapOf("kind" to kind))
 }
 
 /** At the top of the list after an update: the build it is now and what it brought; opens the changelog. */

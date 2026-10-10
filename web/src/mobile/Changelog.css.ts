@@ -15,11 +15,7 @@ export const mLine = style({ fontSize: vars.textBody, lineHeight: "21px", color:
 export const mKind = style({
   display: "inline-block", marginRight: "6px", padding: "0 6px", borderRadius: "6px", fontSize: vars.textMeta, lineHeight: "19px",
   verticalAlign: "1px", color: "var(--m-muted)", background: "var(--m-chip)",
-  selectors: {
-    '&[data-kind="new"]': { color: "var(--m-accent-ink)", background: "var(--m-accent-bg)" },
-    // B: the kind's name alone.
-    'html[data-clv="b"] &': { padding: "0", background: "none", fontWeight: 600 },
-  },
+  selectors: { '&[data-kind="new"]': { color: "var(--m-accent-ink)", background: "var(--m-accent-bg)" } },
 });
 export const mMeta = style({ display: "flex", flexWrap: "wrap", gap: "0 10px", fontSize: vars.textMeta, lineHeight: "18px", color: "var(--m-muted)" });
 // What an update would bring, said in the accent.

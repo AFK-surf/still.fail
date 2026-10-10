@@ -17,8 +17,6 @@ export const kind = style({
   selectors: {
     "&:empty": { padding: "0", background: "none" },
     '&[data-kind="new"]': { color: vars.accentText, background: vars.accentBg },
-    // B: the kind's name alone, in a column.
-    'html[data-clv="b"] &': { padding: "0", background: "none", fontSize: vars.textMeta, fontWeight: 500 },
   },
 });
 export const line = style({ margin: "0", fontSize: vars.textUi, lineHeight: "20px" });
