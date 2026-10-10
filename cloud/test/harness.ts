@@ -134,7 +134,7 @@ export async function harness(
         ...common,
         name: "api",
         script: await bundle("test/worker.ts"),
-        routes: [...[...hosts, betaHost].flatMap((host) => [`${host}/v1/*`, `${host}/healthz*`, `${host}/install.sh*`, `${host}/releases/*`, `${host}/.well-known/*`, `${host}/__test/*`]), ...adminHosts.map((host) => `${host}/v1/*`)],
+        routes: [...[...hosts, betaHost].flatMap((host) => [`${host}/v1/*`, `${host}/healthz*`, `${host}/install.sh*`, `${host}/install.ps1*`, `${host}/releases/*`, `${host}/.well-known/*`, `${host}/__test/*`]), ...adminHosts.map((host) => `${host}/v1/*`)],
         bindings: {
         PUBLIC_ORIGIN: origin,
         PUBLIC_ORIGIN_ALIASES: oldOrigin,

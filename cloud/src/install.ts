@@ -32,18 +32,18 @@ export function installScript(origin: string, channel: "stable" | "beta" = "stab
 
 /**
  * A release's file, as the bucket keeps it: stillfail-station-<platform>.tar.gz; ember-station-<platform>.tar.gz is the
- * last release from before the rename, which installers from before it still get.
+ * last release from before the rename, which installers from before it still get. Windows' is a zip (install-windows.ts).
  */
-export const RELEASE_FILE = /^(stillfail|ember)-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
+export const RELEASE_FILE = /^((stillfail|ember)-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|stillfail-station-win32-x64\.zip)$/;
 
 /** The test channel's release (scripts/release.sh --beta), until promoted to the stable name. */
-export const BETA_RELEASE_FILE = /^beta\/stillfail-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
+export const BETA_RELEASE_FILE = /^beta\/stillfail-station-((darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|win32-x64\.zip)$/;
 
 /**
  * The Node a release runs on (its NODE_VERSION file says the version), kept apart from it, once per version (scripts/node-dist.sh):
  * the installer gets it when the machine has none of that version yet, with its sha256 to check it by.
  */
-export const NODE_FILE = /^node\/node-v[0-9]+\.[0-9]+\.[0-9]+-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz(\.sha256)?$/;
+export const NODE_FILE = /^node\/node-v[0-9]+\.[0-9]+\.[0-9]+-((darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|win-x64\.zip)(\.sha256)?$/;
 
 /**
  * The apps' builds, as scripts/release.sh puts them beside the station's: what each app's updater reads for the
@@ -75,8 +75,9 @@ const APP_FILES: [RegExp, string][] = [
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
 export function releaseType(file: string): string | null {
-  if (RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file)) return "application/gzip";
-  if (NODE_FILE.test(file)) return file.endsWith(".sha256") ? "text/plain; charset=utf-8" : "application/gzip";
+  const archive = file.endsWith(".zip") ? "application/zip" : "application/gzip";
+  if (RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file)) return archive;
+  if (NODE_FILE.test(file)) return file.endsWith(".sha256") ? "text/plain; charset=utf-8" : archive;
   return APP_FILES.find(([name]) => name.test(file))?.[1] ?? null;
 }
 
