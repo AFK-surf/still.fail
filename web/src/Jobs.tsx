@@ -139,6 +139,8 @@ export function JobsPopover({ station, view, onService, onTab }:
   const plain = shown.filter((j) => !j.service);
   return (
     <>
+      {/* Many of them scroll here, between the popover's top and its foot, which stays in sight. */}
+      <div className={css.jobsList}>
       {services.length > 0 && (
         <section className={css.jobsGroup}>
           <div className={css.jobsHead}>{t("web-main.jobs.services")}{view.servicesNote && <span>{view.servicesNote}</span>}</div>
@@ -169,6 +171,7 @@ export function JobsPopover({ station, view, onService, onTab }:
           ))}
         </section>
       )}
+      </div>
       {shown.length === 0 && <p className={css.jobsQuiet}>{t("web-main.jobs.quiet")}</p>}
       <div className={css.jobsFoot}>
         <button type="button" className={css.jobsAll} onClick={() => onTab()}>

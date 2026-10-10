@@ -83,7 +83,10 @@ globalStyle(sendBtn, {
 });
 /** The title bar's popover: what matters now. */
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
-globalStyle(jobsPanel, { width: "360px", display: "flex", flexDirection: "column" });
+// No taller than the room under the title bar: its list scrolls (Jobs.css.ts jobsList).
+globalStyle(jobsPanel, {
+  width: "360px", maxHeight: "var(--radix-popover-content-available-height, calc(100vh - 16px))", display: "flex", flexDirection: "column",
+});
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(details, { display: "grid", gap: "10px", margin: "0" });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */

@@ -101,7 +101,9 @@ export const jobFoldBody = style({
 });
 /** A group's rows, a little apart. */
 export const jobsGroup = style({ display: "flex", flexDirection: "column", gap: "4px" });
-export const jobsFoot = style({ display: "flex", alignItems: "center", gap: "4px", marginTop: "6px" });
+/** The title bar popover's groups: what scrolls when they are more than the window is tall (its foot does not). */
+export const jobsList = style({ flex: "0 1 auto", minHeight: "0", overflowY: "auto", overscrollBehavior: "contain" });
+export const jobsFoot = style({ display: "flex", alignItems: "center", gap: "4px", flex: "none", marginTop: "6px" });
 export const jobsAll = style({
   display: "flex", alignItems: "center", gap: "10px", flex: "1", minWidth: "0", height: "38px",
   padding: "0 12px 0 32px", border: "0", borderRadius: vars.rOption, background: "none", color: vars.muted,
