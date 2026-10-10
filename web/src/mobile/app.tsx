@@ -12,7 +12,7 @@ import { transitionTo } from "../ui.tsx";
 import { said, ToastTo } from "../toast.tsx";
 import { afterBack, useBackClose } from "../backClose.ts";
 import { backPage } from "../backPage.ts";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
@@ -145,12 +145,19 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   useEffect(() => { setSheet(null); setMenu(null); setReader(null); setDrawer(false); }, [location.key]);
   const isHome = (p: Page) => p.location.pathname.replace(/\/$/, "") === home;
 
-  const app: MobileApp = {
+  // The same object while the page in view is: everything under it reads it (every row of a chat), and a new one each
+  // time the shell draws (a finger swiping back draws it each move) would draw them all again. What it does reads the
+  // shell as it is now.
+  const now = useRef({ navigate, drawer, top, pages });
+  now.current = { navigate, drawer, top, pages };
+  const current = top.location.pathname;
+  const app = useMemo<MobileApp>(() => ({
     entry,
     at: (path) => `${home}${path}`,
     // Each after the back that a sheet or menu closed just before takes (../backClose.ts), or that back would undo it.
-    push: (path) => afterBack(() => navigate(path)),
+    push: (path) => afterBack(() => now.current.navigate(path)),
     open: (path) => {
+      const { navigate, drawer, top } = now.current;
       if (!drawer) return afterBack(() => navigate(path));
       setDrawer(false);
       if (path === top.location.pathname) return;
@@ -159,20 +166,20 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
       const go = () => afterBack(() => (isHome(top) ? navigate(path) : navigate(path, { replace: true, state: { fresh: true } })));
       setTimeout(() => setTimeout(go));
     },
-    current: top.location.pathname,
+    current,
     // Back through the pages opened here; from the first one (opened by a link), to the list.
-    pop: () => afterBack(() => (pages.length > 1 ? backPage(() => navigate(-1)) : navigate(home, { replace: true }))),
+    pop: () => afterBack(() => (now.current.pages.length > 1 ? backPage(() => now.current.navigate(-1)) : now.current.navigate(home, { replace: true }))),
     // One page becoming another (a new chat its chat): crossfaded, what both have (the composer) moving between them.
     // The wait for a closing sheet's back is inside the crossfade, which starts a frame later: a sheet closed in the same
     // tap (another workspace from the workspace sheet) starts its back in between, and replacing before that back lands
     // would put the new page on the sheet's entry, which the back then leaves for the old page.
-    replace: (path, state) => void transitionTo(() => afterBack(() => navigate(path, { replace: true, state }))),
-    home: () => afterBack(() => navigate(home)),
+    replace: (path, state) => void transitionTo(() => afterBack(() => now.current.navigate(path, { replace: true, state }))),
+    home: () => afterBack(() => now.current.navigate(home)),
     sheet: setSheet,
     menu: setMenu,
     toast: showToast,
     reader: setReader,
-  };
+  }), [entry, home, current, showToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // With a finger, the page is swiped back from the screen's left edge: it follows the finger, the page under it shows,
   // and past a third of the way (or flung) it goes, from where the finger left it.
@@ -223,7 +230,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
             return (
               <div key={p.key} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
                 data-swiping={(swipe !== null && isTop) || undefined} style={style}>
-                {routes(p.location)}
+                <PageBody location={p.location} routes={routes} />
               </div>
             );
           })}
@@ -247,6 +254,13 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
     </Context.Provider>
   );
 }
+
+
+/** A page's own content: drawn again only when its address or the routes do, not each time the shell is (a swipe's
+ *  every move, a toast). */
+const PageBody = memo(function PageBody({ location, routes }: { location: Location; routes: (location: Location) => ReactNode }) {
+  return routes(location);
+});
 
 
 // ── the sheet ──────────────────────────────────────────────────────────

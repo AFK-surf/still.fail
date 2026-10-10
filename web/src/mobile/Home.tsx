@@ -2,7 +2,7 @@
 // and grouped by day. A fixed head (settings · workspace · the filter · stations) and the new-chat button floating
 // at the bottom. The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with nothing to wait for.
 import { StationMark } from "../StationMark.tsx";
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
 import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
 import { stationApi, useChats, useChatSearch, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
@@ -53,7 +53,7 @@ export function Home() {
   const [searching, setSearching] = useState<DOMRect | null>(null);
   // The lists away while it is open; back as it starts to close, with its field.
   const [away, setAway] = useState(false);
-  const search = (at: DOMRect) => { setSearching(at); setAway(true); };
+  const search = useCallback((at: DOMRect) => { setSearching(at); setAway(true); }, []);
   // Pulled down from its top, a list loads the page again (./pull.ts).
   const pull = usePullToReload(css.mHomePane);
   return (
@@ -272,7 +272,8 @@ function StationButton({ view }: { view: ChatsView | undefined }) {
 }
 
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days. */
-function ChatPane({ chats, filter, onSearch }: { chats: TopicState<ChatsView>; filter: ChatFilter; onSearch: (at: DOMRect) => void }) {
+// Each list drawn again only when its own chats change: Home draws for any of the three (and the rest of what it shows).
+const ChatPane = memo(function ChatPane({ chats, filter, onSearch }: { chats: TopicState<ChatsView>; filter: ChatFilter; onSearch: (at: DOMRect) => void }) {
   const view = chats.value;
   const scope = useApp().entry.id;
   const lead = view?.leading ?? "agents";
@@ -303,7 +304,7 @@ function ChatPane({ chats, filter, onSearch }: { chats: TopicState<ChatsView>; f
       )}
     </div>
   );
-}
+});
 
 function Note({ text, error = false }: { text: string; error?: boolean }) {
   return <p className={homeCss.mNote} data-error={error || undefined}>{text}</p>;
@@ -330,7 +331,8 @@ function Empty({ view, filter }: { view: ChatsView; filter: ChatFilter }) {
  * always the same height. The time shows while the row is held (or, with a mouse, pointed at); held long, what can be
  * done to the chat, as the wide screen's right click (../Sidebar.tsx). One whose station is offline is greyed and says so.
  */
-function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
+// The core's list comes anew at each change in it: a row is drawn again only when what it holds is different.
+const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const app = useApp();
   const [held, setHeld] = useState(false);
   // Pinned, renamed or archived from its menu (closed by then): the row says it is under way until it answers, and a
@@ -338,8 +340,10 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
   const pinning = useDoing("chat.pin", { station: item.station, session: item.session });
   const changing = useDoing(["chat.rename", "chat.archive"], { station: item.station, session: item.session, thread: item.thread });
   const busy = pinning || changing;
-  const failed = useDoingFailed(["chat.rename", "chat.archive"], { station: item.station, session: item.session, thread: item.thread })
-    ?? useDoingFailed("chat.pin", { station: item.station, session: item.session });
+  // Both asked every time (hooks, in the same order each render), the first that failed said.
+  const changeFailed = useDoingFailed(["chat.rename", "chat.archive"], { station: item.station, session: item.session, thread: item.thread });
+  const pinFailed = useDoingFailed("chat.pin", { station: item.station, session: item.session });
+  const failed = changeFailed ?? pinFailed;
   const menu = useRowMenu(item, busy);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const longPressed = useRef(false);
@@ -403,7 +407,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
   // Swiped: not a long press, and not held.
   const dragged = () => { clearTimeout(timer.current); longPressed.current = true; setHeld(false); };
   return <SwipeArchive item={item} busy={busy} onDrag={dragged}>{row}</SwipeArchive>;
-}
+}, (a, b) => a.lead === b.lead && (a.item === b.item || JSON.stringify(a.item) === JSON.stringify(b.item)));
 
 /** How far (of its width) a row is swiped before letting go archives it, and how fast a fling has to be (px/ms). */
 const TAKES = 0.35;

@@ -286,6 +286,9 @@ globalStyle(`${msgImageWait}[data-likeness]`, { backgroundSize: "cover", backgro
 // Not to be had (fetching it failed): the box stays as it waited, still, and says so.
 globalStyle(`${msgImage}[data-failed]`, { cursor: "pointer" });
 globalStyle(`${msgImage}[data-failed] ${msgImageWait} i`, { animation: "none" });
+// Far from the screen (before it is near enough to load), still: blurred blots drifting where no one sees them cost a
+// phone every frame all the same.
+globalStyle(`${msgImage}:not([data-near]) ${msgImageWait} i`, { animationPlayState: "paused" });
 export const msgImageUnavailable = style({
   position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
   gap: "6px", fontSize: vars.textMeta, color: vars.muted, background: `color-mix(in oklab, ${vars.neutralBg} 70%, transparent)`,

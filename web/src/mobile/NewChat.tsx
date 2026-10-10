@@ -59,7 +59,7 @@ function NewChatOn({ choice, view, stations, pick, create }: {
 }) {
   const app = useApp();
   // The page's composer is its host's (ChatHost.tsx): kept as this new chat becomes its chat.
-  const { draft, use } = useHost();
+  const { use } = useHost();
   // What it runs on, as the core resolved it against what the station has now (the same on both screens).
   const entry = choice.model;
   const model = entry?.model;

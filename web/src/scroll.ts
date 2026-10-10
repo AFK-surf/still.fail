@@ -30,6 +30,39 @@
 // content is laid out in (the pane's, or its padding) lays everything out anew, so the floor lets go of what it was holding.
 import { useEffect, useRef, type RefObject } from "react";
 
+/**
+ * `resize` watching `el` and each of its children: `all` (again) from scratch, `update` as `records` (a MutationObserver's
+ * on `el`) say children came and went. Only those: observing every child anew would have each report its size again,
+ * every message of a long chat at each change anywhere in it (a second ticking by in an agent's activity).
+ */
+export function watchChildren(el: Element, resize: ResizeObserver): { all: () => void; update: (records: MutationRecord[]) => void } {
+  return {
+    all: () => { resize.disconnect(); resize.observe(el); for (const child of el.children) resize.observe(child); },
+    update: (records) => {
+      for (const r of records) {
+        if (r.target !== el || r.type !== "childList") continue;
+        for (const n of r.removedNodes) if (n instanceof Element && n.parentNode !== el) resize.unobserve(n);
+        for (const n of r.addedNodes) if (n instanceof Element && n.parentNode === el) resize.observe(n);
+      }
+    },
+  };
+}
+
+/**
+ * The first of `items` (in the order they are laid out, one under another) whose bottom reaches below `y`: found by
+ * halves, measuring a few of them rather than every one above it (this runs as the reader scrolls).
+ */
+export function firstReaching<T extends Element>(items: readonly T[], y: number): T | undefined {
+  let lo = 0;
+  let hi = items.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (items[mid]!.getBoundingClientRect().bottom > y) hi = mid;
+    else lo = mid + 1;
+  }
+  return items[lo];
+}
+
 /** `messages` selects which of the pane's children count as messages; `short`: its bottom is not the end (above). */
 export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = "*", floor?: RefObject<HTMLElement | null>, short = false): void {
   // Read as the pane changes, without starting over.
@@ -105,11 +138,8 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     const note = () => {
       const top = paneTop();
       reading = null;
-      for (const child of el.children) {
-        if (!isMessage(child) || child.hasAttribute("data-transient")) continue;
-        const r = child.getBoundingClientRect();
-        if (r.bottom > top + 1) { reading = { el: child, offset: r.top - top }; return; }
-      }
+      const child = firstReaching([...el.children].filter((n) => isMessage(n) && !n.hasAttribute("data-transient")), top + 1);
+      if (child) reading = { el: child, offset: child.getBoundingClientRect().top - top };
     };
     const hold = () => {
       const glides = smooth;
@@ -206,7 +236,8 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       if (!rewrapped && entries.some((e) => e.target !== el)) readHere();
       hold();
     });
-    const watch = () => { resize.disconnect(); resize.observe(el); for (const child of el.children) resize.observe(child); };
+    const watched = watchChildren(el, resize);
+    const watch = watched.all;
     watch();
     const mutations = new MutationObserver((records) => {
       const added = records.flatMap((r) => [...r.addedNodes]).filter(isMessage);
@@ -218,7 +249,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       // Grown below by what the reader just opened (the bottom moved on with nothing new).
       else if (!arrived.length && distance() > 1) readHere();
       smooth = grown() && (arrived.some((n) => !n.hasAttribute("data-caught")) || records.some((r) => r.target !== el && messageOf(r.target) !== null));
-      watch();
+      watched.update(records);
       hold();
     });
     mutations.observe(el, { childList: true, subtree: true, characterData: true });

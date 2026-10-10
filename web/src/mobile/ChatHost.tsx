@@ -5,7 +5,7 @@
 import { ArchiveNotice } from "../ArchiveNotice.tsx";
 import { WaitingBar } from "../Chat.tsx";
 import type { ChatWaiting } from "../core/shapes.ts";
-import { createContext, useContext, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
 import { useApp } from "./app.tsx";
@@ -41,7 +41,8 @@ export interface HostComposer {
   type?(): void;
 }
 
-interface Host { draft: Draft; use(spec: HostComposer): void }
+/** The same while the page is (what is typed changes `now` alone): the page above is not drawn again at each key. */
+interface Host { now: RefObject<Draft>; use(spec: HostComposer): void }
 const HostContext = createContext<Host | null>(null);
 
 /** The page's composer: its draft, and where the page says what it writes to. */
@@ -67,11 +68,11 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   // The callbacks as the page last gave them; what it shows, as state (changing only when it does).
   const latest = useRef<HostComposer | null>(null);
   const [shown, setShown] = useState<Shown | null>(null);
-  const use = (spec: HostComposer) => {
+  const use = useCallback((spec: HostComposer) => {
     latest.current = spec;
     setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.archived === spec.archived && sameWaiting(was.waiting, spec.waiting) ? was
       : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, waiting: spec.waiting ?? null, ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
-  };
+  }, []);
   const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
   // The host is outside the chat's StationContext: what it writes goes to the station the page says (a new chat's, as
   // picked), else the chat's, by its address, not the context's.
@@ -86,13 +87,15 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const now = useRef(draft);
   now.current = draft;
   const root = useRef<HTMLDivElement>(null);
-  const body = id === undefined ? <NewChatScreen />
+  const host = useMemo<Host>(() => ({ now, use }), [use]);
+  // The same element while the page is the same, so typing (this drawing again) leaves it as it is.
+  const body = useMemo(() => id === undefined ? <NewChatScreen />
     : !stations ? <Loading text={t("web-mobile.reading")} />
     : !station ? <Loading text={t("web-mobile.noStation")} />
-    : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>;
+    : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>, [id, stations, station]);
   const composer = shown && <MobileComposer shown={shown} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} />;
   return (
-    <HostContext.Provider value={{ draft, use }}>
+    <HostContext.Provider value={host}>
       <div className={css.mChatHost} ref={root} data-new={id === undefined || undefined}>
         {body}
         {/* Once shown, it stays (the page above changing hands it on); in its station (the chats its @ offers). */}

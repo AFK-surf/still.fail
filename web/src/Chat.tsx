@@ -20,7 +20,7 @@ import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, 
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
-import { useStickToBottom } from "./scroll.ts";
+import { firstReaching, useStickToBottom, watchChildren } from "./scroll.ts";
 import { animate, arrive, EASE_OUT, follower, moveState, type AnimationPlaybackControls, type Follower } from "./motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
@@ -735,7 +735,7 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
   /** Where the reader is: the message at the pane's top and its offset, and the last message if at the end. */
   const where = useCallback((pane: HTMLElement) => {
     const top = pane.getBoundingClientRect().top;
-    const first = [...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)].find((m) => m.getBoundingClientRect().bottom > top);
+    const first = firstReaching([...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)], top);
     const end = !latest.current.short && pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2;
     return first ? { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top, bottom: end ? lastTs(pane) : null } : null;
   }, []);
@@ -754,13 +754,13 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     if (!pane) return;
     // Told once the pane comes to rest, after it has been put where it was left (before that, it is not the reader's).
     let rest: ReturnType<typeof setTimeout> | undefined;
+    // Measured once it rests, not at every step of a scroll (the page going away meanwhile measures it then, below).
     const record = () => {
-      const at = where(pane);
-      if (at) leftAt.set(key, at);
       clearTimeout(rest);
       rest = setTimeout(() => {
-        const now = restored.current && pane.isConnected ? where(pane) : null;
-        if (now) tell(now);
+        const now = pane.isConnected ? where(pane) : null;
+        if (now) leftAt.set(key, now);
+        if (now && restored.current) tell(now);
       }, REST_MS);
     };
     pane.addEventListener("scroll", record, { passive: true });
@@ -1257,10 +1257,13 @@ function ProseWithFiles({ owner, text, files, session = null, from }: {
     // A local page knows only its own station: the link's station is taken to be it.
     return of ? { key: of.id, ...(here.includes("/") && of.station !== here ? { station: of.station } : {}) } : null;
   }, [session, from, here]);
+  // The same function while `owner` is: a new one each render would have Prose parse the text again whenever this
+  // draws (its station's context changing draws every message's).
+  const file = useCallback((f: Attachment, as: "shown" | "link", words?: ReactNode) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />, [owner]);
   return (
     <>
       <div className={conversationCss.markdown}>
-        <PathSession.Provider value={paths}><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />}>{text}</Prose></PathSession.Provider>
+        <PathSession.Provider value={paths}><Prose files={placed} file={file}>{text}</Prose></PathSession.Provider>
       </div>
       <Files owner={owner} files={rest} />
     </>
@@ -1361,7 +1364,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
       <>
         <button ref={box} type="button" className={look.image} data-send-image={sentImageKey(file.path)} onClick={() => (url || failed) && setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
           data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
-          data-loaded={loaded ?? undefined} data-failed={failed || undefined}>
+          data-loaded={loaded ?? undefined} data-failed={failed || undefined} data-near={near || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} fit={letterbox} />}
           {failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>{t("web-main.file.noPreview")}</span></span>}
           {url && <img src={url} alt={file.name} onLoad={shown} />}
@@ -1914,10 +1917,10 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>) {
       for (const [el, row] of rows) if (!seen.has(el)) { row.y.stop(); rows.delete(el); }
     };
     const resize = new ResizeObserver(check);
-    const watch = () => { resize.disconnect(); resize.observe(pane); for (const child of pane.children) resize.observe(child); };
-    const mutations = new MutationObserver(() => { watch(); check(); });
+    const watched = watchChildren(pane, resize);
+    const mutations = new MutationObserver((records) => { watched.update(records); check(); });
     mutations.observe(pane, { childList: true, subtree: true, characterData: true });
-    watch();
+    watched.all();
     check();
     return () => {
       resize.disconnect();
