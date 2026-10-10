@@ -32,8 +32,8 @@ export function ChangelogPage({ back }: { back: string }) {
           {view?.build != null && <p className={shellCss.muted}>{t("web-pages.changelog.build", { build: view.build })}</p>}
         </div>
       </header>
-      {tab && <Segmented className={css.tabs} label={t("web-pages.settings.nav.changelog")} value={tab.part} onChange={setPart}
-        options={view!.tabs.map((x) => ({ value: x.part, label: x.label }))} />}
+      {tab && <div className={css.tabsRow}><Segmented className={css.tabs} label={t("web-pages.settings.nav.changelog")} value={tab.part}
+        onChange={setPart} options={view!.tabs.map((x) => ({ value: x.part, label: x.label }))} /></div>}
       {!view || view.loading ? <Loading label={t("web-pages.settings.reading")} fill={false} />
         : view.error ? <p className={controlsCss.fieldError}>{view.error}</p>
         : !tab || tab.days.length === 0 ? <p className={shellCss.muted}>{t("web-pages.changelog.empty")}</p>

@@ -2,7 +2,8 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 
 // A tab a part, this app's first, under the title.
-export const tabs = style({ display: "inline-flex", minWidth: "360px", marginBottom: "8px" });
+export const tabsRow = style({ display: "flex", marginBottom: "8px" });
+export const tabs = style({ minWidth: "360px" });
 globalStyle(`${tabs} > button`, { whiteSpace: "nowrap", padding: "0 14px" });
 
 // The changelog: a day's heading, then each change: its lines, each with its kind before it, the version at the end
