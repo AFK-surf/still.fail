@@ -35,6 +35,9 @@ const FIRST = 200;
 const HEAD_RECORDS = 400;
 /// Bytes read from a transcript's end for its latest name.
 const TAIL = 256 * 1024;
+/// A line longer than this is passed over (read as an empty one): a screenshot or a tool's output a Codex rollout keeps
+/// (seen at 16 MB, a head of 51 MB) holds nothing a listing wants, and a reader's heap is bounded (read/pool.ts).
+const LINE_LIMIT = 256 * 1024;
 
 // ---- Rust's text handling ----
 
@@ -101,7 +104,15 @@ function lines(path: string, limit = Infinity): string[] {
   try {
     const chunk = Buffer.alloc(1 << 16);
     let pending: Buffer[] = [];
+    // Bytes of the line read so far; past LINE_LIMIT what comes until its end is dropped, and it is read as "".
+    let pendingSize = 0;
+    let over = false;
     const take = (bytes: Buffer): boolean => {
+      if (over) {
+        over = false;
+        out.push("");
+        return out.length < limit;
+      }
       let line = bytes;
       if (line.length && line[line.length - 1] === 0x0a) line = line.subarray(0, -1);
       if (line.length && line[line.length - 1] === 0x0d) line = line.subarray(0, -1);
@@ -121,16 +132,25 @@ function lines(path: string, limit = Infinity): string[] {
       }
       if (n === 0) break;
       let start = 0;
+      const keep = (part: Buffer) => {
+        if (over) return;
+        pendingSize += part.length;
+        if (pendingSize > LINE_LIMIT) {
+          over = true;
+          pending = [];
+        } else pending.push(Buffer.from(part));
+      };
       for (let nl = chunk.indexOf(0x0a, start); nl >= 0 && nl < n; nl = chunk.indexOf(0x0a, start)) {
-        pending.push(Buffer.from(chunk.subarray(start, nl + 1)));
+        keep(chunk.subarray(start, nl + 1));
         const line = Buffer.concat(pending);
         pending = [];
+        pendingSize = 0;
         start = nl + 1;
         if (!take(line)) return out;
       }
-      if (start < n) pending.push(Buffer.from(chunk.subarray(start, n)));
+      if (start < n) keep(chunk.subarray(start, n));
     }
-    if (pending.length) take(Buffer.concat(pending));
+    if (pending.length || over) take(Buffer.concat(pending));
     return out;
   } finally {
     closeSync(fd);
