@@ -261,7 +261,9 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
             const isTop = p.key === top.key;
             const inMove = moving && (p.key === moving.from.key || p.key === moving.to.key);
             const role = !moving ? (isTop ? "top" : swipe !== null && p.key === below ? "peek" : "under") : p.key === moving.to.key ? "in" : p.key === moving.from.key ? "out" : "under";
-            const way = moving ? (moving.forward ? moving.to : moving.from).way : "side";
+            // A completed edge swipe goes on to the right even for settings and a new chat. A button/browser back
+            // still reverses the page's original entry direction.
+            const way = moving && !moving.forward && from.current > 0 ? "side" : moving ? (moving.forward ? moving.to : moving.from).way : "side";
             const style: React.CSSProperties & Record<string, string | number> = { zIndex: moving ? (p.key === (moving.forward ? moving.to.key : moving.from.key) ? 2 : 1) : isTop ? 1 : 0 };
             if (swipe !== null && isTop) style.transform = `translateX(${swipe}px)`;
             if (role === "peek") style.transform = `translateX(calc(-30% + ${swipe! * 0.3}px))`;
