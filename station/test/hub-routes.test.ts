@@ -2,7 +2,7 @@
 // new chats, uploads, messages, archiving, deleting, stopping, a session's settings, jobs. A real store in a temporary
 // data directory, the real readers over it, a hub with runtimes scripted in-process (test/hub-fakes.ts).
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -392,6 +392,18 @@ test("a file a message names by its path: its peek and the file whole, only with
     const [found, d] = await peek("x/lib/ifc/destination.ex");
     assert.deepEqual([found, d.lines?.text[0]], [200, "defmodule D do"]);
     assert.equal((await peek("y/ifc/destination.ex"))[0], 404);
+    // Else one of the station's clones (<data>/repos), as agents read them without a worktree: the one fetched last.
+    for (const [name, age] of [["old", 3600], ["new", 0]] as const) {
+      const clone = join(r.data, "repos", name);
+      mkdirSync(join(clone, "web", "src"), { recursive: true });
+      writeFileSync(join(clone, "web", "src", "Peeks.tsx"), `// ${name}\n`);
+      execFileSync("git", ["init", "-q", clone]);
+      execFileSync("git", ["-C", clone, "add", "."]);
+      writeFileSync(join(clone, ".git", "FETCH_HEAD"), "");
+      for (const f of ["FETCH_HEAD", "HEAD", "index"]) utimesSync(join(clone, ".git", f), new Date(Date.now() - age * 1000), new Date(Date.now() - age * 1000));
+    }
+    const [cloned, c] = await peek("web/src/Peeks.tsx");
+    assert.deepEqual([cloned, c.path, c.lines?.text[0]], [200, realpathSync(join(r.data, "repos", "new", "web", "src", "Peeks.tsx")), "// new"]);
     // Nothing outside, however named; nothing that is not there.
     assert.deepEqual(await peek("../../../../stillfail.db"), [403, { error: en("station.files.outside") }]);
     assert.deepEqual(await peek("/etc/hosts"), [403, { error: en("station.files.outside") }]);

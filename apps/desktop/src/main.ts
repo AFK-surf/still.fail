@@ -10,8 +10,8 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
-import { hostname, networkInterfaces } from "node:os";
-import { join, normalize } from "node:path";
+import { homedir, hostname, networkInterfaces } from "node:os";
+import { isAbsolute, join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
 import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
@@ -532,6 +532,21 @@ function carriedStation(): { carried: boolean } & Place {
 }
 
 ipcMain.handle("station:state", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? carriedStation() : null);
+
+// A file a message names, on this machine's station (web/src/Peeks.tsx): shown in Finder, a directory opened in it.
+// Absolute, or `~/…`; false when it is not there.
+ipcMain.handle("file:reveal", async (event, given: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof given !== "string") return false;
+  const path = given.startsWith("~/") ? join(homedir(), given.slice(2)) : given;
+  if (!isAbsolute(path)) return false;
+  try {
+    if ((await stat(path)).isDirectory()) return (await shell.openPath(path)) === "";
+  } catch {
+    return false;
+  }
+  shell.showItemInFolder(path);
+  return true;
+});
 
 // Asked for (「添加这台 Mac」): joins whether or not it joined a workspace before, but not over one it is in.
 ipcMain.handle("station:join", async (event, account: unknown, workspace: unknown) => {
