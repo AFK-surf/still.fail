@@ -225,15 +225,23 @@ export function value(parts: [Status, Take][]): Record<string, unknown> {
   }
   // The connections first (the requests wait on them), the oldest first; a stable sort as Rust's.
   const slow = [...all.slow].sort((a, b) => (a.connecting === b.connecting ? b.age - a.age : a.connecting ? -1 : 1));
+  // Waits that say the same (a page's dozen previews) are one line, how many and the oldest's detail: not a list
+  // taller than the window.
+  const alike = new Map<string, { first: Slow; n: number }>();
   for (const w of slow) {
-    const secs = Math.floor(w.age / 1000);
     const text = w.connecting ? t("core-logic.status.connecting", { place: w.place ?? "station" }) : w.place !== null ? t("core-logic.status.at", { place: w.place, what: w.what }) : w.what;
+    const same = alike.get(text);
+    if (same) same.n++;
+    else alike.set(text, { first: w, n: 1 });
+  }
+  for (const [text, { first: w, n }] of alike) {
+    const secs = Math.floor(w.age / 1000);
     const detail = w.connecting
       ? t("core-logic.status.waited", { secs })
       : w.bytes === 0
         ? t("core-logic.status.waited_nothing", { secs })
         : t("core-logic.status.received", { size: size(w.bytes), secs });
-    items.push({ state: "slow", text, detail });
+    items.push({ state: "slow", text: n > 1 ? t("core-logic.status.times", { text, n }) : text, detail });
   }
   if (items.length === 0) return { state: null, text: null, items: [] };
   const window = all.window > 0 ? all.window : RATE_WINDOW_MS;
@@ -241,7 +249,8 @@ export function value(parts: [Status, Take][]): Record<string, unknown> {
   const state = down || all.db.length > 0 ? "trouble" : "slow";
   let text = String(items[0].text);
   if (slow.length > 0 && !down && all.db.length === 0) text += ` · ${t("core-logic.status.seconds", { n: Math.floor(slow[0].age / 1000) })}`;
-  if (items.length > 1) text += ` · ${t("core-logic.status.count", { n: items.length })}`;
+  const count = items.length - alike.size + slow.length;
+  if (count > 1) text += ` · ${t("core-logic.status.count", { n: count })}`;
   if (slow.length > 0 && rate > 0) text += ` · ${size(rate)}/s`;
   return { state, text, items };
 }

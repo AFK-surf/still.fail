@@ -16,12 +16,16 @@ import { activityLine, attachBtn, fileCard, fileCardOpen, msgFiles, msgImage, ms
 import { hPlace } from "./History.css.ts";
 
 export const toastViewport = style({
-  position: "fixed", left: "50%", bottom: "24px", transform: "translateX(-50%)", zIndex: "80", margin: "0",
-  padding: "0", listStyle: "none", outline: "none",
+  // The window's width, its toast in the middle (centred by moving it half its own width, a long one was held to half
+  // the window and ran off both sides).
+  position: "fixed", left: "16px", right: "16px", bottom: "24px", zIndex: "80", margin: "0", display: "flex",
+  flexDirection: "column", alignItems: "center", padding: "0", listStyle: "none", outline: "none", pointerEvents: "none",
 });
 export const toast = style({
-  padding: "9px 18px", borderRadius: "999px", background: vars.primary, color: vars.onPrimary, fontSize: vars.textUi,
-  whiteSpace: "nowrap", boxShadow: `0 8px 24px ${vars.shadow}`, animation: `${toastInKeyframes} 200ms ${vars.easeOut}`,
+  padding: "9px 18px", borderRadius: "20px", background: vars.primary, color: vars.onPrimary, fontSize: vars.textUi,
+  // A long message (an error with its URL) wraps inside the window instead of running off both sides.
+  maxWidth: "560px", overflowWrap: "anywhere", textWrap: "pretty", pointerEvents: "auto", boxShadow: `0 8px 24px ${vars.shadow}`,
+  animation: `${toastInKeyframes} 200ms ${vars.easeOut}`,
   selectors: {
     "&[data-state=\"closed\"]": { animation: `${fadeKeyframes} 150ms ${vars.easeOut} reverse forwards` },
   },
