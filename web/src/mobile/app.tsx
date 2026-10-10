@@ -277,9 +277,9 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
 
 
 /**
- * The strip along the left edge a swipe back starts from. A touch there is the page's, not the browser's: Safari would
- * otherwise start its own swipe back over ours (its edge gesture is let go only by the touch's start being taken, a
- * listener that is not passive, as React's are). A home screen app has no such gesture; this changes nothing there.
+ * The strip along the left edge a swipe back starts from. A touch there is the page's, not the browser's: iOS would
+ * otherwise start its own swipe back over ours, in Safari and in an app on the home screen alike (its edge gesture is
+ * let go only by the touch's start being taken, a listener that is not passive, as React's are).
  */
 function EdgeStrip(props: React.HTMLAttributes<HTMLDivElement>) {
   const strip = useRef<HTMLDivElement>(null);
