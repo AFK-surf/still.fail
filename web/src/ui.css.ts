@@ -210,7 +210,8 @@ export const dialogHead = style({
 });
 export const dialogTitle = style({});
 export const dialogBody = style({
-  display: "grid", gap: "18px", padding: "20px 32px 4px", overflowY: "auto", minHeight: "0",
+  // One column no wider than the dialog: a long unbroken line (an install command) scrolls in itself instead of widening it.
+  display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "18px", padding: "20px 32px 4px", overflowY: "auto", minHeight: "0",
   selectors: { "&:last-child": { paddingBottom: "32px" } },
 });
 export const dialogFoot = style({
