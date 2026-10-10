@@ -32,7 +32,7 @@ test("a config is filled in from what it says", () => {
   };
   checkConfig(raw, "/data");
   const config = hubConfig(raw, "/data");
-  assert.equal(config.profiles[0]!.home, "/data/homes/cc");
+  assert.equal(config.profiles[0]!.home, join("/data", "homes", "cc"));
   assert.deepEqual(config.profiles[0]!.runtimes, ["claude"]);
   const og = config.profiles[1]!;
   assert.deepEqual([og.home, og.models], ["/abs/og", ["a", "b"]]);

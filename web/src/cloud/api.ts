@@ -63,7 +63,7 @@ export const cloud = {
   acceptInvitation: (sub: string, token: string) => operations(sub).invitationAccept<WorkspaceView>({ token }),
   setRole: (sub: string, id: string, member: string, role: Role) => operations(sub).workspaceSetRole<WorkspaceView>({ workspace: id, member, role }),
   removeMember: (sub: string, id: string, member: string) => operations(sub).workspaceRemoveMember<{ ok: true }>({ workspace: id, member }),
-  enroll: (sub: string, id: string, name: string) => operations(sub).workspaceEnroll<{ token: string; expires_at: number; install: string; command: string }>({ workspace: id, name }),
+  enroll: (sub: string, id: string, name: string) => operations(sub).workspaceEnroll<{ token: string; expires_at: number; install: string; installWindows?: string; command: string }>({ workspace: id, name }),
   renameStation: (sub: string, id: string, station: string, name: string) => operations(sub).workspaceRenameStation<WorkspaceView>({ workspace: id, station, name }),
   /** Its icon and emoji together (../stationPick.ts); "" takes either away. */
   setStationMark: (sub: string, id: string, station: string, mark: { emoji: string; icon: string }) => operations(sub).workspaceRenameStation<WorkspaceView>({ workspace: id, station, emoji: mark.emoji, icon: mark.icon }),

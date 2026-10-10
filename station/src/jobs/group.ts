@@ -1,74 +1,33 @@
 // Process groups as jobs use them (the Rust station's runtime/process.rs `signal_group`, `group_alive`, `still_ours`,
 // `end_group`): a job runs in a group of its own, so it and what it starts are signalled together, and a group an
 // earlier station recorded is checked to still be that group before it is touched (pids are reused).
-import { execFileSync } from "node:child_process";
+//
+// How a machine has groups is the platform's (platform/: on Windows a job's group is the job object of the
+// `stillfail-runner --job` it runs under, its pgid that runner's pid, ended whole when the runner is).
 import { Effect } from "effect";
 import type { ProcessRow } from "../store/store.ts";
-import { wall } from "../ops/fibers.ts";
+import { platform } from "../platform/index.ts";
 
 /// Signals a whole group; one already gone is no error.
-export function signalGroup(pgid: number, signal: NodeJS.Signals): void {
-  try {
-    process.kill(-pgid, signal);
-  } catch {
-    // ESRCH: the group is already gone.
-  }
-}
+export const signalGroup = (pgid: number, signal: NodeJS.Signals): void => platform.signalGroup(pgid, signal);
 
 /// Whether any process of the group is there (kill(-pgid, 0) == 0, as the Rust has it).
-export function groupAlive(pgid: number): boolean {
-  try {
-    process.kill(-pgid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
+export const groupAlive = (pgid: number): boolean => platform.groupAlive(pgid);
 
 /// Whether one process is there.
-export function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
+export { pidAlive } from "../platform/processes.ts";
 
-/// When `pid` started (ms), or null if it is not running: from its elapsed time as ps says it ([[dd-]hh:]mm:ss).
-export function startTimeOf(pid: number): number | null {
-  let text: string;
-  try {
-    text = execFileSync("ps", ["-o", "etime=", "-p", String(pid)], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-  } catch {
-    return null;
-  }
-  if (text === "") return null;
-  let days = 0;
-  let rest = text;
-  const dash = text.indexOf("-");
-  if (dash >= 0) {
-    days = Number(text.slice(0, dash));
-    rest = text.slice(dash + 1);
-    if (!Number.isInteger(days)) return null;
-  }
-  const parts = rest.split(":").map(Number);
-  if (parts.some((p) => !Number.isInteger(p))) return null;
-  let seconds: number;
-  if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-  else if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
-  else return null;
-  // ps says it on the machine's time.
-  return wall.now() - (seconds + days * 86_400) * 1000;
-}
+/// When `pid` started (ms), or null if it is not running.
+export const startTimeOf = (pid: number): number | null => platform.startTimeOf(pid);
 
 /// Whether a group recorded by an earlier run is still that group. One whose leader is alive is only if the leader
-/// started when it was recorded (pids get reused); one whose leader is gone but still has members is, because a pgid
-/// cannot be reused while any member remains.
+/// started when it was recorded (pids get reused); one whose leader is gone but still has members is, where a group
+/// lives on without its leader (a pgid cannot be reused while any member remains); where it does not, only a leader
+/// known to be the one recorded is ours.
 export function stillOurs(entry: ProcessRow): boolean {
   const started = startTimeOf(entry.pgid);
   // ps gives whole seconds: a few seconds either way is the same start.
-  const ours = started !== null ? Math.abs(started - entry.startedAt) < 5000 : groupAlive(entry.pgid);
+  const ours = started !== null ? Math.abs(started - entry.startedAt) < 5000 : platform.groupOutlivesLeader && groupAlive(entry.pgid);
   return ours && groupAlive(entry.pgid);
 }
 

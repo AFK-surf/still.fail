@@ -7,6 +7,7 @@ import { realpathSync, statSync } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Mesh, loadMesh } from "../mesh/native.ts";
+import { platform } from "../platform/index.ts";
 
 type Found = { inline: boolean; destination: string; start: number; end: number };
 
@@ -52,6 +53,9 @@ function localPath(destination: string): string | null {
     } catch {
       throw new Error(`invalid local file link: ${destination}; use an absolute path in files`);
     }
+  } else if (platform.paths.isDrivePath(decoded)) {
+    // A drive's path (`C:\…`, `C:/…`, on Windows) is a local one, as a familiar root's is on Unix.
+    path = decoded;
   } else {
     if (!decoded.startsWith("/") || decoded.startsWith("//")) return null;
     const known = ["/Users/", "/home/", "/tmp/", "/private/", "/var/", "/Volumes/", "/mnt/", "/workspace/", "/etc/", "/opt/"];

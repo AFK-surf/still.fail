@@ -32,18 +32,18 @@ export function installScript(origin: string, channel: "stable" | "beta" = "stab
 
 /**
  * A release's file, as the bucket keeps it: stillfail-station-<platform>.tar.gz; ember-station-<platform>.tar.gz is the
- * last release from before the rename, which installers from before it still get.
+ * last release from before the rename, which installers from before it still get. Windows' is a zip (install-windows.ts).
  */
-export const RELEASE_FILE = /^(stillfail|ember)-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
+export const RELEASE_FILE = /^((stillfail|ember)-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|stillfail-station-win32-x64\.zip)$/;
 
 /** The test channel's release (scripts/release.sh --beta), until promoted to the stable name. */
-export const BETA_RELEASE_FILE = /^beta\/stillfail-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
+export const BETA_RELEASE_FILE = /^beta\/stillfail-station-((darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|win32-x64\.zip)$/;
 
 /**
  * The Node a release runs on (its NODE_VERSION file says the version), kept apart from it, once per version (scripts/node-dist.sh):
  * the installer gets it when the machine has none of that version yet, with its sha256 to check it by.
  */
-export const NODE_FILE = /^node\/node-v[0-9]+\.[0-9]+\.[0-9]+-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz(\.sha256)?$/;
+export const NODE_FILE = /^node\/node-v[0-9]+\.[0-9]+\.[0-9]+-((darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|win-x64\.zip)(\.sha256)?$/;
 
 /**
  * The apps' builds, as scripts/release.sh puts them beside the station's: what each app's updater reads for the
@@ -75,8 +75,9 @@ const APP_FILES: [RegExp, string][] = [
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
 export function releaseType(file: string): string | null {
-  if (RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file)) return "application/gzip";
-  if (NODE_FILE.test(file)) return file.endsWith(".sha256") ? "text/plain; charset=utf-8" : "application/gzip";
+  const archive = file.endsWith(".zip") ? "application/zip" : "application/gzip";
+  if (RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file)) return archive;
+  if (NODE_FILE.test(file)) return file.endsWith(".sha256") ? "text/plain; charset=utf-8" : archive;
   return APP_FILES.find(([name]) => name.test(file))?.[1] ?? null;
 }
 
@@ -323,7 +324,8 @@ if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_servic
   step handoff
   echo "${say("cloud.install.handoff.start")}"
   kill -USR2 "$pid"
-  for _ in $(seq 1 120); do
+  # The new one's 60 s to be ready and 90 s to take over (launcher/src/lifecycle.rs Times), and some.
+  for _ in $(seq 1 180); do
     sleep 1
     if [ "$(said startedAt)" != "$started" ]; then
       [ "$(said pid)" = "$pid" ] && handed=yes
@@ -334,6 +336,15 @@ if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_servic
   if [ -n "$handed" ]; then
     rm -rf "$app.old"
     prune_node
+  elif [ -f "$data/run/handoff-failed" ] && kill -0 "$pid" 2>/dev/null && [ "$(said startedAt)" = "$started" ]; then
+    # The new release did not come up or take over, and the station is the launcher it was: the release before goes
+    # back, for the Node serving on it (one that did not get ready) or the one the launcher starts after a while (one
+    # that did not take over, its old one gone; Times::rollback).
+    rm -rf "$app.failed"
+    mv "$app" "$app.failed" && { mv "$app.old" "$app" || mv "$app.failed" "$app"; }
+    rm -rf "$app.failed"
+    echo "${say("cloud.install.handoff.keptOld", { why: '$(cat "$data/run/handoff-failed")' })}" >&2
+    exit 1
   elif [ -f "$data/run/handoff-failed" ]; then
     echo "${say("cloud.install.handoff.failed", { why: '$(cat "$data/run/handoff-failed")' })}" >&2
   elif [ "$(said startedAt)" != "$started" ]; then

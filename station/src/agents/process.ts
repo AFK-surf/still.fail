@@ -7,11 +7,11 @@
 // begins. After a crash there is no snapshot; `ackedOffset` and `linesBefore` let a driver read what the dead station
 // had handled (silently) to know where things stand before the rest comes.
 import { createHash } from "node:crypto";
-import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
-import { RunnerConnection, existingRunners, leave, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
+import { RunnerConnection, existingRunners, leave, listening, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
 
 /// A wait on another process (a grace raced against its exit): the machine's time.
@@ -57,7 +57,7 @@ const pidAlive = (pid: number) => {
 };
 
 /// A runner of this id that keeps its process still (its socket there: one on its way out has let it go).
-export const findRunner = (data: string, id: string): RunnerInfo | undefined => existingRunners(data).find((r) => r.id === id && existsSync(r.socket));
+export const findRunner = (data: string, id: string): RunnerInfo | undefined => existingRunners(data).find((r) => r.id === id && listening(r));
 export const outFile = (data: string, id: string) => join(runnersDir(data), `${id}.out`);
 
 /// The connection's socket, which runner.ts keeps to itself: its errors would otherwise go unhandled, and its closing
@@ -144,7 +144,7 @@ export class AgentProcess {
 
   /// Takes up the process a runner keeps: from its first line not acknowledged.
   static adopt(info: RunnerInfo, options: ProcessOptions) {
-    if (!existsSync(info.socket)) throw new Error(`runner ${info.id} has no socket`);
+    if (!listening(info)) throw new Error(`runner ${info.id} has no socket`);
     return new AgentProcess(info, options);
   }
 
@@ -217,7 +217,7 @@ export async function endRunner(data: string, id: string, label: string) {
   const info = findRunner(data, id);
   if (!info) return;
   log.warn("agents::process", "ending a runtime process left by a previous run", { label, runner: info.runner, pgid: info.pgid });
-  if (existsSync(info.socket)) {
+  if (listening(info)) {
     const conn = new RunnerConnection(info, () => {});
     socketOf(conn).on("error", () => {});
     conn.signal("TERM", true);

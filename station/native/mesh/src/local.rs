@@ -32,7 +32,8 @@ impl FileLock {
 pub async fn file_lock(path: String) -> napi::Result<FileLock> {
     tokio::task::spawn_blocking(move || -> std::io::Result<FileLock> {
         let mut options = OpenOptions::new();
-        options.create(true).append(true);
+        // Read too: LockFileEx wants a handle that may read or write, and one opened to append only may do neither.
+        options.create(true).read(true).append(true);
         #[cfg(unix)]
         options.mode(0o600);
         let file = options.open(&path)?;
@@ -44,6 +45,12 @@ pub async fn file_lock(path: String) -> napi::Result<FileLock> {
     .map_err(|e| napi::Error::from_reason(e.to_string()))
 }
 
+/// `C:\…` or `C:/…`: a path on a Windows drive.
+fn is_drive_path(text: &str) -> bool {
+    let b = text.as_bytes();
+    b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/')
+}
+
 /// Resolve only file URLs, familiar machine roots, or paths that actually name a local file.
 fn local_path(destination: &str) -> std::result::Result<Option<PathBuf>, String> {
     let decoded = percent_encoding::percent_decode_str(destination).decode_utf8_lossy();
@@ -52,6 +59,9 @@ fn local_path(destination: &str) -> std::result::Result<Option<PathBuf>, String>
             .ok()
             .and_then(|u| u.to_file_path().ok())
             .ok_or_else(|| format!("invalid local file link: {destination}; use an absolute path in files"))?
+    } else if cfg!(windows) && is_drive_path(&decoded) {
+        // On Windows a drive's path (`C:\…`, `C:/…`) is a local one, as a familiar root's is on Unix.
+        PathBuf::from(decoded.as_ref())
     } else {
         if !decoded.starts_with('/') || decoded.starts_with("//") {
             return Ok(None);

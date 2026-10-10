@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { idOf } from "./thumbs.ts";
+import { platform } from "../platform/index.ts";
 
 /// The longer side of a poster, in pixels.
 const SIDE = 640;
@@ -49,7 +50,7 @@ async function make(video: string, thumbs: string, path: string): Promise<string
   try {
     const jpeg = join(work, "poster.jpg");
     let ok = false;
-    if (process.platform === "darwin" && (await run("/usr/bin/qlmanage", ["-t", "-s", String(SIDE), "-o", work, video]))) {
+    if (platform.hasQuickLook && (await run("/usr/bin/qlmanage", ["-t", "-s", String(SIDE), "-o", work, video]))) {
       // QuickLook writes <name>.png into the directory it is given.
       const png = readdirSync(work).find((f) => f.endsWith(".png"));
       ok = png !== undefined && (await run("/usr/bin/sips", ["-s", "format", "jpeg", "-s", "formatOptions", "80", join(work, png), "--out", jpeg]));

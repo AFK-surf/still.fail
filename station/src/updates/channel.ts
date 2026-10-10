@@ -6,7 +6,6 @@
 //
 // Unlike the Rust command, Node cannot try run/station.lock (flock): whether a station runs is told by run/station.json
 // (its pid there, alive, a station's command, and saying it takes the ask: `channel: 1`), as the installer tells it.
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, watch } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { Effect, Latch, Option } from "effect";
@@ -15,19 +14,13 @@ import { flag } from "../ops/files.ts";
 import { stationLang, tr } from "../ops/i18n.ts";
 import { CHANNEL_ANSWER, CHANNEL_ASK, writeWhole } from "./updates.ts";
 import { type Channel, channelOf, channelOfId } from "./versions.ts";
+import { platform } from "../platform/index.ts";
 
 const configPath = (data: string) => process.env.STILLFAIL_CONFIG || process.env.EMBER_CONFIG || join(data, "config.json");
 
 /// Whether `pid` is a station (its command says so), as the installer checks it: a pid left in station.json may be
 /// another process's by now.
-export function isStation(pid: number): boolean {
-  try {
-    const command = execFileSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    return command.includes("stillfail-station") || command.includes("ember-station");
-  } catch {
-    return false;
-  }
-}
+export const isStation = (pid: number): boolean => platform.isLauncher(pid);
 
 const alive = (pid: number) => {
   try {
@@ -63,7 +56,8 @@ export async function setChannel(data: string, channel: Channel, waitMs: number,
   rmSync(answer, { force: true });
   writeWhole(join(run, CHANNEL_ASK), channel);
   try {
-    process.kill(pid, "SIGHUP");
+    // The launcher hears it (Unix's SIGHUP, a line on Windows' pipe) and tells the station's process.
+    await platform.askLauncher(pid, "hup");
   } catch (e) {
     rmSync(join(run, CHANNEL_ASK), { force: true });
     throw new Error(tr(stationLang(), "station.cli.signalFailed", { pid, error: (e as Error).message }));

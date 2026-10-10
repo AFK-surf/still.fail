@@ -17,7 +17,7 @@ import { appendFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { connect } from "node:net";
-import { extname, join, normalize } from "node:path";
+import { extname, join, posix } from "node:path";
 import { Response as MFResponse } from "miniflare";
 import { releaseType } from "../src/install.ts";
 import { harness } from "./harness.ts";
@@ -37,7 +37,7 @@ const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javas
 
 /** The static sites' files as the stand-in static Worker asks for them (/web/…, /admin/…, /preview/…); 404 for anything else. */
 async function assets(request: Request): Promise<Response> {
-  const [, site, ...rest] = normalize(decodeURIComponent(new URL(request.url).pathname)).split("/");
+  const [, site, ...rest] = posix.normalize(decodeURIComponent(new URL(request.url).pathname)).split("/");
   const file = rest.join("/");
   try {
     const body = await readFile(join(dist, `cloud-${site}`, file));
@@ -97,11 +97,10 @@ async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
   const release = /^\/releases\/(.+)$/.exec(url.pathname)?.[1];
   const type = release ? releaseType(release) : null;
   if (release && type) {
-    try {
-      return void res.writeHead(200, { "content-type": type }).end(await readFile(join(dist, "releases", release)));
-    } catch {
-      return void res.writeHead(404).end("no such release in dist/releases");
-    }
+    // Read before the head is written: a release not there is a 404, not a 200 that then fails.
+    const body = await readFile(join(dist, "releases", release)).catch(() => null);
+    if (body === null) return void res.writeHead(404).end("no such release in dist/releases");
+    return void res.writeHead(200, { "content-type": type }).end(body);
   }
   if (url.pathname === "/__dev/account") {
     const account = await signIn(url.searchParams.get("user") ?? "alice");

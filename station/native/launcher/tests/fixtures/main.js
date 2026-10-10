@@ -1,7 +1,8 @@
 // A stand-in for the station's Node side in the launcher's tests: it speaks the control socket's protocol and answers a
 // TCP connection on each port it is given with "<pid> mcp|admin". What it does is set by <data>/fake.conf (key=value
 // lines, read as it starts): version=…, ready=no (never says ready), ready_after=ms, crash_after=ms (exits 1 that long
-// after ready), crash=once (the data directory's first Node exits 1 once ready), start=crash (exits 1 at once). What
+// after ready), crash=once (the data directory's first Node exits 1 once ready), start=crash (exits 1 at once),
+// take=no|failed (never takes over: says nothing of the agents' door, or that it failed). What
 // happens is appended to <data>/fake.log: "<ms> <pid> <what>", among it "ports <mcp> <admin>" once both serve (the
 // launcher binds them where it finds them free).
 "use strict";
@@ -87,6 +88,18 @@ if (conf.ready !== "no") {
     // Logged first: the launcher may act on the word before this process runs again.
     log("ready");
     say({ ready: true, version: conf.version || "0.1.0" });
+    // Taken over (the station's Node: its loopback port at once, the agents' door once the sessions are taken up):
+    // take=no never opens the door, take=failed says it could not.
+    const listening = () => servers.every((server) => server.listening);
+    const serve = () => {
+      if (!listening()) return setTimeout(serve, 10);
+      say({ serving: "admin", port: servers[1].address().port });
+      if (conf.take === "failed") {
+        log("take failed");
+        say({ failed: "the agents' side did not start: a test's" });
+      } else if (conf.take !== "no") say({ serving: "mcp", port: servers[0].address().port });
+    };
+    serve();
     const crashed = path.join(data, "crashed");
     if (conf.crash === "once" && !fs.existsSync(crashed)) {
       fs.writeFileSync(crashed, "");

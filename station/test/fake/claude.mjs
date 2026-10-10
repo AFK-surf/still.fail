@@ -28,8 +28,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /// A wait that a control request (interrupt, background_tasks) or a steer ends; nothing else does.
 let wake = () => {};
 const pause = () => new Promise((r) => (wake = r));
-/// Waits until the fifo at `path` is written (and closed).
-const gate = (path) => fs.promises.readFile(path);
+/// Waits until the fifo at `path` is written (and closed). Windows has no fifos: there the test writes a file at
+/// `path`, looked for until it is there.
+const gate = async (path) => {
+  while (process.platform === "win32" && !fs.existsSync(path)) await new Promise((r) => setTimeout(r, 10));
+  return fs.promises.readFile(path);
+};
 
 let busy = false;
 let interrupted = false;

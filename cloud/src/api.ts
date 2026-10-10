@@ -201,7 +201,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return directory(async () => {
       const made = await dir.createEnrollment(sub, ws, text("name"));
       // A machine without still.fail installs it and joins at once; one with it joins.
-      return { ...made, install: `curl -fsSL ${env.PUBLIC_ORIGIN}/install.sh | sh -s -- ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
+      return { ...made, install: `curl -fsSL ${env.PUBLIC_ORIGIN}/install.sh | sh -s -- ${made.token}`, installWindows: `& ([scriptblock]::Create((irm ${env.PUBLIC_ORIGIN}/install.ps1))) ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
     });
   }
   // A mstill.fail's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).

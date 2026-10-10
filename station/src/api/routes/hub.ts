@@ -5,6 +5,7 @@
 import { randomBytes } from "node:crypto";
 import { appendFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { clean, fileName as nameOf, inside } from "../../ops/paths.ts";
 import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { tr } from "../../ops/i18n.ts";
@@ -80,21 +81,9 @@ const text = (v: unknown): string => (v === undefined || v === null ? "" : typeo
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 const chars = (s: string, max: number) => [...s].slice(0, max).join("");
 
-/// files.rs `clean`: a path absolute, with `.` and `..` worked out (no link followed).
-function clean(path: string): string {
-  const out: string[] = [];
-  for (const part of path.split("/")) {
-    if (part === "" || part === ".") continue;
-    if (part === "..") out.pop();
-    else out.push(part);
-  }
-  return `/${out.join("/")}`;
-}
-/// Path::starts_with, component by component, and not the directory itself.
-const inside = (path: string, dir: string) => path !== dir && (dir === "/" || path.startsWith(`${dir}/`));
 const exists = (path: string) => statSync(path, { throwIfNoEntry: false }) !== undefined;
 /// Path::file_name.
-const fileName = (path: string) => path.split("/").filter((p) => p !== "").at(-1) ?? "";
+const fileName = (path: string) => nameOf(path) ?? "";
 
 /// files.rs `sweep_staged`: drops uploads that waited a day without a message taking them.
 export function sweepStaged(dir: string, now = wall.now()) {

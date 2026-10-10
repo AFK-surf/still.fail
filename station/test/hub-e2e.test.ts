@@ -4,7 +4,8 @@
 // ends all_done, not nudged.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ClaudeDriver } from "../src/agents/claude.ts";
@@ -18,11 +19,11 @@ import { openAgentsDoor } from "../src/tools/http.ts";
 import { Store } from "../src/store/store.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
-process.env.PATH = `${fake}:${process.env.PATH}`;
+process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
 
 test("a message in the station's chat: a turn starts, the agent posts through the MCP endpoint, the turn ends all_done", async () => {
   // Short: the runners' sockets live under it (104 bytes at most on macOS).
-  const data = mkdtempSync("/tmp/he-");
+  const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "he-") : "/tmp/he-");
   const home = join(data, "homes", "cc");
   mkdirSync(home, { recursive: true });
   // A login in its file: nothing is looked for in the keychain.

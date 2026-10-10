@@ -5,6 +5,7 @@
 // connection and serves no page. Each host has an old name too (ember.3720.org, admin.ember.3720.org: the
 // *_ORIGIN_ALIASES, compat.ts), answered the same; links, and signing in with Google, use the new ones.
 import { installScript, releaseType } from "./install.ts";
+import { windowsInstallScript } from "./install-windows.ts";
 import { requestLang, tr } from "./i18n.ts";
 import { latestDownload, serveRelease } from "./releases.ts";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
@@ -74,6 +75,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
   if ((onPublic || onBeta) && request.method === "GET") {
     const channel = url.searchParams.get("channel") === "beta" || (onBeta && url.searchParams.get("channel") !== "stable") ? "beta" : "stable";
     if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN, channel, requestLang(request)), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
+    if (path === "/install.ps1") return new Response(windowsInstallScript(env.PUBLIC_ORIGIN, channel, requestLang(request)), { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
     const release = /^\/releases\/(.+)$/.exec(path)?.[1];
     const type = release ? releaseType(release) : null;
     if (release && type) {

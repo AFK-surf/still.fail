@@ -5,9 +5,10 @@
 //   the machine's current access token (CLAUDE_CODE_OAUTH_TOKEN) and never refresh. It is read where claude reads it:
 //   on macOS the keychain first, then the file (a claude run by hand saves to the keychain and deletes the file).
 import { execFile } from "node:child_process";
-import { lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { wall } from "../ops/fibers.ts";
+import { platform } from "../platform/index.ts";
 
 export type Env = Record<string, string | undefined>;
 
@@ -17,7 +18,7 @@ export const CLAUDE_TOKEN_MARGIN_MS = 5 * 60_000;
 
 export type MachineToken = { token: string; expiresAt: number };
 
-const homeOf = (env: Env) => env.HOME ?? ".";
+const homeOf = (env: Env) => platform.home(env) ?? ".";
 export const claudeCredentialsFile = (env: Env) => join(homeOf(env), ".claude", ".credentials.json");
 export const codexHome = (env: Env) => (env.CODEX_HOME ? env.CODEX_HOME : join(homeOf(env), ".codex"));
 export const codexAuthFile = (env: Env) => join(codexHome(env), "auth.json");
@@ -53,7 +54,7 @@ export function parseClaudeCredentials(text: string): MachineToken | undefined {
 
 /// The machine's Claude Code login where claude reads it: on macOS the keychain first, then the file.
 export async function readClaudeCredentials(env: Env): Promise<MachineToken | undefined> {
-  if (process.platform === "darwin") {
+  if (platform.hasKeychain) {
     const found = await readClaudeKeychain(env);
     if (found.kind === "found") return parseClaudeCredentials(found.text);
     if (found.kind === "unreadable") return undefined;
@@ -77,18 +78,9 @@ export async function machineClaudeToken(env: Env): Promise<MachineToken> {
   return found;
 }
 
-/// A machine profile's Codex home, sharing the machine's login: its auth.json a link to the machine's. Made again when
-/// something replaced it (a sign-in in the home, say).
+/// A machine profile's Codex home, sharing the machine's login: its auth.json the machine's file (platform.shareFile:
+/// a link, or where one is refused a hard link). Made again when something replaced it (a sign-in in the home, say).
 export function linkCodexAuth(home: string, env: Env) {
-  const target = codexAuthFile(env);
-  const link = join(home, "auth.json");
   mkdirSync(home, { recursive: true });
-  try {
-    const meta = lstatSync(link);
-    if (meta.isSymbolicLink() && readlinkSync(link) === target) return;
-    unlinkSync(link);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-  symlinkSync(target, link);
+  platform.shareFile(codexAuthFile(env), join(home, "auth.json"));
 }

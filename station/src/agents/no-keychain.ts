@@ -9,6 +9,7 @@ import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readF
 import { tmpdir } from "node:os";
 import { join, relative, isAbsolute } from "node:path";
 import { log } from "../ops/log.ts";
+import { platform } from "../platform/index.ts";
 
 /// Claude Code asks with its item's name in the arguments, or (`security -i`) in the commands it writes to stdin.
 const STUB = `#!/bin/sh
@@ -46,7 +47,7 @@ export function stubDir(): string {
 
 /// Keeps Claude Code off the keychain in `env` (macOS only; elsewhere it uses the file anyway).
 export function fileCredentials(env: Record<string, string>) {
-  if (process.platform !== "darwin") return;
+  if (!platform.hasKeychain) return;
   const path = env.PATH ?? process.env.PATH ?? "";
   env.PATH = `${stubDir()}:${path}`;
 }
@@ -73,7 +74,7 @@ const security = (args: string[]) =>
 /// A profile's login that Claude Code moved into the keychain, moved back into its home's file; one under the home's
 /// name from before the data directory moved is copied (and left). Nothing when the file is there or unreadable.
 export async function takeBack(home: string) {
-  if (process.platform !== "darwin") return;
+  if (!platform.hasKeychain) return;
   const file = join(home, ".credentials.json");
   if (existsSync(file)) return;
   for (const [item, former] of keychainItems(home)) {

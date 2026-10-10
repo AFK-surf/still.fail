@@ -3,7 +3,10 @@
 //! MCP endpoint's host and port, the station's language).
 
 use std::fs::{File, OpenOptions};
-use std::io::{Error, ErrorKind, Result};
+#[cfg(unix)]
+use std::io::Error;
+use std::io::{ErrorKind, Result};
+#[cfg(unix)]
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -20,7 +23,11 @@ pub fn var(name: &str) -> Option<String> {
 }
 
 pub fn home() -> PathBuf {
-    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
+    let home = std::env::var_os("HOME");
+    // Windows names it USERPROFILE.
+    #[cfg(windows)]
+    let home = home.or_else(|| std::env::var_os("USERPROFILE"));
+    home.map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
 }
 
 /// The data directory: `given` (--data, or the variable), else ~/.stillfail. ~/.ember, given or found there, is taken
@@ -60,7 +67,12 @@ fn move_data(old: &Path, new: &Path) -> PathBuf {
         crate::log::warn(&format!("the data directory could not be moved from {} to {}: {error}; staying where it is", old.display(), new.display()));
         return old.to_path_buf();
     }
-    match std::os::unix::fs::symlink(new, old) {
+    #[cfg(unix)]
+    let linked = std::os::unix::fs::symlink(new, old);
+    // A link to a directory needs no privilege as a junction would, but this is what most like Unix's.
+    #[cfg(windows)]
+    let linked = std::os::windows::fs::symlink_dir(new, old);
+    match linked {
         Ok(()) => crate::log::info(&format!("data directory moved from {} to {} (a link stays at the old place)", old.display(), new.display())),
         Err(error) => crate::log::warn(&format!("data directory moved to {}, but no link left at the old place: {error}", new.display())),
     }
@@ -70,20 +82,33 @@ fn move_data(old: &Path, new: &Path) -> PathBuf {
 /// Whether another process holds `lock`.
 fn held(lock: &Path) -> bool {
     let Ok(file) = OpenOptions::new().write(true).open(lock) else { return false };
+    #[cfg(unix)]
     // SAFETY: flock on a descriptor this function owns; dropping the file lets it go.
-    unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) != 0 }
+    return unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) != 0 };
+    #[cfg(windows)]
+    return file.try_lock().is_err();
 }
 
 /// Holds `path` locked for as long as the file lives; None when another process holds it. The descriptor is
 /// close-on-exec: the lock is the launcher's alone, not Node's.
 pub fn lock(path: &Path) -> Result<Option<File>> {
     let file = OpenOptions::new().create(true).truncate(false).write(true).open(path)?;
-    // SAFETY: flock on a descriptor this function owns.
-    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-        let error = Error::last_os_error();
-        return if error.kind() == ErrorKind::WouldBlock { Ok(None) } else { Err(error) };
+    // Windows: the file's own lock (LockFileEx); handles are not inherited unless asked, so it stays the launcher's.
+    #[cfg(windows)]
+    return match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+        Err(std::fs::TryLockError::Error(error)) => Err(error),
+    };
+    #[cfg(unix)]
+    {
+        // SAFETY: flock on a descriptor this function owns.
+        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+            let error = Error::last_os_error();
+            return if error.kind() == ErrorKind::WouldBlock { Ok(None) } else { Err(error) };
+        }
+        Ok(Some(file))
     }
-    Ok(Some(file))
 }
 
 /// Writes `text` to `path` whole (a reader never sees half of it).
@@ -96,8 +121,12 @@ pub fn write_whole(path: &Path, text: &str) -> Result<()> {
 /// run/station.json's line, its fields in the Rust station's order (the installer reads it with sed). `handoff` stays 1:
 /// the installer takes any for "SIGUSR2 hands over".
 pub fn station_json(pid: u32, started_at: u64, version: &str) -> String {
-    format!("{{\"pid\":{pid},\"startedAt\":{started_at},\"version\":{},\"handoff\":1,\"drain\":1,\"channel\":1}}\n", Value::from(version))
+    format!("{{\"pid\":{pid},\"startedAt\":{started_at},\"version\":{},{FLAGS}}}\n", Value::from(version))
 }
+
+/// What the launcher takes: a handover, a drain, the channel asked again. On Unix as signals (SIGUSR2, SIGUSR1, SIGHUP);
+/// on Windows, which has none, as lines on its own pipe (run_windows.rs `control_pipe`).
+const FLAGS: &str = "\"handoff\":1,\"drain\":1,\"channel\":1";
 
 pub fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)

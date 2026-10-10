@@ -16,18 +16,21 @@
 #   stillfail/VERSION, BUILD                              (the commit; the commits in its history: version 0.1.<BUILD>)
 # On darwin-arm64 the native parts are signed when $STILLFAIL_SIGN_STATION is set (the station release job).
 # Its Node is the station's own: the agents' PATH never has it (a runtime installed with it would land there).
-#   station-bundle.sh DIR [darwin-arm64|linux-x64|linux-arm64]
+# On win32-x64 the executables are .exe, and the command is bin/stillfail.cmd (bin/stillfail.ps1 behind it): no links
+# there (they take a privilege on Windows), so no ember beside them.
+#   station-bundle.sh DIR [darwin-arm64|linux-x64|linux-arm64|win32-x64]
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 out=${1:?usage: station-bundle.sh DIR [PLATFORM]}
 platform=${2:-darwin-arm64}
 case "$platform" in
-  darwin-arm64|linux-x64|linux-arm64) ;;
+  darwin-arm64|linux-x64|linux-arm64|win32-x64) ;;
   *) echo "no such platform: $platform" >&2; exit 1 ;;
 esac
 # Written afresh here, so a release never carries what an older build left in dist/admin (its page), nor an old key.
 node "$root/scripts/posthog-key.ts" >&2
 native() { node "$root/scripts/native.ts" file "$1" "$platform"; }
+x=; [ "$platform" = win32-x64 ] && x=.exe
 launcher="$(native launcher)"
 mesh="$(native mesh)"
 runner="$(native runner)"
@@ -35,10 +38,17 @@ runner="$(native runner)"
 app="$out/stillfail"
 rm -rf "$app"
 mkdir -p "$app/bin" "$app/mesh/target/release" "$app/dist" "$app/station/read"
-cp "$root/bin/stillfail" "$app/bin/"
-ln -s stillfail "$app/bin/ember"
+if [ "$platform" = win32-x64 ]; then
+  cp "$root/bin/stillfail.cmd" "$root/bin/stillfail.ps1" "$app/bin/"
+else
+  cp "$root/bin/stillfail" "$app/bin/"
+  ln -s stillfail "$app/bin/ember"
+fi
 cp -R "$root/dist/admin" "$app/dist/admin"
-cp "$launcher" "$app/mesh/target/release/stillfail-station"
+cp "$launcher" "$app/mesh/target/release/stillfail-station$x"
+# And on Windows the launcher with no window beside it (what install.ps1's scheduled task runs; scripts/native.ts keeps
+# it in the launcher's artifact).
+[ "$platform" = win32-x64 ] && cp "$(dirname "$launcher")/stillfail-station-w.exe" "$app/mesh/target/release/"
 cp "$mesh" "$runner" "$app/station/"
 # macOS asks "find devices on local networks?" (the mesh's mDNS) for the launcher: Node and everything it starts are
 # its. Ad hoc, the grant was its hash's: each new launcher asked again, and every Node it started while unanswered put
@@ -50,7 +60,7 @@ if [ "$platform" = darwin-arm64 ] && [ -n "${STILLFAIL_SIGN_STATION:-}" ]; then
     { echo "::warning::the station's native parts were not signed (.github/sign-station.sh): ad hoc" >&2
       cp "$launcher" "$app/mesh/target/release/stillfail-station"; cp "$mesh" "$runner" "$app/station/"; }
 fi
-ln -s stillfail-station "$app/mesh/target/release/ember-station"
+[ "$platform" = win32-x64 ] || ln -s stillfail-station "$app/mesh/target/release/ember-station"
 cp "$root/station/dist/main.js" "$app/station/"
 cp "$root/station/dist/read/worker.js" "$app/station/read/"
 cp -R "$root/station/dist/skills" "$app/station/skills"

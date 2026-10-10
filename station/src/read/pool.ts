@@ -12,7 +12,8 @@ import { wall } from "../ops/fibers.ts";
 /// How long a reader with nothing to do is kept.
 const IDLE_MS = 60_000;
 
-type Slot = { worker: Worker; busy: number; held: Set<number>; idle?: () => void };
+/// `held`: the reads it is answering, by id, with their ops (said when it fails).
+type Slot = { worker: Worker; busy: number; held: Map<number, string>; idle?: () => void };
 
 export class Readers {
   private slots: Slot[] = [];
@@ -38,7 +39,7 @@ export class Readers {
     const file = new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
     // A reader's heap stays small: what it builds is answered and dropped.
     const worker = new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
-    const slot: Slot = { worker, busy: 0, held: new Set() };
+    const slot: Slot = { worker, busy: 0, held: new Map() };
     worker.on("message", (answer: Answer) => {
       slot.busy--;
       slot.held.delete(answer.id);
@@ -49,11 +50,11 @@ export class Readers {
       if (answer.text !== undefined) waiter.resolve(answer.text);
       else waiter.reject(new HttpError(answer.status ?? 500, answer.error ?? "read failed"));
     });
-    worker.on("error", (error) => log.error("readers", "a reader failed", { error: error.message }));
+    worker.on("error", (error) => log.error("readers", "a reader failed", { error: error.message, reading: [...slot.held.values()] }));
     worker.on("exit", (code) => {
       slot.idle?.();
       this.slots = this.slots.filter((s) => s !== slot);
-      for (const id of slot.held) {
+      for (const id of slot.held.keys()) {
         this.waiting.get(id)?.reject(new HttpError(500, `the reader stopped (exit ${code})`));
         this.waiting.delete(id);
       }
@@ -78,7 +79,7 @@ export class Readers {
     slot.idle?.();
     const id = this.next++;
     slot.busy++;
-    slot.held.add(id);
+    slot.held.set(id, op);
     return new Promise((resolve, reject) => {
       this.waiting.set(id, { resolve, reject });
       slot.worker.postMessage({ id, op, args, lang, names: [...this.names], processes: [...this.processes()], clientKeys: [...this.clientKeys()] } satisfies Ask);

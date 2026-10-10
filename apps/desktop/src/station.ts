@@ -7,10 +7,25 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 /** stillfail-station's exit when another station runs the data directory (station/native/launcher: HELD). */
 const HELD = 3;
+
+const WINDOWS = process.platform === "win32";
+
+/**
+ * The environment the station runs in, with `first` before its PATH: where the agents (Claude Code, Codex) are found, as
+ * an installed station's (cloud/src/install.ts). On Windows the variable is `Path` as often as not, and is one whatever
+ * its case: the others are dropped, so the station is not given two.
+ */
+function withPath(env: NodeJS.ProcessEnv, first: string[], last: string[]): NodeJS.ProcessEnv {
+  const key = Object.keys(env).find((k) => k.toUpperCase() === "PATH");
+  const out: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(env)) if (!(WINDOWS && k.toUpperCase() === "PATH")) out[k] = v;
+  out.PATH = [...first, (key && env[key]) ?? "", ...last].filter((d) => d !== "").join(delimiter);
+  return out;
+}
 
 /** The proxy variables a terminal has and an app opened from Finder does not (Claude Code and Codex follow only these). */
 const PROXY = ["http_proxy", "https_proxy", "all_proxy", "no_proxy"].flatMap((name) => [name, name.toUpperCase()]);
@@ -81,7 +96,7 @@ export class LocalStation {
 
   /** `dir`: the release, stillfail/ of scripts/station-bundle.sh. */
   constructor(readonly dir: string) {
-    this.#bin = join(dir, "mesh", "target", "release", "stillfail-station");
+    this.#bin = join(dir, "mesh", "target", "release", WINDOWS ? "stillfail-station.exe" : "stillfail-station");
   }
 
   /**
@@ -142,8 +157,12 @@ export class LocalStation {
     const child = spawn(this.#bin, ["run", "--app", this.dir, "--data", data, "--with-parent"], {
       // Opened from Finder the app has launchd's short PATH; the agents it starts (Claude Code, Codex) are found on this
       // one, as an installed station's (cloud/src/install.ts); and they go through the proxy the terminal's do.
-      env: { ...proxy, ...process.env, ...this.#node, STILLFAIL_DATA: data, EMBER_DATA: data, PATH: `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin` },
+      env: WINDOWS
+        ? // Claude Code's own installer puts it in ~\.local\bin, which an app started from the Start menu may not have.
+          withPath({ ...proxy, ...process.env, ...this.#node, STILLFAIL_DATA: data, EMBER_DATA: data }, [join(homedir(), ".local", "bin")], [])
+        : { ...proxy, ...process.env, ...this.#node, STILLFAIL_DATA: data, EMBER_DATA: data, PATH: `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin` },
       stdio: ["ignore", log, log],
+      windowsHide: true,
     });
     this.#child = child;
     child.on("exit", (code) => {
@@ -160,7 +179,10 @@ export class LocalStation {
     });
   }
 
-  /** SIGTERM, which ends its runtimes first; SIGKILL if it has not ended in 25 s. */
+  /**
+   * SIGTERM, which ends its runtimes first; SIGKILL if it has not ended in 25 s. On Windows both end the launcher at
+   * once, and the station, its control pipe closed, stops by itself as it would have been told to (launcher.ts).
+   */
   async stop(): Promise<void> {
     this.#stopping = true;
     const child = this.#child;

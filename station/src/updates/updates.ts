@@ -21,14 +21,15 @@
 //   binary itself is not replaced (pid kept: that is what the installer checks). The new Node follows update.started
 //   as the Rust binary did after exec. The old Node never sees update.exit (written after the handover).
 // - The installer is started in a session of its own (Node's `detached`, setsid) rather than a process group of its
-//   own: either way launchd/systemd stopping the station does not take it along.
+//   own: either way launchd/systemd stopping the station does not take it along. On Windows by a scheduled task of
+//   its own (startInstaller).
 // - The installer's progress is heard by watching run/ (fs.watch), with a slow look as a safety net and for the
 //   drain's count of running turns, in place of a look every second.
 // - Words the pages show are kept as catalog keys and said in each reader's language (the Rust said them once, in the
 //   language of whoever caused the reading).
 // - `stillfail-station channel` reaches this process as the launcher's `{"op":"hup"}` (it holds SIGHUP for it):
 //   `answerChannelAsk`.
-import { spawn } from "node:child_process";
+
 import { type FSWatcher, createWriteStream, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,6 +38,7 @@ import { Fibers } from "../ops/fibers.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
+import { platform as machine } from "../platform/index.ts";
 import {
   type Env, type How, type Kind, KINDS, NotFinished, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, kindCommand,
   kindName, kindPackage, pinNpmVersion, run, runLines,
@@ -146,6 +148,12 @@ const empty = (): Item => ({ installed: false, version: null, latest: null, how:
 /// What the station's update started from the pages leaves in <data>/run/update.started, for whichever process runs
 /// the station when it ends.
 type Started = { at: number; from: string | null };
+
+/// Starts the cloud's installer apart from the station (platform.startInstaller: in the background of a shell, or on
+/// Windows by a scheduled task of its own), its exit to run/update.exit and what it said to run/update.log. Whether it
+/// was started.
+export const startInstaller = (origin: string, runDir: string, env: Record<string, string>, app: string, lang = stationLang()): Promise<boolean> =>
+  machine.startInstaller(origin, runDir, env, app, lang);
 
 const UA = { "user-agent": "stillfail-station" };
 
@@ -599,7 +607,7 @@ export class Updates {
   /// build for this machine, fetched here first; Claude Code's, as its installer writes it), else the step the command
   /// says it is at (Homebrew's, Claude Code's installer's).
   private async install(kind: Kind, how: How): Promise<[boolean, string]> {
-    const npm = how.program.split("/").pop() === "npm" && how.args[0] === "install";
+    const npm = /^npm(\.cmd)?$/i.test(how.program.split(/[\\/]/).pop() ?? "") && how.args[0] === "install";
     if (kind === "codex" && npm) {
       const version = await this.fetchCodex(how.program);
       // That version, as npm's cache has its build (`latest` from a cached list could be an older one).
@@ -607,7 +615,8 @@ export class Updates {
     }
     const installing = { now: false };
     // Claude Code's own installer (not `claude update`, nor Homebrew).
-    const stop = kind === "claude" && how.program === "/bin/sh" ? this.watchClaudeDownload(installing) : () => {};
+    const own = how.program === "/bin/sh" || how === machine.claudeInstall;
+    const stop = kind === "claude" && own ? this.watchClaudeDownload(installing) : () => {};
     try {
       return await runLines(how.program, how.args, this.env, this.timing.runtimeLimit, (line) => {
         const step = stepOf(line);
@@ -757,21 +766,13 @@ export class Updates {
     // Taken now, so another ask meanwhile finds it updating.
     const before = { updating: station.updating, failed: station.failed, done: station.done };
     station.updating = this.fibers.now();
-    // In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a
-    // handover (this process is let go) and a restart (the service's processes are stopped).
-    const script = `( curl -fsSL "$1/install.sh?lang=$3" | sh; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &`;
     const channel = this.channel();
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(this.env)) if (v !== undefined) env[k] = v;
     // Under both names: the cloud's installer from before the rename reads the old one. The release of its channel
     // (the installer from before channels takes the stable one).
     Object.assign(env, { STILLFAIL_DATA: this.data, EMBER_DATA: this.data, STILLFAIL_CHANNEL: channel });
-    const ok = await new Promise<boolean>((resolve) => {
-      const child = spawn("/bin/sh", ["-c", script, "sh", origin, runDir, stationLang()], { env, stdio: "ignore", detached: true });
-      child.on("error", () => resolve(false));
-      child.on("exit", (code) => resolve(code === 0));
-      child.unref();
-    });
+    const ok = await startInstaller(origin, runDir, env, this.app);
     if (!ok) {
       Object.assign(station, before);
       throw refused(lang, "station.updates.couldNotStart");

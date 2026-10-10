@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, basename } from "node:path";
 import { execFileSync } from "node:child_process";
 import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
@@ -119,7 +119,7 @@ test("uploads wait in the station's uploads, a message takes them into its chat 
     assert.deepEqual(Object.keys(up), ["name", "path", "size"]);
     assert.equal(up.name, "a_.png");
     assert.equal(up.size, 3);
-    assert.match(up.path, /\/uploads\/\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-[0-9a-f]{6}-a_\.png$/);
+    assert.match(up.path, /[\\/]uploads[\\/]\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-[0-9a-f]{6}-a_\.png$/);
     assert.ok(!existsSync(join(staged, "old")), "a day-old upload is swept");
     const [, unnamed] = await r.ask("POST", "/uploads", Buffer.from(""));
     assert.match(unnamed.name, /^file$/);
@@ -137,7 +137,7 @@ test("uploads wait in the station's uploads, a message takes them into its chat 
     };
     const [sent, said] = await r.ask("POST", `/threads/${id}/messages`, send);
     assert.equal(sent, 200);
-    const moved = join(workspace, "uploads", up.path.split("/").at(-1));
+    const moved = join(workspace, "uploads", basename(up.path));
     assert.ok(existsSync(moved) && !existsSync(up.path), "moved into the session's uploads");
     assert.equal(readFileSync(moved, "utf8"), "png");
     const message = r.store.messagesBefore(id, null, 10).find((m) => m.n === said.n)!;
@@ -153,7 +153,7 @@ test("uploads wait in the station's uploads, a message takes them into its chat 
     assert.equal(again, 200);
     // Named by its place in the uploads when the page gives no name.
     const [, named] = await r.ask("POST", `/threads/${id}/messages`, { attachments: [{ path: moved, width: 5 }] });
-    assert.deepEqual(r.store.messagesBefore(id, null, 10).find((m) => m.n === named.n)!.attachments, [{ name: moved.split("/").at(-1), path: moved, size: 0 }]);
+    assert.deepEqual(r.store.messagesBefore(id, null, 10).find((m) => m.n === named.n)!.attachments, [{ name: basename(moved), path: moved, size: 0 }]);
 
     const slack = r.store.openThread("slack:T1", "C1", "1.1", null, null);
     assert.deepEqual(await r.ask("POST", `/threads/${slack.id}/messages`, { text: "hi" }), [400, { error: en("station.admin.postOnlyStillfail") }]);
@@ -182,7 +182,7 @@ test("a file in parts: each added where the file ends, asked again or out of pla
     assert.equal(status, 200);
     assert.equal(done.have, 10);
     assert.deepEqual([done.file.name, done.file.size], ["big.bin", 10]);
-    assert.match(done.file.path, /\/uploads\/\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-[0-9a-f]{6}-big\.bin$/);
+    assert.match(done.file.path, /[\\/]uploads[\\/]\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-[0-9a-f]{6}-big\.bin$/);
     assert.equal(readFileSync(done.file.path, "utf8"), "0123456789");
     assert.ok(!existsSync(join(staged, ".part-abcdefgh12")));
     // The last part asked again after it was put together: the same file.
@@ -406,7 +406,9 @@ test("a file a message names by its path: its peek and the file whole, only with
     assert.deepEqual([cloned, c.path, c.lines?.text[0]], [200, realpathSync(join(r.data, "repos", "new", "web", "src", "Peeks.tsx")), "// new"]);
     // Nothing outside, however named; nothing that is not there.
     assert.deepEqual(await peek("../../../../stillfail.db"), [403, { error: en("station.files.outside") }]);
-    assert.deepEqual(await peek("/etc/hosts"), [403, { error: en("station.files.outside") }]);
+    // A file there is, outside: Windows has its own.
+    const outside = process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "win.ini") : "/etc/hosts";
+    assert.deepEqual(await peek(outside), [403, { error: en("station.files.outside") }]);
     assert.deepEqual(await peek("src/nope.ts"), [404, { error: en("station.files.notFound") }]);
     const [, whole] = await r.ask("GET", `/sessions/${key}/open`, undefined, [["path", "src/a.ts"]]);
     assert.equal(Buffer.from(whole.bytes, "base64").toString("utf8").split("\n").length, 40);

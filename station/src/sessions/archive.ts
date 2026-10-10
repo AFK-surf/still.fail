@@ -31,15 +31,17 @@ import {
   rename,
   rm,
   stat,
-  symlink,
   unlink,
   utimes,
 } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { segments } from "../ops/paths.ts";
+import { link as symlinkOrStandIn } from "../ops/links.ts";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { constants, createZstdCompress, createZstdDecompress } from "node:zlib";
+import { platform } from "../platform/index.ts";
 
 // ── paths ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -240,8 +242,10 @@ async function drain(stream: AsyncIterable<Buffer>) {
   for await (const _ of stream);
 }
 
-/// A directory's entries made durable (File::open(dir).sync_all()).
+/// A directory's entries made durable (File::open(dir).sync_all()), where a directory syncs (on Windows Node's is
+/// refused, EPERM: NTFS journals a directory's entries itself).
 async function syncDir(dir: string) {
+  if (!platform.syncsDirectories) return;
   const handle = await open(dir, "r");
   try {
     await handle.sync();
@@ -472,22 +476,30 @@ export async function packWorkspaceIf(room: string, ready: () => boolean): Promi
   }
 }
 
+/// Links the machine refused while the restored tree was being made (Windows without the privilege): by their path in
+/// it, their target as written. Made once the tree is at its final path (restoreWorkspace), where what stands in for
+/// them (a junction's absolute target, a copy) stays right; a path written again later is no longer one.
+type Refused = Map<string, string>;
+
 /// Copy files created since the snapshot into the restored tree. Originals stay intact until the final swap, so an
 /// interrupted/failed restoration can be retried without discarding new files or the archive.
-async function overlay(source: string, dest: string): Promise<void> {
+async function overlay(source: string, dest: string, refused: Refused): Promise<void> {
   for (const entry of await readdir(source, { withFileTypes: true })) {
     const from = join(source, entry.name);
     const into = join(dest, entry.name);
     const there = await lstatOrNull(into);
+    refused.delete(into);
     if (entry.isDirectory()) {
       if (there && !there.isDirectory()) throw new Error(`restore path conflict: ${into}`);
       await mkdir(into, { recursive: true });
-      await overlay(from, into);
+      await overlay(from, into, refused);
     } else {
       if (there?.isDirectory()) throw new Error(`restore path conflict: ${into}`);
       if (there) await unlink(into);
-      if (entry.isSymbolicLink()) await symlink(await readlink(from), into);
-      else if (entry.isFile()) await copyFile(from, into);
+      if (entry.isSymbolicLink()) {
+        const target = await readlink(from);
+        if ((await symlinkOrStandIn(target, into, {})) === "refused") refused.set(into, target);
+      } else if (entry.isFile()) await copyFile(from, into);
       else throw new Error(`cannot restore special file ${from}`);
     }
   }
@@ -503,9 +515,10 @@ export async function restoreWorkspace(room: string): Promise<void> {
   await mkdir(stage);
   await chmod(stage, 0o700);
   const stream = unzstd(archive);
+  const refused: Refused = new Map();
   try {
     const bytes = new ByteReader(stream[Symbol.asyncIterator]());
-    await unpack(tarEntries(bytes), stage);
+    await unpack(tarEntries(bytes), stage, refused);
     await bytes.drain();
   } catch (error) {
     throw new Error(`restoring the archived workspace: ${(error as Error).message}`, { cause: error });
@@ -516,11 +529,17 @@ export async function restoreWorkspace(room: string): Promise<void> {
   const retiring = join(room, "workspace.retiring");
   const old = join(room, "workspace.restored-old");
   for (const live of [retiring, old, workspace]) {
-    if (await isDir(live)) await overlay(live, stage);
+    if (await isDir(live)) await overlay(live, stage, refused);
   }
   if (await exists(old)) await rm(old, { recursive: true });
   if (await exists(workspace)) await rename(workspace, old);
   await rename(stage, workspace);
+  // The links refused on the way, at their final path now: a junction or a copy stands in (a target that is not
+  // there, a dangling link, leaves nothing to stand in for: the link is not restored).
+  for (const [path, target] of refused) {
+    const at = join(workspace, relative(stage, path));
+    if (!(await lstatOrNull(at))) await symlinkOrStandIn(target, at, { junction: true, copy: true });
+  }
   await syncDir(room);
   // Everything is now back at its original path. Any interrupted deletion is harmless on the next restore.
   if (await exists(retiring)) await rm(retiring, { recursive: true });
@@ -534,7 +553,8 @@ export async function restoreWorkspace(room: string): Promise<void> {
 export async function workspaceFile(room: string, relative: string): Promise<Buffer | null> {
   const archive = workspaceArchive(room);
   if (!(await exists(archive))) return null;
-  const wanted = relative.split("/").filter((p) => p !== "" && p !== ".");
+  // The archive's names are `/`-separated; a path from Windows has `\` too.
+  const wanted = segments(relative).filter((p) => p !== "" && p !== ".");
   const stream = unzstd(archive);
   try {
     const bytes = new ByteReader(stream[Symbol.asyncIterator]());
@@ -897,12 +917,12 @@ const execFileP = promisify(execFile);
 /// Archive::unpack with preserve_permissions: entries with `..` skipped, a leading `/` dropped, nothing written through
 /// a symlink out of `dest`; directories made last, deepest first, with their modes; files with their modes and
 /// modification times.
-async function unpack(entries: AsyncGenerator<Entry>, dest: string): Promise<void> {
+async function unpack(entries: AsyncGenerator<Entry>, dest: string, refused: Refused): Promise<void> {
   const root = await realpath(dest);
   const dirs: { path: string; key: string; mode: number }[] = [];
   const inside = async (dir: string) => {
     const real = await realpath(dir);
-    if (real !== root && !real.startsWith(`${root}/`)) throw new Error(`trying to unpack outside of destination path: ${root}`);
+    if (real !== root && !real.startsWith(root.endsWith(sep) ? root : `${root}${sep}`)) throw new Error(`trying to unpack outside of destination path: ${root}`);
   };
   for await (const entry of entries) {
     const parts = entry.parts.filter((p) => p !== "/");
@@ -935,7 +955,9 @@ async function unpack(entries: AsyncGenerator<Entry>, dest: string): Promise<voi
       await utimes(path, mtime, mtime);
       await chmod(path, entry.mode & 0o7777);
     } else if (entry.kind === "symlink") {
-      await replace(() => symlink(entry.linkName!, path));
+      await replace(async () => {
+        if ((await symlinkOrStandIn(entry.linkName!, path, {})) === "refused") refused.set(path, entry.linkName!);
+      });
     } else if (entry.kind === "hardlink") {
       const target = entry.linkName!.split("/").filter((p) => p !== "" && p !== ".");
       if (target.includes("..")) throw new Error(`hard link outside of destination path: ${entry.linkName}`);

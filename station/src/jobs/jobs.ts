@@ -8,16 +8,18 @@
 // Push, not poll: a job this station started is followed by its exit event; one an earlier station started (not its
 // child) by its exit file appearing (a watch on jobs/exit), with a look at its leader once a second for the one end
 // that writes no file (its shell killed) — Node has no exit event for a process that is not its child.
-import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
-  type FSWatcher, appendFileSync, chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readlinkSync, renameSync,
-  rmSync, statSync, symlinkSync, watch, writeFileSync,
+  type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readlinkSync, renameSync, rmSync,
+  statSync, watch,
 } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
 import { niced } from "../ops/nice.ts";
+import { startLasting } from "../ops/processes.ts";
+import { platform } from "../platform/index.ts";
+import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "./group.ts";
@@ -181,9 +183,15 @@ export class Jobs {
     const dir = join(options.data, "jobs");
     this.dir = dir;
     for (const sub of ["logs", "bin", "exit"]) mkdirSync(join(dir, sub), { recursive: true });
+    // Runnable by name from any shell (on Windows from cmd or PowerShell, Codex's shell there, too).
     const script = join(dir, "bin", JOB_COMMAND_NAME);
-    writeFileSync(script, JOB_COMMAND);
-    chmodSync(script, 0o755);
+    try {
+      platform.makeCommand(script, JOB_COMMAND);
+    } catch (error) {
+      // The script is there for a POSIX shell; only another shell's way to it (no Git's sh on Windows) is missing.
+      if (!existsSync(script)) throw error;
+      log.warn("jobs", "no stillfail-job for cmd and PowerShell", { error: String(error) });
+    }
     // The old name, for jobs and agents used to it: a link to the new one (in place of the script it was).
     const former = join(dir, "bin", FORMER_JOB_COMMAND_NAME);
     let linked: string | null = null;
@@ -193,7 +201,8 @@ export class Jobs {
     if (linked !== JOB_COMMAND_NAME) {
       const aside = join(dir, "bin", `.${FORMER_JOB_COMMAND_NAME}.${process.pid}`);
       rmSync(aside, { force: true });
-      symlinkSync(JOB_COMMAND_NAME, aside);
+      // Where links are refused, a copy will do: the script is written afresh at each start.
+      linkSync(JOB_COMMAND_NAME, aside, { copy: true });
       renameSync(aside, former);
     }
     this.scope = Effect.runSync(Scope.make());
@@ -290,10 +299,11 @@ export class Jobs {
 
   /// Runs a job's command, and follows it to its end.
   private spawn(job: JobRow, restarted: boolean): void {
-    const out = openSync(job.log, "a");
+    // Made (or found) here, so a log that cannot be written is said now; the shell opens it itself (below).
+    closeSync(openSync(job.log, "a"));
     const exit = this.exitFile(job.id);
     rmSync(exit, { force: true });
-    const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${join(this.dir, "bin")}:${process.env.PATH ?? ""}` };
+    const env: NodeJS.ProcessEnv = platform.prependPath(process.env, join(this.dir, "bin"));
     // Under both names: scripts written against the old ones go on working.
     for (const prefix of ["STILLFAIL_", "EMBER_"]) {
       env[`${prefix}JOB_ID`] = job.id;
@@ -301,21 +311,16 @@ export class Jobs {
       env[`${prefix}JOB_NOTIFY`] = this.notifyUrl;
     }
     if (job.port !== null) env.PORT = String(job.port);
-    let child: ChildProcess;
-    try {
-      // detached: a session and process group of its own (pgid = its pid), not ended with the station. Lower than the
-      // station (ops/nice.ts): nice runs the shell in its own process, the pid the same.
-      const [command, args] = niced("/bin/sh", ["-c", WRAPPER, JOB_COMMAND_NAME, job.command, exit]);
-      child = spawn(command, args, {
-        cwd: job.cwd, env, stdio: ["ignore", out, out], detached: true,
-      });
-    } finally {
-      closeSync(out);
-    }
+    // A group of its own (detached: pgid = its pid; on Windows the job of the runner it runs under), not ended with the
+    // station. The shell appends to the log itself: Git's sh on Windows cannot write to a file Node opened for
+    // appending (its handle may only append). Lower than the station (ops/nice.ts): nice runs the shell in its own
+    // process, the pid the same.
+    const child = startLasting(...niced(platform.posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log]), {
+      cwd: job.cwd, env, stdio: "ignore",
+    });
     child.on("error", () => {});
     const pgid = child.pid;
     if (pgid === undefined) throw new Error("the job ended before it started");
-    child.unref();
     this.store.recordProcess(pgid, this.store.now(), "job", `job: ${job.name}`);
     this.store.jobStarted(job.id, pgid, restarted);
     const exited = new Promise<number | null>((resolve) => child.once("exit", (code) => resolve(code)));
@@ -528,7 +533,7 @@ export class Jobs {
   clearEnded(session: string): string[] {
     const gone = this.store.clearEndedJobs(session);
     for (const [id, file] of gone) {
-      if (file.startsWith(this.dir + "/")) rmSync(file, { force: true });
+      if (file.startsWith(this.dir + sep)) rmSync(file, { force: true });
       rmSync(this.exitFile(id), { force: true });
     }
     return gone.map(([id]) => id);

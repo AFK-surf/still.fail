@@ -3,6 +3,7 @@
 import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
+import { platform as machine } from "../platform/index.ts";
 
 export { stationVersion } from "../ops/version.ts";
 
@@ -134,7 +135,7 @@ export function downloading(version: string, got: number, total: number | null):
 
 /// This machine as the runtimes name their builds (`darwin-arm64`…).
 export function platform(): string | null {
-  const os = process.platform === "darwin" ? "darwin" : process.platform === "linux" ? "linux" : null;
+  const os = machine.buildOs;
   const arch = process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x64" : null;
   return os && arch ? `${os}-${arch}` : null;
 }

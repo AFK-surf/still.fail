@@ -23,8 +23,9 @@ import { SMALL, dir, idOf, keep, kept, thumbnail, wanted } from "../src/sessions
 import { Store } from "../src/store/store.ts";
 import type { Attachment } from "../src/store/rows.ts";
 import { FakeDriver } from "./hub-fakes.ts";
+import { fileURLToPath } from "node:url";
 
-const fixtures = new URL("./fixtures/thumbs/", import.meta.url).pathname;
+const fixtures = fileURLToPath(new URL("./fixtures/thumbs/", import.meta.url));
 const golden = JSON.parse(readFileSync(join(fixtures, "golden.json"), "utf8")) as Record<
   string,
   { thumbnail: { type: string; sha256: string; bytes: number; width: number; height: number } | null; thumbhash: string | null }
@@ -94,7 +95,7 @@ async function until(_what: string, f: () => boolean) {
 
 test("which files: png, jpg, jpeg and webp, by name", () => {
   assert.deepEqual(["a.PNG", "b.jpg", "c.Jpeg", "d.webp", "e.gif", "f.svg", "png"].map(wanted), [true, true, true, true, false, false, false]);
-  assert.equal(dir("/d"), "/d/thumbs");
+  assert.equal(dir("/d"), join("/d", "thumbs"));
   assert.equal(SMALL, 24 * 1024);
   // The first 16 bytes of the SHA-256 of the path.
   assert.equal(idOf("/w/uploads/a.png"), sha256(Buffer.from("/w/uploads/a.png")).slice(0, 32));

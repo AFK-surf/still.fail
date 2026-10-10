@@ -1,5 +1,5 @@
 #!/bin/sh
-# scripts/release.sh --beta in CI (.github/workflows/pipeline.yml): the test channel's station release (its three
+# scripts/release.sh --beta in CI (.github/workflows/pipeline.yml): the test channel's station release (its four
 # platforms) or test app (android), uploaded to the releases bucket. What it needs comes from the environment's secrets
 # and is removed after: POSTHOG_JSON (the key the station and the Android app report errors with), ANDROID_DEBUG_KEYSTORE_B64 (the key
 # every Android release is signed with: studio's ~/.android/debug.keystore; another would stop installed apps updating),
@@ -19,7 +19,7 @@ if [ -n "${POSTHOG_JSON:-}" ]; then (umask 077 && printf '%s' "$POSTHOG_JSON" > 
 case "${1:?usage: release.sh station|android}" in
   station)
     # The station in TypeScript, bundled for each platform (scripts/station-bundle.sh) with its native parts prebuilt:
-    # the natives job before this one built and published those of this commit (all three platforms).
+    # the natives job before this one built and published those of this commit (all four platforms).
     (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
     # The native parts signed with the desktop app's certificate (.github/sign-station.sh): macOS keeps the launcher's
     # Local Network grant across releases. Without the certificate, a warning and ad hoc parts.

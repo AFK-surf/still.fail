@@ -19,6 +19,7 @@ import { Jobs, notifyEndpoint, readExit, restartPause, shown, tail, watching } f
 import { agentNice } from "../src/ops/nice.ts";
 import { jobTools } from "../src/tools/jobs.ts";
 import { Store } from "../src/store/store.ts";
+import { WINDOWS, platform } from "../src/platform/index.ts";
 
 const dirs: string[] = [];
 const all: Jobs[] = [];
@@ -114,11 +115,14 @@ function testClock() {
 }
 
 /// A fifo a job's command waits at (`cat` it) until the test opens it.
-function gate(dir: string): { path: string; open: () => Promise<void> } {
+/// What a job's command waits at (`wait`, shell) until the test lets it go on (`open`): a fifo; on Windows, which has
+/// none for sh, a file looked for until it is there.
+function gate(dir: string): { wait: string; open: () => Promise<void> } {
   const path = join(dir, `gate-${Math.random().toString(36).slice(2)}`);
+  if (WINDOWS) return { wait: `until [ -e '${path}' ]; do sleep 0.05; done`, open: () => writeFile(path, "go") };
   execFileSync("mkfifo", [path]);
   // Off the main thread: opening a fifo to write waits for its reader.
-  return { path, open: () => writeFile(path, "go") };
+  return { wait: `cat '${path}' >/dev/null`, open: () => writeFile(path, "go") };
 }
 
 /// The same store, and the same jobs directory, as a restarted station has.
@@ -184,7 +188,8 @@ describe("jobs", { concurrency: true }, () => {
     const bin = join(r.dir, "jobs", "bin");
     jobsOn(r.dir, r.store, [], () => null);
     assert.equal(readlinkSync(join(bin, "ember-job")), "stillfail-job");
-    assert.equal(readdirSync(bin).length, 2);
+    // On Windows, stillfail-job.cmd beside them (for cmd and PowerShell).
+    assert.equal(readdirSync(bin).length, WINDOWS ? 3 : 2);
   });
 
   test("the job command reads the old variables of a job started before the rename", async () => {
@@ -203,10 +208,16 @@ describe("jobs", { concurrency: true }, () => {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const notify = `http://127.0.0.1:${(server.address() as AddressInfo).port}/jobs/notify`;
     try {
-      const out = spawn(join(bin, "ember-job"), ["notify", "hi"], {
-        env: { EMBER_JOB_TOKEN: "t0k", EMBER_JOB_NOTIFY: notify, PATH: `${bin}:/usr/bin:/bin` },
-        stdio: ["ignore", "ignore", "pipe"],
-      });
+      // Windows runs no script by its #!: Git's sh runs it, with Windows' own PATH (curl is System32's or Git's).
+      const out = WINDOWS
+        ? spawn(platform.posixShell(), [join(bin, "ember-job"), "notify", "hi"], {
+            env: { ...platform.prependPath(process.env, bin), EMBER_JOB_TOKEN: "t0k", EMBER_JOB_NOTIFY: notify },
+            stdio: ["ignore", "ignore", "pipe"],
+          })
+        : spawn(join(bin, "ember-job"), ["notify", "hi"], {
+            env: { EMBER_JOB_TOKEN: "t0k", EMBER_JOB_NOTIFY: notify, PATH: `${bin}:/usr/bin:/bin` },
+            stdio: ["ignore", "ignore", "pipe"],
+          });
       let said = "";
       out.stderr.on("data", (chunk) => (said += chunk));
       const code = await new Promise((resolve) => out.on("close", resolve));
@@ -287,7 +298,7 @@ describe("jobs", { concurrency: true }, () => {
   test("a job goes on through a restart of the station and is followed to its end", async () => {
     const before = new Rig();
     const go = gate(before.dir);
-    const job = before.jobs.start("s1", "build", `cat '${go.path}' >/dev/null; echo built; exit 4`, before.work, null, false);
+    const job = before.jobs.start("s1", "build", `${go.wait}; echo built; exit 4`, before.work, null, false);
     await before.jobs.shutdown();
     const pgid = before.store.getJob(job.id)!.pgid!;
     assert.ok(groupAlive(pgid), "the station stopping does not stop it");
@@ -307,7 +318,7 @@ describe("jobs", { concurrency: true }, () => {
   test("a job that ended while no station ran is told as ended, not run again", async () => {
     const before = new Rig();
     const go = gate(before.dir);
-    const job = before.jobs.start("s1", "quick", `cat '${go.path}' >/dev/null; exit 5`, before.work, null, false);
+    const job = before.jobs.start("s1", "quick", `${go.wait}; exit 5`, before.work, null, false);
     await before.jobs.shutdown();
     await go.open();
     const pgid = before.store.getJob(job.id)!.pgid!;

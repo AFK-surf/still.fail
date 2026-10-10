@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src/agents/codex.ts";
@@ -14,12 +15,12 @@ import { existingRunners } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
-process.env.PATH = `${fake}:${process.env.PATH}`;
+process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
 // Inherited, and not to reach the agent.
 process.env.OPENAI_API_KEY = "leaked";
 process.env.CODEX_HOME = "/nowhere";
 // Short: the runners' sockets live under it (104 bytes at most on macOS).
-const data = mkdtempSync("/tmp/cx-");
+const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "cx-") : "/tmp/cx-");
 const skills = join(data, "skills");
 mkdirSync(join(skills, "mine"), { recursive: true });
 writeFileSync(join(skills, "mine", "SKILL.md"), "");
@@ -34,7 +35,7 @@ async function eventually(done: () => boolean) {
 /// The fifos a `gate:<n>:<k>:<name>` turn waits at (test/fake/codex.mjs): `open(part)` lets it go on.
 function gates(dump: string, name: string) {
   const at = `${dump}.${name}`;
-  for (const part of ["a", "b"]) execFileSync("/usr/bin/mkfifo", [`${at}.${part}`]);
+  if (process.platform !== "win32") for (const part of ["a", "b"]) execFileSync("/usr/bin/mkfifo", [`${at}.${part}`]);
   return { open: (part: "a" | "b") => writeFile(`${at}.${part}`, "go"), said: () => existsSync(`${at}.said`) };
 }
 const drivers: CodexDriver[] = [];

@@ -19,6 +19,7 @@ import { langOfCore } from "../api/request.ts";
 import { wall } from "../ops/fibers.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
+import { platform } from "../platform/index.ts";
 import type { Viewer } from "./credential.ts";
 import type { Connection, Stream } from "./native.ts";
 import { Reader, writeLine } from "./serve.ts";
@@ -481,10 +482,16 @@ async function grant(shares: Shares, share: Share, lang: Lang): Promise<string> 
 /// short `PATH`).
 export function adbPath(): string | null {
   const env = process.env;
+  // adb.exe on Windows, and the SDK where Android Studio puts it there (%LOCALAPPDATA%\Android\Sdk).
+  const adb = platform.exe("adb");
+  // On PATH as a shell finds it (on Windows, with PATHEXT's extensions).
+  const onPath = platform.findCommand("adb", env)?.onPath;
   const candidates = [
-    ...(env.PATH ?? "").split(delimiter).filter(Boolean).map((d) => join(d, "adb")),
-    ...[env.ANDROID_HOME, env.ANDROID_SDK_ROOT].filter((d): d is string => !!d).map((d) => join(d, "platform-tools/adb")),
+    ...(onPath ? [onPath] : []),
+    ...(env.PATH ?? "").split(delimiter).filter(Boolean).map((d) => join(d, adb)),
+    ...[env.ANDROID_HOME, env.ANDROID_SDK_ROOT].filter((d): d is string => !!d).map((d) => join(d, "platform-tools", adb)),
     ...(env.HOME ? [join(env.HOME, "Library/Android/sdk/platform-tools/adb"), join(env.HOME, "Android/Sdk/platform-tools/adb")] : []),
+    ...(env.LOCALAPPDATA ? [join(env.LOCALAPPDATA, "Android", "Sdk", "platform-tools", adb)] : []),
     "/opt/homebrew/bin/adb",
     "/usr/local/bin/adb",
     "/usr/bin/adb",
@@ -496,7 +503,9 @@ export function adbPath(): string | null {
 /// started or did not answer in time.
 export function run(adb: string, args: string[], timeout: number | null): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(adb, args, { stdio: ["ignore", "pipe", "pipe"] });
+    // A .cmd (a shim) runs through its script or cmd: Node starts none by itself.
+    const r = platform.runnable(adb, args, process.env);
+    const child = spawn(r.file, r.args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, windowsVerbatimArguments: r.windowsVerbatimArguments });
     const out: Buffer[] = [];
     const err: Buffer[] = [];
     child.stdout.on("data", (b) => out.push(b));

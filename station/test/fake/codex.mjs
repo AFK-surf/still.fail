@@ -19,8 +19,12 @@ const say = (msg) => fs.writeSync(1, JSON.stringify(msg) + "\n");
 const notify = (method, params) => say({ method, params });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/// Waits until the fifo at `path` is written (and closed).
-const gate = (path) => fs.promises.readFile(path);
+/// Waits until the fifo at `path` is written (and closed). Windows has no fifos: there the test writes a file at
+/// `path`, looked for until it is there.
+const gate = async (path) => {
+  while (process.platform === "win32" && !fs.existsSync(path)) await new Promise((r) => setTimeout(r, 10));
+  return fs.promises.readFile(path);
+};
 /// What wakes a thread's turn waiting for a steer or an interrupt, by thread id.
 const wakes = new Map();
 /// What wakes a turn waiting for the client's answer, by request id.

@@ -34,8 +34,9 @@ import {
 } from "node:fs";
 import { homedir, hostname, platform as osPlatform, arch as osArch, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "..");
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /// The Rust every part is built with (rustup installs it on first use): part of each key, so a newer one is a rebuild.
 const TOOLCHAIN = "1.95.0";
 /// The NDK and the lowest Android API the app supports (apps/android/build.py has the same).
@@ -83,20 +84,24 @@ function fail(message: string): never {
   throw new Error(message);
 }
 const STATION: Target[] = ["darwin-arm64", "linux-x64", "linux-arm64"];
+/// The station's own executables: Windows' too (docs/station-ts-native.md, "Windows"), named as it names them.
+const STATION_BINS: Target[] = [...STATION, "win32-x64"];
+const exe = (name: string) => (t: Target) => (t === "win32-x64" ? `${name}.exe` : name);
 
 /// A Rust crate of its own (station/native/*), for a station platform: Linux from a Mac with cargo-zigbuild, for
-/// glibc 2.28 and later (Debian 10, Ubuntu 20.04, RHEL 8 on); Windows (the desktop app's mesh only) with it too, as
-/// MinGW's (napi-rs finds Node's symbols in the process at run time, so no MSVC import library is needed).
-function stationCrate(dir: string, artifact: (t: Target) => string, name: string, extra: string[] = []): Part {
+/// glibc 2.28 and later (Debian 10, Ubuntu 20.04, RHEL 8 on); Windows with it too, as MinGW's (napi-rs finds Node's
+/// symbols in the process at run time, so no MSVC import library is needed). `name`: the file kept, by target.
+function stationCrate(dir: string, artifact: (t: Target) => string, name: string | ((t: Target) => string), extra: string[] = []): Part {
+  const named = (t: Target) => (typeof name === "string" ? name : name(t));
   return {
-    files: () => [name],
+    files: (t) => [named(t)],
     targets: STATION,
     inputs: [dir, ...extra],
-    recipe: (t) => ({ cargo: cargoCommand(t), artifact: artifact(t), name }),
+    recipe: (t) => ({ cargo: cargoCommand(t), artifact: artifact(t), name: named(t) }),
     build(t, out) {
       const target = targetDir(join(ROOT, dir, "target"), basename(dir));
       cargo(cargoCommand(t), join(ROOT, dir), { CARGO_TARGET_DIR: target, ...(t === "win32-x64" ? noLibnode(target) : {}) });
-      copyFileSync(join(target, TRIPLE(t), "release", artifact(t)), join(out, name));
+      copyFileSync(join(target, TRIPLE(t), "release", artifact(t)), join(out, named(t)));
     },
   };
 }
@@ -115,19 +120,35 @@ const cargoCommand = (t: Target, more: string[] = []) =>
     ? ["build", "--release", "--locked", ...more, "--target", TRIPLE(t)]
     : ["zigbuild", "--release", "--locked", ...more, "--target", t === "win32-x64" ? TRIPLE(t) : `${TRIPLE(t)}.2.28`];
 
+/// The launcher's part: Windows' has its windowless start beside it (station/native/launcher/src/hidden.rs).
+function withHidden(part: Part): Part {
+  const hidden = "stillfail-station-w.exe";
+  return {
+    ...part,
+    targets: STATION_BINS,
+    env: "STILLFAIL_LAUNCHER",
+    files: (t) => (t === "win32-x64" ? [...part.files(t), hidden] : part.files(t)),
+    build(t, out) {
+      part.build(t, out);
+      if (t === "win32-x64") copyFileSync(join(targetDir(join(ROOT, "station/native/launcher/target"), "launcher"), TRIPLE(t), "release", hidden), join(out, hidden));
+    },
+  };
+}
+
 const MESH_LIB = (t: Target) => (t === "darwin-arm64" ? "libstillfail_mesh.dylib" : t === "win32-x64" ? "stillfail_mesh.dll" : "libstillfail_mesh.so");
 
 const PARTS: Record<string, Part> = {
   // The station's iroh and image codecs, a Node addon (docs/station-ts-native.md §3); the desktop's core uses it too.
   mesh: {
     ...stationCrate("station/native/mesh", MESH_LIB, "mesh.node", VENDORED),
-    // Windows for the desktop app's core only: the station does not run there yet.
-    targets: [...STATION, "win32-x64"],
+    // Windows for the desktop app's core and the station there.
+    targets: STATION_BINS,
     env: "STILLFAIL_MESH_NATIVE",
   },
   // The TypeScript station's launcher (§2) and an agent's runner (§1).
-  launcher: { ...stationCrate("station/native/launcher", () => "stillfail-station", "stillfail-station"), env: "STILLFAIL_LAUNCHER" },
-  runner: { ...stationCrate("station/native/runner", () => "stillfail-runner", "stillfail-runner"), env: "STILLFAIL_RUNNER" },
+  // On Windows with stillfail-station-w.exe beside it: the launcher as the logon task runs it, with no window.
+  launcher: withHidden(stationCrate("station/native/launcher", exe("stillfail-station"), exe("stillfail-station"))),
+  runner: { ...stationCrate("station/native/runner", exe("stillfail-runner"), exe("stillfail-runner")), targets: STATION_BINS, env: "STILLFAIL_RUNNER" },
   // For the station's tests: the Rust station's cold storage as a command (test/cold-compat.test.ts), and a member's
   // client asking a station over iroh (tools/load: test/e2e.sh, compare.sh). This machine's only.
   "archive-rs": {

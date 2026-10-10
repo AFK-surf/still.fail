@@ -7,14 +7,14 @@ import { join } from "node:path";
 import { deviceCode, LoginManager, type LoginState, stripAnsi } from "../src/accounts/login.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
 import { linkCodexAuth } from "../src/agents/machine-logins.ts";
-import { approval, fakeLogin, idToken, machine, script, temp, upon } from "./accounts-fakes.ts";
+import { approval, exe, fakeLogin, idToken, machine, sameAs, script, temp, upon } from "./accounts-fakes.ts";
 
 test("a subscription sign-in relays the link, the code and the result", async () => {
   const dir = temp("login");
   const fake = join(dir, "fake-login");
   const approved = approval(dir);
   script(fake, fakeLogin(approved.path));
-  const logins = new LoginManager(dir, { claude: fake, codex: fake });
+  const logins = new LoginManager(dir, { claude: exe(fake), codex: exe(fake) });
   const heard: string[] = [];
   logins.changes((id) => heard.push(id));
   const wait = (profile: string, state: LoginState) =>
@@ -68,7 +68,7 @@ test("the machine's own logins are read from the machine's own homes", async () 
   const m = machine({
     // Only answers for the machine's own home: no CLAUDE_CONFIG_DIR may reach it.
     claude: `[ -n "$CLAUDE_CONFIG_DIR" ] && exit 3; echo '{"loggedIn":true,"authMethod":"claude.ai","email":"a@x.com","subscriptionType":"max"}'`,
-    codex: `[ "$CODEX_HOME" = "$HOME/.codex" ] || exit 3; echo "Logged in using ChatGPT"`,
+    codex: `${sameAs("CODEX_HOME", ".codex")} || exit 3; echo "Logged in using ChatGPT"`,
   });
   mkdirSync(join(m.home, ".codex"));
   mkdirSync(join(m.home, ".claude"));

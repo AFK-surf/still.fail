@@ -4,7 +4,7 @@
 // station using 3% of one, and a list it read in 50 ms took a second and more. What the agents do is as fast as
 // before while the machine has room; their children (a build a runtime starts) are as low as they are.
 
-import { existsSync } from "node:fs";
+import { platform } from "../platform/index.ts";
 
 /// How much lower than the station: STILLFAIL_AGENT_NICE (0: as the station), else 10.
 export function agentNice(): number {
@@ -12,9 +12,8 @@ export function agentNice(): number {
   return Number.isInteger(asked) && asked >= 0 && asked <= 19 ? asked : 10;
 }
 
-/// `command` with `args` as it is started lower (nice), where the system can (not on Windows, nor without nice).
+/// `command` with `args` as it is started lower (nice), where the system can (platform.lowered: not on Windows, nor
+/// without nice).
 export function niced(command: string, args: string[]): [string, string[]] {
-  const nice = agentNice();
-  if (process.platform === "win32" || nice === 0 || !existsSync("/usr/bin/nice")) return [command, args];
-  return ["/usr/bin/nice", ["-n", String(nice), command, ...args]];
+  return platform.lowered(command, args, agentNice());
 }

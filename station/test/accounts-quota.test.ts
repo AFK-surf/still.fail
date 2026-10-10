@@ -121,7 +121,7 @@ describe("allowances and renewing", { concurrency: true }, () => {
     assert.equal(stored.claudeAiOauth.refreshToken, "refresh-new");
     assert.equal(stored.claudeAiOauth.subscriptionType, "max");
     assert.equal(stored.otherCredential.keep, true);
-    assert.equal(statSync(path).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(statSync(path).mode & 0o777, 0o600);
     assert.ok(!existsSync(join(home, ".oauth_refresh.lock")));
     await p.close();
   });

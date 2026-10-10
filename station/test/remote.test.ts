@@ -110,6 +110,14 @@ describe("remote", { concurrency: true }, () => {
     assert.equal(filePath(dir, "a/./b", false), join(dir, "a", "b"), "a . inside is no component, as Path::components has it");
   });
 
+  test("on Windows a backslash separates too, and a drive, a share or a stream is not relative", { skip: process.platform !== "win32" && "Windows only" }, () => {
+    const dir = tempdir();
+    for (const path of ["..\\outside.txt", "a\\..\\..\\secret", ".\\a", "C:\\Windows\\win.ini", "C:secret", "\\\\server\\share\\x", "\\x", "file:stream"]) {
+      assert.throws(() => filePath(dir, path, true), Error, path);
+    }
+    assert.equal(filePath(dir, "nested\\file", false), join(dir, "nested", "file"));
+  });
+
   // ── task_tests ──
 
   const call = (s: Station, peer: string, method: string, more: Json = {}) => s.remote.handle("ws", peer, { session: "s", key: "build-1", method, ...more });

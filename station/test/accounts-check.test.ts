@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { checkProfile, URLS } from "../src/accounts/profiles.ts";
 import { hubConfig } from "../src/sessions/config.ts";
 import { byDecisionPriority, discover, resolvedModel } from "../src/sessions/decision.ts";
-import { machine, provider, temp } from "./accounts-fakes.ts";
+import { machine, provider, sameAs, temp } from "./accounts-fakes.ts";
 
 const base = { runtime: "claude" as const, key: "k", via: {}, home: "/nonexistent-check-test", env: {}, machine: false, lang: "zh" as const };
 
@@ -45,8 +45,8 @@ test("a key is tried where its provider says whether it works", async () => {
 
 test("a subscription is checked by its runtime's own status command, in the profile's home", async () => {
   const m = machine({
-    claude: `[ "$CLAUDE_CONFIG_DIR" = "$HOME/profile" ] || exit 3; echo '{"loggedIn":true,"email":"a@x.com","subscriptionType":"max"}'`,
-    codex: `[ "$CODEX_HOME" = "$HOME/cx" ] || exit 3; echo "Not logged in"; exit 1`,
+    claude: `${sameAs("CLAUDE_CONFIG_DIR", "profile")} || exit 3; echo '{"loggedIn":true,"email":"a@x.com","subscriptionType":"max"}'`,
+    codex: `${sameAs("CODEX_HOME", "cx")} || exit 3; echo "Not logged in"; exit 1`,
   });
   const home = join(m.home, "profile");
   mkdirSync(home);

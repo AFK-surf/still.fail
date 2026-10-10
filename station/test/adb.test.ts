@@ -15,7 +15,7 @@ import { GRACE, PORTS, SETTLE, Shares, answerAdb, bind, isPackage, text } from "
 import type { Viewer } from "../src/mesh/credential.ts";
 import type { Connection, Stream } from "../src/mesh/native.ts";
 import { Reader, writeLine } from "../src/mesh/serve.ts";
-import { script } from "./accounts-fakes.ts";
+import { exe, script } from "./accounts-fakes.ts";
 
 const FAKE = fileURLToPath(new URL("./fake", import.meta.url));
 process.env.PATH = `${FAKE}${delimiter}${process.env.PATH ?? ""}`;
@@ -42,7 +42,7 @@ function fakeAdb(files: Record<string, string> = {}) {
       return [];
     }
   };
-  return { path, calls: () => lines("calls").map((l) => JSON.parse(l) as string[]), dialed: () => lines("dialed") };
+  return { path: exe(path), calls: () => lines("calls").map((l) => JSON.parse(l) as string[]), dialed: () => lines("dialed") };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

@@ -5,6 +5,7 @@
 //   tool answers once it is recorded: a turn's end comes after the tool's answer, so nothing a tool said is lost.
 // Its process is a runner's (src/agents/runner.ts): this actor can go (a station stopping or handing over) and the
 // next take it up (`snapshot` / `adopt`), its turn going on all along.
+import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
 import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
@@ -598,7 +599,7 @@ export class SessionActor {
       // What changed in how it works since it was last told (migrations): once, before what it is handed.
       const told = store.toldNotes(this.key) ?? latestNote();
       if (told < latestNote()) {
-        const full = row ? `${row.workspace}/.stillfail-instructions.md` : "";
+        const full = row ? join(row.workspace, ".stillfail-instructions.md") : "";
         if (row) {
           const { writeFileSync } = await import("node:fs");
           try {

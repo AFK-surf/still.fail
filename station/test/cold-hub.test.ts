@@ -53,13 +53,15 @@ test("archiving a session compresses owned history and restores it before resumi
   const transcript = transcriptOf(r, key, '{"type":"user","message":{"content":"history"}}\n');
   const workspace = r.session(key).workspace;
   writeFileSync(join(workspace, "uncommitted.txt"), "keep this");
+  // A key is no file name on Windows (its `:`): no station there ever left this legacy copy.
+  const legacy = process.platform !== "win32";
   const copy = join(r.store.archiveDir(), "transcripts", `${key}.jsonl.zst`);
-  writeCompressed(copy, "old redundant copy");
+  if (legacy) writeCompressed(copy, "old redundant copy");
   await archive(r.hub, key, true);
   await finishArchive(r, key);
   assert.ok(!existsSync(transcript), "compression replaces the original rather than adding another copy");
   assert.ok(existsSync(packed(transcript)));
-  assert.ok(!existsSync(copy), "legacy redundant copy removed only after successful compression");
+  if (legacy) assert.ok(!existsSync(copy), "legacy redundant copy removed only after successful compression");
   assert.equal(new TranscriptTail("claude", transcript).read()[1][0]!.text, "history");
   assert.ok(!existsSync(join(workspace, "uncommitted.txt")));
   assert.ok(existsSync(workspaceArchive(dirname(workspace))));

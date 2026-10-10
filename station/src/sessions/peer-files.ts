@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { closeSync, constants, copyFileSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
+import { anyBaseName, clean, samePath } from "../ops/paths.ts";
 import { iso } from "../read/transcript.ts";
 import type { Attachment } from "../store/store.ts";
 import { CHUNK, hash } from "../jobs/remote.ts";
@@ -34,17 +35,6 @@ const MAX_SENT = 50 * 1024 * 1024;
 const STAGED_MS = 24 * 3600 * 1000;
 
 const IMAGES = [".png", ".jpg", ".jpeg", ".gif", ".webp"];
-
-/// A path absolute, with `.` and `..` worked out (no link followed).
-function clean(path: string): string {
-  const out: string[] = [];
-  for (const part of path.split("/")) {
-    if (part === "" || part === ".") continue;
-    if (part === "..") out.pop();
-    else out.push(part);
-  }
-  return `/${out.join("/")}`;
-}
 
 /// A name as a file in uploads is named: stamped, nothing that leaves the directory.
 function uploadName(hub: Hub, name: string): string {
@@ -77,7 +67,7 @@ export async function fileForPeer(hub: Hub, request: Json): Promise<Json> {
   const sessions = what.type === "session" ? [what.key] : hub.store.threadSessions(what.thread.id).map((m) => m.session);
   const path = clean(given);
   const base = basename(path);
-  const row = sessions.map((k) => hub.store.getSession(k)).find((s) => s !== null && clean(join(s.workspace, "uploads")) === dirname(path));
+  const row = sessions.map((k) => hub.store.getSession(k)).find((s) => s !== null && samePath(clean(join(s.workspace, "uploads")), dirname(path)));
   if (!row || base === "" || base === "." || base === "..") throw new Error(`${given} is not a file of that chat`);
   if (existsSync(path)) {
     const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -136,7 +126,8 @@ export async function fetchAttachments(hub: Hub, key: string, call: Call, statio
     if (seen.has(file.path)) continue;
     seen.add(file.path);
     const asked = wanted.includes(file.path);
-    const local = join(dir, basename(clean(file.path)));
+    // Another station's path, Unix's or Windows'.
+    const local = join(dir, anyBaseName(file.path));
     if (existsSync(local) && statSync(local).size === file.size) {
       here.set(file.path, local);
       continue;
@@ -157,7 +148,7 @@ export async function fetchAttachments(hub: Hub, key: string, call: Call, statio
   for (const path of wanted) {
     if (seen.has(path)) continue;
     seen.add(path);
-    const local = join(dir, basename(clean(path)));
+    const local = join(dir, anyBaseName(path));
     try {
       if (!existsSync(local)) await download(call, station, chat, path, local);
       here.set(path, local);

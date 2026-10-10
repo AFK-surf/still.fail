@@ -14,6 +14,7 @@ import { codexHome, type Env, readClaudeCredentials } from "../agents/machine-lo
 import { liveClock } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import type { ProfileQuota } from "./profiles.ts";
+import { platform } from "../platform/index.ts";
 
 type Json = any;
 
@@ -113,7 +114,8 @@ const CLAUDE_DROP = ["CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_T
 /// What a command said, and how it ended: undefined when it could not be run at all (not installed).
 function run(command: string, args: string[], env: Env): Promise<{ ok: boolean; stdout: string; stderr: string } | undefined | Error> {
   return new Promise((resolve) => {
-    execFile(command, args, { env: env as NodeJS.ProcessEnv, timeout: 20_000, killSignal: "SIGKILL" }, (error, stdout, stderr) => {
+    const r = platform.runnable(command, args, env as NodeJS.ProcessEnv);
+    execFile(r.file, r.args, { env: env as NodeJS.ProcessEnv, timeout: 20_000, killSignal: "SIGKILL", windowsVerbatimArguments: r.windowsVerbatimArguments }, (error, stdout, stderr) => {
       if (error && (error as NodeJS.ErrnoException).code === "ENOENT") return resolve(undefined);
       if (error && error.killed) return resolve(new Error(`${command} took too long`));
       resolve({ ok: !error, stdout: String(stdout), stderr: String(stderr) });

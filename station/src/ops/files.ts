@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { tr, type Lang } from "./i18n.ts";
 import { wall } from "./fibers.ts";
+import { platform } from "../platform/index.ts";
 
 /// The data directory: `--data`, else $STILLFAIL_DATA, else $EMBER_DATA (before the rename), else ~/.stillfail.
 export function dataDir(args: string[]): string {
@@ -53,7 +54,7 @@ export function unreadableDir(dir: string): boolean {
 /// The desktop app runs its station with --with-parent and is the one macOS asks about; an installed station is its
 /// stillfail-station.
 export function unreadableDirMessage(lang: Lang, dir: string, argv = process.argv): string {
-  if (process.platform !== "darwin") return tr(lang, "station.session.cwdDenied", { cwd: dir });
+  if (!platform.hasFolderPermissions) return tr(lang, "station.session.cwdDenied", { cwd: dir });
   const app = flag(argv, "--app");
   const program = argv.includes("--with-parent") || !app ? "still.fail" : join(app, "mesh", "target", "release", "stillfail-station");
   return tr(lang, "station.session.cwdDeniedMac", { cwd: dir, program });
