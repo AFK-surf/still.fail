@@ -95,6 +95,7 @@ export const segmentedThumb = style({
   },
 });
 export const segmentedOption = style({
+  display: "grid", placeItems: "center",
   height: "30px", padding: "0 12px", border: "0", borderRadius: "999px", background: "transparent", color: vars.muted,
   whiteSpace: "nowrap",
   fontSize: vars.textUi, cursor: "pointer", transition: `color ${vars.dur} ${vars.easeOut}`,
@@ -103,6 +104,10 @@ export const segmentedOption = style({
     "&[data-state=\"on\"]": { color: vars.text, fontWeight: "500" },
   },
 });
+/** The label, and under it the same in the chosen weight, unseen: an option is as wide unchosen as chosen, so the
+ * columns (as wide as the widest) do not change width when the choice does. */
+export const segmentedLabel = style({ gridArea: "1 / 1" });
+export const segmentedSizer = style({ gridArea: "1 / 1", fontWeight: "500", visibility: "hidden" });
 export const switch_ = style({
   position: "relative", flex: "none", width: "36px", height: "22px", padding: "0", border: "0", borderRadius: "999px",
   background: vars.lineStrong, cursor: "pointer", transition: `background ${vars.dur} ${vars.easeOut}`,
