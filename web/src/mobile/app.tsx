@@ -368,6 +368,7 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
   // at, not by laying it out anew each frame (frosted glass and all): the finger taking it, it is laid out as tall as
   // it may go; come to rest, as tall as it is.
   const laid = useRef(0);
+  const resizing = useRef(false);
   const rest = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lay = (to: number) => {
     const el = sheet.current;
@@ -379,7 +380,7 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
   height.current ??= follower(0, (v) => {
     const el = sheet.current;
     if (!el) return;
-    if (v > laid.current + 0.5) lay(v);
+    if (resizing.current || v > laid.current + 0.5) lay(v);
     el.style.translate = laid.current - v > 0.5 ? `0 ${laid.current - v}px` : "";
     atRest();
   });
@@ -391,6 +392,7 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
       if (!el || el.hasAttribute("data-dragging") || height.current?.moving) return;
       lay(height.current!.value);
       el.style.translate = "";
+      resizing.current = false;
     }, 120);
   }
   useEffect(() => () => { height.current?.stop(); clearTimeout(rest.current); }, []);
@@ -436,9 +438,12 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
   const grab = (y: number) => {
     from.current = { y, h: h(), moved: false };
     trail.current = [{ y, t: performance.now() }];
+    // Making a scrolled body's viewport taller can clamp its scrollTop before the finger has even moved. Keep
+    // resizing that sheet as it moves, so taking hold cannot jump the reader to a different part of the list.
+    resizing.current = !!sheet.current && [...sheet.current.querySelectorAll("*")].some((el) => el.scrollTop > 0);
     // Laid out once as tall as the finger can take it; moved within that from here.
     const most = shown.draggable ? total() * 0.94 : Math.max(h(), shown.height * total());
-    if (most > laid.current + 0.5) { lay(most); if (sheet.current) sheet.current.style.translate = `0 ${most - h()}px`; }
+    if (!resizing.current && most > laid.current + 0.5) { lay(most); if (sheet.current) sheet.current.style.translate = `0 ${most - h()}px`; }
     setDragging(true);
   };
   const drag: Drag = {
@@ -584,4 +589,3 @@ function ReaderHost({ spec, close }: { spec: ReaderSpec | null; close: () => voi
     </div>
   );
 }
-
