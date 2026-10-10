@@ -7,7 +7,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
 import { enroll, id, status } from "./cli.ts";
@@ -24,12 +23,14 @@ import { version } from "./ops/version.ts";
 import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Key, MeshNative, Paths, Readers, Store, Up } from "./services.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
+import { platform } from "./platform/index.ts";
 
 // Run by the desktop app on its own Electron as Node (apps/desktop/src/station.ts): what this starts (agents, jobs,
 // their tools, the next station at a handover through the launcher, which keeps its own) is not told to be Node too.
 delete process.env.ELECTRON_RUN_AS_NODE;
-// Windows names the user's home USERPROFILE; what reads HOME (the machine's logins, its transcripts) finds it there too.
-if (process.platform === "win32" && !process.env.HOME) process.env.HOME = homedir();
+// What reads HOME (the machine's logins, its transcripts) finds the user's home there, where the machine names it
+// otherwise (Windows: USERPROFILE).
+if (!process.env.HOME && platform.home(process.env)) process.env.HOME = platform.home(process.env);
 
 const args = process.argv.slice(2);
 const data = dataDir(args);

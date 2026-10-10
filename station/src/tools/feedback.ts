@@ -5,6 +5,7 @@
 import { createHash } from "node:crypto";
 import type { SessionRow, Store } from "../store/store.ts";
 import type { Tool } from "./mcp.ts";
+import { platform } from "../platform/index.ts";
 
 type Json = any;
 
@@ -62,7 +63,6 @@ export const FEEDBACK_SEND = {
 const AREAS = ["station", "web", "android", "desktop", "slack", "cloud", "unknown"];
 
 /// std::env::consts as Rust names them.
-const OS: Record<string, string> = { darwin: "macos", linux: "linux", win32: "windows" };
 const ARCH: Record<string, string> = { arm64: "aarch64", x64: "x86_64" };
 
 /// The report still.fail cloud is sent: the agent's words, and what the station adds of the session. `key` is the same
@@ -78,7 +78,7 @@ export function report(session: SessionRow, args: Record<string, Json>, link: st
     connect: session.connect,
     runtime: session.runtime,
     profile: session.profile,
-    os: OS[process.platform] ?? process.platform,
+    os: platform.os,
     arch: ARCH[process.arch] ?? process.arch,
   };
   for (const [name, value] of [["model", session.model], ["thread", text("to") === "" ? null : text("to")], ["link", link]] as const) {

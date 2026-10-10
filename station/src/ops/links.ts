@@ -4,13 +4,12 @@
 import { copyFileSync, statSync, symlinkSync } from "node:fs";
 import { copyFile, stat, symlink } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-
-const WINDOWS = process.platform === "win32";
+import { platform } from "../platform/index.ts";
 
 type MakeSync = (target: string, path: string, type?: "dir" | "file" | "junction") => void;
 type Make = (target: string, path: string, type?: "dir" | "file" | "junction") => Promise<void>;
 
-const refused = (error: unknown) => WINDOWS && (error as NodeJS.ErrnoException).code === "EPERM";
+const refused = (error: unknown) => platform.linkRefused(error);
 
 /// `path` linked to `target` (relative to `path`'s directory, as a link's is), or what stands in for a link. False when
 /// the link was refused and its target is not there to stand in for (yet).

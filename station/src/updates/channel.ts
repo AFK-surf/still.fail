@@ -15,6 +15,7 @@ import { flag } from "../ops/files.ts";
 import { stationLang, tr } from "../ops/i18n.ts";
 import { CHANNEL_ANSWER, CHANNEL_ASK, writeWhole } from "./updates.ts";
 import { type Channel, channelOf, channelOfId } from "./versions.ts";
+import { platform } from "../platform/index.ts";
 
 const configPath = (data: string) => process.env.STILLFAIL_CONFIG || process.env.EMBER_CONFIG || join(data, "config.json");
 
@@ -58,9 +59,9 @@ export async function setChannel(data: string, channel: Channel, waitMs: number,
     said = JSON.parse(readFileSync(join(run, "station.json"), "utf8"));
   } catch {}
   const pid = Number.isSafeInteger(said?.pid) && said.pid > 0 ? (said.pid as number) : null;
-  // Windows has no SIGHUP (one sent ends the process): the config written is what the station reads, as it reads it
-  // afresh each time it changes.
-  if (process.platform === "win32" || pid === null || said?.channel !== 1 || !alive(pid) || !station(pid)) return setChannelIn(data, channel);
+  // Where the running station is not reached by SIGHUP (Windows: one sent ends the process), the config written is what
+  // it reads, as it reads it afresh each time it changes.
+  if (!platform.channelBySignal || pid === null || said?.channel !== 1 || !alive(pid) || !station(pid)) return setChannelIn(data, channel);
   const answer = join(run, CHANNEL_ANSWER);
   rmSync(answer, { force: true });
   writeWhole(join(run, CHANNEL_ASK), channel);

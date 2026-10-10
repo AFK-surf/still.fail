@@ -9,7 +9,8 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { platform } from "../platform/index.ts";
+import { runnerBinary } from "../platform/processes.ts";
 
 export type RunnerInfo = {
   id: string;
@@ -24,26 +25,14 @@ export type RunnerInfo = {
 
 export type Exit = { code: number | null; signal: string | null };
 
-const WINDOWS = process.platform === "win32";
-const EXE = WINDOWS ? ".exe" : "";
-
 /// The runner binary: STILLFAIL_RUNNER, else beside the station's code in a release, else where cargo built it.
-export function runnerBinary(): string {
-  const candidates = [
-    process.env.STILLFAIL_RUNNER,
-    fileURLToPath(new URL(`./stillfail-runner${EXE}`, import.meta.url)),
-    fileURLToPath(new URL(`../../native/runner/target/release/stillfail-runner${EXE}`, import.meta.url)),
-  ];
-  const found = candidates.find((p) => p && existsSync(p));
-  if (!found) throw new Error(`stillfail-runner is not there (looked at ${candidates.filter(Boolean).join(", ")})`);
-  return found;
-}
+export { runnerBinary };
 
 export const runnersDir = (data: string) => join(data, "run", "runners");
 
 /// Whether a runner of before (its info file there, itself alive) still keeps its process: its socket there (one on its
 /// way out has removed it). A pipe cannot be looked at (see above): the info file, which goes with it, says so then.
-export const listening = (info: RunnerInfo) => WINDOWS || existsSync(info.socket);
+export const listening = (info: RunnerInfo) => !platform.runnerSocketVisible || existsSync(info.socket);
 
 /// Starts `program` under a runner, its environment `env` (the agent's whole environment), in `cwd`.
 export function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string): Promise<RunnerInfo> {
@@ -182,7 +171,7 @@ export class RunnerConnection {
     this.left = true;
     if (this.socket.destroyed) return Promise.resolve();
     const closed = new Promise<void>((resolve) => this.socket.once("close", () => resolve()));
-    if (WINDOWS) this.send({ op: "leave" });
+    if (platform.runnerSaysLeave) this.send({ op: "leave" });
     this.socket.end();
     return closed;
   }

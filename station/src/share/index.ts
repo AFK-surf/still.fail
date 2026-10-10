@@ -23,7 +23,7 @@
 // (made and removed only here). Shared skills are config.json `sharedSkills: {name: {id, allow}}`.
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, unlinkSync, watch, writeFileSync } from "node:fs";
-import { dirname, join, relative, sep, win32 } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import type { Clock } from "effect";
 import type { Env, MachineToken } from "../agents/machine-logins.ts";
 import { codexAuthFile } from "../agents/machine-logins.ts";
@@ -33,6 +33,7 @@ import { Fibers } from "../ops/fibers.ts";
 import { writePrivate } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { linkSync } from "../ops/links.ts";
+import { relativeParts } from "../ops/paths.ts";
 
 type Json = any;
 
@@ -133,14 +134,12 @@ function readSkill(dir: string): Record<string, Buffer> {
 const skillHash = (files: Record<string, Buffer>) =>
   hashOf(Object.keys(files).sort().map((k) => `${k}\0${createHash("sha256").update(files[k]!).digest("hex")}`).join("\n"));
 
-/// A relative path that stays inside the skill. On Windows `\` separates too, and a drive, a share or a stream
-/// (`a:b`) is not inside.
-const WINDOWS = process.platform === "win32";
-const safePath = (p: string) =>
-  p !== "" &&
-  !p.startsWith("/") &&
-  !(WINDOWS && (win32.isAbsolute(p) || p.includes(":"))) &&
-  !p.split(WINDOWS ? /[\\/]/ : "/").some((s) => s === ".." || s === "." || s === "");
+/// A relative path that stays inside the skill (relativeParts: not rooted, no `..`), none of its components `.` or
+/// empty.
+const safePath = (p: string) => {
+  const parts = relativeParts(p);
+  return parts !== null && !parts.some((s) => s === "." || s === "");
+};
 
 function writeSkill(dir: string, files: Record<string, string>) {
   const temp = `${dir}.tmp-${randomBytes(4).toString("hex")}`;

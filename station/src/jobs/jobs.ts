@@ -11,13 +11,13 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
-  type FSWatcher, appendFileSync, chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readlinkSync, renameSync,
-  rmSync, statSync, watch, writeFileSync,
+  type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readlinkSync, renameSync, rmSync,
+  statSync, watch,
 } from "node:fs";
 import { join, sep } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
-import { WINDOWS, grouped, posixShell, prependPath } from "../ops/shell.ts";
+import { platform } from "../platform/index.ts";
 import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
@@ -182,17 +182,14 @@ export class Jobs {
     const dir = join(options.data, "jobs");
     this.dir = dir;
     for (const sub of ["logs", "bin", "exit"]) mkdirSync(join(dir, sub), { recursive: true });
+    // Runnable by name from any shell (on Windows from cmd or PowerShell, Codex's shell there, too).
     const script = join(dir, "bin", JOB_COMMAND_NAME);
-    writeFileSync(script, JOB_COMMAND);
-    chmodSync(script, 0o755);
-    // Windows runs no script by its #!: `stillfail-job` from cmd or PowerShell (Codex's shell there) is this, which hands
-    // it to Git's sh. Git Bash runs the script itself.
-    if (WINDOWS) {
-      try {
-        writeFileSync(`${script}.cmd`, `@"${posixShell()}" "%~dp0${JOB_COMMAND_NAME}" %*\r\n`);
-      } catch (error) {
-        log.warn("jobs", "no stillfail-job for cmd and PowerShell", { error: String(error) });
-      }
+    try {
+      platform.makeCommand(script, JOB_COMMAND);
+    } catch (error) {
+      // The script is there for a POSIX shell; only another shell's way to it (no Git's sh on Windows) is missing.
+      if (!existsSync(script)) throw error;
+      log.warn("jobs", "no stillfail-job for cmd and PowerShell", { error: String(error) });
     }
     // The old name, for jobs and agents used to it: a link to the new one (in place of the script it was).
     const former = join(dir, "bin", FORMER_JOB_COMMAND_NAME);
@@ -301,10 +298,11 @@ export class Jobs {
 
   /// Runs a job's command, and follows it to its end.
   private spawn(job: JobRow, restarted: boolean): void {
-    const out = openSync(job.log, "a");
+    // Made (or found) here, so a log that cannot be written is said now; the shell opens it itself (below).
+    closeSync(openSync(job.log, "a"));
     const exit = this.exitFile(job.id);
     rmSync(exit, { force: true });
-    const env: NodeJS.ProcessEnv = prependPath(process.env, join(this.dir, "bin"));
+    const env: NodeJS.ProcessEnv = platform.prependPath(process.env, join(this.dir, "bin"));
     // Under both names: scripts written against the old ones go on working.
     for (const prefix of ["STILLFAIL_", "EMBER_"]) {
       env[`${prefix}JOB_ID`] = job.id;
@@ -312,21 +310,12 @@ export class Jobs {
       env[`${prefix}JOB_NOTIFY`] = this.notifyUrl;
     }
     if (job.port !== null) env.PORT = String(job.port);
-    let child: ChildProcess;
-    try {
-      // detached: a session and process group of its own (pgid = its pid), not ended with the station.
-      // On Windows, Git's sh cannot write to a file Node opened for appending (its handle may only append): it opens
-      // the log itself.
-      child = WINDOWS
-        ? spawn(...grouped(posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log]), {
-            cwd: job.cwd, env, stdio: "ignore", detached: true, windowsHide: true,
-          })
-        : spawn("/bin/sh", ["-c", WRAPPER, JOB_COMMAND_NAME, job.command, exit], {
-            cwd: job.cwd, env, stdio: ["ignore", out, out], detached: true,
-          });
-    } finally {
-      closeSync(out);
-    }
+    // A group of its own (detached: pgid = its pid; on Windows the job of the runner it runs under), not ended with the
+    // station. The shell appends to the log itself: Git's sh on Windows cannot write to a file Node opened for
+    // appending (its handle may only append).
+    const child: ChildProcess = spawn(...platform.grouped(platform.posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log]), {
+      cwd: job.cwd, env, stdio: "ignore", detached: true, windowsHide: true,
+    });
     child.on("error", () => {});
     const pgid = child.pid;
     if (pgid === undefined) throw new Error("the job ended before it started");

@@ -41,6 +41,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { constants, createZstdCompress, createZstdDecompress } from "node:zlib";
+import { platform } from "../platform/index.ts";
 
 // ── paths ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -241,10 +242,10 @@ async function drain(stream: AsyncIterable<Buffer>) {
   for await (const _ of stream);
 }
 
-/// A directory's entries made durable (File::open(dir).sync_all()). Windows has no such sync (Node's is refused,
-/// EPERM): NTFS journals a directory's entries itself.
+/// A directory's entries made durable (File::open(dir).sync_all()), where a directory syncs (on Windows Node's is
+/// refused, EPERM: NTFS journals a directory's entries itself).
 async function syncDir(dir: string) {
-  if (process.platform === "win32") return;
+  if (!platform.syncsDirectories) return;
   const handle = await open(dir, "r");
   try {
     await handle.sync();

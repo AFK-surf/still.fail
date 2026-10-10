@@ -16,8 +16,7 @@ import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.t
 import { findCommand } from "../updates/runtimes.ts";
 import { versionIn } from "../updates/versions.ts";
 import { wall } from "../ops/fibers.ts";
-import { WINDOWS, grouped, posixShell, runnable } from "../ops/shell.ts";
-import { signalGroup } from "../jobs/group.ts";
+import { platform } from "../platform/index.ts";
 
 export type Access = "off" | "read" | "full";
 export const ACCESS: readonly Access[] = ["off", "read", "full"];
@@ -223,7 +222,7 @@ export class DeviceTools {
       return yield* Effect.callback<{ exit_code: number | null; stdout: string; stderr: string; truncated: boolean; timed_out?: boolean }, ToolError>((resume) => {
         let child: ChildProcess;
         try {
-          child = spawn(...grouped(posixShell(self.env), ["-c", command]), { cwd, env: { ...self.env, ...env }, stdio: ["ignore", "pipe", "pipe"], detached: true, windowsHide: true });
+          child = spawn(...platform.grouped(platform.posixShell(self.env), ["-c", command]), { cwd, env: { ...self.env, ...env }, stdio: ["ignore", "pipe", "pipe"], detached: true, windowsHide: true });
         } catch (e) {
           resume(fail("failed", (e as Error).message));
           return;
@@ -340,7 +339,7 @@ export class DeviceTools {
       const cwd = yield* self.cwd(a);
       const id = `p${self.next++}`;
       const child = yield* Effect.try({
-        try: () => spawn(...grouped(posixShell(self.env), ["-c", command]), { cwd, env: { ...self.env, ...env }, stdio: ["pipe", "pipe", "pipe"], detached: true, windowsHide: true }),
+        try: () => spawn(...platform.grouped(platform.posixShell(self.env), ["-c", command]), { cwd, env: { ...self.env, ...env }, stdio: ["pipe", "pipe", "pipe"], detached: true, windowsHide: true }),
         catch: (e) => new ToolError({ code: "failed", message: (e as Error).message }),
       });
       const kept: Kept = { id, command, child, startedAt: self.now(), chunks: [], base: 0, total: 0, exited: false, exitCode: null };
@@ -419,7 +418,7 @@ export class DeviceTools {
       for (const kind of ["claude", "codex"] as const) {
         const found = findCommand(kind, env);
         if (found === null) continue;
-        const r = runnable(found.real, ["--version"], env as NodeJS.ProcessEnv);
+        const r = platform.runnable(found.real, ["--version"], env as NodeJS.ProcessEnv);
         const said = await new Promise<string>((done) =>
           execFile(r.file, r.args, { timeout: 10_000, env: env as NodeJS.ProcessEnv, windowsVerbatimArguments: r.windowsVerbatimArguments }, (_e, out) => done(String(out ?? ""))),
         );
@@ -493,14 +492,5 @@ function capture(stream: NodeJS.ReadableStream) {
   return { text: () => Buffer.concat(parts).toString("utf8"), truncated: () => cut };
 }
 
-/// The process and what it started (it leads its own group; on Windows, its tree).
-function killGroup(child: ChildProcess, signal: NodeJS.Signals) {
-  if (WINDOWS && child.pid !== undefined) return signalGroup(child.pid, signal);
-  try {
-    if (child.pid !== undefined) process.kill(-child.pid, signal);
-  } catch {
-    try {
-      child.kill(signal);
-    } catch {}
-  }
-}
+/// The process and what it started (it leads its own group).
+const killGroup = (child: ChildProcess, signal: NodeJS.Signals) => platform.signalChildGroup(child, signal);

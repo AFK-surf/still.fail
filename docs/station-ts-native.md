@@ -91,6 +91,12 @@ runner → 客户端：
 
 Rust 版 station 交接前会先问新二进制 `handoff-version`，只有回答 `1` 才 exec 它并传 fd。启动器回答 `2`，Rust 版就不走 exec 交接（会写 `run/handoff-failed`），安装器再走普通重启：正在跑的轮次照现在的规则在新 station 上续写。这只在从 Rust 换到 TS 的那一次发生。具体在第 5 期（切换）里验证和调整。
 
+### station 的 TS 代码：平台差异只在 `src/platform/`
+
+station 的逻辑在 macOS、Linux、Windows 上是同一份。各平台不同的地方都在 `src/platform/` 里：`index.ts` 是接口，`unix.ts`（macOS 和 Linux，两者的差异也只在这里）和 `windows.ts` 是实现。业务代码只问 `platform` 要它想做的事，比如结束一个任务的进程组、让一个脚本能被别的程序按名字运行、按 Rust `Path::join` 的规则拼路径；只有某个平台才有的功能，用一个能力开关表示（`hasKeychain`、`hasQuickLook`）。
+
+`station/test/platform.test.ts` 守着这条规则：`src/platform/` 以外的代码一出现 `process.platform`、`win32`、`WINDOWS`，测试就失败。它也在每台机器上测两个平台的路径规则（都是纯函数），所以 Windows 的路径规则在 macOS 和 Linux 的 CI 上也会被测到。
+
 ## 3. mesh 插件（`station/native/mesh`，Node 插件 `mesh.node`）
 
 在原型（分支 proto-rust-shell-ts 的 `proto/ts-station/native`）基础上补齐 station 的 iroh 用法（`mesh/station/src/main.rs` `serve_mesh`、`keep.rs`、`peer.rs`）：

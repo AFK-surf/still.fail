@@ -7,7 +7,7 @@ import { writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { WINDOWS, posixShell } from "../src/ops/shell.ts";
+import { WINDOWS, platform } from "../src/platform/index.ts";
 
 /// A stand-in's test that a variable names a path under its HOME: `sameAs("CODEX_HOME", "cx")`. Git's sh (Windows)
 /// has HOME in a form of its own (/tmp/…, /c/…), so both are compared as Windows has them there.
@@ -95,7 +95,7 @@ export function script(path: string, text: string) {
     const sh = first[0] === "/bin/sh" || first.at(-1) === "sh";
     writeFileSync(`${path}.sh`, sh ? text : "");
     if (!sh) writeFileSync(path, text);
-    const run = sh ? `"${posixShell()}" "%~dp0${name}.sh"` : `"${first.at(-1)}" "%~dp0${name}"`;
+    const run = sh ? `"${platform.posixShell()}" "%~dp0${name}.sh"` : `"${first.at(-1)}" "%~dp0${name}"`;
     writeFileSync(`${path}.cmd`, `@${run} %*\r\n`);
     return;
   }

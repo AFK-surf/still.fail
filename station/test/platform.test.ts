@@ -1,0 +1,77 @@
+// What differs between machines is said in src/platform/ only (src/platform/index.ts), so the station's logic is one
+// for macOS, Linux and Windows. And each platform's path rules, which are pure: Windows' are checked on every machine.
+import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+import { test } from "node:test";
+import { unix } from "../src/platform/unix.ts";
+import { windows } from "../src/platform/windows.ts";
+
+const src = fileURLToPath(new URL("../src", import.meta.url));
+
+function files(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? files(join(dir, e.name)) : e.name.endsWith(".ts") ? [join(dir, e.name)] : [],
+  );
+}
+
+test("no code outside src/platform/ asks which machine this is", () => {
+  const asks = /process\.platform|\bwin32\b|\bWINDOWS\b|["'`]darwin["'`]/;
+  const found: string[] = [];
+  for (const file of files(src)) {
+    const rel = relative(src, file).replaceAll("\\", "/");
+    if (rel.startsWith("platform/")) continue;
+    readFileSync(file, "utf8").split("\n").forEach((line, i) => {
+      // What a comment says is not code.
+      if (line.trim().startsWith("//")) return;
+      if (asks.test(line)) found.push(`src/${rel}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(found, [], "ask platform (src/platform/index.ts) instead:\n" + found.join("\n"));
+});
+
+test("paths join as Rust's Path::join does, on each machine", () => {
+  assert.equal(unix.paths.join("/a/b", "c"), "/a/b/c");
+  assert.equal(unix.paths.join("/a/b/", "c"), "/a/b/c");
+  assert.equal(unix.paths.join("/a", "/c"), "/c");
+  assert.equal(unix.paths.join("", "c"), "c");
+  assert.equal(windows.paths.join("C:\\a", "c"), "C:\\a\\c");
+  assert.equal(windows.paths.join("C:\\a\\", "c"), "C:\\a\\c");
+  assert.equal(windows.paths.join("C:\\a", "D:\\c"), "D:\\c");
+  // Nothing normalised, as Rust has it.
+  assert.equal(windows.paths.join("C:\\a", "b/../c"), "C:\\a\\b/../c");
+});
+
+test("a path given as relative is rooted when it starts somewhere of its own", () => {
+  for (const p of ["/etc/passwd"]) assert.ok(unix.paths.rooted(p) && windows.paths.rooted(p), p);
+  for (const p of ["a/b", "a\\b", "a:b"]) assert.ok(!unix.paths.rooted(p), p);
+  // A drive, a drive-relative path, a share, a stream.
+  for (const p of ["C:\\x", "C:x", "\\\\server\\share\\x", "file:stream"]) assert.ok(windows.paths.rooted(p), p);
+  assert.ok(!windows.paths.rooted("a\\b"));
+});
+
+test("a path inside a root is told by whole components, as each machine compares them", () => {
+  assert.equal(unix.paths.relativeIn("/w/s", "/w/s/a/b"), "a/b");
+  assert.equal(unix.paths.relativeIn("/w/s", "/w/s"), "");
+  assert.equal(unix.paths.relativeIn("/w/s", "/w/sx/a"), null);
+  assert.equal(windows.paths.relativeIn("C:\\w\\s", "c:/W/S/a"), "a");
+  assert.equal(windows.paths.relativeIn("C:\\w\\s", "C:\\w\\sx\\a"), null);
+  assert.equal(windows.paths.relativeIn("C:\\w\\s", "D:\\w\\s\\a"), null);
+  assert.ok(windows.paths.within(windows.paths.key("C:\\W\\S\\a"), windows.paths.key("c:\\w\\s")));
+  assert.ok(!unix.paths.within("/w/sx", "/w/s"));
+});
+
+test("a drive's path is a local link's on Windows only", () => {
+  assert.ok(windows.paths.isDrivePath("C:\\Users\\a\\x.png") && windows.paths.isDrivePath("c:/x"));
+  assert.ok(!unix.paths.isDrivePath("C:\\Users\\a\\x.png"));
+  assert.ok(!windows.paths.isDrivePath("C:x"));
+});
+
+test("each machine names itself and its executables", () => {
+  assert.equal(windows.os, "windows");
+  assert.equal(windows.exe("stillfail-runner"), "stillfail-runner.exe");
+  assert.equal(unix.exe("stillfail-runner"), "stillfail-runner");
+  assert.equal(windows.home({ USERPROFILE: "C:\\Users\\a" }), "C:\\Users\\a");
+  assert.equal(unix.home({ USERPROFILE: "C:\\Users\\a" }), undefined);
+});

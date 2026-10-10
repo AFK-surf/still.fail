@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { type Access, DeviceTools, OPS, READ_OPS, type Sessions, accessOf, permitted } from "../src/device/tools.ts";
 import { checkConfig } from "../src/accounts/check.ts";
-import { WINDOWS } from "../src/ops/shell.ts";
+import { WINDOWS } from "../src/platform/index.ts";
 
 const run = (tools: DeviceTools, op: string, args: Record<string, unknown> = {}, access: Access = "full") =>
   Effect.runPromise(Effect.result(tools.run(op, args, { user_email: "a@x" }, access))).then((r) =>

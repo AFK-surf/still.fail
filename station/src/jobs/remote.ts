@@ -14,7 +14,9 @@ import {
   closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync,
   readSync, readdirSync, renameSync, rmSync, statSync, writeSync,
 } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative as relativeTo, win32 } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
+import { relativeParts } from "../ops/paths.ts";
+import { platform } from "../platform/index.ts";
 import { isDeepStrictEqual } from "node:util";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
@@ -93,8 +95,6 @@ export function writeJson(path: string, value: Json): void {
   renameSync(temp, path);
 }
 
-const WINDOWS = process.platform === "win32";
-
 const isLink = (path: string): boolean => {
   try {
     return lstatSync(path).isSymbolicLink();
@@ -107,17 +107,17 @@ const isLink = (path: string): boolean => {
 /// execution, so separate working directories are organizational isolation, not an OS security boundary.
 export function filePath(root: string, relative: string, create: boolean): string {
   if (lstatSync(root).isSymbolicLink()) throw new Error("transfer root is a symbolic link");
-  // Path::components: a leading / is the root, a leading . is the current directory, a later . is no component. On
-  // Windows a \ separates as / does, and a drive (`C:`, `C:x`), a UNC share or a stream (`file:name`) is never relative.
+  // Path::components: a leading / is the root (and on Windows a drive, a UNC share or a stream: relativeParts), a
+  // leading . is the current directory, a later . is no component.
+  const given = relativeParts(relative);
   const parts: string[] = [];
-  let bad = relative === "" || relative.startsWith("/") || (WINDOWS && (win32.isAbsolute(relative) || relative.includes(":")));
-  relative.split(WINDOWS ? /[\\/]/ : "/").forEach((part, i) => {
+  let bad = given === null;
+  (given ?? []).forEach((part, i) => {
     if (part === "") return;
     if (part === ".") {
       if (i === 0) bad = true;
       return;
     }
-    if (part === "..") bad = true;
     parts.push(part);
   });
   if (bad || parts.length === 0) throw new Error("file path must be relative, without . or ..");
@@ -137,7 +137,7 @@ function fromBase64(data: string): Buffer {
 }
 
 /// The OS and architecture as Rust's std::env::consts name them.
-const OS = ({ darwin: "macos", linux: "linux", win32: "windows", freebsd: "freebsd", openbsd: "openbsd" } as Record<string, string>)[process.platform] ?? process.platform;
+const OS = platform.os;
 const ARCH = ({ arm64: "aarch64", x64: "x86_64", ia32: "x86", arm: "arm" } as Record<string, string>)[process.arch] ?? process.arch;
 
 export class Remote {
@@ -723,17 +723,12 @@ export class Remote {
     const root = row.workspace;
     const localArg = text(args, "local");
     let relative = localArg;
-    if (WINDOWS && isAbsolute(localArg)) {
-      // Whole components of the session's workspace, as Windows compares them (case aside, either separator); what
-      // climbs out of it is refused here, and a `..` left in it by filePath.
-      const within = relativeTo(root, localArg);
-      if (within.startsWith("..") || isAbsolute(within)) throw new Error("local file must be inside this session workspace");
+    if (isAbsolute(localArg)) {
+      // Path::strip_prefix: whole components of the session's workspace (as the machine compares them); a `..` left in
+      // it is filePath's to refuse.
+      const within = platform.paths.relativeIn(root, localArg);
+      if (within === null) throw new Error("local file must be inside this session workspace");
       relative = within;
-    } else if (isAbsolute(localArg)) {
-      // Path::strip_prefix: whole components of the session's workspace.
-      const prefix = root.endsWith("/") ? root : `${root}/`;
-      if (localArg !== root && !localArg.startsWith(prefix)) throw new Error("local file must be inside this session workspace");
-      relative = localArg === root ? "" : localArg.slice(prefix.length);
     }
     const direction = text(args, "direction");
     const path = filePath(root, relative, direction === "download");

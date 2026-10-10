@@ -10,8 +10,9 @@ import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { ConfigFile } from "../src/ops/config.ts";
 import { type Env, type Found, howToInstall, howToUpdate, findCommand, pinNpmVersion, run, runLines, Unable, kindCommand, kindPackage } from "../src/updates/runtimes.ts";
-import { Updates, type UpdatesOptions, windowsUpdateScript } from "../src/updates/updates.ts";
-import { WINDOWS } from "../src/ops/shell.ts";
+import { Updates, type UpdatesOptions } from "../src/updates/updates.ts";
+import { WINDOWS } from "../src/platform/index.ts";
+import { windowsUpdateScript } from "../src/platform/windows.ts";
 import {
   channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, versionIn,
 } from "../src/updates/versions.ts";

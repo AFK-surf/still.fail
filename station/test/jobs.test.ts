@@ -18,7 +18,7 @@ import { endGroup, groupAlive, signalGroup } from "../src/jobs/group.ts";
 import { Jobs, notifyEndpoint, readExit, restartPause, shown, tail, watching } from "../src/jobs/jobs.ts";
 import { jobTools } from "../src/tools/jobs.ts";
 import { Store } from "../src/store/store.ts";
-import { WINDOWS, posixShell, prependPath } from "../src/ops/shell.ts";
+import { WINDOWS, platform } from "../src/platform/index.ts";
 
 const dirs: string[] = [];
 const all: Jobs[] = [];
@@ -206,8 +206,8 @@ describe("jobs", { concurrency: true }, () => {
     try {
       // Windows runs no script by its #!: Git's sh runs it, with Windows' own PATH (curl is System32's or Git's).
       const out = WINDOWS
-        ? spawn(posixShell(), [join(bin, "ember-job"), "notify", "hi"], {
-            env: { ...prependPath(process.env, bin), EMBER_JOB_TOKEN: "t0k", EMBER_JOB_NOTIFY: notify },
+        ? spawn(platform.posixShell(), [join(bin, "ember-job"), "notify", "hi"], {
+            env: { ...platform.prependPath(process.env, bin), EMBER_JOB_TOKEN: "t0k", EMBER_JOB_NOTIFY: notify },
             stdio: ["ignore", "ignore", "pipe"],
           })
         : spawn(join(bin, "ember-job"), ["notify", "hi"], {

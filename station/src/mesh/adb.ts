@@ -19,8 +19,7 @@ import { langOfCore } from "../api/request.ts";
 import { wall } from "../ops/fibers.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
-import { runnable } from "../ops/shell.ts";
-import { findCommand } from "../updates/runtimes.ts";
+import { platform } from "../platform/index.ts";
 import type { Viewer } from "./credential.ts";
 import type { Connection, Stream } from "./native.ts";
 import { Reader, writeLine } from "./serve.ts";
@@ -483,10 +482,10 @@ async function grant(shares: Shares, share: Share, lang: Lang): Promise<string> 
 /// short `PATH`).
 export function adbPath(): string | null {
   const env = process.env;
-  // Windows: adb.exe, and the SDK where Android Studio puts it there (%LOCALAPPDATA%\Android\Sdk).
-  const adb = process.platform === "win32" ? "adb.exe" : "adb";
+  // adb.exe on Windows, and the SDK where Android Studio puts it there (%LOCALAPPDATA%\Android\Sdk).
+  const adb = platform.exe("adb");
   // On PATH as a shell finds it (on Windows, with PATHEXT's extensions).
-  const onPath = process.platform === "win32" ? findCommand("adb", env)?.onPath : undefined;
+  const onPath = platform.findCommand("adb", env)?.onPath;
   const candidates = [
     ...(onPath ? [onPath] : []),
     ...(env.PATH ?? "").split(delimiter).filter(Boolean).map((d) => join(d, adb)),
@@ -505,7 +504,7 @@ export function adbPath(): string | null {
 export function run(adb: string, args: string[], timeout: number | null): Promise<string> {
   return new Promise((resolve, reject) => {
     // A .cmd (a shim) runs through its script or cmd: Node starts none by itself.
-    const r = runnable(adb, args, process.env);
+    const r = platform.runnable(adb, args, process.env);
     const child = spawn(r.file, r.args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, windowsVerbatimArguments: r.windowsVerbatimArguments });
     const out: Buffer[] = [];
     const err: Buffer[] = [];

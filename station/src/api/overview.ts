@@ -1,19 +1,17 @@
 // GET /overview (admin/views.rs `overview`): the station as its settings pages show it — still.fail cloud, connects,
 // profiles, the agents' processes, counts, the disk, logins, updates — as the viewer sees it. Answered on the main
 // thread from what is in memory and the config; told again on /events when it changes (`overview`).
-import { execFile } from "node:child_process";
 import { statfsSync } from "node:fs";
-import { promisify } from "node:util";
 import type { Accounts } from "../accounts/index.ts";
 import { mask } from "../accounts/index.ts";
 import type { Cloud } from "../cloud/state.ts";
 import type { Viewer } from "../mesh/credential.ts";
+import { platform } from "../platform/index.ts";
 import type { Lang } from "../ops/i18n.ts";
 import type { Hub } from "../sessions/hub.ts";
 import type { Store } from "../store/store.ts";
 import type { Updates } from "../updates/updates.ts";
 
-const run = promisify(execFile);
 
 /// What the Slack side adds (src/slack): a connect's connection, the viewer's Slack workspaces and apps.
 export type SlackView = {
@@ -48,51 +46,9 @@ export function meshStatus(cloud: Cloud): Record<string, unknown> {
   return v;
 }
 
-/// Memory of each recorded runtime process group, from ps (kB).
+/// Memory of each recorded runtime process group (kB).
 async function processMemory(pgids: number[]): Promise<Map<number, number>> {
-  const rss = new Map<number, number>();
-  if (pgids.length === 0) return rss;
-  if (process.platform === "win32") return windowsMemory(pgids);
-  try {
-    const { stdout } = await run("ps", ["-axo", "pgid=,rss="]);
-    for (const line of stdout.split("\n")) {
-      const [pgid, kb] = line.trim().split(/\s+/).map(Number);
-      if (pgid !== undefined && kb !== undefined && pgids.includes(pgid)) rss.set(pgid, (rss.get(pgid) ?? 0) + kb);
-    }
-  } catch {}
-  return rss;
-}
-
-/// On Windows a group is its leader's process tree (a runner's job holds no other): each leader's working set and its
-/// descendants', from Win32_Process (kB).
-async function windowsMemory(pgids: number[]): Promise<Map<number, number>> {
-  const rss = new Map<number, number>();
-  try {
-    const script = "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId) $($_.ParentProcessId) $($_.WorkingSetSize)\" }";
-    const { stdout } = await run("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, maxBuffer: 16 << 20 });
-    const children = new Map<number, number[]>();
-    const bytes = new Map<number, number>();
-    for (const line of stdout.split(/\r?\n/)) {
-      const [pid, parent, size] = line.trim().split(/\s+/).map(Number);
-      if (!Number.isInteger(pid) || !Number.isInteger(parent) || !Number.isFinite(size)) continue;
-      bytes.set(pid!, size!);
-      if (pid !== parent) children.set(parent!, [...(children.get(parent!) ?? []), pid!]);
-    }
-    for (const pgid of pgids) {
-      if (!bytes.has(pgid)) continue;
-      let total = 0;
-      const seen = new Set<number>();
-      for (const queue = [pgid]; queue.length > 0; ) {
-        const pid = queue.pop()!;
-        if (seen.has(pid)) continue;
-        seen.add(pid);
-        total += bytes.get(pid) ?? 0;
-        queue.push(...(children.get(pid) ?? []));
-      }
-      rss.set(pgid, Math.round(total / 1024));
-    }
-  } catch {}
-  return rss;
+  return pgids.length === 0 ? new Map() : platform.groupMemory(pgids);
 }
 
 /// The data disk's room: what clients warn of when it runs low.

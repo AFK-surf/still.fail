@@ -11,7 +11,7 @@ import { type Endpoints, endpoints, find, type Source } from "../agents/provider
 import type { Capability } from "../sessions/decision.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeToken as tokenOf } from "./oauth.ts";
-import { runnable } from "../ops/shell.ts";
+import { platform } from "../platform/index.ts";
 
 type Json = any;
 
@@ -127,7 +127,7 @@ const sorted = (list: string[]) => list.sort((a, b) => (a < b ? -1 : a > b ? 1 :
 /// Runs a runtime's own status command, in `env` only; what it said and how it ended.
 function statusOf(command: string, args: string[], env: Env): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const r = runnable(command, args, env as NodeJS.ProcessEnv);
+    const r = platform.runnable(command, args, env as NodeJS.ProcessEnv);
     execFile(r.file, r.args, { env: env as NodeJS.ProcessEnv, timeout: 20_000, killSignal: "SIGKILL", windowsVerbatimArguments: r.windowsVerbatimArguments }, (error, stdout, stderr) => {
       if (error && (error as NodeJS.ErrnoException).code === "ENOENT") return reject(new Error(`${command}: ${error.message}`));
       if (error && error.killed) return reject(new Error(`${command} ${args.join(" ")} timed out`));

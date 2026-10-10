@@ -2,12 +2,12 @@
 // updated the way it was installed (`claude update`, npm, Homebrew, Vite+, Codex's standalone installer) or installed
 // when it is not there, and running those commands.
 import { spawn } from "node:child_process";
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, delimiter, dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { wall } from "../ops/fibers.ts";
-import { grouped } from "../ops/shell.ts";
+import { type Found as PlatformFound, platform } from "../platform/index.ts";
 
 /// The environment commands run in: the station's own (its PATH says where the runtimes are).
 export type Env = Record<string, string | undefined>;
@@ -32,16 +32,8 @@ export function pinNpmVersion(how: How, pkg: string, version: string): How {
 }
 
 /// A command as the station's PATH finds it: where it was found (the link on PATH) and what that is.
-export type Found = { onPath: string; real: string };
+export type Found = PlatformFound;
 
-const executable = (p: string) => {
-  try {
-    const st = statSync(p);
-    return st.isFile() && (st.mode & 0o111) !== 0;
-  } catch {
-    return false;
-  }
-};
 const real = (p: string) => {
   try {
     return realpathSync(p);
@@ -50,31 +42,8 @@ const real = (p: string) => {
   }
 };
 
-/// On Windows a command is a file with one of PATHEXT's extensions (no mode bit says it runs): `codex` is found as
-/// `codex.cmd`, `claude` as `claude.exe`.
-const WINDOWS = process.platform === "win32";
-const runnable = (p: string) => {
-  try {
-    return statSync(p).isFile();
-  } catch {
-    return false;
-  }
-};
-
-export function findCommand(name: string, env: Env): Found | null {
-  const pathKey = WINDOWS ? Object.keys(env).find((k) => k.toUpperCase() === "PATH") : "PATH";
-  const path = pathKey === undefined ? undefined : env[pathKey];
-  if (path === undefined) return null;
-  const exts = WINDOWS ? (env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter((e) => e !== "").map((e) => e.toLowerCase()) : [""];
-  for (const dir of path.split(delimiter)) {
-    for (const ext of exts) {
-      // An empty entry is the current directory, as split_paths has it.
-      const onPath = join(dir === "" ? "." : dir, name + ext);
-      if (WINDOWS ? runnable(onPath) : executable(onPath)) return { onPath, real: real(onPath) ?? onPath };
-    }
-  }
-  return null;
-}
+/// A command on `env`'s PATH as a shell finds it (platform.findCommand).
+export const findCommand = (name: string, env: Env): Found | null => platform.findCommand(name, env);
 
 /// Why a runtime cannot be updated from here: said in the language it is read in.
 export class Unable {
@@ -91,16 +60,18 @@ export class Unable {
 
 /// How a runtime installed as `found` is updated, or why it cannot be from here.
 export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
-  // The markers below are written with `/`: a Windows path is read with them too.
-  const realPath = WINDOWS ? found.real.replaceAll("\\", "/") : found.real;
+  // The markers below are written with `/`: a path whose machine separates otherwise too is read with them (it has
+  // the same length, so where a marker is found is where it is in found.real).
+  const realPath = found.real.split(platform.paths.separator).join("/");
   const name = kindName(kind);
+  if (kind === "station") return new Unable("");
+  // A package manager's shim of this machine's kind (Windows: Vite+'s beside vp.exe, npm's .cmd in its prefix).
+  const shim = platform.shimUpdate(found, kindPackage(kind), env);
+  if (shim === "no-npm") return new Unable("station.updates.noNpm", { name });
+  if (shim !== null) return shim;
   // Vite+ global commands are shims pointing to vp itself. Its packages are separate from npm's; `claude update` can
   // report success after updating a different installation.
-  // On Windows a Vite+ command is a shim of its own (codex.cmd, codex.exe) beside vp.exe.
-  if (WINDOWS && kind !== "station" && existsSync(join(dirname(found.onPath), "vp.exe"))) {
-    return { program: join(dirname(found.onPath), "vp.exe"), args: ["install", "-g", `${kindPackage(kind)}@latest`] };
-  }
-  if (kind !== "station" && basename(realPath) === "vp") {
+  if (basename(realPath) === "vp") {
     const beside = join(dirname(found.onPath), "vp");
     let vp: string | null = real(beside) === realPath ? beside : null;
     if (vp === null) {
@@ -123,13 +94,6 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
   };
   const using = (program: string | Unable, args: string[]): How | Unable => (program instanceof Unable ? program : { program, args });
   const pkg = `${kindPackage(kind)}@latest`;
-  if (kind === "station") return new Unable("");
-  // npm on Windows: the command a .cmd shim in the global prefix, the package in its node_modules beside it.
-  if (WINDOWS && /\.cmd$/i.test(found.onPath) && existsSync(join(dirname(found.onPath), "node_modules", ...kindPackage(kind).split("/")))) {
-    const prefix = dirname(found.onPath);
-    const own = join(prefix, "npm.cmd");
-    return using(existsSync(own) ? own : (findCommand("npm", env)?.onPath ?? new Unable("station.updates.noNpm", { name })), ["install", "-g", pkg, "--prefix", prefix]);
-  }
   if (realPath.includes("/Caskroom/")) return using(brew(), ["upgrade", "--cask", kind === "claude" ? "claude-code" : "codex"]);
   if (realPath.includes("/Cellar/")) return using(brew(), ["upgrade", kind === "claude" ? "claude-code" : "codex"]);
   if (realPath.includes("/node_modules/")) {
@@ -141,8 +105,8 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
     return using(npm(), ["install", "-g", pkg, "--prefix", found.real.slice(0, at)]);
   }
   if (kind === "claude") return { program: found.onPath, args: ["update"] };
-  // Its installer is a shell script (install.sh): not Windows'.
-  if (!WINDOWS && realPath.includes("/packages/standalone/releases/")) return standaloneCodexUpdate(found);
+  // Its installer is a shell script (install.sh): where the platform runs it.
+  if (platform.codexStandalone && realPath.includes("/packages/standalone/releases/")) return standaloneCodexUpdate(found);
   return new Unable("station.updates.codexElsewhere", { path: realPath });
 }
 
@@ -172,19 +136,13 @@ CODEX_HOME="$1" CODEX_INSTALL_DIR="$2" CODEX_NON_INTERACTIVE=1 sh -c "$installer
 /// (into ~/.local/bin, on the station's PATH as install.ts sets it), Codex by npm, else Homebrew.
 export function howToInstall(kind: Kind, env: Env): How | Unable {
   if (kind === "station") return new Unable("");
-  if (kind === "claude") return WINDOWS ? CLAUDE_WINDOWS_INSTALL : { program: "/bin/sh", args: ["-c", "curl -fsSL https://claude.ai/install.sh | bash"] };
+  if (kind === "claude") return platform.claudeInstall;
   const npm = findCommand("npm", env);
   if (npm) return { program: npm.onPath, args: ["install", "-g", "@openai/codex@latest"] };
   const brew = findCommand("brew", env);
   if (brew) return { program: brew.onPath, args: ["install", "--cask", "codex"] };
   return new Unable("station.updates.noNpmNoBrew");
 }
-
-/// Claude Code's own installer on Windows (into ~\\.local\\bin), as its documentation gives it.
-export const CLAUDE_WINDOWS_INSTALL: How = {
-  program: "powershell",
-  args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "irm https://claude.ai/install.ps1 | iex"],
-};
 
 /// A command that did not end in time.
 export class NotFinished extends Error {}
@@ -207,7 +165,7 @@ function runBoth(program: string, args: string[], env: Env, timeoutMs: number, o
     for (const [k, v] of Object.entries(env)) if (v !== undefined) clean[k] = v;
     // On Windows under `stillfail-runner --job`: what npm starts ends with it, and a .cmd (npm's) is run through cmd,
     // escaped, by the runner.
-    const child = spawn(...grouped(program, args), { env: clean, cwd: tmpdir(), stdio: ["ignore", "pipe", "pipe"], detached: true, windowsHide: true });
+    const child = spawn(...platform.grouped(program, args), { env: clean, cwd: tmpdir(), stdio: ["ignore", "pipe", "pipe"], detached: true, windowsHide: true });
     let said = "";
     const whole = ["", ""];
     const take = (stream: NodeJS.ReadableStream, which: 0 | 1) => {
@@ -235,10 +193,7 @@ function runBoth(program: string, args: string[], env: Env, timeoutMs: number, o
     };
     const ends = Promise.all([take(child.stdout!, 0), take(child.stderr!, 1)]);
     const timer = wall.after(timeoutMs, () => {
-      try {
-        if (WINDOWS) child.kill("SIGKILL");
-        else process.kill(-child.pid!, "SIGKILL");
-      } catch {}
+      platform.signalChildGroup(child, "SIGKILL");
       reject(new NotFinished(tr(lang, "station.updates.notFinished", { program })));
     });
     child.on("error", (e) => {
