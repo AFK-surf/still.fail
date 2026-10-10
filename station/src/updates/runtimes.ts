@@ -1,12 +1,12 @@
 // Claude Code and Codex on this machine (the Rust station's updates.rs): where the station's PATH finds them, how each is
 // updated the way it was installed (`claude update`, npm, Homebrew, Vite+, Codex's standalone installer) or installed
 // when it is not there, and running those commands.
-import { spawn } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { wall } from "../ops/fibers.ts";
+import { endCommand, startCommand } from "../ops/processes.ts";
 import { type Found as PlatformFound, platform } from "../platform/index.ts";
 
 /// The environment commands run in: the station's own (its PATH says where the runtimes are).
@@ -165,7 +165,7 @@ function runBoth(program: string, args: string[], env: Env, timeoutMs: number, o
     for (const [k, v] of Object.entries(env)) if (v !== undefined) clean[k] = v;
     // On Windows under `stillfail-runner --job`: what npm starts ends with it, and a .cmd (npm's) is run through cmd,
     // escaped, by the runner.
-    const child = spawn(...platform.grouped(program, args), { env: clean, cwd: tmpdir(), stdio: ["ignore", "pipe", "pipe"], detached: true, windowsHide: true });
+    const child = startCommand(program, args, { env: clean, cwd: tmpdir(), stdio: ["ignore", "pipe", "pipe"] });
     let said = "";
     const whole = ["", ""];
     const take = (stream: NodeJS.ReadableStream, which: 0 | 1) => {
@@ -193,7 +193,7 @@ function runBoth(program: string, args: string[], env: Env, timeoutMs: number, o
     };
     const ends = Promise.all([take(child.stdout!, 0), take(child.stderr!, 1)]);
     const timer = wall.after(timeoutMs, () => {
-      platform.signalChildGroup(child, "SIGKILL");
+      endCommand(child, "SIGKILL");
       reject(new NotFinished(tr(lang, "station.updates.notFinished", { program })));
     });
     child.on("error", (e) => {

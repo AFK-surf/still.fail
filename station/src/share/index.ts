@@ -506,8 +506,8 @@ export class Sharing {
         if (!meta.isSymbolicLink() || readlinkSync(link) !== target) continue;
       } catch {
         mkdirSync(this.skillsDir(), { recursive: true });
-        // A junction on Windows when links are refused there.
-        linkSync(target, link);
+        // Where links are refused, a junction will do: its target is the copy's own directory, which stays where it is.
+        linkSync(target, link, { junction: true });
       }
       this.watchBorrowed(id, target);
     }

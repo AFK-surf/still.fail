@@ -15,6 +15,8 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import fsModule from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -78,6 +80,37 @@ test("workspace round trip preserves edits, permissions, symlinks and attachment
   await restoreWorkspace(room);
   release();
   assert.ok(existsSync(join(room, "archive.lock")), "the lock file is where the Rust's is");
+  rmSync(room, { recursive: true });
+});
+
+test("links the machine refuses come back where the restored workspace ends up, not where it was made", { skip: process.platform !== "win32" && "only Windows refuses links" }, async () => {
+  const room = temp();
+  const ws = join(room, "workspace");
+  write(join(ws, "project/main.rs"), "fn main() {}");
+  symlinkSync("project", join(ws, "lib"), "dir");
+  symlinkSync(join("project", "main.rs"), join(ws, "entry"));
+  const release = await lock(room);
+  await packWorkspace(room);
+  // As Windows without the privilege (Developer Mode off): links refused, junctions made.
+  const real = fsModule.promises.symlink;
+  fsModule.promises.symlink = (async (target: string, path: string, type?: string) => {
+    if (type === "junction") return real(target, path, type);
+    throw Object.assign(new Error("EPERM: operation not permitted, symlink"), { code: "EPERM" });
+  }) as typeof real;
+  syncBuiltinESMExports();
+  try {
+    await restoreWorkspace(room);
+  } finally {
+    fsModule.promises.symlink = real;
+    syncBuiltinESMExports();
+  }
+  release();
+  // The directory's stand-in (a junction) leads into the workspace at its final path: the tree was made beside it
+  // (workspace.restoring) and moved.
+  assert.equal(realpathSync(join(ws, "lib")), realpathSync(join(ws, "project")));
+  assert.equal(readFileSync(join(ws, "lib", "main.rs"), "utf8"), "fn main() {}");
+  assert.equal(readFileSync(join(ws, "entry"), "utf8"), "fn main() {}");
+  assert.ok(!existsSync(join(room, "workspace.restoring")));
   rmSync(room, { recursive: true });
 });
 

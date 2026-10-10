@@ -6,7 +6,7 @@
 // own data (its key, cloud.json, config, the profiles' homes) and the machine's runtime logins are refused to the file
 // ops and as a working directory (`protect`); `exec` and `process.*` under `full` run as the station's user and can
 // reach what that user can, which is why they need `full`.
-import { type ChildProcess, execFile, spawn } from "node:child_process";
+import { type ChildProcess, execFile } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { appendFile, lstat, mkdir, open, readdir, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -16,6 +16,7 @@ import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.t
 import { findCommand } from "../updates/runtimes.ts";
 import { versionIn } from "../updates/versions.ts";
 import { wall } from "../ops/fibers.ts";
+import { endCommand, startCommand } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
 
 export type Access = "off" | "read" | "full";
@@ -222,7 +223,7 @@ export class DeviceTools {
       return yield* Effect.callback<{ exit_code: number | null; stdout: string; stderr: string; truncated: boolean; timed_out?: boolean }, ToolError>((resume) => {
         let child: ChildProcess;
         try {
-          child = spawn(...platform.grouped(platform.posixShell(self.env), ["-c", command]), { cwd, env: { ...self.env, ...env }, stdio: ["ignore", "pipe", "pipe"], detached: true, windowsHide: true });
+          child = startCommand(platform.posixShell(self.env), ["-c", command], { cwd, env: { ...self.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
         } catch (e) {
           resume(fail("failed", (e as Error).message));
           return;
@@ -339,7 +340,7 @@ export class DeviceTools {
       const cwd = yield* self.cwd(a);
       const id = `p${self.next++}`;
       const child = yield* Effect.try({
-        try: () => spawn(...platform.grouped(platform.posixShell(self.env), ["-c", command]), { cwd, env: { ...self.env, ...env }, stdio: ["pipe", "pipe", "pipe"], detached: true, windowsHide: true }),
+        try: () => startCommand(platform.posixShell(self.env), ["-c", command], { cwd, env: { ...self.env, ...env }, stdio: ["pipe", "pipe", "pipe"] }),
         catch: (e) => new ToolError({ code: "failed", message: (e as Error).message }),
       });
       const kept: Kept = { id, command, child, startedAt: self.now(), chunks: [], base: 0, total: 0, exited: false, exitCode: null };
@@ -493,4 +494,4 @@ function capture(stream: NodeJS.ReadableStream) {
 }
 
 /// The process and what it started (it leads its own group).
-const killGroup = (child: ChildProcess, signal: NodeJS.Signals) => platform.signalChildGroup(child, signal);
+const killGroup = endCommand;

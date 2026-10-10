@@ -8,7 +8,6 @@
 // Push, not poll: a job this station started is followed by its exit event; one an earlier station started (not its
 // child) by its exit file appearing (a watch on jobs/exit), with a look at its leader once a second for the one end
 // that writes no file (its shell killed) — Node has no exit event for a process that is not its child.
-import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
   type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readlinkSync, renameSync, rmSync,
@@ -17,6 +16,7 @@ import {
 import { join, sep } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
+import { startLasting } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
 import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
@@ -200,8 +200,8 @@ export class Jobs {
     if (linked !== JOB_COMMAND_NAME) {
       const aside = join(dir, "bin", `.${FORMER_JOB_COMMAND_NAME}.${process.pid}`);
       rmSync(aside, { force: true });
-      // A copy on Windows when links are refused there.
-      linkSync(JOB_COMMAND_NAME, aside);
+      // Where links are refused, a copy will do: the script is written afresh at each start.
+      linkSync(JOB_COMMAND_NAME, aside, { copy: true });
       renameSync(aside, former);
     }
     this.scope = Effect.runSync(Scope.make());
@@ -313,13 +313,12 @@ export class Jobs {
     // A group of its own (detached: pgid = its pid; on Windows the job of the runner it runs under), not ended with the
     // station. The shell appends to the log itself: Git's sh on Windows cannot write to a file Node opened for
     // appending (its handle may only append).
-    const child: ChildProcess = spawn(...platform.grouped(platform.posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log]), {
-      cwd: job.cwd, env, stdio: "ignore", detached: true, windowsHide: true,
+    const child = startLasting(platform.posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log], {
+      cwd: job.cwd, env, stdio: "ignore",
     });
     child.on("error", () => {});
     const pgid = child.pid;
     if (pgid === undefined) throw new Error("the job ended before it started");
-    child.unref();
     this.store.recordProcess(pgid, this.store.now(), "job", `job: ${job.name}`);
     this.store.jobStarted(job.id, pgid, restarted);
     const exited = new Promise<number | null>((resolve) => child.once("exit", (code) => resolve(code)));

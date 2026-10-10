@@ -31,6 +31,21 @@ test("no code outside src/platform/ asks which machine this is", () => {
   assert.deepEqual(found, [], "ask platform (src/platform/index.ts) instead:\n" + found.join("\n"));
 });
 
+test("a group of processes is started and ended in ops/processes.ts only", () => {
+  // The runner starts apart from the rest (agents/runner.ts): it is no group of a command's, but what agents run under.
+  const allowed = new Set(["ops/processes.ts", "agents/runner.ts"]);
+  const found: string[] = [];
+  for (const file of files(src)) {
+    const rel = relative(src, file).replaceAll("\\", "/");
+    if (rel.startsWith("platform/") || allowed.has(rel)) continue;
+    readFileSync(file, "utf8").split("\n").forEach((line, i) => {
+      if (line.trim().startsWith("//")) return;
+      if (/platform\.grouped\(|platform\.signalChildGroup\(|detached:\s*true/.test(line)) found.push(`src/${rel}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(found, [], "start it with startCommand or startLasting (src/ops/processes.ts):\n" + found.join("\n"));
+});
+
 test("paths join as Rust's Path::join does, on each machine", () => {
   assert.equal(unix.paths.join("/a/b", "c"), "/a/b/c");
   assert.equal(unix.paths.join("/a/b/", "c"), "/a/b/c");
