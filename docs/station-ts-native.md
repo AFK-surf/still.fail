@@ -34,6 +34,17 @@ runner → 客户端：
 - agent 退出后、station 一直没来 `done`：runner 保留文件和 socket 24 小时后自行清理退出（station 也会在启动时清理找不到 agent 的 runner）。
 - runner 自己被杀时，agent 的 stdin 关闭（与现在 station 崩溃时一样），agent 按自己的规矩退出；文件还在，station 能读到最后的输出。
 - 不用 tokio，std 线程 + libc 就够；目标 macOS（arm64、x86_64）和 Linux（x86_64、aarch64）。
+- `{"op":"leave"}`（客户端 → runner）：station 放手，runner 读到这里就关掉连接（之前的消息都已处理）。Unix 上等同于半关闭 socket 后读到底；Windows 的管道没有半关闭，station 在 Windows 上放手时先发它。
+
+### Windows（PoC，`src/sys/windows.rs`；Unix 的在 `src/sys/unix.rs`，协议和文件不变）
+
+- socket 换成命名管道 `\\.\pipe\stillfail-runner-<数据目录的 FNV-1a 哈希>-<id>`（json 的 `socket` 字段），ACL 只给当前用户、拒绝远程客户端、`FIRST_PIPE_INSTANCE` 防抢注。管道不是文件：**不能用 `existsSync`/stat 看它在不在——那本身就是一次连接**，会挤掉 station 的连接；TS 侧（`runner.ts` 的 `listening`）在 Windows 上以 info 文件在、runner 活着为准。
+- 进程组换成 Job Object：agent 挂起启动、放进 job 后再恢复，它启动的东西都在 job 里；`signal` 没有信号可发，`group: true` 结束整个 job、否则只结束 agent（Node 在 Windows 上的 `process.kill` 也是结束），exit 的 `signal` 字段照样写 `TERM`/`KILL`/`INT`。agent 不开控制台窗口，能脱离外层 job 时就脱离。
+- 启动时关掉从启动者继承来的、stdio 以外的句柄：Windows 把父进程所有可继承句柄都传给子进程（Unix 靠 close-on-exec），不关的话 runner 会一直占着 station 的 stdout，读它的一方（启动器、桌面端）等不到结束。
+- 裸命令名按 PATH + PATHEXT 找（`codex` 是 npm 装的 `codex.cmd`），`.cmd`/`.bat` 由 Rust 的 Command 转义后交给 cmd。
+- `stillfail-runner --job -- <program> <args…>`：后台任务、设备命令在 Windows 上的“进程组”。把命令放进一个 `KILL_ON_JOB_CLOSE` 的 job，用自己的 stdio；等 job 里没有进程了才以命令的退出码退出；结束这个 runner 就结束整个 job。需要它是因为 Git Bash（MSYS）`exec` 出的进程在 Windows 看来父进程已经没了，按进程树（`taskkill /T`）找不到。
+
+测试：`tests/windows.rs`（Windows 上的 `cargo test`），`station/test/runner-windows.test.ts`。
 
 ## 2. 启动器（`station/native/launcher`，可执行文件 `stillfail-station`）
 
@@ -57,6 +68,24 @@ runner → 客户端：
 8. 启动器 stderr 照常（launchd 会写日志）；Node 的 stdout/stderr 继承启动器的。
 
 控制管道上 Node → 启动器：`{"ready":true,"version":"0.1.x"}`、`{"drained":"idle"|"timeout"}`（启动器照 Rust 版写 `run/drained`）。
+
+### Windows（PoC，`src/run_windows.rs`）
+
+只有 `run` 的最小版本，其余命令照旧交给 Node（没有 exec，Node 作为子进程跑，退出码照传）：
+
+- 锁用 `File::try_lock`（LockFileEx），拿不到退出码 3。
+- Node 自己 bind 端口（Windows 上 Node 不支持 `listen({fd})`），所以**没有交接**：不起新 Node 旁接，重启时端口有短暂空档；`handover`/SIGUSR1/SIGUSR2 都没有。
+- 控制通道是命名管道 `\\.\pipe\stillfail-launcher-<pid>-<n>`（只给当前用户），以 `--launcher-pipe` 交给 Node（`src/ops/launcher.ts`），两边的消息同 Unix。
+- ^C / 控制台关闭 / `--with-parent` 的父进程没了：在管道上说 `stop`，等 30 秒，不退再结束。Node 在自己的进程组里，^C 只到启动器。
+- Node 意外退出：按 1s、2s…60s 退避重启；连续 5 次没到 ready 就退出。
+- Node 在发布目录里是 `node/node.exe`（Node 官方 Windows 包的布局）。
+- `stillfail-station-w.exe`（GUI 子系统，没有窗口）：登录时的计划任务跑它，它再无窗口地跑同目录的 `stillfail-station.exe`，输出追加到数据目录的 `stillfail.log`。`--run <program> <args…>` 则无窗口地跑那个程序（station 自更新用）。
+
+安装、自启动、更新（`cloud/src/install-windows.ts`，`/install.ps1`）：
+- 发布包 `stillfail-station-win32-x64.zip`（`scripts/station-bundle.sh win32-x64`），native 部分由 `scripts/native.ts` 在 Mac 上用 cargo-zigbuild 交叉编译（`x86_64-pc-windows-gnu`），和 macOS/Linux 一样走缓存/CI。
+- 自启动是当前用户的计划任务（登录时、不需要管理员），结束后 1 分钟再起。`STILLFAIL_TASK`/`STILLFAIL_BIN` 让一台测试 station 用自己的任务名和命令目录，记在 `<data>/windows.json` 里，之后的更新（包括 station 自己发起的）沿用。
+- 更新先停（停任务、结束 launcher，按命令行里含 `<app>` 等 Node 退出），旧发布挪到 `app.old-<时间>`（还在跑的 runner 让目录删不掉，挪可以），下次再清。
+- station 从页面上自更新（`updates.ts` 的 `startInstaller`）：写 `run/update.ps1`，复制 `stillfail-station-w.exe` 到 `run/`，注册一次性计划任务「<station 的任务名> update」去跑它，跑完自己删掉任务；`update.step`/`update.log`/`update.exit` 同 Unix。不用 WMI 的 `Win32_Process.Create`：那样起 PowerShell 会被安全软件拒（实测“Access is denied”）。
 
 ### 从 Rust 版切过来
 

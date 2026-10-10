@@ -178,6 +178,21 @@ The enrollment token is temporary; do not commit it. Keep `STILLFAIL_DATA` set t
 
 The mock login routes are for loopback development only. Restarting the local cloud recreates its test identities and workspace, so enroll a fresh test station again. The station's old local admin URL is a redirect, not a standalone UI.
 
+## A station on Windows (proof of concept)
+
+The station runs natively on Windows x64 from a checkout; there is no Windows installer or release yet (docs/station-ts-native.md, "Windows"). It needs Git for Windows: jobs and device commands run under its `sh`, as Claude Code's own commands do there. From PowerShell (Git Bash's `tar` takes `C:` for a host, so `scripts/native.ts` runs from PowerShell):
+
+```powershell
+corepack pnpm install --frozen-lockfile --ignore-scripts
+cd station; corepack pnpm install --frozen-lockfile --ignore-scripts
+cd native\runner; cargo build --release; cd ..\launcher; cargo build --release; cd ..\..
+$env:STILLFAIL_MESH_NATIVE = node ..\scripts\native.ts file mesh   # win32-x64 is prebuilt for the desktop app
+$env:STILLFAIL_RUNNER = "$PWD\native\runner\target\release\stillfail-runner.exe"
+node src\main.ts run --app $PWD --data $env:TEMP\stillfail-test
+```
+
+`cargo test --release` in `native\runner` runs its Windows tests (`tests\windows.rs`); `node --test test\runner-windows.test.ts test\jobs.test.ts test\device-tools.test.ts test\remote.test.ts` the station's that run there. Most other station tests still assume Unix (fifos, `/tmp`, `sh` scripts as commands).
+
 ## Local desktop packages
 
 The desktop build currently targets macOS on Apple silicon. Install its dependencies and opt out of the maintainer's signing identity when making a local package:
