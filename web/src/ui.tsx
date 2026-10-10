@@ -131,7 +131,9 @@ export function Segmented<T extends string>({ options, value, onChange, label, c
       {/* The chosen option's ground is one piece that slides between options. */}
       <span className={css.segmentedThumb} aria-hidden="true" />
       {options.map((o) => (
-        <ToggleGroup.Item key={o.value} value={o.value} disabled={o.disabled ?? false} className={css.segmentedOption}>{o.label}</ToggleGroup.Item>
+        <ToggleGroup.Item key={o.value} value={o.value} disabled={o.disabled ?? false} className={css.segmentedOption}>
+          <span className={css.segmentedLabel}>{o.label}</span><span className={css.segmentedSizer} aria-hidden="true">{o.label}</span>
+        </ToggleGroup.Item>
       ))}
     </ToggleGroup.Root>
   );
