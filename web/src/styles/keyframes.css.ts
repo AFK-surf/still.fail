@@ -27,7 +27,8 @@ export const searchStrokeKeyframes = keyframes({ to: { strokeDashoffset: "0" } }
 export const buddyHopKeyframes = keyframes({ "50%": { transform: "translateY(-9px)" } });
 export const msgWaitingInKeyframes = keyframes({ "from": { visibility: "hidden" }, "to": { visibility: "visible" } });
 export const mFromRightKeyframes = keyframes({ "from": { transform: "translateX(100%)" }, "to": { transform: "none" } });
-export const mFromLeftKeyframes = keyframes({ "from": { transform: "translateX(-100%)" }, "to": { transform: "none" } });
+// From the left; a page under one swiped back, from where it showed (`--m-under-from`, mobile/app.tsx).
+export const mFromLeftKeyframes = keyframes({ "from": { transform: "translateX(var(--m-under-from, -100%))" }, "to": { transform: "none" } });
 export const mToLeftKeyframes = keyframes({ "from": { transform: "none" }, "to": { transform: "translateX(-100%)" } });
 export const mToRightKeyframes = keyframes({ "from": { transform: "translateX(var(--m-from, 0px))" }, "to": { transform: "translateX(100%)" } });
 export const mRiseInKeyframes = keyframes({ "from": { transform: "translateY(100%)" }, "to": { transform: "none" } });

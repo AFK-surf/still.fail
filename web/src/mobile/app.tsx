@@ -112,6 +112,10 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   const [pages, setPages] = useState<Page[]>(() => [{ key: location.key, location, way: wayOf(location.pathname) }]);
   const [moving, setMoving] = useState<{ from: Page; to: Page; forward: boolean } | null>(null);
   const top = pages.at(-1)!;
+  // A finger swiping the page back: how far (null: none); let go far enough, where it left the page, which the back goes
+  // on from (`from`), the page held there until the back lands.
+  const [swipe, setSwipe] = useState<number | null>(null);
+  const from = useRef(0);
   useLayoutEffect(() => {
     if (location.key === top.location.key) return;
     const page = { key: location.key, location, way: wayOf(location.pathname) };
@@ -134,7 +138,13 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
     setPages(next);
     const drawn = type === "POP" && drawnByBrowser;
     drawnByBrowser = false;
-    if (type !== "REPLACE" && !drawn && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) setMoving({ from: top, to: page, forward });
+    const moves = type !== "REPLACE" && !drawn && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Back, the page as it is in the list (its key the one it was first opened with, kept as it became another in place:
+    // a chat opened by a link becoming the list), or it would not be the one coming in, and stay hidden as it comes.
+    if (moves) setMoving({ from: top, to: type === "POP" && at >= 0 ? pages[at]! : page, forward });
+    else from.current = 0;
+    // A page swiped back was held where the finger let it go: in the same frame, its going on from there takes over.
+    setSwipe(null);
   }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!moving) { from.current = 0; return; }
@@ -196,9 +206,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   // With a finger, the page is swiped back from the screen's left edge: it follows the finger, the page under it shows,
   // and past a third of the way (or flung) it goes, from where the finger left it.
   const home_ = isHome(top);
-  const [swipe, setSwipe] = useState<number | null>(null);
   const swiping = useRef<{ x: number; y: number; at: number; dx: number; tapped: boolean } | null>(null);
-  const from = useRef(0);
   const swipeProps = home_ ? {} : {
     onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.pointerType !== "touch" || sheet || reader) return;
@@ -221,7 +229,14 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
       swiping.current = null;
       if (!s) return;
       const flung = s.dx > 40 && s.dx / Math.max(1, e.timeStamp - s.at) > 0.6;
-      if (s.dx > window.innerWidth / 3 || flung) { from.current = s.dx; setSwipe(null); app.pop(); } else setSwipe(null);
+      if (s.dx > window.innerWidth / 3 || flung) {
+        // Held where it is (and the page under it) until the back lands, then on from there (the effect above): not
+        // sprung back meanwhile, nor started over.
+        from.current = s.dx;
+        app.pop();
+        const leaving = top.key;
+        setTimeout(() => { if (now.current.top.key === leaving && from.current === s.dx) { from.current = 0; setSwipe(null); } }, 1000);
+      } else setSwipe(null);
       // A tap, not a swipe: it is for what lies under the strip (the bar's back button reaches into it).
       if (s.tapped && Math.hypot(e.clientX - s.x, e.clientY - s.y) < 6) {
         const strip = e.currentTarget;
@@ -250,8 +265,13 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
             const style: React.CSSProperties & Record<string, string | number> = { zIndex: moving ? (p.key === (moving.forward ? moving.to.key : moving.from.key) ? 2 : 1) : isTop ? 1 : 0 };
             if (swipe !== null && isTop) style.transform = `translateX(${swipe}px)`;
             if (role === "peek") style.transform = `translateX(calc(-30% + ${swipe! * 0.3}px))`;
-            // A page swiped back leaves from where the finger let it go.
-            if (role === "out" && moving && !moving.forward) style["--m-from"] = `${from.current}px`;
+            // A page swiped back leaves from where the finger let it go, the one under it comes on from where it showed,
+            // in what is left of the time.
+            if (moving && !moving.forward && from.current > 0 && (role === "out" || role === "in")) {
+              if (role === "out") style["--m-from"] = `${from.current}px`;
+              else style["--m-under-from"] = `calc(-30% + ${from.current * 0.3}px)`;
+              style.animationDuration = `${Math.round(300 * Math.max(0.5, 1 - from.current / window.innerWidth))}ms`;
+            }
             return (
               <div key={p.key} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
                 data-swiping={(swipe !== null && isTop) || undefined} style={style}>
