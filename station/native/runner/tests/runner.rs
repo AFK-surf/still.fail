@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 //! Runs the runner around small /bin/sh agents and talks to it as a station would. What these tests decide is the
 //! code's, not the machine's speed's: they wait for what the processes do (a line, an exit), with no limit of time.
 
