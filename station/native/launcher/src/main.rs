@@ -7,6 +7,7 @@
 //! arguments. `handoff-version` says 2: a Rust station asked to hand over to this binary does not exec it.
 
 mod data;
+mod lifecycle;
 mod log;
 #[cfg(unix)]
 mod ports;

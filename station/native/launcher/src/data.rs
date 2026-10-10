@@ -220,6 +220,8 @@ mod tests {
 
     #[test]
     fn station_json_is_one_line_in_the_rust_stations_order() {
-        assert_eq!(station_json(7, 12, "0.1.\"x"), "{\"pid\":7,\"startedAt\":12,\"version\":\"0.1.\\\"x\",\"handoff\":1,\"drain\":1,\"channel\":1}\n");
+        assert_eq!(station_json(7, 12, "0.1.\"x"), format!("{{\"pid\":7,\"startedAt\":12,\"version\":\"0.1.\\\"x\",{FLAGS}}}\n"));
+        #[cfg(unix)]
+        assert_eq!(FLAGS, "\"handoff\":1,\"drain\":1,\"channel\":1");
     }
 }

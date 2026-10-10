@@ -1,29 +1,30 @@
-//! `run` on Windows: the station's Node process under a launcher whose pid and lock stay, as run.rs is on Unix, less
-//! what Windows cannot do the same way.
+//! `run` on Windows: the station's Node process under a launcher whose pid and lock stay. What happens to the Node
+//! (ready, crashed and started again, stopped) is lifecycle.rs's, as on Unix; this is how Windows gives it its
+//! processes and events, less what Windows cannot do the same way:
 //!
 //! - Node binds its ports itself (Node cannot listen on a socket handed down on Windows), so a new Node is not started
-//!   beside the old one: there is no handover, and a restart leaves the ports for a moment.
+//!   beside the old one: there is no handover (nothing here asks the lifecycle for one), and a restart leaves the ports
+//!   for a moment.
 //! - The control channel is a named pipe only this user may open, `\\.\pipe\stillfail-launcher-<pid>-<n>`, given as
 //!   `--launcher-pipe`; on it the same lines go both ways as on Unix's socket.
 //! - There are no signals: a ^C (or the console closing) stops the station, as SIGTERM does on Unix. Node runs in a
 //!   process group of its own, so the ^C reaches the launcher only.
 //!
-//! Threads say what happened (Node's exit, a line from it, a ^C, the parent gone) on one channel; the main thread acts.
+//! Threads say what happened (Node's exit, a line from it, a ^C) on one channel; the main thread tells the lifecycle.
 
 use std::ffi::OsStr;
 use std::io;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
 use std::os::windows::process::CommandExt;
-use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::ptr::{null, null_mut};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use serde_json::Value;
-use windows_sys::Win32::Foundation::{CloseHandle, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, GetLastError, HANDLE, INVALID_HANDLE_VALUE, LocalFree};
+use windows_sys::Win32::Foundation::{CloseHandle, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, GetLastError, HANDLE, INVALID_HANDLE_VALUE, LocalFree, WAIT_TIMEOUT};
 use windows_sys::Win32::Security::Authorization::{ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1};
 use windows_sys::Win32::Security::{GetTokenInformation, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER, TokenUser};
 use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OVERLAPPED, PIPE_ACCESS_DUPLEX, ReadFile, WriteFile};
@@ -35,30 +36,16 @@ use windows_sys::Win32::System::Threading::{
     PROCESS_SYNCHRONIZE, WaitForSingleObject,
 };
 
-use crate::data::{self, Config, now_ms, write_whole};
+use crate::data::{self, Config};
+use crate::lifecycle::{Lifecycle, Os, Process, Times};
+pub use crate::lifecycle::Options;
 use crate::log;
 
-pub struct Options {
-    pub data: PathBuf,
-    pub app: PathBuf,
-    pub port: u16,
-    pub named: bool,
-    pub with_parent: bool,
-}
-
-/// As run.rs has them: a stopped Node's time to exit; restarts after an unexpected exit, doubling; how many starts in a
-/// row may end before Node says ready.
-const STOP: Duration = Duration::from_secs(30);
-const BACKOFF: Duration = Duration::from_secs(1);
-const BACKOFF_MAX: Duration = Duration::from_secs(60);
-const START_FAILURES: u32 = 5;
-const PARENT: Duration = Duration::from_secs(2);
-
 enum Event {
-    /// Node `n` exited, with this code.
-    Exited(u64, Option<i32>),
-    /// Node `n` said this.
-    Said(u64, Value),
+    /// Node `pid` exited, with this code.
+    Exited(u32, Option<i32>),
+    /// Node `pid` said this.
+    Said(u32, Value),
     Stop(&'static str),
 }
 
@@ -73,18 +60,94 @@ unsafe extern "system" fn on_ctrl(_kind: u32) -> i32 {
 }
 
 struct Node {
-    n: u64,
     child: Child,
     pipe: Pipe,
-    ready: bool,
 }
 
-impl Node {
+impl Process for Node {
+    fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
     fn tell(&self, op: &str) {
         let line = format!("{{\"op\":\"{op}\"}}\n");
         if let Err(error) = self.pipe.write_all(line.as_bytes()) {
             log::warn(&format!("Node {} not told {op}: {error}", self.child.id()));
         }
+    }
+}
+
+/// Windows' processes: each Node with a pipe of its own, its lines and its exit told on the channel by threads.
+struct System {
+    options: Options,
+    security: Arc<Security>,
+    tx: Sender<Event>,
+    next: u64,
+    /// --with-parent: the parent at the start, to wait on.
+    parent: Option<OwnedHandle>,
+}
+
+impl Os for System {
+    type Node = Node;
+
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+
+    fn spawn(&mut self) -> io::Result<Node> {
+        self.next += 1;
+        let name = format!(r"\\.\pipe\stillfail-launcher-{}-{}", std::process::id(), self.next);
+        let pipe = Pipe::create(&name, &self.security).map_err(|error| io::Error::new(error.kind(), format!("{name}: {error}")))?;
+        let app = &self.options.app;
+        let mut command = Command::new(crate::node(app));
+        command.arg(crate::main_js(app)).arg("run").arg("--app").arg(app).arg("--data").arg(&self.options.data).arg("--launcher-pipe").arg(&name);
+        if self.options.named {
+            command.arg("--port").arg(self.options.port.to_string());
+        }
+        command.stdin(Stdio::null()).creation_flags(CREATE_NEW_PROCESS_GROUP);
+        let mut child = command.spawn()?;
+        let pid = child.id();
+        // Its exit, seen from a thread of its own: a handle of its process to wait on.
+        // SAFETY: a handle of ours, closed by OwnedHandle.
+        let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+        if process.is_null() {
+            let error = io::Error::last_os_error();
+            let _ = child.kill();
+            return Err(io::Error::new(error.kind(), format!("Node {pid} cannot be waited for: {error}")));
+        }
+        let process = unsafe { OwnedHandle::from_raw_handle(process as RawHandle) };
+        let (tx, wait_pipe) = (self.tx.clone(), pipe.clone());
+        std::thread::spawn(move || {
+            // SAFETY: waiting on our handle.
+            unsafe { WaitForSingleObject(process.as_raw_handle() as HANDLE, u32::MAX) };
+            // A pipe it never connected to waits no more.
+            wait_pipe.cancel();
+            let code = exit_code(&process);
+            let _ = tx.send(Event::Exited(pid, code));
+        });
+        let (tx, read_pipe) = (self.tx.clone(), pipe.clone());
+        std::thread::spawn(move || read_lines(pid, read_pipe, tx));
+        let _ = child.stdin.take();
+        Ok(Node { child, pipe })
+    }
+
+    fn kill(&mut self, node: &mut Node) {
+        // Its exit is told by its waiting thread, as any.
+        let _ = node.child.kill();
+    }
+
+    fn parent_gone(&mut self) -> bool {
+        // The parent's pid is not taken over on Windows (a child keeps naming a parent long gone): its process is
+        // waited on instead. None to wait on: gone already.
+        match &self.parent {
+            // SAFETY: waiting on our handle, not at all.
+            Some(parent) => unsafe { WaitForSingleObject(parent.as_raw_handle() as HANDLE, 0) != WAIT_TIMEOUT },
+            None => true,
+        }
+    }
+
+    fn program(&self) -> String {
+        crate::node(&self.options.app).display().to_string()
     }
 }
 
@@ -129,158 +192,49 @@ pub fn run(options: Options) -> i32 {
     let _ = EVENTS.set(Mutex::new(tx.clone()));
     // SAFETY: a handler that only sends on a channel.
     unsafe { SetConsoleCtrlHandler(Some(on_ctrl), 1) };
-    if options.with_parent {
-        watch_parent(tx.clone());
+    let with_parent = options.with_parent;
+    let parent = if with_parent { parent_process() } else { None };
+    if with_parent && parent.is_none() {
+        log::warn("--with-parent: the parent is not there");
     }
-    Launcher { options, run, security, tx, rx, next: 0, failures: 0, backoff_step: 0 }.serve()
+    let mut station = Lifecycle::new(System { options, security, tx, next: 0, parent }, Times::of_env(), run, with_parent);
+    station.start();
+    serve(&mut station, rx)
 }
 
-struct Launcher {
-    options: Options,
-    run: PathBuf,
-    security: Arc<Security>,
-    tx: Sender<Event>,
-    rx: Receiver<Event>,
-    next: u64,
-    failures: u32,
-    backoff_step: u32,
-}
-
-impl Launcher {
-    fn serve(mut self) -> i32 {
-        let mut node = self.start();
-        let mut restart_at: Option<Instant> = None;
-        loop {
-            if node.is_none() && restart_at.is_none() {
-                restart_at = Some(self.failed_start());
-                if self.failures >= START_FAILURES {
-                    log::error(&format!("Node did not start {START_FAILURES} times in a row; giving up"));
-                    return 1;
-                }
-            }
-            let event = match restart_at {
-                Some(at) => match self.rx.recv_timeout(at.saturating_duration_since(Instant::now())) {
-                    Ok(event) => Some(event),
-                    Err(RecvTimeoutError::Timeout) => None,
-                    Err(RecvTimeoutError::Disconnected) => return 1,
-                },
-                None => self.rx.recv().ok(),
-            };
-            match event {
-                None => {
-                    restart_at = None;
-                    node = self.start();
-                }
-                Some(Event::Said(n, message)) => {
-                    let Some(current) = node.as_mut().filter(|c| c.n == n) else { continue };
-                    if message["ready"] == true && !current.ready {
-                        current.ready = true;
-                        self.failures = 0;
-                        self.backoff_step = 0;
-                        let version = message["version"].as_str().unwrap_or_default();
-                        log::info(&format!("Node {} ready (version {version})", current.child.id()));
-                        if let Err(error) = write_whole(&self.run.join("station.json"), &data::station_json(std::process::id(), now_ms(), version)) {
-                            log::warn(&format!("station.json not written: {error}"));
-                        }
-                    } else if let Some(said) = message["drained"].as_str() {
-                        let _ = write_whole(&self.run.join("drained"), &format!("{said}\n"));
-                    }
-                }
-                Some(Event::Exited(n, code)) => {
-                    let Some(current) = node.take_if(|c| c.n == n) else { continue };
-                    log::warn(&format!("Node {} exited unexpectedly ({})", current.child.id(), code.map_or("no code".into(), |c| format!("code {c}"))));
-                    if current.ready {
-                        restart_at = Some(self.backoff());
-                    }
-                }
-                Some(Event::Stop(why)) => {
-                    log::info(&format!("stopping ({why})"));
-                    if let Some(current) = node.take() {
-                        self.stop(current);
-                    }
-                    return 0;
-                }
-            }
+/// Waits for what happens (a line from a Node, a Node's end, a stop, something due) and tells the lifecycle, until it
+/// is done.
+fn serve(station: &mut Lifecycle<System>, rx: Receiver<Event>) -> i32 {
+    loop {
+        if let Some(exit) = station.finished() {
+            log::info("stopped");
+            return exit;
         }
-    }
-
-    /// A start that came to nothing: when to try again.
-    fn failed_start(&mut self) -> Instant {
-        self.failures += 1;
-        self.backoff()
-    }
-
-    fn backoff(&mut self) -> Instant {
-        let delay = BACKOFF.saturating_mul(1 << self.backoff_step.min(16)).min(BACKOFF_MAX);
-        self.backoff_step += 1;
-        log::info(&format!("starting Node again in {} ms", delay.as_millis()));
-        Instant::now() + delay
-    }
-
-    fn start(&mut self) -> Option<Node> {
-        self.next += 1;
-        let n = self.next;
-        let name = format!(r"\\.\pipe\stillfail-launcher-{}-{n}", std::process::id());
-        let pipe = match Pipe::create(&name, &self.security) {
-            Ok(pipe) => pipe,
-            Err(error) => {
-                log::error(&format!("{name}: {error}"));
-                return None;
-            }
+        let event = match station.next_due() {
+            Some(at) => match rx.recv_timeout(at.saturating_duration_since(Instant::now())) {
+                Ok(event) => Some(event),
+                Err(RecvTimeoutError::Timeout) => None,
+                Err(RecvTimeoutError::Disconnected) => return 1,
+            },
+            None => match rx.recv() {
+                Ok(event) => Some(event),
+                Err(_) => return 1,
+            },
         };
-        let app = &self.options.app;
-        let mut command = Command::new(crate::node(app));
-        command.arg(crate::main_js(app)).arg("run").arg("--app").arg(app).arg("--data").arg(&self.options.data).arg("--launcher-pipe").arg(&name);
-        if self.options.named {
-            command.arg("--port").arg(self.options.port.to_string());
-        }
-        command.stdin(Stdio::null()).creation_flags(CREATE_NEW_PROCESS_GROUP);
-        let mut child = match command.spawn() {
-            Ok(child) => child,
-            Err(error) => {
-                log::error(&format!("{} did not start: {error}", crate::node(app).display()));
-                return None;
+        match event {
+            Some(Event::Said(pid, message)) => {
+                if let Some(slot) = station.slot_of(pid) {
+                    station.said(slot, message);
+                }
             }
-        };
-        log::info(&format!("Node started (pid {})", child.id()));
-        // Its exit, seen from a thread of its own: a handle of its process to wait on.
-        // SAFETY: a handle of ours, closed by OwnedHandle.
-        let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, 0, child.id()) };
-        if process.is_null() {
-            log::error(&format!("Node {} cannot be waited for: {}", child.id(), io::Error::last_os_error()));
-            let _ = child.kill();
-            return None;
-        }
-        let process = unsafe { OwnedHandle::from_raw_handle(process as RawHandle) };
-        let (tx, wait_pipe) = (self.tx.clone(), pipe.clone());
-        std::thread::spawn(move || {
-            // SAFETY: waiting on our handle.
-            unsafe { WaitForSingleObject(process.as_raw_handle() as HANDLE, u32::MAX) };
-            // A pipe it never connected to waits no more.
-            wait_pipe.cancel();
-            let code = exit_code(&process);
-            let _ = tx.send(Event::Exited(n, code));
-        });
-        let (tx, read_pipe) = (self.tx.clone(), pipe.clone());
-        std::thread::spawn(move || read_lines(n, read_pipe, tx));
-        let _ = child.stdin.take();
-        Some(Node { n, child, pipe, ready: false })
-    }
-
-    /// Tells it to stop, waits for its exit (STOP at most), then ends it.
-    fn stop(&self, mut node: Node) {
-        node.tell("stop");
-        let deadline = Instant::now() + STOP;
-        loop {
-            match self.rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-                Ok(Event::Exited(n, _)) if n == node.n => return,
-                Ok(_) => {}
-                Err(_) => break,
+            Some(Event::Exited(pid, code)) => station.ended(pid, &code.map_or("exited (no code)".into(), |c| format!("exited with {c}"))),
+            Some(Event::Stop(why)) => {
+                log::info(&format!("stopping ({why})"));
+                station.stop();
             }
+            None => {}
         }
-        log::warn(&format!("Node {} did not stop in {} s; ending it", node.child.id(), STOP.as_secs()));
-        let _ = node.child.kill();
-        let _ = node.child.wait();
+        station.tick();
     }
 }
 
@@ -292,7 +246,7 @@ fn exit_code(process: &OwnedHandle) -> Option<i32> {
 }
 
 /// Lines from Node on the pipe, once it has connected; until it closes.
-fn read_lines(n: u64, pipe: Pipe, tx: Sender<Event>) {
+fn read_lines(pid: u32, pipe: Pipe, tx: Sender<Event>) {
     if pipe.connect().is_err() {
         return;
     }
@@ -308,7 +262,7 @@ fn read_lines(n: u64, pipe: Pipe, tx: Sender<Event>) {
             let line: Vec<u8> = pending.drain(..=at).collect();
             match serde_json::from_slice::<Value>(&line) {
                 Ok(message) => {
-                    let _ = tx.send(Event::Said(n, message));
+                    let _ = tx.send(Event::Said(pid, message));
                 }
                 Err(_) => log::warn(&format!("an unreadable line from Node: {}", String::from_utf8_lossy(&line).trim())),
             }
@@ -316,24 +270,12 @@ fn read_lines(n: u64, pipe: Pipe, tx: Sender<Event>) {
     }
 }
 
-/// --with-parent: the parent's end stops the station (looked at every PARENT, as on Unix).
-fn watch_parent(tx: Sender<Event>) {
-    let Some(parent) = parent_pid() else {
-        log::warn("--with-parent: the parent is not known");
-        return;
-    };
-    // SAFETY: a handle of ours, waited on and closed.
+/// --with-parent: the launcher's parent, to wait on (its pid read now, while it is still the parent's).
+fn parent_process() -> Option<OwnedHandle> {
+    let parent = parent_pid()?;
+    // SAFETY: a handle of ours, closed by OwnedHandle.
     let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, parent) };
-    if process.is_null() {
-        let _ = tx.send(Event::Stop("the parent is gone"));
-        return;
-    }
-    let process = unsafe { OwnedHandle::from_raw_handle(process as RawHandle) };
-    std::thread::spawn(move || {
-        // SAFETY: waiting on our handle; PARENT at a time, as Unix looks.
-        while unsafe { WaitForSingleObject(process.as_raw_handle() as HANDLE, PARENT.as_millis() as u32) } != 0 {}
-        let _ = tx.send(Event::Stop("the parent is gone"));
-    });
+    (!process.is_null()).then(|| unsafe { OwnedHandle::from_raw_handle(process as RawHandle) })
 }
 
 fn parent_pid() -> Option<u32> {

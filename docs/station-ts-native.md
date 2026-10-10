@@ -69,15 +69,17 @@ runner → 客户端：
 
 控制管道上 Node → 启动器：`{"ready":true,"version":"0.1.x"}`、`{"drained":"idle"|"timeout"}`（启动器照 Rust 版写 `run/drained`）。
 
-### Windows（PoC，`src/run_windows.rs`）
+**生命周期只有一份**（`src/lifecycle.rs`）：上面第 4–7 步（ready、退避重启、连续失败放弃、交接、drain、停止和超时强杀、跟随父进程）是一个与平台无关的状态机，它的测试在三个平台上都会跑。`run.rs`（Unix）和 `run_windows.rs` 只负责三件事：起进程、在控制通道上收发消息、把事件（某行消息、进程结束、停止）告诉状态机。改重启、取消或超时策略只改这一处。各平台不同的只有两点：Windows 不发起交接，判断父进程是否还在时 Unix 用 `getppid` 有没有变，Windows 等父进程的句柄。
+
+### Windows（`src/run_windows.rs`）
 
 只有 `run` 的最小版本，其余命令照旧交给 Node（没有 exec，Node 作为子进程跑，退出码照传）：
 
 - 锁用 `File::try_lock`（LockFileEx），拿不到退出码 3。
 - Node 自己 bind 端口（Windows 上 Node 不支持 `listen({fd})`），所以**没有交接**：不起新 Node 旁接，重启时端口有短暂空档；`handover`/SIGUSR1/SIGUSR2 都没有。
 - 控制通道是命名管道 `\\.\pipe\stillfail-launcher-<pid>-<n>`（只给当前用户），以 `--launcher-pipe` 交给 Node（`src/ops/launcher.ts`），两边的消息同 Unix。
-- ^C / 控制台关闭 / `--with-parent` 的父进程没了：在管道上说 `stop`，等 30 秒，不退再结束。Node 在自己的进程组里，^C 只到启动器。
-- Node 意外退出：按 1s、2s…60s 退避重启；连续 5 次没到 ready 就退出。
+- ^C / 控制台关闭 / `--with-parent` 的父进程没了：交给共用的状态机，和 Unix 的 SIGTERM 一样处理。Node 在自己的进程组里，^C 只到启动器。
+- Node 意外退出、退避、放弃：同 Unix（共用的状态机）。
 - Node 在发布目录里是 `node/node.exe`（Node 官方 Windows 包的布局）。
 - `stillfail-station-w.exe`（GUI 子系统，没有窗口）：登录时的计划任务跑它，它再无窗口地跑同目录的 `stillfail-station.exe`，输出追加到数据目录的 `stillfail.log`。`--run <program> <args…>` 则无窗口地跑那个程序（station 自更新用）。
 
