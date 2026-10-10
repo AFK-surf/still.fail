@@ -22,6 +22,16 @@ import * as partsCss from "./styles/parts.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import { t } from "../i18n.ts";
 
+// The composer's height, set at its page's root (MobileComposer), as that element's own; the room it leaves a chat's
+// list, a length worked out there and inherited (ChatHost.css.ts): one changing with the other only past a few lines.
+// A browser without registered properties inherits both as they are, as before.
+for (const property of [
+  { name: "--m-bottom", syntax: "<length>", inherits: false, initialValue: "72px" },
+  { name: "--m-composer-room", syntax: "<length>", inherits: true, initialValue: "0px" },
+]) {
+  try { globalThis.CSS?.registerProperty?.(property); } catch { /* registered already (a module loaded again) */ }
+}
+
 /** What the composer writes to, as the page above it says. */
 export interface HostComposer {
   /** The station its files and messages go to (its address). */

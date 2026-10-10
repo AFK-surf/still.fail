@@ -325,6 +325,8 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
   let copy: HTMLElement | null = null;
   let of: HTMLElement | null = null;
   let ground = "";
+  /** Where the copy was set down (in the layer), its width: from there it is only moved (a transform), not laid out anew. */
+  let set: { left: number; top: number; width: number } | null = null;
   let clock: Animation | null = null;
   let frame = 0;
   let over = false;
@@ -364,6 +366,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
       }
       if (copy) copy.replaceWith(next); else ghost.append(next);
       copy = next;
+      set = null;
       if (!ground) {
         const bubble = copy.querySelector(`.${conversationCss.msgBubble}`);
         ground = bubble ? getComputedStyle(bubble).backgroundColor : "";
@@ -374,15 +377,21 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     const box = layer.getBoundingClientRect();
     const { up, across } = flight(clock.effect?.getComputedTiming().progress ?? 1);
     const e = Math.min(1, across);
-    Object.assign(copy.style, { position: "absolute", left: `${at.left - box.left}px`, top: `${at.top - box.top}px`, width: `${at.width}px`, margin: "0" });
+    // Set down once where the row is (again only if its width changes); followed from there by a transform alone, on a
+    // layer of its own: moving it each frame lays nothing out and draws nothing anew (a phone's frames go on that).
+    if (!set || Math.abs(set.width - at.width) > 0.5) {
+      set = { left: at.left - box.left, top: at.top - box.top, width: at.width };
+      Object.assign(copy.style, { position: "absolute", left: `${set.left}px`, top: `${set.top}px`, width: `${set.width}px`, margin: "0", willChange: "transform" });
+    }
+    const dx = at.left - box.left - set.left, dy = at.top - box.top - set.top;
     if (words) {
       const to = textAt(words);
       const s = from.size / to.size + (1 - from.size / to.size) * up;
       Object.assign(copy.style, {
         transformOrigin: `${to.x - at.left}px ${to.y - at.top}px`,
-        transform: `translate(${(from.x - to.x) * (1 - across)}px, ${(from.y - to.y) * (1 - up)}px) scale(${s})`,
+        transform: `translate(${dx + (from.x - to.x) * (1 - across)}px, ${dy + (from.y - to.y) * (1 - up)}px) scale(${s})`,
       });
-    }
+    } else copy.style.transform = `translate(${dx}px, ${dy}px)`;
     // Each image from its thumbnail to its place in the row as it is now: across and up as the words go, its box
     // growing from the thumbnail's to its own.
     for (const picture of pictures) {
