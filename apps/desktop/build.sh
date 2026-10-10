@@ -18,7 +18,7 @@
 # in the history>, each release's higher than the one before it.
 # --win (or WIN=1) builds it for Windows x64 instead, from the Mac: an NSIS installer (out/stillfail-<version>-x64-win.exe,
 # its blockmap and the feed stillfail.yml; with --beta stillfail-beta-…-win.exe and stillfail-beta.yml), not signed
-# yet. It carries no station (the station does not run on Windows: SKIP_STATION) and no dock.
+# yet. It carries Windows' station (station-bundle.sh win32-x64), run on its Electron as on the Mac; no dock.
 # --beta (or BETA=1) builds the beta app instead: 「youdid.wtf」 (fail.still.desktop.beta), beside the released one, with
 # its own userData and link scheme (stillfail-beta://), its core saying it is a beta app and its updates on the
 # stillfail-beta channel (main.ts BETA): out/mac-arm64/youdid.wtf.app, zipped as stillfail-beta-<version>-arm64-mac.zip
@@ -33,7 +33,6 @@ for arg; do
 done
 beta=${BETA:-}
 win=${WIN:-}
-[ -z "$win" ] || SKIP_STATION=1
 # A non-login shell (ssh studio …) has none of these on its PATH.
 export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/Library/pnpm:$PATH"
 here=$(cd "$(dirname "$0")" && pwd)
@@ -56,8 +55,8 @@ posthog="$deploy/posthog.json"
 rm -rf "$here/build" "$here/out"
 mkdir -p "$here/build/station"
 if [ -z "${SKIP_STATION:-}" ]; then
-  if [ -f "$posthog" ]; then STILLFAIL_POSTHOG="$posthog" sh "$root/scripts/station-bundle.sh" "$here/build/station"
-  else sh "$root/scripts/station-bundle.sh" "$here/build/station"; fi
+  if [ -f "$posthog" ]; then STILLFAIL_POSTHOG="$posthog" sh "$root/scripts/station-bundle.sh" "$here/build/station" "$target"
+  else sh "$root/scripts/station-bundle.sh" "$here/build/station" "$target"; fi
 fi
 cp "$mesh" "$here/build/mesh.node"
 mkdir -p "$here/build/dock" && [ -n "$win" ] || cp "$dock" "$here/build/dock/StillfailDock"

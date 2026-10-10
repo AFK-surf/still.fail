@@ -515,6 +515,8 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
  */
 function JoinThisMac({ account, workspace, className }: { account: Account; workspace: string; className?: string }) {
   const desktop = typeof window !== "undefined" ? window.stillfailDesktop?.station : undefined;
+  // The desktop app on Windows: a PC, not a Mac.
+  const pc = typeof navigator !== "undefined" && /Windows/.test(navigator.userAgent);
   const toast = useToast();
   const [here, setHere] = useState<CarriedStation | null>(null);
   // Read again every few seconds: a station removed from its workspace marks itself so only once the cloud has told it.
@@ -531,17 +533,23 @@ function JoinThisMac({ account, workspace, className }: { account: Account; work
     if (!done) throw new Error(t("web-pages.settings.thisMac.noAnswer"));
     if ("error" in done) throw new Error(done.error);
     return done.station;
-  }, (s) => { setHere(s); toast(t("web-pages.settings.thisMac.joined")); });
+  }, (s) => { setHere(s); toast(t(pc ? "web-pages.settings.thisPc.joined" : "web-pages.settings.thisMac.joined")); });
   if (!desktop || !here?.carried || here.state === "running") return null;
-  return <Button icon={Monitor} className={className} busy={join.busy} onClick={() => join.run()}>{t("web-pages.settings.thisMac.add")}</Button>;
+  return <Button icon={Monitor} className={className} busy={join.busy} onClick={() => join.run()}>{t(pc ? "web-pages.settings.thisPc.add" : "web-pages.settings.thisMac.add")}</Button>;
 }
 
-/** An enrollment's command, and that the station is awaited. */
-function EnrollSteps({ enrollment }: { enrollment: { install: string } }) {
+/** An enrollment's command (Windows' too, from a cloud that gives it), and that the station is awaited. */
+function EnrollSteps({ enrollment }: { enrollment: { install: string; installWindows?: string } }) {
   return (
     <>
       <p>{t("web-pages.settings.enroll.run")}<About>{t("web-pages.settings.enroll.about", { name: NAME })}</About></p>
       <CopyCommand text={enrollment.install} />
+      {enrollment.installWindows && (
+        <>
+          <p>{t("web-pages.settings.enroll.windows")}</p>
+          <CopyCommand text={enrollment.installWindows} />
+        </>
+      )}
       <div className={css.enrollWait} role="status">
         <span className={waitingCss.spinner} aria-hidden="true" />
         <span><strong>{t("web-pages.settings.enroll.waiting")}</strong><span className={shellCss.muted}>{t("web-pages.settings.enroll.waitingNote")}</span></span>

@@ -537,7 +537,7 @@ ipcMain.handle("station:state", (event) => event.senderFrame?.url.startsWith(`${
 ipcMain.handle("station:join", async (event, account: unknown, workspace: unknown) => {
   if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof account !== "string" || typeof workspace !== "string") return null;
   if (!station.carried) return { error: t("desktop.station.notCarried") };
-  if (station.enrolled) return { error: t("desktop.station.enrolled") };
+  if (station.enrolled) return { error: t(process.platform === "win32" ? "desktop.station.enrolledPc" : "desktop.station.enrolled") };
   if (joining) return { error: t("desktop.station.joining") };
   try {
     await joinHere(account, workspace);

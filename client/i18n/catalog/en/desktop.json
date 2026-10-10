@@ -68,6 +68,7 @@
   "desktop.preview.redirectedAway": "Page redirected elsewhere: {location}",
   "desktop.preview.tooManyRedirects": "Too many redirects",
   "desktop.station.enrolled": "This Mac is already in a workspace",
+  "desktop.station.enrolledPc": "This PC is already in a workspace",
   "desktop.station.joining": "Joining, one moment…",
   "desktop.station.notCarried": "This app version has no station",
   "desktop.update.available": "{version} is available",

@@ -68,6 +68,7 @@
   "desktop.preview.redirectedAway": "这个网页跳到了别的地址：{location}",
   "desktop.preview.tooManyRedirects": "跳转太多次了",
   "desktop.station.enrolled": "这台 Mac 已经在一个 workspace 里",
+  "desktop.station.enrolledPc": "这台电脑已经在一个 workspace 里",
   "desktop.station.joining": "正在加入，稍等",
   "desktop.station.notCarried": "这个版本的 app 没有带 station",
   "desktop.update.available": "有新版本 {version}",
