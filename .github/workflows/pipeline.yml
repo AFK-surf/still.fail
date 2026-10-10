@@ -27,7 +27,7 @@ permissions:
 env:
   # The native parts a branch's checks and builds use (the Linux station parts are built and published from main; the
   # Linux check's mesh addon is built on a branch that changed it).
-  BRANCH_NATIVES: mesh:darwin-arm64 dock:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64 mesh:win32-x64
+  BRANCH_NATIVES: mesh:darwin-arm64 dock:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64
 jobs:
   # Every job runs on Blacksmith's machines or mini1, not on GitHub's own: when GitHub's runners were short (Actions
   # degraded, 2026-10-05), a job waiting for one held each run 15 minutes and was cancelled, nothing released.
@@ -361,7 +361,7 @@ jobs:
   # at them yet); the station's (named the same each time: what installs get) and every feed are kept as this run's
   # artifact and put by `put` once the check passed and the API is out (scripts/release-put.sh).
 
-  # The station's (darwin-arm64, linux-x64, linux-arm64): what a station on the test channel updates to.
+  # The station's (darwin-arm64, linux-x64, linux-arm64, win32-x64): what a station on the test channel updates to.
   station:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' }}
@@ -372,7 +372,7 @@ jobs:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the release's number is the commits in the history
       - uses: ./.github/actions/setup-mac
-      - name: Build the station's release (darwin-arm64, linux-x64, linux-arm64)
+      - name: Build the station's release (darwin-arm64, linux-x64, linux-arm64, win32-x64)
         env:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}

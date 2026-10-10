@@ -1,13 +1,14 @@
 #!/bin/sh
 # Builds the still.fail station's releases (the station in TypeScript, laid out by scripts/station-bundle.sh) and puts
 # them in the cloud's releases bucket, where install.sh (cloud/src/install.ts) gets them: darwin-arm64, linux-x64 and
-# linux-arm64, each with its Node and its native parts (prebuilt for that platform: scripts/native.ts).
+# linux-arm64, each with its Node and its native parts (prebuilt for that platform: scripts/native.ts); and win32-x64,
+# a zip, which install.ps1 gets (cloud/src/install-windows.ts), its Node nodejs.org's zip.
 # The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip, its blockmap and stillfail-mac.yml, in desktop/),
 # `desktop-win` (build.sh --win, from the Mac too: the NSIS installer stillfail-<version>-x64-win.exe, its blockmap and
 # stillfail.yml, in desktop/; not signed yet) and
 # `android` (apps/android/build.py --release: stillfail-<n>.apk and latest.json, in android/). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
-#   release.sh [--beta] [PLATFORM…]   (default: the station's three; desktop and android only when named)
+#   release.sh [--beta] [PLATFORM…]   (default: the station's four; desktop and android only when named)
 #   release.sh promote [station]
 # --beta: to the test channel instead (cloud/src/install.ts): the station's tarballs in beta/ and station-beta.json; the
 # beta apps, apps of their own beside the released ones (fail.still.desktop.beta: apps/desktop/build.sh --beta, its
@@ -57,6 +58,7 @@ if [ "${1:-}" = promote ]; then
       # The tarballs first, the feed that says they are out last.
       station)
         for platform in darwin-arm64 linux-x64 linux-arm64; do copy "beta/stillfail-station-$platform.tar.gz" "stillfail-station-$platform.tar.gz" application/gzip; done
+        copy beta/stillfail-station-win32-x64.zip stillfail-station-win32-x64.zip application/zip
         copy station-beta.json station.json application/json
         ;;
       *) echo "promote what? only the station (the beta apps are apps of their own: release.sh desktop or android releases the stable ones), not $what" >&2; exit 2 ;;
@@ -67,7 +69,7 @@ fi
 
 beta=""
 if [ "${1:-}" = --beta ]; then beta=yes; shift; fi
-platforms=${*:-darwin-arm64 linux-x64 linux-arm64}
+platforms=${*:-darwin-arm64 linux-x64 linux-arm64 win32-x64}
 for platform in $platforms; do
   if [ "$platform" != android ] && [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ]; then
     echo "$platform releases require a Mac with Apple silicon" >&2; exit 1
@@ -130,14 +132,22 @@ for platform in $platforms; do
       # Under the new name only: the old name (ember-station-*.tar.gz) keeps the last release from before the rename,
       # for the cloud's installer from before it, which would not know this layout (cloud/src/install.ts).
       # Packed and put beside the next platform's bundling (each ~20 s, one after another before 2026-10-04).
-      file="stillfail-station-$platform.tar.gz"
-      (tar -czf "$out/$file" -C "$out/$platform" stillfail && put "$out/$file" "${beta:+beta/}$file" application/gzip) &
+      # Windows' a zip (install.ps1 opens it with Expand-Archive), its Node nodejs.org's own zip (node-dist.sh).
+      if [ "$platform" = win32-x64 ]; then
+        file="stillfail-station-$platform.zip"
+        (rm -f "$out/$file" && (cd "$out/$platform" && zip -qr "$out/$file" stillfail) && put "$out/$file" "${beta:+beta/}$file" application/zip) &
+        node_file="node/node-v$(cat "$root/.node-version")-win-x64.zip"
+      else
+        file="stillfail-station-$platform.tar.gz"
+        (tar -czf "$out/$file" -C "$out/$platform" stillfail && put "$out/$file" "${beta:+beta/}$file" application/gzip) &
+        node_file="node/node-v$(cat "$root/.node-version")-$platform.tar.gz"
+      fi
       putting="${putting:-} $!"
       # Its Node, unless the releases have that version already.
-      node_file="node/node-v$(cat "$root/.node-version")-$platform.tar.gz"
       if ! released "$node_file"; then
         dist=$(sh "$root/scripts/node-dist.sh" "$out/node-$platform" "$platform")
-        put "$dist" "$node_file" application/gzip
+        node_type=application/gzip; [ "$platform" = win32-x64 ] && node_type=application/zip
+        put "$dist" "$node_file" "$node_type"
         put "$dist.sha256" "$node_file.sha256" "text/plain; charset=utf-8"
       fi
       station=yes
