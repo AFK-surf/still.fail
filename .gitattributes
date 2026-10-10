@@ -1,0 +1,5 @@
+# Text is checked out with LF everywhere, a Windows checkout too (whatever core.autocrlf says there): sh scripts with
+# CRLF do not run, and a station built on Windows would ship its skills and scripts with them. cmd needs CRLF.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
