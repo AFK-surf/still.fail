@@ -483,6 +483,7 @@
   "core-logic.status.down.tries": " (attempt {n})",
   "core-logic.status.received": "Received {size} in {secs}s",
   "core-logic.status.seconds": "{n}s",
+  "core-logic.status.times": "{text} ×{n}",
   "core-logic.status.waited": "Waited {secs}s",
   "core-logic.status.waited_nothing": "Waited {secs}s, no data yet",
   "core-logic.status.what.chats": "Loading chats",

@@ -141,6 +141,20 @@ test("a_workspaces_status_is_its_own_waits_its_accounts_socket_and_the_relay", (
   assert.deepEqual(texts(value([[w1, "all"], [w2, "all"], [device, "all"]])), ["连不上 still.fail cloud，2 秒后重试", "正在连接 relay", "读取对话", "still.fail cloud 读取 workspace"]);
 });
 
+test("waits_that_say_the_same_are_one_line_with_how_many", () => {
+  const host = new FakeHost();
+  const status = new Status(host, new Runner(host.time.clock));
+  status.setNames((a) => (a === "ws/s1" ? "studio" : null));
+  for (let i = 0; i < 12; i++) status.begin({ station: "ws/s1" }, stationWhat("GET", `/preview/${i}`), false);
+  status.skew += 2_000;
+  status.begin({ station: "ws/s1" }, stationWhat("GET", "/overview"), false);
+  status.skew += 2_000;
+  const v = status.value() as { text: string; items: { text: string; detail: string }[] };
+  assert.deepEqual(v.items.map((i) => i.text), ["studio 读取网页服务 ×12", "studio 读取 station 概况"]);
+  assert.equal(v.items[0].detail, "已等 4 秒，还没收到数据");
+  assert.equal(v.text, "studio 读取网页服务 ×12 · 4 秒 · 共 13 项");
+});
+
 test("a_station_is_in_the_workspace_its_address_names", () => {
   assert.equal(ofAddress("ws/st"), "ws");
   const host = new FakeHost();

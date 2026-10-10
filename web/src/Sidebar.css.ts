@@ -236,7 +236,11 @@ export const waitingRetry = style({
     [`${stationRow} > &`]: { position: "absolute", right: 6, top: 5, marginRight: 0 },
   },
 });
-export const waitingItems = style({ display: "grid", gap: 6, maxWidth: 320 });
+/** However many there are, within the window: what does not fit scrolls (the tip's own padding is 5px each side). */
+export const waitingItems = style({
+  display: "grid", gap: 6, maxWidth: 320, maxHeight: "calc(var(--radix-tooltip-content-available-height, 100vh) - 10px)",
+  overflowY: "auto",
+});
 export const waitingItem = style({ display: "grid", gap: 1 });
 export const waitingDetail = style({ opacity: 0.7 });
 /** Under a page's "loading…": quiet. */

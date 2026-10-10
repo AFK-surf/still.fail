@@ -387,6 +387,7 @@
   "core-logic.status.down.tries": "（第 {n} 次）",
   "core-logic.status.received": "已收 {size}，{secs} 秒",
   "core-logic.status.seconds": "{n} 秒",
+  "core-logic.status.times": "{text} ×{n}",
   "core-logic.status.waited": "已等 {secs} 秒",
   "core-logic.status.waited_nothing": "已等 {secs} 秒，还没收到数据",
   "core-logic.status.what.chats": "读取会话列表",
