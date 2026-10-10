@@ -35,6 +35,10 @@ export const RECONNECT_MAX_MS = 60_000;
 export const OFFLINE_RETRY_MS = 10 * 60_000;
 /// How many tries in a row a station that was up may miss before it is taken for down.
 export const MISSES = 3;
+/// A station not reached this many tries in a row (some ten minutes of trying) is tried as seldom as one the cloud says
+/// is not online, though it says it is: one too old to take this client's access, or one that lost its relay, was
+/// dialled by every client about once a minute, some 1,600 dials a day for one such station.
+export const LONG_MISSES = 12;
 export const LINK_KEY = "link";
 /// Where a station's last host sample is kept (`host/<address>`), so its figures show from before it is reached again;
 /// written at most every HOST_SAVE_MS.
@@ -508,9 +512,9 @@ export class StationsSync {
             : { why: ended.why ?? "", lasted: 0, bytes: 0, read: 0, events: 0 };
           if (ended.again) continue;
         } else previous = { why: ended.failed, lasted: 0, bytes: 0, read: 0, events: 0 };
-        // Not reached: less and less often, and seldom while still.fail cloud says it is not online. A UI back after
-        // being away wants it now, and so does the cloud saying it is back.
-        const offline = self.#cloudSaysOffline(address);
+        // Not reached: less and less often, and seldom while still.fail cloud says it is not online or it has not been
+        // reached for long. A UI back after being away wants it now, and so does the cloud saying it is back.
+        const offline = self.#cloudSaysOffline(address) || misses >= LONG_MISSES;
         const wait = offline ? OFFLINE_RETRY_MS : Math.min(RECONNECT_MS * 2 ** Math.min(Math.max(misses - 1, 0), 8), RECONNECT_MAX_MS);
         const back = self.#backOf(address);
         const woken = yield* Effect.raceFirst(Effect.sleep(wait).pipe(Effect.as(false)), Effect.raceFirst(core.wakes.next.pipe(Effect.as(true)), Deferred.await(back).pipe(Effect.as(true))));

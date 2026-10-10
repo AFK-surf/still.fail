@@ -15,7 +15,7 @@ import { base, entries, entry, overview, session, started, status, stationReplie
 import { merge } from "../src/entries.ts";
 import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
-import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
+import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RETRY_MS, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
 import { SOCKET_OPEN_MS } from "../src/station/requests.ts";
@@ -1796,4 +1796,23 @@ test("how_a_station_was_last_time_is_there_as_its_link_starts_and_an_old_file_of
   assert.equal(third.inner.data.record("link", ST), "offline");
   assert.equal(host.stored(`${LINK_KEY}/${ST}`), undefined);
   third.close();
+});
+
+test("a_station_not_reached_for_long_is_tried_seldom_though_the_cloud_says_it_is_online", async () => {
+  const { host, core, gate } = await started(base(), 0, undefined, (s) => (s.gate.stream = "fail"));
+  const tries = () => host.requests.filter((r) => r.url.includes("/admin/api/events")).length;
+  // Tried less and less often, at most RECONNECT_MAX_MS apart: its LONG_MISSES-th miss some seven minutes in…
+  await host.time.pass(LONG_MISSES * RECONNECT_MAX_MS, 1_000);
+  assert.equal(tries(), LONG_MISSES);
+  // …and then not for OFFLINE_RETRY_MS, as one the cloud says is not online.
+  await host.time.pass(4 * RECONNECT_MAX_MS, 1_000);
+  assert.equal(tries(), LONG_MISSES);
+  await host.time.pass(OFFLINE_RETRY_MS - 4 * RECONNECT_MAX_MS, 1_000);
+  assert.equal(tries(), LONG_MISSES + 1);
+  // Reached at the try after.
+  gate.stream = "open";
+  await host.time.pass(OFFLINE_RETRY_MS / 2 + 30_000, 1_000);
+  assert.equal(tries(), LONG_MISSES + 2);
+  assert.equal(core.inner.data.record("link", ST), "online");
+  core.close();
 });
