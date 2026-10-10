@@ -186,6 +186,7 @@
   "web-main.composer.pressToTypeCjk": "按{key}输入",
   "web-main.composer.refFailed": "没能引用「{title}」：{error}",
   "web-main.composer.send": "发送",
+  "web-main.composer.stop": "停止",
   "web-main.composer.stillUploading": "文件还在上传",
   "web-main.copyFailed": "没能复制：{error}",
   "web-main.core.cancelled": "已取消",

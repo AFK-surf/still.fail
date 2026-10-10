@@ -4,7 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { sentImage, sentImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
-import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
+import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "./icons.tsx";
 import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
@@ -96,6 +96,14 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   const rows = useMessageList(list, floor, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives);
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
   const keeper = chat.agents[0]?.session.key ?? null;
+  // Its agents at work, stopped from the composer (as the chat.stop shortcut does): one function all along, so the
+  // composer is not drawn again for it.
+  const act = useAct();
+  const working = chat.agents.filter((a) => a.status === "running" || a.status === "queued").map((a) => a.session.key);
+  const stopping = useRef(working);
+  stopping.current = working;
+  const [stopAll] = useState(() => () => act(Promise.all(stopping.current.map((key) => api.stop(key))), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked")));
+  const stoppable = working.length > 0 && !chat.offline && !chat.archived;
   const ownerOf = (file: Attachment) => ownerIn(chat, file);
   // The messages are kept as they are while nothing they show changes (MessageRow): what they are handed stays the same
   // function, the latest one behind it, and `owners` says when whose files are whose has changed.
@@ -143,7 +151,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused} above={waitingBar}
-        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
+        {...(stoppable ? { onStop: stopAll } : {})} locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
 }
@@ -1432,6 +1440,8 @@ export interface ComposerProps {
   draftKey?: string;
   /** A key whose draft goes on from what is typed now, instead of its own (a new chat becoming its chat). */
   carry?: MutableRefObject<string | null>;
+  /** While its agents work: with nothing typed, the send button stops them instead. */
+  onStop?: () => void;
 }
 
 export function Composer(props: ComposerProps) {
@@ -1442,7 +1452,7 @@ export function Composer(props: ComposerProps) {
 }
 
 /** The chat's composer, also used where a page sends its draft as a reply to a decision. */
-export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
+export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey, onStop }: ComposerProps & {
   draft: Draft; submitDraft?: (draft: Draft) => void;
 }) {
   const api = useApi();
@@ -1521,11 +1531,17 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
             </button>
           </Tip>
           {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
-          <Tip label={draft.uploading ? t("web-main.composer.stillUploading") : t("web-main.composer.send")}>
+          {onStop && !draft.starting && text.trim() === "" && files.length === 0 ? (
+            <Tip label={t("web-main.composer.stop")} shortcut="chat.stop">
+              <button type="button" className={css.sendBtn} data-stop="" aria-label={t("web-main.composer.stop")} onClick={(e) => { e.stopPropagation(); onStop(); }}>
+                <Stop size={14} fill="currentColor" />
+              </button>
+            </Tip>
+          ) : <Tip label={draft.uploading ? t("web-main.composer.stillUploading") : t("web-main.composer.send")}>
             <button type="submit" className={css.sendBtn} disabled={!ready} aria-label={t("web-main.composer.send")} aria-busy={draft.starting || undefined}>
               {draft.starting ? <span className={waitingCss.spinner} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
             </button>
-          </Tip>
+          </Tip>}
         </div>
       </form>
       {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}

@@ -207,6 +207,7 @@
   "web-main.composer.pressToTypeCjk": "Press {key} to type",
   "web-main.composer.refFailed": "Couldn't link \"{title}\": {error}",
   "web-main.composer.send": "Send",
+  "web-main.composer.stop": "Stop",
   "web-main.composer.stillUploading": "Still uploading",
   "web-main.copyFailed": "Couldn't copy: {error}",
   "web-main.core.cancelled": "Cancelled",
