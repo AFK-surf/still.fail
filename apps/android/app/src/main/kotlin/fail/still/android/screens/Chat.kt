@@ -60,6 +60,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.graphics.compositeOver
+import fail.still.android.ui.letsGoOfKeyboard
 import fail.still.android.ui.MakerIcon
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.animation.core.animateFloat
@@ -827,6 +828,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                         clipRect(bottom = cut) { this@drawWithContent.drawContent() }
                     }.graphicsLayer { translationY = flight.shift() }
                 }
+                // Reading on (a tap, a drag): the keyboard goes, out of the way.
+                .letsGoOfKeyboard()
                 .hazeSource(haze).background(C.bg), state = list,
             contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = top + 14.dp, bottom = bottom + 10.dp), verticalArrangement = Arrangement.spacedBy(GAP, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
         ) {
