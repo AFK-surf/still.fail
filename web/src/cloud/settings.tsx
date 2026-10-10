@@ -538,20 +538,26 @@ function JoinThisMac({ account, workspace, className }: { account: Account; work
   return <Button icon={Monitor} className={className} busy={join.busy} onClick={() => join.run()}>{t(pc ? "web-pages.settings.thisPc.add" : "web-pages.settings.thisMac.add")}</Button>;
 }
 
-/** An enrollment's command (Windows' too, from a cloud that gives it), and that the station is awaited. */
+type EnrollSystem = "unix" | "windows";
+
+/// The system whose command is shown first: this browser's (a station is most often added on the machine it is to be;
+/// another is a click away).
+const BROWSER_SYSTEM: EnrollSystem = /Win/.test(navigator.platform) ? "windows" : "unix";
+
+/** An enrollment's command, macOS and Linux's or Windows' (from a cloud that gives one), and that the station is awaited. */
 function EnrollSteps({ enrollment }: { enrollment: { install: string; installWindows?: string } }) {
+  const [system, setSystem] = useState<EnrollSystem>(BROWSER_SYSTEM);
+  const windows = system === "windows" && enrollment.installWindows !== undefined;
   return (
     <div className={css.enroll}>
-      <div className={css.enrollStep}>
-        <p className={css.enrollLabel}>{t("web-pages.settings.enroll.run")}<About>{t("web-pages.settings.enroll.about", { name: NAME })}</About></p>
-        <CopyCommand text={enrollment.install} />
+      <div className={css.enrollStep} data-shell={windows ? "powershell" : undefined}>
+        <p className={css.enrollLabel}>{t(windows ? "web-pages.settings.enroll.windows" : "web-pages.settings.enroll.run")}<About>{t("web-pages.settings.enroll.about", { name: NAME })}</About></p>
+        {enrollment.installWindows !== undefined && (
+          <Segmented<EnrollSystem> className={css.enrollSystem} label={t("web-pages.settings.enroll.system")} value={system} onChange={setSystem}
+            options={[{ value: "unix", label: t("web-pages.settings.enroll.unix") }, { value: "windows", label: t("web-pages.settings.enroll.windowsTab") }]} />
+        )}
+        <CopyCommand text={windows ? enrollment.installWindows! : enrollment.install} />
       </div>
-      {enrollment.installWindows && (
-        <div className={css.enrollStep} data-shell="powershell">
-          <p className={css.enrollLabel}>{t("web-pages.settings.enroll.windows")}</p>
-          <CopyCommand text={enrollment.installWindows} />
-        </div>
-      )}
       <div className={css.enrollWait} role="status">
         <span className={waitingCss.spinner} aria-hidden="true" />
         <span><strong>{t("web-pages.settings.enroll.waiting")}</strong><span className={shellCss.muted}>{t("web-pages.settings.enroll.waitingNote")}</span></span>
