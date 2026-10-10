@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
-import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Stop, Web } from "../icons.tsx";
+import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -13,7 +13,7 @@ import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from
 import { PENDING } from "../lastChat.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
 import type { ChatJobsView } from "../core/shapes.ts";
-import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, useStations, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
+import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
@@ -465,7 +465,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               if (!a) return <Tabs.Content key={key} className={css.sideContent} value={key} />;
               return (
                 <Tabs.Content key={key} className={css.sideContent} value={key}>
-                  <History station={station.address} sessionKey={key} title={view?.title} actions={<SessionActions session={a.session} status={a.status} />}
+                  <History station={station.address} sessionKey={key} title={view?.title}
                     focus={focus?.key === key ? focus : null} tools={sideTools}
                     summary={a.attention.length > 0 ? <HistorySummary agent={a} /> : null}
                     details={<SessionDetails agent={a} />} />
@@ -677,17 +677,3 @@ function ChatTitle({ station, session, title, onRename }: { station: string; ses
 }
 
 /** What can be done to it right now: stop a turn, release an idle process. */
-function SessionActions({ session, status }: { session: Session; status: Status }) {
-  const api = useApi();
-  const act = useAct();
-  const station = useStation().address;
-  // Under way: the button turns, wherever it was asked from (the shortcut too); failed, a red mark there a few seconds.
-  const stopping = useDoing("session.stop", { station, key: session.key });
-  const stopFailed = useDoingFailed("session.stop", { station, key: session.key });
-  return (
-    <>
-      {(status === "running" || status === "queued") && <IconButton label={t("web-pages.chat.stopTurn")} icon={Stop} shortcut="chat.stop" busy={stopping} failed={stopFailed}
-        onClick={() => act(api.stop(session.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"))} />}
-    </>
-  );
-}
