@@ -48,6 +48,11 @@ export function watchChildren(el: Element, resize: ResizeObserver): { all: () =>
   };
 }
 
+/** Inside what ticks in place (`data-ticking`: Chat.tsx Elapsed), whose words changing changes nothing around them. */
+export function ticking(node: Node): boolean {
+  return !!(node instanceof Element ? node : node.parentElement)?.closest("[data-ticking]");
+}
+
 /**
  * The first of `items` (in the order they are laid out, one under another) whose bottom reaches below `y`: found by
  * halves, measuring a few of them rather than every one above it (this runs as the reader scrolls).
@@ -195,8 +200,9 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     };
     let lastInput = 0;
     const onScroll = () => {
-      // Its own steps.
-      if (Math.abs(el.scrollTop - placed) < 1) return hold();
+      // Its own steps. A glide's go on by themselves (what changes meanwhile is heard by the observers, which move its
+      // goal): measured again only once it has stopped.
+      if (Math.abs(el.scrollTop - placed) < 1) return frame ? undefined : hold();
       // Pulled up by the browser as content left the bottom (at the bottom, with no one scrolling): put back.
       if (following && Date.now() - lastInput > 400 && el.scrollTop < placed && distance() <= 1) return hold();
       moved();
@@ -239,7 +245,10 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     const watched = watchChildren(el, resize);
     const watch = watched.all;
     watch();
-    const mutations = new MutationObserver((records) => {
+    const mutations = new MutationObserver((all) => {
+      // A clock ticking in place (an activity's seconds) is not the list changing.
+      const records = all.filter((r) => !ticking(r.target));
+      if (!records.length) return;
       const added = records.flatMap((r) => [...r.addedNodes]).filter(isMessage);
       // Only messages arriving at the bottom are followed (older ones loaded above are not); ones arriving while the
       // reader is further up leave them where they are.

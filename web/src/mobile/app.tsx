@@ -364,9 +364,36 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
   const [dragging, setDragging] = useState(false);
   const sheet = useRef<HTMLDivElement>(null);
   // Its height: following the finger at once while dragged, then on to where it settles at the speed it was let go of.
+  // Shown by moving it (`translate`, on top of the transform it opens and closes with) within the height it is laid out
+  // at, not by laying it out anew each frame (frosted glass and all): the finger taking it, it is laid out as tall as
+  // it may go; come to rest, as tall as it is.
+  const laid = useRef(0);
+  const rest = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const lay = (to: number) => {
+    const el = sheet.current;
+    if (!el) return;
+    laid.current = to;
+    el.style.height = `${to}px`;
+  };
   const height = useRef<Follower | null>(null);
-  height.current ??= follower(0, (v) => { if (sheet.current) sheet.current.style.height = `${v}px`; });
-  useEffect(() => () => height.current?.stop(), []);
+  height.current ??= follower(0, (v) => {
+    const el = sheet.current;
+    if (!el) return;
+    if (v > laid.current + 0.5) lay(v);
+    el.style.translate = laid.current - v > 0.5 ? `0 ${laid.current - v}px` : "";
+    atRest();
+  });
+  /** Once it has stopped (no finger on it, nothing moving it), laid out as tall as it shows. */
+  function atRest() {
+    clearTimeout(rest.current);
+    rest.current = setTimeout(() => {
+      const el = sheet.current;
+      if (!el || el.hasAttribute("data-dragging") || height.current?.moving) return;
+      lay(height.current!.value);
+      el.style.translate = "";
+    }, 120);
+  }
+  useEffect(() => () => { height.current?.stop(); clearTimeout(rest.current); }, []);
   const total = () => window.innerHeight;
   useBackClose(!!spec, close);
   useEffect(() => {
@@ -383,7 +410,7 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     return () => clearTimeout(timer);
   }, [spec]);
   // Drawn as it is when it (re)appears.
-  useLayoutEffect(() => { if (shown && sheet.current) sheet.current.style.height = `${height.current!.value}px`; }, [shown]);
+  useLayoutEffect(() => { if (shown && sheet.current) { lay(height.current!.value); sheet.current.style.translate = ""; } }, [shown]);
   useEffect(() => {
     if (!spec) return;
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
@@ -406,13 +433,21 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     return first && last && last.t > first.t ? ((first.y - last.y) / (last.t - first.t)) * 1000 : 0;
   };
   const settle = (to: number) => height.current!.to(to, { type: "spring", visualDuration: 0.32, bounce: 0, velocity: speed() });
-  const grab = (y: number) => { from.current = { y, h: h(), moved: false }; trail.current = [{ y, t: performance.now() }]; setDragging(true); };
+  const grab = (y: number) => {
+    from.current = { y, h: h(), moved: false };
+    trail.current = [{ y, t: performance.now() }];
+    // Laid out once as tall as the finger can take it; moved within that from here.
+    const most = shown.draggable ? total() * 0.94 : Math.max(h(), shown.height * total());
+    if (most > laid.current + 0.5) { lay(most); if (sheet.current) sheet.current.style.translate = `0 ${most - h()}px`; }
+    setDragging(true);
+  };
   const drag: Drag = {
     draggable: !!shown.draggable,
     start: grab,
     move: (y) => follow(y, total() * 0.94),
     end: () => {
       setDragging(false);
+      atRest();
       if (!from.current.moved) return;
       const f = h() / total();
       if (f < 0.3) close();
@@ -436,6 +471,7 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
       setDragging(false);
+      atRest();
       if (!from.current.moved) return;
       if (shown.draggable) return drag.end();
       if (base - h() > 80) close();

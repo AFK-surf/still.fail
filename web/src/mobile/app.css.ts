@@ -35,6 +35,11 @@ export const mPage = style({
   },
 });
 // As wide as Safari's own edge gesture reaches in, which a touch here keeps from starting (app.tsx EdgeStrip).
+// A page under the one on top is kept as it was left, not drawn: what moves on it (spinners, a station's glyph
+// breathing, images' waiting blots) stands still meanwhile rather than being worked out every frame unseen.
+globalStyle(`${mPage}[data-role="under"] *, ${mPage}[data-role="under"] *::before, ${mPage}[data-role="under"] *::after`, {
+  animationPlayState: "paused !important" as "paused",
+});
 export const mEdge = style({
   display: "none", position: "absolute", top: "0", bottom: "0", left: "0", zIndex: "40", width: "20px",
   touchAction: "none",

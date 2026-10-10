@@ -431,7 +431,8 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
   useEffect(() => x.on("change", (v) => {
     const dx = Math.min(0, Math.round(v));
     if (slide.current) slide.current.style.transform = dx ? `translateX(${dx}px)` : "";
-    if (under.current) under.current.style.width = `${-dx}px`;
+    // Slid in from the right as far as the row has gone (moved, not laid out anew each frame).
+    if (under.current) under.current.style.transform = `translateX(calc(100% + ${dx}px))`;
   }), [x]);
   const back = () => {
     run.current?.stop();

@@ -20,7 +20,7 @@ import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, 
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
-import { firstReaching, useStickToBottom, watchChildren } from "./scroll.ts";
+import { firstReaching, ticking, useStickToBottom, watchChildren } from "./scroll.ts";
 import { animate, arrive, EASE_OUT, follower, moveState, type AnimationPlaybackControls, type Follower } from "./motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
@@ -1922,7 +1922,12 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>) {
     };
     const resize = new ResizeObserver(check);
     const watched = watchChildren(pane, resize);
-    const mutations = new MutationObserver((records) => { watched.update(records); check(); });
+    const mutations = new MutationObserver((all) => {
+      const records = all.filter((r) => !ticking(r.target));
+      if (!records.length) return;
+      watched.update(records);
+      check();
+    });
     mutations.observe(pane, { childList: true, subtree: true, characterData: true });
     watched.all();
     check();
@@ -2290,13 +2295,25 @@ export function useSteady(now: { key: string; text: string }) {
 
 /** Seconds (then minutes) since a moment, ticking; at most `most` seconds. */
 export function Elapsed({ since, most }: { since: number; most?: number }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+  const shown = () => {
+    const s = Math.max(0, Math.floor((Date.now() - since) / 1000));
+    return span(most === undefined ? s : Math.min(s, most));
+  };
+  // Its words changed in place each second, not drawn by React: nothing around it is drawn again, and the lists that
+  // watch what changes in them pass over it (`data-ticking`, scroll.ts).
+  const [first] = useState(shown);
+  const el = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const tick = () => {
+      const words = el.current?.firstChild;
+      const now = shown();
+      if (words && words.nodeValue !== now) words.nodeValue = now;
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, []);
-  const s = Math.max(0, Math.floor((now - since) / 1000));
-  return <>{span(most === undefined ? s : Math.min(s, most))}</>;
+  }, [since, most]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <span ref={el} data-ticking="">{first}</span>;
 }
 
 /** How long a wait has gone on, ticking, at most its limit, with the limit: 1m 20s / 10m. */

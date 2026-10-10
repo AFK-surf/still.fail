@@ -203,9 +203,9 @@ export const mRowArchive = style({
 });
 // The phone's buttons take their page's font (root.css.ts): its size and colour, as strong as that.
 globalStyle(`${mChatRowWrap} button${mRowArchive}`, { color: "var(--m-ink)", fontSize: vars.textMeta, lineHeight: "28px", fontWeight: "500" });
-/** What a row swiped left uncovers, as wide as it has gone: 归档, in ink. */
+/** What a row swiped left uncovers, as far as it has gone (slid in from the right, Home.tsx): 归档, in ink. */
 export const mSwipeUnder = style({
-  position: "absolute", top: "0", bottom: "0", right: "0", width: "0", display: "flex", alignItems: "center",
+  position: "absolute", top: "0", bottom: "0", left: "0", right: "0", transform: "translateX(100%)", display: "flex", alignItems: "center",
   overflow: "hidden", background: "var(--m-ink)", color: "var(--m-bg)", fontSize: vars.textBody, fontWeight: "600",
   whiteSpace: "nowrap",
 });
