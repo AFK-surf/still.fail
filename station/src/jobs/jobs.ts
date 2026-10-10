@@ -17,6 +17,7 @@ import {
 import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
+import { niced } from "../ops/nice.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "./group.ts";
@@ -302,8 +303,10 @@ export class Jobs {
     if (job.port !== null) env.PORT = String(job.port);
     let child: ChildProcess;
     try {
-      // detached: a session and process group of its own (pgid = its pid), not ended with the station.
-      child = spawn("/bin/sh", ["-c", WRAPPER, JOB_COMMAND_NAME, job.command, exit], {
+      // detached: a session and process group of its own (pgid = its pid), not ended with the station. Lower than the
+      // station (ops/nice.ts): nice runs the shell in its own process, the pid the same.
+      const [command, args] = niced("/bin/sh", ["-c", WRAPPER, JOB_COMMAND_NAME, job.command, exit]);
+      child = spawn(command, args, {
         cwd: job.cwd, env, stdio: ["ignore", out, out], detached: true,
       });
     } finally {

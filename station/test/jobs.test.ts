@@ -16,6 +16,7 @@ import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { endGroup, groupAlive, signalGroup } from "../src/jobs/group.ts";
 import { Jobs, notifyEndpoint, readExit, restartPause, shown, tail, watching } from "../src/jobs/jobs.ts";
+import { agentNice } from "../src/ops/nice.ts";
 import { jobTools } from "../src/tools/jobs.ts";
 import { Store } from "../src/store/store.ts";
 
@@ -150,6 +151,9 @@ describe("jobs", { concurrency: true }, () => {
   test("a job tells its agent on the way through its token", async () => {
     const r = new Rig();
     const job = r.jobs.start("s1", "long", FOREVER, r.work, null, false);
+    // Started lower than the station (ops/nice.ts), as what an agent starts is.
+    const pgid = r.store.getJob(job.id)!.pgid!;
+    if (process.platform !== "win32") assert.equal(Number(execFileSync("ps", ["-o", "nice=", "-p", String(pgid)], { encoding: "utf8" }).trim()), agentNice());
     r.jobs.notified(job.token, "  half way  ");
     assert.deepEqual(r.said(), [`Job "long" (${job.id}) says: half way`]);
     assert.throws(() => r.jobs.notified("wrong", "x"));
