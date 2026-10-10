@@ -196,7 +196,6 @@
   "web-pages.chat.archiveFailed": "Couldn't archive: {error}",
   "web-pages.chat.archived": "Archived",
   "web-pages.chat.close": "Close {name}",
-  "web-pages.chat.closeHistory": "Close {agent} history",
   "web-pages.chat.closeJobs": "Close jobs",
   "web-pages.chat.closePanel": "Hide panel",
   "web-pages.chat.evict": "Release process",

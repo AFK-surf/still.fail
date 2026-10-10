@@ -1,7 +1,7 @@
 import { StationUpdate } from "../StationUpdate.tsx";
 // A chat: a thread (a Slack thread or a chat on still.fail's page) with its people
-// and agents. The messages are the page; each agent's execution history can
-// be opened beside them, one tab per agent.
+// and agents. The messages are the page; its agents' execution histories can
+// be opened beside them, in one tab that switches between them.
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
@@ -101,8 +101,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   }, [made, stationKey]);
   const agents = chatView.value?.agents ?? [];
   const lives = useLives(station.address, agents.map((a) => a.session.key));
-  // One history tab per agent, by session key; each but the first agent's can be closed (the panel's switch closes
-  // that), and with none open the panel goes away.
+  // One history tab, by the session key of the agent it shows: picking another agent puts that one's in its place. It
+  // is not closed alone (the panel's switch closes it), and with no tab open the panel goes away.
   // Each chat keeps its own tabs. One not opened before opens none (its agents' histories open from them when wanted),
   // except an agent with no chat yet, here or in Slack (the core's `noChat`): its page shows its history. Where the
   // panel would lie over the chat (the styles' `max-width: 1100px`), none opens by itself: the chat comes first.
@@ -123,9 +123,12 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     for (const job of jobs) if (job.open === false) closePreview(previewKey(station.address, job.id));
   }, [jobs, station.address]);
   const known = agents.length ? tabs.filter((key) => key === JOBS || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
-  // The panel open always has the first agent's history, first: it is not closed alone (as the panel would bring it back).
-  const own = agents[0]?.session.key;
-  const open = own && known.length && !known.includes(own) ? [own, ...known] : known;
+  // The panel open always has the history tab, first: the agent in front, else the first one kept (tabs kept before
+  // there was one may name several), else the chat's own (agents[0]).
+  const isAgent = (key: string) => agents.some((a) => a.session.key === key);
+  const viewed = agents.length && known.length
+    ? (active && known.includes(active) && isAgent(active) ? active : known.find(isAgent) ?? agents[0]!.session.key) : null;
+  const open = viewed ? [viewed, ...known.filter((key) => !isAgent(key))] : known;
   // The job picked in the 任务 tab.
   const [jobPicked, pickJob] = useState<string | null>(null);
   const shown = active && open.includes(active) ? active : open[0] ?? null;
@@ -195,6 +198,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   }, [sliding]);
   const openTab = (key: string) => {
     if (open.length === 0 && !reducedMotion()) setOpening(true);
+    // An agent's history takes the history tab's place.
+    if (isAgent(key)) return commit([key, ...open.filter((tab) => !isAgent(tab))], key);
     commit(open.includes(key) ? open : [...open, key], key);
   };
   const closeTab = (key: string) => {
@@ -208,7 +213,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     if (job) pickJob(job);
     openTab(JOBS);
   };
-  const toggleHistory = (key: string) => (open.includes(key) && shown === key ? closeTab(key) : openTab(key));
+  const toggleHistory = (key: string) => (open.includes(key) && shown === key ? saveTabs([]) : openTab(key));
   // An activity row: its agent's history, open at that entry.
   const [focus, setFocus] = useState<{ key: string; entry: number; n: number } | null>(null);
   // A link that names a web service of the chat's (`?service=<job>`, a service's link in Slack): its tab, open.
@@ -275,10 +280,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   useShortcut("chat.stop", running.length ? () => {
     act(Promise.all(running.map((a) => api.stop(a.session.key))), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"));
   } : null);
-  // The history tab in front closes the panel; else the first agent's opens.
+  // The history tab in front closes the panel; else it comes to the front, the chat's own agent's if not open.
   useShortcut("chat.history", agents[0] ? () => {
-    const front = agents.find((a) => a.session.key === shown);
-    if (front) saveTabs([]); else openTab(agents[0]!.session.key);
+    if (shown && isAgent(shown)) saveTabs([]); else openTab(viewed ?? agents[0]!.session.key);
   } : null);
   useShortcut("chat.jobs", () => (shown === JOBS ? closeTab(JOBS) : openJobs()));
   useShortcut("panel.close", open.length ? () => saveTabs([]) : null);
@@ -349,11 +353,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           <ChatStation />
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a) => (
-            <Tip key={a.session.key} label={`${a.session.agentText}${a.session.badgeText ? ` · ${a.session.badgeText}` : ""} · ${t("web-pages.chat.history")}`}>
-              <button type="button" className={css.agentMarkBtn} onClick={() => toggleHistory(a.session.key)} aria-label={t("web-pages.chat.historyOf", { agent: a.session.agentText })}>
-                <AgentMark maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={20} />
-              </button>
-            </Tip>
+            <AgentCard key={a.session.key} agent={a} marked={agents.length > 1 && shown === a.session.key} onHistory={() => toggleHistory(a.session.key)} />
           ))}
         </div>
         <div className={css.pageBarActions}>
@@ -422,8 +422,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                       <Tip label={label} cut><Tabs.Trigger className={css.sideTab} value={key}>
                         <span className={css.sideTabAgent}><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={14} /><span className={css.sideTabText} data-text={label}>{label}</span></span>
                       </Tabs.Trigger></Tip>
-                      {/* The chat's own agent's history is the panel's: the panel's switch closes it, not a tab's. */}
-                      {a !== agents[0] && <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.closeHistory", { agent: label })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>}
+                      {/* The panel's switch closes it, not a tab's; another agent's comes from its card (the bar's avatars). */}
                     </span>
                   );
                 })}
@@ -475,6 +474,44 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           </Tabs.Root>
         )}
     </div>
+  );
+}
+
+/**
+ * One of the chat's agents, as its avatar in the bar: pressed, its history opens (or, shown, closes); on hover, its
+ * card says what it runs and how it stands, with a stop for it alone while it works. The one whose history shows is
+ * marked, among several.
+ */
+function AgentCard({ agent, marked, onHistory }: { agent: ChatAgent; marked: boolean; onHistory(): void }) {
+  const { session } = agent;
+  const api = useApi();
+  const act = useAct();
+  const working = agent.status === "running" || agent.status === "queued";
+  const card = (
+    <div className={css.agentCard}>
+      <div className={css.agentCardHead}>
+        <AgentMark maker={session.maker} runtime={session.runtime} badge={agent.badge} badgeText={session.badgeText} size={28} />
+        <span className={css.agentCardWho}>
+          <b>{session.agentText}</b>
+          <span className={shellCss.muted}>{session.statusText}</span>
+        </span>
+      </div>
+      {working && (
+        <div className={css.agentCardActions}>
+          <button type="button" className={`${controlsCss.btn} ${controlsCss.btnGhost} ${controlsCss.btnDanger}`}
+            onClick={() => act(api.stop(session.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"))}>
+            {t("web-pages.chat.stopTurn")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <Hover content={card}>
+      <button type="button" className={css.agentMarkBtn} data-on={marked || undefined} onClick={onHistory} aria-label={t("web-pages.chat.historyOf", { agent: session.agentText })}>
+        <AgentMark maker={session.maker} runtime={session.runtime} badge={agent.badge} badgeText={session.badgeText} size={20} />
+      </button>
+    </Hover>
   );
 }
 
