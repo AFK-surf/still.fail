@@ -199,3 +199,5 @@ export const titleBtn = style({
 // The title keeps its width; its button's box reaches 8px past it each side (cut short with it), and a little more room
 // before what follows.
 globalStyle(`${pageBarTitle} h1:has(> ${titleBtn})`, { overflow: "visible", marginRight: "4px" });
+/** Ending its warm process, in its details' line: a link's look, as the profile's beside it. */
+export const evict = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });

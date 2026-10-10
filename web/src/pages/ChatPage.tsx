@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
-import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
+import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Stop, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -611,6 +611,7 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
       {/* What it used: a line, quiet. */}
       <p className={`${css.runUsage} ${shellCss.muted}`}>
         {session.runtimeText} · {session.processText}
+        {session.process === "warm" && <>{" · "}<Evict session={session.key} /></>}
         {usage && <> · {usage}</>}
         {" · "}<Link className={css.detailLink} to={link(`/settings/accounts/${session.profile}`)}>{t("web-pages.chat.profileDetails")}</Link>
       </p>
@@ -624,6 +625,23 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Its idle process, kept warm for the next message, ended now (the station ends it by itself in time): rarely wanted,
+ * so in its details, beside where they say it is warm. Under way, a turning ring; failed, a red mark a few seconds.
+ */
+function Evict({ session }: { session: string }) {
+  const api = useApi();
+  const act = useAct();
+  const station = useStation().address;
+  const evicting = useDoing("session.evict", { station, key: session });
+  const failed = useDoingFailed("session.evict", { station, key: session });
+  return (
+    <button type="button" className={`${css.detailLink} ${css.evict}`} disabled={evicting} onClick={() => act(api.evict(session), t("web-pages.chat.evict"), t("web-pages.chat.evicted"))}>
+      {t("web-pages.chat.evict")}<DoingShown state={{ running: evicting, error: failed }} className={controlsCss.iconSpinner} size={12} />
+    </button>
   );
 }
 
@@ -665,14 +683,11 @@ function SessionActions({ session, status }: { session: Session; status: Status 
   const station = useStation().address;
   // Under way: the button turns, wherever it was asked from (the shortcut too); failed, a red mark there a few seconds.
   const stopping = useDoing("session.stop", { station, key: session.key });
-  const evicting = useDoing("session.evict", { station, key: session.key });
   const stopFailed = useDoingFailed("session.stop", { station, key: session.key });
-  const evictFailed = useDoingFailed("session.evict", { station, key: session.key });
   return (
     <>
       {(status === "running" || status === "queued") && <IconButton label={t("web-pages.chat.stopTurn")} icon={Stop} shortcut="chat.stop" busy={stopping} failed={stopFailed}
         onClick={() => act(api.stop(session.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"))} />}
-      {session.process === "warm" && <IconButton label={t("web-pages.chat.evict")} icon={Unplug} busy={evicting} failed={evictFailed} onClick={() => act(api.evict(session.key), t("web-pages.chat.evict"), t("web-pages.chat.evicted"))} />}
     </>
   );
 }
