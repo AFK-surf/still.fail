@@ -20,6 +20,30 @@ function pathOf(env: Env): string {
   return (key && env[key]) ?? "";
 }
 
+/// Where a .cmd file names `path`: cmd reads the file in the console's code page, not UTF-8, so a path with other than
+/// ASCII in it (C:\Users\张三\…) is named through the variable of `env` it is under (%USERPROFILE%\…), which cmd
+/// expands as it runs; none such: refused, rather than a .cmd that names some other path. (The installer's
+/// stillfail.cmd: the same rule, install-windows.ts CmdPath.)
+export function cmdPath(path: string, env: Env = process.env): string {
+  const ascii = (s: string) => /^[\x20-\x7e]*$/.test(s);
+  if (ascii(path)) return path;
+  const value = (name: string) => {
+    const key = Object.keys(env).find((k) => k.toUpperCase() === name.toUpperCase());
+    return key ? env[key]?.replace(/[\\/]+$/, "") : undefined;
+  };
+  const under = CMD_PATH_VARS.flatMap((name) => {
+    const dir = value(name);
+    if (!dir) return [];
+    const rest = path.slice(dir.length);
+    return path.slice(0, dir.length).toLowerCase() === dir.toLowerCase() && /^([\\/]|$)/.test(rest) && ascii(rest) ? [{ name, dir, rest }] : [];
+  });
+  const best = under.sort((a, b) => b.dir.length - a.dir.length)[0];
+  if (!best) throw new Error(`a .cmd cannot name ${path}: it has other than ASCII in it, outside the user's folders`);
+  return `%${best.name}%${best.rest}`;
+}
+
+const CMD_PATH_VARS = ["USERPROFILE", "LOCALAPPDATA", "APPDATA", "TEMP", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "ProgramData", "PUBLIC"];
+
 const real = (p: string) => {
   try {
     return realpathSync(p);
@@ -300,7 +324,8 @@ export const windows: Platform = {
   makeCommand(path, script, noop) {
     writeFileSync(path, script);
     const name = path.slice(Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/")) + 1);
-    writeFileSync(`${path}.cmd`, noop ? "@exit /b 0\r\n" : `@"${posixShell()}" "%~dp0${name}" %*\r\n`);
+    // %~dp0 is cmd's to expand (any path); the shell's is named as a .cmd can (cmdPath).
+    writeFileSync(`${path}.cmd`, noop ? "@exit /b 0\r\n" : `@"${cmdPath(posixShell())}" "%~dp0${name}" %*\r\n`);
     return `${path}.cmd`;
   },
 

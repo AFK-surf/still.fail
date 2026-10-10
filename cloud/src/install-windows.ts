@@ -8,9 +8,10 @@
 // - joins the workspace the token is for;
 // - runs the station at sign-in: a scheduled task of the user's (no administrator needed), started now, which runs the
 //   launcher with no window (stillfail-station-w.exe) and starts it again should it end;
-// - an update (no token, a station already in a workspace) stops the running station first: Windows keeps a running
-//   program's files, so there is no handing over in place; the station stops its turns as it stops for a restart, and
-//   the next one goes on with them. One already on this release is left as it is.
+// - an update (no token, a station already in a workspace) hands the running station over to the new release as
+//   install.sh does (the launcher stays; it starts the new Node beside the old one); the release before is put back
+//   when the new one does not take over. Else (a new task, no handover to be had) it is drained, stopped and started
+//   again. One already on this release is left as it is.
 // The script uses no backtick and no "${" (it is a template here): PowerShell's escapes are not needed in it.
 
 import { tr, type Lang } from "./i18n.ts";
@@ -175,7 +176,8 @@ if (-not $Token -and $station -and $sameTask -and $said.handoff -eq 1) {
   Say (__SAY(cloud.install.handoff.start))
   Swap
   if (Ask 'handover') {
-    $deadline = (Get-Date).AddSeconds(120)
+    # The new one's 60 s to be ready and 90 s to take over (launcher/src/lifecycle.rs Times), and some.
+    $deadline = (Get-Date).AddSeconds(180)
     while ((Get-Date) -lt $deadline) {
       Start-Sleep 1
       $now = Said
@@ -191,12 +193,19 @@ if (-not $Token -and $station -and $sameTask -and $said.handoff -eq 1) {
     $why = Get-Content (Join-Path $run 'handoff-failed') -Raw -ErrorAction SilentlyContinue
     $now = Said
     if ($why -and $swap.aside -and (Get-Process -Id $station.ProcessId -ErrorAction SilentlyContinue) -and $now -and $now.startedAt -eq $started) {
-      # The new release did not come up and the old one serves on: it stays, and so does its release.
+      # The new release did not come up or take over, and the station is the launcher it was: the release before goes
+      # back, for the Node serving on it (one that did not get ready) or the one the launcher starts after a while (one
+      # that did not take over, its old one gone; Times::rollback). A move that fails leaves a release in place.
       $why = $why.Trim()
       $failed = $app + '.failed'
       Remove-Item $failed -Recurse -Force -ErrorAction SilentlyContinue
-      Move-Item $app $failed
-      Move-Item $swap.aside $app
+      try {
+        Move-Item $app $failed
+        Move-Item $swap.aside $app
+      } catch {
+        if (-not (Test-Path $app) -and (Test-Path $failed)) { Move-Item $failed $app }
+        throw
+      }
       Remove-Item $failed -Recurse -Force -ErrorAction SilentlyContinue
       Fail (__SAY(cloud.install.handoff.keptOld, why=$why))
     }
@@ -235,10 +244,39 @@ if (-not $handed) {
 # The Nodes no release here runs on any more.
 Get-ChildItem (Join-Path $data 'node') -Directory -ErrorAction SilentlyContinue | Where-Object { $_.FullName -ne $nodeDir } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
+# Where a .cmd names a path (station/src/platform/windows.ts cmdPath, the same rule): cmd reads the file in the
+# console's code page, not as UTF-8, so a path with other than ASCII in it (C:\\Users\\张三\\…) is named through the
+# variable it is under (%USERPROFILE%\\…), which cmd expands as it runs; $null when under none.
+function CmdPath([string]$path) {
+  if ($path -cnotmatch '[^ -~]') { return $path }
+  $best = $null
+  foreach ($name in 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'TEMP', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'ProgramData', 'PUBLIC') {
+    $dir = [Environment]::GetEnvironmentVariable($name)
+    if (-not $dir) { continue }
+    $dir = $dir.TrimEnd('\\', '/')
+    if ($path.Length -lt $dir.Length -or -not $path.StartsWith($dir, [StringComparison]::OrdinalIgnoreCase)) { continue }
+    $rest = $path.Substring($dir.Length)
+    if ($rest -ne '' -and $rest[0] -ne '\\' -and $rest[0] -ne '/') { continue }
+    if ($rest -cmatch '[^ -~]') { continue }
+    if (-not $best -or $dir.Length -gt $best.length) { $best = @{ name = $name; rest = $rest; length = $dir.Length } }
+  }
+  if ($best) { return '%' + $best.name + '%' + $best.rest }
+  return $null
+}
+# A .cmd that runs $target with its arguments: the path as CmdPath names it; under no such variable, written in the
+# system's OEM code page (cmd's) when that can say it; else refused, rather than a command that runs nothing.
+function WriteCmd([string]$file, [string]$target) {
+  $named = CmdPath $target
+  if ($named) { Set-Content -Path $file -Encoding ASCII -Value ('@"' + $named + '" %*'); return }
+  $oem = [Text.Encoding]::GetEncoding([Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)
+  if ($oem.GetString($oem.GetBytes($target)) -cne $target) { Fail (__SAY(cloud.install.win.cmdPath, path=$target)) }
+  [IO.File]::WriteAllText($file, '@"' + $target + '" %*' + [char]13 + [char]10, $oem)
+}
+
 # The command: ~\\.local\\bin\\stillfail.cmd, that directory on the user's PATH.
 $bin = if ($binApart) { $binApart } else { Join-Path $env:USERPROFILE '.local\\bin' }
 New-Item -ItemType Directory -Force $bin | Out-Null
-Set-Content -Path (Join-Path $bin 'stillfail.cmd') -Encoding ASCII -Value ('@"' + (Join-Path $app 'bin\\stillfail.cmd') + '" %*')
+WriteCmd (Join-Path $bin 'stillfail.cmd') (Join-Path $app 'bin\\stillfail.cmd')
 $kept = @{}
 if ($task -ne 'still.fail station') { $kept.task = $task }
 if ($binApart) { $kept.bin = $binApart }

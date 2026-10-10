@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -22,6 +22,30 @@ test("the Windows installer keeps its state in its own scope", () => {
   // It runs as a script block (`& ([scriptblock]::Create(...))`): $script: and $global: there are its caller's, so a
   // function setting one leaves the installer's variable as it was.
   assert.deepEqual(windowsInstallScript("https://ember.test").match(/\$(script|global):\w+/gi) ?? [], []);
+});
+
+test("the stillfail command the installer writes runs the release under a home with other than ASCII in its path", { skip: (spawnSync("powershell", ["-NoProfile", "-Command", "exit 0"]).status !== 0 || spawnSync("cmd", ["/d", "/c", "exit 0"]).status !== 0) && "no PowerShell and cmd" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "install-cmd-"));
+  try {
+    const home = join(dir, "张三");
+    const release = join(home, ".stillfail", "app", "bin");
+    mkdirSync(release, { recursive: true });
+    writeFileSync(join(release, "stillfail.cmd"), "@echo the release's stillfail %*\r\n");
+    // The installer's own functions, as it has them, with its Fail.
+    const script = windowsInstallScript("https://ember.test");
+    const fn = (name: string) => script.match(new RegExp(`^function ${name}\\(.*?^}$`, "ms"))![0];
+    const file = join(dir, "write.ps1");
+    writeFileSync(file, "﻿" + ["function Fail([string]$t) { throw $t }", fn("CmdPath"), fn("WriteCmd"),
+      `WriteCmd (Join-Path $env:TEST_DIR 'stillfail.cmd') (Join-Path $env:USERPROFILE '.stillfail\\app\\bin\\stillfail.cmd')`].join("\n"));
+    const env = { ...process.env, USERPROFILE: home, TEST_DIR: dir };
+    const wrote = spawnSync("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file], { env, encoding: "utf8" });
+    assert.equal(wrote.status, 0, wrote.stdout + wrote.stderr);
+    assert.equal(readFileSync(join(dir, "stillfail.cmd"), "utf8").trim(), '@"%USERPROFILE%\\.stillfail\\app\\bin\\stillfail.cmd" %*');
+    const ran = spawnSync("cmd", ["/d", "/c", join(dir, "stillfail.cmd"), "status"], { env, encoding: "utf8" });
+    assert.equal(ran.stdout.trim(), "the release's stillfail status", ran.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("the Windows installer is one PowerShell parses", { skip: spawnSync("powershell", ["-NoProfile", "-Command", "exit 0"]).status !== 0 && "no PowerShell" }, () => {

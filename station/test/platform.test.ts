@@ -1,12 +1,14 @@
 // What differs between machines is said in src/platform/ only (src/platform/index.ts), so the station's logic is one
 // for macOS, Linux and Windows. And each platform's path rules, which are pure: Windows' are checked on every machine.
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { unix } from "../src/platform/unix.ts";
-import { windows } from "../src/platform/windows.ts";
+import { cmdPath, windows } from "../src/platform/windows.ts";
 
 const src = fileURLToPath(new URL("../src", import.meta.url));
 
@@ -89,4 +91,32 @@ test("each machine names itself and its executables", () => {
   assert.equal(unix.exe("stillfail-runner"), "stillfail-runner");
   assert.equal(windows.home({ USERPROFILE: "C:\\Users\\a" }), "C:\\Users\\a");
   assert.equal(unix.home({ USERPROFILE: "C:\\Users\\a" }), undefined);
+});
+
+test("a .cmd names a path with other than ASCII in it through the variable it is under", () => {
+  const env = { USERPROFILE: "C:\\Users\\张三", LOCALAPPDATA: "C:\\Users\\张三\\AppData\\Local", ProgramFiles: "C:\\Program Files" };
+  assert.equal(cmdPath("C:\\Program Files\\Git\\bin\\sh.exe", env), "C:\\Program Files\\Git\\bin\\sh.exe");
+  assert.equal(cmdPath("C:\\Users\\张三\\.stillfail\\app\\bin\\stillfail.cmd", env), "%USERPROFILE%\\.stillfail\\app\\bin\\stillfail.cmd");
+  // The closest variable; its name in any case.
+  assert.equal(cmdPath("c:\\users\\张三\\AppData\\Local\\Programs\\Git\\bin\\sh.exe", env), "%LOCALAPPDATA%\\Programs\\Git\\bin\\sh.exe");
+  assert.equal(cmdPath("C:\\Users\\张三", env), "%USERPROFILE%");
+  // Not one of its folders (张三x), or more than ASCII left: refused.
+  assert.throws(() => cmdPath("C:\\Users\\张三x\\a", env), /cannot name/);
+  assert.throws(() => cmdPath("C:\\Users\\张三\\数据\\a", env), /cannot name/);
+  assert.throws(() => cmdPath("D:\\数据\\a", env), /cannot name/);
+});
+
+test("a .cmd so written runs what is at such a path", { skip: process.platform !== "win32" && "cmd is Windows'" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "cmd-path-"));
+  try {
+    const home = join(dir, "张三");
+    mkdirSync(join(home, "bin"), { recursive: true });
+    writeFileSync(join(home, "bin", "say.cmd"), "@echo said %*\r\n");
+    const env = { ...process.env, USERPROFILE: home };
+    writeFileSync(join(dir, "wrapper.cmd"), `@"${cmdPath(join(home, "bin", "say.cmd"), env)}" %*\r\n`);
+    const ran = spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/c", join(dir, "wrapper.cmd"), "hi"], { env, encoding: "utf8" });
+    assert.equal(ran.stdout.trim(), "said hi", ran.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

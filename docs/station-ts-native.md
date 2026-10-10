@@ -60,18 +60,24 @@ runner → 客户端：
 3. 起 Node：`node <app>/station/main.js run --app … --data … --launcher-fds 3,4,5`，fd 5 是控制管道（双向，一行一个 JSON）。
 4. 写 `<data>/run/station.json`（一行、字段与 Rust 版相同：`{"pid":<启动器 pid>,"startedAt":<ms>,"version":…,"handoff":1,"drain":1,"channel":1}`；version 由 Node 在控制管道上告诉启动器；安装器用 sed 读，格式不能变）。
 5. 信号：
-   - SIGUSR2（交接）：起一个新 Node（同样的 fd），等它在控制管道上说 `{"ready":true}`（超时 60 秒算失败：杀掉新的，写 `run/handoff-failed`，旧的照常）；然后告诉旧的 `{"op":"handover"}`，等它退出（最多 30 秒，超时 SIGKILL）；更新 `station.json` 的 `startedAt`（pid 不变——安装器靠这个判断交接成功）。
+   - SIGUSR2（交接）：起一个新 Node（同样的 fd），等它在控制管道上说 `{"ready":true}`（超时 60 秒算失败：杀掉新的，写 `run/handoff-failed`，旧的照常）；然后告诉旧的 `{"op":"handover"}`，等它退出（最多 30 秒，超时 SIGKILL）；新的**接管之后**（见下）才更新 `station.json` 的 `startedAt`（pid 不变——安装器靠这个判断交接成功）。
    - SIGUSR1（drain）、SIGHUP：转给当前 Node（在控制管道上发 `{"op":"drain"}` / `{"op":"hup"}`）。
    - SIGTERM / SIGINT：转给 Node（`{"op":"stop"}`），等它退出（最多 30 秒），然后自己退出。
 6. Node 意外退出（不是启动器让它退的）：按 1s、2s、4s… 最多 60s 退避重启；连续 5 次起不来就退出（交给 launchd）。
 7. `--with-parent`：每 2 秒看一次父进程，没了就按 SIGTERM 处理（同 Rust）。
 8. 启动器 stderr 照常（launchd 会写日志）；Node 的 stdout/stderr 继承启动器的。
 
-控制管道上 Node → 启动器：`{"ready":true,"version":"0.1.x"}`、`{"drained":"idle"|"timeout"}`（启动器照 Rust 版写 `run/drained`）。
+控制管道上 Node → 启动器：`{"ready":true,"version":"0.1.x"}`、`{"serving":"admin"|"mcp","port":N}`（回环口听好了；接手会话、agent 的门开好了）、`{"failed":"…"}`（没能接管：agent 那边没起来）、`{"drained":"idle"|"timeout"}`（启动器照 Rust 版写 `run/drained`）。
 
 **生命周期只有一份**（`src/lifecycle.rs`）：上面第 4–7 步（ready、退避重启、连续失败放弃、交接、drain、停止和超时强杀、跟随父进程）是一个与平台无关的状态机，它的测试在三个平台上都会跑。`run.rs`（Unix）和 `run_windows.rs` 只负责三件事：起进程、在控制通道上收发消息、把事件（某行消息、进程结束、停止）告诉状态机。改重启、取消或超时策略只改这一处。各平台不同的只有两点：端口怎么交给 Node（Unix 传 fd，Windows 由启动器转发，见下），判断父进程是否还在时 Unix 用 `getppid` 有没有变，Windows 等父进程的句柄。
 
-交接时“热好了”和“接管了”是两回事：新 Node 说 ready 只表示它能接手；旧 Node 交出会话并退出、新 Node 接上之后，它才开始调度（同一时刻只有一个 Node 在调度）。交接失败（新 Node 起不来、超时）时旧的照常服务，启动器写 `run/handoff-failed`；安装器（两个平台一样）看到它、且 station 还是原来那次启动（pid 活着、`startedAt` 没变），就把旧发布挪回原位、报告失败退出，**不会重启进一个起不来的新版本**。
+交接时“热好了”和“接管了”是两回事：新 Node 说 ready 只表示它能接手；旧 Node 交出会话并退出、新 Node 接上之后，它才开始调度（同一时刻只有一个 Node 在调度）。**接管**＝ready、旧的已经不在、并且 `admin` 和 `mcp` 都说了 `serving`；`station.json` 只在这时写（普通启动也一样）。从开始服务起算 90 秒（`Times::take`）还没接管，或者它说了 `failed`，启动器就结束它，按没起来算（计入连续失败次数），再起一个。
+
+交接失败分两种，启动器都写 `run/handoff-failed`：
+- 新 Node 没 ready（起不来、60 秒超时）：旧的照常服务。
+- 新 Node ready 了、旧的已经交出会话退出，但新的没接管：结束新的，**等 10 秒**（`Times::rollback`）再起一个。
+
+安装器（两个平台一样）看到 `handoff-failed`、且 station 还是原来那次启动（启动器 pid 活着、`startedAt` 没变），就把旧发布挪回原位、报告失败退出：前一种旧 Node 继续跑，后一种启动器 10 秒后起的是旧发布。**不会重启进一个起不来的新版本**。安装器等交接最多 180 秒（60 秒 ready + 90 秒接管，再留余量）。
 
 ### Windows（`src/run_windows.rs`）
 
@@ -92,6 +98,7 @@ runner → 客户端：
 - 自启动是当前用户的计划任务（登录时、不需要管理员），结束后 1 分钟再起。`STILLFAIL_TASK`/`STILLFAIL_BIN` 让一台测试 station 用自己的任务名和命令目录，记在 `<data>/windows.json` 里，之后的更新（包括 station 自己发起的）沿用。
 - 更新同 install.sh：station 在跑、计划任务没变、`station.json` 说 `handoff:1` 时，旧发布挪到 `app.old-<时间>`（还在跑的启动器、runner 让目录删不掉，挪可以），新发布放到原位，请启动器交接；`startedAt` 变了、pid 没变就是交接成功，启动器不重启。交接失败且旧的还在服务：挪回旧发布、报告失败。其余情况（第一次装、任务变了、交接失败且旧的已经不在）先 drain，再停（停任务、结束 launcher，按命令行里含 `<app>` 等 Node 退出）、换发布、重启。
 - 安装器在 PowerShell 里作为脚本块运行（`& ([scriptblock]::Create(...))`），那里的 `$script:` 是调用者的作用域：函数要改的状态放在一个哈希表里（`cloud/test/install-windows.test.ts` 守着不出现 `$script:`/`$global:`）。
+- `.cmd` 文件里只写 ASCII：cmd 按控制台代码页（中文系统 936、英文 437）读 .cmd，不是 UTF-8，所以 `C:\Users\张三\…` 写成 ASCII 会变成 `??`，写成 UTF-8 会读乱。含非 ASCII 的路径写成它所在的环境变量（`%USERPROFILE%\.stillfail\…`），cmd 运行时按 Unicode 展开。安装器的 `stillfail.cmd`（`CmdPath`/`WriteCmd`）和 station 的 `.cmd` 外壳（`platform/windows.ts` 的 `cmdPath`）用同一条规则；不在任何这类目录下时，安装器退而用系统 OEM 代码页写（能表示才写，否则报错），station 报错不写。
 - station 从页面上自更新（`updates.ts` 的 `startInstaller`）：写 `run/update.ps1`，复制 `stillfail-station-w.exe` 到 `run/`，注册一次性计划任务「<station 的任务名> update」去跑它，跑完自己删掉任务；`update.step`/`update.log`/`update.exit` 同 Unix。不用 WMI 的 `Win32_Process.Create`：那样起 PowerShell 会被安全软件拒（实测“Access is denied”）。
 
 ### 从 Rust 版切过来
