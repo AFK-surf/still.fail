@@ -131,6 +131,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const shown = active && open.includes(active) ? active : open[0] ?? null;
   // The panel as it was when its last tab closed, kept while it slides out over the chat (which takes the room at once).
   const panelRef = useRef<HTMLDivElement>(null);
+  // Where the history in front puts its tools (stop, details): in the tabs' row.
+  const [sideTools, setSideTools] = useState<HTMLElement | null>(null);
   const [leaving, setLeaving] = useState<{ tabs: string[]; shown: string; width: number } | null>(null);
   // Tabs and the one in front change together, and are kept for this chat in one write.
   const commit = (next: string[], front: string | null) => {
@@ -426,6 +428,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   );
                 })}
               </Tabs.List>
+              {/* The history in front puts what can be done to its agent here, beside the tabs: no row of its own. */}
+              <div ref={setSideTools} className={css.sideTools} />
               {/* The panel's switch stays in the top-right corner, open or closed. */}
               <IconButton label={t("web-pages.chat.closePanel")} icon={PanelClose} shortcut="panel.close" onClick={() => saveTabs([])} />
             </div>
@@ -462,8 +466,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               return (
                 <Tabs.Content key={key} className={css.sideContent} value={key}>
                   <History station={station.address} sessionKey={key} title={view?.title} actions={<SessionActions session={a.session} status={a.status} />}
-                    focus={focus?.key === key ? focus : null}
-                    summary={<HistorySummary agent={a} />}
+                    focus={focus?.key === key ? focus : null} tools={sideTools}
+                    summary={a.attention.length > 0 ? <HistorySummary agent={a} /> : null}
                     details={<SessionDetails agent={a} />} />
                 </Tabs.Content>
               );

@@ -185,6 +185,8 @@ globalStyle(`${sidePanel} ${resizeHandle}`, {
     },
   },
 });
+/** What the history in front can do (History.tsx `tools`), between the tabs and the panel's switch; empty, nothing. */
+export const sideTools = style({ display: "flex", flex: "none", selectors: { "&:empty": { display: "none" } } });
 globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "auto", padding: "0", borderBottom: "0" });
 /** The chat's title when it can be renamed: pressed, it turns into the field (Rename.css.ts titleInputBar) in the same box. */
 export const titleBtn = style({
