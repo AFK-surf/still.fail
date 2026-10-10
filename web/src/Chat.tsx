@@ -1452,9 +1452,13 @@ export interface ComposerProps {
   onStop?: () => void;
 }
 
+/** The quotes of a composer whose page holds none (a new chat's): the same array each time, or its draft would go to the
+ * core again (`draft.put`) at every render. */
+const NO_QUOTES: DraftQuote[] = [];
+
 export function Composer(props: ComposerProps) {
   const api = useApi();
-  const { draftKey, carry, quotes = [], setQuotes = () => {} } = props;
+  const { draftKey, carry, quotes = NO_QUOTES, setQuotes = () => {} } = props;
   const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}), upload: (file, onProgress) => api.uploadFile(file, onProgress), quotes: [quotes, setQuotes] });
   return <ComposerView {...props} draft={draft} />;
 }
