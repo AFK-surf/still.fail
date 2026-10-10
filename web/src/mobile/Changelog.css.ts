@@ -5,6 +5,7 @@ const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", wh
 
 // The changelog on a narrow screen: each change on its day's card, its lines, then where it is and whether this app
 // has it (grey but for an update that would bring it).
+export const mTabs = style({ padding: "4px 16px 2px" });
 export const mNote = style({
   display: "flex", alignItems: "center", gap: "8px", margin: "8px 24px", fontSize: vars.textMeta, color: "var(--m-muted)",
   selectors: { "&[data-error]": { color: "var(--m-red)" } },

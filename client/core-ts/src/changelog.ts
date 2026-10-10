@@ -1,5 +1,6 @@
 // What changed in still.fail, for people (changelog.rs; the `changelog` topic, docs/changelog.md): still.fail cloud's
-// changelog with what each part has out on this app's channel, by day, newest first; and what this app got since it
+// changelog with what each part has out on this app's channel, one tab a part (this app's first), by day, newest first;
+// and what this app got since it
 // was last shown here (`news`, until `changelog.seen`). Kept on the device (table `changelog`). The sync reads it as
 // the core starts and each time still.fail cloud's events socket opens (rule 6: never because it is shown); `app.update`
 // reads it too when it finds a build of this app the changelog kept was read before (`brings`).
@@ -25,6 +26,17 @@ const TABLE = "changelog";
 
 function partsOf(app: string): string[] {
   return app === "android" ? ["android"] : app === "desktop" ? ["web", "desktop"] : app === "web" ? ["web"] : [];
+}
+
+/// The changelog's tabs, this app's first, and which changes each has: the desktop app carries the web's.
+const TABS = ["desktop", "web", "android", "station", "cloud"];
+function tabsOf(app: string): string[] {
+  const own = TABS.includes(app) ? app : "web";
+  return [own, ...TABS.filter((tab) => tab !== own)];
+}
+function inTab(tab: string, parts: string[]): boolean {
+  if (tab === "cloud") return parts.length === 0 || parts.includes("cloud");
+  return tab === "desktop" ? parts.includes("web") || parts.includes("desktop") : parts.includes(tab);
 }
 
 function partName(part: string): string {
@@ -142,12 +154,12 @@ export class Changelog implements Owner {
     const build = int(get(device, "build"));
     const seen = int(this.#data.record(TABLE, "seen"));
     const feed = this.#data.record(TABLE, "feed") as J;
-    if (feed === undefined) return { app, build, days: [], loading: !this.#failed, error: this.#failed ? t("core-misc.changelog.unreadable") : null };
+    if (feed === undefined) return { app, build, tabs: [], loading: !this.#failed, error: this.#failed ? t("core-misc.changelog.unreadable") : null };
     const released = get(feed, "released") ?? null;
     const now = this.#host.nowMs();
     const offset = this.#host.utcOffsetMin(now);
-    const days: J[] = [];
     const news: J[] = [];
+    const tabs = tabsOf(app).map((part) => ({ part, label: t(`core-misc.changelog.tab.${part}`), days: [] as J[] }));
     for (const entry of arr(get(feed, "entries")).slice(0, SHOWN)) {
       const it = item(entry, app, build, released);
       if (it === null) continue;
@@ -155,10 +167,14 @@ export class Changelog implements Owner {
       if (it.mine && build !== null && version <= build && seen !== null && version > seen && news.length < NEWS) news.push(structuredClone(it));
       const ms = (typeof get(entry, "at") === "number" ? entry.at : 0) * 1000;
       const label = format.dayLabel(ms, now, offset);
-      const last = days[days.length - 1];
-      if (last && last.label === label) last.entries.push(it);
-      else days.push({ label, entries: [it] });
+      const parts: string[] = arr(get(entry, "parts")).filter((p): p is string => typeof p === "string");
+      for (const tab of tabs) {
+        if (!inTab(tab.part, parts)) continue;
+        const last = tab.days[tab.days.length - 1];
+        if (last && last.label === label) last.entries.push(structuredClone(it));
+        else tab.days.push({ label, entries: [structuredClone(it)] });
+      }
     }
-    return { app, build, days, news: news.length > 0 ? { build: build !== null ? `0.1.${build}` : null, entries: news } : null, loading: false };
+    return { app, build, tabs, news: news.length > 0 ? { build: build !== null ? `0.1.${build}` : null, entries: news } : null, loading: false };
   }
 }

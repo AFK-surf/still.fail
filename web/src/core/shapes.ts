@@ -564,15 +564,25 @@ export interface ChangelogNews {
 }
 
 /**
+ * A part's changes (`part`: desktop, web, android, station or cloud; the desktop's include the web's), under
+ * its name.
+ */
+export interface ChangelogTab {
+	part: string;
+	label: string;
+	days: ChangelogDay[];
+}
+
+/**
  * What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`
- * (web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes by day, newest
- * first; what this app got since the changelog was last shown here (`news`, until `changelog.seen`); `loading` while
- * first read, `error` when it could not be and none was kept.
+ * (web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes in a tab a part,
+ * this app's first, by day, newest first; what this app got since the changelog was last shown here (`news`, until
+ * `changelog.seen`); `loading` while first read, `error` when it could not be and none was kept.
  */
 export interface ChangelogView {
 	app?: string;
 	build?: number;
-	days: ChangelogDay[];
+	tabs: ChangelogTab[];
 	news?: ChangelogNews;
 	loading?: boolean;
 	error?: string;

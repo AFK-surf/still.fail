@@ -1,7 +1,7 @@
 // What changed in still.fail, as the narrow web has it (web/src/mobile/Changelog.tsx), from the core's `changelog` topic
-// (client/core-ts/src/changelog.ts): the settings' 更新日志 page, by day on cards, each change with where it is and whether
-// this app has it; and at the top of the list, what the last update brought, until the page is opened or it is put
-// away (`changelog.seen`).
+// (client/core-ts/src/changelog.ts): the settings' 更新日志 page, a tab a part (this app's first), by day on cards, each
+// change with where it is and whether this app has it; and at the top of the list, what the last update brought, until
+// the page is opened or it is put away (`changelog.seen`).
 package fail.still.android.screens
 
 import androidx.compose.foundation.background
@@ -53,6 +53,7 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.SectionHeader
+import fail.still.android.ui.Seg
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
@@ -71,17 +72,22 @@ fun ChangelogScreen() {
     // Opened: what the update brought is read.
     val news = view?.news != null
     LaunchedEffect(news) { if (news) seen(app) }
+    var part by remember { mutableStateOf<String?>(null) }
+    val tabs = view?.tabs.orEmpty()
+    val at = tabs.indexOfFirst { it.part == part }.coerceAtLeast(0)
+    val tab = tabs.getOrNull(at)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
         TopBack(t("android-settings.title"), app::pop)
         LargeTitle(view?.build?.let { t("android-settings.changelog.build", "build" to it) } ?: "", t("android-settings.changelog.title"))
+        if (tab != null) Seg(tabs.map { it.label }, at, { part = tabs[it].part }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp).fillMaxWidth(), height = 34.dp, fill = true)
         when {
             view == null || view.loading == true -> Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Spinner(13.dp)
                 Text(t("android-settings.reading"), fontSize = 14.sp, color = C.muted)
             }
             view.error != null -> Text(view.error, fontSize = 14.sp, color = C.red, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            view.days.isEmpty() -> Text(t("android-settings.changelog.empty"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            else -> view.days.forEach { day ->
+            tab == null || tab.days.isEmpty() -> Text(t("android-settings.changelog.empty"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+            else -> tab.days.forEach { day ->
                 SectionHeader(day.label, start = 24.dp)
                 ListCard { day.entries.forEach { Change(it) } }
             }

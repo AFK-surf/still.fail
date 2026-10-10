@@ -1097,8 +1097,14 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   answersOf(host, values);
   const c = v(values, 2);
   assert.deepEqual([c.app, c.build, c.loading], ["android", 1320, false]);
-  assert.equal(c.days[0].label, "今天");
-  assert.deepEqual(c.days[0].entries.map((e: J) => e.note), ["还没发布", "更新到 0.1.1330 后就有", "还没发布", "你的版本已包含"]);
+  // A tab a part, this app's first; the desktop's carries the web's.
+  assert.deepEqual(c.tabs.map((x: J) => [x.part, x.label]), [["android", "安卓"], ["desktop", "桌面"], ["web", "网页"], ["station", "Station"], ["cloud", "云端"]]);
+  const notes = (part: string) => c.tabs.find((x: J) => x.part === part).days.flatMap((d: J) => d.entries.map((e: J) => e.note));
+  assert.equal(c.tabs[0].days[0].label, "今天");
+  assert.deepEqual(notes("android"), ["还没发布", "更新到 0.1.1330 后就有", "你的版本已包含"]);
+  assert.deepEqual(notes("desktop"), ["已发布"]);
+  assert.deepEqual(notes("station"), ["还没发布"]);
+  assert.deepEqual(notes("cloud"), []);
   // The first build seen here: nothing is news.
   assert.equal(c.news, undefined, JSON.stringify(c));
   // Updated, the app started again: what it brought, until seen.

@@ -587,15 +587,24 @@ data class ChangelogNews (
 	val entries: List<ChangelogItem>
 )
 
+/// A part's changes (`part`: desktop, web, android, station or cloud; the desktop's include the web's), under
+/// its name.
+@Serializable
+data class ChangelogTab (
+	val part: String,
+	val label: String,
+	val days: List<ChangelogDay>
+)
+
 /// What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`
-/// (web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes by day, newest
-/// first; what this app got since the changelog was last shown here (`news`, until `changelog.seen`); `loading` while
-/// first read, `error` when it could not be and none was kept.
+/// (web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes in a tab a part,
+/// this app's first, by day, newest first; what this app got since the changelog was last shown here (`news`, until
+/// `changelog.seen`); `loading` while first read, `error` when it could not be and none was kept.
 @Serializable
 data class ChangelogView (
 	val app: String? = null,
 	val build: Long? = null,
-	val days: List<ChangelogDay>,
+	val tabs: List<ChangelogTab>,
 	val news: ChangelogNews? = null,
 	val loading: Boolean? = null,
 	val error: String? = null

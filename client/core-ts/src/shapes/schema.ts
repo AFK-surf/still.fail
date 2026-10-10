@@ -886,11 +886,16 @@ export const SHAPES: Record<string, Shape> = {
   ChangelogView: struct([
     ["app", "String", { default: true }],
     ["build", opt("i64"), { client: opt("I54") }],
-    ["days", vec("ChangelogDay")],
+    ["tabs", vec("ChangelogTab")],
     ["news", opt("ChangelogNews")],
     ["loading", "bool", { default: true }],
     ["error", opt("String")],
-  ], { doc: "What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`\n(web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes by day, newest\nfirst; what this app got since the changelog was last shown here (`news`, until `changelog.seen`); `loading` while\nfirst read, `error` when it could not be and none was kept." }),
+  ], { doc: "What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`\n(web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes in a tab a part,\nthis app's first, by day, newest first; what this app got since the changelog was last shown here (`news`, until\n`changelog.seen`); `loading` while first read, `error` when it could not be and none was kept." }),
+  ChangelogTab: struct([
+    ["part", "String"],
+    ["label", "String"],
+    ["days", vec("ChangelogDay")],
+  ], { doc: "A part's changes (`part`: desktop, web, android, station or cloud; the desktop's include the web's), under\nits name.", keepNone: true }),
   ChangelogDay: struct([
     ["label", "String"],
     ["entries", vec("ChangelogItem")],

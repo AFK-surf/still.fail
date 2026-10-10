@@ -1,5 +1,9 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+
+// A tab a part, this app's first, beside the title.
+export const tabs = style({ minWidth: "340px" });
+globalStyle(`${tabs} > button`, { whiteSpace: "nowrap", padding: "0 12px" });
 
 // The changelog: a day's heading, then each change's lines, and under them where it is and whether this app has it
 // (grey but for an update that would bring it). No lines between.
