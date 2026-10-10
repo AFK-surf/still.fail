@@ -134,7 +134,7 @@ export function downloading(version: string, got: number, total: number | null):
 
 /// This machine as the runtimes name their builds (`darwin-arm64`…).
 export function platform(): string | null {
-  const os = process.platform === "darwin" ? "darwin" : process.platform === "linux" ? "linux" : null;
+  const os = process.platform === "darwin" ? "darwin" : process.platform === "linux" ? "linux" : process.platform === "win32" ? "win32" : null;
   const arch = process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x64" : null;
   return os && arch ? `${os}-${arch}` : null;
 }

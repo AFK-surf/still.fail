@@ -2,6 +2,9 @@
 // child of a `stillfail-runner` that outlives this station, restarting or crashing. Starting one gives a handle; a
 // station starting finds those of before (<data>/run/runners/*.json) and takes them up again where it stopped reading:
 // what it has handled is acknowledged line by line, so nothing is read twice and nothing is lost.
+//
+// On Windows the runner's socket is a named pipe (`\\.\pipe\…`, its `socket`), which is not a file: opening it, even
+// to see it is there, is a connection, and the runner keeps one at a time. So it is never looked at but to attach.
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
@@ -21,12 +24,15 @@ export type RunnerInfo = {
 
 export type Exit = { code: number | null; signal: string | null };
 
+const WINDOWS = process.platform === "win32";
+const EXE = WINDOWS ? ".exe" : "";
+
 /// The runner binary: STILLFAIL_RUNNER, else beside the station's code in a release, else where cargo built it.
 export function runnerBinary(): string {
   const candidates = [
     process.env.STILLFAIL_RUNNER,
-    fileURLToPath(new URL("./stillfail-runner", import.meta.url)),
-    fileURLToPath(new URL("../../native/runner/target/release/stillfail-runner", import.meta.url)),
+    fileURLToPath(new URL(`./stillfail-runner${EXE}`, import.meta.url)),
+    fileURLToPath(new URL(`../../native/runner/target/release/stillfail-runner${EXE}`, import.meta.url)),
   ];
   const found = candidates.find((p) => p && existsSync(p));
   if (!found) throw new Error(`stillfail-runner is not there (looked at ${candidates.filter(Boolean).join(", ")})`);
@@ -34,6 +40,10 @@ export function runnerBinary(): string {
 }
 
 export const runnersDir = (data: string) => join(data, "run", "runners");
+
+/// Whether a runner of before (its info file there, itself alive) still keeps its process: its socket there (one on its
+/// way out has removed it). A pipe cannot be looked at (see above): the info file, which goes with it, says so then.
+export const listening = (info: RunnerInfo) => WINDOWS || existsSync(info.socket);
 
 /// Starts `program` under a runner, its environment `env` (the agent's whole environment), in `cwd`.
 export function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string): Promise<RunnerInfo> {
@@ -167,10 +177,12 @@ export class RunnerConnection {
 
   /// This station lets go (stopping, handing over): the runner keeps the agent for the next one. Its side is closed and
   /// what comes meanwhile is not handled; resolved once the runner, having read to the end, closed it too (or was gone).
+  /// A pipe has no closing of one side: it is asked to (`leave`), and closes once it has read up to there.
   detach(): Promise<void> {
     this.left = true;
     if (this.socket.destroyed) return Promise.resolve();
     const closed = new Promise<void>((resolve) => this.socket.once("close", () => resolve()));
+    if (WINDOWS) this.send({ op: "leave" });
     this.socket.end();
     return closed;
   }

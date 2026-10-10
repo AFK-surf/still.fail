@@ -1,6 +1,7 @@
 // The station's and its runtimes' versions and updating them (the Rust station's updates.rs's tests), with fake release
 // servers, fake installers and fake npm/vp/curl commands in temporary directories: nothing real is installed or read.
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -9,12 +10,13 @@ import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { ConfigFile } from "../src/ops/config.ts";
 import { type Env, type Found, howToInstall, howToUpdate, findCommand, pinNpmVersion, run, runLines, Unable, kindCommand, kindPackage } from "../src/updates/runtimes.ts";
-import { Updates, type UpdatesOptions } from "../src/updates/updates.ts";
+import { Updates, type UpdatesOptions, windowsUpdateScript } from "../src/updates/updates.ts";
+import { WINDOWS } from "../src/ops/shell.ts";
 import {
   channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, versionIn,
 } from "../src/updates/versions.ts";
 import { setChannelIn } from "../src/updates/channel.ts";
-import { launcher, script as stand_in } from "./accounts-fakes.ts";
+import { exe, launcher, script as stand_in } from "./accounts-fakes.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
 delete process.env.STILLFAIL_CONFIG;
@@ -47,6 +49,9 @@ function installed(data: string, build: string, channel: string | null, more: Pa
 }
 
 const station = (u: Updates) => u.get("zh")[0]!;
+
+/// A PATH of `bin` and the system's commands.
+const withSystem = (bin: string) => (WINDOWS ? `${bin};${process.env.SystemRoot ?? "C:\\Windows"}\\System32` : `${bin}:/usr/bin:/bin`);
 
 /// A server answering `routes` (path → status and body, or a function of the request's path and query).
 type Said = { status?: number; type?: string; body: string | Buffer } | null;
@@ -106,11 +111,14 @@ async function codexWorld(version: string | null): Promise<[string, Server, stri
   base = registry;
   const bin = join(temp(), "bin");
   const said = join(dirname(bin), "npm-asked");
+  // On Windows what is installed is a .cmd (as npm's shims are), written by Git's sh: its paths with /.
+  const [b, s] = [bin, said].map((p) => p.replaceAll("\\", "/"));
+  const codex = WINDOWS ? `printf '@echo codex-cli ${version}\\r\\n' > "${b}/codex.cmd"` : `printf '#!/bin/sh\\necho "codex-cli ${version}"\\n' > "${b}/codex.sh"; /bin/ln "${launcher()}" "${b}/codex"`;
   script(join(bin, "npm"), `#!/bin/sh
-echo "$*" >> "${said}"
+echo "$*" >> "${s}"
 if [ "$1" = install ]; then
   echo "==> Downloading codex"
-  ${version === null ? ":" : `printf '#!/bin/sh\\necho "codex-cli ${version}"\\n' > "${bin}/codex.sh"; /bin/ln "${launcher()}" "${bin}/codex"`}
+  ${version === null ? ":" : codex}
   echo "added 1 package"
 fi
 exit 0
@@ -124,7 +132,8 @@ describe("updates", { concurrency: true }, () => {
   test("an install says where it is as it goes", async () => {
     const env: Env = { PATH: "/usr/bin:/bin" };
     const steps: string[] = [];
-    const [ok, said] = await runLines("/bin/sh", ["-c", "echo '==> Downloading https://x'; echo '==> Pouring codex'; echo 'Warning: x' >&2; exit 3"], env, 10_000, (line) => {
+    const program = "console.log('==> Downloading https://x'); console.log('==> Pouring codex'); console.error('Warning: x'); process.exitCode = 3";
+    const [ok, said] = await runLines(process.execPath, ["-e", program], env, 10_000, (line) => {
       const s = stepOf(line);
       if (s) steps.push(say(s, "zh"));
     });
@@ -380,7 +389,42 @@ describe("updates", { concurrency: true }, () => {
     assert.equal(updates.toUpdateTo(), null, "a request resets the quiet period");
   });
 
-  test("the station is updated by its cloud's installer, followed to its end", async (t) => {
+  // The installer here is install.sh, piped to sh; Windows' (install.ps1, by a scheduled task) is the next test's.
+  const shInstaller = { skip: WINDOWS && "install.sh is macOS's and Linux's" };
+
+  test("on Windows the update's script runs install.ps1, its words in UTF-8 and its exit kept", { skip: !WINDOWS && "Windows'" }, async (t) => {
+    const dir = temp();
+    const run = join(dir, "run 'x'");
+    mkdirSync(run);
+    const installer = [
+      "Write-Host ('下载 still.fail station… ' + $env:STILLFAIL_CHANNEL + ' ' + $env:STILLFAIL_DATA)",
+      "[Console]::Error.WriteLine('没能更新')",
+      "exit 3",
+    ].join("\r\n");
+    const asked: string[] = [];
+    const [origin, server] = await serve((path, search) => {
+      asked.push(path + search);
+      return path === "/install.ps1" ? { type: "text/plain; charset=utf-8", body: installer } : null;
+    });
+    t.after(() => server.close());
+    const env = { STILLFAIL_DATA: dir, STILLFAIL_CHANNEL: "beta", PATH: "C:\\nowhere" };
+    const ps1 = join(run, "update.ps1");
+    const text = windowsUpdateScript(origin, run, env, "still.fail station (test, not registered) update", "zh");
+    // Only the station's own variables: the task has the user's PATH.
+    assert.ok(!text.includes("nowhere"));
+    writeFileSync(ps1, text);
+    // Run here as the task runs it (no task: its removal at the end finds none). Not spawnSync: the cloud is this process.
+    await new Promise<void>((resolve, reject) =>
+      execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", ps1], { timeout: 60_000 }, (e, _out, err) => (e ? reject(new Error(`${e.message} ${err}`)) : resolve())),
+    );
+    assert.deepEqual(asked, ["/install.ps1?lang=zh"]);
+    assert.equal(readFileSync(join(run, "update.exit"), "utf8").trim(), "3");
+    const log = readFileSync(join(run, "update.log"), "utf8");
+    assert.ok(log.includes(`下载 still.fail station… beta ${dir}`), log);
+    assert.ok(log.includes("没能更新"), log);
+  });
+
+  test("the station is updated by its cloud's installer, followed to its end", shInstaller, async (t) => {
     const dir = temp();
     const [origin, server, asked, finish] = await cloudWithRelease("0.1.1310", "1310", true);
     t.after(() => server.close());
@@ -402,7 +446,7 @@ describe("updates", { concurrency: true }, () => {
     assert.equal(readFileSync(join(dir, "run", "update.exit"), "utf8").trim(), "0");
   });
 
-  test("turned on, a quiet station updates itself by the installer, once", async (t) => {
+  test("turned on, a quiet station updates itself by the installer, once", shInstaller, async (t) => {
     const dir = temp();
     const [origin, server, asked] = await cloudWithRelease("0.1.1310", "1310");
     t.after(() => server.close());
@@ -464,7 +508,7 @@ describe("updates", { concurrency: true }, () => {
       t.after(() => server.close());
       const dir = temp();
       let changed = 0;
-      const updates = installed(dir, "1300", null, { registry, env: { PATH: `${bin}:/usr/bin:/bin`, HOME: dir }, runtimeChanged: () => changed++ });
+      const updates = installed(dir, "1300", null, { registry, env: { PATH: withSystem(bin), HOME: dir }, runtimeChanged: () => changed++ });
       t.after(() => updates.close());
       await updates.check();
       let codex = updates.get("zh")[2]!;
@@ -490,16 +534,32 @@ describe("updates", { concurrency: true }, () => {
       const [registry, server, bin] = await codexWorld(null);
       t.after(() => server.close());
       const dir = temp();
-      const updates = installed(dir, "1300", null, { registry, env: { PATH: `${bin}:/usr/bin:/bin`, HOME: dir } });
+      const updates = installed(dir, "1300", null, { registry, env: { PATH: withSystem(bin), HOME: dir } });
       t.after(() => updates.close());
       await updates.check();
       await updates.update("codex", "zh");
       await until("failed", () => updates.get("zh")[2]!.state === "failed");
-      assert.equal(updates.get("zh")[2]!.message, `${join(bin, "npm")} 跑完了，但 station 的 PATH 上还是找不到 codex：可能装到了别处`);
+      assert.equal(updates.get("zh")[2]!.message, `${exe(join(bin, "npm"))} 跑完了，但 station 的 PATH 上还是找不到 codex：可能装到了别处`);
     });
   });
 
-  test("vite shims update the package with their own vp", async () => {
+  test("on Windows a command beside vp.exe is Vite+'s, updated with it; one in npm's prefix with that npm", { skip: !WINDOWS && "Windows'" }, () => {
+    const dir = temp();
+    writeFileSync(join(dir, "vp.exe"), "");
+    writeFileSync(join(dir, "codex.cmd"), "@echo codex-cli 0.1.0\r\n");
+    const env: Env = { PATH: dir };
+    assert.deepEqual(howToUpdate("codex", findCommand("codex", env)!, env), { program: join(dir, "vp.exe"), args: ["install", "-g", "@openai/codex@latest"] });
+    const prefix = temp();
+    mkdirSync(join(prefix, "node_modules", "@anthropic-ai", "claude-code"), { recursive: true });
+    writeFileSync(join(prefix, "claude.cmd"), "@echo 2.1.0\r\n");
+    writeFileSync(join(prefix, "npm.cmd"), "");
+    const there: Env = { PATH: prefix };
+    assert.deepEqual(howToUpdate("claude", findCommand("claude", there)!, there), {
+      program: join(prefix, "npm.cmd"), args: ["install", "-g", "@anthropic-ai/claude-code@latest", "--prefix", prefix],
+    });
+  });
+
+  test("vite shims update the package with their own vp", { skip: WINDOWS && "Windows' Vite+ commands are shims of their own (the test before)" }, async () => {
     const dir = temp();
     script(join(dir, "vp"), "#!/bin/sh\nprintf '%s\\n' \"$@\"\n");
     for (const kind of ["claude", "codex"] as const) {
@@ -514,7 +574,7 @@ describe("updates", { concurrency: true }, () => {
     }
   });
 
-  test("a standalone update keeps the actual home and path, with shell characters", async () => {
+  test("a standalone update keeps the actual home and path, with shell characters", shInstaller, async () => {
     const dir = temp();
     const home = join(dir, "custom codex ' $home");
     const real = join(home, "packages/standalone/releases/0.155.1-aarch64-apple-darwin/bin/codex");
@@ -544,7 +604,7 @@ INSTALLER
     const dir = temp();
     for (const name of ["brew", "npm"]) script(join(dir, name), "#!/bin/sh\n");
     const env: Env = { PATH: dir };
-    const [brew, npm] = [join(dir, "brew"), join(dir, "npm")];
+    const [brew, npm] = [exe(join(dir, "brew")), exe(join(dir, "npm"))];
     assert.deepEqual(howToUpdate("claude", found("/Users/a/.local/share/claude/versions/2.1.284"), env), { program: "/nowhere/bin/x", args: ["update"] });
     assert.deepEqual(howToUpdate("claude", found("/opt/homebrew/Caskroom/claude-code/2.1.284/claude"), env), { program: brew, args: ["upgrade", "--cask", "claude-code"] });
     assert.deepEqual(howToUpdate("codex", found("/opt/homebrew/Cellar/codex/0.46.0/bin/codex"), env), { program: brew, args: ["upgrade", "codex"] });
@@ -565,9 +625,11 @@ INSTALLER
     const say_ = (h: unknown) => (h as Unable).say("zh");
     assert.ok(say_(howToUpdate("codex", found("/project/node_modules/@openai/codex/bin/codex.js"), env)).includes("全局安装目录"));
     assert.ok(say_(howToUpdate("codex", found("/usr/local/bin/codex"), env)).includes("自己更新"));
+    // Codex's standalone installer is a shell script: on Windows not run.
+    if (WINDOWS) assert.ok(say_(howToUpdate("codex", found("C:/Users/a/.codex/packages/standalone/releases/0.1.0-x86_64-pc-windows-msvc/bin/codex.exe"), env)).includes("自己更新"));
     assert.deepEqual(howToInstall("codex", env), { program: npm, args: ["install", "-g", "@openai/codex@latest"] });
     const bare: Env = { PATH: "/nowhere" };
     assert.ok(say_(howToInstall("codex", bare)).includes("Node"));
-    assert.equal((howToInstall("claude", bare) as any).program, "/bin/sh");
+    assert.equal((howToInstall("claude", bare) as any).program, WINDOWS ? "powershell" : "/bin/sh");
   });
 });

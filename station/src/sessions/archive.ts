@@ -31,11 +31,12 @@ import {
   rename,
   rm,
   stat,
-  symlink,
   unlink,
   utimes,
 } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
+import { segments } from "../ops/paths.ts";
+import { link as symlinkOrStandIn } from "../ops/links.ts";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
@@ -240,8 +241,10 @@ async function drain(stream: AsyncIterable<Buffer>) {
   for await (const _ of stream);
 }
 
-/// A directory's entries made durable (File::open(dir).sync_all()).
+/// A directory's entries made durable (File::open(dir).sync_all()). Windows has no such sync (Node's is refused,
+/// EPERM): NTFS journals a directory's entries itself.
 async function syncDir(dir: string) {
+  if (process.platform === "win32") return;
   const handle = await open(dir, "r");
   try {
     await handle.sync();
@@ -486,7 +489,7 @@ async function overlay(source: string, dest: string): Promise<void> {
     } else {
       if (there?.isDirectory()) throw new Error(`restore path conflict: ${into}`);
       if (there) await unlink(into);
-      if (entry.isSymbolicLink()) await symlink(await readlink(from), into);
+      if (entry.isSymbolicLink()) await symlinkOrStandIn(await readlink(from), into);
       else if (entry.isFile()) await copyFile(from, into);
       else throw new Error(`cannot restore special file ${from}`);
     }
@@ -534,7 +537,8 @@ export async function restoreWorkspace(room: string): Promise<void> {
 export async function workspaceFile(room: string, relative: string): Promise<Buffer | null> {
   const archive = workspaceArchive(room);
   if (!(await exists(archive))) return null;
-  const wanted = relative.split("/").filter((p) => p !== "" && p !== ".");
+  // The archive's names are `/`-separated; a path from Windows has `\` too.
+  const wanted = segments(relative).filter((p) => p !== "" && p !== ".");
   const stream = unzstd(archive);
   try {
     const bytes = new ByteReader(stream[Symbol.asyncIterator]());
@@ -900,9 +904,11 @@ const execFileP = promisify(execFile);
 async function unpack(entries: AsyncGenerator<Entry>, dest: string): Promise<void> {
   const root = await realpath(dest);
   const dirs: { path: string; key: string; mode: number }[] = [];
+  // Links Windows refused whose targets were not unpacked yet: stood in for at the end.
+  const later: [string, string][] = [];
   const inside = async (dir: string) => {
     const real = await realpath(dir);
-    if (real !== root && !real.startsWith(`${root}/`)) throw new Error(`trying to unpack outside of destination path: ${root}`);
+    if (real !== root && !real.startsWith(root.endsWith(sep) ? root : `${root}${sep}`)) throw new Error(`trying to unpack outside of destination path: ${root}`);
   };
   for await (const entry of entries) {
     const parts = entry.parts.filter((p) => p !== "/");
@@ -935,7 +941,9 @@ async function unpack(entries: AsyncGenerator<Entry>, dest: string): Promise<voi
       await utimes(path, mtime, mtime);
       await chmod(path, entry.mode & 0o7777);
     } else if (entry.kind === "symlink") {
-      await replace(() => symlink(entry.linkName!, path));
+      await replace(async () => {
+        if (!(await symlinkOrStandIn(entry.linkName!, path))) later.push([entry.linkName!, path]);
+      });
     } else if (entry.kind === "hardlink") {
       const target = entry.linkName!.split("/").filter((p) => p !== "" && p !== ".");
       if (target.includes("..")) throw new Error(`hard link outside of destination path: ${entry.linkName}`);
@@ -948,6 +956,8 @@ async function unpack(entries: AsyncGenerator<Entry>, dest: string): Promise<voi
       throw new Error(`cannot unpack a device file: ${parts.join("/")}`);
     }
   }
+  // A target never unpacked (a dangling link) leaves nothing to stand in for: the link is not restored.
+  for (const [target, path] of later) await symlinkOrStandIn(target, path);
   dirs.sort((a, b) => Buffer.compare(Buffer.from(b.key), Buffer.from(a.key)));
   for (const dir of dirs) {
     const there = await lstatOrNull(dir.path);

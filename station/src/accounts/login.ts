@@ -17,6 +17,7 @@ import type { Runtime } from "../agents/profiles.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { Fibers } from "../ops/fibers.ts";
+import { WINDOWS, prependPath, runnable } from "../ops/shell.ts";
 
 export type LoginState = "starting" | "needs_code" | "needs_approval" | "verifying" | "done" | "failed" | "cancelled";
 
@@ -80,9 +81,9 @@ export class LoginManager {
     this.finished.delete(profile.id);
     mkdirSync(profile.home, { recursive: true });
     const noBrowser = this.noBrowser();
-    const env = this.env();
-    env.PATH = `${noBrowser}:${env.PATH ?? ""}`;
-    env.BROWSER = join(noBrowser, "open");
+    // Windows' PATH is one variable whatever its case (`Path` as often as not), and runs no sh script: a .cmd there.
+    const env = prependPath(this.env(), noBrowser) as Record<string, string>;
+    env.BROWSER = join(noBrowser, WINDOWS ? "open.cmd" : "open");
     let command: string;
     let args: string[];
     if (profile.runtime === "claude") {
@@ -97,7 +98,8 @@ export class LoginManager {
     const job: LoginJob = { profile: profile.id, runtime: profile.runtime, state: "starting", url: null, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
     const run = ++this.runs;
     const id = profile.id;
-    const child = spawn(command, args, { cwd: profile.home, env, stdio: ["pipe", "pipe", "pipe"] });
+    const r = runnable(command, args, env);
+    const child = spawn(r.file, r.args, { cwd: profile.home, env, stdio: ["pipe", "pipe", "pipe"], windowsVerbatimArguments: r.windowsVerbatimArguments, windowsHide: true });
     const spawned = await new Promise<Error | null>((resolve) => {
       child.once("spawn", () => resolve(null));
       child.once("error", (e) => resolve(e));
@@ -213,6 +215,7 @@ export class LoginManager {
       const path = join(this.noBrowserDir, name);
       writeFileSync(path, "#!/bin/sh\nexit 0\n");
       chmodSync(path, 0o755);
+      if (WINDOWS) writeFileSync(`${path}.cmd`, "@exit /b 0\r\n");
     }
     return this.noBrowserDir;
   }

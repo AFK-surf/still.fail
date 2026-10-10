@@ -12,6 +12,7 @@ import { knownChannel, knownPerson, slackCreator } from "./slack-known.ts";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join, isAbsolute } from "node:path";
+import { clean, cleanPosix, fileName, samePath, segments, within } from "../ops/paths.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { watching } from "./store.ts";
@@ -305,20 +306,6 @@ function mime(path: string): string {
   return (ext !== null && Object.hasOwn(kinds, ext) ? kinds[ext] : undefined) ?? "application/octet-stream";
 }
 
-/// files.rs `clean`: a path absolute, with `.` and `..` worked out (no link followed).
-function clean(path: string): string {
-  const out: string[] = [];
-  for (const part of path.split("/")) {
-    if (part === "" || part === ".") continue;
-    if (part === "..") out.pop();
-    else out.push(part);
-  }
-  return `/${out.join("/")}`;
-}
-
-/// Path::starts_with, component by component.
-const within = (path: string, base: string) => base === "/" || path === base || path.startsWith(`${base}/`);
-
 const isFile = (path: string) => {
   try {
     return statSync(path).isFile();
@@ -333,13 +320,6 @@ const canonical = (path: string): string | null => {
     return null;
   }
 };
-/// Path::file_name: the last part, none for `..` or the root.
-const fileName = (path: string): string | null => {
-  const parts = path.split("/").filter((p) => p !== "" && p !== ".");
-  const last = parts.at(-1);
-  return last === undefined || last === ".." ? null : last;
-};
-
 /// footprint.rs `room_of`: a session's own directory, the one its workspace is in when the station made it
 /// (<data>/sessions/<connect>/<session>/workspace), else none.
 function roomOf(dataDir: string, workspace: string): string | null {
@@ -352,8 +332,8 @@ function roomOf(dataDir: string, workspace: string): string | null {
     if (parent === null) return null;
     path = join(parent, "workspace");
   }
-  if (!within(path, sessions) || path === sessions) return null;
-  const relative = path.slice(sessions.length).split("/").filter((p) => p !== "");
+  if (!within(path, sessions) || samePath(path, sessions)) return null;
+  const relative = segments(path.slice(sessions.length)).filter((p) => p !== "");
   if (relative.length !== 3 || fileName(path) !== "workspace") return null;
   return dirname(path);
 }
@@ -417,7 +397,8 @@ const listed = new Map<string, { at: number; files: string[] }>();
 /// `<workspace>/cue/apps/x/lib/ifc/a.ex`): the file of a repository in `dirs` (one of them, or two levels below)
 /// whose path ends with it; the shortest, when several do. Null when none does.
 function inRepositories(dirs: (string | null)[], given: string): string | null {
-  const tail = clean(given).slice(1);
+  // As git lists them: `/` between the parts, whatever this machine uses.
+  const tail = cleanPosix(given).slice(1);
   if (tail === "" || tail.endsWith("/")) return null;
   const repos = new Set<string>();
   const look = (dir: string, depth: number) => {
@@ -463,7 +444,7 @@ export function sessionFile(s: Store, key: string, name: string, thumb: boolean,
   const base = name.split(/[/\\]/).at(-1) ?? "";
   const path = clean(`${uploads}/${base}`);
   const notFound = () => new HttpError(404, tr("station.files.notFound"));
-  if (base === "" || !within(path, uploads) || path === uploads) throw notFound();
+  if (base === "" || !within(path, uploads) || samePath(path, uploads)) throw notFound();
   if (!isFile(path)) {
     // Packed with its archived workspace: the route reads it out of the archive (sessions/archive.ts), under its lock.
     if (room === null || !existsSync(join(room, "workspace.tar.zst"))) throw notFound();

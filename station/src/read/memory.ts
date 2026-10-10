@@ -1,6 +1,7 @@
 // The agents' memory, for the pages to show (GET /memory; the agents write it): the global one, and the shared skills
 // (projects' memories among them). admin/mod.rs's route over agent_home.rs `agent_home_paths` and `list_skills`.
 import { lstatSync, readFileSync, readdirSync, readlinkSync } from "node:fs";
+import { win32 } from "node:path";
 import type { Json } from "./store.ts";
 
 /// The skills the station brings (agent_home.rs BUILTIN_SKILLS, and FEEDBACK_SKILL): rewritten at every start, so not
@@ -9,8 +10,11 @@ const BUILTIN = ["stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail
 /// What a project memory's description starts with.
 const PROJECT_PREFIX = "项目记忆：";
 
-/// Path::join as Rust has it: an absolute path replaces, nothing is normalised.
-const joined = (dir: string, name: string) => (name.startsWith("/") ? name : dir.endsWith("/") ? `${dir}${name}` : `${dir}/${name}`);
+/// Path::join as Rust has it: an absolute path replaces, nothing is normalised (on Windows, as it has them).
+const joined = (dir: string, name: string) =>
+  process.platform === "win32"
+    ? win32.isAbsolute(name) ? name : /[\\/]$/.test(dir) ? `${dir}${name}` : `${dir}\\${name}`
+    : name.startsWith("/") ? name : dir.endsWith("/") ? `${dir}${name}` : `${dir}/${name}`;
 
 /// std::fs::read_to_string: the file as UTF-8, none when it does not read or is not UTF-8.
 const STRICT = new TextDecoder("utf-8", { fatal: true });

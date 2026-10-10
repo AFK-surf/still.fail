@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { type Access, DeviceTools, OPS, READ_OPS, type Sessions, accessOf, permitted } from "../src/device/tools.ts";
 import { checkConfig } from "../src/accounts/check.ts";
+import { WINDOWS } from "../src/ops/shell.ts";
 
 const run = (tools: DeviceTools, op: string, args: Record<string, unknown> = {}, access: Access = "full") =>
   Effect.runPromise(Effect.result(tools.run(op, args, { user_email: "a@x" }, access))).then((r) =>
@@ -46,11 +47,12 @@ test("access: off refuses everything, read only the reads, full everything; unse
 
 test("exec: exit code and output, each capped at 1 MiB, a timeout ending it", async () => {
   const { t, home } = tools();
-  const echo = await run(t, "exec", { command: "echo out; echo err >&2; pwd; exit 3" });
+  // Git Bash's pwd says /c/…: -W says it as Windows does (with /).
+  const echo = await run(t, "exec", { command: `echo out; echo err >&2; pwd${WINDOWS ? " -W" : ""}; exit 3` });
   assert.ok(echo.ok);
   assert.equal(echo.result.exit_code, 3);
   // It runs in the home directory.
-  assert.equal(echo.result.stdout, `out\n${realpathSync(home)}\n`);
+  assert.equal(echo.result.stdout, `out\n${WINDOWS ? realpathSync(home).replaceAll("\\", "/") : realpathSync(home)}\n`);
   assert.equal(echo.result.stderr, "err\n");
   assert.equal(echo.result.truncated, false);
   const env = await run(t, "exec", { command: "echo $GREETING", env: { GREETING: "hello" } });
@@ -122,18 +124,20 @@ test("runtime.probe: the runtimes on PATH, their versions, whether this machine 
   const home = mkdtempSync(join(tmpdir(), "probe-"));
   const bin = join(home, "bin");
   mkdirSync(bin);
-  writeFileSync(join(bin, "claude"), "#!/bin/sh\necho '2.1.284 (Claude Code)'\n");
-  writeFileSync(join(bin, "codex"), "#!/bin/sh\necho 'codex-cli 0.46.0'\n");
-  chmodSync(join(bin, "claude"), 0o755);
-  chmodSync(join(bin, "codex"), 0o755);
+  // On Windows as npm puts them there: .cmd shims.
+  const [claude, codex] = WINDOWS ? ["claude.cmd", "codex.cmd"] : ["claude", "codex"];
+  writeFileSync(join(bin, claude), WINDOWS ? "@echo 2.1.284 (Claude Code)\r\n" : "#!/bin/sh\necho '2.1.284 (Claude Code)'\n");
+  writeFileSync(join(bin, codex), WINDOWS ? "@echo codex-cli 0.46.0\r\n" : "#!/bin/sh\necho 'codex-cli 0.46.0'\n");
+  chmodSync(join(bin, claude), 0o755);
+  chmodSync(join(bin, codex), 0o755);
   mkdirSync(join(home, ".codex"));
   writeFileSync(join(home, ".codex", "auth.json"), "{}");
   const t = new DeviceTools({ home, env: { PATH: bin, HOME: home } });
   const probe = await run(t, "runtime.probe", {}, "read");
   assert.ok(probe.ok);
   assert.deepEqual(probe.result.runtimes, [
-    { kind: "claude", path: join(bin, "claude"), version: "2.1.284", signed_in: false },
-    { kind: "codex", path: join(bin, "codex"), version: "0.46.0", signed_in: true },
+    { kind: "claude", path: join(bin, claude), version: "2.1.284", signed_in: false },
+    { kind: "codex", path: join(bin, codex), version: "0.46.0", signed_in: true },
   ]);
 });
 

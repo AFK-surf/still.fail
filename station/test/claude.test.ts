@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ClaudeDriver, classifyResult } from "../src/agents/claude.ts";
@@ -14,12 +15,12 @@ import { existingRunners } from "../src/agents/runner.ts";
 import type { AgentSession, OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
-process.env.PATH = `${fake}:${process.env.PATH}`;
+process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
 // Inherited, and not to reach the agent.
 process.env.CLAUDECODE = "1";
 process.env.CLAUDE_CODE_OAUTH_TOKEN = "leaked";
 // Short: the runners' sockets live under it (104 bytes at most on macOS).
-const data = mkdtempSync("/tmp/cl-");
+const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "cl-") : "/tmp/cl-");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /// Looks every 20 ms until `done` holds: what real processes do has no event here. No deadline (it comes, however
 /// slow the machine, or the test hangs).
@@ -29,7 +30,7 @@ async function eventually(done: () => boolean) {
 /// The fifos a `gate:<n>:<k>:<name>` turn waits at (test/fake/claude.mjs): `open(part)` lets it go on.
 function gates(dump: string, name: string) {
   const at = `${dump}.${name}`;
-  for (const part of ["a", "b"]) execFileSync("/usr/bin/mkfifo", [`${at}.${part}`]);
+  if (process.platform !== "win32") for (const part of ["a", "b"]) execFileSync("/usr/bin/mkfifo", [`${at}.${part}`]);
   return { open: (part: "a" | "b") => writeFile(`${at}.${part}`, "go"), said: () => existsSync(`${at}.said`) };
 }
 const drivers: ClaudeDriver[] = [];

@@ -52,6 +52,9 @@ function localPath(destination: string): string | null {
     } catch {
       throw new Error(`invalid local file link: ${destination}; use an absolute path in files`);
     }
+  } else if (process.platform === "win32" && /^[A-Za-z]:[\\/]/.test(decoded)) {
+    // On Windows a drive's path (`C:\…`, `C:/…`) is a local one, as a familiar root's is on Unix.
+    path = decoded;
   } else {
     if (!decoded.startsWith("/") || decoded.startsWith("//")) return null;
     const known = ["/Users/", "/home/", "/tmp/", "/private/", "/var/", "/Volumes/", "/mnt/", "/workspace/", "/etc/", "/opt/"];

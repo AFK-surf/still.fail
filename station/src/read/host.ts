@@ -6,10 +6,12 @@
 // and hands in, as readers come and go.
 import { spawnSync } from "node:child_process";
 import { readFileSync, statfsSync } from "node:fs";
-import { availableParallelism, cpus as cpuList, hostname as osHostname, loadavg, release, type as osType } from "node:os";
+import { availableParallelism, cpus as cpuList, freemem, hostname as osHostname, loadavg, release, totalmem, type as osType, uptime as osUptime, version as osVersion } from "node:os";
 import { wall } from "../ops/fibers.ts";
 
 const MACOS = process.platform === "darwin";
+/// Windows has neither /proc nor sysctl: what Node's os says (the same counters Task Manager reads).
+const WINDOWS = process.platform === "win32";
 
 /// CPU time since boot, all CPUs together: (busy, total).
 export type Ticks = [busy: number, total: number];
@@ -52,7 +54,7 @@ function hostname(): string {
 /// cpu_ticks: on macOS the CPUs' user, system, idle and nice time (os.cpus, from the same counters as Mach's
 /// HOST_CPU_LOAD_INFO, in ms rather than ticks: the share is the same).
 function cpuTicks(): Ticks | null {
-  if (MACOS) {
+  if (MACOS || WINDOWS) {
     const all = cpuList();
     if (all.length === 0) return null;
     let [busy, total] = [0, 0];
@@ -124,6 +126,7 @@ function disk(path: string) {
 
 /// memory: total, used (on macOS as Activity Monitor counts it), and swap used.
 function memory() {
+  if (WINDOWS) return { totalBytes: totalmem(), usedBytes: Math.max(totalmem() - freemem(), 0), swapUsedBytes: null };
   if (MACOS) {
     const total = parseU64(output("sysctl", ["-n", "hw.memsize"]) ?? "") ?? 0;
     const vm = output("vm_stat", []);
@@ -154,6 +157,7 @@ function memory() {
 }
 
 function cpuModel(): string {
+  if (WINDOWS) return trim(cpuList()[0]?.model ?? "");
   if (MACOS) return output("sysctl", ["-n", "machdep.cpu.brand_string"]) ?? "";
   let info = "";
   try {
@@ -170,6 +174,7 @@ function cpuModel(): string {
 }
 
 function uptimeSec(): number {
+  if (WINDOWS) return Math.round(osUptime());
   if (MACOS) {
     // "{ sec = 1790000000, usec = 0 } ..."
     const text = output("sysctl", ["-n", "kern.boottime"]);
@@ -190,11 +195,14 @@ function osName(): string {
     const version = output("sw_vers", ["-productVersion"]);
     return version !== null ? `macOS ${version}` : `macOS (Darwin ${release()})`;
   }
+  // "Windows 11 Pro 10.0.26300", not os.type()'s "Windows_NT".
+  if (WINDOWS) return `${osVersion()} ${release()}`;
   return `${osType()} ${release()}`;
 }
 
 /// own_rss: the station's resident memory (this process's: a reader is a thread of it).
 function ownRss(): number {
+  if (WINDOWS) return process.memoryUsage.rss();
   const kb = parseU64(trim(output("ps", ["-o", "rss=", "-p", String(process.pid)]) ?? ""));
   return kb === null ? 0 : kb * 1024;
 }

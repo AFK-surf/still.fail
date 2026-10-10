@@ -3,9 +3,10 @@ import { execFile } from "node:child_process";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { lstat, readdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { fileName, samePath, segments, within } from "../ops/paths.ts";
 
 /// Path::starts_with: `path` is `dir` or under it.
-export const within = (path: string, dir: string) => path === dir || dir === "/" || path.startsWith(`${dir}/`);
+export { within };
 
 const canonical = (path: string): string | null => {
   try {
@@ -13,13 +14,6 @@ const canonical = (path: string): string | null => {
   } catch {
     return null;
   }
-};
-
-/// Path::file_name: the last part, none for `..` or the root.
-const fileName = (path: string): string | null => {
-  const parts = path.split("/").filter((p) => p !== "" && p !== ".");
-  const last = parts.at(-1);
-  return last === undefined || last === ".." ? null : last;
 };
 
 /// Where a session's own directory is: the one its workspace is in when the station made it (sessions/…/workspace),
@@ -34,9 +28,9 @@ export function roomOf(dataDir: string, workspace: string): string | null {
     if (parent === null) return null;
     path = join(parent, "workspace");
   }
-  if (!within(path, sessions) || path === sessions) return null;
+  if (!within(path, sessions) || samePath(path, sessions)) return null;
   // Only the station layout sessions/<connect>/<session>/workspace, never an arbitrary nested project.
-  const relative = path.slice(sessions.length).split("/").filter((p) => p !== "");
+  const relative = segments(path.slice(sessions.length)).filter((p) => p !== "");
   if (relative.length !== 3 || fileName(path) !== "workspace") return null;
   return dirname(path);
 }

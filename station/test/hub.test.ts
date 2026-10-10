@@ -1409,7 +1409,8 @@ function machine(root: string, project: string) {
   const roots = { claude: join(root, ".claude/projects"), codex: join(root, ".codex/sessions") };
   const lines = (records: unknown[]) => records.map((r) => `${JSON.stringify(r)}\n`).join("");
   const cwd = project;
-  const claudeDir = join(roots.claude, cwd.replaceAll("/", "-"));
+  // As Claude Code names a project's directory: every character but a letter or a digit as `-` (C:\a\b is C--a-b).
+  const claudeDir = join(roots.claude, cwd.replace(/[^A-Za-z0-9]/g, "-"));
   mkdirSync(claudeDir, { recursive: true });
   writeFileSync(
     join(claudeDir, "11111111-aaaa-bbbb-cccc-000000000001.jsonl"),
@@ -1503,7 +1504,8 @@ test("a session the machine kept goes on in a chat, run in its own directory, wi
 });
 
 // root reads a directory whatever its mode says.
-test("a directory the station may not read is told as that, not left to the agent to fail in", { skip: process.getuid?.() === 0 }, async () => {
+// Windows has no chmod that keeps the owner out.
+test("a directory the station may not read is told as that, not left to the agent to fail in", { skip: process.getuid?.() === 0 || process.platform === "win32" }, async () => {
   const { find } = await import("../src/read/machine.ts");
   const { continueMachineSession } = await import("../src/sessions/lifecycle.ts");
   const r = new Rig();

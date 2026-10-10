@@ -1,6 +1,7 @@
 // The agents' tools for background jobs (the Rust station's jobs.rs `Jobs::tools`): job_start, job_list, job_log, job_stop,
 // run as the session whose token the MCP request carries. Names, descriptions and input schemas as the Rust's, word for
 // word (test/jobs-tools.test.ts reads them from it).
+import { win32 } from "node:path";
 import { type Jobs, LOG_LINES, named, tail } from "../jobs/jobs.ts";
 import type { JobRow } from "../store/store.ts";
 import type { Tool } from "./mcp.ts";
@@ -23,8 +24,10 @@ function owned(jobs: Jobs, key: string, args: Record<string, unknown>): JobRow {
   return job;
 }
 
-/// Path::join: an absolute path in place of the base, else the two with one separator.
+/// Path::join: an absolute path in place of the base, else the two with one separator (Windows': `\`, and `C:\…` is
+/// absolute).
 function joinPath(base: string, given: string): string {
+  if (process.platform === "win32") return win32.isAbsolute(given) ? given : win32.join(base, given);
   if (given.startsWith("/")) return given;
   return base.endsWith("/") || base === "" ? base + given : `${base}/${given}`;
 }

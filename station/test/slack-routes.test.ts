@@ -283,7 +283,7 @@ test("editing a connect keeps tokens that were left blank and writes config.json
     assert.equal(saved.connects[0].slack.botToken, "xoxb-bbbbbbbbbbbb");
     assert.equal(saved.connects[0].slack.appId, "A0DS");
     assert.equal(saved.connects[0].bind.model, "deepseek-flash");
-    assert.equal(statSync(t.path).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(statSync(t.path).mode & 0o777, 0o600);
     // Connected, and shown masked.
     assert.equal(view.connection.state, "connected");
     assert.deepEqual(view.connection.workspace, { team: "Acme", teamId: "T1", url: "https://acme.slack.com/", botUserId: "UBOT", botName: "ember", botImage: "https://avatars.slack-edge.com/ember_72.png" });

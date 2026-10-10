@@ -9,6 +9,7 @@ import { type Env, readClaudeKeychain } from "../agents/machine-logins.ts";
 import { writePrivate } from "../agents/no-keychain.ts";
 import { wall } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
+import { runnable } from "../ops/shell.ts";
 
 type Json = any;
 
@@ -47,11 +48,12 @@ function usable(c: Credentials, rejected: string | null, lang: Lang): boolean {
   }
 }
 
-const homeOf = (env: Env) => env.HOME ?? ".";
+const homeOf = (env: Env) => env.HOME ?? (process.platform === "win32" ? env.USERPROFILE : undefined) ?? ".";
 
 function run(command: string, args: string[], env: Env, input?: string): Promise<{ ok: boolean; stdout: string } | undefined> {
   return new Promise((resolve) => {
-    const child = execFile(command, args, { env: env as NodeJS.ProcessEnv, timeout: 10_000, killSignal: "SIGKILL" }, (error, stdout) => {
+    const r = runnable(command, args, env as NodeJS.ProcessEnv);
+    const child = execFile(r.file, r.args, { env: env as NodeJS.ProcessEnv, timeout: 10_000, killSignal: "SIGKILL", windowsVerbatimArguments: r.windowsVerbatimArguments }, (error, stdout) => {
       if (error && (error as NodeJS.ErrnoException).code === "ENOENT") resolve(undefined);
       else resolve({ ok: !error, stdout: String(stdout) });
     });

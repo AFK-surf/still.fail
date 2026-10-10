@@ -52,11 +52,44 @@ export function meshStatus(cloud: Cloud): Record<string, unknown> {
 async function processMemory(pgids: number[]): Promise<Map<number, number>> {
   const rss = new Map<number, number>();
   if (pgids.length === 0) return rss;
+  if (process.platform === "win32") return windowsMemory(pgids);
   try {
     const { stdout } = await run("ps", ["-axo", "pgid=,rss="]);
     for (const line of stdout.split("\n")) {
       const [pgid, kb] = line.trim().split(/\s+/).map(Number);
       if (pgid !== undefined && kb !== undefined && pgids.includes(pgid)) rss.set(pgid, (rss.get(pgid) ?? 0) + kb);
+    }
+  } catch {}
+  return rss;
+}
+
+/// On Windows a group is its leader's process tree (a runner's job holds no other): each leader's working set and its
+/// descendants', from Win32_Process (kB).
+async function windowsMemory(pgids: number[]): Promise<Map<number, number>> {
+  const rss = new Map<number, number>();
+  try {
+    const script = "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId) $($_.ParentProcessId) $($_.WorkingSetSize)\" }";
+    const { stdout } = await run("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, maxBuffer: 16 << 20 });
+    const children = new Map<number, number[]>();
+    const bytes = new Map<number, number>();
+    for (const line of stdout.split(/\r?\n/)) {
+      const [pid, parent, size] = line.trim().split(/\s+/).map(Number);
+      if (!Number.isInteger(pid) || !Number.isInteger(parent) || !Number.isFinite(size)) continue;
+      bytes.set(pid!, size!);
+      if (pid !== parent) children.set(parent!, [...(children.get(parent!) ?? []), pid!]);
+    }
+    for (const pgid of pgids) {
+      if (!bytes.has(pgid)) continue;
+      let total = 0;
+      const seen = new Set<number>();
+      for (const queue = [pgid]; queue.length > 0; ) {
+        const pid = queue.pop()!;
+        if (seen.has(pid)) continue;
+        seen.add(pid);
+        total += bytes.get(pid) ?? 0;
+        queue.push(...(children.get(pid) ?? []));
+      }
+      rss.set(pgid, Math.round(total / 1024));
     }
   } catch {}
   return rss;

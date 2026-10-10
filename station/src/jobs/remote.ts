@@ -14,7 +14,7 @@ import {
   closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync,
   readSync, readdirSync, renameSync, rmSync, statSync, writeSync,
 } from "node:fs";
-import { basename, dirname, isAbsolute, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative as relativeTo, win32 } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
@@ -93,6 +93,8 @@ export function writeJson(path: string, value: Json): void {
   renameSync(temp, path);
 }
 
+const WINDOWS = process.platform === "win32";
+
 const isLink = (path: string): boolean => {
   try {
     return lstatSync(path).isSymbolicLink();
@@ -105,10 +107,11 @@ const isLink = (path: string): boolean => {
 /// execution, so separate working directories are organizational isolation, not an OS security boundary.
 export function filePath(root: string, relative: string, create: boolean): string {
   if (lstatSync(root).isSymbolicLink()) throw new Error("transfer root is a symbolic link");
-  // Path::components: a leading / is the root, a leading . is the current directory, a later . is no component.
+  // Path::components: a leading / is the root, a leading . is the current directory, a later . is no component. On
+  // Windows a \ separates as / does, and a drive (`C:`, `C:x`), a UNC share or a stream (`file:name`) is never relative.
   const parts: string[] = [];
-  let bad = relative === "" || relative.startsWith("/");
-  relative.split("/").forEach((part, i) => {
+  let bad = relative === "" || relative.startsWith("/") || (WINDOWS && (win32.isAbsolute(relative) || relative.includes(":")));
+  relative.split(WINDOWS ? /[\\/]/ : "/").forEach((part, i) => {
     if (part === "") return;
     if (part === ".") {
       if (i === 0) bad = true;
@@ -720,7 +723,13 @@ export class Remote {
     const root = row.workspace;
     const localArg = text(args, "local");
     let relative = localArg;
-    if (isAbsolute(localArg)) {
+    if (WINDOWS && isAbsolute(localArg)) {
+      // Whole components of the session's workspace, as Windows compares them (case aside, either separator); what
+      // climbs out of it is refused here, and a `..` left in it by filePath.
+      const within = relativeTo(root, localArg);
+      if (within.startsWith("..") || isAbsolute(within)) throw new Error("local file must be inside this session workspace");
+      relative = within;
+    } else if (isAbsolute(localArg)) {
       // Path::strip_prefix: whole components of the session's workspace.
       const prefix = root.endsWith("/") ? root : `${root}/`;
       if (localArg !== root && !localArg.startsWith(prefix)) throw new Error("local file must be inside this session workspace");

@@ -58,7 +58,9 @@ export async function setChannel(data: string, channel: Channel, waitMs: number,
     said = JSON.parse(readFileSync(join(run, "station.json"), "utf8"));
   } catch {}
   const pid = Number.isSafeInteger(said?.pid) && said.pid > 0 ? (said.pid as number) : null;
-  if (pid === null || said?.channel !== 1 || !alive(pid) || !station(pid)) return setChannelIn(data, channel);
+  // Windows has no SIGHUP (one sent ends the process): the config written is what the station reads, as it reads it
+  // afresh each time it changes.
+  if (process.platform === "win32" || pid === null || said?.channel !== 1 || !alive(pid) || !station(pid)) return setChannelIn(data, channel);
   const answer = join(run, CHANNEL_ANSWER);
   rmSync(answer, { force: true });
   writeWhole(join(run, CHANNEL_ASK), channel);

@@ -21,7 +21,8 @@
 //   binary itself is not replaced (pid kept: that is what the installer checks). The new Node follows update.started
 //   as the Rust binary did after exec. The old Node never sees update.exit (written after the handover).
 // - The installer is started in a session of its own (Node's `detached`, setsid) rather than a process group of its
-//   own: either way launchd/systemd stopping the station does not take it along.
+//   own: either way launchd/systemd stopping the station does not take it along. On Windows by a scheduled task of
+//   its own (startInstaller).
 // - The installer's progress is heard by watching run/ (fs.watch), with a slow look as a safety net and for the
 //   drain's count of running turns, in place of a look every second.
 // - Words the pages show are kept as catalog keys and said in each reader's language (the Rust said them once, in the
@@ -29,16 +30,17 @@
 // - `stillfail-station channel` reaches this process as the launcher's `{"op":"hup"}` (it holds SIGHUP for it):
 //   `answerChannelAsk`.
 import { spawn } from "node:child_process";
-import { type FSWatcher, createWriteStream, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import { type FSWatcher, copyFileSync, createWriteStream, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { type Clock, Effect, Fiber } from "effect";
 import { Fibers } from "../ops/fibers.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
+import { WINDOWS } from "../ops/shell.ts";
 import {
-  type Env, type How, type Kind, KINDS, NotFinished, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, kindCommand,
+  CLAUDE_WINDOWS_INSTALL, type Env, type How, type Kind, KINDS, NotFinished, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, kindCommand,
   kindName, kindPackage, pinNpmVersion, run, runLines,
 } from "./runtimes.ts";
 import {
@@ -148,6 +150,89 @@ const empty = (): Item => ({ installed: false, version: null, latest: null, how:
 /// What the station's update started from the pages leaves in <data>/run/update.started, for whichever process runs
 /// the station when it ends.
 type Started = { at: number; from: string | null };
+
+/// Starts the cloud's installer apart from the station, its exit to run/update.exit and what it said to run/update.log.
+/// Whether it was started.
+/// - Elsewhere in the background of a shell that ends at once: the installer is nobody's child here, and outlives both
+///   a handover (this process is let go) and a restart (the service's processes are stopped).
+/// - On Windows by a scheduled task of its own ("<the station's task> update"): nobody's child here, with no window
+///   (`stillfail-station-w --run`, copied into run/ so the installer stopping what runs from <app> leaves it be). (Not
+///   WMI's Win32_Process.Create: PowerShell started so is what malware does, and security software refuses it.) The
+///   task starts with the user's own environment, so what this side gives it is in run/update.ps1
+///   (windowsUpdateScript).
+export function startInstaller(origin: string, runDir: string, env: Record<string, string>, app: string, lang = stationLang()): Promise<boolean> {
+  if (!WINDOWS) {
+    const script = `( curl -fsSL "$1/install.sh?lang=$3" | sh; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &`;
+    return new Promise<boolean>((resolve) => {
+      const child = spawn("/bin/sh", ["-c", script, "sh", origin, runDir, lang], { env, stdio: "ignore", detached: true });
+      child.on("error", () => resolve(false));
+      child.on("exit", (code) => resolve(code === 0));
+      child.unref();
+    });
+  }
+  const ps1 = join(runDir, "update.ps1");
+  const hidden = join(runDir, "stillfail-update-w.exe");
+  // The station's task as install.ps1 named it (windows.json: a station apart's), and " update".
+  let task = "still.fail station";
+  try {
+    const kept = JSON.parse(readFileSync(join(dirname(runDir), "windows.json"), "utf8").trim());
+    if (typeof kept?.task === "string" && kept.task) task = kept.task;
+  } catch {}
+  task += " update";
+  try {
+    rmSync(join(runDir, "update.err"), { force: true });
+    // Refused while an update before still runs from it.
+    copyFileSync(join(app, "mesh", "target", "release", "stillfail-station-w.exe"), hidden);
+    writeFileSync(ps1, windowsUpdateScript(origin, runDir, env, task, lang));
+  } catch {
+    return Promise.resolve(false);
+  }
+  const register = [
+    "$ErrorActionPreference = 'Stop'",
+    "$ps = (Get-Process -Id $PID).Path",
+    `$action = New-ScheduledTaskAction -Execute ${q(hidden)} -Argument ('--run "' + $ps + '" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ${q(ps1)} + '"') -WorkingDirectory ${q(runDir)}`,
+    "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances IgnoreNew",
+    "$principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited",
+    `Register-ScheduledTask -TaskName ${q(task)} -Action $action -Settings $settings -Principal $principal -Force | Out-Null`,
+    `Start-ScheduledTask -TaskName ${q(task)}`,
+  ].join("\r\n");
+  return new Promise<boolean>((resolve) => {
+    const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(register, "utf16le").toString("base64")], {
+      env, stdio: "ignore", windowsHide: true,
+    });
+    child.on("error", () => resolve(false));
+    child.on("exit", (code) => resolve(code === 0));
+  });
+}
+
+/// A PowerShell string of `s`.
+const q = (s: string) => `'${s.replaceAll("'", "''")}'`;
+
+/// run/update.ps1 (startInstaller): the STILLFAIL_ (and EMBER_DATA) variables of `env`, then the cloud's install.ps1
+/// fetched into run/ and run, what it says (both streams, UTF-8) in run/update.log and its exit in run/update.exit, then
+/// `task` removed. With a BOM, as PowerShell 5.1 reads a file of non-ASCII words.
+export function windowsUpdateScript(origin: string, runDir: string, env: Record<string, string>, task: string, lang: Lang): string {
+  return String.fromCharCode(0xfeff) + `${[
+    ...Object.entries(env).filter(([k]) => k.startsWith("STILLFAIL_") || k === "EMBER_DATA").map(([k, v]) => `$env:${k} = ${q(v)}`),
+    "[Console]::OutputEncoding = [Text.Encoding]::UTF8",
+    `$run = ${q(runDir)}`,
+    "$log = Join-Path $run 'update.log'",
+    "$err = Join-Path $run 'update.err'",
+    "$code = 1",
+    "try {",
+    `  $script = Invoke-RestMethod -UseBasicParsing ${q(`${origin}/install.ps1?lang=${lang}`)}`,
+    "  [IO.File]::WriteAllText((Join-Path $run 'install.ps1'), $script, (New-Object Text.UTF8Encoding $true))",
+    `  $p = Start-Process (Get-Process -Id $PID).Path -ArgumentList '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"' + (Join-Path $run 'install.ps1') + '"') -RedirectStandardOutput $log -RedirectStandardError $err -NoNewWindow -PassThru`,
+    "  $null = $p.Handle",
+    "  $p.WaitForExit()",
+    "  $code = $p.ExitCode",
+    "  $said = Get-Content -LiteralPath $err -Raw -Encoding UTF8",
+    "  if ($said) { Add-Content -LiteralPath $log -Value $said -Encoding UTF8 }",
+    "} catch { Add-Content -LiteralPath $log -Value ($_ | Out-String) -Encoding UTF8 }",
+    "Set-Content -LiteralPath (Join-Path $run 'update.exit') -Value $code -Encoding ASCII",
+    `try { Unregister-ScheduledTask -TaskName ${q(task)} -Confirm:$false -ErrorAction Stop } catch {}`,
+  ].join("\r\n")}\r\n`;
+}
 
 const UA = { "user-agent": "stillfail-station" };
 
@@ -605,7 +690,7 @@ export class Updates {
   /// build for this machine, fetched here first; Claude Code's, as its installer writes it), else the step the command
   /// says it is at (Homebrew's, Claude Code's installer's).
   private async install(kind: Kind, how: How): Promise<[boolean, string]> {
-    const npm = how.program.split("/").pop() === "npm" && how.args[0] === "install";
+    const npm = /^npm(\.cmd)?$/i.test(how.program.split(/[\\/]/).pop() ?? "") && how.args[0] === "install";
     if (kind === "codex" && npm) {
       const version = await this.fetchCodex(how.program);
       // That version, as npm's cache has its build (`latest` from a cached list could be an older one).
@@ -613,7 +698,8 @@ export class Updates {
     }
     const installing = { now: false };
     // Claude Code's own installer (not `claude update`, nor Homebrew).
-    const stop = kind === "claude" && how.program === "/bin/sh" ? this.watchClaudeDownload(installing) : () => {};
+    const own = how.program === "/bin/sh" || how === CLAUDE_WINDOWS_INSTALL;
+    const stop = kind === "claude" && own ? this.watchClaudeDownload(installing) : () => {};
     try {
       return await runLines(how.program, how.args, this.env, this.timing.runtimeLimit, (line) => {
         const step = stepOf(line);
@@ -763,21 +849,13 @@ export class Updates {
     // Taken now, so another ask meanwhile finds it updating.
     const before = { updating: station.updating, failed: station.failed, done: station.done };
     station.updating = this.fibers.now();
-    // In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a
-    // handover (this process is let go) and a restart (the service's processes are stopped).
-    const script = `( curl -fsSL "$1/install.sh?lang=$3" | sh; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &`;
     const channel = this.channel();
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(this.env)) if (v !== undefined) env[k] = v;
     // Under both names: the cloud's installer from before the rename reads the old one. The release of its channel
     // (the installer from before channels takes the stable one).
     Object.assign(env, { STILLFAIL_DATA: this.data, EMBER_DATA: this.data, STILLFAIL_CHANNEL: channel });
-    const ok = await new Promise<boolean>((resolve) => {
-      const child = spawn("/bin/sh", ["-c", script, "sh", origin, runDir, stationLang()], { env, stdio: "ignore", detached: true });
-      child.on("error", () => resolve(false));
-      child.on("exit", (code) => resolve(code === 0));
-      child.unref();
-    });
+    const ok = await startInstaller(origin, runDir, env, this.app);
     if (!ok) {
       Object.assign(station, before);
       throw refused(lang, "station.updates.couldNotStart");

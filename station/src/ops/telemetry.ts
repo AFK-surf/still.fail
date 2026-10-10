@@ -25,7 +25,12 @@ export function builtKey(uiDir: string): ProjectKey | null {
 /// Home directories (this user's and anyone's) in a path or stack, as ~.
 export function scrubPaths(text: string, home: string): string {
   const own = home !== "" && home !== "/" ? text.split(home).join("~") : text;
-  return own.replace(/\/(?:Users|home)\/([^/\s:'"()]+)/g, "~");
+  return (
+    own
+      // Windows' first (its drive with it): C:\Users\x, C:/Users/x, and as JSON escapes it (C:\\Users\\x).
+      .replace(/[A-Za-z]:(?:\\\\|\\|\/)Users(?:\\\\|\\|\/)[^\\/\s:'"()]+/g, "~")
+      .replace(/\/(?:Users|home)\/([^/\s:'"()]+)/g, "~")
+  );
 }
 
 /// An error message without the text it quoted.

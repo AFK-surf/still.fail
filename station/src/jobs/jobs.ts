@@ -12,11 +12,13 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
   type FSWatcher, appendFileSync, chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readlinkSync, renameSync,
-  rmSync, statSync, symlinkSync, watch, writeFileSync,
+  rmSync, statSync, watch, writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
+import { WINDOWS, grouped, posixShell, prependPath } from "../ops/shell.ts";
+import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "./group.ts";
@@ -183,6 +185,15 @@ export class Jobs {
     const script = join(dir, "bin", JOB_COMMAND_NAME);
     writeFileSync(script, JOB_COMMAND);
     chmodSync(script, 0o755);
+    // Windows runs no script by its #!: `stillfail-job` from cmd or PowerShell (Codex's shell there) is this, which hands
+    // it to Git's sh. Git Bash runs the script itself.
+    if (WINDOWS) {
+      try {
+        writeFileSync(`${script}.cmd`, `@"${posixShell()}" "%~dp0${JOB_COMMAND_NAME}" %*\r\n`);
+      } catch (error) {
+        log.warn("jobs", "no stillfail-job for cmd and PowerShell", { error: String(error) });
+      }
+    }
     // The old name, for jobs and agents used to it: a link to the new one (in place of the script it was).
     const former = join(dir, "bin", FORMER_JOB_COMMAND_NAME);
     let linked: string | null = null;
@@ -192,7 +203,8 @@ export class Jobs {
     if (linked !== JOB_COMMAND_NAME) {
       const aside = join(dir, "bin", `.${FORMER_JOB_COMMAND_NAME}.${process.pid}`);
       rmSync(aside, { force: true });
-      symlinkSync(JOB_COMMAND_NAME, aside);
+      // A copy on Windows when links are refused there.
+      linkSync(JOB_COMMAND_NAME, aside);
       renameSync(aside, former);
     }
     this.scope = Effect.runSync(Scope.make());
@@ -292,7 +304,7 @@ export class Jobs {
     const out = openSync(job.log, "a");
     const exit = this.exitFile(job.id);
     rmSync(exit, { force: true });
-    const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${join(this.dir, "bin")}:${process.env.PATH ?? ""}` };
+    const env: NodeJS.ProcessEnv = prependPath(process.env, join(this.dir, "bin"));
     // Under both names: scripts written against the old ones go on working.
     for (const prefix of ["STILLFAIL_", "EMBER_"]) {
       env[`${prefix}JOB_ID`] = job.id;
@@ -303,9 +315,15 @@ export class Jobs {
     let child: ChildProcess;
     try {
       // detached: a session and process group of its own (pgid = its pid), not ended with the station.
-      child = spawn("/bin/sh", ["-c", WRAPPER, JOB_COMMAND_NAME, job.command, exit], {
-        cwd: job.cwd, env, stdio: ["ignore", out, out], detached: true,
-      });
+      // On Windows, Git's sh cannot write to a file Node opened for appending (its handle may only append): it opens
+      // the log itself.
+      child = WINDOWS
+        ? spawn(...grouped(posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log]), {
+            cwd: job.cwd, env, stdio: "ignore", detached: true, windowsHide: true,
+          })
+        : spawn("/bin/sh", ["-c", WRAPPER, JOB_COMMAND_NAME, job.command, exit], {
+            cwd: job.cwd, env, stdio: ["ignore", out, out], detached: true,
+          });
     } finally {
       closeSync(out);
     }
@@ -525,7 +543,7 @@ export class Jobs {
   clearEnded(session: string): string[] {
     const gone = this.store.clearEndedJobs(session);
     for (const [id, file] of gone) {
-      if (file.startsWith(this.dir + "/")) rmSync(file, { force: true });
+      if (file.startsWith(this.dir + sep)) rmSync(file, { force: true });
       rmSync(this.exitFile(id), { force: true });
     }
     return gone.map(([id]) => id);

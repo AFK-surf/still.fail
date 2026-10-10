@@ -6,7 +6,16 @@ import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, rmSync, writeF
 import { writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import { WINDOWS, posixShell } from "../src/ops/shell.ts";
+
+/// A stand-in's test that a variable names a path under its HOME: `sameAs("CODEX_HOME", "cx")`. Git's sh (Windows)
+/// has HOME in a form of its own (/tmp/…, /c/…), so both are compared as Windows has them there.
+export const sameAs = (variable: string, under: string) =>
+  `p() { [ -x /usr/bin/cygpath ] && /usr/bin/cygpath -m "$1" || echo "$1"; }; [ "$(p "$${variable}")" = "$(p "$HOME/${under}")" ]`;
+
+/// What runs a stand-in made by `script` at `path`: itself, on Windows its .cmd.
+export const exe = (path: string) => (WINDOWS ? `${path}.cmd` : path);
 
 export type Asked = { method: string; url: string; headers: Record<string, string>; body: any };
 export type Reply = { status: number; body: unknown; delayMs?: number };
@@ -45,7 +54,7 @@ export function machine(clis: Record<string, string> = {}): { home: string; bin:
   const bin = join(home, "bin");
   mkdirSync(bin);
   for (const [name, text] of Object.entries({ security: "exit 44", ...clis })) script(join(bin, name), text.startsWith("#!") ? text : `#!/bin/sh\n${text}\n`);
-  return { home, bin, env: { HOME: home, PATH: `${bin}:/usr/bin:/bin` } };
+  return { home, bin, env: { HOME: home, PATH: WINDOWS ? `${bin};${process.env.SystemRoot ?? "C:\\Windows"}\\System32` : `${bin}:/usr/bin:/bin` } };
 }
 
 /// macOS looks at every new executable file the first time it runs (some 200 ms each, more on a busy machine), and the
@@ -76,8 +85,20 @@ export function launcher(): string {
   return path;
 }
 
-/// An executable script at `path`: a shell script by the shared launcher, another as it is.
+/// An executable script at `path`: a shell script by the shared launcher, another as it is. On Windows, which runs
+/// nothing by its #!, `<path>.cmd` (what a shell finds for `path`'s name) runs it: a shell script with Git's sh, another
+/// with its interpreter (the last word of its #!).
 export function script(path: string, text: string) {
+  if (WINDOWS) {
+    const name = basename(path);
+    const first = text.startsWith("#!") ? text.slice(2, text.indexOf("\n")).trim().split(/\s+/) : ["/bin/sh"];
+    const sh = first[0] === "/bin/sh" || first.at(-1) === "sh";
+    writeFileSync(`${path}.sh`, sh ? text : "");
+    if (!sh) writeFileSync(path, text);
+    const run = sh ? `"${posixShell()}" "%~dp0${name}.sh"` : `"${first.at(-1)}" "%~dp0${name}"`;
+    writeFileSync(`${path}.cmd`, `@${run} %*\r\n`);
+    return;
+  }
   // Never written through: an earlier stand-in at `path` is the launcher's link.
   rmSync(path, { force: true });
   if (text.startsWith("#!") && !text.startsWith("#!/bin/sh\n")) {
@@ -98,7 +119,8 @@ export function script(path: string, text: string) {
 /// An approval a stand-in waits for (a fifo it reads a line from): `approve` lets it go on.
 export function approval(dir: string): { path: string; approve: () => Promise<void> } {
   const path = join(dir, `approval-${Math.random().toString(36).slice(2)}`);
-  execFileSync("/usr/bin/mkfifo", [path]);
+  // Windows has no fifos: the stand-in waits for the file instead (fakeLogin).
+  if (!WINDOWS) execFileSync("/usr/bin/mkfifo", [path]);
   return { path, approve: () => writeFile(path, "approved\n") };
 }
 
@@ -114,7 +136,7 @@ if [ "$1" = "auth" ]; then
   echo "OAuth error: invalid code"; exit 1
 fi
 printf "1. Open this link\\n   \\033[94mhttps://auth.openai.com/codex/device\\033[0m\\n2. Enter this one-time code\\n   \\033[94mABCD-12345\\033[0m\\n"
-${approval === undefined ? "" : `read approved < '${approval}'`}
+${approval === undefined ? "" : `while [ ! -e '${approval}' ]; do sleep 0.05; done; read approved < '${approval}'`}
 echo "Successfully logged in"
 `;
 

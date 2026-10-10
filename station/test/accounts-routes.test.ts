@@ -17,7 +17,7 @@ import { profileEnv } from "../src/agents/profiles.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
 import { Store } from "../src/store/store.ts";
-import { approval, fakeLogin, machine as fakeMachine, script, temp, until, upon } from "./accounts-fakes.ts";
+import { approval, exe, fakeLogin, machine as fakeMachine, script, temp, until, upon } from "./accounts-fakes.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
 const viewer = (email: string, role: string) => ({ sub: `sub-${email}`, email, name: "", role, workspace: "ws", device: "d" });
@@ -51,7 +51,7 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     data,
     store,
     config,
-    loginCommands: { claude: fake, codex: fake },
+    loginCommands: { claude: exe(fake), codex: exe(fake) },
     machine: o.machine ?? null,
     checkOnStart: false,
     check: o.check ?? (async () => ({ state: "ok", detail: "fake", models: [], checkedAt: Date.now() })),

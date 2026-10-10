@@ -121,7 +121,8 @@ test("with no station running the channel is written in the config", async () =>
   assert.equal(readFileSync(join(dir, "config.json"), "utf8"), "{ broken");
 });
 
-test("a running station is asked for the channel and keeps it itself", async () => {
+// No SIGHUP on Windows: the config is written there (the test before), which a running station reads afresh.
+test("a running station is asked for the channel and keeps it itself", { skip: process.platform === "win32" && "no signals on Windows" }, async () => {
   const dir = temp();
   const runDir = join(dir, "run");
   mkdirSync(runDir, { recursive: true });

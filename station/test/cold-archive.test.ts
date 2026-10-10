@@ -69,8 +69,10 @@ test("workspace round trip preserves edits, permissions, symlinks and attachment
   write(join(ws, "uploads/new.txt"), "new attachment while archived");
   await restoreWorkspace(room);
   assert.deepEqual(readFileSync(join(ws, "project/uncommitted.rs")), Buffer.alloc(100_000, "x"));
-  assert.equal(statSync(join(ws, "script.sh")).mode & 0o777, 0o751);
-  assert.equal(readlinkSync(join(ws, "link")), "project/uncommitted.rs");
+  // Windows keeps no Unix modes.
+  if (process.platform !== "win32") assert.equal(statSync(join(ws, "script.sh")).mode & 0o777, 0o751);
+  // Windows keeps a link's target with its own separator.
+  assert.equal(readlinkSync(join(ws, "link")), join("project", "uncommitted.rs"));
   assert.equal(readFileSync(join(ws, "uploads/new.txt"), "utf8"), "new attachment while archived");
   assert.ok(!existsSync(workspaceArchive(room)));
   await restoreWorkspace(room);
@@ -200,8 +202,8 @@ test("long names, long link targets, nested directories, empty files and hard li
   assert.equal(readFileSync(join(ws, deep), "utf8"), "deep");
   assert.equal(readFileSync(join(ws, "empty"), "utf8"), "");
   assert.ok(statSync(join(ws, "an/empty/dir")).isDirectory());
-  assert.equal(statSync(join(ws, "an")).mode & 0o777, 0o750);
-  assert.equal(readlinkSync(join(ws, "far")), `${"t".repeat(150)}/target`);
+  if (process.platform !== "win32") assert.equal(statSync(join(ws, "an")).mode & 0o777, 0o750);
+  assert.equal(readlinkSync(join(ws, "far")), join("t".repeat(150), "target"));
   assert.equal(readFileSync(join(ws, "b"), "utf8"), "linked");
   rmSync(room, { recursive: true });
 });
@@ -239,8 +241,8 @@ test("jsonl files: logical names, packed ones too, once each", () => {
   const out: string[] = [];
   jsonlFiles(root, out);
   assert.deepEqual(out.sort(), [join(root, "a.jsonl"), join(root, "sub/b.jsonl")]);
-  assert.equal(withExtension("/x/abc.jsonl", "jsonl.archive-lock"), "/x/abc.jsonl.archive-lock");
-  assert.equal(withExtension("/x/abc.jsonl.zst", "zst.writing"), "/x/abc.jsonl.zst.writing");
+  assert.equal(withExtension("/x/abc.jsonl", "jsonl.archive-lock"), join("/x", "abc.jsonl.archive-lock"));
+  assert.equal(withExtension("/x/abc.jsonl.zst", "zst.writing"), join("/x", "abc.jsonl.zst.writing"));
   rmSync(root, { recursive: true });
 });
 
