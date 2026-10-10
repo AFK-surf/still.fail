@@ -11,6 +11,9 @@ export const mPage = style({
     "&[data-role=\"peek\"]": { pointerEvents: "none" },
     "&[data-role=\"top\"]:not([data-swiping])": { transition: "transform 200ms var(--m-standard)" },
     "&[data-swiping]": { boxShadow: "-8px 0 24px rgba(0, 0, 0, .12)" },
+    // Moved by the finger (a transform set at each move, not an animation): each its own layer, only moved, not drawn
+    // anew at every move (with the frosted glass on it).
+    "&[data-swiping], &[data-role=\"peek\"]": { willChange: "transform" },
     // Side by side: the new page pushes in whole from the right, the old goes out whole to the left (and back the other way).
     "&[data-way=\"side\"][data-forward][data-role=\"in\"]": { animation: `${mFromRightKeyframes} 300ms var(--m-standard) both` },
     "&[data-way=\"side\"][data-forward][data-role=\"out\"]": { animation: `${mToLeftKeyframes} 300ms var(--m-standard) both` },

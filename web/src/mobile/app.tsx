@@ -204,6 +204,9 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
       if (e.pointerType !== "touch" || sheet || reader) return;
       swiping.current = { x: e.clientX, y: e.clientY, at: e.timeStamp, dx: 0, tapped: true };
       e.currentTarget.setPointerCapture(e.pointerId);
+      // The page and the one under it made ready to move as the finger lands (each a layer of its own, the one under
+      // drawn), not on its first move: that move would wait for both to be drawn.
+      setSwipe(0);
     },
     onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
       const s = swiping.current;

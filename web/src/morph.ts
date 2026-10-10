@@ -67,6 +67,11 @@ export function stop(box: HTMLElement): void {
   running.delete(box);
 }
 
+/** When `box`'s motion under way ends (done or stopped), if it has one. */
+export function settling(box: HTMLElement): Promise<unknown> | null {
+  return running.get(box)?.all[0]?.finished ?? null;
+}
+
 /** Who moves `box` now (the `by` of its motion under way), if anyone. */
 export function movingBy(box: HTMLElement): string | undefined {
   return running.get(box)?.by;

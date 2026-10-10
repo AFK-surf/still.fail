@@ -50,7 +50,7 @@ export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElemen
   const pictures = picturesIn(composer, layer, z);
   sending = { field, from: textAt(field), top: composer.getBoundingClientRect().top, stand, pictures, release: hold.detail.release };
   field.dataset.madeField = "";
-  document.documentElement.dataset.madeHint = "hidden";
+  field.dataset.madeHint = "hidden";
 }
 
 /** The images going with the message, drawn in `layer` (at `z`) where their thumbnails are in `composer`, cropped as there. */
@@ -103,7 +103,7 @@ export function notSent(): void {
   sending.stand?.remove();
   for (const picture of sending.pictures) picture.stand.remove();
   delete sending.field.dataset.madeField;
-  delete document.documentElement.dataset.madeHint;
+  delete sending.field.dataset.madeHint;
   sending = null;
 }
 
@@ -231,7 +231,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     }
     // The composer's hint comes in once the words are out of it (above its top edge), not while they pass over it.
     const out = () => {
-      if (!copy.isConnected || copy.getBoundingClientRect().bottom <= top) delete root.dataset.madeHint;
+      if (!copy.isConnected || copy.getBoundingClientRect().bottom <= top) { if (now) delete now.field.dataset.madeHint; }
       else requestAnimationFrame(out);
     };
     requestAnimationFrame(out);
@@ -251,7 +251,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
       delete list.dataset.madeList;
     }
     delete root.dataset.made;
-    delete root.dataset.madeHint;
+    if (now) delete now.field.dataset.madeHint;
   });
 }
 
@@ -299,14 +299,14 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
   const stand = standIn(field, text, layer, z);
   const pictures = picturesIn(composer, layer, z);
   if (!stand && !pictures.length) return;
-  const root = document.documentElement;
   const mine = `.${msgCss.msgMine}`;
   const before = new Set(list.querySelectorAll(mine));
   const from = textAt(field);
   field.dataset.madeField = "";
   // Only words pass over the hint; images alone leave it where it is.
-  if (stand) root.dataset.madeHint = "hidden";
-  root.dataset.sent = "";
+  // On the field, not the page's root: a mark there has every element's style worked out anew (a long chat's, at once).
+  if (stand) field.dataset.madeHint = "hidden";
+  field.dataset.sent = "";
   // The rows it went into (the outbox's, then the message that takes its place): hidden while their copy is on its way,
   // and never easing in by themselves.
   const rows: HTMLElement[] = [];
@@ -340,12 +340,12 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     stand?.remove();
     for (const picture of pictures) picture.stand.remove();
     for (const el of rows) delete el.dataset.sendCovered;
-    delete root.dataset.madeHint;
+    delete field.dataset.madeHint;
     // The hint eases back (data-sent), then the field is as it was.
     setTimeout(() => {
       if (flying) return;
       delete field.dataset.madeField;
-      delete root.dataset.sent;
+      delete field.dataset.sent;
     }, 200);
   };
   // Where the row is now, its copy drawn so far on its way from the composer.
@@ -404,7 +404,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     // (Its own delay kept: "sending" shows when the row's does.)
     for (const el of copy.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)) el.style.opacity = `${e}`;
     // Out of the composer (its top edge as it is now): its hint comes back.
-    if (words && root.dataset.madeHint && copy.getBoundingClientRect().bottom <= composer.getBoundingClientRect().top) delete root.dataset.madeHint;
+    if (words && field.dataset.madeHint && copy.getBoundingClientRect().bottom <= composer.getBoundingClientRect().top) delete field.dataset.madeHint;
   };
   const tick = () => { place(); frame = requestAnimationFrame(tick); };
   // The row comes as the list is drawn anew: its copy takes the words' place before the frame is painted.

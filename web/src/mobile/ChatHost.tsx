@@ -12,7 +12,7 @@ import { useApp } from "./app.tsx";
 import { ChatScreen, openAttach, openedAs, useComposerBar, type Draft } from "./Chat.tsx";
 import { ComposerExtras } from "../Chat.tsx";
 import { useDraft } from "../draft.ts";
-import { useMorph } from "../morph.ts";
+import { settling, useMorph } from "../morph.ts";
 import { useStationCall, type Attachment } from "../api.ts";
 import { NewChatScreen } from "./NewChat.tsx";
 import { Loading } from "./parts.tsx";
@@ -116,14 +116,29 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, uplo
   const upload = draft.add;
   const locked = shown.offline || !!shown.archived || draft.starting;
   const capsule = useRef<HTMLDivElement>(null);
+  // The capsule itself, the box that changes shape (useMorph, below).
+  const frame = useRef<HTMLDivElement>(null);
   // What is above keeps its end clear of the capsule, whatever its height.
   useLayoutEffect(() => {
     const el = capsule.current;
     const page = root.current;
     if (!el || !page) return;
-    const set = () => page.style.setProperty("--m-bottom", `${el.offsetHeight}px`);
+    // Every element of the page inherits it: each change has the whole page's style worked out anew (a long chat's, all
+    // its messages). So it changes once the capsule has its new shape, not at every frame of its motion there (morph.ts).
+    let waiting = false;
+    const set = () => {
+      waiting = false;
+      const height = `${el.offsetHeight}px`;
+      if (page.style.getPropertyValue("--m-bottom") !== height) page.style.setProperty("--m-bottom", height);
+    };
     set();
-    const observer = new ResizeObserver(set);
+    const observer = new ResizeObserver(() => {
+      const moving = frame.current ? settling(frame.current) : null;
+      if (!moving) return set();
+      if (waiting) return;
+      waiting = true;
+      void moving.then(set, set);
+    });
     observer.observe(el);
     return () => observer.disconnect();
   }, [root]);
@@ -133,7 +148,6 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, uplo
   });
   // Growing or shrinking (a line more, a file, a quote, sent and emptied) in one motion, as the wide screen's
   // (morph.ts): after the text box has taken its height (useComposerBar), so that it is read with it.
-  const frame = useRef<HTMLDivElement>(null);
   useMorph(frame, `${expanded}|${draft.text}|${draft.files.length}|${draft.quotes.length}|${draft.error}|${shown.offline}|${shown.archived}`);
   return (
     <div className={`${inline ? css.mInlineComposer : `${css.mComposer} ${css.mHostComposer}`} ${rootCss.wide}`} ref={capsule}>
