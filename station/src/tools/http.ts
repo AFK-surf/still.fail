@@ -14,8 +14,9 @@ export type Notified = (authorization: string | undefined, body: Buffer) => { st
 const NOTIFY_LIMIT = 64 * 1024;
 
 export type AgentsDoor = {
-  /// Where agents reach it: `http://127.0.0.1:<port>/mcp`.
+  /// Where agents reach it: `http://127.0.0.1:<port>/mcp` (the launcher's entrance's port when it has one).
   url: string;
+  /// Where it listens.
   port: number;
   /// Stops taking connections; done once the calls it has are answered (or after `graceMs`).
   close(graceMs?: number): Promise<void>;
@@ -35,8 +36,9 @@ function bodyOf(req: IncomingMessage, limit: number): Promise<Buffer | null> {
   });
 }
 
-/// Opens the door on the launcher's fd, or on `port` at 127.0.0.1 (0: any free one) when there is no launcher.
-export function openAgentsDoor(at: { fd: number } | { port: number }, mcp: McpEndpoint, notified: Notified): Promise<AgentsDoor> {
+/// Opens the door on the launcher's fd, or on `port` at 127.0.0.1 (0: any free one): with no launcher, or behind a
+/// launcher's entrance (`shown`, its port, is then the one agents are told: launcher.ts `ports`).
+export function openAgentsDoor(at: { fd: number } | { port: number; shown?: number }, mcp: McpEndpoint, notified: Notified): Promise<AgentsDoor> {
   let busy = 0;
   let idle: (() => void) | null = null;
   const server: Server = createServer(async (req, res) => {
@@ -77,7 +79,7 @@ export function openAgentsDoor(at: { fd: number } | { port: number }, mcp: McpEn
       server.on("error", (e) => log.error("mcp", "the agents' door failed", { error: e.message }));
       const port = (server.address() as AddressInfo).port;
       resolve({
-        url: `http://127.0.0.1:${port}/mcp`,
+        url: `http://127.0.0.1:${"shown" in at && at.shown !== undefined ? at.shown : port}/mcp`,
         port,
         close: (graceMs = 30_000) =>
           new Promise<void>((done) => {

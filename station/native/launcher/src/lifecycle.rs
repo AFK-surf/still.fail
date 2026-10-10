@@ -89,6 +89,10 @@ pub trait Os {
     fn parent_gone(&mut self) -> bool;
     /// What `spawn` starts, for what is said when it does not.
     fn program(&self) -> String;
+    /// Connections to the launcher's entrance `name` (mcp, admin) go to `port` from now on (the Node serving's, on
+    /// 127.0.0.1); none: none serves, they wait. Where the launcher keeps entrances (Windows: proxy.rs); where Node
+    /// listens on sockets handed down to it (Unix), they are its already, and nothing is to be done.
+    fn route(&mut self, _name: &str, _port: Option<u16>) {}
 }
 
 /// A Node and what the launcher knows of it.
@@ -96,6 +100,8 @@ pub struct Node<P> {
     pub process: P,
     ready: Option<Instant>,
     version: String,
+    /// The ports it said it serves on (`{"serving":<name>,"port":<n>}`): once it has taken over, as its own.
+    served: Vec<(String, u16)>,
 }
 
 /// Which of the launcher's Nodes: the one serving, the one starting beside it (a handover), the one handing over.
@@ -148,7 +154,20 @@ impl<O: Os> Lifecycle<O> {
     }
 
     fn node(process: O::Node) -> Node<O::Node> {
-        Node { process, ready: None, version: String::new() }
+        Node { process, ready: None, version: String::new(), served: vec![] }
+    }
+
+    /// The serving Node changed (from one that served on `before`): each entrance goes to the one serving now, where it
+    /// serves on it; elsewhere connections wait for it to.
+    fn reroute(&mut self, before: &[(String, u16)]) {
+        let now: Vec<(String, u16)> = self.current.as_ref().map(|n| n.served.clone()).unwrap_or_default();
+        let mut names: Vec<&str> = before.iter().chain(&now).map(|(name, _)| name.as_str()).collect();
+        names.sort();
+        names.dedup();
+        for name in names {
+            let port = now.iter().find(|(n, _)| n == name).map(|(_, p)| *p);
+            self.os.route(name, port);
+        }
     }
 
     /// Starts the Node that serves (at first, after a crash).
@@ -262,6 +281,15 @@ impl<O: Os> Lifecycle<O> {
                 Slot::Next => self.hand_over(),
                 Slot::Retiring => {}
             }
+        } else if let (Some(name), Some(port)) = (message["serving"].as_str(), message["port"].as_u64().and_then(|p| u16::try_from(p).ok())) {
+            // Taken over and serving on `port`: the entrance goes there if it is the Node serving (else once it is).
+            let Some(node) = self.node_mut(slot) else { return };
+            node.served.retain(|(n, _)| n != name);
+            node.served.push((name.to_string(), port));
+            log::info(&format!("Node {} serves {name} on port {port}", node.process.pid()));
+            if slot == Slot::Current {
+                self.os.route(name, Some(port));
+            }
         } else if let Some(said) = message["drained"].as_str().filter(|_| slot == Slot::Current) {
             log::info(&format!("drained ({said})"));
             let _ = write_whole(&self.run.join("drained"), &format!("{said}\n"));
@@ -275,7 +303,11 @@ impl<O: Os> Lifecycle<O> {
     fn hand_over(&mut self) {
         let Some((next, _, _)) = self.next.take() else { return };
         self.restart_at = None;
-        match self.current.replace(next) {
+        let old = self.current.replace(next);
+        // The entrances leave the old one: they go to the new one where it serves already, else wait until it does
+        // (it takes over once the old one has handed its sessions over).
+        self.reroute(&old.as_ref().map(|n| n.served.clone()).unwrap_or_default());
+        match old {
             Some(old) => {
                 log::info(&format!("handing over from Node {} to Node {}", old.process.pid(), self.current.as_ref().map_or(0, |n| n.process.pid())));
                 old.process.tell("handover");
@@ -289,8 +321,7 @@ impl<O: Os> Lifecycle<O> {
         }
     }
 
-    /// `op` (drain, hup) to the Node serving: asked by Unix's signals (none on Windows).
-    #[cfg_attr(windows, allow(dead_code))]
+    /// `op` (drain, hup) to the Node serving.
     pub fn ask(&mut self, op: &str) {
         match &self.current {
             Some(node) if self.stopping.is_none() => node.process.tell(op),
@@ -298,9 +329,8 @@ impl<O: Os> Lifecycle<O> {
         }
     }
 
-    /// A handover: a new Node beside the one serving (the release at --app may be new). Where the platform can: Unix's
-    /// SIGUSR2 (on Windows Node cannot take over the ports, and nothing asks).
-    #[cfg_attr(windows, allow(dead_code))]
+    /// A handover: a new Node beside the one serving (the release at --app may be new), the one serving told to hand
+    /// over once the new one is ready.
     pub fn start_next(&mut self) {
         if self.stopping.is_some() {
             return;
@@ -339,6 +369,8 @@ impl<O: Os> Lifecycle<O> {
         match self.slot_of(pid) {
             Some(Slot::Current) => {
                 let node = self.current.take().unwrap();
+                // None serves now: connections wait for the next one (a restart, the one starting beside).
+                self.reroute(&node.served);
                 log::info(&format!("Node {pid} {how}"));
                 if self.stopping.is_none() {
                     self.crashed(node);
@@ -494,9 +526,14 @@ mod tests {
         told: Vec<(u32, Rc<RefCell<Vec<String>>>)>,
         killed: Vec<u32>,
         parent_gone: bool,
+        /// Where the entrances were told to go, in turn.
+        routes: Vec<(String, Option<u16>)>,
     }
 
     impl Os for Fake {
+        fn route(&mut self, name: &str, port: Option<u16>) {
+            self.routes.push((name.to_string(), port));
+        }
         type Node = FakeNode;
         fn now(&self) -> Instant {
             self.now
@@ -539,7 +576,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&data);
         let run = data.join("run");
         std::fs::create_dir_all(&run).unwrap();
-        let fake = Fake { dir: data, now: Instant::now(), pid: 100, told: vec![], killed: vec![], parent_gone: false };
+        let fake = Fake { dir: data, now: Instant::now(), pid: 100, told: vec![], killed: vec![], parent_gone: false, routes: vec![] };
         let times = Times { ready: s(60), exit: s(30), stop: s(30), backoff: s(1), backoff_max: s(4), stable: s(60), parent: s(2), drained: s(300) };
         let mut station = Lifecycle::new(fake, times, run, with_parent);
         station.start();
@@ -734,6 +771,59 @@ mod tests {
         assert_eq!(station.told(node), ["stop"]);
         station.ended(node, EXITED_0);
         assert_eq!(station.finished(), Some(0));
+    }
+
+    fn serving(name: &str, port: u16) -> Value {
+        json!({"serving": name, "port": port})
+    }
+
+    fn routes(station: &mut Lifecycle<Fake>) -> Vec<(String, Option<u16>)> {
+        std::mem::take(&mut station.os.routes)
+    }
+
+    fn to(name: &str, port: Option<u16>) -> (String, Option<u16>) {
+        (name.to_string(), port)
+    }
+
+    #[test]
+    fn the_entrances_go_to_a_node_only_once_it_has_taken_over() {
+        let mut station = station("entrances", false);
+        station.said(Slot::Current, serving("admin", 5002));
+        station.said(Slot::Current, ready("0.1.0"));
+        station.said(Slot::Current, serving("mcp", 5001));
+        assert_eq!(routes(&mut station), [to("admin", Some(5002)), to("mcp", Some(5001))]);
+        // A handover: the new one says where it listens before it has taken over (its loopback port is up at once).
+        station.start_next();
+        let new = station.last();
+        station.said(Slot::Next, serving("admin", 6002));
+        assert!(routes(&mut station).is_empty(), "not the one serving yet");
+        // Ready: it serves, the old one hands over; the agents' door is the new one's once it has taken the sessions
+        // up, so until then connections to it wait (none goes to a Node that has not taken over).
+        station.said(Slot::Next, ready("0.2.0"));
+        assert_eq!(routes(&mut station), [to("admin", Some(6002)), to("mcp", None)]);
+        station.said(Slot::Retiring, serving("mcp", 5001));
+        assert!(routes(&mut station).is_empty(), "the one handing over is not served to again");
+        station.said(Slot::Current, serving("mcp", 6001));
+        assert_eq!(routes(&mut station), [to("mcp", Some(6001))]);
+        // It crashes: connections wait for the one started again, which serves where it says.
+        station.ended(new, EXITED_1);
+        assert_eq!(routes(&mut station), [to("admin", None), to("mcp", None)]);
+        station.pass(s(1));
+        station.said(Slot::Current, serving("mcp", 7001));
+        assert_eq!(routes(&mut station), [to("mcp", Some(7001))]);
+    }
+
+    #[test]
+    fn a_handover_given_up_leaves_the_entrances_with_the_old_node() {
+        let mut station = station("entrances-kept", false);
+        station.said(Slot::Current, ready("0.1.0"));
+        station.said(Slot::Current, serving("mcp", 5001));
+        routes(&mut station);
+        station.start_next();
+        station.said(Slot::Next, serving("mcp", 6001));
+        station.pass(s(60));
+        assert!(station.file("handoff-failed").is_some());
+        assert!(routes(&mut station).is_empty(), "the old one serves on, its entrances its");
     }
 
     #[test]

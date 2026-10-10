@@ -21,7 +21,7 @@ use std::process::{Child, Command, Stdio};
 use std::ptr::{null, null_mut};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use windows_sys::Win32::Foundation::{CloseHandle, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, GetLastError, HANDLE, INVALID_HANDLE_VALUE, LocalFree, WAIT_TIMEOUT};
@@ -30,7 +30,7 @@ use windows_sys::Win32::Security::{GetTokenInformation, SECURITY_ATTRIBUTES, TOK
 use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OVERLAPPED, PIPE_ACCESS_DUPLEX, ReadFile, WriteFile};
 use windows_sys::Win32::System::Console::SetConsoleCtrlHandler;
 use windows_sys::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
-use windows_sys::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT};
+use windows_sys::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT};
 use windows_sys::Win32::System::Threading::{
     CREATE_NEW_PROCESS_GROUP, CreateEventW, GetCurrentProcess, GetExitCodeProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
     PROCESS_SYNCHRONIZE, WaitForSingleObject,
@@ -38,6 +38,7 @@ use windows_sys::Win32::System::Threading::{
 
 use crate::data::{self, Config};
 use crate::lifecycle::{Lifecycle, Os, Process, Times};
+use crate::proxy::Entrance;
 pub use crate::lifecycle::Options;
 use crate::log;
 
@@ -47,6 +48,19 @@ enum Event {
     /// Node `pid` said this.
     Said(u32, Value),
     Stop(&'static str),
+    /// Asked on the launcher's own pipe (control_pipe): handover, drain, hup, stop (Unix's SIGUSR2, SIGUSR1, SIGHUP,
+    /// SIGTERM).
+    Ask(String),
+}
+
+/// How long a connection to an entrance waits for a Node to serve it (a handover's moment, a restart) before it is
+/// closed.
+const ENTRANCE_WAIT: Duration = Duration::from_secs(60);
+
+/// The launcher's own pipe, by its pid (run/station.json's): what the installer and the CLI ask it on, one
+/// `{"op":…}` a line. Only this user may open it.
+pub fn control_pipe(pid: u32) -> String {
+    format!(r"\\.\pipe\stillfail-launcher-{pid}")
 }
 
 static EVENTS: OnceLock<Mutex<Sender<Event>>> = OnceLock::new();
@@ -85,6 +99,11 @@ struct System {
     next: u64,
     /// --with-parent: the parent at the start, to wait on.
     parent: Option<OwnedHandle>,
+    /// The ports the launcher holds (the agents' MCP endpoint's, the loopback port's), as Node is told them, and their
+    /// entrances: each carried to the Node serving it (proxy.rs).
+    ports: (u16, u16),
+    mcp: Entrance,
+    admin: Entrance,
 }
 
 impl Os for System {
@@ -100,10 +119,10 @@ impl Os for System {
         let pipe = Pipe::create(&name, &self.security).map_err(|error| io::Error::new(error.kind(), format!("{name}: {error}")))?;
         let app = &self.options.app;
         let mut command = Command::new(crate::node(app));
-        command.arg(crate::main_js(app)).arg("run").arg("--app").arg(app).arg("--data").arg(&self.options.data).arg("--launcher-pipe").arg(&name);
-        if self.options.named {
-            command.arg("--port").arg(self.options.port.to_string());
-        }
+        // Node listens where it may (127.0.0.1, any port) and says where once it serves; the launcher's ports, which
+        // agents and the CLI are told, it is given to say as its own.
+        let ports = format!("{},{}", self.ports.0, self.ports.1);
+        command.arg(crate::main_js(app)).arg("run").arg("--app").arg(app).arg("--data").arg(&self.options.data).arg("--launcher-pipe").arg(&name).arg("--launcher-ports").arg(ports);
         command.stdin(Stdio::null()).creation_flags(CREATE_NEW_PROCESS_GROUP);
         let mut child = command.spawn()?;
         let pid = child.id();
@@ -149,6 +168,14 @@ impl Os for System {
     fn program(&self) -> String {
         crate::node(&self.options.app).display().to_string()
     }
+
+    fn route(&mut self, name: &str, port: Option<u16>) {
+        match name {
+            "mcp" => self.mcp.serve(port),
+            "admin" => self.admin.serve(port),
+            _ => log::warn(&format!("Node serves {name}, which the launcher has no entrance for")),
+        }
+    }
 }
 
 pub fn run(options: Options) -> i32 {
@@ -181,6 +208,19 @@ pub fn run(options: Options) -> i32 {
         }
     };
     let _ = std::fs::remove_file(run.join("drained"));
+    // The ports, held by the launcher for good (as on Unix), so a handover keeps them: Node serves behind them.
+    let bound = crate::ports::mcp(&config).and_then(|mcp| Ok((mcp, crate::ports::admin(&options.data, options.port, options.named, config.english)?)));
+    let (mcp, admin) = match bound {
+        Ok(bound) => bound,
+        Err(error) => {
+            log::error(&error);
+            eprintln!("{error}");
+            return 1;
+        }
+    };
+    let port_of = |l: &std::net::TcpListener| l.local_addr().map(|a| a.port()).unwrap_or(0);
+    let ports = (port_of(&mcp), port_of(&admin));
+    let (mcp, admin) = (Entrance::open("the agents' MCP endpoint", mcp, ENTRANCE_WAIT), Entrance::open("the loopback port", admin, ENTRANCE_WAIT));
     let security = match Security::this_user() {
         Ok(security) => Arc::new(security),
         Err(error) => {
@@ -197,9 +237,41 @@ pub fn run(options: Options) -> i32 {
     if with_parent && parent.is_none() {
         log::warn("--with-parent: the parent is not there");
     }
-    let mut station = Lifecycle::new(System { options, security, tx, next: 0, parent }, Times::of_env(), run, with_parent);
+    if let Err(error) = take_asks(&security, tx.clone()) {
+        log::error(&format!("{}: {error}", control_pipe(std::process::id())));
+        return 1;
+    }
+    let mut station = Lifecycle::new(System { options, security, tx, next: 0, parent, ports, mcp, admin }, Times::of_env(), run, with_parent);
     station.start();
     serve(&mut station, rx)
+}
+
+/// The launcher's own pipe (control_pipe), taking one asker at a time: each line's op told on the channel.
+fn take_asks(security: &Security, tx: Sender<Event>) -> io::Result<()> {
+    let pipe = Pipe::create(&control_pipe(std::process::id()), security)?;
+    std::thread::spawn(move || {
+        loop {
+            if pipe.connect().is_ok() {
+                let mut pending = Vec::new();
+                let mut buf = [0u8; 1024];
+                while let Ok(got) = pipe.read(&mut buf).and_then(|n| if n == 0 { Err(io::ErrorKind::UnexpectedEof.into()) } else { Ok(n) }) {
+                    pending.extend_from_slice(&buf[..got]);
+                    while let Some(at) = pending.iter().position(|&b| b == b'\n') {
+                        let line: Vec<u8> = pending.drain(..=at).collect();
+                        match serde_json::from_slice::<Value>(&line).ok().and_then(|v| v["op"].as_str().map(str::to_string)) {
+                            Some(op) => {
+                                let _ = tx.send(Event::Ask(op));
+                            }
+                            None => log::warn(&format!("asked what the launcher does not read: {}", String::from_utf8_lossy(&line).trim())),
+                        }
+                    }
+                }
+            }
+            // The asker gone (or never there): the next one.
+            pipe.disconnect();
+        }
+    });
+    Ok(())
 }
 
 /// Waits for what happens (a line from a Node, a Node's end, a stop, something due) and tells the lifecycle, until it
@@ -232,6 +304,15 @@ fn serve(station: &mut Lifecycle<System>, rx: Receiver<Event>) -> i32 {
                 log::info(&format!("stopping ({why})"));
                 station.stop();
             }
+            Some(Event::Ask(op)) => match op.as_str() {
+                "handover" => station.start_next(),
+                "drain" | "hup" => station.ask(&op),
+                "stop" => {
+                    log::info("stopping (asked)");
+                    station.stop();
+                }
+                _ => log::warn(&format!("asked to {op}, which the launcher does not do")),
+            },
             None => {}
         }
         station.tick();
@@ -412,6 +493,12 @@ impl Pipe {
     fn cancel(&self) {
         // SAFETY: on our own handle.
         unsafe { CancelIoEx(self.raw(), null()) };
+    }
+
+    /// Lets the client go, for the next one to connect.
+    fn disconnect(&self) {
+        // SAFETY: on our own handle.
+        unsafe { DisconnectNamedPipe(self.raw()) };
     }
 
     fn overlapped(&self, start: impl FnOnce(HANDLE, *mut OVERLAPPED) -> i32, done: impl Fn(u32) -> bool) -> io::Result<usize> {

@@ -124,12 +124,9 @@ pub fn station_json(pid: u32, started_at: u64, version: &str) -> String {
     format!("{{\"pid\":{pid},\"startedAt\":{started_at},\"version\":{},{FLAGS}}}\n", Value::from(version))
 }
 
-/// What the launcher takes: SIGUSR2 hands over, SIGUSR1 drains, SIGHUP asks the channel. None on Windows (run_windows.rs:
-/// no signals there, and one sent ends the process), so the CLI writes the channel to the config instead.
-#[cfg(unix)]
+/// What the launcher takes: a handover, a drain, the channel asked again. On Unix as signals (SIGUSR2, SIGUSR1, SIGHUP);
+/// on Windows, which has none, as lines on its own pipe (run_windows.rs `control_pipe`).
 const FLAGS: &str = "\"handoff\":1,\"drain\":1,\"channel\":1";
-#[cfg(windows)]
-const FLAGS: &str = "\"handoff\":0,\"drain\":0,\"channel\":0";
 
 pub fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
@@ -220,8 +217,6 @@ mod tests {
 
     #[test]
     fn station_json_is_one_line_in_the_rust_stations_order() {
-        assert_eq!(station_json(7, 12, "0.1.\"x"), format!("{{\"pid\":7,\"startedAt\":12,\"version\":\"0.1.\\\"x\",{FLAGS}}}\n"));
-        #[cfg(unix)]
-        assert_eq!(FLAGS, "\"handoff\":1,\"drain\":1,\"channel\":1");
+        assert_eq!(station_json(7, 12, "0.1.\"x"), "{\"pid\":7,\"startedAt\":12,\"version\":\"0.1.\\\"x\",\"handoff\":1,\"drain\":1,\"channel\":1}\n");
     }
 }

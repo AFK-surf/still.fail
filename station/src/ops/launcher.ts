@@ -6,10 +6,17 @@ import { log } from "./log.ts";
 import { flag } from "./files.ts";
 
 export type Control = {
-  /// The MCP and loopback listeners' fds, when the launcher bound them.
+  /// The MCP and loopback listeners' fds, when the launcher bound them and hands them down (Unix).
   mcpFd?: number;
   loopbackFd?: number;
+  /// The launcher's own ports, when it holds them and carries their connections to this process (Windows: Node cannot
+  /// listen on a socket handed down): this process listens on any port of 127.0.0.1, says where (`serving`), and tells
+  /// agents and the CLI these.
+  ports?: { mcp: number; admin: number };
+  /// Up (its sessions not taken over yet: a handover's new process waits for the old one to hand them over).
   ready(version: string): void;
+  /// Serving on `port` (the agents' door: once the sessions are taken over): the launcher's entrance goes there.
+  serving(name: "mcp" | "admin", port: number): void;
   drained(how: "idle" | "timeout"): void;
   on(op: "handover" | "stop" | "drain" | "hup", f: () => void): void;
 };
@@ -25,8 +32,10 @@ export function launcher(args: string[]): Control {
   if (!handed && pipe === undefined) {
     // On its own: SIGTERM and ^C stop it, as they would through a launcher.
     for (const signal of ["SIGTERM", "SIGINT"] as const) process.on(signal, () => handlers.get("stop")?.forEach((f) => f()));
-    return { ready() {}, drained() {}, on };
+    return { ready() {}, serving() {}, drained() {}, on };
   }
+  const given = flag(args, "--launcher-ports")?.split(",").map(Number);
+  const ports = given && given.length === 2 && given.every((n) => Number.isInteger(n) && n > 0) ? { mcp: given[0]!, admin: given[1]! } : undefined;
   const [mcpFd, loopbackFd, controlFd] = handed ? fds : [undefined, undefined, undefined];
   const channel = controlFd !== undefined ? new Socket({ fd: controlFd, readable: true, writable: true }) : createConnection(pipe!);
   let carry = "";
@@ -51,7 +60,9 @@ export function launcher(args: string[]): Control {
   return {
     mcpFd,
     loopbackFd,
+    ports,
     ready: (version) => say({ ready: true, version }),
+    serving: (name, port) => say({ serving: name, port }),
     drained: (how) => say({ drained: how }),
     on,
   };

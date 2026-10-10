@@ -353,13 +353,17 @@ export const AgentsLive = (control: Control) =>
         // unless it was named, ports.rs).
         const named = config.raw()?.http?.port;
         const notified = (authorization: string | undefined, body: Buffer) => notifyEndpoint(jobs, authorization, body);
+        // Behind the launcher's entrance (launcher.ts `ports`): any port here, its port the one agents are told.
+        const at = control.mcpFd !== undefined ? { fd: control.mcpFd } : control.ports ? { port: 0, shown: control.ports.mcp } : { port: Number(named ?? 4750) };
         try {
-          door = await openAgentsDoor(control.mcpFd !== undefined ? { fd: control.mcpFd } : { port: Number(named ?? 4750) }, mcp, notified);
+          door = await openAgentsDoor(at, mcp, notified);
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE" || named !== undefined) throw error;
           door = await openAgentsDoor({ port: 0 }, mcp, notified);
         }
         jobs.setNotifyUrl(door.url.replace(/\/mcp$/, "/jobs/notify"));
+        // Taken over and serving: the launcher's entrance comes here now (not before: launcher/src/lifecycle.rs).
+        control.serving("mcp", door.port);
         log.info("station", "agents' door open", { url: door.url });
         taken = true;
         if (inWorkspace) {

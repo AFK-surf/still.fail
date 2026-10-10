@@ -266,7 +266,17 @@ export const unix: Platform = {
 
   host,
 
-  channelBySignal: true,
+  isLauncher(pid) {
+    try {
+      const command = execFileSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+      return command.includes("stillfail-station") || command.includes("ember-station");
+    } catch {
+      return false;
+    }
+  },
+  async askLauncher(pid, op) {
+    process.kill(pid, ({ handover: "SIGUSR2", drain: "SIGUSR1", hup: "SIGHUP" } as const)[op]);
+  },
   claudeInstall: { program: "/bin/sh", args: ["-c", "curl -fsSL https://claude.ai/install.sh | bash"] },
   /// In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a handover
   /// (this process is let go) and a restart (the service's processes are stopped).

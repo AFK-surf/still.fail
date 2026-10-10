@@ -9,8 +9,10 @@
 mod data;
 mod lifecycle;
 mod log;
-#[cfg(unix)]
 mod ports;
+/// The entrances Windows' launcher keeps for Node (built and tested everywhere; run where Node cannot be handed sockets).
+#[cfg_attr(unix, allow(dead_code))]
+mod proxy;
 #[cfg_attr(windows, path = "run_windows.rs")]
 mod run;
 

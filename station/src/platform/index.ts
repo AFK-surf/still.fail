@@ -113,9 +113,14 @@ export type Platform = {
   // The machine (read/host.ts).
   host: Host;
 
+  // The launcher (native/launcher), as the CLI and the station's own update reach it.
+  /// Whether process `pid` is a station's launcher (pids get reused).
+  isLauncher(pid: number): boolean;
+  /// Asks the launcher `pid` to hand over to a new process, to drain, or to read the channel again: Unix's SIGUSR2,
+  /// SIGUSR1, SIGHUP; on Windows, which has no signals, a line on its own pipe. Throws when it is not reached.
+  askLauncher(pid: number, op: "handover" | "drain" | "hup"): Promise<void>;
+
   // Updates.
-  /// Whether `stillfail-station channel` reaches the running station by SIGHUP (none on Windows: it reads the config).
-  channelBySignal: boolean;
   /// How Claude Code is installed where it is not.
   claudeInstall: How;
   /// Starts the cloud's installer apart from the station, its exit to run/update.exit and what it said to

@@ -67,11 +67,15 @@ const Loopback = (control: Control) =>
           });
           server.on("listening", () => {
             const port = (server.address() as AddressInfo).port;
+            // Behind the launcher's entrance, the launcher's port is the one there is (the launcher wrote it too).
+            const shown = control.ports?.admin ?? port;
             mkdirSync(join(data, "run"), { recursive: true });
-            writeFileSync(join(data, "run", "ports.json"), `{"admin":${port}}\n`);
-            log.info("station", "loopback port listening (old /admin links go to still.fail cloud)", { port });
+            writeFileSync(join(data, "run", "ports.json"), `{"admin":${shown}}\n`);
+            control.serving("admin", port);
+            log.info("station", "loopback port listening (old /admin links go to still.fail cloud)", { port: shown });
           });
           if (control.loopbackFd !== undefined) server.listen({ fd: control.loopbackFd });
+          else if (control.ports) server.listen(0, "127.0.0.1");
           else {
             // On its own (no launcher): 4760, or a free port when that is taken and none was named (local.rs).
             const named = flag(args, "--port");

@@ -5,6 +5,7 @@ import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_pro
 import { copyFileSync, existsSync, linkSync, lstatSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { cpus as cpuList, freemem, release, totalmem, uptime as osUptime, version as osVersion } from "node:os";
 import { delimiter, dirname, join, win32 } from "node:path";
+import { createConnection } from "node:net";
 import { promisify } from "node:util";
 import { pidAlive, runnerBinary } from "./processes.ts";
 import type { Lang } from "../ops/i18n.ts";
@@ -363,8 +364,27 @@ export const windows: Platform = {
 
   host,
 
-  // No SIGHUP (one sent ends the process): the station reads the config afresh when it changes.
-  channelBySignal: false,
+  isLauncher(pid) {
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    try {
+      const name = execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", `(Get-Process -Id ${pid} -ErrorAction Stop).ProcessName`], {
+        encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], windowsHide: true,
+      }).trim();
+      return /^(stillfail|ember)-station(-w)?$/i.test(name);
+    } catch {
+      return false;
+    }
+  },
+  /// No signals (one sent ends the process): a line on the launcher's own pipe (launcher/src/run_windows.rs
+  /// `control_pipe`), which only this user may open.
+  askLauncher(pid, op) {
+    return new Promise<void>((resolve, reject) => {
+      const pipe = createConnection(`\\\\.\\pipe\\stillfail-launcher-${pid}`);
+      pipe.once("error", reject);
+      pipe.once("connect", () => pipe.end(`${JSON.stringify({ op })}\n`));
+      pipe.once("close", (failed) => (failed ? undefined : resolve()));
+    });
+  },
   /// Claude Code's own installer on Windows (into ~\.local\bin), as its documentation gives it.
   claudeInstall: {
     program: "powershell",
