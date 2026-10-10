@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
-import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Web } from "../icons.tsx";
+import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Stop, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -20,7 +20,7 @@ import { StationPeek } from "../cloud/StationCards.tsx";
 import { Hover } from "../Peeks.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
-import { ChatPanel, goToNeighbour } from "../Chat.tsx";
+import { ChatPanel, Elapsed, goToNeighbour } from "../Chat.tsx";
 import { OpenFile } from "../Viz.tsx";
 import { fileService, fileSourceOf } from "../Preview.tsx";
 import { useShortcut } from "../keymap.ts";
@@ -353,7 +353,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           <ChatStation />
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a) => (
-            <AgentCard key={a.session.key} agent={a} marked={agents.length > 1 && shown === a.session.key} onHistory={() => toggleHistory(a.session.key)} />
+            <AgentCard key={a.session.key} agent={a} now={lives.get(a.session.key)?.activity?.now?.text} marked={agents.length > 1 && shown === a.session.key} onHistory={() => toggleHistory(a.session.key)} />
           ))}
         </div>
         <div className={css.pageBarActions}>
@@ -479,31 +479,35 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
 
 /**
  * One of the chat's agents, as its avatar in the bar: pressed, its history opens (or, shown, closes); on hover, its
- * card says what it runs and how it stands, with a stop for it alone while it works. The one whose history shows is
- * marked, among several.
+ * card says how it stands (its mark, how long it has worked), what it runs, what it does now or last said, with a stop
+ * for it alone while it works. The one whose history shows is marked, among several.
  */
-function AgentCard({ agent, marked, onHistory }: { agent: ChatAgent; marked: boolean; onHistory(): void }) {
-  const { session } = agent;
+function AgentCard({ agent, now, marked, onHistory }: { agent: ChatAgent; now: string | undefined; marked: boolean; onHistory(): void }) {
+  const { session, connect } = agent;
   const api = useApi();
   const act = useAct();
   const working = agent.status === "running" || agent.status === "queued";
   const card = (
     <div className={css.agentCard}>
-      <div className={css.agentCardHead}>
-        <AgentMark maker={session.maker} runtime={session.runtime} badge={agent.badge} badgeText={session.badgeText} size={28} />
-        <span className={css.agentCardWho}>
-          <b>{session.agentText}</b>
-          <span className={shellCss.muted}>{session.statusText}</span>
-        </span>
+      <div className={css.agentCardMeta}>
+        <span className={css.agentCardState} data-tone={session.tone}>{session.badgeText ?? session.processText ?? session.runtimeText}</span>
+        <span className={css.agentCardWhere}>{session.runtimeText}{connect ? ` · ${connect.name}` : ""}</span>
+        {working && agent.since !== undefined && <span className={css.agentCardTime}><Elapsed since={agent.since} /></span>}
       </div>
-      {working && (
-        <div className={css.agentCardActions}>
-          <button type="button" className={`${controlsCss.btn} ${controlsCss.btnGhost} ${controlsCss.btnDanger}`}
+      <div className={css.agentCardWho}>
+        <ModelLogo maker={session.maker} runtime={session.runtime} size={16} />
+        <span>{session.agentText}</span>
+      </div>
+      <p className={css.agentCardNow}>{working && now ? now : session.statusText}</p>
+      <div className={css.agentCardFoot}>
+        <span>{t("web-pages.chat.agentCardHint")}</span>
+        {working && (
+          <button type="button" className={css.agentCardStop}
             onClick={() => act(api.stop(session.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"))}>
-            {t("web-pages.chat.stopTurn")}
+            <Stop size={11} fill="currentColor" />{t("web-pages.chat.stopTurn")}
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
   return (

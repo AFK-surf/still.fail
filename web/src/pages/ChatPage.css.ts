@@ -203,9 +203,34 @@ export const titleBtn = style({
 globalStyle(`${pageBarTitle} h1:has(> ${titleBtn})`, { overflow: "visible", marginRight: "4px" });
 /** Ending its warm process, in its details' line: a link's look, as the profile's beside it. */
 export const evict = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
-/** An agent's card, from its avatar in the bar: who it is and how it stands, then what can be done. */
-export const agentCard = style({ display: "grid", gap: "10px" });
-export const agentCardHead = style({ display: "flex", alignItems: "center", gap: "10px", minWidth: "0" });
-export const agentCardWho = style({ display: "grid", gap: "2px", minWidth: "0", fontSize: vars.textUi });
-globalStyle(`${agentCardWho} > *`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const agentCardActions = style({ display: "flex", gap: "6px", justifyContent: "flex-end" });
+/** An agent's card, from its avatar in the bar (in Hover's card): its state and how long, what it runs, what it does. */
+export const agentCard = style({ display: "flex", flexDirection: "column", gap: "8px", minWidth: "0" });
+export const agentCardMeta = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", fontSize: vars.textMeta, color: vars.muted });
+/** A tinted pill, its colours the session's tone. */
+export const agentCardState = style({
+  flex: "none", padding: "1px 8px", borderRadius: "999px", background: vars.neutralBg, color: vars.muted, fontWeight: "500",
+  whiteSpace: "nowrap",
+  selectors: {
+    '&[data-tone="accent"]': { background: vars.accentBg, color: vars.accentText },
+    '&[data-tone="blue"]': { background: vars.blueBg, color: vars.blue },
+    '&[data-tone="green"]': { background: vars.greenBg, color: vars.green },
+    '&[data-tone="red"]': { background: vars.redBg, color: vars.red },
+  },
+});
+export const agentCardWhere = style({ flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const agentCardTime = style({ flex: "none", fontVariantNumeric: "tabular-nums" });
+export const agentCardWho = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontWeight: "500" });
+globalStyle(`${agentCardWho} > span`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const agentCardNow = style({
+  margin: "0", color: vars.text, overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: "3", WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+});
+export const agentCardFoot = style({
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", minHeight: "26px", paddingTop: "8px",
+  borderTop: `1px solid ${vars.line}`, fontSize: vars.textMeta, color: vars.subtle,
+});
+export const agentCardStop = style({
+  display: "inline-flex", alignItems: "center", gap: "5px", height: "24px", padding: "0 10px", border: "0", borderRadius: "999px",
+  background: vars.redBg, color: vars.red, font: "inherit", fontWeight: "500", cursor: "pointer",
+  selectors: { "&:hover": { background: `color-mix(in srgb, ${vars.red} 22%, transparent)` } },
+});

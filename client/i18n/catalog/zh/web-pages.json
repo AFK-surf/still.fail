@@ -176,6 +176,7 @@
   "web-pages.changelog.more": "还有 {n} 项",
   "web-pages.changelog.updated": "已更新",
   "web-pages.changelog.updatedTo": "已更新到 {build}",
+  "web-pages.chat.agentCardHint": "点头像查看执行历史",
   "web-pages.chat.archive": "归档",
   "web-pages.chat.archiveConfirm": "归档「{title}」？",
   "web-pages.chat.archiveFailed": "没能归档：{error}",

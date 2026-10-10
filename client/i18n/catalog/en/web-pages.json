@@ -191,6 +191,7 @@
   },
   "web-pages.changelog.updated": "Updated",
   "web-pages.changelog.updatedTo": "Updated to {build}",
+  "web-pages.chat.agentCardHint": "Click to view its history",
   "web-pages.chat.archive": "Archive",
   "web-pages.chat.archiveConfirm": "Archive “{title}”?",
   "web-pages.chat.archiveFailed": "Couldn't archive: {error}",
