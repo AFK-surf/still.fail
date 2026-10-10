@@ -55,6 +55,16 @@ export interface MobileApp {
 
 const Context = createContext<MobileApp | null>(null);
 
+/**
+ * The browser drew the last back or forward itself (Safari's own swipe from the screen's edge, its picture of the page
+ * under following the finger): the page is not moved again after it. Heard before the router hears it (this listens
+ * from when the module loads), so it is known by the time the page changes.
+ */
+let drawnByBrowser = false;
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", (event) => { drawnByBrowser = (event as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition === true; });
+}
+
 /** Whether this is drawn in the narrow app (a phone's way of doing things: ../annotate/ImageMarks.tsx). */
 export function useNarrow(): boolean {
   return useContext(Context) !== null;
@@ -122,7 +132,9 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
       next = [...pages, page];
     }
     setPages(next);
-    if (type !== "REPLACE" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) setMoving({ from: top, to: page, forward });
+    const drawn = type === "POP" && drawnByBrowser;
+    drawnByBrowser = false;
+    if (type !== "REPLACE" && !drawn && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) setMoving({ from: top, to: page, forward });
   }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!moving) { from.current = 0; return; }
@@ -205,6 +217,14 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
       if (!s) return;
       const flung = s.dx > 40 && s.dx / Math.max(1, e.timeStamp - s.at) > 0.6;
       if (s.dx > window.innerWidth / 3 || flung) { from.current = s.dx; setSwipe(null); app.pop(); } else setSwipe(null);
+      // A tap, not a swipe: it is for what lies under the strip (the bar's back button reaches into it).
+      if (s.dx < 6) {
+        const strip = e.currentTarget;
+        strip.style.pointerEvents = "none";
+        const under = document.elementFromPoint(e.clientX, e.clientY);
+        strip.style.pointerEvents = "";
+        under?.closest<HTMLElement>("button, a[href], [role=button]")?.click();
+      }
     },
     onPointerCancel: () => { swiping.current = null; setSwipe(null); },
   };
@@ -235,7 +255,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
             );
           })}
           {/* Where a swipe back starts: a strip along the left edge that the browser leaves to it (a finger only). */}
-          {!home_ && !moving && <div className={css.mEdge} {...swipeProps} />}
+          {!home_ && !moving && <EdgeStrip {...swipeProps} />}
           {/* The latest chats, from the screen's bottom left, level with the composer; over the page, rising from the button. */}
           {wide && !home_ && <>
             <button type="button" className={`${pagesCss.mFloating} ${css.mRecentButton}`} data-open={drawer || undefined}
@@ -255,6 +275,23 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   );
 }
 
+
+/**
+ * The strip along the left edge a swipe back starts from. A touch there is the page's, not the browser's: Safari would
+ * otherwise start its own swipe back over ours (its edge gesture is let go only by the touch's start being taken, a
+ * listener that is not passive, as React's are). A home screen app has no such gesture; this changes nothing there.
+ */
+function EdgeStrip(props: React.HTMLAttributes<HTMLDivElement>) {
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = strip.current;
+    if (!el) return;
+    const take = (event: TouchEvent) => { if (event.cancelable) event.preventDefault(); };
+    el.addEventListener("touchstart", take, { passive: false });
+    return () => el.removeEventListener("touchstart", take);
+  }, []);
+  return <div ref={strip} className={css.mEdge} {...props} />;
+}
 
 /** A page's own content: drawn again only when its address or the routes do, not each time the shell is (a swipe's
  *  every move, a toast). */

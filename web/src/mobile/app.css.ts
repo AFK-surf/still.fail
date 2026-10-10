@@ -31,8 +31,9 @@ export const mPage = style({
     },
   },
 });
+// As wide as Safari's own edge gesture reaches in, which a touch here keeps from starting (app.tsx EdgeStrip).
 export const mEdge = style({
-  display: "none", position: "absolute", top: "0", bottom: "0", left: "0", zIndex: "40", width: "14px",
+  display: "none", position: "absolute", top: "0", bottom: "0", left: "0", zIndex: "40", width: "20px",
   touchAction: "none",
   "@media": {
     "(pointer: coarse)": {
