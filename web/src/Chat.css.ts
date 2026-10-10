@@ -636,3 +636,13 @@ export const waitingDismiss = style({
 
 /** What is said right on top of the composer's box (ComposerProps `above`): as wide as it, a little inset. */
 export const composerAbove = style({ margin: "0 12px 6px" });
+/** The activity line and, for one of several agents, its own stop: shown on hover. */
+export const activityRow = style({ display: "flex", alignItems: "center", gap: "4px", minWidth: "0" });
+export const activityStop = style({
+  display: "grid", placeItems: "center", width: "22px", height: "22px", padding: "0", border: "0", borderRadius: "6px",
+  background: "none", color: vars.muted, cursor: "pointer", opacity: "0", transition: "opacity 120ms",
+  selectors: {
+    [`${activityRow}:hover &, &:focus-visible`]: { opacity: "1" },
+    "&:hover": { background: vars.hover, color: vars.text },
+  },
+});

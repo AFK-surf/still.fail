@@ -9,6 +9,7 @@
   "web-main.act.failed": "没能{what}：{error}",
   "web-main.act.unconfirmed": "{what}：{error}",
   "web-main.activity.busy": "处理中",
+  "web-main.activity.stop": "停止 {who}",
   "web-main.activity.waiting": "等待中",
   "web-main.ago.days": "{n} 天前",
   "web-main.ago.hours": "{n} 小时前",

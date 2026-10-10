@@ -9,6 +9,7 @@
   "web-main.act.failed": "Couldn't {what}: {error}",
   "web-main.act.unconfirmed": "Tried to {what}: {error}",
   "web-main.activity.busy": "Working",
+  "web-main.activity.stop": "Stop {who}",
   "web-main.activity.waiting": "Waiting",
   "web-main.ago.days": {
     "one": "1 day ago",
