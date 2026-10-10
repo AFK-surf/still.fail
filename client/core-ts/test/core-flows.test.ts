@@ -1102,7 +1102,7 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   const notes = (part: string) => c.tabs.find((x: J) => x.part === part).days.flatMap((d: J) => d.entries.map((e: J) => e.note));
   assert.equal(c.tabs[0].days[0].label, "今天");
   assert.deepEqual(notes("android"), ["还没发布", "更新到 0.1.1330 后就有", "你的版本已包含"]);
-  assert.deepEqual(notes("desktop"), ["已发布"]);
+  assert.deepEqual(notes("desktop"), ["更新到 0.1.1330 后就有"]);
   assert.deepEqual(notes("station"), ["还没发布"]);
   assert.deepEqual(notes("cloud"), []);
   // The first build seen here: nothing is news.
