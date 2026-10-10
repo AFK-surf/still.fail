@@ -37,8 +37,10 @@ export function timing(id: string, attempt?: number) {
   const n = attempt ?? api<Run>(`repos/${REPO}/actions/runs/${id}`).run_attempt;
   const run = api<Run>(`repos/${REPO}/actions/runs/${id}/attempts/${n}`);
   const jobs = api<{ jobs: Job[] }>(`repos/${REPO}/actions/runs/${id}/attempts/${n}/jobs?per_page=100`).jobs.filter(
-    // Ran (not skipped), and not the job measuring it.
-    (j) => j.started_at && j.completed_at && j.conclusion !== "skipped" && j.name !== "timing",
+    // Ran (not skipped), and not the job measuring it; in an attempt after the first, ran in it: the jobs a re-run of the
+    // failed ones keeps from before carry their old times, and the hours between the attempts were counted as the run's
+    // (windows-station's second attempt, 576 s of which 180 s waiting for it to be asked, 2026-10-10).
+    (j) => j.started_at && j.completed_at && j.conclusion !== "skipped" && j.name !== "timing" && (n === 1 || j.started_at >= run.run_started_at),
   ) as (Job & { started_at: string; completed_at: string })[];
   if (jobs.length === 0) return undefined;
   const start = jobs.map((j) => j.started_at).sort()[0]!;
