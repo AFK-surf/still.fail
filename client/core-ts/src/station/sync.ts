@@ -272,9 +272,11 @@ export class StationsSync {
     const link = new Link(address, addr, core.runner.child());
     this.#links.set(address, link);
     // The last event it told a core before this one, written down with what it told: the first stream asks what came
-    // after it, and nothing is read again when the station still has that (the app started again within the hour).
+    // after it, and nothing is read again when the station still has that (the app started again within the hour). Not
+    // when its lists are not held (a database begun anew): they are read.
     const heard = core.data.record("heard", address);
-    if (typeof heard === "string") heardEvent(link, heard);
+    const held = (["chats", "sessions", "threads"] as const).every((list) => core.data.listed(address, list));
+    if (typeof heard === "string" && held) heardEvent(link, heard);
     link.keptEvent = link.lastEvent;
     link.restored = link.lastEvent !== null;
     // How it was last time, until the link finds out anew: kept in its workspace's database, there as the link is.
