@@ -166,8 +166,10 @@ export function WaitingBar({ station, thread, waiting }: { station: string; thre
   const [gone, setGone] = useState<number | null>(null);
   if (gone === waiting.seq) return null;
   const lead = waiting.card ? t("web-main.chat.waiting.card") : t("web-main.chat.waiting.lead");
+  // Pressed with the cursor in the box, it keeps it there: the box losing it would fold to its one line and slide this
+  // down from under the pointer before the click lands.
   return (
-    <div className={css.waitingBar} role="status">
+    <div className={css.waitingBar} role="status" onMouseDown={(e) => e.preventDefault()}>
       <button type="button" className={css.waitingText} title={t("web-main.chat.waiting.go")} onClick={() => jumpTo({ station, thread, seq: waiting.seq })}>
         <Bell size={14} /><span><b>{lead}</b>{waiting.text && <span>{waiting.text}</span>}</span>
       </button>
