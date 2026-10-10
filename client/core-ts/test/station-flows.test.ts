@@ -1840,3 +1840,31 @@ test("an_agent_ending_its_turn_keeps_the_stream_one_starting_opens_it_anew", asy
   assert.deepEqual(open(), ["/events?live=j&from=0&last=200&brief=1"]);
   core.close();
 });
+
+test("a_core_started_again_takes_its_stations_up_from_the_last_event_kept_and_reads_nothing_again_when_told", async () => {
+  for (const resumes of [true, false]) {
+    const { host, core, streams, gate } = await started();
+    gate.resumes = resumes;
+    await host.settle();
+    // An event with its id, as a station tells it: written down with what it changed.
+    const open = streams.filter((s) => !s.closed).at(-1)!;
+    const row = { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [] };
+    Queue.offerUnsafe(open.queue, new TextEncoder().encode(`id: 1a.7\nevent: chat\ndata: ${JSON.stringify(row)}\n\n`));
+    await host.settle();
+    await run(core.inner.data.written);
+    core.close();
+    const before = host.requests.length;
+    const again = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+    again.connect();
+    await host.settle();
+    await host.settle();
+    const asked = host.requests.slice(before).map((r) => r.url.replace("https://stillfail.test/admin/api", "")).filter((u) => !u.startsWith("http"));
+    assert.ok(asked.some((u) => u.startsWith("/events") && u.includes("since=1a.7")), JSON.stringify(asked));
+    const lists = asked.filter((u) => ["/overview", "/chats", "/sessions", "/threads", "/jobs"].includes(u) || u.startsWith("/changed/"));
+    // Told what came after it: nothing read again. Not told so (more than an hour later, the station started again):
+    // everything is, as before.
+    if (resumes) assert.deepEqual(lists, [], JSON.stringify(asked));
+    else assert.ok(lists.includes("/overview"), JSON.stringify(asked));
+    again.close();
+  }
+});
