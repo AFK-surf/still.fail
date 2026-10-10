@@ -197,18 +197,20 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   // and past a third of the way (or flung) it goes, from where the finger left it.
   const home_ = isHome(top);
   const [swipe, setSwipe] = useState<number | null>(null);
-  const swiping = useRef<{ x: number; at: number; dx: number } | null>(null);
+  const swiping = useRef<{ x: number; y: number; at: number; dx: number; tapped: boolean } | null>(null);
   const from = useRef(0);
   const swipeProps = home_ ? {} : {
     onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.pointerType !== "touch" || sheet || reader) return;
-      swiping.current = { x: e.clientX, at: e.timeStamp, dx: 0 };
+      swiping.current = { x: e.clientX, y: e.clientY, at: e.timeStamp, dx: 0, tapped: true };
       e.currentTarget.setPointerCapture(e.pointerId);
     },
     onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
       const s = swiping.current;
       if (!s) return;
       s.dx = Math.max(0, e.clientX - s.x);
+      // A drag stays a drag even when it is vertical or the finger comes back to where it started.
+      if (Math.hypot(e.clientX - s.x, e.clientY - s.y) >= 6) s.tapped = false;
       setSwipe(s.dx);
     },
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
@@ -218,7 +220,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
       const flung = s.dx > 40 && s.dx / Math.max(1, e.timeStamp - s.at) > 0.6;
       if (s.dx > window.innerWidth / 3 || flung) { from.current = s.dx; setSwipe(null); app.pop(); } else setSwipe(null);
       // A tap, not a swipe: it is for what lies under the strip (the bar's back button reaches into it).
-      if (s.dx < 6) {
+      if (s.tapped && Math.hypot(e.clientX - s.x, e.clientY - s.y) < 6) {
         const strip = e.currentTarget;
         strip.style.pointerEvents = "none";
         const under = document.elementFromPoint(e.clientX, e.clientY);
