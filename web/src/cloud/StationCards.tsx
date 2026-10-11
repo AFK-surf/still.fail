@@ -11,6 +11,7 @@ import { MarkPick } from "./MarkPick.tsx";
 import { same, type Mark } from "../stationPick.ts";
 import { StationMark } from "../StationMark.tsx";
 import { Link } from "react-router";
+import { ChevronRight } from "../icons.tsx";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
@@ -37,12 +38,41 @@ export function StationPeek({ s, settings, footer }: { s: StationView; settings?
         <span className={css.peekName}>{s.name}</span>
         <span className={css.state}>{state(s)}</span>
       </div>
-      {s.host && <span className={css.peekLine}>{machine(s.host)}</span>}
-      {s.host && <span className={css.peekLine}>{s.host.hostname} · {s.host.arch} · {s.host.emberText}</span>}
-      {s.online && s.host && <MeterChips meters={s.host.meters} />}
-      {s.online && s.net && <Net net={s.net} stacked />}
-      {settings !== undefined && <Link className={css.peekLink} to={settings}>{t("web-pages.stations.peekSettings")}</Link>}
+      {s.host && <div className={css.peekLines}>
+        <Parts parts={[s.host.hostname, s.host.cpuModel, s.host.arch]} />
+        <Parts parts={[s.host.line]} />
+      </div>}
+      {s.online && s.host && <div className={css.peekSection}><MeterChips meters={s.host.meters} /></div>}
+      {s.online && s.net && <div className={css.peekSection}><PeekNet net={s.net} /></div>}
+      {s.host && <div className={`${css.peekSection} ${css.peekLines}`}><span>{t("web-pages.stations.peekProcess", { text: s.host.emberText })}</span></div>}
+      {settings !== undefined && <Link className={css.peekLink} to={settings}><span>{t("web-pages.stations.peekSettings")}</span><ChevronRight size={14} /></Link>}
       {footer}
+    </div>
+  );
+}
+
+/** A line of facts joined by " · " that wraps only between them, never inside one ("up 25 days" stays whole). Its
+ * parts split on the core's own " · " too, so a joined `line` breaks the same way. */
+function Parts({ parts }: { parts: (string | null | undefined)[] }) {
+  const each = parts.flatMap((p) => (p ? p.split(" · ") : []));
+  return <span className={css.peekLine}>{each.map((p, i) => <span key={i}>{i > 0 && " · "}<span className={css.peekPart}>{p}</span></span>)}</span>;
+}
+
+/** The connection in the peek: how it goes and its round trip in a line, then ↑ and ↓ a line each, totals on the right. */
+function PeekNet({ net }: { net: StationNet }) {
+  const head = (
+    <span className={css.peekNetHead} tabIndex={net.measured?.relays.length ? 0 : undefined}>
+      <span>{net.path}{net.rtt && <>{" · "}<Figure f={net.rtt} /></>}</span>
+      {net.loss && <Figure f={net.loss} />}
+    </span>
+  );
+  return (
+    <div className={css.peekNet}>
+      {net.measured?.relays.length ? <Tip label={<Ways relays={net.measured.relays} />}>{head}</Tip> : head}
+      <span className={css.peekRates}>
+        <span>↑</span><b>{net.up}</b><span>{net.upTotal && t("web-pages.stations.total", { total: net.upTotal })}</span>
+        <span>↓</span><b>{net.down}</b><span>{net.downTotal && t("web-pages.stations.total", { total: net.downTotal })}</span>
+      </span>
     </div>
   );
 }

@@ -797,6 +797,7 @@
   "web-pages.stations.connecting": "正在连接…",
   "web-pages.stations.details": "查看 {name} 详情",
   "web-pages.stations.peekSettings": "机器设置",
+  "web-pages.stations.peekProcess": "进程内存：{text}",
   "web-pages.stations.emoji.label": "给 {name} 选个图标",
   "web-pages.stations.emoji.paste": "粘贴或输入任意 emoji",
   "web-pages.stations.emoji.clear": "不用图标",

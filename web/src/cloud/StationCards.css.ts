@@ -61,6 +61,24 @@ export const detailTitle = style({ margin: "0", fontSize: vars.textBody, fontWei
 /** The card over a station's name in a chat's bar (StationPeek). */
 export const peek = style({ display: "flex", flexDirection: "column", gap: "8px", minWidth: "0" });
 export const peekHead = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0" });
-export const peekName = style({ fontWeight: "600", color: vars.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: "0" });
+export const peekName = style({ flex: "1", fontWeight: "600", color: vars.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: "0" });
 export const peekLine = style({ fontSize: vars.textMeta, color: vars.muted, overflowWrap: "anywhere" });
-export const peekLink = style({ alignSelf: "flex-start", fontSize: vars.textMeta, color: vars.muted, selectors: { "&:hover": { color: vars.text } } });
+/** What it is over what it has: a line each. */
+export const peekLines = style({ display: "flex", flexDirection: "column", gap: "2px", fontSize: vars.textMeta, color: vars.muted });
+/** One fact of a line: kept whole, the line breaking only between facts. */
+export const peekPart = style({ whiteSpace: "nowrap" });
+/** Load, connection, the process: each set off from the one above by a hairline. */
+export const peekSection = style({ borderTop: `1px solid ${vars.line}`, paddingTop: "8px" });
+export const peekNet = style({ display: "grid", gap: "4px", fontSize: vars.textMeta, color: vars.muted, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
+globalStyle(`${peekNet} b`, { fontWeight: "500", color: vars.text });
+globalStyle(`${peekNet} b[data-level="amber"]`, { color: vars.amber });
+globalStyle(`${peekNet} b[data-level="red"]`, { color: vars.red });
+export const peekNetHead = style({ display: "flex", gap: "8px", color: vars.text });
+/** ↑ and ↓ a row each: arrow, rate, and what went that way pushed to the right. */
+export const peekRates = style({ display: "grid", gridTemplateColumns: "auto 1fr auto", columnGap: "8px", rowGap: "2px", alignItems: "baseline" });
+/** Its settings, as a row that reads as one to click: the words and a chevron, a tint under it on hover. */
+export const peekLink = style({
+  display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 -6px", padding: "5px 6px", borderRadius: "6px",
+  fontSize: vars.textMeta, color: vars.muted, textDecoration: "none",
+  selectors: { "&:hover": { color: vars.text, background: vars.hover } },
+});

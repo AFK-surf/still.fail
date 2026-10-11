@@ -857,6 +857,7 @@
   "web-pages.stations.connecting": "Connecting…",
   "web-pages.stations.details": "View {name} details",
   "web-pages.stations.peekSettings": "Station settings",
+  "web-pages.stations.peekProcess": "Process memory: {text}",
   "web-pages.stations.emoji.label": "Icon for {name}",
   "web-pages.stations.emoji.paste": "Paste or type any emoji",
   "web-pages.stations.emoji.clear": "No icon",
