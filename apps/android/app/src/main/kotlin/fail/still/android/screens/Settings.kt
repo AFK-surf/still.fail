@@ -590,6 +590,7 @@ private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationVi
         var emojis by remember { mutableStateOf(glyph == null && picture == null && s.emoji != null) }
         var typed by remember { mutableStateOf("") }
         var color by remember { mutableStateOf(glyphColor(s.icon)) }
+        var query by remember { mutableStateOf("") }
         val tint = markColor(color)
         val upload = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
             if (uri != null) scope.launch {
@@ -603,6 +604,7 @@ private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationVi
             Column(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Seg(listOf(t("android-settings.station.glyphs"), "Emoji"), if (emojis) 1 else 0, { emojis = it == 1 }, Modifier.fillMaxWidth(), height = 34.dp, fill = true, radius = 17.dp)
                 if (emojis) Field(typed, { v -> typed = v; firstEmoji(v)?.let { pick(it, "") } }, t("android-settings.station.emojiPaste"))
+                else Field(query, { query = it }, t("android-settings.station.glyphSearch"))
             }
             // The icons' colour: the words' own first, then MARK_COLORS; the one picked ringed. It colours the grid, and the
             // icon the station has, at once.
@@ -619,7 +621,10 @@ private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationVi
             }
             // Six to a row, wide enough for a thumb; the one it has on the accent's wash.
             val kept = if (emojis) s.emoji?.takeIf { glyph == null && picture == null }?.replace("\uFE0F", "") else glyph?.name
-            val offered = if (!emojis) StationIcons.all.map { it.name } else if (kept != null && STATION_EMOJI.none { it.replace("\uFE0F", "") == kept }) listOf(s.emoji!!) + STATION_EMOJI.dropLast(1) else STATION_EMOJI
+            // The icons found by every word typed (in their names, English or Chinese); all of them for none.
+            val terms = query.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+            val offered = if (!emojis) StationIcons.all.filter { g -> terms.all { it in g.words } }.map { it.name } else if (kept != null && STATION_EMOJI.none { it.replace("\uFE0F", "") == kept }) listOf(s.emoji!!) + STATION_EMOJI.dropLast(1) else STATION_EMOJI
+            if (offered.isEmpty()) Text(t("android-settings.station.glyphNone"), Modifier.fillMaxWidth().padding(vertical = 24.dp), color = C.muted, fontSize = 15.sp, textAlign = TextAlign.Center)
             Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 offered.chunked(6).forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

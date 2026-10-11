@@ -39,6 +39,7 @@ export function MarkPick({ emoji, icon, name, editable, busy, onPick }: {
 function MarkPanel({ emoji, icon, onPick }: { emoji: string | null | undefined; icon: string | null | undefined; onPick(mark: Mark, stay?: boolean): void }) {
   const [kind, setKind] = useState<Kind>(() => kindOf(emoji, icon));
   const [color, setColor] = useState(() => glyphColor(icon));
+  const [query, setQuery] = useState("");
   const [typed, setTyped] = useState("");
   const [failed, setFailed] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
@@ -57,8 +58,9 @@ function MarkPanel({ emoji, icon, onPick }: { emoji: string | null | undefined; 
             onChange={(ev) => { setTyped(ev.target.value); const one = firstEmoji(ev.target.value); if (one) onPick(emojiMark(one)); }} />
         </form>
       )}
+      {kind === "glyph" && <input className={`${controlsCss.input} ${css.field}`} value={query} autoFocus placeholder={t("web-pages.stations.mark.search")} aria-label={t("web-pages.stations.mark.search")} onChange={(ev) => setQuery(ev.target.value)} />}
       {kind === "glyph" && <ColorRow color={color} onColor={(c) => { setColor(c); const g = stationGlyph(icon); if (g) onPick(glyphMark(g, c), true); }} />}
-      {kind === "glyph" ? <GlyphGrid icon={icon} color={color} size={18} onPick={onPick} /> : <EmojiGrid emoji={stationGlyph(icon) || picture ? null : emoji} onPick={onPick} />}
+      {kind === "glyph" ? <GlyphGrid icon={icon} color={color} query={query} size={18} onPick={onPick} /> : <EmojiGrid emoji={stationGlyph(icon) || picture ? null : emoji} onPick={onPick} />}
       <div className={css.foot}>
         <button type="button" className={`${controlsCss.menuItem} ${css.footButton}`} aria-pressed={!!picture} onClick={() => file.current?.click()}>
           {picture ? <img src={picture} alt="" className={css.footPicture} /> : <ImageUpload size={16} />}
@@ -86,18 +88,24 @@ export function ColorRow({ color, className, onColor }: { color: MarkColor | und
   );
 }
 
-/** Still.fail's icons in `color`, the one it has marked (the phone's sheet has them larger: `className`, `size`). */
-export function GlyphGrid({ icon, color, size, className, onPick }: { icon: string | null | undefined; color?: MarkColor | undefined; size: number; className?: string; onPick(mark: Mark): void }) {
+/**
+ * Still.fail's icons in `color`, the one it has marked (the phone's sheet has them larger: `className`, `size`); those
+ * found by every word of `query` (in their names, English or Chinese), when there is one.
+ */
+export function GlyphGrid({ icon, color, query = "", size, className, onPick }: { icon: string | null | undefined; color?: MarkColor | undefined; query?: string; size: number; className?: string; onPick(mark: Mark): void }) {
   const kept = stationGlyph(icon)?.name;
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const found = terms.length ? STATION_ICONS.filter((g) => terms.every((w) => g.words.includes(w))) : STATION_ICONS;
   const grid = useRef<HTMLDivElement>(null);
   // Opened, the one it has is in sight: the grid has more rows than room (the phone's sheet scrolls itself).
   useLayoutEffect(() => {
     const el = grid.current, on = el?.querySelector<HTMLElement>("[aria-pressed=true]");
     if (el && on && el.scrollHeight > el.clientHeight) el.scrollTop = on.offsetTop - el.offsetTop - (el.clientHeight - on.offsetHeight) / 2;
   }, []);
+  if (!found.length) return <p className={css.none}>{t("web-pages.stations.mark.none")}</p>;
   return (
     <div ref={grid} className={`${css.grid}${className ? ` ${className}` : ""}`} role="group" data-color={color} style={{ color: markColor(color) }}>
-      {STATION_ICONS.map((g) => (
+      {found.map((g) => (
         <button key={g.name} type="button" className={css.choice} aria-label={g.name} aria-pressed={g.name === kept} onClick={() => onPick(glyphMark(g, color))}><g.Icon size={size} /></button>
       ))}
     </div>

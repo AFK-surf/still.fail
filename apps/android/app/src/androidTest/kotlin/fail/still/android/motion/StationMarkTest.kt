@@ -1,11 +1,13 @@
 package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import fail.still.android.Screen
 import fail.still.android.data.Link
 import fail.still.android.data.StationView
@@ -49,6 +51,13 @@ class StationMarkTest {
         h.settle()
         assertEquals("glyph:dice-1:green", sent(h))
         h.record("mark-sheet-green-$theme").end()
+
+        // Typed, a word finds the icons named by it (in Chinese too), and only those.
+        rule.onNode(hasSetTextAction()).performTextInput("棋子")
+        h.settle()
+        rule.onNodeWithContentDescription("chess-knight").assertExists()
+        rule.onNodeWithContentDescription("desktop").assertDoesNotExist()
+        h.record("mark-sheet-search-$theme").end()
 
         // An icon picked is in the colour the sheet shows.
         rule.onNodeWithContentDescription("chess-knight").performScrollTo().performClick()

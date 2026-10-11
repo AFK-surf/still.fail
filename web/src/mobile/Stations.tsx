@@ -288,6 +288,7 @@ function StationMarkSheet({ s }: { s: StationView }) {
   const [typed, setTyped] = useState("");
   const file = useRef<HTMLInputElement>(null);
   const [color, setColor] = useState(() => glyphColor(s.icon));
+  const [query, setQuery] = useState("");
   const pick = (m: Mark, stay?: boolean) => {
     if (!stay) app.sheet(null);
     if (!same(m, s.emoji, s.icon)) act(cloud.setStationMark(app.entry.account.sub, app.entry.id, s.id, m), t("web-mobile.stations.emojiWhat"), t("web-mobile.stations.emojiSet"));
@@ -302,13 +303,14 @@ function StationMarkSheet({ s }: { s: StationView }) {
       <div className={sheetsCss.mSheetScroll}>
         <div className={css.mMarkHead}>
           <Seg options={[t("web-pages.stations.mark.glyphs"), "Emoji"]} selected={kind === "glyph" ? 0 : 1} onSelect={(i) => setKind(i === 0 ? "glyph" : "emoji")} fill height={34} radius={17} />
+          {kind === "glyph" && <input className={css.mMarkField} value={query} placeholder={t("web-pages.stations.mark.search")} aria-label={t("web-pages.stations.mark.search")} onChange={(e) => setQuery(e.target.value)} />}
           {kind === "emoji" && (
             <input className={css.mMarkField} value={typed} placeholder={t("web-pages.stations.emoji.paste")} aria-label={t("web-pages.stations.emoji.paste")}
               onChange={(e) => { setTyped(e.target.value); const one = firstEmoji(e.target.value); if (one) pick(emojiMark(one)); }} />
           )}
         </div>
         {kind === "glyph" && <ColorRow color={color} className={css.mMarkColors} onColor={(c) => { setColor(c); const g = stationGlyph(s.icon); if (g) pick(glyphMark(g, c), true); }} />}
-        {kind === "glyph" ? <GlyphGrid icon={s.icon} color={color} size={24} className={css.mMarkGrid} onPick={pick} />
+        {kind === "glyph" ? <GlyphGrid icon={s.icon} color={color} query={query} size={24} className={css.mMarkGrid} onPick={pick} />
           : <EmojiGrid emoji={stationGlyph(s.icon) || picture ? null : s.emoji} className={`${css.mMarkGrid} ${css.mMarkEmoji}`} onPick={pick} />}
         <PickRow label={t(picture ? "web-pages.stations.mark.another" : "web-pages.stations.mark.upload")}
           leading={picture ? <img src={picture} alt="" className={css.mMarkPicture} /> : <ImageUpload size={20} />} onClick={() => file.current?.click()} />

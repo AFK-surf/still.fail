@@ -803,6 +803,8 @@
   "web-pages.stations.emoji.clear": "不用图标",
   "web-pages.stations.mark.kind": "图标还是 emoji",
   "web-pages.stations.mark.glyphs": "图标",
+  "web-pages.stations.mark.search": "搜索图标",
+  "web-pages.stations.mark.none": "没有找到图标",
   "web-pages.stations.mark.color": "图标颜色",
   "web-pages.stations.mark.color.none": "默认",
   "web-pages.stations.mark.color.red": "红",

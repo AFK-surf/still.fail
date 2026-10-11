@@ -523,6 +523,8 @@
   "android-settings.station.emojiTitle": "Icon for {name}",
   "android-settings.station.emojiClear": "No icon",
   "android-settings.station.glyphs": "Icons",
+  "android-settings.station.glyphSearch": "Search icons",
+  "android-settings.station.glyphNone": "No icons found",
   "android-settings.station.emojiPaste": "Paste or type any emoji",
   "android-settings.station.image": "Upload image",
   "android-settings.station.imageAnother": "Another image",

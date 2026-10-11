@@ -863,6 +863,8 @@
   "web-pages.stations.emoji.clear": "No icon",
   "web-pages.stations.mark.kind": "Icon or emoji",
   "web-pages.stations.mark.glyphs": "Icons",
+  "web-pages.stations.mark.search": "Search icons",
+  "web-pages.stations.mark.none": "No icons found",
   "web-pages.stations.mark.color": "Icon colour",
   "web-pages.stations.mark.color.none": "Default",
   "web-pages.stations.mark.color.red": "Red",

@@ -484,6 +484,8 @@
   "android-settings.station.emojiTitle": "给 {name} 选个图标",
   "android-settings.station.emojiClear": "不用图标",
   "android-settings.station.glyphs": "图标",
+  "android-settings.station.glyphSearch": "搜索图标",
+  "android-settings.station.glyphNone": "没有找到图标",
   "android-settings.station.emojiPaste": "粘贴或输入任意 emoji",
   "android-settings.station.image": "上传图片",
   "android-settings.station.imageAnother": "换一张图片",

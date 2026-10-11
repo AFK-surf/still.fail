@@ -70,8 +70,13 @@ def jsx(tag: str, a: dict, filled: bool) -> str:
 
 
 def station_icons():
-    """The icons a station can have, in the picker's order: (name, emoji, elements)."""
-    return [(m["name"], m["emoji"], shapes(STATION / f"{m['name']}.svg")) for m in json.loads((STATION / "manifest.json").read_text())]
+    """The icons a station can have, in the picker's order: (name, emoji, elements, the words it is found by)."""
+    return [(m["name"], m["emoji"], shapes(STATION / f"{m['name']}.svg"), words(m)) for m in json.loads((STATION / "manifest.json").read_text())]
+
+
+def words(m: dict) -> str:
+    """What a station's icon is found by in the picker: its name (its hyphens as spaces) and its Chinese words, in small letters."""
+    return f"{m['name'].replace('-', ' ')} {m['zh']}".lower()
 
 
 def web(icons, stations) -> str:
@@ -104,16 +109,16 @@ def web(icons, stations) -> str:
         lines.append(f"  \"{name}\": {pascal(name)},")
     lines.append("};")
     lines.append("")
-    for name, _, els in stations:
+    for name, _, els, _ in stations:
         body = "".join(jsx(*e) for e in els)
         lines.append(f"function Station{pascal(name)}(props: IconProps) {{")
         lines.append(f"  return <Svg {{...props}}>{body}</Svg>;")
         lines.append("}")
         lines.append("")
-    lines.append("/** The icons a station can have (design/station-icons), in the picker's order, each with the emoji kept beside it for older clients. */")
-    lines.append("export const STATION_ICONS: readonly { emoji: string; name: string; Icon: (props: IconProps) => React.JSX.Element }[] = [")
-    for name, emoji, _ in stations:
-        lines.append(f"  {{ emoji: \"{emoji}\", name: \"{name}\", Icon: Station{pascal(name)} }},")
+    lines.append("/** The icons a station can have (design/station-icons), in the picker's order, each with the emoji kept beside it for older clients and the words it is found by. */")
+    lines.append("export const STATION_ICONS: readonly { emoji: string; name: string; words: string; Icon: (props: IconProps) => React.JSX.Element }[] = [")
+    for name, emoji, _, found in stations:
+        lines.append(f"  {{ emoji: \"{emoji}\", name: \"{name}\", words: \"{found}\", Icon: Station{pascal(name)} }},")
     lines.append("];")
     lines.append("")
     return "\n".join(lines)
@@ -151,17 +156,17 @@ def android(icons, stations) -> str:
     lines.append("    val byName = mapOf(" + ", ".join(f"\"{n}\" to {pascal(n)}" for n, _ in icons) + ")")
     lines.append("}")
     lines.append("")
-    lines.append("/** One of the icons a station can have: its name (kept as glyph:<name>), the emoji kept beside it for older clients, and it drawn. */")
-    lines.append("data class StationGlyph(val name: String, val emoji: String, val icon: ImageVector)")
+    lines.append("/** One of the icons a station can have: its name (kept as glyph:<name>), the emoji kept beside it for older clients, the words it is found by, and it drawn. */")
+    lines.append("data class StationGlyph(val name: String, val emoji: String, val words: String, val icon: ImageVector)")
     lines.append("")
     lines.append("/** The icons a station can have (design/station-icons), in the picker's order. */")
     lines.append("object StationIcons {")
     lines.append("    val all: List<StationGlyph> = listOf(")
-    for name, emoji, els in stations:
+    for name, emoji, els, found in stations:
         stroked = [as_path(t, a) for t, a, f in els if not f]
         dots = [as_path(t, a) for t, a, f in els if f]
         q = lambda xs: ", ".join('"' + x.replace('"', '\\"') + '"' for x in xs)
-        lines.append(f"        StationGlyph(\"{name}\", \"{emoji}\", icon(\"{name}\", listOf({q(stroked)}), listOf({q(dots)}))),")
+        lines.append(f"        StationGlyph(\"{name}\", \"{emoji}\", \"{found}\", icon(\"{name}\", listOf({q(stroked)}), listOf({q(dots)}))),")
     lines.append("    )")
     lines.append("")
     lines.append("    private val byName = all.associateBy { it.name }")

@@ -45,6 +45,8 @@ export const choice = style({
 });
 // In a colour, every icon is that colour (the grid's), the one it has only on its ground.
 globalStyle(`${grid}[data-color] > ${choice}${choice}`, { color: "inherit" });
+/** No icon is found by what was typed. */
+export const none = style({ margin: "0", padding: "18px 0", textAlign: "center", color: vars.muted, fontSize: vars.textUi });
 /** The colours, in a row over the grid: a dot each, the one picked ringed in its own colour. The words' colour is the first. */
 export const colors = style({ display: "flex", gap: "2px", padding: "2px 0" });
 export const color = style({
