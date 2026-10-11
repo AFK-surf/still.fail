@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import { card, jobsText, recentText, workText } from "../src/views/brief.ts";
+import { card, jobsText, recentOf, workText } from "../src/views/brief.ts";
 
 holdLanguage();
 const MIN = 60_000;
@@ -60,8 +60,11 @@ test("the_latest_three_things_it_did_oldest_first", () => {
     call("mcp__stillfail__chat_post", { to: "EMBER/1", text: "改好了\n详情见 PR" }),
     call("mcp__stillfail__chat_state", { kind: "all_done", done: "合了" }),
   ];
-  assert.deepEqual(recentText({ timeline }), ["跑登录测试", "测试过了。", "改好了"]);
-  assert.deepEqual(recentText({ timeline: timeline.slice(0, 4) }), ["读取 login.ts", "宽度写死了"]);
-  assert.deepEqual(recentText(null), []);
+  const lines = (live: unknown) => recentOf(live).map((r) => `${r.key} ${r.text}`);
+  assert.deepEqual(lines({ timeline }), ["4 跑登录测试", "7 测试过了。", "8 改好了"]);
+  assert.deepEqual(lines({ timeline: timeline.slice(0, 4) }), ["1 读取 login.ts", "3 宽度写死了"]);
+  // A key is its entry's place in the whole transcript: the same as older entries are left out of what is read.
+  assert.deepEqual(lines({ first: 100, timeline: timeline.slice(4) }), ["100 跑登录测试", "103 测试过了。", "104 改好了"]);
+  assert.deepEqual(recentOf(null), []);
   assert.equal(card({ turns: [], attention: [], jobs: [] }, { timeline }).recent.length, 3);
 });

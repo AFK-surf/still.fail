@@ -2,13 +2,15 @@
 // avatar is (beside its messages, in the chat's bar): what it runs, where it stands and for how long, what it does now
 // (with a stop for it alone), and what the core says of it (the `agentCard` view, views/brief.ts): what it has done,
 // cost and used, its account and what is left of it, its jobs, what is wrong.
-import { createContext, useContext, type ReactElement } from "react";
+import { createContext, useContext, useLayoutEffect, useRef, type ReactElement, type RefObject } from "react";
 import { useAgentCard, useApi, useLives, type ChatAgent } from "./api.ts";
 import { useStation } from "./station.tsx";
 import { Hover } from "./Peeks.tsx";
 import { AgentMark, Tip } from "./ui.tsx";
 import { Stop } from "./icons.tsx";
 import { useAct } from "./toast.tsx";
+import { useListMotion } from "./listMotion.ts";
+import { reducedMotion } from "./motion.ts";
 import { EdgeChip } from "./components.tsx";
 import { t } from "./i18n.ts";
 import { Elapsed, Waited } from "./Chat.tsx";
@@ -26,6 +28,29 @@ export function AgentHover({ agent, children }: { agent: string | null | undefin
 }
 
 /**
+ * `el`'s height goes from what it was at the last render to what this one gives it (lines coming and going), carrying
+ * on from wherever it had got to; as it is the first time.
+ */
+function useHeightMotion(el: RefObject<HTMLElement | null>): void {
+  const was = useRef<{ el: HTMLElement; height: number; run?: Animation } | null>(null);
+  useLayoutEffect(() => {
+    const box = el.current;
+    const before = was.current;
+    if (!box) return void (was.current = null);
+    // Where it has got to, then its height at rest.
+    const shown = box.offsetHeight;
+    before?.run?.cancel();
+    const height = box.offsetHeight;
+    const from = before?.el === box ? (before.run ? shown : before.height) : height;
+    was.current = { el: box, height };
+    if (from === height || reducedMotion()) return;
+    const run = box.animate([{ height: `${from}px` }, { height: `${height}px` }], { duration: 220, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" });
+    was.current.run = run;
+    void run.finished.then(() => { if (was.current?.run === run) delete was.current.run; }, () => {});
+  });
+}
+
+/**
  * What it runs (with a stop for it alone while it works) and where it stands now (for how long), the latest three
  * things it did and what it does now, then what the core says of it (the `agentCard` view): the
  * figures that say most (cost, the cache's hit rate, how full its context is) large, side by side; its account with
@@ -39,6 +64,12 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
   const act = useAct();
   const working = agent.status === "running" || agent.status === "queued";
   const now = useLives(station, [s.key]).get(s.key)?.activity?.now?.text;
+  const recent = card?.recent ?? [];
+  const doing = working && now && now !== recent.at(-1)?.text ? now : null;
+  // A new line comes in under the others, which move up, the oldest going (listMotion.ts); the lines' height follows.
+  const lines = useRef<HTMLOListElement>(null);
+  useListMotion(lines);
+  useHeightMotion(lines);
   const account = agent.account ?? agent.profile;
   const quota = agent.account?.quota?.state === "ok" ? agent.account.quota.windows : [];
   const context = card?.context;
@@ -62,10 +93,10 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
           : agent.since ? <span className={css.elapsed}> · <Elapsed since={agent.since} /></span> : null}
       </p>
       {/* The latest of what it did, oldest first, then (unless that is the last of them) what it does now. */}
-      {((card?.recent.length ?? 0) > 0 || (working && now)) && (
-        <ol className={css.recent}>
-          {card?.recent.map((line, i) => <li key={i}>{line}</li>)}
-          {working && now && now !== card?.recent.at(-1) && <li data-now="">{now}</li>}
+      {(recent.length > 0 || doing) && (
+        <ol ref={lines} className={css.recent}>
+          {recent.map((r) => <li key={r.key} data-flip={r.key}>{r.text}</li>)}
+          {doing && <li key="now" data-flip="now" data-now="">{doing}</li>}
         </ol>
       )}
       {(card?.cost || card?.cache || context) && (

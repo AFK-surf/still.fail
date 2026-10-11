@@ -31,6 +31,8 @@ export const status = style({
 export const recent = style({
   listStyle: "none", margin: "0", padding: "0 0 0 14px", display: "flex", flexDirection: "column", gap: "2px",
   fontSize: vars.textMeta, color: vars.muted,
+  // Its lines move in it (listMotion.ts): their offset parent, the one gone drawn under them, none past its edges.
+  position: "relative", isolation: "isolate", overflow: "hidden",
 });
 globalStyle(`${recent} > li`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${recent} > li[data-now]`, { color: vars.text });

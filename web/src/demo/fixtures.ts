@@ -249,7 +249,7 @@ export function agentCardView(chat: DemoChat): AgentCardView {
     work: `${turns} 轮 · 共干了 ${turns * 7} 分钟`, cost: `$${(turns * 0.62).toFixed(2)}`, tokens: `输入 ${turns * 420}K · 输出 ${turns * 11}K`,
     cache: { percent: 91, text: "91%", level: "ok" },
     context: { percent: context, text: `${turns * 38}K / 200K`, level: context >= 95 ? "red" : context >= 80 ? "amber" : "ok" },
-    recent: chat.messages.filter((m) => m.authorKind === "agent").slice(-3).map((m) => m.text.split("\n")[0]!.replace(/`/g, "")),
+    recent: chat.messages.filter((m) => m.authorKind === "agent").slice(-3).map((m) => ({ key: `${m.seq}`, text: m.text.split("\n")[0]!.replace(/`/g, "") })),
     attention: [],
   };
 }
