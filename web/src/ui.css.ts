@@ -51,12 +51,10 @@ export const agentMark = style({
 export const agentMarkJoined = style({
   display: "inline-flex", width: "auto", gap: "0", color: vars.muted, fontSize: vars.textMeta, lineHeight: "1", whiteSpace: "nowrap",
 });
-// Each part its own end of the tile's corners, so a tint on one (pointed at) is that half of the tile.
+// Each part rounded all round as the tile is, so a tint on one (pointed at) is a tile of its own within it.
 const joinedCorner = `calc(var(--mark) * .3 * ${vars.cornerScale})`;
-globalStyle(`${agentMarkJoined} > :first-child`, { borderRadius: `${joinedCorner} 0 0 ${joinedCorner}`, cornerShape: vars.cornerShape });
-globalStyle(`${agentMarkJoined} > :last-child`, {
-  borderRadius: `0 ${joinedCorner} ${joinedCorner} 0`, cornerShape: vars.cornerShape, paddingLeft: "2px", paddingRight: "calc(var(--mark) * .19)",
-});
+globalStyle(`${agentMarkJoined} > *`, { borderRadius: joinedCorner, cornerShape: vars.cornerShape });
+globalStyle(`${agentMarkJoined} > :last-child`, { paddingLeft: "2px", paddingRight: "calc(var(--mark) * .19)" });
 globalStyle(`${agentMarkJoined}[data-badge] > :last-child`, { paddingRight: "calc(var(--mark) * .19 + 7px)" });
 export const empty = style({
   flex: "1", display: "grid", placeContent: "center", justifyItems: "center", gap: "6px", padding: "40px",
