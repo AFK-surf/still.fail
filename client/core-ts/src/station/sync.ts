@@ -3,9 +3,9 @@
 // (link.ts): its events stream, held open while the station is reached. What a station holds is of two sorts, kept in
 // sync each its own way:
 //
-// - what is only added to (a thread's entries, a session's transcript): channels (channels.ts). The stream says what
-//   is added (`thread`, `live`), and what the device lacks of one it reads by number: where it is in a channel is the
-//   numbers it holds. Nothing of it depends on a stream having told all there was.
+// - what is only added to (a thread's entries, a session's transcript): channels (channels/channels.ts, a part of its
+//   own). The stream says what is added (`thread`, `live`), and what the device lacks of one it reads by number: where
+//   it is in a channel is the numbers it holds. Nothing of it depends on a stream having told all there was.
 // - what changes (the lists and their rows, a thread's summary, the overview, jobs, how far one has read): only how it
 //   is now matters. The stream says how it is as it changes; one that comes back is told first how what changed
 //   meanwhile is now (from where the device is in the station's log of events, cursor.ts), and where that cannot be
@@ -28,8 +28,8 @@ import { activity as historyActivity } from "../history.ts";
 import { StationAddr } from "./addr.ts";
 import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
-import { type Channel, Channels } from "./channels.ts";
-import { ENTRIES, PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.ts";
+import { type Channel, Channels } from "../channels/channels.ts";
+import { ENTRIES, PAGE, TRANSCRIPT_PAGE, entriesOf, heldIn, transcriptOf } from "./channel-kinds.ts";
 import { HOST_KEY, HOST_SAVE_MS, type HistoryRead, type Link, Links, type LiveView } from "./link.ts";
 import { readAll, type StationWire } from "./wire.ts";
 
@@ -106,7 +106,7 @@ export class StationsSync {
       gone: (address) => this.channels.forget(address),
     });
     this.requests.onAnswered = (station) => this.#links.answered(station.toString());
-    this.channels = new Channels(core.data, {
+    this.channels = new Channels(heldIn(core.data), {
       read: (station, path, options) => Effect.suspend(() => this.requests.call(this.#links.get(station)?.addr ?? StationAddr.parse(station), "GET", path, null, options)),
       reached: (station) => this.#links.has(station) && this.reachable(station),
       enqueue: (station, task, priority, work) => this.#enqueue(station, task, priority, work),
@@ -429,7 +429,8 @@ export class StationsSync {
     return reads;
   }
 
-  /// A channel's next read (channels.ts `next`) as a read of its station's history, the read after it while items come.
+  /// A channel's next read (channels/channels.ts `next`) as a read of its station's history, the read after it while
+  /// items come.
   #channelRead(channel: Channel): HistoryRead | null {
     const read = this.channels.batched(channel);
     if (read === null) return null;

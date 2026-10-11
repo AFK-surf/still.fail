@@ -241,12 +241,15 @@ cloud 的端口、`doing` 的 `since`。
 - station 同步分三块（`src/station/`），station 话题 `topics.ts` 只读记录（thread 窗口、live、net 采样、place）：
   - 链路 `link.ts`：workspace 能到就建，events 流的开、断、重连、接管；只管「通不通」，流上来了什么、开流时读什么
     都交给同步。
-  - 只追加的 `channels.ts`（两种见 `channel-kinds.ts`：thread 的 entries、会话的 transcript）：每个 channel 一条带编号的
-    日志，设备在其中的位置就是手里有的编号（和条目一起落盘），没有别的游标。推送（`thread`、`live` 事件）存下并记
-    「说到第几条」；其它说到第几条的来源（thread 摘要的 `last`、读取的答案、发消息得到的编号）走同一个入口；只有一条
-    规则：手里有一部分、而说到的比手里多或中间有洞，就按编号读（`settle`，读哪一段是 `channel-fill.ts` 的纯函数）。
-    channel 不靠「流把该说的都说了」保持最新：流断了重开时，界面开着的 channel 问一次手里最后一条之后的
-    （`catchUp`），其余的等摘要说它落后。channels 不知道 chat、窗口、谁开着，调用方只给优先级。
+  - 只追加的是单独一个模块 `src/channels/`（`channels.ts`，读哪一段是 `fill.ts` 的纯函数），不认识 station 的接口、
+    数据库、事件流、chat、窗口；用它的人给三样：channel 是什么（`Kind`：怎么问对端、答案怎么解）、条目存哪
+    （`Held`）、怎么到对端（`Reach`），外加每次要的优先级。station 的两种在 `station/channel-kinds.ts`：thread 的
+    entries、会话的 transcript。每个 channel 一条带编号的日志，设备在其中的位置就是手里有的编号（和条目一起落盘），
+    没有别的游标。推送（`thread`、`live` 事件）存下并记「说到第几条」；其它说到第几条的来源（thread 摘要的 `last`、
+    读取的答案、发消息得到的编号）走同一个入口；只有一条规则：手里有一部分、而说到的比手里多或中间有洞，就按编号读
+    （`settle`）。channel 不靠「流把该说的都说了」保持最新：流断了重开时，界面开着的 channel 问一次手里最后一条之后的
+    （`catchUp`），其余的等摘要说它落后。测试 `test/channels.test.ts` 直接对模块写（内存里的假对端和假存储，乱序丢包
+    按种子跑）。
   - 会变的 `sync.ts`（列表和行、thread 摘要、overview、job、已读）：只有最新值有意义。流推最新值；流回来时先按设备
     在 station 事件日志里的位置（`cursor.ts`）补发这期间变过的，补不了就重读（`snapshot`，手里有的列表按摘要只取变了
     的行）。写操作用 `afterWrite` 只读它影响的记录。后台再把其余的搬到设备上（`#history`：各会话详情和每个 channel）。

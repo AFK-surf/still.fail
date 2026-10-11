@@ -1,11 +1,11 @@
-// The channels a station has (channels.ts): a thread's entries, and a session's transcript. Each says where its items
-// are held and how its station is asked for them; what is done with a channel is the same for both.
+// The channels a station has (channels/channels.ts): a thread's entries, and a session's transcript. Each says how its
+// station is asked for it; where their items are held is the core's database (`heldIn`). What is done with a channel is
+// the same for both.
+import type { Channel, Held, Kind, Read } from "../channels/channels.ts";
 import type { Data } from "../data.ts";
 import { nOf } from "../entries.ts";
 import { encode } from "../ops.ts";
 import { get } from "../util.ts";
-import type { Read } from "./channel-fill.ts";
-import type { Channel, Kind } from "./channels.ts";
 
 /// Entries per page of a thread, and items per page of a transcript.
 export const PAGE = 50;
@@ -17,7 +17,7 @@ const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 /// A thread's entries (GET /threads/:id/entries): numbered from 1, each saying its number (`n`), all of them brought
 /// onto the device. How far a thread goes is its summary's `last`.
 export const ENTRIES: Kind = {
-  table: "entry",
+  name: "entry",
   first: 1,
   page: PAGE,
   whole: true,
@@ -36,16 +36,14 @@ export const ENTRIES: Kind = {
       return n === null ? [] : [[n, e] as [number, unknown]];
     }),
   last: (answer) => u64(get(answer, "last")),
-  head: (data: Data, station, id) => data.threadLast(station, Number(id)),
-  raise: (data: Data, station, id, n) => data.raiseLast(station, Number(id), n),
 };
 
 /// A session's transcript (GET /sessions/:key/timeline): numbered from 0 by where an item stands (a page says where it
 /// starts), in brief but for a stretch read whole. Its latest page is brought, the pages before as they are gone back
-/// to; a stream that follows the session says where it is in it as it opens (sync.ts `#path`), so nothing else has to
-/// say how far it goes.
+/// to; a stream that follows the session says where the device is in it as it opens (link.ts `#path`), so nothing
+/// else has to say how far it goes.
 export const TRANSCRIPT: Kind = {
-  table: "transcript",
+  name: "transcript",
   first: 0,
   page: TRANSCRIPT_PAGE,
   whole: false,
@@ -61,9 +59,24 @@ export const TRANSCRIPT: Kind = {
     return list(get(answer, "entries")).map((item, i) => [start + i, item] as [number, unknown]);
   },
   last: () => null,
-  head: () => 0,
-  raise: () => {},
 };
 
 export const entriesOf = (station: string, thread: number): Channel => ({ kind: ENTRIES, station, id: String(thread) });
 export const transcriptOf = (station: string, session: string): Channel => ({ kind: TRANSCRIPT, station, id: session });
+
+/// Where the channels' items are held: the logs of the core's database, by number (data.ts), let go for room where a
+/// chat was not opened for long (KEPT). How far a thread goes is its summary's `last` there.
+export function heldIn(data: Data): Held {
+  const table = (c: Channel) => (c.kind === ENTRIES ? "entry" : "transcript");
+  return {
+    numbers: (c) => data.logNumbers(table(c), c.station, c.id),
+    span: (c) => data.logSpan(table(c), c.station, c.id),
+    count: (c, from, to) => data.logCount(table(c), c.station, c.id, from, to),
+    put: (c, items, cutAfter) => data.putItems(table(c), c.station, c.id, items, cutAfter),
+    letGo: (c) => data.evicted(table(c), c.station, c.id),
+    head: (c) => (c.kind === ENTRIES ? data.threadLast(c.station, Number(c.id)) : 0),
+    raise: (c, n) => {
+      if (c.kind === ENTRIES) data.raiseLast(c.station, Number(c.id), n);
+    },
+  };
+}

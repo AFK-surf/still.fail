@@ -125,7 +125,7 @@ export class StationTopics implements Owner {
       if (evicted || this.summary(station, id) === null) this.#sync.channels.bring(entries, Priority.shown);
       // Its latest not on the device yet: that page alone, at once. What is before it comes with the station's history,
       // in batches behind (sync.ts #history), or as it is scrolled back to.
-      else if (this.#sync.channels.latestMissing(entries)) this.#sync.channels.bring(entries, Priority.shown, true);
+      else if (this.#sync.channels.latestMissing(entries)) this.#sync.channels.bring(entries, Priority.shown, "latest");
       this.#moveOldPlace(station, id);
     }
     if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown);
