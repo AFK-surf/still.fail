@@ -136,7 +136,7 @@ function useRead<T>(key: string, read: () => Promise<T>): Read<T> {
 type Person = { login: string; avatar?: string };
 type LinkPreview =
   | { kind: "none" }
-  | { kind: "page"; url: string; title: string; description?: string; site?: string; icon?: string }
+  | { kind: "page"; url: string; title: string; description?: string; site?: string; icon?: string; image?: string }
   | {
       kind: "github_pull_request"; url: string; repository: string; number: number; title: string; state: "open" | "closed" | "merged" | "draft";
       author: Person | null; additions: number | null; deletions: number | null; changedFiles: number | null; updatedAt: number | null;
@@ -181,7 +181,7 @@ function LinkCard({ href, label }: { href: string; label: string }) {
   if (preview?.kind === "github_issue") return <IssueCard preview={preview} />;
   const page = preview?.kind === "page" ? preview : null;
   const github = /^https:\/\/(?:[\w-]+\.)?github\.com\//.test(href);
-  return (
+  const tile = (
     <div className={css.tile}>
       <span className={css.tileThumb} aria-hidden="true">
         {page?.icon ? <img className={css.tileIcon} src={page.icon} alt="" /> : github ? <GitHubMark size={20} /> : <Web size={18} />}
@@ -190,6 +190,14 @@ function LinkCard({ href, label }: { href: string; label: string }) {
         <span className={css.tileTitle}>{page?.title ?? label}</span>
         <span className={css.tileUrl} title={href}>{page?.site ? `${page.site} · ${destination(href)}` : destination(href)}</span>
       </span>
+    </div>
+  );
+  // A page's picture (its og:image, a video's frame) over the tile, as the page shows itself when shared.
+  if (!page?.image) return tile;
+  return (
+    <div className={css.tileWithPicture}>
+      <img className={css.picture} src={page.image} alt="" />
+      {tile}
     </div>
   );
 }
