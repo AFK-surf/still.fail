@@ -174,7 +174,11 @@ export class Events {
     // Coming back where all that was told since is kept (their sidebar told on this run too).
     const k = `${viewer.email}\0${lang}`;
     const resumes = since !== null && this.rowsTold.has(k) && this.kept(since);
-    if (since !== null && !resumes) client.send("missed", {});
+    if (since !== null && !resumes) {
+      // Why, for the log: a station whose streams are never resumed has every client read it again each time.
+      log.info("events", "a stream is not resumed", { since, run: this.run, forgotten: this.forgotten, told: this.seq, kept: this.told.length, bytes: this.toldBytes, rows: this.rowsTold.has(k) });
+      client.send("missed", {});
+    }
     if (!resumes) {
       // Afresh: their sidebar as it is now is what its changes are told against from now (read before the stream
       // answers, so the client's own reading of it comes after); where it changed while none of their streams was

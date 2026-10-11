@@ -580,6 +580,12 @@ export class StationsSync {
     span.set("stillfail.station", address);
     const ctx = span.context;
     const read = (topic: Topic, path: string) => this.#read(address, topic, path, undefined, ctx);
+    // The chats a UI has open, first: what was said in them after what is held, in the room kept for what is open. The
+    // lists and the history behind them take a slow link a minute, and what an agent said while the stream was away
+    // waited on them.
+    for (const topic of this.#core.store.liveTopics()) {
+      if (topic.topic === "thread" && topic.station === address && typeof topic.thread === "number") this.#enqueue(address, `entries/${topic.thread}`, Priority.shown, this.#entriesSince(address, topic.thread));
+    }
     const done = [
       this.#enqueue(address, "overview", p, read({ topic: "overview", station: address }, "/overview")),
       this.#enqueue(address, "sessions", p, Effect.andThen(read({ topic: "sessions", station: address }, "/sessions"), Effect.sync(() => this.#historyStart(address)))),
@@ -942,6 +948,23 @@ export class StationsSync {
       const entries = this.#tookEntries(address, id, answer._tag === "Success" ? { ok: answer.success } : { error: answer.failure });
       // More to bring: asked again, behind what is more urgent.
       if (!once && entries > 0 && this.#entriesPath(address, id) !== null) this.syncEntries(address, id, priority);
+    });
+  }
+
+  /// What was said in a thread after what is held of it, asked whether or not its summary says anything was (the summary
+  /// is as old as what is held): the station's stream was away. One with nothing held is brought as it opens.
+  #entriesSince(address: string, id: number): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address) || this.#core.data.evicted("entry", address, String(id))) return;
+      const held = this.#core.data.logSpan("entry", address, String(id));
+      if (held === null) return;
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", `/threads/${id}/entries?after=${held.max}`, null, { quiet: true }));
+      if (answer._tag === "Success") {
+        const last = u64(get(answer.success, "last"));
+        if (last !== null) this.#core.data.raiseLast(address, id, last);
+      }
+      this.#tookEntries(address, id, answer._tag === "Success" ? { ok: answer.success } : { error: answer.failure });
     });
   }
 

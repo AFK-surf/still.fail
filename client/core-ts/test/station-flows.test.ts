@@ -955,6 +955,28 @@ test("a_stream_coming_back_after_its_link_went_is_told_what_it_missed_and_reads_
   core.close();
 });
 
+test("a_chat_open_is_asked_what_was_said_since_before_the_station_is_read_again", async () => {
+  const answers: J = { ...base(), "GET /threads/7/entries?after=3": { last: 3, entries: [] } };
+  const { host, core, end, values, read } = await ui(answers);
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
+  await read();
+  assert.deepEqual(nums(values), [1, 2, 3]);
+  // The stream goes and comes back without being told what it missed (its station started anew, say): what the agent
+  // said meanwhile shows without waiting on the lists and the history read behind them.
+  answers["GET /threads/7/entries?after=3"] = { last: 5, entries: entries(4, 5) };
+  answers["GET /threads"] = [threadView(7, 5)];
+  const from = host.requests.length;
+  end();
+  await host.time.pass(RECONNECT_MS + 50, 50);
+  await read();
+  assert.deepEqual(nums(values), [1, 2, 3, 4, 5]);
+  const asked = host.requests.slice(from).map((r) => r.url.replace("https://stillfail.test/admin/api", ""));
+  const at = asked.indexOf("/threads/7/entries?after=3");
+  assert.ok(at >= 0, "asked what was said since");
+  for (const list of ["/changed/threads", "/changed/chats", "/changed/sessions", "/batch"]) assert.ok(asked.indexOf(list) < 0 || at < asked.indexOf(list), `before ${list}`);
+  core.close();
+});
+
 test("a_stream_taking_over_told_it_missed_what_came_since_reads_the_station_again", async () => {
   const { host, core, push, streams } = await started();
   const ui = core.connect();
