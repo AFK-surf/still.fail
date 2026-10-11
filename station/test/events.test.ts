@@ -206,6 +206,53 @@ test("a stream that comes back after its link went is told what was told meanwhi
   await late.close();
 });
 
+test("streams opened while the sidebar could not be read are ended once it reads, and read the station again", async () => {
+  const { events, rows, change } = setup(testClock().clock);
+  const all = rows["a@x"]!;
+  const open = async (email: string, since?: string) => {
+    const answer = await events.open(viewer(email), "zh", false, [], [], since ?? null);
+    const it = (answer.body as AsyncIterable<Buffer>)[Symbol.asyncIterator]();
+    const got: string[] = [];
+    let ended = false;
+    let last: string | undefined;
+    void (async () => {
+      for (;;) {
+        const next = await it.next();
+        if (next.done) return void (ended = true);
+        const m = /^(?:id: ([0-9a-f]+\.\d+)\n)?event: (.+)\n/.exec(next.value.toString());
+        if (m) got.push(m[2]!), (last = m[1] ?? last);
+      }
+    })();
+    return { resumed: (answer.headers as Record<string, string>)["stillfail-resumed"] === "1", got, ended: () => ended, last: () => last, close: () => it.return?.() };
+  };
+  // a@x's sidebar does not read (an archive file gone, say); b@x's does.
+  Object.defineProperty(rows, "a@x", { configurable: true, get: () => { throw new Error("No such file or directory (os error 2)"); } });
+  const blind = await open("a@x");
+  const other = await open("b@x");
+  change({ type: "session", key: "s1" });
+  await settle();
+  // What does not depend on it is told all the same, and the stream stays.
+  assert.deepEqual([blind.got, blind.ended()], [["session"], false]);
+  // It reads again, with a chat made meanwhile: nothing says which rows changed since the client last had them, so
+  // the stream is ended instead; another viewer's is not.
+  Object.defineProperty(rows, "a@x", { configurable: true, writable: true, value: [...all, { id: "2", title: "two" }] });
+  change({ type: "session", key: "s2" });
+  await settle();
+  assert.deepEqual([blind.got, blind.ended()], [["session", "session"], true]);
+  assert.deepEqual([other.got, other.ended()], [["session", "session"], false]);
+  // Its client comes back from where it was: not resumed, so it reads the station again; from then on its sidebar is
+  // told by what changes.
+  const back = await open("a@x", blind.last());
+  await settle();
+  assert.deepEqual([back.resumed, back.got], [false, ["missed"]]);
+  rows["a@x"] = [...all, { id: "2", title: "two" }, { id: "3", title: "three" }];
+  change({ type: "session", key: "s3" });
+  await settle();
+  assert.deepEqual([back.got, back.ended()], [["missed", "session", "chat"], false]);
+  await back.close();
+  await other.close();
+});
+
 test("a job's log is told now and as it grows", async () => {
   const time = testClock();
   const { events, dir } = setup(time.clock);

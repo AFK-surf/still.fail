@@ -82,6 +82,8 @@ type Client = {
   raw(text: string): void;
   /// What it follows besides (live sessions, job logs): ended with it.
   stops: (() => void)[];
+  /// Ends its stream from this side: its client opens another.
+  end(): void;
 };
 
 export class Events {
@@ -169,6 +171,7 @@ export class Events {
       send: (event, data) => push(`id: ${this.run}.${++this.seq}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
       raw: push,
       stops: [],
+      end: () => remove(),
     };
     push("retry: 3000\n\n");
     // Coming back where all that was told since is kept (their sidebar told on this run too).
@@ -512,6 +515,15 @@ export class Events {
           rows = JSON.parse(await this.deps.readers.read("chats", { viewer, archived: false }, lang));
         } catch (error) {
           log.warn("events", "sidebar rows not read", { error: (error as Error).message });
+          return;
+        }
+        // Their streams opened while it could not be read (nothing it changes by is told against), and what their
+        // clients read of the station then failed as it did: now that it reads, those streams are ended. Each comes
+        // back to one that is not resumed, and reads the station again.
+        if (!this.rowsTold.has(`${viewer.email}\0${lang}`)) {
+          const theirs = this.clients.filter((c) => c.viewer.email === viewer.email && c.lang === lang);
+          log.info("events", "the sidebar reads again: its streams are ended, to read the station again", { streams: theirs.length });
+          for (const c of theirs) c.end();
           return;
         }
         this.tellRows(viewer, lang, rows);
