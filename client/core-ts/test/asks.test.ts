@@ -22,6 +22,8 @@ test("still_fail_links_open_in_the_app_and_others_do_not", () => {
   assert.equal(linkTarget("https://app.still.fail/invite", cloud), null);
   assert.deepEqual(linkTarget("https://ember.3720.org/w/ws1/s/st1/chats/k%3A1", cloud), { opens: "chat", workspace: "ws1", station: "st1", chat: "k:1" });
   assert.deepEqual(linkTarget("https://app.still.fail/o/ws1/st1/ds:C1:1.0?service=web", cloud), { opens: "item", workspace: "ws1", station: "st1", session: "ds:C1:1.0", service: "web" });
+  assert.deepEqual(linkTarget("https://app.youdid.wtf/w/ws1/s/st1/chats/k", cloud), { opens: "chat", workspace: "ws1", station: "st1", chat: "k" });
+  assert.deepEqual(linkTarget("https://app.still.fail/o/ws1/st1/k", "https://app.youdid.wtf"), { opens: "item", workspace: "ws1", station: "st1", session: "k", service: null });
   assert.equal(linkTarget("https://app.still.fail/o/ws1/st1/k/", cloud).service, null);
   assert.deepEqual(linkTarget("https://app.still.fail/w/ws1/s/st1/adb", cloud), { opens: "adbShare", workspace: "ws1", station: "st1" });
   assert.equal(linkTarget("https://example.com/o/ws1/st1/k", cloud), null);

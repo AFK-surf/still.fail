@@ -242,8 +242,8 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
   const quoting = useSelectionQuote(list, stable.quote);
   const hold = useHold(list, rows.messages, stable.hold);
   const askedFile = useAskedFile(list, rows.messages, (f) => ownerIn(view, f));
-  // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them) open here, as pages over this one (the
-  // chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
+  // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them; a chat's page, as a reference is
+  // written), on any of its cloud's hosts, open here, as pages over this one (the chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
   // link to an agent's execution history opens it.
   const onClick = (event: React.MouseEvent) => {
     // One of this chat's agents' (another's goes to its chat, below).
@@ -255,7 +255,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
     }
     const link = stillfailLinkClicked(event);
     if (!link) return;
-    const elsewhere = link.sameOrigin && history ? history : null;
+    const elsewhere = link.own && history ? history : null;
     if (elsewhere) {
       // Another chat's agent's execution history, at the entry it names: over this chat, as its page would open it.
       event.preventDefault();
@@ -263,7 +263,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
     } else if (link.service && view.agents.some((a) => a.session.key === link.session)) {
       event.preventDefault();
       app.push(servicePath(here.station, here.key, link.service));
-    } else if (link.sameOrigin) {
+    } else if (link.own) {
       event.preventDefault();
       const path = `/w/${link.workspace}/s/${link.station}/chats/${encodeURIComponent(link.session)}`;
       if (`${path}${link.search}` !== `${stationBase(here.station)}/chats/${encodeURIComponent(here.key)}`) app.push(`${path}${link.search}`);

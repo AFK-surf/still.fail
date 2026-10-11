@@ -14,7 +14,8 @@ import { base64, fromUtf8, parseJson } from "./util.ts";
 // deno-lint-ignore no-explicit-any
 type J = any;
 
-const CLOUD_HOSTS = ["app.still.fail", "ember.3720.org"];
+/// still.fail cloud under its names: the released app's, the test channel's (youdid.wtf), ember's from before the rename.
+const CLOUD_HOSTS = ["app.still.fail", "app.youdid.wtf", "ember.3720.org"];
 const UPDATE_EVERY_MS = 60 * 60 * 1000;
 const PICTURES = 256;
 /// A picture that could not be fetched is not asked for again for this long: a Google account's, where Google cannot be

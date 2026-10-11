@@ -11,6 +11,7 @@ import { Popover, Tabs } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { PENDING } from "../lastChat.ts";
+import { ownOrigin } from "../stillfailLink.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
 import type { ChatJobsView } from "../core/shapes.ts";
 import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
@@ -246,8 +247,10 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!anchor) return;
       const url = new URL(anchor.href, location.href);
-      // Another chat's page on this origin (as a reference to it is written, ChatRef.tsx): opened here.
-      const page = url.origin === location.origin && url.pathname.startsWith(`${opens.current.root}/`) ? url.pathname.slice(opens.current.root.length) : null;
+      // Another chat's page (as a reference to it is written, ChatRef.tsx): opened here, from this origin or from any of
+      // still.fail cloud's (one written on app.still.fail, read on app.youdid.wtf or in the desktop app).
+      const page = url.origin === location.origin && url.pathname.startsWith(`${opens.current.root}/`) ? url.pathname.slice(opens.current.root.length)
+        : url.origin !== location.origin && ownOrigin(url) ? url.pathname : null;
       if (page && /^(\/w\/[^/]+\/s\/[^/]+)?\/chats\/[^/]+\/?$/.test(page)) {
         event.preventDefault();
         navigate(`${page}${url.search}`);
@@ -260,7 +263,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       if (service && opens.current.agents.some((a) => a.session.key === session)) {
         event.preventDefault();
         opens.current.openTab(`service:${service}`);
-      } else if (url.origin === location.origin || url.origin === window.stillfailDesktop?.cloudOrigin) {
+      } else if (ownOrigin(url)) {
         event.preventDefault();
         navigate(`/w/${item[1]}/s/${item[2]}/chats/${encodeURIComponent(session)}${url.search}`);
       }
