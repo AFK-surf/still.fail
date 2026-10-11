@@ -456,10 +456,11 @@ test("a_text_card_is_on_the_page_and_its_row_whatever_its_agent_does", async () 
   const all = v.days.flatMap((d: J) => d.items);
   const of = (id: string) => all.find((r: J) => r.id === id);
   const k1 = of("k1");
-  assert.deepEqual([k1.stateText, k1.stateAbout, k1.tone], ["奏 · Stripe 的测试 key 是多少？", 5, "wait"]);
+  // A line that asks for a decision only says so: the chat leads to its post, not the row.
+  assert.deepEqual([k1.stateText, k1.stateAbout, k1.tone], ["奏 · Stripe 的测试 key 是多少？", undefined, "wait"]);
   assert.deepEqual([k1.decision.card.type, k1.card], ["text", undefined]);
   const k2 = of("k2");
-  assert.deepEqual([k2.stateText, k2.stateAbout, k2.tone], ["要你帮忙：要 key", 9, "wait"]);
+  assert.deepEqual([k2.stateText, k2.stateAbout, k2.tone], ["要你帮忙：要 key", undefined, "wait"]);
 });
 
 test("what_is_worth_a_look_about_a_session_is_its_account_its_quota_running_out_and_the_disk_filling_up", () => {

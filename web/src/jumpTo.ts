@@ -1,5 +1,6 @@
-// A message a chat is to show when it opens: a row's second line pressed, where the core says what its state is about
-// (`stateAbout`). The row asks for it here and opens the chat as it always does; the chat's list (Chat.tsx
+// A message a chat is to show: a row's second line pressed, where the core says what its state is about (`stateAbout`),
+// or what waits to be decided in the chat, pressed over its composer (Chat.tsx AsksBar). It is asked for here (a row
+// opens its chat as it always does); the chat's list (Chat.tsx
 // useMessageList, both screens) takes it once the message is in, scrolls it to its top and flashes it; or, opened from
 // a search (`words`), marks the words in it instead, until the chat is left.
 import { useSyncExternalStore } from "react";

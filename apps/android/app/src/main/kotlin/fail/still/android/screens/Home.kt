@@ -384,8 +384,8 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
     var held by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var bounds by remember { mutableStateOf(Rect.Zero) }
-    // Its state line (in the root, as `bounds`): tapped while it names a message (`stateAbout`), the chat opens there;
-    // not with something unread: it opens at the unread line, as any tap on the row (the message is read on from there).
+    // Its state line (in the root, as `bounds`): tapped while it names a message (`stateAbout`: not one that asks for a
+    // decision, which the chat itself leads to), the chat opens there; not with something unread: it opens at the unread line, as any tap on the row (the message is read on from there).
     var line by remember { mutableStateOf(Rect.Zero) }
     if (app.menu == null && menuOpen) menuOpen = false
     // Nothing left in it: archived with one tap on the 归档 at its start (as its menu's 归档), or swiped away to the left.

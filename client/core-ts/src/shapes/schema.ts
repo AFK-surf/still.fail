@@ -1222,7 +1222,7 @@ export const SHAPES: Record<string, Shape> = {
     ["settled", opt("bool"), { doc: "Nothing is left in it: each of its agents ended all_done, nothing at work, no card waiting for the viewer,\nnothing unread; where its station's archive review is on, only once the review recommended archiving it. Drawn faded,\nbelow the rest of its day (the core orders it so). Absent otherwise." }],
     ["archivable", opt("bool"), { doc: "With `settled`: offer to archive it with one tap (`chat.archive`). Absent otherwise." }],
     ["stateText", opt("String"), { doc: "Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a\ncard waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with\nno card waiting, or with nothing to say." }],
-    ["stateAbout", opt("i64"), { client: opt("I54"), doc: "The message `stateText` is about (a seq in this chat): the card, or the one the agent's state names. Opening the\nchat from the line may go to it. Absent when none." }],
+    ["stateAbout", opt("i64"), { client: opt("I54"), doc: "The message `stateText` is about (a seq in this chat): the one the agent's state names. Opening the chat from\nthe line may go to it. Absent when none, and for a line that asks for a decision (its chat leads to it: `ChatView.asks`)." }],
     ["tone", opt("String"), { doc: "Its mark, the most urgent first: alert (an agent failed), wait (a card waits, not dismissed by the viewer; or an\nagent needs them: need_help), busy (at work), done (something unread). Absent for none." }],
   ], { doc: "An item of the sidebar, as its station puts it together for the viewer, and where it is." }),
   RowWatch: struct([
@@ -1564,15 +1564,16 @@ export const SHAPES: Record<string, Shape> = {
     ["connection", opt("LinkShown"), { doc: "Its link while it is down or coming back, in words; absent while it is up (and from a core before it)." }],
     ["stationUpdate", opt("StationUpdateNotice"), { doc: "Station update availability or progress, including the local outbox while reconnecting." }],
     ["decision", opt("RowDecision"), { doc: "The card it waits on, as its row has it. Absent when there is none." }],
-    ["waiting", opt("ChatWaiting"), { doc: "What waits for the viewer in it (a card for them, or an agent needing them), for the bar above the\ncomposer. Absent when nothing does." }],
+    ["asks", vec("ChatAsk"), { default: true, doc: "What is asked in it that no one has decided and the viewer has not let go (a card, or an agent needing a\nperson), the oldest first, for the bar above the composer that leads to each. Empty when nothing is." }],
     ["archivable", opt("bool"), { doc: "Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap\n(`chat.archive`). Absent otherwise." }],
     ["archiveCheck", opt("ArchiveCheck"), { default: true, doc: "What the archive check made of it as it stands (the option picked, or a failure). Absent when none did." }],
   ], { doc: "An item's page: its chat (with the viewer's read position), or its agent before it has one." }),
-  ChatWaiting: struct([
+  ChatAsk: struct([
     ["seq", "u64", { doc: "The post it is about (`decision.dismiss`, and where the bar jumps to)." }],
     ["card", "bool", { doc: "A card: its options are on that post." }],
+    ["mine", "bool", { doc: "The viewer is the one to decide it." }],
     ["text", "String", { doc: "What is wanted, in a line: the agent's need as it said it, else the post's first line." }],
-  ], { doc: "What waits for the viewer in a chat (`ChatView.waiting`)." }),
+  ], { doc: "A decision waiting in a chat (`ChatView.asks`)." }),
   RuntimeModels: struct([
     ["runtime", "RuntimeKind"],
     ["models", vec("String")],

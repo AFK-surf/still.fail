@@ -256,6 +256,9 @@ class Host {
     internal val tiles = mutableMapOf<Long, Tile>()
     /** Shows the chat's message `seq` (in the list, at its top, flashing), if it is loaded: set by the list. */
     internal var showSaid: ((Long) -> Unit)? = null
+    /** Every card waiting to be decided in the chat shows in its list, its options there to be picked: said by the list;
+     * what the composer says of them (Composer.kt AsksNotice) is left out then. */
+    internal var asksShow by mutableStateOf(false)
     /** A message (seq) to show once the chat's list is in place (Screen.Chat.at), the pages before it brought in. */
     internal var goTo: Long? = null
     /** The words to mark in that message (opened from a search, Search.kt), instead of flashing it. */

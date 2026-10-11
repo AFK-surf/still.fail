@@ -1147,6 +1147,19 @@ data class ChatAgent (
 	val jobs: List<Job>
 )
 
+/// A decision waiting in a chat (`ChatView.asks`).
+@Serializable
+data class ChatAsk (
+	/// The post it is about (`decision.dismiss`, and where the bar jumps to).
+	val seq: ULong,
+	/// A card: its options are on that post.
+	val card: Boolean,
+	/// The viewer is the one to decide it.
+	val mine: Boolean,
+	/// What is wanted, in a line: the agent's need as it said it, else the post's first line.
+	val text: String
+)
+
 /// An agent of a sidebar row, with what its mark shows.
 @Serializable
 data class RowAgent (
@@ -1322,8 +1335,8 @@ data class ChatItem (
 	/// card waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with
 	/// no card waiting, or with nothing to say.
 	val stateText: String? = null,
-	/// The message `stateText` is about (a seq in this chat): the card, or the one the agent's state names. Opening the
-	/// chat from the line may go to it. Absent when none.
+	/// The message `stateText` is about (a seq in this chat): the one the agent's state names. Opening the chat from
+	/// the line may go to it. Absent when none, and for a line that asks for a decision (its chat leads to it: `ChatView.asks`).
 	val stateAbout: Long? = null,
 	/// Its mark, the most urgent first: alert (an agent failed), wait (a card waits, not dismissed by the viewer; or an
 	/// agent needs them: need_help), busy (at work), done (something unread). Absent for none.
@@ -1561,17 +1574,6 @@ data class StationUpdateNotice (
 	val dismissible: Boolean? = null
 )
 
-/// What waits for the viewer in a chat (`ChatView.waiting`).
-@Serializable
-data class ChatWaiting (
-	/// The post it is about (`decision.dismiss`, and where the bar jumps to).
-	val seq: ULong,
-	/// A card: its options are on that post.
-	val card: Boolean,
-	/// What is wanted, in a line: the agent's need as it said it, else the post's first line.
-	val text: String
-)
-
 /// An item's page: its chat (with the viewer's read position), or its agent before it has one.
 @Serializable
 data class ChatView (
@@ -1629,9 +1631,9 @@ data class ChatView (
 	val stationUpdate: StationUpdateNotice? = null,
 	/// The card it waits on, as its row has it. Absent when there is none.
 	val decision: RowDecision? = null,
-	/// What waits for the viewer in it (a card for them, or an agent needing them), for the bar above the
-	/// composer. Absent when nothing does.
-	val waiting: ChatWaiting? = null,
+	/// What is asked in it that no one has decided and the viewer has not let go (a card, or an agent needing a
+	/// person), the oldest first, for the bar above the composer that leads to each. Empty when nothing is.
+	val asks: List<ChatAsk>? = null,
 	/// Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
 	/// (`chat.archive`). Absent otherwise.
 	val archivable: Boolean? = null,

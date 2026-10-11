@@ -29,7 +29,7 @@ import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import type { ArchiveCheck, ChatSentElsewhere, ChatWaiting } from "./core/shapes.ts";
+import type { ArchiveCheck, ChatAsk, ChatSentElsewhere } from "./core/shapes.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
@@ -106,11 +106,11 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
     archive: () => latest.current.onArchive?.() }));
   useShortcut("chat.latest", rows.toEnd);
   const askedFile = useAskedFile(list, rows.messages, ownerOf);
-  // What an agent waits on the viewer for with no card to say it, right on top of the composer: kept the same element
-  // while it says the same (the dock compares what it is handed).
-  const waiting = chat.waiting && !chat.waiting.card && !chat.archived && id !== null ? chat.waiting : null;
-  const waitingBar = useMemo(() => waiting && id !== null ? <WaitingBar station={station.address} thread={id} waiting={waiting} /> : undefined,
-    [station.address, id, waiting?.seq, waiting?.text]); // eslint-disable-line react-hooks/exhaustive-deps
+  // What waits to be decided here, right on top of the composer, leading to each: kept the same element while it says
+  // the same (the dock compares what it is handed).
+  const asks = useAsksShown(list, chat);
+  const waitingBar = useMemo(() => asks.length > 0 && id !== null ? <AsksBar station={station.address} thread={id} asks={asks} /> : undefined,
+    [station.address, id, asksKey(asks)]); // eslint-disable-line react-hooks/exhaustive-deps
   // Selecting text inside one message offers to quote it.
   const quoting = useSelectionQuote(list, (q) => {
     const quote = { ...q, comment: "", id: `${Date.now()}` };
@@ -149,28 +149,71 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
 }
 
 /**
- * What an agent needs of the viewer in this chat with no card for it (the core's `waiting`), on top of the composer: all
- * of it, wrapped, leading to the post it is about; 忽略 lets it go (`decision.dismiss`). A card says so on its post already.
+ * What waits to be decided in this chat (the core's `asks`: a card no one has answered, or what an agent needs a
+ * person for), on top of the composer: the next of them in a line, wrapped; pressed, the chat goes to its post
+ * (jumpTo.ts), then to the one after it the next time, round again. One with no card to let it go on its post
+ * has 忽略 here (`decision.dismiss`).
  */
-export function WaitingBar({ station, thread, waiting }: { station: string; thread: number; waiting: ChatWaiting }) {
+export function AsksBar({ station, thread, asks }: { station: string; thread: number; asks: ChatAsk[] }) {
   const call = useCall();
   const act = useAct();
-  const [gone, setGone] = useState<number | null>(null);
-  if (gone === waiting.seq) return null;
-  const lead = waiting.card ? t("web-main.chat.waiting.card") : t("web-main.chat.waiting.lead");
+  const [gone, setGone] = useState<readonly number[]>([]);
+  const [turn, setTurn] = useState(0);
+  const left = asks.filter((a) => !gone.includes(a.seq));
+  const next = left[turn % Math.max(left.length, 1)];
+  if (!next) return null;
   // Pressed with the cursor in the box, it keeps it there: the box losing it would fold to its one line and slide this
   // down from under the pointer before the click lands.
   return (
     <div className={css.waitingBar} role="status" onMouseDown={(e) => e.preventDefault()}>
-      <button type="button" className={css.waitingText} title={t("web-main.chat.waiting.go")} onClick={() => jumpTo({ station, thread, seq: waiting.seq })}>
-        <Bell size={14} /><span><b>{lead}</b>{waiting.text && <span>{waiting.text}</span>}</span>
+      <button type="button" className={css.waitingText} title={t("web-main.chat.asks.go")} onClick={() => { jumpTo({ station, thread, seq: next.seq }); setTurn((n) => n + 1); }}>
+        <Bell size={14} /><span><b>{t("web-main.chat.asks.lead")}</b>{next.text && <span>{next.text}</span>}</span>
       </button>
-      <button type="button" className={css.waitingDismiss} onClick={() => {
-        setGone(waiting.seq);
-        act(call("decision.dismiss", { station, thread, seq: waiting.seq }).catch((e: unknown) => { setGone(null); throw e; }), t("web-main.decisions.dismissWhat"));
-      }}>{t("web-main.chat.waiting.dismiss")}</button>
+      {!next.card && <button type="button" className={css.waitingDismiss} onClick={() => {
+        setGone((all) => [...all, next.seq]);
+        act(call("decision.dismiss", { station, thread, seq: next.seq }).catch((e: unknown) => { setGone((all) => all.filter((seq) => seq !== next.seq)); throw e; }), t("web-main.decisions.dismissWhat"));
+      }}>{t("web-main.chat.waiting.dismiss")}</button>}
     </div>
   );
+}
+
+const NO_ASKS: ChatAsk[] = [];
+
+/** What a bar of asks says, in a word: the same while it does. */
+export function asksKey(asks: ChatAsk[] | null | undefined): string {
+  return (asks ?? NO_ASKS).map((a) => `${a.seq}:${a.card}:${a.text}`).join("\n");
+}
+
+/**
+ * The asks a chat's bar is to show (AsksBar), both screens: all of them (the chat's `asks`; none in an archived one),
+ * and none at all while each is a card whose post shows in the pane, its options there to be picked. The pane says
+ * which posts do not show (out of it, or under the composer); one outside the window of messages does not.
+ */
+export function useAsksShown(list: RefObject<HTMLElement | null>, chat: ChatView): ChatAsk[] {
+  const asks = chat.archived || !chat.thread ? NO_ASKS : chat.asks ?? NO_ASKS;
+  const tsOf = (a: ChatAsk) => chat.messages.find((m) => m.seq === a.seq)?.ts;
+  const cards = asks.filter((a) => a.card).flatMap((a) => tsOf(a) ?? []).join(" ");
+  const [away, setAway] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    const pane = list.current;
+    if (!pane || cards === "") return;
+    const out = new Set<string>();
+    const seen = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        const ts = (e.target as HTMLElement).dataset.ts ?? "";
+        if (e.isIntersecting) out.delete(ts);
+        else out.add(ts);
+      }
+      setAway(new Set(out));
+    }, { root: pane, rootMargin: `0px 0px -${parseFloat(getComputedStyle(pane).scrollPaddingBottom) || 0}px 0px` });
+    for (const ts of cards.split(" ")) {
+      const post = pane.querySelector(`.${conversationCss.msg}[data-ts="${CSS.escape(ts)}"]`);
+      if (post) seen.observe(post);
+    }
+    return () => { seen.disconnect(); setAway(new Set()); };
+  }, [list, cards, chat.messages.length]);
+  const shows = (a: ChatAsk) => { const ts = tsOf(a); return a.card && ts !== undefined && !away.has(ts); };
+  return asks.length > 0 && asks.every(shows) ? NO_ASKS : asks;
 }
 
 /** The session of a chat that keeps a file: the agent whose workspace holds it, else the first (what is sent goes there). */
@@ -1429,7 +1472,7 @@ export interface ComposerProps {
   onSending?: (text: string | null) => void;
   /** Choices shown in the toolbar, between attach and send (a new chat's station, model and effort). */
   toolbar?: ReactNode;
-  /** Said right on top of the box (what an agent waits on the viewer for: WaitingBar). */
+  /** Said right on top of the box (what waits to be decided in the chat: AsksBar). */
   above?: ReactNode;
   placeholder?: string;
   /** While true (a new chat being made) nothing can be sent. */

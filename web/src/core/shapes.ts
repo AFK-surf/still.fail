@@ -1127,6 +1127,18 @@ export interface ChatAgent {
 	jobs: Job[];
 }
 
+/** A decision waiting in a chat (`ChatView.asks`). */
+export interface ChatAsk {
+	/** The post it is about (`decision.dismiss`, and where the bar jumps to). */
+	seq: number;
+	/** A card: its options are on that post. */
+	card: boolean;
+	/** The viewer is the one to decide it. */
+	mine: boolean;
+	/** What is wanted, in a line: the agent's need as it said it, else the post's first line. */
+	text: string;
+}
+
 /** An agent of a sidebar row, with what its mark shows. */
 export interface RowAgent {
 	key: string;
@@ -1311,8 +1323,8 @@ export interface ChatItem {
 	 */
 	stateText?: string;
 	/**
-	 * The message `stateText` is about (a seq in this chat): the card, or the one the agent's state names. Opening the
-	 * chat from the line may go to it. Absent when none.
+	 * The message `stateText` is about (a seq in this chat): the one the agent's state names. Opening the chat from
+	 * the line may go to it. Absent when none, and for a line that asks for a decision (its chat leads to it: `ChatView.asks`).
 	 */
 	stateAbout?: number;
 	/**
@@ -1560,16 +1572,6 @@ export interface StationUpdateNotice {
 	dismissible?: boolean;
 }
 
-/** What waits for the viewer in a chat (`ChatView.waiting`). */
-export interface ChatWaiting {
-	/** The post it is about (`decision.dismiss`, and where the bar jumps to). */
-	seq: number;
-	/** A card: its options are on that post. */
-	card: boolean;
-	/** What is wanted, in a line: the agent's need as it said it, else the post's first line. */
-	text: string;
-}
-
 /** An item's page: its chat (with the viewer's read position), or its agent before it has one. */
 export interface ChatView {
 	/** Archived chats must be restored before composing another message. */
@@ -1641,10 +1643,10 @@ export interface ChatView {
 	/** The card it waits on, as its row has it. Absent when there is none. */
 	decision?: RowDecision;
 	/**
-	 * What waits for the viewer in it (a card for them, or an agent needing them), for the bar above the
-	 * composer. Absent when nothing does.
+	 * What is asked in it that no one has decided and the viewer has not let go (a card, or an agent needing a
+	 * person), the oldest first, for the bar above the composer that leads to each. Empty when nothing is.
 	 */
-	waiting?: ChatWaiting;
+	asks?: ChatAsk[];
 	/**
 	 * Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
 	 * (`chat.archive`). Absent otherwise.

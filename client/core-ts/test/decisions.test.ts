@@ -230,9 +230,17 @@ test("the_page_puts_those_set_aside_last", () => {
 });
 
 test("what_waits_in_a_chat_says_the_agents_need_else_its_posts_first_line", () => {
+  const me = { id: "u1", email: "me@x.com" };
   const need = { seq: 9, message: { text: "测试版发好了\n你滑一下看看" } };
-  const row = { agents: [{ key: "k", lastTurn: { declared: "block", need: " 要你在手机上确认滑动 " } }], need };
-  assert.deepEqual(d.waitingOf(row, need), { seq: 9, card: false, text: "要你在手机上确认滑动" });
-  const card = { seq: 4, card: { type: "options", options: [{ label: "A" }] }, message: { text: "选哪个方案？\n细节" } };
-  assert.deepEqual(d.waitingOf({ agents: [{ key: "k" }], card }, card), { seq: 4, card: true, text: "选哪个方案？" });
+  const row = { creator: me, agents: [{ key: "k", lastTurn: { declared: "block", need: " 要你在手机上确认滑动 " } }], need };
+  assert.deepEqual(d.undecided(row).map((a: J) => d.askOf(row, a, me)), [{ seq: 9, card: false, mine: true, text: "要你在手机上确认滑动" }]);
+  // A card, whoever is to decide it.
+  const card = { seq: 4, card: { type: "options", options: [{ label: "A" }], assignee: "other@x.com" }, message: { text: "选哪个方案？\n细节" } };
+  const carded = { creator: me, agents: [{ key: "k" }], card };
+  const asks = d.undecided(carded).map((a: J) => d.askOf(carded, a, me));
+  assert.deepEqual(asks, [{ seq: 4, card: true, mine: false, text: "选哪个方案？" }]);
+  shape("ChatAsk", asks[0]);
+  // None once the viewer let it go, or with nothing asked.
+  assert.deepEqual(d.undecided({ creator: me, card: { ...card, dismissed: true } }), []);
+  assert.deepEqual(d.undecided({ creator: me }), []);
 });

@@ -299,12 +299,13 @@ export function stateAbout(agent: J, thread: number | null): number | null {
   return u64(about.seq) ?? null;
 }
 
-/// Where a chat stands, in words, and the message that is about.
+/// Where a chat stands, in words, and the message that is about. A line that asks for a decision (奏 · …, 要你帮忙：…)
+/// is about none: the line only says so, and the chat leads to what it asks (`ChatView.asks`).
 export function rowStateLine(row: J): [string, number | null] | null {
   const thread = u64(get(row, "thread")) ?? null;
   const p = decisions.pending(row);
   const card: [string, number | null] | null = p
-    ? [str(p.text) ?? decisions.line(str(get(p.message, "text")) ?? ""), u64(p.seq) ?? null]
+    ? [str(p.text) ?? decisions.line(str(get(p.message, "text")) ?? ""), null]
     : null;
   const agents: J[] = arr(get(row, "agents")) ?? [];
   const textOf = (a: J): string | null => str(get(a, "statusText")) ?? null;
@@ -315,7 +316,7 @@ export function rowStateLine(row: J): [string, number | null] | null {
       const need = nonEmpty(get(get(blocked, "lastTurn"), "need")) !== null;
       if (card && !need) return card;
       const text = textOf(blocked);
-      return text === null ? null : [text, stateAbout(blocked, thread) ?? card?.[1] ?? null];
+      return text === null ? null : [text, null];
     }
     const failed = agents.find((a) => ["failed", "unexpected", "aborted"].includes(shownStatus(a)));
     if (failed) {

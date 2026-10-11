@@ -620,7 +620,7 @@ export const archiveCheck = style({
   selectors: { "&[data-failed]": { color: vars.red } },
 });
 
-/** What an agent needs of the viewer (Chat.tsx WaitingBar): on top of the composer (composerAbove), all of it, wrapped. */
+/** What waits to be decided in the chat (Chat.tsx AsksBar): on top of the composer (composerAbove), all of it, wrapped. */
 export const waitingBar = style({
   display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 6px 6px 12px", borderRadius: "10px",
   background: vars.amberBg, color: vars.text, fontSize: vars.textUi, lineHeight: vars.leadingUi,

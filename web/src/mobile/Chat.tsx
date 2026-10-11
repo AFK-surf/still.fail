@@ -13,7 +13,7 @@ import { OpenFile } from "../Viz.tsx";
 import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
-import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
+import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, Copy, External, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
@@ -409,6 +409,7 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
 function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
   const api = useApi();
   const keeper = view.agents[0]?.session.key ?? null;
+  const asks = useAsksShown(list, view);
   const warmed = useRef(0);
   const send = (draft: Draft) => {
     if (view.offline || view.archived) return;
@@ -425,7 +426,7 @@ function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => vo
   };
   useLayoutEffect(() => use({
     station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : t("web-mobile.chat.placeholder"), offline: view.offline, archived: !!view.archived, send,
-    waiting: view.waiting && !view.waiting.card && !view.archived && view.thread ? { thread: view.thread.id, waiting: view.waiting } : null,
+    asks: asks.length > 0 && view.thread ? { thread: view.thread.id, asks } : null,
     restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {
