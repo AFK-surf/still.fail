@@ -140,6 +140,12 @@ test("a_row_with_a_card_says_so_and_is_marked_wait_until_dismissed", () => {
   d.presentRow(row);
   assert.equal(row.tone, "done");
   assert.equal(d.tone({ state: "block" }), "wait");
+  // Let go by the viewer (忽略), a card or a need: no mark for its agent asking, and no state of it on the row.
+  assert.equal(d.tone({ state: "block", decision: decision(4, true) }), null);
+  assert.equal(d.tone({ state: "block", unread: true, need: { seq: 9, message: { seq: 9, text: "要 key" }, dismissed: true } }), "done");
+  row = { state: "block", need: { seq: 9, message: { seq: 9, text: "要 key" }, dismissed: true } };
+  d.presentRow(row);
+  assert.deepEqual([row.state, row.tone], [undefined, undefined]);
   assert.equal(d.tone({ state: "failed", decision: decision(4, false) }), "alert");
   assert.equal(d.tone({ state: "run", decision: decision(4, false) }), "wait");
   assert.equal(d.tone({ state: "run" }), "busy");

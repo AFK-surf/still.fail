@@ -311,7 +311,8 @@ export function rowStateLine(row: J): [string, number | null] | null {
   const textOf = (a: J): string | null => str(get(a, "statusText")) ?? null;
   const atWork = agents.some((a) => shownStatus(a) === "queued" || (shownStatus(a) === "running" && waiting(a) === null));
   if (!atWork) {
-    const blocked = agents.find((a) => shownStatus(a) === "block");
+    // What it asks let go by the viewer (忽略): its agent asking says nothing on their row.
+    const blocked = decisions.letGo(row) ? undefined : agents.find((a) => shownStatus(a) === "block");
     if (blocked) {
       const need = nonEmpty(get(get(blocked, "lastTurn"), "need")) !== null;
       if (card && !need) return card;

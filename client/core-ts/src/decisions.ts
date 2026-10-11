@@ -213,11 +213,18 @@ export function waits(row: J): boolean {
   return pending(row) !== null;
 }
 
+/// The viewer let go of what the chat asks (its card, or what its agent needs a person for): nothing in it waits for
+/// them, though its agent still stands asking.
+export function letGo(row: J): boolean {
+  const d = asked(row);
+  return d !== null && dismissed(d);
+}
+
 /// A row's mark, the most urgent first.
 export function tone(row: J): string | null {
   const state = str(get(row, "state"));
   if (state === "failed") return "alert";
-  if (waits(row) || state === "block") return "wait";
+  if (waits(row) || (state === "block" && !letGo(row))) return "wait";
   if (state === "run") return "busy";
   return get(row, "unread") === true ? "done" : null;
 }
@@ -233,6 +240,8 @@ export function shown(card: J): J {
 
 export function presentRow(row: J): void {
   const card = ofRow(row);
+  // Let go by the viewer: its agent asking is not its state for them (no mark, no 要你帮忙).
+  if (isObject(row) && (row as J).state === "block" && letGo(row)) delete (row as J).state;
   if (isObject(row)) {
     delete (row as J).card;
     delete (row as J).decision;

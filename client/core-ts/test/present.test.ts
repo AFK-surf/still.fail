@@ -286,8 +286,14 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   assert.equal(p.rowStateText(asked), "出问题：登录失效");
   asked.agents = [agent({ declared: "block", ending: "need_decision", outcome: "completed" }, "warm")];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
+  // Let go by the viewer: the row says nothing of it, its agent asking still.
   asked.card.dismissed = true;
-  assert.equal(p.rowStateText(asked), "要你帮忙");
+  assert.equal(p.rowStateText(asked), null);
+  const needing = row([helped], false);
+  needing.need = { seq: 9, message: { seq: 9, text: "要 key" }, before: [] };
+  assert.equal(p.rowStateText(needing), "要你帮忙：要 key");
+  needing.need.dismissed = true;
+  assert.equal(p.rowStateText(needing), null);
   asked.agents = [done];
   assert.ok(p.settled(asked));
   const about = (a: J) => agent({ declared: "final", ending: "all_done", need: "已合进 main", about: a, outcome: "completed" }, "warm");
