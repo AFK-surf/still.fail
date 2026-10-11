@@ -851,7 +851,7 @@ private fun ArchiveNotice(offline: Boolean, restore: suspend () -> Unit) {
 
 /**
  * What waits to be decided in the chat (the core's `asks`: a card no one has answered, or what an agent needs a person
- * for), over the field: the next of them in a line; tapped, the list goes to its post (Host.showSaid), then to the one
+ * for), over the field: the next of them, all of it, wrapped; tapped, the list goes to its post (Host.showSaid), then to the one
  * after it the next time, round again. One with no card to let it go on its post has 忽略 here. Web Chat.tsx AsksBar.
  */
 @Composable
@@ -871,7 +871,7 @@ private fun AsksNotice(asks: List<ChatAsk>, host: Host, dismiss: (seq: Long, fai
                     pushStyle(SpanStyle(fontWeight = FontWeight.SemiBold)); append(t("android-chat.asks.lead")); pop()
                     if (next.text.isNotEmpty()) append("  ${next.text}")
                 },
-                fontSize = 13.sp, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                fontSize = 13.sp, lineHeight = 19.sp, color = C.ink,
             )
         }
         if (!next.card) Text(t("android-chat.asks.dismiss"), fontSize = 13.sp, color = C.muted, modifier = Modifier.clickable {
