@@ -603,6 +603,214 @@ function StationRobot(props: IconProps) {
   return <Svg {...props}><rect x="4" y="7" width="16" height="14" rx="3" /><path d="M12 7V3 M10 3H14 M1.5 12V16 M22.5 12V16 M9 17H15" /><circle cx="8.5" cy="12" r="1.25" fill="currentColor" stroke="none" /><circle cx="15.5" cy="12" r="1.25" fill="currentColor" stroke="none" /></Svg>;
 }
 
+function StationKeyboard(props: IconProps) {
+  return <Svg {...props}><rect x="2.5" y="6" width="19" height="12" rx="2" /><path d="M6 10H7 M11.5 10H12.5 M17 10H18 M7 14H17" /></Svg>;
+}
+
+function StationMouse(props: IconProps) {
+  return <Svg {...props}><rect x="6" y="2.5" width="12" height="19" rx="6" /><path d="M12 6V10" /></Svg>;
+}
+
+function StationGamepad(props: IconProps) {
+  return <Svg {...props}><path d="M8 6H16Q19 6 20 10L21.5 17Q22 21 18.5 19L15 16H9L5.5 19Q2 21 2.5 17L4 10Q5 6 8 6Z M6 11H10 M8 9V13" /><circle cx="16" cy="10" r="1" fill="currentColor" stroke="none" /><circle cx="18" cy="13" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationHeadphones(props: IconProps) {
+  return <Svg {...props}><path d="M3.5 14V11Q3.5 3 12 3Q20.5 3 20.5 11V14" /><rect x="3.5" y="12" width="4.5" height="8" rx="2" /><rect x="16" y="12" width="4.5" height="8" rx="2" /></Svg>;
+}
+
+function StationCamera(props: IconProps) {
+  return <Svg {...props}><path d="M3 7H7L9 4H15L17 7H21V20H3Z" /><circle cx="12" cy="13" r="4" /></Svg>;
+}
+
+function StationPrinter(props: IconProps) {
+  return <Svg {...props}><path d="M7 8V3H17V8 M7 17H3V8H21V17H17 M7 14H17V21H7Z" /><circle cx="17.5" cy="11" r="0.9" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationTv(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="7" width="18" height="13" rx="2.5" /><path d="M8 2.5L12 7L16 2.5" /></Svg>;
+}
+
+function StationWatch(props: IconProps) {
+  return <Svg {...props}><path d="M8 7L9 2.5H15L16 7 M8 17L9 21.5H15L16 17" /><circle cx="12" cy="12" r="6" /><path d="M12 9V12H15" /></Svg>;
+}
+
+function StationTablet(props: IconProps) {
+  return <Svg {...props}><rect x="2.5" y="4.5" width="19" height="15" rx="2" /><path d="M6 8V16" /></Svg>;
+}
+
+function StationWifi(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 7.5Q12 -0.5 21.5 7.5 M6 12Q12 6.5 18 12 M9.5 16Q12 13.5 14.5 16" /><circle cx="12" cy="20" r="1.2" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationBattery(props: IconProps) {
+  return <Svg {...props}><rect x="2.5" y="6" width="17" height="12" rx="2" /><path d="M22 10V14 M6.5 10V14 M10 10V14" /></Svg>;
+}
+
+function StationPlug(props: IconProps) {
+  return <Svg {...props}><path d="M6 8H18V11Q18 16 12 16Q6 16 6 11Z M8 8V3 M16 8V3 M12 16V19Q12 21 9 21H7" /></Svg>;
+}
+
+function StationFloppy(props: IconProps) {
+  return <Svg {...props}><path d="M3 3H17L21 7V21H3Z M7 3V9H16V3 M7 21V14H17V21" /></Svg>;
+}
+
+function StationFolder(props: IconProps) {
+  return <Svg {...props}><path d="M3 6Q3 4 5 4H9L12 7H19Q21 7 21 9V18Q21 20 19 20H5Q3 20 3 18Z" /></Svg>;
+}
+
+function StationDocument(props: IconProps) {
+  return <Svg {...props}><path d="M5 3H14L19 8V21H5Z M14 3V8H19 M9 12H15 M9 16H15" /></Svg>;
+}
+
+function StationInbox(props: IconProps) {
+  return <Svg {...props}><path d="M3 13L6 5H18L21 13V20H3Z M3 13H8L10 16H14L16 13H21" /></Svg>;
+}
+
+function StationMail(props: IconProps) {
+  return <Svg {...props}><rect x="2.5" y="5" width="19" height="14" rx="2" /><path d="M3 6L12 13L21 6" /></Svg>;
+}
+
+function StationCalendar(props: IconProps) {
+  return <Svg {...props}><rect x="3.5" y="5" width="17" height="16" rx="2" /><path d="M8 2.5V7 M16 2.5V7 M3.5 10H20.5 M8 14H9 M14 14H16 M8 17.5H9" /></Svg>;
+}
+
+function StationClock(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9" /><path d="M12 6V12L16 15" /></Svg>;
+}
+
+function StationBookmark(props: IconProps) {
+  return <Svg {...props}><path d="M6 3H18V21L12 17L6 21Z" /></Svg>;
+}
+
+function StationTag(props: IconProps) {
+  return <Svg {...props}><path d="M3 3H12L21 12L12 21L3 12Z" /><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationFlag(props: IconProps) {
+  return <Svg {...props}><path d="M5 21V3 M5 4Q9 1 13 4Q17 7 21 4V14Q17 17 13 14Q9 11 5 14" /></Svg>;
+}
+
+function StationPin(props: IconProps) {
+  return <Svg {...props}><path d="M8 3H16 M9 3V9L6 13V15H18V13L15 9V3 M12 15V22" /></Svg>;
+}
+
+function StationLink(props: IconProps) {
+  return <Svg {...props}><path d="M9 15L15 9 M8 12L5.5 14.5A3.5 3.5 0 0 0 10.5 19.5L13 17 M11 7L13.5 4.5A3.5 3.5 0 0 1 18.5 9.5L16 12" /></Svg>;
+}
+
+function StationMagnifier(props: IconProps) {
+  return <Svg {...props}><circle cx="10" cy="10" r="7" /><path d="M15 15L21 21" /></Svg>;
+}
+
+function StationBulb(props: IconProps) {
+  return <Svg {...props}><path d="M8 17V15Q3 10 6 6Q8 2 12 2.5Q16 2 18 6Q21 10 16 15V17Z M9 21H15" /></Svg>;
+}
+
+function StationWrench(props: IconProps) {
+  return <Svg {...props}><path d="M14 3Q9 3 9 8L3.5 16.5Q2 19 4 20.5Q6 22 8 19.5L14 11Q21 12 21 5L17 8L14 6Z" /></Svg>;
+}
+
+function StationScrewdriver(props: IconProps) {
+  return <Svg {...props}><path d="M14 8L7 15 M14 8L16 9L21 4L20 2.5L15 6Z M6 13L11 18L7.5 21.5Q6 22.5 4 20L2.5 18.5Q1.5 17 3 16Z" /></Svg>;
+}
+
+function StationRuler(props: IconProps) {
+  return <Svg {...props}><path d="M3 15L15 3L21 9L9 21Z M7 11L9.5 13.5 M11 7L13.5 9.5 M15 15L13 13" /></Svg>;
+}
+
+function StationPencil(props: IconProps) {
+  return <Svg {...props}><path d="M3 21L4.5 14.5L16 3Q17.5 1.5 20 4Q22 6 20.5 7.5L9 19Z M14 5L19 10 M4.5 14.5L9 19" /></Svg>;
+}
+
+function StationBrush(props: IconProps) {
+  return <Svg {...props}><path d="M10 13L17 3Q19 1 21 3Q22 4 20 6L13 16 M10 13Q5 12 5 17Q5 20 2.5 21Q13 23 13 16Z" /></Svg>;
+}
+
+function StationPalette(props: IconProps) {
+  return <Svg {...props}><path d="M21 10Q21 3 12 3Q3 3 3 12Q3 21 12 21Q16 21 15 18Q13 14 17 14H18Q21 14 21 10Z" /><circle cx="7" cy="10" r="1.2" fill="currentColor" stroke="none" /><circle cx="11" cy="6.5" r="1.2" fill="currentColor" stroke="none" /><circle cx="16" cy="8" r="1.2" fill="currentColor" stroke="none" /><circle cx="7" cy="15.5" r="1.2" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationScissors(props: IconProps) {
+  return <Svg {...props}><circle cx="6" cy="17" r="3.5" /><circle cx="18" cy="17" r="3.5" /><path d="M8 14L19 3 M16 14L5 3" /></Svg>;
+}
+
+function StationPaperclip(props: IconProps) {
+  return <Svg {...props}><path d="M9 12L14.5 6.5Q17 4 19 6Q21 8 18.5 10.5L10 19Q6.5 22.5 3.5 19.5Q0.5 16.5 4 13L13.5 3.5Q16.5 0.5 19.5 3.5 M7 14L14 7" /></Svg>;
+}
+
+function StationCompass(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9" /><path d="M16 7L13.5 14L8 17L10.5 10Z" /></Svg>;
+}
+
+function StationMap(props: IconProps) {
+  return <Svg {...props}><path d="M3 5L9 3L15 6L21 4V19L15 21L9 18L3 20Z M9 3V18 M15 6V21" /></Svg>;
+}
+
+function StationGlobe(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9" /><path d="M3 12H21 M12 3C6 8 6 16 12 21C18 16 18 8 12 3Z" /></Svg>;
+}
+
+function StationTarget(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationTrophy(props: IconProps) {
+  return <Svg {...props}><path d="M7 3H17V10Q17 15 12 15Q7 15 7 10Z M7 5H3V8Q3 12 7 12 M17 5H21V8Q21 12 17 12 M12 15V21 M7 21H17" /></Svg>;
+}
+
+function StationMedal(props: IconProps) {
+  return <Svg {...props}><path d="M7 3H3L8 12 M17 3H21L16 12 M7 3L12 9L17 3" /><circle cx="12" cy="15.5" r="6" /><circle cx="12" cy="15.5" r="1.3" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationCrown(props: IconProps) {
+  return <Svg {...props}><path d="M3 6L8 10L12 3L16 10L21 6L19 20H5Z M5 16H19" /></Svg>;
+}
+
+function StationGift(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="8" width="18" height="5" rx="1" /><path d="M5 13V21H19V13 M12 8V21 M12 8Q3 8 6 3Q9 0 12 8Q21 8 18 3Q15 0 12 8" /></Svg>;
+}
+
+function StationPuzzle(props: IconProps) {
+  return <Svg {...props}><path d="M3 8H8Q6 2.5 10 2.5Q14 2.5 12 8H18V12Q23 10 23 14Q23 18 18 16V21H3Z" /></Svg>;
+}
+
+function StationCalculator(props: IconProps) {
+  return <Svg {...props}><rect x="5" y="2.5" width="14" height="19" rx="2" /><path d="M8 7H16 M8 12H9 M14 12H15 M8 17H9 M14 17H15" /></Svg>;
+}
+
+function StationChart(props: IconProps) {
+  return <Svg {...props}><path d="M3 3V21H21 M7 17V12 M12 17V7 M17 17V10" /></Svg>;
+}
+
+function StationCube(props: IconProps) {
+  return <Svg {...props}><path d="M3 8H16V21H3Z M3 8L8 3H21V16L16 21 M16 8L21 3" /></Svg>;
+}
+
+function StationAtom(props: IconProps) {
+  return <Svg {...props}><path d="M4 4C0 8 16 24 20 20C24 16 8 0 4 4Z M20 4C16 0 0 16 4 20C8 24 24 8 20 4Z" /><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDna(props: IconProps) {
+  return <Svg {...props}><path d="M6 2.5C6 12 18 12 18 21.5 M18 2.5C18 12 6 12 6 21.5 M6.5 5H17.5 M9 9H15 M9 15H15 M6.5 19H17.5" /></Svg>;
+}
+
+function StationMicroscope(props: IconProps) {
+  return <Svg {...props}><path d="M7 3L11 2L15 11L11 13Z M13 6Q21 6 21 13Q21 20 14 20 M4 21H21 M8 21V17 M4 17H13" /></Svg>;
+}
+
+function StationTelescope(props: IconProps) {
+  return <Svg {...props}><path d="M8 8L18 3L21 10L11 13Z M8 8L4 10L6 15L11 13 M4 10L2 11 M6 15L4 16 M13 13V16 M13 16L8 21 M13 16L18 21" /></Svg>;
+}
+
+function StationSatellite(props: IconProps) {
+  return <Svg {...props}><path d="M9 10L14 5L19 10L14 15Z M3 3L7 2L10 5L6 9Z M15 18L19 14L22 18L21 22Z M8 7L10 9 M15 14L17 16 M9 15L6 18 M3 14Q2 22 10 21" /></Svg>;
+}
+
+function StationAntenna(props: IconProps) {
+  return <Svg {...props}><path d="M12 10L7 21H17Z M9 17H15 M5.5 4Q0 9 5.5 14 M18.5 4Q24 9 18.5 14 M8 6.5Q5.5 9 8 11.5 M16 6.5Q18.5 9 16 11.5" /><circle cx="12" cy="8" r="1.3" fill="currentColor" stroke="none" /></Svg>;
+}
+
 function StationHome(props: IconProps) {
   return <Svg {...props}><path d="M2.5 11L11 3.5Q12 2.5 13 3.5L21.5 11 M5 9V20H19V9 M10 20V14H14V20 M17 6V3" /></Svg>;
 }
@@ -783,6 +991,606 @@ function StationTurtle(props: IconProps) {
   return <Svg {...props}><path d="M3 15Q3 6 10 6Q17 6 17 15Z M17 13V11Q17 8 19.5 8Q22 8 22 11Q22 15 17 15 M6 15L5 19H8 M14 15L15 19H18 M8 6.5L11 10L10 15 M11 10H15" /></Svg>;
 }
 
+function StationDog(props: IconProps) {
+  return <Svg {...props}><path d="M7 6Q12 3 17 6L18 16Q18 21 12 21Q6 21 6 16Z M7 6Q3 4 2.5 9L3 15Q3.5 17 6 14 M17 6Q21 4 21.5 9L21 15Q20.5 17 18 14" /><circle cx="9" cy="11" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="11" r="1" fill="currentColor" stroke="none" /><path d="M10 15H14L12 17Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationPanda(props: IconProps) {
+  return <Svg {...props}><path d="M5.5 9Q2 8 3 4.5Q4 2 7.5 4L9 6 M15 6L16.5 4Q20 2 21 4.5Q22 8 18.5 9" fill="currentColor" stroke="none" /><path d="M20 13Q21 21 12 21Q3 21 4 13Q4 6 12 6Q20 6 20 13Z" /><path d="M6.5 12Q8 9.5 10 11Q12 13 9 15Q6 16 6.5 12Z M17.5 12Q16 9.5 14 11Q12 13 15 15Q18 16 17.5 12Z" fill="currentColor" stroke="none" /><path d="M11 18H13" /></Svg>;
+}
+
+function StationFrog(props: IconProps) {
+  return <Svg {...props}><path d="M4 11Q1.5 5 6 4Q10 3 10 8H14Q14 3 18 4Q22.5 5 20 11Q23 20 12 20Q1 20 4 11Z M7 14Q12 18 17 14" /><circle cx="6.5" cy="7.5" r="1" fill="currentColor" stroke="none" /><circle cx="17.5" cy="7.5" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationOwl(props: IconProps) {
+  return <Svg {...props}><path d="M4 3L8 6Q12 4 16 6L20 3V14Q20 21 12 21Q4 21 4 14Z" /><circle cx="8" cy="10" r="3" /><circle cx="16" cy="10" r="3" /><path d="M10.5 15L12 17L13.5 15" fill="currentColor" stroke="none" /><circle cx="8" cy="10" r="0.75" fill="currentColor" stroke="none" /><circle cx="16" cy="10" r="0.75" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationBee(props: IconProps) {
+  return <Svg {...props}><path d="M9 9Q3 9 4 4.5Q5 1 9 4Q11 6 12 9Q13 6 15 4Q19 1 20 4.5Q21 9 15 9" /><path d="M6 13Q6 9 12 9Q18 9 18 13V15Q18 19 12 21Q6 19 6 15Z M6 13H18 M7 17H17" /></Svg>;
+}
+
+function StationButterfly(props: IconProps) {
+  return <Svg {...props}><path d="M12 9Q7 1 3.5 4Q0 7 6 13Q2 14 4 18Q7 23 12 15Q17 23 20 18Q22 14 18 13Q24 7 20.5 4Q17 1 12 9Z M12 8V18 M10 3L12 6L14 3" /></Svg>;
+}
+
+function StationBear(props: IconProps) {
+  return <Svg {...props}><path d="M5 10Q1 7 4 4Q7 1 9 6 M15 6Q17 1 20 4Q23 7 19 10 M20 14Q20 21 12 21Q4 21 4 14Q4 6 12 6Q20 6 20 14Z" /><circle cx="8.5" cy="11" r="1" fill="currentColor" stroke="none" /><circle cx="15.5" cy="11" r="1" fill="currentColor" stroke="none" /><path d="M8 17Q8 14 12 14Q16 14 16 17Q16 20 12 20Q8 20 8 17Z" /><path d="M11 16H13" fill="currentColor" stroke="none" /><circle cx="12" cy="16" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDuck(props: IconProps) {
+  return <Svg {...props}><path d="M2 12Q6 15 10 12V8Q10 4 14 4Q18 4 18 8H22V11H18Q20 20 11 20Q2 20 2 12Z M7 16Q11 18 14 15" /><circle cx="14" cy="8" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDragon(props: IconProps) {
+  return <Svg {...props}><path d="M6 21L7 16L3 12L6 10L4 5L10 6L13 2L14 7L19 9L21 14L17 17H12L13 21 M7 16L12 13 M16 13H20" /><circle cx="14" cy="10.5" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDinosaur(props: IconProps) {
+  return <Svg {...props}><path d="M2 15Q7 17 11 11V6Q11 3 15 3H20V9H16V14L19 16 M16 14Q16 18 13 19V21H10V18Q4 19 2 15Z" /><circle cx="16" cy="6" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationBird(props: IconProps) {
+  return <Svg {...props}><path d="M3 8L8 11Q7 4 13 4Q17 4 18 8L21 10L18 12Q18 18 11 18Q5 18 3 8Z M8 11Q9 15 13 12 M10 18L8 21 M14 18V21" /><circle cx="13.5" cy="8" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationElephant(props: IconProps) {
+  return <Svg {...props}><path d="M6 7Q3 7 3 11V18H6V15H12V18H15V8Q15 4 18 4Q21 4 21 8V17Q21 21 18 19 M15 7Q10 2 6 7V12Q10 16 13 11" /><circle cx="18.5" cy="8" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationSnake(props: IconProps) {
+  return <Svg {...props}><path d="M4 19Q4 21 8 21H16Q20 21 20 17Q20 13 16 13H10Q6 13 6 9V7Q6 3 10 3H13Q16 3 16 6Q16 9 12 9H10 M10 17H15 M16 6H21L22 4 M21 6L22 8" /><circle cx="11" cy="5.5" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationSpider(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="7" r="2.5" /><path d="M16 14Q16 19 12 20Q8 19 8 14Q8 10 12 10Q16 10 16 14Z M9 10L5 7V3 M15 10L19 7V3 M8 12L2 9 M16 12L22 9 M8 15L2 16 M16 15L22 16 M9 18L5 20V22 M15 18L19 20V22" /></Svg>;
+}
+
+function StationSheep(props: IconProps) {
+  return <Svg {...props}><path d="M6 17Q2 17 2 13Q0 10 4 8Q3 4 7 5Q9 1 12 5Q16 3 17 7 M6 17H14 M6 17V21 M13 17V21" /><path d="M16 7Q20 5 21 9V14Q21 18 17 17Q15 16 15 12V9L12 9" /><circle cx="18" cy="10" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationPig(props: IconProps) {
+  return <Svg {...props}><path d="M5 10L3 3L9 6Q12 5 15 6L21 3L19 10Q23 21 12 21Q1 21 5 10Z" /><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none" /><circle cx="16" cy="11" r="1" fill="currentColor" stroke="none" /><path d="M8 16Q8 13.5 12 13.5Q16 13.5 16 16Q16 18.5 12 18.5Q8 18.5 8 16Z" /><circle cx="10.5" cy="16" r="0.7" fill="currentColor" stroke="none" /><circle cx="13.5" cy="16" r="0.7" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationCow(props: IconProps) {
+  return <Svg {...props}><path d="M7 6Q3 6 4 2 M17 6Q21 6 20 2 M7 7Q3 5 2 8Q3 11 6 10 M17 7Q21 5 22 8Q21 11 18 10 M7 6H17L18 17Q18 21 12 21Q6 21 6 17Z M6.5 16Q12 13 17.5 16" /><circle cx="9" cy="10.5" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="10.5" r="1" fill="currentColor" stroke="none" /><circle cx="9.5" cy="18" r="0.8" fill="currentColor" stroke="none" /><circle cx="14.5" cy="18" r="0.8" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationHorse(props: IconProps) {
+  return <Svg {...props}><path d="M7 8L6 2L10 5H14L18 2L17 8L18 17Q18 21 12 21Q6 21 6 17Z M7 16Q12 13 17 16 M10 5L9 9" /><circle cx="9" cy="11" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="11" r="1" fill="currentColor" stroke="none" /><path d="M10 18H14" /></Svg>;
+}
+
+function StationMonkey(props: IconProps) {
+  return <Svg {...props}><path d="M5 9Q0 7 2 13Q3 16 6 14 M19 9Q24 7 22 13Q21 16 18 14 M19 11Q19 21 12 21Q5 21 5 11Q5 4 12 4Q19 4 19 11Z M7 9Q9 6 12 9Q15 6 17 9 M9 16Q12 19 15 16" /><circle cx="9" cy="11.5" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="11.5" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationLion(props: IconProps) {
+  return <Svg {...props}><path d="M8 3L12 2L16 3L18 6L21 8L22 12L20 16L17 20L12 22L7 20L4 16L2 12L3 8L6 6Z" /><path d="M7 9Q12 6 17 9V14Q17 18 12 18Q7 18 7 14Z" /><circle cx="9" cy="11" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="11" r="1" fill="currentColor" stroke="none" /><path d="M10.5 14L12 16L13.5 14" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationWolf(props: IconProps) {
+  return <Svg {...props}><path d="M5 21L7 14L4 15L7 9L8 3L12 6L16 3L20 5L16 11L13 13L16 21Z M16 7L18 8" /><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDeer(props: IconProps) {
+  return <Svg {...props}><path d="M7 9L5 5V2 M5 5L2 4 M17 9L19 5V2 M19 5L22 4 M7 10L3 8L4 12L7 13 M17 10L21 8L20 12L17 13 M7 10Q12 7 17 10L16 17L12 21L8 17Z" /><circle cx="9.5" cy="13" r="1" fill="currentColor" stroke="none" /><circle cx="14.5" cy="13" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="18" r="0.9" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationHedgehog(props: IconProps) {
+  return <Svg {...props}><path d="M3 17L2 12L5 13L4 7L8 9L9 3L12 7L16 4L17 9Q19 10 19 13L22 16L20 19H7Q4 19 3 17Z M15 11L13 16 M7 19V21 M17 19V21" /><circle cx="18" cy="15" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationBat(props: IconProps) {
+  return <Svg {...props}><path d="M9 9L10 5L12 7L14 5L15 9Q19 8 22 5L21 16Q18 12 16 17Q13 14 12 21Q11 14 8 17Q6 12 3 16L2 5Q5 8 9 9Z" /></Svg>;
+}
+
+function StationShark(props: IconProps) {
+  return <Svg {...props}><path d="M2 14Q5 10 10 9L13 3L15 9Q18 9 19 11L22 7V19L18 16Q11 21 2 14Z M10 17L13 20L15 17 M14 12L13 14" /><circle cx="6" cy="13" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDolphin(props: IconProps) {
+  return <Svg {...props}><path d="M2 12Q4 8 9 7L12 3L14 7Q21 9 19 16L22 19L18 18L15 21L16 16Q15 12 11 12L8 16L9 11Q6 10 4 13H2Z" /><circle cx="6.5" cy="9.5" r="0.85" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationJellyfish(props: IconProps) {
+  return <Svg {...props}><path d="M3 12Q3 3 12 3Q21 3 21 12Q18 15 15 12Q12 15 9 12Q6 15 3 12Z M6 16Q4 18 6 21 M10 16Q12 18 10 22 M15 16Q13 18 15 21 M19 16V19" /></Svg>;
+}
+
+function StationShell(props: IconProps) {
+  return <Svg {...props}><path d="M9 21L3 11Q1 7 5 6Q5 2 9 3Q12 0 15 3Q19 2 19 6Q23 7 21 11L15 21Z M6 8L10 17 M12 5V17 M18 8L14 17" /></Svg>;
+}
+
+function StationLadybug(props: IconProps) {
+  return <Svg {...props}><path d="M9 5L7 2 M15 5L17 2 M8 7Q8 4 12 4Q16 4 16 7" /><circle cx="12" cy="14" r="8" /><path d="M12 7V22" /><circle cx="8" cy="12" r="1.2" fill="currentColor" stroke="none" /><circle cx="16" cy="12" r="1.2" fill="currentColor" stroke="none" /><circle cx="8.5" cy="17" r="1.2" fill="currentColor" stroke="none" /><circle cx="15.5" cy="17" r="1.2" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationAnt(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="6" r="3" /><circle cx="12" cy="12" r="2" /><path d="M15 18Q15 22 12 22Q9 22 9 18Q9 15 12 15Q15 15 15 18Z M10 3L7 2 M14 3L17 2 M10 10L5 8L3 10 M14 10L19 8L21 10 M10 13H5L3 15 M14 13H19L21 15 M10 16L6 18V21 M14 16L18 18V21" /></Svg>;
+}
+
+function StationMouseAnimal(props: IconProps) {
+  return <Svg {...props}><path d="M7 12Q2 12 2 7Q2 2 6 3Q10 3 10 8 M14 8Q14 3 18 3Q22 2 22 7Q22 12 17 12 M7 11Q12 7 17 11L16 17L12 21L8 17Z" /><circle cx="9.5" cy="13" r="1" fill="currentColor" stroke="none" /><circle cx="14.5" cy="13" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="18" r="1.1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationChick(props: IconProps) {
+  return <Svg {...props}><path d="M10 5L9 2 M12 5L14 2 M19 13Q19 20 12 20Q5 20 5 13Q5 5 12 5Q19 5 19 13Z M5 12L2 15 M19 12L22 15 M9 20L8 22 M15 20L16 22" /><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none" /><path d="M10 13H14L12 15Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationLeaf(props: IconProps) {
+  return <Svg {...props}><path d="M4 17Q0 4 21 3Q21 23 7 20 M3 22L16 9 M9 16V11 M9 16H14" /></Svg>;
+}
+
+function StationFlower(props: IconProps) {
+  return <Svg {...props}><path d="M9 7Q7 1 12 2Q17 1 15 7Q21 4 22 9Q23 13 17 13Q22 17 18 20Q14 23 12 17Q10 23 6 20Q2 17 7 13Q1 13 2 9Q3 4 9 7Z" /><circle cx="12" cy="11" r="2.5" /></Svg>;
+}
+
+function StationTulip(props: IconProps) {
+  return <Svg {...props}><path d="M5 4L9 7L12 3L15 7L19 4V10Q19 15 12 15Q5 15 5 10Z M12 15V22 M12 21Q5 22 4 17Q9 16 12 21" /></Svg>;
+}
+
+function StationClover(props: IconProps) {
+  return <Svg {...props}><path d="M12 10Q6 7 8 3Q11 1 12 4Q13 1 16 3Q18 7 12 10Z M14 12Q17 6 21 8Q23 11 20 12Q23 13 21 16Q17 18 14 12Z M12 14Q18 17 16 21Q13 23 12 20Q11 23 8 21Q6 17 12 14Z M10 12Q7 18 3 16Q1 13 4 12Q1 11 3 8Q7 6 10 12Z" /></Svg>;
+}
+
+function StationPalm(props: IconProps) {
+  return <Svg {...props}><path d="M10 22Q14 14 12 8 M12 8Q7 5 2 10Q3 3 11 5 M12 8Q17 5 22 10Q21 3 13 5 M12 8Q7 12 6 15 M12 8Q17 10 18 15 M12 5L14 2 M7 22H16" /></Svg>;
+}
+
+function StationTree(props: IconProps) {
+  return <Svg {...props}><path d="M7 17Q2 18 2 13Q2 10 5 9Q4 5 8 5Q9 1 13 2Q17 2 17 6Q21 6 20 10Q24 16 17 17Z M12 11V22 M12 16L8 12 M12 14L16 10" /></Svg>;
+}
+
+function StationSeedling(props: IconProps) {
+  return <Svg {...props}><path d="M12 21V12Q12 3 21 3Q22 12 12 12 M12 17Q2 17 3 8Q11 7 12 17 M7 22H17" /></Svg>;
+}
+
+function StationRainbow(props: IconProps) {
+  return <Svg {...props}><path d="M2 20V13Q2 3 12 3Q22 3 22 13V20 M6 20V13Q6 7 12 7Q18 7 18 13V20 M10 20V13Q10 11 12 11Q14 11 14 13V20" /></Svg>;
+}
+
+function StationStorm(props: IconProps) {
+  return <Svg {...props}><path d="M6 13Q2 13 3 9Q4 7 7 7Q8 2 13 3Q17 3 18 7Q22 7 21 11Q21 13 18 13 M12 12L9 17H14L11 22 M5 17L4 20 M19 17L18 20" /></Svg>;
+}
+
+function StationTornado(props: IconProps) {
+  return <Svg {...props}><path d="M2 3H22 M4 7H20 M7 11H18 M10 15H17 M11 19H15L12 22" /></Svg>;
+}
+
+function StationComet(props: IconProps) {
+  return <Svg {...props}><path d="M4 11L21 2L13 20 M11 13L21 2 M7 10Q1 10 2 16Q2 22 8 22Q14 21 13 16" /></Svg>;
+}
+
+function StationDrop(props: IconProps) {
+  return <Svg {...props}><path d="M12 2Q9 7 5 12C-1 23 25 25 19 12Q15 7 12 2Z M7 15Q7 18 10 18" /></Svg>;
+}
+
+function StationFeather(props: IconProps) {
+  return <Svg {...props}><path d="M9 22L13 6 M9.5 18Q4 16 6 9Q8 1 14 2Q21 3 17 12L14 13L15 15Q13 19 9.5 18Z M10.5 14L7 11" /></Svg>;
+}
+
+function StationPaw(props: IconProps) {
+  return <Svg {...props}><path d="M6 21Q2 20 5 16L9 12Q12 10 15 12L19 16Q22 20 18 21Q15 22 12 20Q9 22 6 21Z" fill="currentColor" stroke="none" /><path d="M3 8C0 8 1 14 4 13C7 12 6 8 3 8Z M8 2C4 2 5 9 8 9C11 9 11 2 8 2Z M16 2C13 2 13 9 16 9C19 9 20 2 16 2Z M21 8C18 8 17 12 20 13C23 14 24 8 21 8Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationBone(props: IconProps) {
+  return <Svg {...props}><path d="M8 4Q6 1 3 3Q1 6 4 8Q1 10 4 12Q7 14 9 11L13 15Q10 17 12 20Q14 23 16 20Q18 23 21 21Q23 18 20 16Q23 14 20 12Q17 10 15 13L11 9Q14 7 12 4Q10 1 8 4Z" /></Svg>;
+}
+
+function StationEgg(props: IconProps) {
+  return <Svg {...props}><path d="M20 14Q20 22 12 22Q4 22 4 14Q4 9 8 4Q12-1 16 4Q20 9 20 14Z" /></Svg>;
+}
+
+function StationPizza(props: IconProps) {
+  return <Svg {...props}><path d="M3 4Q12 0 21 6L9 21Z M4.5 8Q12 4.5 18 9" /><circle cx="10" cy="10" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="14" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationBurger(props: IconProps) {
+  return <Svg {...props}><path d="M3 10Q3 3 12 3Q21 3 21 10Z M3 14L7 13L12 15L17 13L21 14 M3 18H21Q20 21 17 21H7Q4 21 3 18Z" /></Svg>;
+}
+
+function StationDonut(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" /><path d="M6 8L7 7 M16 7L17 8 M6 15L7 16 M16 17L18 15" /></Svg>;
+}
+
+function StationCake(props: IconProps) {
+  return <Svg {...props}><path d="M3 10Q12 7 21 10V21H3Z M3 14Q6 17 9 14Q12 17 15 14Q18 17 21 14 M12 8V3" /></Svg>;
+}
+
+function StationCupcake(props: IconProps) {
+  return <Svg {...props}><path d="M5 12Q2 12 3 9Q3 7 7 7Q7 3 12 3Q17 3 17 7Q21 7 21 9Q22 12 19 12Z M5 12L7 21H17L19 12 M10 16V18 M14 16V18" /></Svg>;
+}
+
+function StationCookie(props: IconProps) {
+  return <Svg {...props}><path d="M20 13Q17 13 17 10Q13 10 14 6Q11 6 12 3Q4 2 3 11Q2 20 11 21Q19 22 21 15Z" /><circle cx="7" cy="10" r="1" fill="currentColor" stroke="none" /><circle cx="11" cy="15" r="1.2" fill="currentColor" stroke="none" /><circle cx="7" cy="17" r="0.8" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationBread(props: IconProps) {
+  return <Svg {...props}><path d="M5 11Q1 10 3 6Q4 3 8 3H16Q21 3 21 7Q21 10 19 11V20H5Z M9 7L8 10 M14 7L13 10" /></Svg>;
+}
+
+function StationCroissant(props: IconProps) {
+  return <Svg {...props}><path d="M2 18L4 11L8 5Q12 3 16 5L20 11L22 18L18 16L15 12Q12 10 9 12L6 16Z M8 5L9 12 M16 5L15 12 M4 11L7 14 M20 11L17 14" /></Svg>;
+}
+
+function StationCheese(props: IconProps) {
+  return <Svg {...props}><path d="M3 10L15 3L21 10V13Q17 13 17 16Q17 19 21 19V21H3Z M3 10H21" /><circle cx="7" cy="15" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationCarrot(props: IconProps) {
+  return <Svg {...props}><path d="M4 21Q5 12 11 7Q14 5 17 8Q20 11 17 14Q12 19 4 21Z M15 6L16 2 M18 7L21 4 M19 10L22 10 M9 10L12 13 M7 15L9 17" /></Svg>;
+}
+
+function StationCorn(props: IconProps) {
+  return <Svg {...props}><path d="M7 13V8Q7 3 12 3Q17 3 17 8V13 M12 21Q4 19 3 10Q10 12 12 21Q14 12 21 10Q20 19 12 21Z M12 6V12 M8 8H16" /></Svg>;
+}
+
+function StationChili(props: IconProps) {
+  return <Svg {...props}><path d="M16 7Q20 8 19 12Q17 21 3 21Q11 17 12 10Q12 7 16 7Z M16 7Q15 3 20 3" /></Svg>;
+}
+
+function StationAvocado(props: IconProps) {
+  return <Svg {...props}><path d="M8 5Q12 0 16 5Q16 8 20 13Q24 22 12 22Q0 22 4 13Q8 8 8 5Z" /><circle cx="12" cy="15" r="3.5" /></Svg>;
+}
+
+function StationWatermelon(props: IconProps) {
+  return <Svg {...props}><path d="M3 5H21Q21 19 12 21Q3 19 3 5Z M6 5Q6 16 12 18Q18 16 18 5 M9 8V10 M15 8V10 M12 12V14" /></Svg>;
+}
+
+function StationStrawberry(props: IconProps) {
+  return <Svg {...props}><path d="M6 7Q1 9 5 15Q8 20 12 22Q16 20 19 15Q23 9 18 7 M5 6L10 7L12 3L14 7L19 6L16 10L12 8L8 10Z" /><circle cx="8" cy="13" r="0.8" fill="currentColor" stroke="none" /><circle cx="16" cy="13" r="0.8" fill="currentColor" stroke="none" /><circle cx="12" cy="17" r="0.8" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationBanana(props: IconProps) {
+  return <Svg {...props}><path d="M17 3L20 4Q23 16 14 20Q7 23 3 17L4 14Q10 19 16 10Q18 7 17 3Z M4 14L3 17 M20 7Q20 16 11 19" /></Svg>;
+}
+
+function StationPeach(props: IconProps) {
+  return <Svg {...props}><path d="M12 8Q6 4 3 10Q0 17 12 22Q24 17 21 10Q18 4 12 8Z M12 8Q16 13 12 19 M12 7Q11 2 6 2Q6 6 12 7 M12 7L15 3" /></Svg>;
+}
+
+function StationPineapple(props: IconProps) {
+  return <Svg {...props}><path d="M8 8L5 3L10 5L12 1.5L14 5L19 3L16 8 M7 9Q12 7 17 9Q20 12 18 18Q17 22 12 22Q7 22 6 18Q4 12 7 9Z M8 11L16 19 M16 11L8 19" /></Svg>;
+}
+
+function StationIceCream(props: IconProps) {
+  return <Svg {...props}><path d="M6 11Q3 10 5 7Q5 2 12 2Q19 2 19 7Q21 10 18 11Z M6 11L12 22L18 11 M8 15H16" /></Svg>;
+}
+
+function StationCandy(props: IconProps) {
+  return <Svg {...props}><path d="M7 9Q11 5 15 9L17 11Q20 15 15 17Q12 19 9 16Z M7 9L3 8L3 14L8 13 M16 11L21 10L21 16L17 15 M10 7L14 17" /></Svg>;
+}
+
+function StationLollipop(props: IconProps) {
+  return <Svg {...props}><circle cx="10" cy="9" r="6.5" /><path d="M14 14L20 21 M7 10Q5 6 9 5Q14 4 14 9Q14 12 10 12Q8 12 8 9" /></Svg>;
+}
+
+function StationPopcorn(props: IconProps) {
+  return <Svg {...props}><path d="M4 10Q1 7 5 6Q3 2 8 3Q10 0 12 4Q16 0 17 4Q22 3 20 7Q24 9 20 11 M3 11H21L18 22H6Z M8 14L9 19 M16 14L15 19" /></Svg>;
+}
+
+function StationNoodles(props: IconProps) {
+  return <Svg {...props}><path d="M3 13H21Q20 20 12 21Q4 20 3 13Z M7 13V7Q7 5 9 5H20 M11 13V8 M15 13V8 M5 3L21 1.5" /></Svg>;
+}
+
+function StationSushi(props: IconProps) {
+  return <Svg {...props}><path d="M3 9Q3 5 12 5Q21 5 21 9V17Q21 21 12 21Q3 21 3 17Z M3 9Q3 13 12 13Q21 13 21 9 M8 9Q12 6 16 9Q12 12 8 9Z" /></Svg>;
+}
+
+function StationRice(props: IconProps) {
+  return <Svg {...props}><path d="M3 12H21Q20 20 12 21Q4 20 3 12Z M4 12Q3 8 7 7Q7 3 11 5Q15 1 17 6Q22 6 20 12 M9 8L10 9 M15 8L16 9" /></Svg>;
+}
+
+function StationTaco(props: IconProps) {
+  return <Svg {...props}><path d="M3 19Q3 6 12 6Q21 6 21 19Z M3 15Q1 11 5 10Q4 6 8 6Q9 2 12 5Q16 2 17 6Q22 6 21 11 M7 15L8 14 M13 11L14 12 M16 16H17" /></Svg>;
+}
+
+function StationHotdog(props: IconProps) {
+  return <Svg {...props}><path d="M4.57 13.69Q3.62 10.67 8.47 7.15Q13.33 3.62 15.90 5.46 M8.10 18.54Q10.67 20.38 15.53 16.85Q20.38 13.33 19.43 10.31 M4.57 13.69L15.90 5.46Q18.33 3.70 20.09 6.12Q21.85 8.55 19.43 10.31L8.10 18.54Q5.67 20.30 3.91 17.88Q2.15 15.45 4.57 13.69Z M7.15 15.53L8.99 12.95L12.59 12.81L13.84 9.43L16.85 8.47" /></Svg>;
+}
+
+function StationBeer(props: IconProps) {
+  return <Svg {...props}><path d="M4 9V20Q4 21 6 21H15Q17 21 17 19V9 M17 10H19Q22 10 22 14Q22 18 17 18 M4 9Q1 7 4 4Q6 2 9 4Q12 0 15 4Q19 3 19 6Q19 9 16 9Z M8 12V17 M13 12V17" /></Svg>;
+}
+
+function StationWine(props: IconProps) {
+  return <Svg {...props}><path d="M7 3H17L18 10Q18 15 12 15Q6 15 6 10Z M6.5 9H17.5 M12 15V21 M8 21H16" /></Svg>;
+}
+
+function StationCocktail(props: IconProps) {
+  return <Svg {...props}><path d="M3 7H21L12 16Z M12 16V22 M8 22H16 M12 7L16 2H21" /></Svg>;
+}
+
+function StationMilk(props: IconProps) {
+  return <Svg {...props}><path d="M6 7L9 2H17L20 7V22H6Z M6 7H15L17 2 M15 7V22 M9 12H12V17H9Z" /></Svg>;
+}
+
+function StationSoda(props: IconProps) {
+  return <Svg {...props}><path d="M5 8H19L17 22H7Z M4 8H20 M12 8L14 2H19 M6 12H18" /></Svg>;
+}
+
+function StationChair(props: IconProps) {
+  return <Svg {...props}><rect x="6" y="3" width="12" height="9" rx="2" /><path d="M6 12V16 M18 12V16 M4 16H20 M6 16V22 M18 16V22" /></Svg>;
+}
+
+function StationSofa(props: IconProps) {
+  return <Svg {...props}><path d="M6 11V6Q6 4 8 4H16Q18 4 18 6V11 M6 15H18 M6 15V11Q6 8 3 9Q2 9 2 11V19H22V11Q22 8 19 9Q18 9 18 11V15 M5 19V22 M19 19V22" /></Svg>;
+}
+
+function StationBed(props: IconProps) {
+  return <Svg {...props}><path d="M3 5V21 M21 13V21 M3 17H21V11Q21 9 19 9H10V17 M3 9H7Q10 9 10 12V13H3" /></Svg>;
+}
+
+function StationLamp(props: IconProps) {
+  return <Svg {...props}><path d="M8 3H16L20 13H4Z M12 13V21 M7 21H17 M16 13V16" /></Svg>;
+}
+
+function StationDoor(props: IconProps) {
+  return <Svg {...props}><path d="M4 22H20 M6 22V3L18 2V22 M14 12V14" /></Svg>;
+}
+
+function StationBathtub(props: IconProps) {
+  return <Svg {...props}><path d="M2 12H22 M3 12L5 19H19L21 12 M6 19L5 22 M18 19L19 22 M5 12V5Q5 2 8 2Q11 2 11 5" /></Svg>;
+}
+
+function StationUmbrella(props: IconProps) {
+  return <Svg {...props}><path d="M2 12Q3 3 12 3Q21 3 22 12Q18 9 15 12Q12 9 9 12Q6 9 2 12Z M12 3V1.5 M12 11V19Q12 24 8 21" /></Svg>;
+}
+
+function StationBackpack(props: IconProps) {
+  return <Svg {...props}><path d="M8 5V4Q8 2 12 2Q16 2 16 4V5 M5 21V10Q5 5 12 5Q19 5 19 10V21Z M5 12H3V19H5 M19 12H21V19H19" /><rect x="8" y="13" width="8" height="5" rx="1" /></Svg>;
+}
+
+function StationGlasses(props: IconProps) {
+  return <Svg {...props}><path d="M3 11L4 5H7 M21 11L20 5H17 M10 12Q12 10 14 12" /><rect x="2" y="11" width="8" height="7" rx="2" /><rect x="14" y="11" width="8" height="7" rx="2" /></Svg>;
+}
+
+function StationHat(props: IconProps) {
+  return <Svg {...props}><path d="M6 14L7 5Q8 3 12 5Q16 3 17 5L18 14 M6 11H18 M6 14Q2 14 2 17Q2 20 12 20Q22 20 22 17Q22 14 18 14Z" /></Svg>;
+}
+
+function StationShirt(props: IconProps) {
+  return <Svg {...props}><path d="M8 3Q12 7 16 3L22 7L19 12L16 10V21H8V10L5 12L2 7Z" /></Svg>;
+}
+
+function StationShoe(props: IconProps) {
+  return <Svg {...props}><path d="M3 8H7Q8 14 13 12L16 16L21 17V21H3Z M3 17H17 M10 13L12 11 M13 15L15 13" /></Svg>;
+}
+
+function StationRing(props: IconProps) {
+  return <Svg {...props}><path d="M8 6L10 2H14L16 6L12 10Z M8 6H16 M8 10Q3 12 5 18Q7 23 13 22Q19 21 20 16Q20 12 16 10" /></Svg>;
+}
+
+function StationBalloon(props: IconProps) {
+  return <Svg {...props}><path d="M19 9Q19 15 12 18Q5 15 5 9Q5 2 12 2Q19 2 19 9Z M12 18L10 20H14Z M12 20Q15 23 18 21" /></Svg>;
+}
+
+function StationCandle(props: IconProps) {
+  return <Svg {...props}><rect x="8" y="10" width="8" height="12" rx="1" /><path d="M12 7Q7 6 12 1Q17 6 12 7Z M8 13Q11 11 12 14Q14 17 16 13" /></Svg>;
+}
+
+function StationBook(props: IconProps) {
+  return <Svg {...props}><path d="M4 5Q8 2 12 5Q16 2 20 5V21Q16 18 12 21Q8 18 4 21Z M12 5V21" /></Svg>;
+}
+
+function StationBooks(props: IconProps) {
+  return <Svg {...props}><path d="M6 3H20V8H6Q3 8 3 5.5Q3 3 6 3Z M18 8H4Q1 8 1 11Q1 14 4 14H18Z M7 14H21V20H7Q4 20 4 17Q4 14 7 14Z" /></Svg>;
+}
+
+function StationNewspaper(props: IconProps) {
+  return <Svg {...props}><path d="M3 3H18V18Q18 21 21 21H6Q3 21 3 18Z M18 8H22V19Q22 21 21 21 M7 7H14 M11 11H14 M11 15H14 M7 18H14" /><rect x="6.5" y="10.5" width="2" height="4.5" rx="0" /></Svg>;
+}
+
+function StationCar(props: IconProps) {
+  return <Svg {...props}><path d="M3 16H2.5V12L6 11L8.5 6H15L18 11L21.5 12V16H20 M8 16H15 M6 11H18 M12 6V11" /><circle cx="5.5" cy="16.5" r="2.5" /><circle cx="17.5" cy="16.5" r="2.5" /></Svg>;
+}
+
+function StationTaxi(props: IconProps) {
+  return <Svg {...props}><path d="M4 17V12L6.5 7H17.5L20 12V17Z M4 12H20 M6 17V20 M18 17V20 M9 7V3.5H15V7 M7 14.5H8 M16 14.5H17" /></Svg>;
+}
+
+function StationBus(props: IconProps) {
+  return <Svg {...props}><path d="M3 16V6Q3 4 5 4H19Q21 4 21 6V16H19 M7 16H15 M3 11H21 M9 4V11 M15 4V11" /><circle cx="5" cy="17" r="2" /><circle cx="17" cy="17" r="2" /></Svg>;
+}
+
+function StationTruck(props: IconProps) {
+  return <Svg {...props}><path d="M3 16V5H14V16H8 M14 8H18L21.5 12V16H20 M14 12H21.5" /><circle cx="5.5" cy="17" r="2.5" /><circle cx="17.5" cy="17" r="2.5" /></Svg>;
+}
+
+function StationTrain(props: IconProps) {
+  return <Svg {...props}><path d="M3 16V10H12V4H19V16 M3 10V6H6V10 M12 10H19 M19 16L22 18H19 M8 17H12 M2 21H22" /><circle cx="5.5" cy="17" r="2.5" /><circle cx="15.5" cy="17" r="3" /></Svg>;
+}
+
+function StationMetro(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 20V11Q2.5 2.5 12 2.5Q21.5 2.5 21.5 11V20 M8 18L6 21 M16 18L18 21" /><rect x="7" y="7" width="10" height="11" rx="2" /><path d="M7 13H17" /><circle cx="10" cy="15.5" r="0.8" fill="currentColor" stroke="none" /><circle cx="14" cy="15.5" r="0.8" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationBike(props: IconProps) {
+  return <Svg {...props}><circle cx="5.5" cy="16.5" r="4" /><circle cx="18.5" cy="16.5" r="4" /><path d="M5.5 16.5L9 9L14 16.5H5.5 M9 9H16 M18.5 16.5L15 5H18 M7 6H11 M9 6V9" /></Svg>;
+}
+
+function StationScooter(props: IconProps) {
+  return <Svg {...props}><circle cx="5" cy="18" r="2.5" /><circle cx="19" cy="18" r="2.5" /><path d="M5 18H12L17 12 M19 18L16 4H12" /></Svg>;
+}
+
+function StationMotorcycle(props: IconProps) {
+  return <Svg {...props}><circle cx="5.5" cy="17" r="3.5" /><circle cx="18.5" cy="17" r="3.5" /><path d="M5.5 17L10 12 M18.5 17L15 5H18L20 8 M4 10H8" /><path d="M6 12H9L11 9H14L16 12L12 16H9Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationPlane(props: IconProps) {
+  return <Svg {...props}><path d="M10 9V5Q10 2.5 12 2.5Q14 2.5 14 5V9L21 13V16L14 14V18L17 20V21L12 20L7 21V20L10 18V14L3 16V13Z" /></Svg>;
+}
+
+function StationHelicopter(props: IconProps) {
+  return <Svg {...props}><path d="M10 9H15Q20 9 21 15Q21 17 18 17H11Q8 17 8 13L3 11V7 M3 11H8 M13 9V5 M6 5H21 M16 9V13H20 M11 17V21 M18 17V21 M8 21H21" /></Svg>;
+}
+
+function StationSailboat(props: IconProps) {
+  return <Svg {...props}><path d="M12 3V16H3Z M15 6L21 16H15Z M3 19H21L18 22H6Z" /></Svg>;
+}
+
+function StationShip(props: IconProps) {
+  return <Svg {...props}><path d="M5 12V7H19V12 M10 7V3H14V7 M3 14L12 11L21 14L18 19 M3 14L6 19 M12 11V17 M2 21Q4.5 18.5 7 21Q9.5 23 12 21Q14.5 18.5 17 21Q19.5 23 22 21" /></Svg>;
+}
+
+function StationUfo(props: IconProps) {
+  return <Svg {...props}><path d="M7 10Q7 4 12 4Q17 4 17 10 M2.5 12Q12 6 21.5 12Q20 17 12 17Q4 17 2.5 12Z M7 20L6 21 M17 20L18 21 M12 20V22" /><path d="M7 13H7.5 M12 13H12.5 M17 13H17.5" /></Svg>;
+}
+
+function StationParachute(props: IconProps) {
+  return <Svg {...props}><path d="M3 11Q3 2.5 12 2.5Q21 2.5 21 11Z M8 11Q8 5 12 2.5Q16 5 16 11 M3 11L10 19 M21 11L14 19 M12 11V18" /><rect x="9" y="18" width="6" height="3.5" rx="1" /></Svg>;
+}
+
+function StationAnchor(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="5" r="2.5" /><path d="M12 7.5V21 M8 10H16 M3 14Q3 20 12 21Q21 20 21 14 M3 14L2 17 M3 14L6 15 M21 14L22 17 M21 14L18 15" /></Svg>;
+}
+
+function StationTrafficLight(props: IconProps) {
+  return <Svg {...props}><rect x="7" y="2.5" width="10" height="17" rx="3" /><circle cx="12" cy="6.5" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="11" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="15.5" r="1.3" fill="currentColor" stroke="none" /><path d="M12 19.5V22 M4 6L7 8 M20 6L17 8 M4 12L7 14 M20 12L17 14" /></Svg>;
+}
+
+function StationFuel(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="3" width="11" height="18" rx="1.5" /><path d="M3 10H14 M2 21H15 M14 12H16Q18 12 18 15V17Q18 20 20 20Q22 20 22 17V9L18 5 M19 6V10H22" /></Svg>;
+}
+
+function StationFactory(props: IconProps) {
+  return <Svg {...props}><path d="M3 21V11L9 7V11L15 7V12H21V21Z M17 12V3H20V12 M7 16V17 M12 16V17 M17 16V17" /></Svg>;
+}
+
+function StationCastle(props: IconProps) {
+  return <Svg {...props}><path d="M3 21V4H6V8H9V4H15V8H18V4H21V21Z M10 21V16Q12 13 14 16V21" /></Svg>;
+}
+
+function StationBridge(props: IconProps) {
+  return <Svg {...props}><path d="M2 15H22 M6 5V21 M18 5V21 M2 11Q4 10 6 7Q12 17 18 7Q20 10 22 11 M10 12V15 M14 12V15" /></Svg>;
+}
+
+function StationIsland(props: IconProps) {
+  return <Svg {...props}><path d="M3 21Q12 15 21 21Z M12 18Q16 12 14 6 M14 6Q8 1 5 7Q10 5 14 6Q20 1 22 7Q18 5 14 6 M14 6Q8 6 8 11 M14 6Q19 7 19 12" /></Svg>;
+}
+
+function StationTorii(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 4Q12 7 21.5 4 M4 8H20 M3 12H21 M7 8L6 21 M17 8L18 21 M12 8V12" /></Svg>;
+}
+
+function StationFerrisWheel(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="10" r="7.5" /><path d="M12 2.5V10 M4.5 10H19.5 M6.5 5L17.5 15 M17.5 5L6.5 15 M12 10L7 21 M12 10L17 21 M5 21H19" /><circle cx="12" cy="2.5" r="1.7" fill="currentColor" stroke="none" /><circle cx="4.5" cy="10" r="1.7" fill="currentColor" stroke="none" /><circle cx="19.5" cy="10" r="1.7" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationSchool(props: IconProps) {
+  return <Svg {...props}><path d="M8 21V10L12 6L16 10V21 M3 21V12H8 M16 12H21V21Z M8 21H3 M12 6V2.5H17V5H12 M11 21V17H13V21" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationBank(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 8L12 2.5L21.5 8Z M5 11V18 M12 11V18 M19 11V18 M3 21H21" /></Svg>;
+}
+
+function StationShop(props: IconProps) {
+  return <Svg {...props}><path d="M3 9L5 3H19L21 9 M3 9Q3 14 7.5 11Q12 14 16.5 11Q21 14 21 9Z M5 13V21H19V13 M10 21V16H14V21 M8 4L7.5 9 M16 4L16.5 9" /></Svg>;
+}
+
+function StationBarn(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 11L6 5L12 2.5L18 5L21.5 11 M4 10V21H20V10 M8 21V12H16V21 M8 12L16 21 M16 12L8 21" /></Svg>;
+}
+
+function StationPyramid(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 19L12 3L21.5 19L15 21Z M12 3L15 21" /></Svg>;
+}
+
+function StationGuitar(props: IconProps) {
+  return <Svg {...props}><path d="M13 9L18.5 3.5L21 6L15.5 11.5Q18 15 14 16Q13 21 8 21Q3 21 3 16Q3 11 8 10Q9 6 13 9Z M18.5 3.5L20 2 M21 6L22 4.5 M6 16L8 18" /><circle cx="10.5" cy="13.5" r="1.8" /></Svg>;
+}
+
+function StationPiano(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="4" width="18" height="16" rx="1.5" /><path d="M3 13H21 M9 13V20 M15 13V20" /><path d="M6 4H9V13H6Z M12 4H15V13H12Z M17 4H19V13H17Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDrum(props: IconProps) {
+  return <Svg {...props}><path d="M3 10C3 6 21 6 21 10C21 14 3 14 3 10Z M3 10V18C3 22 21 22 21 18V10 M4 12L8 19L12 13L16 19L20 12 M6 2L15 7 M18 2L14 4" /></Svg>;
+}
+
+function StationTrumpet(props: IconProps) {
+  return <Svg {...props}><path d="M2 11H15L21 6V20L15 15H7Q4 15 4 18Q4 21 8 21H12Q15 21 15 18V11 M7 11V7 M11 11V7 M5.5 7H8.5 M9.5 7H12.5" /></Svg>;
+}
+
+function StationMicrophone(props: IconProps) {
+  return <Svg {...props}><rect x="8" y="2.5" width="8" height="13" rx="4" /><path d="M4 11V12Q4 20 12 20Q20 20 20 12V11 M12 20V22 M8 22H16" /></Svg>;
+}
+
+function StationMusic(props: IconProps) {
+  return <Svg {...props}><path d="M9 17V5L20 3V15 M9 9L20 7" /><path d="M9 16C3 14 1 22 6 21C8 21 9 19 9 16Z M20 14C14 12 12 20 17 19C19 19 20 17 20 14Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationFilm(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="3" width="18" height="18" rx="1.5" /><path d="M7 3V21 M17 3V21 M3 8H7 M3 16H7 M17 8H21 M17 16H21" /><path d="M10 8L15 12L10 16Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationTicket(props: IconProps) {
+  return <Svg {...props}><path d="M3 6H21V10Q17 12 21 14V18H3V14Q7 12 3 10Z M15 8V9 M15 12V13 M15 16V16.5" /></Svg>;
+}
+
+function StationJoystick(props: IconProps) {
+  return <Svg {...props}><path d="M12 9V16 M7 13H4L2.5 21H21.5L20 13H17" /><circle cx="12" cy="5.5" r="3.5" /><path d="M17 17H18" /></Svg>;
+}
+
+function StationKite(props: IconProps) {
+  return <Svg {...props}><path d="M10 2.5L19 7L14 16L5 11Z M10 2.5L14 16 M5 11L19 7 M14 16Q8 17 11 20Q13 23 6 21" /></Svg>;
+}
+
+function StationSoccer(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9" /><path d="M12 8L16 11L14.5 16H9.5L8 11Z M12 8V3 M16 11L20.5 9 M14.5 16L17.5 19 M9.5 16L6.5 19 M8 11L3.5 9" /></Svg>;
+}
+
+function StationBasketball(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9" /><path d="M3 12H21 M12 3V21 M5.5 5.5Q15 12 5.5 18.5 M18.5 5.5Q9 12 18.5 18.5" /></Svg>;
+}
+
+function StationTennis(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9" /><path d="M6 5.3C11 6 11 18 6 18.7 M18 5.3C13 6 13 18 18 18.7" /></Svg>;
+}
+
+function StationBowling(props: IconProps) {
+  return <Svg {...props}><path d="M7 3H11Q12 6 10 9V12Q15 20 11 21H6Q2 20 7 12V9Q5 6 7 3Z M7 9H10" /><circle cx="17" cy="17" r="4" /><circle cx="16" cy="15.5" r="0.7" fill="currentColor" stroke="none" /><circle cx="18.5" cy="16" r="0.7" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationYinYang(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9" /><path d="M12 3A9 9 0 0 1 12 21A4.5 4.5 0 0 1 12 12A4.5 4.5 0 0 0 12 3Z M13.2 16.5A1.2 1.2 0 1 0 10.8 16.5A1.2 1.2 0 1 0 13.2 16.5Z" fill="currentColor" stroke="none" /><circle cx="12" cy="7.5" r="1.2" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationPeace(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9" /><path d="M12 3V21 M12 12L5.5 18.5 M12 12L18.5 18.5" /></Svg>;
+}
+
+function StationSkull(props: IconProps) {
+  return <Svg {...props}><path d="M7 17Q3 16 3 10Q3 2.5 12 2.5Q21 2.5 21 10Q21 16 17 17V21H7Z M10 18V21 M14 18V21" /><circle cx="8" cy="11" r="2" fill="currentColor" stroke="none" /><circle cx="16" cy="11" r="2" fill="currentColor" stroke="none" /><path d="M12 13.5L10.5 16H13.5Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationAlien(props: IconProps) {
+  return <Svg {...props}><path d="M3.5 9Q3.5 2.5 12 2.5Q20.5 2.5 20.5 9Q20.5 16 12 21Q3.5 16 3.5 9Z M11 17H13" /><path d="M6 9Q11 9 10 14Q6 14 6 9Z M18 9Q13 9 14 14Q18 14 18 9Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationBomb(props: IconProps) {
+  return <Svg {...props}><circle cx="10" cy="14" r="7" /><path d="M14 8L16 5L19 7L17 10 M17.5 6Q16 2 20 2.5 M7 10Q5 11 5 14 M21 4L22 3 M21 8H22" /></Svg>;
+}
+
+function StationSword(props: IconProps) {
+  return <Svg {...props}><path d="M9 13L17 3L21 3L21 7L11 15 M7 11L13 17 M9 15L4 20 M3 18L6 21 M12 12L17 7" /></Svg>;
+}
+
+function StationWand(props: IconProps) {
+  return <Svg {...props}><path d="M3 19L15 7L18 10L6 22Z M12 10L15 13 M6 3V7 M4 5H8 M19 2V6 M17 4H21 M20 15V19 M18 17H22" /></Svg>;
+}
+
+function StationCrystalBall(props: IconProps) {
+  return <Svg {...props}><path d="M7 17A8 8 0 1 1 17 17 M7 17H17L19 21H5Z M8 9Q8 6 11 6 M16 10V14 M14 12H18" /></Svg>;
+}
+
+function StationSparkles(props: IconProps) {
+  return <Svg {...props}><path d="M10 3Q11 10 17 12Q11 14 10 21Q9 14 3 12Q9 10 10 3Z M19 2V8 M16 5H22 M20 17V21 M18 19H22" /></Svg>;
+}
+
 function StationDice1(props: IconProps) {
   return <Svg {...props}><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none" /></Svg>;
 }
@@ -867,6 +1675,114 @@ function StationMoonFull(props: IconProps) {
   return <Svg {...props}><circle cx="12" cy="12" r="9.875" fill="currentColor" stroke="none" /></Svg>;
 }
 
+function StationZodiacAries(props: IconProps) {
+  return <Svg {...props}><path d="M12 21V10C12 2 3 2 3 7.5C3 10 4.5 11 6 11 M12 10C12 2 21 2 21 7.5C21 10 19.5 11 18 11" /></Svg>;
+}
+
+function StationZodiacTaurus(props: IconProps) {
+  return <Svg {...props}><path d="M4 3C4 7.5 7.5 10 12 10C16.5 10 20 7.5 20 3" /><circle cx="12" cy="15.5" r="5.5" /></Svg>;
+}
+
+function StationZodiacGemini(props: IconProps) {
+  return <Svg {...props}><path d="M5 3Q12 6 19 3 M5 21Q12 18 19 21 M8 4.1V19.9 M16 4.1V19.9" /></Svg>;
+}
+
+function StationZodiacCancer(props: IconProps) {
+  return <Svg {...props}><path d="M4 9C5 3 16 2 20 6 M20 15C19 21 8 22 4 18" /><circle cx="6.5" cy="9" r="3" /><circle cx="17.5" cy="15" r="3" /></Svg>;
+}
+
+function StationZodiacLeo(props: IconProps) {
+  return <Svg {...props}><path d="M8.5 13.5C10.5 10 7.5 8 8.5 5.5C10 1.5 17 2 17 7C17 11 13 14 13 17C13 21.5 19 22 21 17" /><circle cx="5.5" cy="15" r="3.5" /></Svg>;
+}
+
+function StationZodiacVirgo(props: IconProps) {
+  return <Svg {...props}><path d="M3 5V18 M3 9C3 4 8 4 8 9V18 M8 9C8 4 13 4 13 9V15C13 18 17 20 21 21 M13 11C13 5 20 5 20 10C20 15 17 18 14 20" /></Svg>;
+}
+
+function StationZodiacLibra(props: IconProps) {
+  return <Svg {...props}><path d="M3 15H8C4 9 7.5 4 12 4C16.5 4 20 9 16 15H21 M3 20H21" /></Svg>;
+}
+
+function StationZodiacScorpio(props: IconProps) {
+  return <Svg {...props}><path d="M3 5V18 M3 9C3 4 8 4 8 9V18 M8 9C8 4 13 4 13 9V16Q13 19 16 19H21 M18 16L21 19L18 22" /></Svg>;
+}
+
+function StationZodiacSagittarius(props: IconProps) {
+  return <Svg {...props}><path d="M4 20L20 4 M11 4H20V13 M5 10L14 19" /></Svg>;
+}
+
+function StationZodiacCapricorn(props: IconProps) {
+  return <Svg {...props}><path d="M3 5L6.5 18L10 5L13 15C15 23 22 21 22 16C22 12 16.5 12 15 16L12.5 21" /></Svg>;
+}
+
+function StationZodiacAquarius(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 9L6 5L10 9L14 5L18 9L21.5 5 M2.5 18L6 14L10 18L14 14L18 18L21.5 14" /></Svg>;
+}
+
+function StationZodiacPisces(props: IconProps) {
+  return <Svg {...props}><path d="M5 3C11 8 11 16 5 21 M19 3C13 8 13 16 19 21 M3 12H21" /></Svg>;
+}
+
+function StationDigit0(props: IconProps) {
+  return <Svg {...props}><path d="M12 3C7.5 3 6 6.5 6 12C6 17.5 7.5 21 12 21C16.5 21 18 17.5 18 12C18 6.5 16.5 3 12 3Z M9.5 16L14.5 8" /></Svg>;
+}
+
+function StationDigit1(props: IconProps) {
+  return <Svg {...props}><path d="M7 7L12 3V21 M7 21H17" /></Svg>;
+}
+
+function StationDigit2(props: IconProps) {
+  return <Svg {...props}><path d="M6 7.5C6 1.5 18 1.5 18 7.5C18 11 14 13 6 21H18" /></Svg>;
+}
+
+function StationDigit3(props: IconProps) {
+  return <Svg {...props}><path d="M6 5C10 1.5 18 2 18 7C18 10 15.5 12 11 12 M11 12C15.5 12 18 13.5 18 17C18 22 10 22.5 6 19" /></Svg>;
+}
+
+function StationDigit4(props: IconProps) {
+  return <Svg {...props}><path d="M15 21V3L4 15H20" /></Svg>;
+}
+
+function StationDigit5(props: IconProps) {
+  return <Svg {...props}><path d="M18 3H7L6 11.5C12 9 18 11 18 16C18 22 10 22.5 6 19" /></Svg>;
+}
+
+function StationDigit6(props: IconProps) {
+  return <Svg {...props}><path d="M17 4C10 0 6 7 6 14.5C6 23 18 23 18 15.5C18 8.5 6 9 6 15.5" /></Svg>;
+}
+
+function StationDigit7(props: IconProps) {
+  return <Svg {...props}><path d="M5 3H19L9 21" /></Svg>;
+}
+
+function StationDigit8(props: IconProps) {
+  return <Svg {...props}><path d="M12 3C5 3 5 11.5 12 11.5C19 11.5 19 3 12 3Z M12 11.5C4 11.5 4 21 12 21C20 21 20 11.5 12 11.5Z" /></Svg>;
+}
+
+function StationDigit9(props: IconProps) {
+  return <Svg {...props}><path d="M7 20C14 24 18 17 18 9.5C18 1 6 1 6 8.5C6 15.5 18 15 18 8.5" /></Svg>;
+}
+
+function StationShapeTriangle(props: IconProps) {
+  return <Svg {...props}><path d="M12 3L22 20H2Z" /></Svg>;
+}
+
+function StationShapeSquare(props: IconProps) {
+  return <Svg {...props}><path d="M4 4H20V20H4Z" /></Svg>;
+}
+
+function StationShapePentagon(props: IconProps) {
+  return <Svg {...props}><path d="M12 2.5L21.5 9.5L18 20.5H6L2.5 9.5Z" /></Svg>;
+}
+
+function StationShapeHexagon(props: IconProps) {
+  return <Svg {...props}><path d="M7 3.5H17L22 12L17 20.5H7L2 12Z" /></Svg>;
+}
+
+function StationShapeOctagon(props: IconProps) {
+  return <Svg {...props}><path d="M8 3H16L21 8V16L16 21H8L3 16V8Z" /></Svg>;
+}
+
 /** The icons a station can have (design/station-icons), in the picker's order, each with the emoji kept beside it for older clients and the words it is found by. */
 export const STATION_ICONS: readonly { emoji: string; name: string; words: string; Icon: (props: IconProps) => React.JSX.Element }[] = [
   { emoji: "🖥️", name: "desktop", words: "desktop 台式机 显示器", Icon: StationDesktop },
@@ -888,6 +1804,58 @@ export const STATION_ICONS: readonly { emoji: string; name: string; words: strin
   { emoji: "🛡️", name: "shield", words: "shield 盾 安全", Icon: StationShield },
   { emoji: "🔒", name: "lock", words: "lock 锁", Icon: StationLock },
   { emoji: "🤖", name: "robot", words: "robot 机器人", Icon: StationRobot },
+  { emoji: "⌨️", name: "keyboard", words: "keyboard 键盘", Icon: StationKeyboard },
+  { emoji: "🖱️", name: "mouse", words: "mouse 鼠标", Icon: StationMouse },
+  { emoji: "🎮", name: "gamepad", words: "gamepad 手柄", Icon: StationGamepad },
+  { emoji: "🎧", name: "headphones", words: "headphones 耳机", Icon: StationHeadphones },
+  { emoji: "📷", name: "camera", words: "camera 相机", Icon: StationCamera },
+  { emoji: "🖨️", name: "printer", words: "printer 打印机", Icon: StationPrinter },
+  { emoji: "📺", name: "tv", words: "tv 电视", Icon: StationTv },
+  { emoji: "⌚", name: "watch", words: "watch 手表", Icon: StationWatch },
+  { emoji: "📲", name: "tablet", words: "tablet 平板", Icon: StationTablet },
+  { emoji: "📶", name: "wifi", words: "wifi 无线", Icon: StationWifi },
+  { emoji: "🔋", name: "battery", words: "battery 电池", Icon: StationBattery },
+  { emoji: "🔌", name: "plug", words: "plug 插头", Icon: StationPlug },
+  { emoji: "💽", name: "floppy", words: "floppy 软盘", Icon: StationFloppy },
+  { emoji: "📁", name: "folder", words: "folder 文件夹", Icon: StationFolder },
+  { emoji: "📄", name: "document", words: "document 文档", Icon: StationDocument },
+  { emoji: "📥", name: "inbox", words: "inbox 收件箱", Icon: StationInbox },
+  { emoji: "✉️", name: "mail", words: "mail 信", Icon: StationMail },
+  { emoji: "📅", name: "calendar", words: "calendar 日历", Icon: StationCalendar },
+  { emoji: "🕒", name: "clock", words: "clock 钟", Icon: StationClock },
+  { emoji: "🔖", name: "bookmark", words: "bookmark 书签", Icon: StationBookmark },
+  { emoji: "🏷️", name: "tag", words: "tag 标签", Icon: StationTag },
+  { emoji: "🚩", name: "flag", words: "flag 旗", Icon: StationFlag },
+  { emoji: "📌", name: "pin", words: "pin 图钉", Icon: StationPin },
+  { emoji: "🔗", name: "link", words: "link 链接", Icon: StationLink },
+  { emoji: "🔍", name: "magnifier", words: "magnifier 放大镜", Icon: StationMagnifier },
+  { emoji: "💡", name: "bulb", words: "bulb 灯泡", Icon: StationBulb },
+  { emoji: "🔧", name: "wrench", words: "wrench 扳手", Icon: StationWrench },
+  { emoji: "🪛", name: "screwdriver", words: "screwdriver 螺丝刀", Icon: StationScrewdriver },
+  { emoji: "📏", name: "ruler", words: "ruler 尺子", Icon: StationRuler },
+  { emoji: "✏️", name: "pencil", words: "pencil 铅笔", Icon: StationPencil },
+  { emoji: "🖌️", name: "brush", words: "brush 画笔", Icon: StationBrush },
+  { emoji: "🎨", name: "palette", words: "palette 调色板", Icon: StationPalette },
+  { emoji: "✂️", name: "scissors", words: "scissors 剪刀", Icon: StationScissors },
+  { emoji: "📎", name: "paperclip", words: "paperclip 回形针", Icon: StationPaperclip },
+  { emoji: "🧭", name: "compass", words: "compass 指南针", Icon: StationCompass },
+  { emoji: "🗺️", name: "map", words: "map 地图", Icon: StationMap },
+  { emoji: "🌍", name: "globe", words: "globe 地球", Icon: StationGlobe },
+  { emoji: "🎯", name: "target", words: "target 靶子", Icon: StationTarget },
+  { emoji: "🏆", name: "trophy", words: "trophy 奖杯", Icon: StationTrophy },
+  { emoji: "🏅", name: "medal", words: "medal 奖牌", Icon: StationMedal },
+  { emoji: "🤴", name: "crown", words: "crown 皇冠", Icon: StationCrown },
+  { emoji: "🎁", name: "gift", words: "gift 礼物", Icon: StationGift },
+  { emoji: "🧩", name: "puzzle", words: "puzzle 拼图", Icon: StationPuzzle },
+  { emoji: "🧮", name: "calculator", words: "calculator 计算器", Icon: StationCalculator },
+  { emoji: "📊", name: "chart", words: "chart 图表", Icon: StationChart },
+  { emoji: "🧱", name: "cube", words: "cube 方块", Icon: StationCube },
+  { emoji: "⚛️", name: "atom", words: "atom 原子", Icon: StationAtom },
+  { emoji: "🧬", name: "dna", words: "dna 基因", Icon: StationDna },
+  { emoji: "🔬", name: "microscope", words: "microscope 显微镜", Icon: StationMicroscope },
+  { emoji: "🔭", name: "telescope", words: "telescope 望远镜", Icon: StationTelescope },
+  { emoji: "🛰️", name: "satellite", words: "satellite 卫星", Icon: StationSatellite },
+  { emoji: "📡", name: "antenna", words: "antenna 天线", Icon: StationAntenna },
   { emoji: "🏠", name: "home", words: "home 家 房子", Icon: StationHome },
   { emoji: "🏢", name: "tower", words: "tower 大楼", Icon: StationTower },
   { emoji: "🗼", name: "lighthouse", words: "lighthouse 灯塔", Icon: StationLighthouse },
@@ -933,6 +1901,156 @@ export const STATION_ICONS: readonly { emoji: string; name: string; words: strin
   { emoji: "👻", name: "ghost", words: "ghost 幽灵", Icon: StationGhost },
   { emoji: "🐟", name: "fish", words: "fish 鱼", Icon: StationFish },
   { emoji: "🐢", name: "turtle", words: "turtle 乌龟", Icon: StationTurtle },
+  { emoji: "🐶", name: "dog", words: "dog 狗", Icon: StationDog },
+  { emoji: "🐼", name: "panda", words: "panda 熊猫", Icon: StationPanda },
+  { emoji: "🐸", name: "frog", words: "frog 青蛙", Icon: StationFrog },
+  { emoji: "🦉", name: "owl", words: "owl 猫头鹰", Icon: StationOwl },
+  { emoji: "🐝", name: "bee", words: "bee 蜜蜂", Icon: StationBee },
+  { emoji: "🦋", name: "butterfly", words: "butterfly 蝴蝶", Icon: StationButterfly },
+  { emoji: "🐻", name: "bear", words: "bear 熊", Icon: StationBear },
+  { emoji: "🦆", name: "duck", words: "duck 鸭子", Icon: StationDuck },
+  { emoji: "🐉", name: "dragon", words: "dragon 龙", Icon: StationDragon },
+  { emoji: "🦖", name: "dinosaur", words: "dinosaur 恐龙", Icon: StationDinosaur },
+  { emoji: "🐦", name: "bird", words: "bird 鸟", Icon: StationBird },
+  { emoji: "🐘", name: "elephant", words: "elephant 大象", Icon: StationElephant },
+  { emoji: "🐍", name: "snake", words: "snake 蛇", Icon: StationSnake },
+  { emoji: "🕷️", name: "spider", words: "spider 蜘蛛", Icon: StationSpider },
+  { emoji: "🐑", name: "sheep", words: "sheep 羊", Icon: StationSheep },
+  { emoji: "🐷", name: "pig", words: "pig 猪", Icon: StationPig },
+  { emoji: "🐮", name: "cow", words: "cow 牛", Icon: StationCow },
+  { emoji: "🐎", name: "horse", words: "horse 马", Icon: StationHorse },
+  { emoji: "🐵", name: "monkey", words: "monkey 猴子", Icon: StationMonkey },
+  { emoji: "🦁", name: "lion", words: "lion 狮子", Icon: StationLion },
+  { emoji: "🐺", name: "wolf", words: "wolf 狼", Icon: StationWolf },
+  { emoji: "🦌", name: "deer", words: "deer 鹿", Icon: StationDeer },
+  { emoji: "🦔", name: "hedgehog", words: "hedgehog 刺猬", Icon: StationHedgehog },
+  { emoji: "🦇", name: "bat", words: "bat 蝙蝠", Icon: StationBat },
+  { emoji: "🦈", name: "shark", words: "shark 鲨鱼", Icon: StationShark },
+  { emoji: "🐬", name: "dolphin", words: "dolphin 海豚", Icon: StationDolphin },
+  { emoji: "🪼", name: "jellyfish", words: "jellyfish 水母", Icon: StationJellyfish },
+  { emoji: "🐚", name: "shell", words: "shell 贝壳", Icon: StationShell },
+  { emoji: "🐞", name: "ladybug", words: "ladybug 瓢虫", Icon: StationLadybug },
+  { emoji: "🐜", name: "ant", words: "ant 蚂蚁", Icon: StationAnt },
+  { emoji: "🐭", name: "mouse-animal", words: "mouse animal 老鼠", Icon: StationMouseAnimal },
+  { emoji: "🐥", name: "chick", words: "chick 小鸡", Icon: StationChick },
+  { emoji: "🍃", name: "leaf", words: "leaf 叶子", Icon: StationLeaf },
+  { emoji: "🌸", name: "flower", words: "flower 花", Icon: StationFlower },
+  { emoji: "🌷", name: "tulip", words: "tulip 郁金香", Icon: StationTulip },
+  { emoji: "🍀", name: "clover", words: "clover 四叶草", Icon: StationClover },
+  { emoji: "🌴", name: "palm", words: "palm 棕榈", Icon: StationPalm },
+  { emoji: "🌳", name: "tree", words: "tree 树", Icon: StationTree },
+  { emoji: "🌱", name: "seedling", words: "seedling 幼苗", Icon: StationSeedling },
+  { emoji: "🌈", name: "rainbow", words: "rainbow 彩虹", Icon: StationRainbow },
+  { emoji: "⛈️", name: "storm", words: "storm 雷雨", Icon: StationStorm },
+  { emoji: "🌪️", name: "tornado", words: "tornado 龙卷风", Icon: StationTornado },
+  { emoji: "☄️", name: "comet", words: "comet 彗星", Icon: StationComet },
+  { emoji: "💧", name: "drop", words: "drop 水滴", Icon: StationDrop },
+  { emoji: "🪶", name: "feather", words: "feather 羽毛", Icon: StationFeather },
+  { emoji: "🐾", name: "paw", words: "paw 爪印", Icon: StationPaw },
+  { emoji: "🦴", name: "bone", words: "bone 骨头", Icon: StationBone },
+  { emoji: "🥚", name: "egg", words: "egg 蛋", Icon: StationEgg },
+  { emoji: "🍕", name: "pizza", words: "pizza 披萨", Icon: StationPizza },
+  { emoji: "🍔", name: "burger", words: "burger 汉堡", Icon: StationBurger },
+  { emoji: "🍩", name: "donut", words: "donut 甜甜圈", Icon: StationDonut },
+  { emoji: "🍰", name: "cake", words: "cake 蛋糕", Icon: StationCake },
+  { emoji: "🧁", name: "cupcake", words: "cupcake 纸杯蛋糕", Icon: StationCupcake },
+  { emoji: "🍪", name: "cookie", words: "cookie 饼干", Icon: StationCookie },
+  { emoji: "🍞", name: "bread", words: "bread 面包", Icon: StationBread },
+  { emoji: "🥐", name: "croissant", words: "croissant 可颂", Icon: StationCroissant },
+  { emoji: "🧀", name: "cheese", words: "cheese 奶酪", Icon: StationCheese },
+  { emoji: "🥕", name: "carrot", words: "carrot 胡萝卜", Icon: StationCarrot },
+  { emoji: "🌽", name: "corn", words: "corn 玉米", Icon: StationCorn },
+  { emoji: "🌶️", name: "chili", words: "chili 辣椒", Icon: StationChili },
+  { emoji: "🥑", name: "avocado", words: "avocado 牛油果", Icon: StationAvocado },
+  { emoji: "🍉", name: "watermelon", words: "watermelon 西瓜", Icon: StationWatermelon },
+  { emoji: "🍓", name: "strawberry", words: "strawberry 草莓", Icon: StationStrawberry },
+  { emoji: "🍌", name: "banana", words: "banana 香蕉", Icon: StationBanana },
+  { emoji: "🍑", name: "peach", words: "peach 桃子", Icon: StationPeach },
+  { emoji: "🍍", name: "pineapple", words: "pineapple 菠萝", Icon: StationPineapple },
+  { emoji: "🍦", name: "ice-cream", words: "ice cream 冰淇淋", Icon: StationIceCream },
+  { emoji: "🍬", name: "candy", words: "candy 糖果", Icon: StationCandy },
+  { emoji: "🍭", name: "lollipop", words: "lollipop 棒棒糖", Icon: StationLollipop },
+  { emoji: "🍿", name: "popcorn", words: "popcorn 爆米花", Icon: StationPopcorn },
+  { emoji: "🍜", name: "noodles", words: "noodles 面条", Icon: StationNoodles },
+  { emoji: "🍣", name: "sushi", words: "sushi 寿司", Icon: StationSushi },
+  { emoji: "🍚", name: "rice", words: "rice 米饭", Icon: StationRice },
+  { emoji: "🌮", name: "taco", words: "taco 塔可", Icon: StationTaco },
+  { emoji: "🌭", name: "hotdog", words: "hotdog 热狗", Icon: StationHotdog },
+  { emoji: "🍺", name: "beer", words: "beer 啤酒", Icon: StationBeer },
+  { emoji: "🍷", name: "wine", words: "wine 红酒", Icon: StationWine },
+  { emoji: "🍸", name: "cocktail", words: "cocktail 鸡尾酒", Icon: StationCocktail },
+  { emoji: "🥛", name: "milk", words: "milk 牛奶", Icon: StationMilk },
+  { emoji: "🥤", name: "soda", words: "soda 汽水", Icon: StationSoda },
+  { emoji: "🪑", name: "chair", words: "chair 椅子", Icon: StationChair },
+  { emoji: "🛋️", name: "sofa", words: "sofa 沙发", Icon: StationSofa },
+  { emoji: "🛏️", name: "bed", words: "bed 床", Icon: StationBed },
+  { emoji: "🪔", name: "lamp", words: "lamp 台灯", Icon: StationLamp },
+  { emoji: "🚪", name: "door", words: "door 门", Icon: StationDoor },
+  { emoji: "🛁", name: "bathtub", words: "bathtub 浴缸", Icon: StationBathtub },
+  { emoji: "☂️", name: "umbrella", words: "umbrella 伞", Icon: StationUmbrella },
+  { emoji: "🎒", name: "backpack", words: "backpack 背包", Icon: StationBackpack },
+  { emoji: "👓", name: "glasses", words: "glasses 眼镜", Icon: StationGlasses },
+  { emoji: "🎩", name: "hat", words: "hat 帽子", Icon: StationHat },
+  { emoji: "👕", name: "shirt", words: "shirt 衣服", Icon: StationShirt },
+  { emoji: "👟", name: "shoe", words: "shoe 鞋", Icon: StationShoe },
+  { emoji: "💍", name: "ring", words: "ring 戒指", Icon: StationRing },
+  { emoji: "🎈", name: "balloon", words: "balloon 气球", Icon: StationBalloon },
+  { emoji: "🕯️", name: "candle", words: "candle 蜡烛", Icon: StationCandle },
+  { emoji: "📖", name: "book", words: "book 书", Icon: StationBook },
+  { emoji: "📚", name: "books", words: "books 一摞书", Icon: StationBooks },
+  { emoji: "📰", name: "newspaper", words: "newspaper 报纸", Icon: StationNewspaper },
+  { emoji: "🚗", name: "car", words: "car 汽车", Icon: StationCar },
+  { emoji: "🚕", name: "taxi", words: "taxi 出租车", Icon: StationTaxi },
+  { emoji: "🚌", name: "bus", words: "bus 公交车", Icon: StationBus },
+  { emoji: "🚚", name: "truck", words: "truck 卡车", Icon: StationTruck },
+  { emoji: "🚂", name: "train", words: "train 火车", Icon: StationTrain },
+  { emoji: "🚇", name: "metro", words: "metro 地铁", Icon: StationMetro },
+  { emoji: "🚲", name: "bike", words: "bike 自行车", Icon: StationBike },
+  { emoji: "🛴", name: "scooter", words: "scooter 滑板车", Icon: StationScooter },
+  { emoji: "🏍️", name: "motorcycle", words: "motorcycle 摩托车", Icon: StationMotorcycle },
+  { emoji: "✈️", name: "plane", words: "plane 飞机", Icon: StationPlane },
+  { emoji: "🚁", name: "helicopter", words: "helicopter 直升机", Icon: StationHelicopter },
+  { emoji: "⛵", name: "sailboat", words: "sailboat 帆船", Icon: StationSailboat },
+  { emoji: "🚢", name: "ship", words: "ship 轮船", Icon: StationShip },
+  { emoji: "🛸", name: "ufo", words: "ufo 飞碟", Icon: StationUfo },
+  { emoji: "🪂", name: "parachute", words: "parachute 降落伞", Icon: StationParachute },
+  { emoji: "⚓", name: "anchor", words: "anchor 锚", Icon: StationAnchor },
+  { emoji: "🚦", name: "traffic-light", words: "traffic light 红绿灯", Icon: StationTrafficLight },
+  { emoji: "⛽", name: "fuel", words: "fuel 加油站", Icon: StationFuel },
+  { emoji: "🏭", name: "factory", words: "factory 工厂", Icon: StationFactory },
+  { emoji: "🏯", name: "castle", words: "castle 城堡", Icon: StationCastle },
+  { emoji: "🌉", name: "bridge", words: "bridge 桥", Icon: StationBridge },
+  { emoji: "🏝️", name: "island", words: "island 小岛", Icon: StationIsland },
+  { emoji: "⛩️", name: "torii", words: "torii 鸟居", Icon: StationTorii },
+  { emoji: "🎡", name: "ferris-wheel", words: "ferris wheel 摩天轮", Icon: StationFerrisWheel },
+  { emoji: "🏫", name: "school", words: "school 学校", Icon: StationSchool },
+  { emoji: "🏦", name: "bank", words: "bank 银行", Icon: StationBank },
+  { emoji: "🏪", name: "shop", words: "shop 商店", Icon: StationShop },
+  { emoji: "🛖", name: "barn", words: "barn 小屋", Icon: StationBarn },
+  { emoji: "🔺", name: "pyramid", words: "pyramid 金字塔", Icon: StationPyramid },
+  { emoji: "🎸", name: "guitar", words: "guitar 吉他", Icon: StationGuitar },
+  { emoji: "🎹", name: "piano", words: "piano 钢琴", Icon: StationPiano },
+  { emoji: "🥁", name: "drum", words: "drum 鼓", Icon: StationDrum },
+  { emoji: "🎺", name: "trumpet", words: "trumpet 小号", Icon: StationTrumpet },
+  { emoji: "🎤", name: "microphone", words: "microphone 麦克风", Icon: StationMicrophone },
+  { emoji: "🎵", name: "music", words: "music 音符", Icon: StationMusic },
+  { emoji: "🎬", name: "film", words: "film 电影", Icon: StationFilm },
+  { emoji: "🎫", name: "ticket", words: "ticket 票", Icon: StationTicket },
+  { emoji: "🕹️", name: "joystick", words: "joystick 摇杆", Icon: StationJoystick },
+  { emoji: "🪁", name: "kite", words: "kite 风筝", Icon: StationKite },
+  { emoji: "⚽", name: "soccer", words: "soccer 足球", Icon: StationSoccer },
+  { emoji: "🏀", name: "basketball", words: "basketball 篮球", Icon: StationBasketball },
+  { emoji: "🎾", name: "tennis", words: "tennis 网球", Icon: StationTennis },
+  { emoji: "🎳", name: "bowling", words: "bowling 保龄球", Icon: StationBowling },
+  { emoji: "☯️", name: "yin-yang", words: "yin yang 阴阳", Icon: StationYinYang },
+  { emoji: "☮️", name: "peace", words: "peace 和平", Icon: StationPeace },
+  { emoji: "💀", name: "skull", words: "skull 骷髅", Icon: StationSkull },
+  { emoji: "👽", name: "alien", words: "alien 外星人", Icon: StationAlien },
+  { emoji: "💣", name: "bomb", words: "bomb 炸弹", Icon: StationBomb },
+  { emoji: "⚔️", name: "sword", words: "sword 剑", Icon: StationSword },
+  { emoji: "🪄", name: "wand", words: "wand 魔杖", Icon: StationWand },
+  { emoji: "🔮", name: "crystal-ball", words: "crystal ball 水晶球", Icon: StationCrystalBall },
+  { emoji: "✨", name: "sparkles", words: "sparkles 闪光", Icon: StationSparkles },
   { emoji: "🎲", name: "dice-1", words: "dice 1 骰子 1", Icon: StationDice1 },
   { emoji: "🎲", name: "dice-2", words: "dice 2 骰子 2", Icon: StationDice2 },
   { emoji: "🎲", name: "dice-3", words: "dice 3 骰子 3", Icon: StationDice3 },
@@ -954,4 +2072,31 @@ export const STATION_ICONS: readonly { emoji: string; name: string; words: strin
   { emoji: "🌓", name: "moon-half", words: "moon half 月相 半月", Icon: StationMoonHalf },
   { emoji: "🌔", name: "moon-gibbous", words: "moon gibbous 月相 凸月", Icon: StationMoonGibbous },
   { emoji: "🌕", name: "moon-full", words: "moon full 月相 满月", Icon: StationMoonFull },
+  { emoji: "♈", name: "zodiac-aries", words: "zodiac aries 白羊座", Icon: StationZodiacAries },
+  { emoji: "♉", name: "zodiac-taurus", words: "zodiac taurus 金牛座", Icon: StationZodiacTaurus },
+  { emoji: "♊", name: "zodiac-gemini", words: "zodiac gemini 双子座", Icon: StationZodiacGemini },
+  { emoji: "♋", name: "zodiac-cancer", words: "zodiac cancer 巨蟹座", Icon: StationZodiacCancer },
+  { emoji: "♌", name: "zodiac-leo", words: "zodiac leo 狮子座", Icon: StationZodiacLeo },
+  { emoji: "♍", name: "zodiac-virgo", words: "zodiac virgo 处女座", Icon: StationZodiacVirgo },
+  { emoji: "♎", name: "zodiac-libra", words: "zodiac libra 天秤座", Icon: StationZodiacLibra },
+  { emoji: "♏", name: "zodiac-scorpio", words: "zodiac scorpio 天蝎座", Icon: StationZodiacScorpio },
+  { emoji: "♐", name: "zodiac-sagittarius", words: "zodiac sagittarius 射手座", Icon: StationZodiacSagittarius },
+  { emoji: "♑", name: "zodiac-capricorn", words: "zodiac capricorn 摩羯座", Icon: StationZodiacCapricorn },
+  { emoji: "♒", name: "zodiac-aquarius", words: "zodiac aquarius 水瓶座", Icon: StationZodiacAquarius },
+  { emoji: "♓", name: "zodiac-pisces", words: "zodiac pisces 双鱼座", Icon: StationZodiacPisces },
+  { emoji: "🔢", name: "digit-0", words: "digit 0 0", Icon: StationDigit0 },
+  { emoji: "🔢", name: "digit-1", words: "digit 1 1", Icon: StationDigit1 },
+  { emoji: "🔢", name: "digit-2", words: "digit 2 2", Icon: StationDigit2 },
+  { emoji: "🔢", name: "digit-3", words: "digit 3 3", Icon: StationDigit3 },
+  { emoji: "🔢", name: "digit-4", words: "digit 4 4", Icon: StationDigit4 },
+  { emoji: "🔢", name: "digit-5", words: "digit 5 5", Icon: StationDigit5 },
+  { emoji: "🔢", name: "digit-6", words: "digit 6 6", Icon: StationDigit6 },
+  { emoji: "🔢", name: "digit-7", words: "digit 7 7", Icon: StationDigit7 },
+  { emoji: "🔢", name: "digit-8", words: "digit 8 8", Icon: StationDigit8 },
+  { emoji: "🔢", name: "digit-9", words: "digit 9 9", Icon: StationDigit9 },
+  { emoji: "🔼", name: "shape-triangle", words: "shape triangle 三角", Icon: StationShapeTriangle },
+  { emoji: "⬜", name: "shape-square", words: "shape square 方", Icon: StationShapeSquare },
+  { emoji: "⭐", name: "shape-pentagon", words: "shape pentagon 五边形", Icon: StationShapePentagon },
+  { emoji: "🔷", name: "shape-hexagon", words: "shape hexagon 六边形", Icon: StationShapeHexagon },
+  { emoji: "🛑", name: "shape-octagon", words: "shape octagon 八边形", Icon: StationShapeOctagon },
 ];
