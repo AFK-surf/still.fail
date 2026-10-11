@@ -82,7 +82,7 @@ globalStyle(`${navRow} button${navLink}`, { padding: "8px 0", border: "0", backg
 /** The downloads' card, under their word while the pointer is on it (or it has focus): frosted, as the bar is. */
 export const menu = style({ position: "relative" });
 export const menuCard = style({
-  position: "absolute", top: "calc(100% + 14px)", left: "50%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px",
+  position: "absolute", top: "calc(100% + 14px)", left: "50%", display: "grid", gridAutoFlow: "column", gridAutoColumns: "1fr", gap: "6px",
   padding: "6px", borderRadius: "20px", whiteSpace: "nowrap",
   background: `color-mix(in srgb, var(--s-node) 84%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)",
   boxShadow: `0 16px 48px -16px rgba(0, 0, 0, .5), inset 0 0 0 1px ${LINE}`,
