@@ -214,6 +214,39 @@ test("the test channel's releases: served by name, installed with ?channel=beta,
   }
 });
 
+test("a station added on the test channel installs its release: on its host, or from a beta app", async () => {
+  const h = await harness();
+  try {
+    const aliceTokens = await h.login("alice");
+    await h.as(aliceTokens, "admin")("POST", `/v1/admin/users/${aliceTokens.subject}/beta`, { on: true });
+    const alice = h.as(aliceTokens);
+    const home = (await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as { id: string };
+    type Made = { token: string; install: string; installWindows: string; command: string };
+    const add = async (on: "main" | "beta") => {
+      const made = await h.as(aliceTokens, on)("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "studio" });
+      return (await made.json()) as Made;
+    };
+    const fromApp = async () => {
+      const made = await h.fetch(`/v1/workspaces/${home.id}/enrollments`, { method: "POST", headers: { authorization: `Bearer ${aliceTokens.access_token}`, "content-type": "application/json", "x-stillfail-channel": "beta" }, body: JSON.stringify({ name: "studio" }) });
+      return (await made.json()) as Made;
+    };
+
+    const stable = await add("main");
+    assert.equal(stable.install, `curl -fsSL ${h.origin}/install.sh | sh -s -- ${stable.token}`);
+    assert.equal(stable.installWindows, `& ([scriptblock]::Create((irm ${h.origin}/install.ps1))) ${stable.token}`);
+    for (const made of [await add("beta"), await fromApp()]) {
+      // The stable host's installer all the same (the station joins it), asked for the test channel's release.
+      assert.equal(made.install, `curl -fsSL '${h.origin}/install.sh?channel=beta' | sh -s -- ${made.token}`);
+      assert.equal(made.installWindows, `& ([scriptblock]::Create((irm ${h.origin}/install.ps1?channel=beta))) ${made.token}`);
+      assert.equal(made.command, `stillfail station enroll ${h.origin} ${made.token}`);
+    }
+    const windows = await (await h.fetch("/install.ps1?channel=beta")).text();
+    assert.match(windows, /else \{ 'beta' \}/);
+  } finally {
+    await h.close();
+  }
+});
+
 test("without BETA_ORIGIN there is no test channel", () => {
   assert.equal(betaOrigin({}), null);
   assert.equal(betaOrigin({ BETA_ORIGIN: " " }), null);
