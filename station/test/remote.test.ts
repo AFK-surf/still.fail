@@ -72,14 +72,14 @@ async function rounds(_what: string, clock: ReturnType<typeof testClock>, by: Du
 
 type Station = { dir: string; store: Store; jobs: Jobs; remote: Remote; told: [string, string][] };
 
-function station(allow: string[], options: { clock?: Clock.Clock; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void } = {}): Station {
+function station(allow: string[], options: { clock?: Clock.Clock; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void } = {}): Station {
   const dir = options.dir ?? tempdir();
   const store = options.store ?? Store.open(":memory:");
   const told: [string, string][] = [];
   const jobs = options.jobs ?? new Jobs({ store, data: dir, notify: () => {}, link: () => null });
   const config = { remoteTasks: { allow } };
   const remote = new Remote({
-    data: dir, store, jobs, config: () => config, clock: options.clock,
+    data: dir, store, jobs, config: () => config, clock: options.clock, meshWaitMs: options.meshWaitMs,
     notify: options.notify ?? ((session, text) => void told.push([session, text])),
   });
   cleanup.push(async () => {
@@ -98,6 +98,20 @@ const unb64 = (v: Json) => Buffer.from(v.data, "base64").toString();
 
 // Each test has stations of its own (directories, stores, clocks): they run at once.
 describe("remote", { concurrency: true }, () => {
+  test("a request asked before the mesh is up waits for it; one it never comes up for is refused after the wait", async () => {
+    // As a chat taken up as the station starts, on a subscription borrowed from another station.
+    const s = station([], { meshWaitMs: 2000 });
+    const asked = s.remote.ask("b".repeat(64), { method: "share.lend", id: "sh-x" });
+    await new Promise((r) => setTimeout(r, 100));
+    const call: PeerCall = async (to, _workspace, request) => ({ to, method: request.method });
+    s.remote.attach(call);
+    assert.deepEqual(await asked, { to: "b".repeat(64), method: "share.lend" });
+    const never = station([], { meshWaitMs: 200 });
+    const t0 = Date.now();
+    await assert.rejects(never.remote.ask("b".repeat(64), {}), /station mesh is not ready/);
+    assert.ok(Date.now() - t0 >= 180, "refused only after the wait");
+  });
+
   test("transfer paths do not escape or follow links", () => {
     const dir = tempdir();
     for (const path of ["", "/etc/passwd", "../secret", "a/../../secret", "./a", "."]) {
