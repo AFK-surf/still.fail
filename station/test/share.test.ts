@@ -53,7 +53,7 @@ function station(cloud: FakeCloud, id: string, others: () => Map<string, Station
     },
     agentHome: () => join(data, "agent"),
     env: {},
-    claudeToken: async (p) => (lent.push(p.id), { token: `token-of-${p.id}`, expiresAt: Date.now() + 3600_000 }),
+    claudeToken: async (p) => (lent.push(p.id), { token: `token-of-${p.id}`, expiresAt: Date.now() + 2 * 3600_000 }),
     codexRunning: () => false,
     status: (pid) => ({ check: { state: "ok", detail: `checked ${pid}`, models: null, checkedAt: 1 }, quota: null }),
     changed: () => {},
@@ -123,7 +123,7 @@ test("a station left out of a share's stations does not get it, and refuses to b
   await assert.rejects(a.sharing.handle(B, { method: "share.get", id }), /not for this station/);
 });
 
-test("a shared subscription: the other borrows tokens from its host, with no login of its own; not while the host is away", async () => {
+test("a shared subscription: the other borrows tokens from its host, with no login of its own; while the host is away, only the one lent before", async () => {
   const cloud = new FakeCloud();
   const all = new Map<string, Station>();
   const a = station(cloud, A, () => all, [SUB]);
@@ -141,8 +141,9 @@ test("a shared subscription: the other borrows tokens from its host, with no log
   assert.deepEqual(a.lent, ["max"]);
   assert.equal((await b.sharing.status(copy)).check.detail, "checked max");
   all.delete(A);
-  await assert.rejects(b.sharing.lendClaude(copy), /did not lend/);
+  assert.equal((await b.sharing.lendClaude(copy)).token, "token-of-max", "the token lent before, while it lasts");
   assert.equal(b.sharing.profileView(copy)!.reachable, false);
+  await assert.rejects(b.sharing.lendClaude({ ...copy, id: "never-lent" }), /did not lend/);
 });
 
 test("a borrowed Codex subscription's login is written in its home, the profile as the runtime has it (its home resolved)", async () => {
@@ -164,6 +165,12 @@ test("a borrowed Codex subscription's login is written in its home, the profile 
   const auth = JSON.parse(readFileSync(join(home, "auth.json"), "utf8"));
   assert.equal(auth.tokens.account_id, "acct");
   assert.equal(auth.tokens.refresh_token, "lent-by-another-station");
+  // The host away: the login lent before is used while it has long enough, not once it runs out soon.
+  all.delete(A);
+  assert.ok((await b.sharing.lendCodex({ ...copy, home })) > Date.now() + 23 * 3600_000);
+  auth.tokens.access_token = jwt({ exp: Math.floor(Date.now() / 1000) + 600 });
+  writeFileSync(join(home, "auth.json"), JSON.stringify(auth));
+  await assert.rejects(b.sharing.lendCodex({ ...copy, home }), /did not lend/);
 });
 
 test("a shared subscription moves to another station: login handed over, the old host keeps a copy", async () => {

@@ -43,6 +43,8 @@ const MAX_SKILL_FILES = 200;
 /// A host lends a Codex token it has for at least this long; one closer to its end is renewed first (when it can be).
 const CODEX_LEND_MS = 24 * 3600_000;
 const CODEX_MIN_MS = 3600_000;
+/// A login lent before is used again while its host does not answer, if it still has this long.
+const KEEP_LENT_MS = 3600_000;
 /// Edits to a skill are taken once they have settled this long.
 const SETTLE_MS = 2000;
 /// What could not be done because another station did not answer is tried again after this, then twice as long each
@@ -167,6 +169,15 @@ function jwtExpiry(token: unknown): number | null {
   }
 }
 
+/// When the Codex login lent before, kept in a borrowed profile's home, runs out (0 when there is none).
+function keptCodexExpiry(file: string): number {
+  try {
+    return jwtExpiry(JSON.parse(readFileSync(file, "utf8"))?.tokens?.access_token) ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export class Sharing {
   private deps: SharingDeps;
   private time: Fibers;
@@ -179,6 +190,8 @@ export class Sharing {
   private unreachable = new Map<string, number>();
   /// Shares this station is handing to another right now: not lent meanwhile.
   private moving = new Set<string>();
+  /// The Claude token each borrowed profile was last lent (Codex keeps its own in its home's auth.json).
+  private lentClaude = new Map<string, MachineToken>();
   private reconciling: Promise<void> | null = null;
   private again = false;
   /// Copies asked about in this run (what changed while this station was away is found that way).
@@ -776,10 +789,17 @@ export class Sharing {
       const got = await this.deps.ask(host, { method: "share.lend", id: profile.share.id });
       this.unreachable.delete(host);
       if (typeof got?.token !== "string") throw new Error("the host lent no token");
-      return { token: got.token, expiresAt: Number(got.expiresAt ?? 0) };
+      const token = { token: got.token, expiresAt: Number(got.expiresAt ?? 0) };
+      this.lentClaude.set(profile.id, token);
+      return token;
     } catch (e) {
       this.unreachable.set(host, this.time.now());
       this.deps.changed();
+      const kept = this.lentClaude.get(profile.id);
+      if (kept && kept.expiresAt - this.time.now() >= KEEP_LENT_MS) {
+        log.warn("share", "the host did not lend a new token; the one lent before is used", { profile: profile.id, error: (e as Error).message });
+        return kept;
+      }
       throw new Error(`the station this subscription is signed in on did not lend it: ${(e as Error).message}`);
     }
   }
@@ -788,6 +808,7 @@ export class Sharing {
   /// Codex never renews it here); when they run out.
   async lendCodex(profile: Json): Promise<number> {
     const host = this.hostOf(profile);
+    const home = this.home(profile);
     let got: Json;
     try {
       got = await this.deps.ask(host, { method: "share.lend", id: profile.share.id });
@@ -795,6 +816,11 @@ export class Sharing {
     } catch (e) {
       this.unreachable.set(host, this.time.now());
       this.deps.changed();
+      const kept = keptCodexExpiry(join(home, "auth.json"));
+      if (kept - this.time.now() >= KEEP_LENT_MS) {
+        log.warn("share", "the host did not lend a new login; the one lent before is used", { profile: profile.id, error: (e as Error).message });
+        return kept;
+      }
       throw new Error(`the station this subscription is signed in on did not lend it: ${(e as Error).message}`);
     }
     const auth = {
@@ -803,7 +829,6 @@ export class Sharing {
       tokens: { ...got.tokens, refresh_token: "lent-by-another-station" },
       last_refresh: new Date(this.time.now()).toISOString(),
     };
-    const home = this.home(profile);
     mkdirSync(home, { recursive: true });
     writePrivate(join(home, "auth.json"), JSON.stringify(auth, null, 2));
     return Number(got.expiresAt ?? 0);
