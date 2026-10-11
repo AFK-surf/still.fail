@@ -36,12 +36,12 @@ const LINES_EASE = "cubic-bezier(0.2, 0.7, 0.2, 1)";
  * leaves with them, as a copy. With none moved, new and gone fade in place. As they are the first time.
  */
 function useLinesMotion(list: RefObject<HTMLElement | null>): void {
-  const was = useRef<{ box: HTMLElement; lines: Map<string, { el: HTMLElement; top: number; run?: Animation }> } | null>(null);
+  const was = useRef<{ box: HTMLElement; lines: Map<string, { el: HTMLElement; top: number; left: number; run?: Animation }> } | null>(null);
   useLayoutEffect(() => {
     const box = list.current;
     const before = was.current?.box === box ? was.current.lines : null;
     if (!box) return void (was.current = null);
-    const lines = new Map<string, { el: HTMLElement; top: number; run?: Animation }>();
+    const lines = new Map<string, { el: HTMLElement; top: number; left: number; run?: Animation }>();
     // How far each still is from its place on its way there, then where it lies now.
     const under = new Map<string, number>();
     for (const el of box.querySelectorAll<HTMLElement>(":scope > [data-line]")) {
@@ -52,7 +52,7 @@ function useLinesMotion(list: RefObject<HTMLElement | null>): void {
         run.cancel();
         under.set(key, shown - el.getBoundingClientRect().top);
       }
-      lines.set(key, { el, top: el.offsetTop });
+      lines.set(key, { el, top: el.offsetTop, left: el.offsetLeft });
     }
     was.current = { box, lines };
     if (!before || reducedMotion()) return;
@@ -75,7 +75,7 @@ function useLinesMotion(list: RefObject<HTMLElement | null>): void {
       const ghost = old.el.cloneNode(true) as HTMLElement;
       delete ghost.dataset.line;
       ghost.setAttribute("aria-hidden", "true");
-      Object.assign(ghost.style, { position: "absolute", top: `${old.top}px`, left: `${old.el.offsetLeft}px`, right: "0", pointerEvents: "none" });
+      Object.assign(ghost.style, { position: "absolute", top: `${old.top}px`, left: `${old.left}px`, right: "0", pointerEvents: "none" });
       box.appendChild(ghost);
       const run = ghost.animate([{ transform: "translateY(0)", opacity: 1 }, { transform: `translateY(${-shift}px)`, opacity: 0 }], { ...timing, fill: "forwards" });
       void run.finished.then(() => ghost.remove(), () => ghost.remove());
