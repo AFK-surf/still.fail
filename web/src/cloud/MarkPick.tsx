@@ -1,7 +1,7 @@
 // A station's mark (the settings' stations): a square before its name; pressed, a panel to pick one of still.fail's icons
 // (in a colour, or the words') or an emoji (any, pasted or typed, besides those offered), to put up a picture (or paste
 // one), or to have none. Those who may not change it see only the one it has. What is sent is ../stationPick.ts's.
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Popover } from "radix-ui";
 import { Close, ImageUpload, Plus, STATION_ICONS } from "../icons.tsx";
 import { Glyph, glyphColor, isPicture, MARK_COLORS, markColor, StationMark, stationGlyph, type MarkColor } from "../StationMark.tsx";
@@ -89,8 +89,14 @@ export function ColorRow({ color, className, onColor }: { color: MarkColor | und
 /** Still.fail's icons in `color`, the one it has marked (the phone's sheet has them larger: `className`, `size`). */
 export function GlyphGrid({ icon, color, size, className, onPick }: { icon: string | null | undefined; color?: MarkColor | undefined; size: number; className?: string; onPick(mark: Mark): void }) {
   const kept = stationGlyph(icon)?.name;
+  const grid = useRef<HTMLDivElement>(null);
+  // Opened, the one it has is in sight: the grid has more rows than room (the phone's sheet scrolls itself).
+  useLayoutEffect(() => {
+    const el = grid.current, on = el?.querySelector<HTMLElement>("[aria-pressed=true]");
+    if (el && on && el.scrollHeight > el.clientHeight) el.scrollTop = on.offsetTop - el.offsetTop - (el.clientHeight - on.offsetHeight) / 2;
+  }, []);
   return (
-    <div className={`${css.grid}${className ? ` ${className}` : ""}`} role="group" data-color={color} style={{ color: markColor(color) }}>
+    <div ref={grid} className={`${css.grid}${className ? ` ${className}` : ""}`} role="group" data-color={color} style={{ color: markColor(color) }}>
       {STATION_ICONS.map((g) => (
         <button key={g.name} type="button" className={css.choice} aria-label={g.name} aria-pressed={g.name === kept} onClick={() => onPick(glyphMark(g, color))}><g.Icon size={size} /></button>
       ))}

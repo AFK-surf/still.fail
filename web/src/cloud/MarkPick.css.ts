@@ -30,7 +30,8 @@ export const field = style({ width: "100%", height: "32px" });
 // settings' dark focus line is too heavy here: hover and focus take the hover's.
 globalStyle(`input${field}${field}`, { borderRadius: inner, cornerShape: vars.cornerShape, background: "transparent", borderColor: vars.lineStrong });
 globalStyle(`input${field}${field}:hover, input${field}${field}:focus`, { borderColor: vars.fieldHover });
-export const grid = style({ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "2px" });
+/** Eight to a row; more rows than the panel has room for scroll in it, under the switch and the colours. */
+export const grid = style({ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: "2px", maxHeight: "288px", overflowY: "auto", overscrollBehavior: "contain", scrollbarWidth: "thin" });
 /** Emoji are pictures: drawn a step above the title's size, as large as the icons look. */
 export const emojiGrid = style({ fontSize: `calc(${vars.textTitle} * 1.25)`, lineHeight: "1" });
 export const choice = style({

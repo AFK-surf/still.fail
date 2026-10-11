@@ -49,7 +49,7 @@ export const mMarkField = style({
 /** The grid: six to a row, wide enough for a thumb. */
 export const mMarkGrid = style({});
 // Doubled, to win over the wide grid's eight columns whatever order the sheets load in.
-globalStyle(`${mMarkGrid}${mMarkGrid}`, { gridTemplateColumns: "repeat(6, 1fr)", gap: "4px", padding: "0 14px 10px" });
+globalStyle(`${mMarkGrid}${mMarkGrid}`, { gridTemplateColumns: "repeat(6, 1fr)", gap: "4px", padding: "0 14px 10px", maxHeight: "none", overflowY: "visible" });
 globalStyle(`${mMarkGrid}:not([data-color]) > button:not([aria-pressed=true])`, { color: "var(--m-ink)" });
 /** The colours over the grid: as wide as it, a thumb's room each. */
 export const mMarkColors = style({});
