@@ -13,7 +13,8 @@ import type { Value } from "../store.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { equal, get, isObject, parseJson } from "../util.ts";
 import { StationAddr } from "./addr.ts";
-import { PAGE, TRANSCRIPT_PAGE, type StationsSync } from "./sync.ts";
+import { PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.ts";
+import type { StationsSync } from "./sync.ts";
 
 /// A chat shows a window of its thread's entries: at most this many.
 export const WINDOW = 3 * PAGE;
@@ -120,13 +121,14 @@ export class StationTopics implements Owner {
       // Opened: the most recently used, kept while shown. Let go for room before, or a chat no list has (opened from an
       // old notification's link): the sync brings it.
       const evicted = this.#core.data.opened("entry", station, String(id), true);
-      if (evicted || this.summary(station, id) === null) this.#sync.syncEntries(station, id, Priority.shown);
+      const entries = entriesOf(station, id);
+      if (evicted || this.summary(station, id) === null) this.#sync.channels.bring(entries, Priority.shown);
       // Its latest not on the device yet: that page alone, at once. What is before it comes with the station's history,
       // in batches behind (sync.ts #history), or as it is scrolled back to.
-      else if (this.#sync.latestMissing(station, id)) this.#sync.syncEntries(station, id, Priority.shown, true);
+      else if (this.#sync.channels.latestMissing(entries)) this.#sync.channels.bring(entries, Priority.shown, true);
       this.#moveOldPlace(station, id);
     }
-    if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.syncTranscript(station, topic.key as string, Priority.shown);
+    if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown);
     if (topic.topic === "net") this.#sampleNet(topic);
     this.resume(topic);
     // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
@@ -247,7 +249,8 @@ export class StationTopics implements Owner {
       if (before === undefined || before === 0) return false;
       const data = this.#core.data;
       const from = Math.max(0, before - TRANSCRIPT_PAGE);
-      if (data.logCount("transcript", station, key, from, before - 1) !== before - from) yield* this.#sync.transcript(station, key, before);
+      // Read now unless held, while its station is reached (else what is held is all there is).
+      if (this.#sync.link(station) && this.#sync.reachable(station)) yield* this.#sync.channels.older(transcriptOf(station, key), before, { quiet: false });
       const items = data.logRange("transcript", station, key, from, before - 1);
       if (!items.has(before - 1)) return false;
       let first = before;
@@ -350,7 +353,7 @@ export class StationTopics implements Owner {
           // Not all on the device yet: brought. What is held from where it opens on (the sync brings the latest first)
           // opens it now, what is before it coming in as it does when read back; only with that not held either does
           // it wait.
-          this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.range(station, id, from, to, null))));
+          this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.channels.range(entriesOf(station, id), from, to, { quiet: false }))));
           const held = data.logRange("entry", station, String(id), from, to);
           for (let n = at; n <= to; n++) if (!held.has(n)) return undefined;
           first = at;
@@ -412,7 +415,7 @@ export class StationTopics implements Owner {
       const [, window] = found;
       const before = window.first;
       if (before <= 1) return false;
-      yield* this.#sync.older(station, id, before, null);
+      yield* this.#sync.channels.older(entriesOf(station, id), before, { quiet: false });
       const held = this.#core.data.logRange("entry", station, String(id), Math.max(1, before - PAGE), before - 1);
       let first = before;
       while (first > Math.max(1, before - PAGE) && held.has(first - 1)) first--;
@@ -436,7 +439,7 @@ export class StationTopics implements Owner {
       const after = window.last!;
       const latest = this.#latest(station, id);
       const to = Math.min(after + PAGE, latest);
-      yield* this.#sync.range(station, id, after + 1, to, null);
+      yield* this.#sync.channels.range(entriesOf(station, id), after + 1, to, { quiet: false });
       const held = this.#core.data.logRange("entry", station, String(id), after + 1, to);
       let last = after;
       while (last < to && held.has(last + 1)) last++;
@@ -455,7 +458,7 @@ export class StationTopics implements Owner {
       const found = this.#window(station, id);
       if (!found || found[1].last === null) return;
       const latest = this.#latest(station, id);
-      yield* this.#sync.range(station, id, Math.max(1, latest - PAGE + 1), latest, null);
+      yield* this.#sync.channels.range(entriesOf(station, id), Math.max(1, latest - PAGE + 1), latest, { quiet: false });
       const held = this.#core.data.logRange("entry", station, String(id), Math.max(1, latest - PAGE), latest);
       let first = latest;
       while (first > 1 && held.has(first - 1) && first > latest - PAGE + 1) first--;

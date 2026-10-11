@@ -5,11 +5,20 @@
 // events bring what changes as it changes, into the records. Then the rest is brought onto the device in the
 // background, the most urgent first: every chat's entries (from its latest page back to its first), every session's
 // detail and the latest page of its transcript. The UI makes some of it more urgent (`prioritize`), never more or less.
+//
+// What a station holds is of two sorts, kept in sync each its own way:
+//
+// - what is only added to (a thread's entries, a session's transcript): channels (channels.ts). The stream says what
+//   is added (`thread`, `live`); what the device lacks of one it reads by number. Nothing of it depends on the stream
+//   having told all there was.
+// - what changes (the lists and their rows, a thread's summary, the overview, jobs, how far one has read): only how it
+//   is now matters. The stream says how it is as it changes; a stream that comes back is told how what changed
+//   meanwhile is now (from where the device is in the station's log of events, cursor.ts), or the lists are read again
+//   (`snapshot`). All of that is here.
 import { Deferred, Effect, Exit, Fiber, Scope } from "effect";
 import type { Inner } from "../core.ts";
 import { join } from "../data.ts";
 import { CoreError, asCoreError } from "../error.ts";
-import { nOf } from "../entries.ts";
 import { t } from "../i18n.ts";
 import { encode, type Effect as OpEffect, type Request } from "../ops.ts";
 import { topicKey, type Topic } from "../protocol.ts";
@@ -24,7 +33,8 @@ import { IDEMPOTENCY_KEY, READS, RESUMED, Requests, httpError } from "./requests
 import { digest } from "../digest.ts";
 import { SseParser } from "./sse.ts";
 import { Cursor } from "./cursor.ts";
-import * as fill from "./thread-fill.ts";
+import { type Channel, Channels } from "./channels.ts";
+import { ENTRIES, PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.ts";
 import { readAll, replyHeader, type StationWire } from "./wire.ts";
 
 /// How long a failed or ended stream waits before it is opened again; a station not reached is tried again at
@@ -52,9 +62,7 @@ export const STREAM_IDLE_MS = 40_000;
 export const STREAM_QUIET_MS = 30_000;
 /// A burst of `thread` events becomes one read of each thread's summary.
 export const EVENTS_COALESCE_MS = 400;
-/// Entries per page of a thread, and items per page of a transcript.
-export const PAGE = 50;
-export const TRANSCRIPT_PAGE = 200;
+export { PAGE, TRANSCRIPT_PAGE };
 export const RECHECK_MS = 5 * 60 * 1000;
 /// A read that failed in passing (a 5xx, the link dropping) is tried again after this, doubling, this many times.
 export const READ_RETRY_MS = 2_000;
@@ -64,9 +72,8 @@ const LIST_ID: Record<string, string> = { chatRows: "id", archivedRows: "id", th
 /// A station from before POST /changed/<list> reads its lists whole, and is tried again after this.
 export const CHANGES_RETRY_MS = 3_600_000;
 /// How much of a station's history one batch asks (POST /batch, #history): a page of entries or a session's detail is
-/// one, a page of a transcript (200 steps in brief) TRANSCRIPT_COST.
+/// one, a page of a transcript (200 steps in brief) five (each channel's kind says, channel-kinds.ts).
 export const HISTORY_BATCH = 40;
-const TRANSCRIPT_COST = 5;
 
 /// A read of a station's history (#history): its path, how much of a batch it takes, and what its answer does (and
 /// the read after it, as a thread has more pages to bring).
@@ -89,8 +96,6 @@ const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isIn
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 /// A row's id as text (sessions' and chats' are strings, threads' numbers).
 const idText = (v: unknown): string | null => (typeof v === "string" ? v : typeof v === "number" ? String(v) : null);
-/// The latest page of a session's transcript, in brief (what a history shows unopened).
-const latestPage = (key: string) => `/sessions/${encode(key)}/timeline?before=1000000000000000&limit=${TRANSCRIPT_PAGE}&brief=1`;
 
 /// One `step` event, as useLiveSession applies it.
 export function applyStep(view: LiveView, event: unknown, now: number): void {
@@ -169,6 +174,8 @@ export class Link {
 export class StationsSync {
   readonly #core: Inner;
   readonly requests: Requests;
+  /// What its stations hold that is only added to (threads' entries, sessions' transcripts), kept in sync by number.
+  readonly channels: Channels;
   readonly #links = new Map<string, Link>();
   /// What the station topics want of a stream beyond what the sync wants (host samples, logs, sessions shown).
   wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][] } = () => ({ host: false, live: [], logs: [] });
@@ -181,6 +188,17 @@ export class StationsSync {
     this.#core = core;
     this.requests = new Requests(core, wire);
     this.requests.onAnswered = (station) => this.#answered(station.toString());
+    this.channels = new Channels(core.data, {
+      read: (station, path, options) => Effect.suspend(() => this.requests.call(this.#links.get(station)?.addr ?? StationAddr.parse(station), "GET", path, null, options)),
+      reached: (station) => this.#links.has(station) && this.reachable(station),
+      enqueue: (station, task, priority, work) => this.#enqueue(station, task, priority, work),
+      later: (station, work) => {
+        const link = this.#links.get(station);
+        if (link) core.runner.fork(Effect.sleep(EVENTS_COALESCE_MS).pipe(Effect.andThen(Effect.sync(work))), link.scoped);
+        else work();
+      },
+      answered: (channel, error, nothing) => this.#channelAnswered(channel, error, nothing),
+    });
   }
 
   get wire(): StationWire {
@@ -258,6 +276,7 @@ export class StationsSync {
       if (wanted.has(address)) continue;
       this.#links.delete(address);
       core.runner.close(link.scoped);
+      this.channels.forget(address);
       core.scheduler.drop(address, new CoreError("gone", t("station.core.localGone")));
     }
     for (const address of wanted) if (!this.#links.has(address)) this.#start(address);
@@ -474,8 +493,14 @@ export class StationsSync {
             span.end();
             let snapshotted = !handing && !resumed;
             if (snapshotted) self.snapshot(address, span.context);
-            // Taken up from where a core before this one was: its history is swept as a reading of everything would.
-            else if (link.cursor.restored) self.#historyStart(address);
+            else {
+              // Told what changed while it was away: nothing is read again but the channels a UI shows, asked what came
+              // after what is held of them (what is shown does not hang on all of it having been told). Not one that
+              // took over from a stream still heard: nothing was away.
+              if (!handing) self.#catchUpShown(address);
+              // Taken up from where a core before this one was: its history is swept as a reading of everything would.
+              if (link.cursor.restored) self.#historyStart(address);
+            }
             link.cursor.restored = false;
             handing = false;
             const parser = new SseParser();
@@ -568,9 +593,7 @@ export class StationsSync {
     // The chats a UI has open, first: what was said in them after what is held, in the room kept for what is open. The
     // lists and the history behind them take a slow link a minute, and what an agent said while the stream was away
     // waited on them.
-    for (const topic of this.#core.store.liveTopics()) {
-      if (topic.topic === "thread" && topic.station === address && typeof topic.thread === "number") this.#enqueue(address, `entries/${topic.thread}`, Priority.shown, this.#entriesSince(address, topic.thread));
-    }
+    this.#catchUpShown(address);
     const done = [
       this.#enqueue(address, "overview", p, read({ topic: "overview", station: address }, "/overview")),
       this.#enqueue(address, "sessions", p, Effect.andThen(read({ topic: "sessions", station: address }, "/sessions"), Effect.sync(() => this.#historyStart(address)))),
@@ -583,6 +606,13 @@ export class StationsSync {
       ...this.#slackConnects(address).map((id) => this.#enqueue(address, `slackApp/${id}`, Priority.background, read({ topic: "slackApp", station: address, connect: id }, `/connects/${encode(id)}/slack-app`))),
     ];
     this.#core.runner.fork(Effect.ensuring(Effect.ignore(Effect.all(done.map((d) => Deferred.await(d)), { mode: "result" })), Effect.sync(() => span.end())));
+  }
+
+  /// The station's stream was away: the threads a UI shows are asked what was said in them after what is held.
+  #catchUpShown(address: string): void {
+    for (const topic of this.#core.store.liveTopics()) {
+      if (topic.topic === "thread" && topic.station === address && typeof topic.thread === "number") this.channels.catchUp(entriesOf(address, topic.thread), Priority.shown);
+    }
   }
 
   /// A job's log as it is now (its `lines` last lines), once: its topic opened. The station's stream says how it grows
@@ -814,26 +844,38 @@ export class StationsSync {
       const topic = { topic: "session", station: address, key };
       reads.push({ path: `/sessions/${encode(key)}`, cost: 1, apply: (a) => (this.#took(address, topic, a), null) });
     }
-    for (const id of data.threadIds(address)) {
-      const read = this.#entriesRead(address, id);
+    for (const channel of [...data.threadIds(address).map((id) => entriesOf(address, id)), ...sessions.map(([key]) => transcriptOf(address, key))]) {
+      const read = this.#channelRead(channel);
       if (read !== null) reads.push(read);
-    }
-    for (const [key] of sessions) {
-      if (data.evicted("transcript", address, key) || data.logSpan("transcript", address, key) !== null) continue;
-      reads.push({ path: latestPage(key), cost: TRANSCRIPT_COST, apply: (a) => (this.#tookTranscript(address, key, a), null) });
     }
     return reads;
   }
 
-  /// A thread's next page of entries as a read of its history, the read after it while pages come.
-  #entriesRead(address: string, id: number): HistoryRead | null {
-    const path = this.#entriesPath(address, id);
-    if (path === null) return null;
+  /// A channel's next read (channels.ts `next`) as a read of its station's history, the read after it while items come.
+  #channelRead(channel: Channel): HistoryRead | null {
+    const read = this.channels.batched(channel);
+    if (read === null) return null;
     const apply = (a: { status: number; body: unknown }) => {
-      const came = this.#tookEntries(address, id, a.status >= 200 && a.status < 300 ? { ok: a.body } : { error: httpError(a.status, a.body) });
-      return came > 0 ? this.#entriesRead(address, id) : null;
+      const came = read.took(a.status >= 200 && a.status < 300 ? { _tag: "Success", success: a.body } : { _tag: "Failure", failure: httpError(a.status, a.body) });
+      return came > 0 ? this.#channelRead(channel) : null;
     };
-    return { path, cost: 1, apply };
+    return { path: read.path, cost: channel.kind.cost, apply };
+  }
+
+  /// A read of a channel made in the background answered. A thread's: one that is gone goes with what is held of it; one
+  /// not to be read (no longer this viewer's) says so while nothing of it is held.
+  #channelAnswered(channel: Channel, error: CoreError | null, nothing: boolean): void {
+    const link = this.#links.get(channel.station);
+    if (!link || channel.kind !== ENTRIES) return;
+    const id = Number(channel.id);
+    const topic = topicKey({ topic: "thread", station: channel.station, thread: id });
+    if (error === null) {
+      if (link.errors.delete(topic)) this.onChange(channel.station, "errors", topic);
+    } else if (error.status === 404) this.#threadGone(channel.station, id);
+    else if (error.status !== undefined && error.status >= 400 && error.status < 500 && nothing) {
+      link.errors.set(topic, error);
+      this.onChange(channel.station, "errors", topic);
+    }
   }
 
   /// A read of a held topic answered in a batch, as #read takes its answer (a 4xx while nothing is held is its error).
@@ -850,150 +892,26 @@ export class StationsSync {
     }
   }
 
-  /// The latest page of a session's transcript answered in a batch, as `transcript` takes it.
-  #tookTranscript(address: string, key: string, a: { status: number; body: unknown }): void {
-    if (a.status < 200 || a.status >= 300) return;
-    this.#putTranscript(address, key, a.body, 0);
-  }
-
   /// A station from before batches: its history a read a task, each its own request.
   #historyEach(address: string): void {
     const link = this.#links.get(address);
     if (link) link.history = [];
     for (const [key, again] of this.#core.data.sessionsToRead(address)) {
       if (again) this.#enqueue(address, `session/${key}`, Priority.background, this.#session(address, key));
-      this.syncTranscript(address, key, Priority.background - 1);
+      this.channels.bring(transcriptOf(address, key), Priority.background - 1);
     }
-    for (const id of this.#core.data.threadIds(address)) this.syncEntries(address, id, Priority.background);
+    for (const id of this.#core.data.threadIds(address)) this.channels.bring(entriesOf(address, id), Priority.background);
   }
 
   #session(address: string, key: string): Effect.Effect<void, CoreError> {
     return this.#read(address, { topic: "session", station: address, key }, `/sessions/${encode(key)}`);
   }
 
-  /// Brings a thread's entries onto the device: what came after what is held, then any gap, then the pages before,
-  /// one page a run (the task asks itself again while there is more, so what is more urgent goes between); `once`: the
-  /// next page only (a chat opened, the rest of its history coming with the station's, #history).
-  syncEntries(address: string, id: number, priority: number, once = false): void {
-    // Let go for room and not opened since: left as it is (data.ts KEPT).
-    if (this.#core.data.evicted("entry", address, String(id))) return;
-    this.#enqueue(address, `entries/${id}`, priority, this.#entriesPage(address, id, priority, once));
-  }
-
-  /// The read that brings a thread's next page of entries onto the device (thread-fill.ts `next`); null when it has them
-  /// all, or they were let go for room and it was not opened since.
-  #entriesPath(address: string, id: number): string | null {
-    const data = this.#core.data;
-    if (data.evicted("entry", address, String(id))) return null;
-    const read = fill.next(data.logNumbers("entry", address, String(id)), data.threadLast(address, id), PAGE);
-    return read === null ? null : fill.path(id, read, PAGE);
-  }
-
-  /// Whether a thread misses entries between the lowest it holds and its latest (a gap what was told left), as against
-  /// history older than what is held (brought with the station's, #history).
-  #gapAbove(address: string, id: number): boolean {
-    return fill.holeAbove(this.#core.data.logNumbers("entry", address, String(id)), this.#core.data.threadLast(address, id));
-  }
-
-  /// Whether a thread's latest entries are not on the device: none held, or its summary goes further.
-  latestMissing(address: string, id: number): boolean {
-    return fill.latestMissing(this.#core.data.logSpan("entry", address, String(id))?.max ?? null, this.#core.data.threadLast(address, id));
-  }
-
-  #entriesPage(address: string, id: number, priority: number, once: boolean): Effect.Effect<void, CoreError> {
-    return Effect.gen({ self: this }, function* () {
-      const link = this.#links.get(address);
-      if (!link || !this.reachable(address)) return;
-      const path = this.#entriesPath(address, id);
-      if (path === null) return;
-      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", path, null, { quiet: true }));
-      const entries = this.#tookEntries(address, id, answer._tag === "Success" ? { ok: answer.success } : { error: answer.failure });
-      // More to bring: asked again, behind what is more urgent.
-      if (!once && entries > 0 && this.#entriesPath(address, id) !== null) this.syncEntries(address, id, priority);
-    });
-  }
-
-  /// What was said in a thread after what is held of it, asked whether or not its summary says anything was (the summary
-  /// is as old as what is held): the station's stream was away. One with nothing held is brought as it opens.
-  #entriesSince(address: string, id: number): Effect.Effect<void, CoreError> {
-    return Effect.gen({ self: this }, function* () {
-      const link = this.#links.get(address);
-      if (!link || !this.reachable(address) || this.#core.data.evicted("entry", address, String(id))) return;
-      const held = this.#core.data.logSpan("entry", address, String(id));
-      if (held === null) return;
-      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", fill.path(id, { after: held.max }, PAGE), null, { quiet: true }));
-      if (answer._tag === "Success") {
-        const last = u64(get(answer.success, "last"));
-        if (last !== null) this.#core.data.raiseLast(address, id, last);
-      }
-      this.#tookEntries(address, id, answer._tag === "Success" ? { ok: answer.success } : { error: answer.failure });
-    });
-  }
-
-  /// A page of a thread's entries as the station answered it: into its log; a thread that is gone goes with what is held
-  /// of it; one not to be read (no longer this viewer's) says so while nothing of it is held. How many came.
-  #tookEntries(address: string, id: number, answer: { ok: unknown } | { error: CoreError }): number {
-    const link = this.#links.get(address);
-    if (!link) return 0;
-    const topic = topicKey({ topic: "thread", station: address, thread: id });
-    if ("error" in answer) {
-      const status = answer.error.status;
-      if (status === 404) this.#threadGone(address, id);
-      else if (status !== undefined && status >= 400 && status < 500 && this.#core.data.logSpan("entry", address, String(id)) === null) {
-        link.errors.set(topic, answer.error);
-        this.onChange(address, "errors", topic);
-      }
-      return 0;
-    }
-    if (link.errors.delete(topic)) this.onChange(address, "errors", topic);
-    const entries = (get(answer.ok, "entries") as unknown[] | undefined) ?? [];
-    this.putEntries(address, id, entries);
-    return entries.length;
-  }
-
-  /// Entries into a thread's log.
-  putEntries(address: string, id: number, entries: unknown[]): void {
-    const items: [number, unknown][] = entries.flatMap((e) => {
-      const n = nOf(e);
-      return n === null ? [] : [[n, e] as [number, unknown]];
-    });
-    if (items.length > 0) this.#core.data.putItems("entry", address, String(id), items);
-  }
-
-  /// Brings a session's transcript onto the device (its latest page), unless it was let go for room and not opened since.
-  syncTranscript(address: string, key: string, priority: number): void {
-    if (this.#core.data.evicted("transcript", address, key)) return;
-    this.#enqueue(address, `transcript/${key}`, priority, this.transcript(address, key, null));
-  }
-
-  /// A session's transcript: its latest page when none is held, or the page before `before` (history.older).
-  transcript(address: string, key: string, before: number | null): Effect.Effect<void, CoreError> {
-    return Effect.gen({ self: this }, function* () {
-      const link = this.#links.get(address);
-      if (!link || !this.reachable(address)) return;
-      if (before === null && this.#core.data.logSpan("transcript", address, key) !== null) return;
-      const page = yield* this.requests.call(link.addr, "GET", before === null ? latestPage(key) : `/sessions/${encode(key)}/timeline?before=${before}&limit=${TRANSCRIPT_PAGE}&brief=1`, null, { quiet: before === null });
-      this.#putTranscript(address, key, page, 0);
-    });
-  }
-
-  /// A page of a session's transcript into its log, from its `start` (else `from`).
-  #putTranscript(address: string, key: string, page: unknown, from: number): void {
-    const start = u64(get(page, "start")) ?? from;
-    const items = (get(page, "entries") as unknown[] | undefined) ?? [];
-    if (items.length > 0) this.#core.data.putItems("transcript", address, key, items.map((item, i) => [start + i, item] as [number, unknown]));
-  }
-
   /// A session's transcript entries `from` to `to` whole, in place of what is held of them in brief (`history.detail`):
   /// never pushed, read when a history's step is opened, behind what is shown in brief (Priority.detail). Asked for by
   /// someone waiting on it, it is tried while the station seems away too: what went wrong is theirs to see.
   detail(address: string, key: string, from: number, to: number): Effect.Effect<void, CoreError> {
-    const work = Effect.gen({ self: this }, function* () {
-      const link = this.#links.get(address);
-      if (!link) return;
-      const page = yield* this.requests.call(link.addr, "GET", `/sessions/${encode(key)}/timeline?from=${from}&to=${to}`, null, { quiet: true });
-      this.#putTranscript(address, key, page, from);
-    });
+    const work = Effect.suspend(() => (this.#links.has(address) ? Effect.asVoid(this.channels.read(transcriptOf(address, key), { from, to }, { quiet: true })) : Effect.void));
     return Deferred.await(this.#enqueue(address, `detail/${key}/${from}-${to}`, Priority.detail, work));
   }
 
@@ -1026,16 +944,13 @@ export class StationsSync {
         const id = u64(get(data, "id"));
         if (id === null) return;
         const entries = (get(data, "entries") as unknown[] | undefined) ?? [];
-        const newest = Math.max(-1, ...entries.map((e) => nOf(e) ?? -1));
-        // How far the thread goes, at once; the rest of its summary is read below.
-        if (newest >= 0) core.data.raiseLast(address, id, newest);
+        const items = ENTRIES.items(data, { latest: true });
+        const newest = Math.max(-1, ...items.map(([n]) => n));
         this.onTold(address, id, entries);
-        // A chat let go for room (and not opened since) is not kept current: what it said is read when it is opened.
-        // A gap what was told left is read at once; history older than what is held comes with the station's (#history).
-        if (!core.data.evicted("entry", address, String(id))) {
-          this.putEntries(address, id, entries);
-          if (this.#gapAbove(address, id)) this.syncEntries(address, id, Priority.shown, true);
-        }
+        // Into its channel: the thread goes that far at once (the rest of its summary is read below), and a gap what
+        // was told left is read. A chat let go for room (and not opened since) is not kept current: what it said is
+        // read when it is opened. History older than what is held comes with the station's (#history).
+        this.channels.told(entriesOf(address, id), items);
         // Its summary for the viewer: told by the station (`thread-view`) when it tells it, else read.
         const viewed = this.#links.get(address)?.viewed.get(id);
         if (viewed === undefined || viewed < newest) this.#markDirty(address, id);
@@ -1170,9 +1085,13 @@ export class StationsSync {
     this.openEvents(address, false);
   }
 
-  /// A thread's summary into the station's threads, and the details of the sessions taking part.
+  /// A thread's summary into the station's threads, and the details of the sessions taking part. It says how far the
+  /// thread goes: its channel is read if the device is behind on it.
   putThread(address: string, view: unknown): void {
     this.#core.data.putThread(address, view);
+    const id = u64(get(view, "id"));
+    const last = u64(get(view, "last"));
+    if (id !== null && last !== null) this.channels.goesTo(entriesOf(address, id), last);
   }
 
   /// The viewer read a thread up to entry `n`: its read position moves there, nothing unread once it covers the last
@@ -1235,7 +1154,7 @@ export class StationsSync {
         // only): it is put as it is, and the topic shows the run that ends the transcript.
         const held = core.data.logSpan("transcript", address, key);
         const top = held ? held.max + 1 : 0;
-        core.data.putItems("transcript", address, key, entries.map((e, i) => [start + i, e] as [number, unknown]), start < top ? start + entries.length - 1 : null);
+        this.channels.told(transcriptOf(address, key), entries.map((e, i) => [start + i, e] as [number, unknown]), start < top ? start + entries.length - 1 : null);
         view.usage = get(message, "usage") ?? null;
         // Ended steps stay until the entries that record them arrive.
         if (entries.length > 0) view.steps = view.steps.filter((s) => get(s, "ended") !== true);
@@ -1416,8 +1335,7 @@ export class StationsSync {
       const n = u64(get(answer, "n"));
       if (n === null) return yield* Effect.fail(new CoreError("bad_response", t("station.core.noMessageNumber")));
       // The thread goes that far now: what came after what is held is read.
-      this.#core.data.raiseLast(address, thread, n);
-      if (this.#core.data.logCount("entry", address, String(thread), n, n) === 0) yield* Effect.ignore(this.ask(address, `entries/${thread}`, this.#entriesPage(address, thread, Priority.asked, true)));
+      yield* this.channels.sent(entriesOf(address, thread), n);
       return n;
     });
   }
@@ -1437,31 +1355,6 @@ export class StationsSync {
     return this.#core.data.readPosition(address, thread);
   }
 
-  /// The page of a thread's entries before `before`, onto the device (a person scrolled up): from what is held, else
-  /// read now. Answers whether older ones exist.
-  older(address: string, thread: number, before: number, ctx: SpanContext | null): Effect.Effect<void, CoreError> {
-    return Effect.gen({ self: this }, function* () {
-      const from = Math.max(1, before - PAGE);
-      const all = this.#core.data.logCount("entry", address, String(thread), from, before - 1) === before - from;
-      if (all || before <= 1) return;
-      const page = yield* this.requests.call(StationAddr.parse(address), "GET", `/threads/${thread}/entries?before=${before}&limit=${PAGE}`, null, { ctx });
-      this.putEntries(address, thread, ((get(page, "entries") as unknown[] | undefined) ?? []).filter((e) => (nOf(e) ?? Infinity) < before));
-    });
-  }
-
-  /// Entries `from ..= to` onto the device (a window moved there): read now if not all held.
-  range(address: string, thread: number, from: number, to: number, ctx: SpanContext | null): Effect.Effect<void, CoreError> {
-    return Effect.gen({ self: this }, function* () {
-      if (to < from) return;
-      if (this.#core.data.logCount("entry", address, String(thread), from, to) === to - from + 1) return;
-      const page = yield* this.requests.call(StationAddr.parse(address), "GET", `/threads/${thread}/entries?from=${from}&to=${to}`, null, { ctx });
-      this.putEntries(address, thread, ((get(page, "entries") as unknown[] | undefined) ?? []).filter((e) => {
-        const n = nOf(e);
-        return n !== null && n >= from && n <= to;
-      }));
-    });
-  }
-
   /// Uploads, files, previews (station/transport.rs), by address.
   upload(address: string, name: string, bytes: Uint8Array, ctx: SpanContext | null) {
     return Effect.flatMap(Effect.try({ try: () => StationAddr.parse(address), catch: asCoreError }), (addr) => this.requests.upload(addr, name, bytes, ctx));
@@ -1477,7 +1370,10 @@ export class StationsSync {
 
   /// Lets go of every link (the core closes).
   close(): void {
-    for (const link of this.#links.values()) this.#core.runner.close(link.scoped);
+    for (const link of this.#links.values()) {
+      this.#core.runner.close(link.scoped);
+      this.channels.forget(link.address);
+    }
     this.#links.clear();
   }
 

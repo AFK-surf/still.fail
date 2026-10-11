@@ -783,6 +783,63 @@ test("a_gap_is_read_once_and_what_came_meanwhile_waits_for_it", async () => {
   core.close();
 });
 
+test("a_thread_its_summary_says_goes_further_than_what_is_held_is_read_whoever_said_so", async () => {
+  const answers: J = { ...base(), "GET /threads/7/entries?after=3": { last: 5, entries: entries(4, 5) } };
+  const { host, core, push, values, read } = await ui(answers);
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
+  await read();
+  const from = host.requests.length;
+  // Its summary alone says it goes to 5 (the entries were never told): read once the burst is over, not before.
+  push("thread-view", { ...threadView(7, 5, 3, 2) });
+  await host.settle();
+  assert.deepEqual(entryReads(host, from), [], "waits for the burst to end: the entries are mostly on their way");
+  await coalesce(host);
+  await read();
+  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3"]);
+  assert.deepEqual(nums(values), [1, 2, 3, 4, 5]);
+  // Said with its entries, in either order: they are held by the time the burst is over, and nothing is read.
+  push("thread-view", { ...threadView(7, 6, 3, 3) });
+  push("thread", { id: 7, entries: [entry(6, "m6")] });
+  push("thread", { id: 7, entries: [entry(7, "m7")] });
+  push("thread-view", { ...threadView(7, 7, 3, 4) });
+  await coalesce(host);
+  await read();
+  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3"]);
+  assert.deepEqual(nums(values), [1, 2, 3, 4, 5, 6, 7]);
+  // A read of its summary (after something was read, say) says so as well.
+  answers["GET /threads/7"] = threadView(7, 9, 7, 2);
+  answers["GET /threads/7/entries?after=7"] = { last: 9, entries: entries(8, 9) };
+  push("read", { viewer: "a@x.com", thread: 7, n: 4 });
+  await coalesce(host);
+  await coalesce(host);
+  await read();
+  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3", "/threads/7/entries?after=7"]);
+  assert.deepEqual(nums(values), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  core.close();
+});
+
+test("a_thread_not_open_its_summary_says_goes_further_is_read_too_and_one_none_of_which_is_held_waits_to_be_brought", async () => {
+  const answers: J = {
+    ...base(),
+    "GET /threads": [threadView(7, 3), threadView(8, 2)],
+    "GET /threads/8/entries?limit=50": { last: 2, entries: [{ ...entry(1, "x1"), thread: 8 }, { ...entry(2, "x2"), thread: 8 }] },
+    "GET /threads/8/entries?after=2": { last: 3, entries: [{ ...entry(3, "x3"), thread: 8 }] },
+  };
+  const { host, core, push } = await started(answers);
+  await host.settle();
+  const held = (id: number) => core.inner.data.logNumbers("entry", ST, String(id));
+  assert.deepEqual(held(8), [1, 2]);
+  const from = host.requests.length;
+  push("thread-view", { ...threadView(8, 3, 2, 1) });
+  // One the device holds nothing of (it is new): brought with the station's history, not by this.
+  push("thread-view", { ...threadView(9, 4, 0, 4) });
+  await coalesce(host);
+  await host.settle();
+  assert.deepEqual(entryReads(host, from), ["/threads/8/entries?after=2"]);
+  assert.deepEqual(held(8), [1, 2, 3]);
+  core.close();
+});
+
 test("a_thread_keeps_a_page_ahead_so_going_back_does_not_wait", async () => {
   // Further than the Rust core (which kept one page ahead): the whole thread is brought onto the device, so going
   // back asks the station nothing.
@@ -974,6 +1031,42 @@ test("a_chat_open_is_asked_what_was_said_since_before_the_station_is_read_again"
   const at = asked.indexOf("/threads/7/entries?after=3");
   assert.ok(at >= 0, "asked what was said since");
   for (const list of ["/changed/threads", "/changed/chats", "/changed/sessions", "/batch"]) assert.ok(asked.indexOf(list) < 0 || at < asked.indexOf(list), `before ${list}`);
+  core.close();
+});
+
+test("a_chat_open_is_asked_what_was_said_since_though_its_stream_came_back_told_what_it_missed", async () => {
+  const answers: J = {
+    ...base(),
+    "GET /threads": [threadView(7, 3), threadView(8, 2)],
+    "GET /threads/8/entries?limit=50": { last: 2, entries: [{ ...entry(1, "x1"), thread: 8 }, { ...entry(2, "x2"), thread: 8 }] },
+  };
+  const { host, core, push, streams, end, gate, values, read } = await ui(answers);
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
+  await read();
+  const said = (id: string, name: string, data: unknown) =>
+    Queue.offerUnsafe(streams.at(-1)!.queue, new TextEncoder().encode(`id: ${id}\nevent: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
+  said("1f2e3d4c.9", "overview", { connects: [1] });
+  await host.settle();
+  // The stream goes and comes back saying it told all that was missed, though it did not tell what was said in the
+  // chat (what the device hears of a station's events is not what says how far a chat goes): the chat shown is asked,
+  // and nothing else is read, a chat not shown neither.
+  answers["GET /threads/7/entries?after=3"] = { last: 5, entries: entries(4, 5) };
+  gate.resumes = true;
+  const from = host.requests.length;
+  end();
+  await host.time.pass(RECONNECT_MS + 50, 50);
+  await read();
+  assert.equal(streams.at(-1)!.path, `/events?since=${encodeURIComponent("1f2e3d4c.9")}`);
+  assert.deepEqual(nums(values), [1, 2, 3, 4, 5]);
+  const asked = host.requests.slice(from).flatMap(readsOf).filter((url) => url.includes("/admin/api/") && !url.includes("/events")).map((url) => url.replace("https://stillfail.test/admin/api", ""));
+  assert.deepEqual(asked, ["/threads/7/entries?after=3"]);
+  // A stream that takes over from one still heard (an agent started: the stream follows it) was not away: nothing asked.
+  const again = host.requests.length;
+  push("chat", { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [{ key: "k1", process: "running" }] });
+  await host.settle();
+  await host.settle();
+  assert.ok(streams.at(-1)!.path.includes("live=k1"), streams.at(-1)!.path);
+  assert.deepEqual(entryReads(host, again), []);
   core.close();
 });
 
