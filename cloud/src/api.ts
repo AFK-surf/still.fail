@@ -6,7 +6,7 @@
 // routes to (index.ts).
 import { isAdmin } from "./admin";
 import { bearerToken, clock, denied, readJson, reply, verifyToken, type Claims } from "./auth";
-import { header, publicOrigins, signedMessages } from "./compat";
+import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
 import type { FeedbackStatus } from "./types";
@@ -200,8 +200,15 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (kind === "enrollments" && !target && method === "POST") {
     return directory(async () => {
       const made = await dir.createEnrollment(sub, ws, text("name"));
-      // A machine without still.fail installs it and joins at once; one with it joins.
-      return { ...made, install: `curl -fsSL ${env.PUBLIC_ORIGIN}/install.sh | sh -s -- ${made.token}`, installWindows: `& ([scriptblock]::Create((irm ${env.PUBLIC_ORIGIN}/install.ps1))) ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
+      // A machine without still.fail installs it and joins at once; one with it joins. Asked on the test channel (its
+      // host, or a beta app's x-stillfail-channel), the installer is the test channel's, which gets its release
+      // (index.ts): from its host, or, with no such host, ?channel=beta. The station joins PUBLIC_ORIGIN either way.
+      const beta = betaOrigin(env);
+      const ofBeta = (beta !== null && url.origin === beta) || header(request, "channel") === "beta";
+      const installer = (file: string) => (!ofBeta ? `${env.PUBLIC_ORIGIN}/${file}` : beta ? `${beta}/${file}` : `${env.PUBLIC_ORIGIN}/${file}?channel=beta`);
+      // Quoted when it asks: zsh (macOS's shell) takes an unquoted ? for a file name to match, and stops.
+      const sh = installer("install.sh").includes("?") ? `'${installer("install.sh")}'` : installer("install.sh");
+      return { ...made, install: `curl -fsSL ${sh} | sh -s -- ${made.token}`, installWindows: `& ([scriptblock]::Create((irm ${installer("install.ps1")}))) ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
     });
   }
   // A mstill.fail's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
