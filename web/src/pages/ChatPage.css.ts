@@ -5,6 +5,7 @@ import { sessionPage } from "../styles/session.css.ts";
 import { pageBarTitle } from "../styles/conversation.css.ts";
 import { resizeHandle } from "../ui.css.ts";
 import { quotaRing, quotaRingNumber } from "../components.css.ts";
+import { sessionMain } from "../styles/jobs.css.ts";
 
 export const agentMarkBtn = style({
   display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer", borderRadius: "6px",
@@ -168,6 +169,17 @@ export const sideTabClose = style({
 export const sideBar = style({
   display: "flex", alignItems: "center", gap: "8px", height: "45px", padding: "0 12px 1px 8px",
   flex: "none",
+  selectors: {
+    // The desktop app has no title bar: the panel's bar drags the window as the page's does (styles/sidebar.css.ts),
+    // and on Windows keeps clear of the window's buttons over its right end (styles/global.css.ts).
+    "[data-desktop] &": { WebkitAppRegion: "drag" },
+    '[data-desktop="overlay"] &': { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" },
+  },
+});
+globalStyle(`[data-desktop] ${sideBar} :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex])`, { WebkitAppRegion: "no-drag" });
+// Beside the open panel the chat's bar ends short of the window's right end: the buttons are over the panel's.
+globalStyle(`${sessionPage}[data-panel="true"] > ${sessionMain}`, {
+  "@media": { "(min-width: 1101px)": { vars: { "--window-buttons": "0px" } } },
 });
 globalStyle(`${attentionQuota} ${quotaRing}`, { flex: "none" });
 globalStyle(`${attentionQuota} ${quotaRingNumber}`, { fontSize: vars.textCaption });
