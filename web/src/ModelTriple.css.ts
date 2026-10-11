@@ -9,7 +9,7 @@ import { runCardRow } from "./pages/Connect.css.ts";
 import { input } from "./styles/controls.css.ts";
 import { chooserChevron, modelPoolItem } from "./styles/chat.css.ts";
 import { onboardingRow } from "./cloud/settings.css.ts";
-import { sessionDetails } from "./pages/ChatPage.css.ts";
+import { sessionHead } from "./pages/ChatPage.css.ts";
 import { composerChoices } from "./Chat.css.ts";
 import { spinner } from "./styles/waiting.css.ts";
 
@@ -108,7 +108,7 @@ export const modelTripleFit = style({
   selectors: {
     // In a row of a list, a ring's mark sits beside it, so the ring is on the row's line.
     // Where it heads text, the control's text lines up with the text under it (its border and padding stand out).
-    [`:is(${sessionDetails}, ${card}) > &`]: { marginLeft: "-11px" },
+    [`:is(${sessionHead}, ${card}) > &`]: { marginLeft: "-11px" },
   },
 });
 export const tripleModel = style({

@@ -8,7 +8,7 @@ import { mineFilterBtn, mineFilterWide } from "./components.css.ts";
 import { textToggle } from "./styles/controls.css.ts";
 import { chooserMenu } from "./styles/chat.css.ts";
 import { accountMenu } from "./cloud/workspace.css.ts";
-import { detailRow, details, sessionDetails, sideContent } from "./pages/ChatPage.css.ts";
+import { detailRow, details, sideContent } from "./pages/ChatPage.css.ts";
 import { msgRoute } from "./Chat.css.ts";
 
 export const history = style({
@@ -23,7 +23,7 @@ export const historyHead = style({
   padding: "0 8px 1px 16px",
 });
 export const historyIdentity = style({
-  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontSize: vars.textUi, color: vars.muted,
+  display: "flex", alignItems: "center", gap: "6px", flex: "1", minWidth: "0", fontSize: vars.textUi, color: vars.muted,
   whiteSpace: "nowrap", overflow: "hidden",
 });
 export const historyTools = style({ display: "flex", alignItems: "center", gap: "2px", flex: "none" });
@@ -120,7 +120,8 @@ export const hStepBody = style({
 export const hThinking = style({
   padding: "2px 0 6px 6px", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
 });
-export const historyDetails = style({ borderBottom: `1px solid ${vars.line}`, background: vars.list });
+/** Open under the head, on the same ground: one block, ruled off from the steps. */
+export const historyDetails = style({ borderBottom: `1px solid ${vars.line}` });
 export const flip = style({
   selectors: {
     [`${textToggle} &`]: { transform: "rotate(180deg)" },
@@ -206,10 +207,8 @@ globalStyle(mineFilterBtn, {
 globalStyle(mineFilterWide, { border: `1px solid ${vars.line}`, marginBottom: "12px" });
 /** Here rather than with its class: it comes after .usage dd, and wins over it. */
 globalStyle(`${detailRow} dd`, { margin: "0", minWidth: "0" });
-globalStyle(`${historyDetails} ${sessionDetails}`, { padding: "12px 16px", maxHeight: "50vh" });
 globalStyle(`${historyDetails} + ${usage}`, { background: vars.list });
 /** Details pack tight: two columns of short facts, small type. */
-globalStyle(`${historyDetails} ${sessionDetails}`, { gap: "10px", padding: "10px 14px" });
 globalStyle(`${historyDetails} ${details}`, { gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "4px 16px" });
 globalStyle(`${historyDetails} ${detailRow}`, {
   gridTemplateColumns: "4.5em minmax(0, 1fr)", gap: "8px", fontSize: vars.textMeta, minHeight: "22px",

@@ -30,12 +30,13 @@ import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 import { ReadWhole, useWhole } from "./brief.ts";
 /**
- * The session as it ran: the main view of a session. `summary` says what needs seeing to (in the head), `details`
- * unfolds under the head, from its switch there: the history's own, not its tab's (a chat's agents each have a tab).
+ * The session as it ran: the main view of a session. `head` says what it runs on and `summary` what needs seeing to
+ * (both in the head); `details` unfold under the head, open to begin with, from its switch there: the history's own,
+ * not its tab's (a chat's agents each have a tab).
  * With its chat's `title`, each item offers its link (opening the history there), to paste into another chat.
  */
-export function History({ station, sessionKey, summary, details, focus, title }: {
-  station: string; sessionKey: string; summary?: ReactNode; details?: ReactNode; title?: string | undefined;
+export function History({ station, sessionKey, head, summary, details, focus, title }: {
+  station: string; sessionKey: string; head?: ReactNode; summary?: ReactNode; details?: ReactNode; title?: string | undefined;
   /** An entry to bring into view (n changes each time it is asked for). */
   focus?: { entry: number; n: number } | null;
 }) {
@@ -57,7 +58,7 @@ export function History({ station, sessionKey, summary, details, focus, title }:
   const latest = useRef(where);
   latest.current = where;
   const [stableWhere] = useState(() => (place: Place | null) => latest.current(place));
-  const [usageOpen, setUsageOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(true);
   const copyLink = useCopyChatLink(useToast());
   // The steps' and thoughts' whole words: read only as one is opened (the core has them in brief till then).
   const detail = useHistoryDetail(station, sessionKey);
@@ -98,7 +99,7 @@ export function History({ station, sessionKey, summary, details, focus, title }:
     <ReadWhole.Provider value={detail}>
     <section className={css.history} aria-label={t("web-main.history.label")}>
       <header className={css.historyHead}>
-        <div className={css.historyIdentity}>{summary}</div>
+        <div className={css.historyIdentity}>{head}{summary}</div>
         <div className={css.historyTools}>
           {(usage || details) && (
             <button type="button" className={controlsCss.textToggle} aria-expanded={usageOpen} onClick={() => setUsageOpen(!usageOpen)}>

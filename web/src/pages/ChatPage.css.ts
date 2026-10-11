@@ -94,17 +94,16 @@ export const attention = style({
 });
 export const attentionQuota = style({});
 /** A session's details, by how much each matters: the account (largest), the model, what it used, the station. */
+/** The history's head: its model control, and why saving it failed. */
+export const sessionHead = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", flex: "1" });
+/** Under the head: a label and a line a row, small and quiet. */
 export const sessionDetails = style({
-  overflowY: "auto", padding: "16px", display: "grid", gap: "20px", alignContent: "start",
+  display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "8px 14px", alignItems: "baseline", margin: "0",
+  padding: "0 16px 14px", fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.muted,
 });
-export const runUsage = style({ margin: "0", fontSize: vars.textMeta });
-export const runStation = style({});
-export const resourceRings = style({
-  display: "flex", alignItems: "center", gap: "10px",
-  selectors: {
-    [`${runStation} &`]: { marginTop: "8px" },
-  },
-});
+globalStyle(`${sessionDetails} dt`, { color: vars.subtle });
+globalStyle(`${sessionDetails} dd`, { margin: "0", minWidth: "0" });
+export const resourceRings = style({ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" });
 export const sidePanel = style({
   minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column",
   background: vars.canvas,
@@ -205,7 +204,6 @@ globalStyle(`${sessionPage}[data-panel="true"] > ${sessionMain}`, {
 });
 globalStyle(`${attentionQuota} ${quotaRing}`, { flex: "none" });
 globalStyle(`${attentionQuota} ${quotaRingNumber}`, { fontSize: vars.textCaption });
-globalStyle(`${runStation} p`, { margin: "0", fontSize: vars.textMeta });
 globalStyle(`${jobsPanel} section`, { display: "flex", flexDirection: "column" });
 globalStyle(`${jobsPanel} section + section`, { marginTop: "6px" });
 globalStyle(`${detailRow} dt`, { color: vars.muted });

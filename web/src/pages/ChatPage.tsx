@@ -465,6 +465,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                 <Tabs.Content key={key} className={css.sideContent} value={key}>
                   <History station={station.address} sessionKey={key} title={view?.title}
                     focus={focus?.key === key ? focus : null}
+                    head={<SessionHead agent={a} />}
                     summary={a.attention.length > 0 ? <HistorySummary agent={a} /> : null}
                     details={<SessionDetails agent={a} />} />
                 </Tabs.Content>
@@ -617,42 +618,52 @@ function HistorySummary({ agent }: { agent: ChatAgent }) {
 }
 
 /**
- * Unfolded under the history's head, by how much each thing matters: the account it runs on (with its quota) first,
- * which can be changed here, or left to the station; then the model and effort; then what it has used; the station
- * last, folded. Changes take from its next turn on.
+ * The history's head: how it runs, in one control (the model, how hard it thinks, the account with its quota), shown
+ * whether its details are open or not. Changes take from its next turn on.
+ */
+function SessionHead({ agent }: { agent: ChatAgent }) {
+  const station = useStation();
+  const toast = useToast();
+  // What it runs on and what its control's panel picked, as the core has them (../pick.ts).
+  const pick = usePick(station.address, `session:${agent.session.key}`);
+  const change = useAction(() => pick.save(), () => toast(t("web-pages.chat.pickSaved")));
+  return (
+    <span className={css.sessionHead}>
+      <ModelTriple pick={pick} onConfirm={() => void change.run()} />
+      {change.error && <span className={controlsCss.fieldError} role="alert">{change.error.message}</span>}
+    </span>
+  );
+}
+
+/**
+ * Unfolded under the history's head, a row each, quiet: what runs it (and its account's page), what it has used, the
+ * station it runs on with how loaded it is.
  */
 function SessionDetails({ agent }: { agent: ChatAgent }) {
   const { session } = agent;
   const station = useStation();
   const link = useLink();
-  const toast = useToast();
   const host = useHost(station.address).value;
-  // What it runs on and what its control's panel picked, as the core has them (../pick.ts).
-  const pick = usePick(station.address, `session:${session.key}`);
-  const change = useAction(() => pick.save(), () => toast(t("web-pages.chat.pickSaved")));
   const usage = useHistory(station.address, session.key).value?.usageLine;
   return (
-    <div className={css.sessionDetails}>
-      {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota). */}
-      <ModelTriple pick={pick} onConfirm={() => void change.run()} />
-      {change.error && <p className={controlsCss.fieldError} role="alert">{change.error.message}</p>}
-      {/* What it used: a line, quiet. */}
-      <p className={`${css.runUsage} ${shellCss.muted}`}>
+    <dl className={css.sessionDetails}>
+      <dt>{t("web-pages.chat.detailRuns")}</dt>
+      <dd>
         {session.runtimeText} · {session.processText}
         {session.process === "warm" && <>{" · "}<Evict session={session.key} /></>}
-        {usage && <> · {usage}</>}
         {" · "}<Link className={css.detailLink} to={link(`/settings/accounts/${session.profile}`)}>{t("web-pages.chat.profileDetails")}</Link>
-      </p>
-      {/* The station it runs on, and how loaded it is. */}
-      <div className={css.runStation}>
-        <p className={shellCss.muted}>{station.name || host?.hostname || t("web-pages.chat.thisMachine")}{host ? ` · ${host.summary}` : ""}</p>
+      </dd>
+      {usage && <><dt>{t("web-pages.chat.detailUsed")}</dt><dd>{usage}</dd></>}
+      <dt>{t("web-pages.chat.detailStation")}</dt>
+      <dd>
+        {station.name || host?.hostname || t("web-pages.chat.thisMachine")}{host ? ` · ${host.summary}` : ""}
         {host && (
-          <div className={css.resourceRings}>
+          <span className={css.resourceRings}>
             {host.meters.map((m) => <Ring key={m.label} percent={m.percent} level={m.level} label={m.short} title={`${m.label} ${m.value}`} />)}
-          </div>
+          </span>
         )}
-      </div>
-    </div>
+      </dd>
+    </dl>
   );
 }
 
