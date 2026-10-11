@@ -42,7 +42,7 @@ function useLinesMotion(list: RefObject<HTMLElement | null>): void {
     const before = was.current?.box === box ? was.current.lines : null;
     if (!box) return void (was.current = null);
     const lines = new Map<string, { el: HTMLElement; top: number; left: number; run?: Animation }>();
-    // How far each still is from its place on its way there, then where it lies now.
+    // How far each still was from its place, on its way there (a motion cut short), then where it lies now.
     const under = new Map<string, number>();
     for (const el of box.querySelectorAll<HTMLElement>(":scope > [data-line]")) {
       const key = el.dataset.line!;
@@ -62,7 +62,8 @@ function useLinesMotion(list: RefObject<HTMLElement | null>): void {
     const shift = stays === undefined ? 0 : before.get(stays)!.top - lines.get(stays)!.top;
     for (const [key, line] of lines) {
       const old = before.get(key);
-      const y = old ? under.get(key) ?? old.top - line.top : shift;
+      // From where it was drawn: its place then, and how far it still was from it.
+      const y = old ? old.top + (under.get(key) ?? 0) - line.top : shift;
       if (old && Math.abs(y) < 0.5) continue;
       const run = line.el.animate([{ transform: `translateY(${y}px)`, ...(old ? {} : { opacity: 0 }) }, { transform: "translateY(0)", ...(old ? {} : { opacity: 1 }) }], timing);
       line.run = run;
