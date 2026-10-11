@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import { card, jobsText, workText } from "../src/views/brief.ts";
+import { card, jobsText, recentText, workText } from "../src/views/brief.ts";
 
 holdLanguage();
 const MIN = 60_000;
@@ -43,5 +43,25 @@ test("the_card_says_what_it_did_cost_and_used", () => {
   assert.deepEqual(c.attention, [{ text: "磁盘剩 8 GB", level: "amber" }, { text: "「lin」要重新登录", level: "red" }]);
   // Before its first turn and its usage is read: nothing.
   const none = card({ turns: [], attention: [], jobs: [] }, null);
-  assert.deepEqual([none.work, none.cost, none.cache, none.context, none.jobs, none.attention], [null, undefined, undefined, undefined, null, []]);
+  assert.deepEqual([none.work, none.cost, none.cache, none.context, none.jobs, none.recent, none.attention], [null, undefined, undefined, undefined, null, [], []]);
+});
+
+test("the_latest_three_things_it_did_oldest_first", () => {
+  const call = (tool: string, input: object, more: object = {}) => ({ kind: "tool_call", tool, text: JSON.stringify(input), ...more });
+  const timeline = [
+    { kind: "user", text: "修一下登录" },
+    call("Read", { file_path: "/src/login.ts" }),
+    { kind: "tool_result", text: "…" },
+    { kind: "thinking", text: "\n宽度写死了\n改成撑满" },
+    call("Bash", { command: "pnpm test login", description: "跑登录测试" }),
+    call("Grep", { pattern: "width" }, { subagent: true }),
+    { kind: "tool_result", text: "ok" },
+    { kind: "assistant", text: "测试过了。\n\n接着发消息" },
+    call("mcp__stillfail__chat_post", { to: "EMBER/1", text: "改好了\n详情见 PR" }),
+    call("mcp__stillfail__chat_state", { kind: "all_done", done: "合了" }),
+  ];
+  assert.deepEqual(recentText({ timeline }), ["跑登录测试", "测试过了。", "改好了"]);
+  assert.deepEqual(recentText({ timeline: timeline.slice(0, 4) }), ["读取 login.ts", "宽度写死了"]);
+  assert.deepEqual(recentText(null), []);
+  assert.equal(card({ turns: [], attention: [], jobs: [] }, { timeline }).recent.length, 3);
 });

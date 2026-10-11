@@ -1,6 +1,7 @@
 // An agent of a chat in brief, for its card over its avatar (the `agentCard` view, web AgentCard.tsx): how much it has
-// done, what that cost and used (its tokens, the cache's hit rate, how full its context is), its jobs at work, and what
-// is wrong.
+// done, what that cost and used (its tokens, the cache's hit rate, how full its context is), the latest of what it
+// did, its jobs at work, and what is wrong.
+import { args, doing, toolName } from "../activity.ts";
 import * as format from "../format.ts";
 import { usageOf } from "../history.ts";
 import { t } from "../i18n.ts";
@@ -46,6 +47,34 @@ export function jobsText(list: unknown): string | null {
   return parts.length ? parts.join(" · ") : null;
 }
 
+/// How many of the latest things it did its card says.
+const RECENT = 3;
+const firstLine = (s: string) => (s.split(/\r?\n/).find((l) => l.trim() !== "") ?? "").trim();
+
+/// The latest things it did (its own, not its subagents'), oldest first, three at most, each in a line as its
+/// execution history would name it: a call by what it does, a message by what it posts, what it wrote or thought by
+/// its first line. From its live transcript: none before that is read.
+export function recentText(live: unknown): string[] {
+  const out: string[] = [];
+  const timeline = arr(get(live, "timeline"));
+  for (let i = timeline.length - 1; i >= 0 && out.length < RECENT; i--) {
+    const e = timeline[i];
+    if (get(e, "subagent") === true) continue;
+    const kind = get(e, "kind");
+    const text = typeof get(e, "text") === "string" ? (get(e, "text") as string) : "";
+    let line = "";
+    if (kind === "tool_call") {
+      const tool = typeof get(e, "tool") === "string" ? (get(e, "tool") as string) : "";
+      const name = toolName(tool);
+      if (name === "chat_state") continue;
+      const posted = name === "chat_post" ? args(text)?.text : null;
+      line = typeof posted === "string" ? firstLine(posted) : doing(tool, text);
+    } else if (kind === "assistant" || kind === "thinking") line = firstLine(text);
+    if (line) out.unshift(line);
+  }
+  return out;
+}
+
 type Level = "ok" | "amber" | "red";
 type Meter = { percent: number; text: string; level: Level };
 
@@ -56,7 +85,7 @@ const CONTEXT_RED = 95;
 /// The card of `agent` (a chat's agent, ViewsInner `agent`), with its live usage (none before it is read): each part
 /// only when it has one. Its account and what is left of it the card takes from the agent as it is.
 export function card(agent: J, live: J): J {
-  const out: J = { work: workText(get(agent, "turns")), jobs: jobsText(get(agent, "jobs")), attention: [] };
+  const out: J = { work: workText(get(agent, "turns")), jobs: jobsText(get(agent, "jobs")), recent: recentText(live), attention: [] };
   const u = get(live, "usage");
   const n = (k: string): number => (typeof get(u, k) === "number" ? u[k] : 0);
   if (n("modelCalls") > 0) {

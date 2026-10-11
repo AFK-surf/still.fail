@@ -26,8 +26,8 @@ export function AgentHover({ agent, children }: { agent: string | null | undefin
 }
 
 /**
- * What it runs (with a stop for it alone while it works) and where it stands now (for how long), what it does now,
- * then what the core says of it (the `agentCard` view): the
+ * What it runs (with a stop for it alone while it works) and where it stands now (for how long), the latest three
+ * things it did and what it does now, then what the core says of it (the `agentCard` view): the
  * figures that say most (cost, the cache's hit rate, how full its context is) large, side by side; its account with
  * what is left of it; the rest (its turns, tokens) in a quiet line; its jobs and what is wrong under them.
  */
@@ -61,7 +61,13 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
           ? <span className={css.elapsed}> · <Waited since={wait.since} seconds={wait.seconds} /></span>
           : agent.since ? <span className={css.elapsed}> · <Elapsed since={agent.since} /></span> : null}
       </p>
-      {working && now && <p className={css.now}>{now}</p>}
+      {/* The latest of what it did, oldest first, then (unless that is the last of them) what it does now. */}
+      {((card?.recent.length ?? 0) > 0 || (working && now)) && (
+        <ol className={css.recent}>
+          {card?.recent.map((line, i) => <li key={i}>{line}</li>)}
+          {working && now && now !== card?.recent.at(-1) && <li data-now="">{now}</li>}
+        </ol>
+      )}
       {(card?.cost || card?.cache || context) && (
         <div className={css.tiles}>
           {card?.cost && <span className={css.tile}><b>{card.cost}</b><small>{t("web-main.chat.agentCard.cost")}</small></span>}

@@ -92,6 +92,8 @@ data class AgentCardView (
 	val context: AgentCardMeter? = null,
 	/// Its jobs at work now: 服务在线：web · 在盯着：CI.
 	val jobs: String? = null,
+	/// The latest things it did, oldest first (three at most), each in a line as its execution history names it.
+	val recent: List<String>,
 	/// What is wrong (an account that cannot run, the disk filling up); a quota running out is its account's windows'.
 	val attention: List<AgentCardNote>
 )

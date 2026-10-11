@@ -84,6 +84,8 @@ export interface AgentCardView {
 	context?: AgentCardMeter;
 	/** Its jobs at work now: 服务在线：web · 在盯着：CI. */
 	jobs?: string;
+	/** The latest things it did, oldest first (three at most), each in a line as its execution history names it. */
+	recent: string[];
 	/** What is wrong (an account that cannot run, the disk filling up); a quota running out is its account's windows'. */
 	attention: AgentCardNote[];
 }

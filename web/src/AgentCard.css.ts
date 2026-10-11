@@ -27,11 +27,13 @@ export const status = style({
   },
 });
 
-/** What it does now, while it works: two lines at most. */
-export const now = style({
-  margin: "0", paddingLeft: "14px", fontSize: vars.textMeta, color: vars.muted, overflowWrap: "anywhere",
-  display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical", overflow: "hidden",
+/** The latest of what it did, a line each, oldest first; what it does now, last, in the text's colour. */
+export const recent = style({
+  listStyle: "none", margin: "0", padding: "0 0 0 14px", display: "flex", flexDirection: "column", gap: "2px",
+  fontSize: vars.textMeta, color: vars.muted,
 });
+globalStyle(`${recent} > li`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+globalStyle(`${recent} > li[data-now]`, { color: vars.text });
 
 export const elapsed = style({ color: vars.muted, fontVariantNumeric: "tabular-nums" });
 

@@ -1305,6 +1305,7 @@ export const SHAPES: Record<string, Shape> = {
     ["cache", opt("AgentCardMeter"), { doc: "How much of what it sent was read from the cache." }],
     ["context", opt("AgentCardMeter"), { doc: "The context it carries on with, against its model's window (amber from 80%, red from 95%)." }],
     ["jobs", opt("String"), { doc: "Its jobs at work now: 服务在线：web · 在盯着：CI." }],
+    ["recent", vec("String"), { doc: "The latest things it did, oldest first (three at most), each in a line as its execution history names it." }],
     ["attention", vec("AgentCardNote"), { doc: "What is wrong (an account that cannot run, the disk filling up); a quota running out is its account's windows'." }],
   ], { doc: "A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): each part only when it\nhas one. Its account and what is left of it are the chat's agent's (`ChatAgent::account`)." }),
   AgentCardMeter: struct([
