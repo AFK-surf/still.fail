@@ -5,7 +5,8 @@ import { stationApi, useStationCall } from "./api.ts";
 import { useAct } from "./toast.tsx";
 import { useDoing } from "./doing.ts";
 import { DoingMark } from "./DoingMark.tsx";
-import { Close } from "./icons.tsx";
+import { Close, Download } from "./icons.tsx";
+import { useCommands } from "./commands.ts";
 import { t } from "./i18n.ts";
 import * as css from "./StationUpdate.css.ts";
 
@@ -13,6 +14,9 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
   const api = stationApi(useStationCall(station));
   const act = useAct();
   const busy = useDoing("software.update", { station, id: "station" });
+  const update = () => act(api.updateSoftware("station"), t("web-main.stationUpdate.updateAction"));
+  // ⌘K offers it too while its chat is open.
+  useCommands(notice?.canUpdate && !busy ? [{ id: "update.station", group: "update", words: "update station", label: notice.station ? `${t("web-main.stationUpdate.updateAction")} · ${notice.station}` : t("web-main.stationUpdate.updateAction"), icon: Download, run: update }] : []);
   const control = (action: string) => act(core().call("station.updateNotice", { station, action, version: notice?.version }), t("web-main.stationUpdate.noticeAction"));
   if (!notice) return null;
   return <Popover.Root open={notice.open ?? false} onOpenChange={(open) => control(open ? "open" : "close")}>
@@ -35,7 +39,7 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
         </div>}
         {(notice.from || notice.to || notice.canUpdate) && <div className={css.foot}>
           {(notice.from || notice.to) && <span className={css.versions}>{[notice.from, notice.to].filter(Boolean).join(" → ")}</span>}
-          {notice.canUpdate && <button className={css.update} disabled={busy} onClick={() => act(api.updateSoftware("station"), t("web-main.stationUpdate.updateAction"))}>
+          {notice.canUpdate && <button className={css.update} disabled={busy} onClick={update}>
             <DoingMark calls="software.update" on={{ station, id: "station" }} size={12} />{busy ? t("web-main.stationUpdate.updating") : notice.tone === "trouble" ? t("common.retry") : t("web-main.stationUpdate.updateNow")}
           </button>}
         </div>}

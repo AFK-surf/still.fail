@@ -28,7 +28,7 @@ import { NotificationsPage } from "../pages/Notifications.tsx";
 import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
-import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
+import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, ROLE_LABEL, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
@@ -66,6 +66,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   const stations = useStationList(found.value, entry.id) ?? NO_STATIONS;
   const path = useLocation().pathname;
   const navigate = useNavigate();
+  useSettingsCommands(entry);
   useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/chats\/.+)$/.test(p));
   const detail = /\/(s\/[^/]+\/.+|settings|new$|archive$|decisions$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
