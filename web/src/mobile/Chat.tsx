@@ -125,6 +125,7 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
   const app = useApp();
   const thread = view.thread;
   const jobs = useChatJobs(here.station, { session: here.key }).value;
+  const station = useChatStation(here.station);
   return (
     <BarFrame title={view.title} more={!!thread} onMore={() => thread && openChatInfo(app, here, thread)}
       trailing={<>
@@ -132,14 +133,31 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
         {view.archivable && thread && <ArchiveButton here={here} view={view} thread={thread} />}
         {jobs && jobs.jobs.length > 0 && <JobsButton here={here} alarm={jobs.alarm} />}
       </>}>
-      <StationChip station={here.station} />
+      {view.agents.length === 0 && <StationChip station={here.station} />}
       <StationUpdate station={here.station} notice={view.stationUpdate} />
       <PeopleStack people={view.people} max={5} />
-      {view.agents.map((a) => (
-        <button key={a.session.key} type="button" className={css.mBarAgent} onClick={() => openHistory(app, here.station, here.key, a.session.key)} aria-label={t("web-mobile.chat.agentHistory", { agent: a.session.agentText })}>
-          <AgentMark maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={22} />
-        </button>
-      ))}
+      {view.agents.map((a, i) => {
+        const history = () => openHistory(app, here.station, here.key, a.session.key);
+        const label = t("web-mobile.chat.agentHistory", { agent: a.session.agentText });
+        // The first shares its tile with the station it runs on (once the workspace has more than one): its icon, or its
+        // name where it has none; tapped, the station's card.
+        if (i === 0 && station) {
+          return (
+            <AgentMark key={a.session.key} maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={22}
+              wrap={(logo) => <button type="button" className={css.mBarJoinedAgent} onClick={history} aria-label={label}>{logo}</button>}>
+              <button type="button" className={css.mBarJoinedStation} data-name={station.emoji || station.icon ? undefined : true} aria-label={station.name}
+                onClick={() => app.sheet({ height: 0.55, content: () => <StationSheet station={here.station} /> })}>
+                {station.emoji || station.icon ? <StationMark emoji={station.emoji} icon={station.icon} size={13} /> : station.name}
+              </button>
+            </AgentMark>
+          );
+        }
+        return (
+          <button key={a.session.key} type="button" className={css.mBarAgent} onClick={history} aria-label={label}>
+            <AgentMark maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={22} />
+          </button>
+        );
+      })}
     </BarFrame>
   );
 }
@@ -150,14 +168,20 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
  */
 function StationChip({ station }: { station: string }) {
   const app = useApp();
-  const stations = useStations(scopeOf(station)).value;
-  const s = stations?.find((x) => x.station === station);
-  if (!stations || stations.length < 2 || !s) return null;
+  const s = useChatStation(station);
+  if (!s) return null;
   return (
     <button type="button" className={css.mBarStation} aria-label={s.name} onClick={() => app.sheet({ height: 0.55, content: () => <StationSheet station={station} /> })}>
       {(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={12} />}<span>{s.name}</span>
     </button>
   );
+}
+
+/** The station the chat runs on, once the workspace has more than one. */
+function useChatStation(station: string) {
+  const stations = useStations(scopeOf(station)).value;
+  if (!stations || stations.length < 2) return undefined;
+  return stations.find((x) => x.station === station);
 }
 
 function StationSheet({ station }: { station: string }) {

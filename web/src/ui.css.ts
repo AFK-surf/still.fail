@@ -44,6 +44,11 @@ export const agentMark = style({
   },
   "@media": { "(prefers-reduced-motion: reduce)": { selectors: { "&[data-badge=\"run\"]::before": { animation: "none" } } } },
 });
+/** With the station it runs on: one tile, as tall, the maker's part square, the station's (its icon or its name) after it. */
+export const agentMarkJoined = style({
+  display: "inline-flex", width: "auto", gap: "0", paddingRight: "calc(var(--mark) * .19)",
+  color: vars.muted, fontSize: vars.textMeta, lineHeight: "1", whiteSpace: "nowrap",
+});
 export const empty = style({
   flex: "1", display: "grid", placeContent: "center", justifyItems: "center", gap: "6px", padding: "40px",
   textAlign: "center", color: vars.muted,

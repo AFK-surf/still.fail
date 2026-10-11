@@ -620,11 +620,22 @@ export function RuntimeTags({ runtimes, decision = false }: { runtimes: ("claude
   );
 }
 
-/** An agent as the phone shows it: its model's maker on a tile, and where it stands as a badge. */
-export function AgentMark({ maker, runtime, badge, badgeText, size = 20 }: { maker: Maker | null | undefined; runtime: "claude" | "codex"; badge: Badge | undefined; badgeText?: string | undefined; size?: number }) {
+/**
+ * An agent as the phone shows it: its model's maker on a tile, and where it stands as a badge. `children`: the station it
+ * runs on, on the same tile after the maker (its icon, or its name where it has none); `wrap` then puts the maker in its
+ * own control, the station's part being one of its own.
+ */
+export function AgentMark({ maker, runtime, badge, badgeText, size = 20, wrap, children }: {
+  maker: Maker | null | undefined; runtime: "claude" | "codex"; badge: Badge | undefined; badgeText?: string | undefined; size?: number;
+  wrap?: ((logo: ReactNode) => ReactNode) | undefined; children?: ReactNode;
+}) {
+  const logo = <ModelLogo maker={maker} runtime={runtime} size={Math.round(size * 0.62)} />;
+  if (children == null) {
+    return <span className={css.agentMark} style={{ "--mark": `${size}px` } as CSSProperties} data-badge={badge ?? undefined} role="img" aria-label={badgeText ?? undefined}>{logo}</span>;
+  }
   return (
-    <span className={css.agentMark} style={{ "--mark": `${size}px` } as CSSProperties} data-badge={badge ?? undefined} role="img" aria-label={badgeText ?? undefined}>
-      <ModelLogo maker={maker} runtime={runtime} size={Math.round(size * 0.62)} />
+    <span className={`${css.agentMark} ${css.agentMarkJoined}`} style={{ "--mark": `${size}px` } as CSSProperties} data-badge={badge ?? undefined}>
+      {wrap ? wrap(logo) : logo}{children}
     </span>
   );
 }

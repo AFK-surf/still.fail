@@ -15,6 +15,25 @@ export const agentMarkBtn = style({
     "&[data-on]": { boxShadow: `0 0 0 2px ${vars.accent}` },
   },
 });
+/** An agent and the station it runs on, one tile (ui.tsx AgentMark): the maker's square opens its history. */
+export const agentStation = style({
+  display: "inline-flex", flex: "none", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  selectors: { "&[data-on]": { boxShadow: `0 0 0 2px ${vars.accent}` } },
+});
+export const agentStationAgent = style({
+  display: "grid", placeItems: "center", width: "var(--mark)", height: "var(--mark)", padding: "0", border: "0", borderRadius: "inherit",
+  background: "none", color: "inherit", cursor: "pointer",
+  selectors: { "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "2px" } },
+});
+/** The station's part: its icon, or its name (kept short) where it has none. */
+export const agentStationPart = style({
+  display: "inline-flex", alignItems: "center", height: "var(--mark)", maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis",
+  cursor: "default", outline: "none",
+  selectors: {
+    "&[data-name]": { display: "block", lineHeight: "var(--mark)", paddingLeft: "1px" },
+    "&:hover, &[data-state=open], &:focus-visible": { color: vars.text },
+  },
+});
 /** The machine it runs on, beside the title: a quiet tag. */
 export const chatStation = style({
   display: "inline-flex", alignItems: "center", gap: "4px",

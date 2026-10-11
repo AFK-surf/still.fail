@@ -8,7 +8,7 @@ import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
 import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { PENDING } from "../lastChat.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
@@ -350,10 +350,10 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
             : <ChatTitle station={station.address} session={keeper} title={chat.title} onRename={renamable ? () => setRenaming(true) : undefined} />}
           <StationUpdate station={station.address} notice={chat.stationUpdate} />
-          <ChatStation />
+          {agents.length === 0 && <ChatStation />}
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
-          {agents.map((a) => (
-            <AgentButton key={a.session.key} agent={a} marked={agents.length > 1 && shown === a.session.key} onHistory={() => toggleHistory(a.session.key)} />
+          {agents.map((a, i) => (
+            <AgentButton key={a.session.key} agent={a} marked={agents.length > 1 && shown === a.session.key} onHistory={() => toggleHistory(a.session.key)} station={i === 0} />
           ))}
         </div>
         <div className={css.pageBarActions}>
@@ -482,11 +482,25 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
  * hover, its card (AgentCard.tsx), the one its avatar beside its messages has. Those whose history shows are marked,
  * among several.
  */
-function AgentButton({ agent, marked, onHistory }: { agent: ChatAgent; marked: boolean; onHistory(): void }) {
+function AgentButton({ agent, marked, onHistory, station = false }: { agent: ChatAgent; marked: boolean; onHistory(): void; station?: boolean }) {
   const { session } = agent;
+  const where = useChatStation();
+  const label = t("web-pages.chat.historyOf", { agent: session.agentText });
+  // With the station it runs on (once the workspace has more than one), one tile: the maker opens the history and has
+  // the agent's card, the station's part its own.
+  if (station && where) {
+    return (
+      <span className={css.agentStation} data-on={marked || undefined}>
+        <AgentMark maker={session.maker} runtime={session.runtime} badge={agent.badge} badgeText={session.badgeText} size={20}
+          wrap={(logo) => <Hover tile content={<AgentCard agent={agent} />}><button type="button" className={css.agentStationAgent} onClick={onHistory} aria-label={label}>{logo}</button></Hover>}>
+          <StationPart where={where} />
+        </AgentMark>
+      </span>
+    );
+  }
   return (
     <Hover tile content={<AgentCard agent={agent} />}>
-      <button type="button" className={css.agentMarkBtn} data-on={marked || undefined} onClick={onHistory} aria-label={t("web-pages.chat.historyOf", { agent: session.agentText })}>
+      <button type="button" className={css.agentMarkBtn} data-on={marked || undefined} onClick={onHistory} aria-label={label}>
         <AgentMark maker={session.maker} runtime={session.runtime} badge={agent.badge} badgeText={session.badgeText} size={20} />
       </button>
     </Hover>
@@ -660,18 +674,46 @@ function Evict({ session }: { session: string }) {
   );
 }
 
-/** The machine the chat runs on, beside its title, once the workspace has more than one; its load in the tip. */
-function ChatStation() {
+/** The machine the chat runs on, once the workspace has more than one: its name, its view (once it comes) and its host. */
+function useChatStation() {
   const station = useStation();
   const stations = useStations(scopeOf(station.address)).value;
   const host = useHost(station.address).value;
   if (!stations || stations.length < 2) return null;
   const name = station.name || host?.hostname || t("web-pages.chat.thisMachine");
-  const view = stations.find((s) => s.station === station.address);
-  const tag = <span className={css.chatStation} tabIndex={view ? 0 : undefined}>{(view?.emoji || view?.icon) && <StationMark emoji={view.emoji} icon={view.icon} size={12} />}{name}</span>;
-  // The station at a glance on hover (its card, StationCards.tsx); before its view comes, its host in a line.
-  if (view) return <Hover content={<StationPeek s={view} settings={`${station.settings}/stations`} />}>{tag}</Hover>;
-  return <Tip label={host ? `${host.hostname} · ${host.summary}` : name}>{tag}</Tip>;
+  return { name, view: stations.find((s) => s.station === station.address), host, settings: `${station.settings}/stations` };
+}
+
+/** The station at a glance on hover (its card, StationCards.tsx); before its view comes, its host in a line. */
+function StationHover({ where, children }: { where: NonNullable<ReturnType<typeof useChatStation>>; children: ReactElement }) {
+  const { view, host, name, settings } = where;
+  if (view) return <Hover content={<StationPeek s={view} settings={settings} />}>{children}</Hover>;
+  return <Tip label={host ? `${host.hostname} · ${host.summary}` : name}>{children}</Tip>;
+}
+
+/** The station's part of its agent's tile: its icon, or its name where it has none. */
+function StationPart({ where }: { where: NonNullable<ReturnType<typeof useChatStation>> }) {
+  const { view, name } = where;
+  const mark = view && (view.emoji || view.icon);
+  return (
+    <StationHover where={where}>
+      <span className={css.agentStationPart} data-name={mark ? undefined : true} tabIndex={view ? 0 : undefined} aria-label={mark ? name : undefined}>
+        {mark ? <StationMark emoji={view.emoji} icon={view.icon} size={12} /> : name}
+      </span>
+    </StationHover>
+  );
+}
+
+/** The machine the chat runs on, beside its title, while it has no agent to share a tile with. */
+function ChatStation() {
+  const where = useChatStation();
+  if (!where) return null;
+  const { view, name } = where;
+  return (
+    <StationHover where={where}>
+      <span className={css.chatStation} tabIndex={view ? 0 : undefined}>{(view?.emoji || view?.icon) && <StationMark emoji={view.emoji} icon={view.icon} size={12} />}{name}</span>
+    </StationHover>
+  );
 }
 
 /**
