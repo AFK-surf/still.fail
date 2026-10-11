@@ -27,15 +27,15 @@ export const status = style({
   },
 });
 
-/** The latest of what it did, a line each, oldest first; what it does now, last, in the text's colour. */
+/** Its latest lines, a line each, oldest first; what it does now in the text's colour. */
 export const recent = style({
   listStyle: "none", margin: "0", padding: "0 0 0 14px", display: "flex", flexDirection: "column", gap: "2px",
   fontSize: vars.textMeta, color: vars.muted,
-  // Its lines move in it (listMotion.ts): their offset parent, the one gone drawn under them, none past its edges.
-  position: "relative", isolation: "isolate", overflow: "hidden",
+  // Its lines run on in it (AgentCard.tsx useLinesMotion): their offset parent, none drawn past its edges.
+  position: "relative", overflow: "hidden",
 });
-// A line keeps its height while the list's own follows (it would give way otherwise, cut short as it is).
-globalStyle(`${recent} > li`, { flex: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+// A line moves whole, on a layer of its own: its letters are drawn once.
+globalStyle(`${recent} > li`, { flex: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", willChange: "transform" });
 globalStyle(`${recent} > li[data-now]`, { color: vars.text });
 
 export const elapsed = style({ color: vars.muted, fontVariantNumeric: "tabular-nums" });

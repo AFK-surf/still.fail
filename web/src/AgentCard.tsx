@@ -9,7 +9,6 @@ import { Hover } from "./Peeks.tsx";
 import { AgentMark, Tip } from "./ui.tsx";
 import { Stop } from "./icons.tsx";
 import { useAct } from "./toast.tsx";
-import { useListMotion } from "./listMotion.ts";
 import { reducedMotion } from "./motion.ts";
 import { EdgeChip } from "./components.tsx";
 import { t } from "./i18n.ts";
@@ -27,26 +26,60 @@ export function AgentHover({ agent, children }: { agent: string | null | undefin
   return <Hover tile content={<AgentCard agent={of} />}>{children}</Hover>;
 }
 
+const LINES_MS = 240;
+const LINES_EASE = "cubic-bezier(0.2, 0.7, 0.2, 1)";
+
 /**
- * `el`'s height goes from what it was at the last render to what this one gives it (lines coming and going), carrying
- * on from wherever it had got to; as it is the first time.
+ * The lines of `list` (its children marked `data-line="<key>"`, `list` their offset parent, cut at its edges) run on
+ * as they change, by moving alone (no line is resized, nor the list): those that stay go from where they were to where
+ * they are, carrying on from wherever they had got to; a new one comes with them from beyond the edge, and one gone
+ * leaves with them, as a copy. With none moved, new and gone fade in place. As they are the first time.
  */
-function useHeightMotion(el: RefObject<HTMLElement | null>): void {
-  const was = useRef<{ el: HTMLElement; height: number; run?: Animation } | null>(null);
+function useLinesMotion(list: RefObject<HTMLElement | null>): void {
+  const was = useRef<{ box: HTMLElement; lines: Map<string, { el: HTMLElement; top: number; run?: Animation }> } | null>(null);
   useLayoutEffect(() => {
-    const box = el.current;
-    const before = was.current;
+    const box = list.current;
+    const before = was.current?.box === box ? was.current.lines : null;
     if (!box) return void (was.current = null);
-    // Where it has got to, then its height at rest.
-    const shown = box.offsetHeight;
-    before?.run?.cancel();
-    const height = box.offsetHeight;
-    const from = before?.el === box ? (before.run ? shown : before.height) : height;
-    was.current = { el: box, height };
-    if (from === height || reducedMotion()) return;
-    const run = box.animate([{ height: `${from}px` }, { height: `${height}px` }], { duration: 220, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" });
-    was.current.run = run;
-    void run.finished.then(() => { if (was.current?.run === run) delete was.current.run; }, () => {});
+    const lines = new Map<string, { el: HTMLElement; top: number; run?: Animation }>();
+    // How far each still is from its place on its way there, then where it lies now.
+    const under = new Map<string, number>();
+    for (const el of box.querySelectorAll<HTMLElement>(":scope > [data-line]")) {
+      const key = el.dataset.line!;
+      const run = before?.get(key)?.run;
+      if (run) {
+        const shown = el.getBoundingClientRect().top;
+        run.cancel();
+        under.set(key, shown - el.getBoundingClientRect().top);
+      }
+      lines.set(key, { el, top: el.offsetTop });
+    }
+    was.current = { box, lines };
+    if (!before || reducedMotion()) return;
+    const timing = { duration: LINES_MS, easing: LINES_EASE };
+    // How far the lines ran on (the first that stays tells): what comes and what goes moves as far.
+    const stays = [...lines.keys()].find((key) => before.has(key));
+    const shift = stays === undefined ? 0 : before.get(stays)!.top - lines.get(stays)!.top;
+    for (const [key, line] of lines) {
+      const old = before.get(key);
+      const y = old ? under.get(key) ?? old.top - line.top : shift;
+      if (old && Math.abs(y) < 0.5) continue;
+      const run = line.el.animate([{ transform: `translateY(${y}px)`, ...(old ? {} : { opacity: 0 }) }, { transform: "translateY(0)", ...(old ? {} : { opacity: 1 }) }], timing);
+      line.run = run;
+      void run.finished.then(() => { if (line.run === run) delete line.run; }, () => {});
+    }
+    // One gone: a copy of it where it was, leaving as far as the others ran on.
+    for (const [key, old] of before) {
+      if (lines.has(key)) continue;
+      old.run?.cancel();
+      const ghost = old.el.cloneNode(true) as HTMLElement;
+      delete ghost.dataset.line;
+      ghost.setAttribute("aria-hidden", "true");
+      Object.assign(ghost.style, { position: "absolute", top: `${old.top}px`, left: `${old.el.offsetLeft}px`, right: "0", pointerEvents: "none" });
+      box.appendChild(ghost);
+      const run = ghost.animate([{ transform: "translateY(0)", opacity: 1 }, { transform: `translateY(${-shift}px)`, opacity: 0 }], { ...timing, fill: "forwards" });
+      void run.finished.then(() => ghost.remove(), () => ghost.remove());
+    }
   });
 }
 
@@ -64,12 +97,13 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
   const act = useAct();
   const working = agent.status === "running" || agent.status === "queued";
   const now = useLives(station, [s.key]).get(s.key)?.activity?.now?.text;
+  // Its latest lines, three at most: what it did, then (unless that is the last of them) what it does now. Three once
+  // it has done as much, so their room stays as it is while they run on (useLinesMotion).
   const recent = card?.recent ?? [];
-  const doing = working && now && now !== recent.at(-1)?.text ? now : null;
-  // A new line comes in under the others, which move up, the oldest going (listMotion.ts); the lines' height follows.
+  const doing = working && now && now !== recent.at(-1)?.text ? [{ key: "now", text: now, now: true }] : [];
+  const latest: { key: string; text: string; now?: boolean }[] = [...recent, ...doing].slice(-3);
   const lines = useRef<HTMLOListElement>(null);
-  useListMotion(lines);
-  useHeightMotion(lines);
+  useLinesMotion(lines);
   const account = agent.account ?? agent.profile;
   const quota = agent.account?.quota?.state === "ok" ? agent.account.quota.windows : [];
   const context = card?.context;
@@ -92,11 +126,9 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
           ? <span className={css.elapsed}> · <Waited since={wait.since} seconds={wait.seconds} /></span>
           : agent.since ? <span className={css.elapsed}> · <Elapsed since={agent.since} /></span> : null}
       </p>
-      {/* The latest of what it did, oldest first, then (unless that is the last of them) what it does now. */}
-      {(recent.length > 0 || doing) && (
+      {latest.length > 0 && (
         <ol ref={lines} className={css.recent}>
-          {recent.map((r) => <li key={r.key} data-flip={r.key}>{r.text}</li>)}
-          {doing && <li key="now" data-flip="now" data-now="">{doing}</li>}
+          {latest.map((r) => <li key={r.key} data-line={r.key} data-now={r.now ? "" : undefined}>{r.text}</li>)}
         </ol>
       )}
       {(card?.cost || card?.cache || context) && (
