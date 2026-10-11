@@ -34,7 +34,8 @@ export const recent = style({
   // Its lines move in it (listMotion.ts): their offset parent, the one gone drawn under them, none past its edges.
   position: "relative", isolation: "isolate", overflow: "hidden",
 });
-globalStyle(`${recent} > li`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+// A line keeps its height while the list's own follows (it would give way otherwise, cut short as it is).
+globalStyle(`${recent} > li`, { flex: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${recent} > li[data-now]`, { color: vars.text });
 
 export const elapsed = style({ color: vars.muted, fontVariantNumeric: "tabular-nums" });
