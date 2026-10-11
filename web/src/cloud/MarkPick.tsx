@@ -1,10 +1,10 @@
 // A station's mark (the settings' stations): a square before its name; pressed, a panel to pick one of still.fail's icons
-// or an emoji (any, pasted or typed, besides those offered), to put up a picture (or paste one), or to have none. Those
-// who may not change it see only the one it has. What is sent is ../stationPick.ts's.
+// (in a colour, or the words') or an emoji (any, pasted or typed, besides those offered), to put up a picture (or paste
+// one), or to have none. Those who may not change it see only the one it has. What is sent is ../stationPick.ts's.
 import { useRef, useState } from "react";
 import { Popover } from "radix-ui";
 import { Close, ImageUpload, Plus, STATION_ICONS } from "../icons.tsx";
-import { Glyph, isPicture, StationMark, stationGlyph } from "../StationMark.tsx";
+import { Glyph, glyphColor, isPicture, MARK_COLORS, markColor, StationMark, stationGlyph, type MarkColor } from "../StationMark.tsx";
 import { EMOJI, emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pastedPicture, pictureMark, pictureOf, type Kind, type Mark } from "../stationPick.ts";
 import { Segmented } from "../ui.tsx";
 import { t } from "../i18n.ts";
@@ -28,16 +28,17 @@ export function MarkPick({ emoji, icon, name, editable, busy, onPick }: {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css.pick}`} align="start" sideOffset={6} collisionPadding={8}>
-          <MarkPanel emoji={emoji} icon={icon} onPick={(m) => { setOpen(false); onPick(m); }} />
+          <MarkPanel emoji={emoji} icon={icon} onPick={(m, stay) => { if (!stay) setOpen(false); onPick(m); }} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   );
 }
 
-/** The panel itself: which grid, the grid, and putting up a picture or having none. */
-function MarkPanel({ emoji, icon, onPick }: { emoji: string | null | undefined; icon: string | null | undefined; onPick(mark: Mark): void }) {
+/** The panel itself: which grid, the icons' colour, the grid, and putting up a picture or having none. */
+function MarkPanel({ emoji, icon, onPick }: { emoji: string | null | undefined; icon: string | null | undefined; onPick(mark: Mark, stay?: boolean): void }) {
   const [kind, setKind] = useState<Kind>(() => kindOf(emoji, icon));
+  const [color, setColor] = useState(() => glyphColor(icon));
   const [typed, setTyped] = useState("");
   const [failed, setFailed] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
@@ -56,7 +57,8 @@ function MarkPanel({ emoji, icon, onPick }: { emoji: string | null | undefined; 
             onChange={(ev) => { setTyped(ev.target.value); const one = firstEmoji(ev.target.value); if (one) onPick(emojiMark(one)); }} />
         </form>
       )}
-      {kind === "glyph" ? <GlyphGrid icon={icon} size={18} onPick={onPick} /> : <EmojiGrid emoji={stationGlyph(icon) || picture ? null : emoji} onPick={onPick} />}
+      {kind === "glyph" && <ColorRow color={color} onColor={(c) => { setColor(c); const g = stationGlyph(icon); if (g) onPick(glyphMark(g, c), true); }} />}
+      {kind === "glyph" ? <GlyphGrid icon={icon} color={color} size={18} onPick={onPick} /> : <EmojiGrid emoji={stationGlyph(icon) || picture ? null : emoji} onPick={onPick} />}
       <div className={css.foot}>
         <button type="button" className={`${controlsCss.menuItem} ${css.footButton}`} aria-pressed={!!picture} onClick={() => file.current?.click()}>
           {picture ? <img src={picture} alt="" className={css.footPicture} /> : <ImageUpload size={16} />}
@@ -70,13 +72,27 @@ function MarkPanel({ emoji, icon, onPick }: { emoji: string | null | undefined; 
   );
 }
 
-/** Still.fail's icons, the one it has marked (the phone's sheet has them larger: `className`, `size`). */
-export function GlyphGrid({ icon, size, className, onPick }: { icon: string | null | undefined; size: number; className?: string; onPick(mark: Mark): void }) {
+/**
+ * The colour the icons are picked in: the words' own first, then MARK_COLORS. Picking one colours the grid, and the icon
+ * the station has, at once.
+ */
+export function ColorRow({ color, className, onColor }: { color: MarkColor | undefined; className?: string; onColor(color: MarkColor | undefined): void }) {
+  return (
+    <div className={`${css.colors}${className ? ` ${className}` : ""}`} role="group" aria-label={t("web-pages.stations.mark.color")}>
+      {[undefined, ...MARK_COLORS].map((c) => (
+        <button key={c ?? "none"} type="button" className={css.color} style={{ color: markColor(c) }} aria-label={t(`web-pages.stations.mark.color.${c ?? "none"}`)} aria-pressed={c === color} onClick={() => onColor(c)} />
+      ))}
+    </div>
+  );
+}
+
+/** Still.fail's icons in `color`, the one it has marked (the phone's sheet has them larger: `className`, `size`). */
+export function GlyphGrid({ icon, color, size, className, onPick }: { icon: string | null | undefined; color?: MarkColor | undefined; size: number; className?: string; onPick(mark: Mark): void }) {
   const kept = stationGlyph(icon)?.name;
   return (
-    <div className={`${css.grid}${className ? ` ${className}` : ""}`} role="group">
+    <div className={`${css.grid}${className ? ` ${className}` : ""}`} role="group" data-color={color} style={{ color: markColor(color) }}>
       {STATION_ICONS.map((g) => (
-        <button key={g.name} type="button" className={css.choice} aria-label={g.name} aria-pressed={g.name === kept} onClick={() => onPick(glyphMark(g))}><g.Icon size={size} /></button>
+        <button key={g.name} type="button" className={css.choice} aria-label={g.name} aria-pressed={g.name === kept} onClick={() => onPick(glyphMark(g, color))}><g.Icon size={size} /></button>
       ))}
     </div>
   );

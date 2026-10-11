@@ -19,9 +19,9 @@ import { GoRow } from "./Settings.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
 import { Net } from "../cloud/StationCards.tsx";
-import { EmojiGrid, GlyphGrid } from "../cloud/MarkPick.tsx";
-import { isPicture, StationMark, stationGlyph } from "../StationMark.tsx";
-import { emojiMark, firstEmoji, kindOf, NO_MARK, pictureMark, pictureOf, same, type Kind, type Mark } from "../stationPick.ts";
+import { ColorRow, EmojiGrid, GlyphGrid } from "../cloud/MarkPick.tsx";
+import { glyphColor, isPicture, StationMark, stationGlyph } from "../StationMark.tsx";
+import { emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pictureMark, pictureOf, same, type Kind, type Mark } from "../stationPick.ts";
 import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
@@ -287,8 +287,9 @@ function StationMarkSheet({ s }: { s: StationView }) {
   const [kind, setKind] = useState<Kind>(() => kindOf(s.emoji, s.icon));
   const [typed, setTyped] = useState("");
   const file = useRef<HTMLInputElement>(null);
-  const pick = (m: Mark) => {
-    app.sheet(null);
+  const [color, setColor] = useState(() => glyphColor(s.icon));
+  const pick = (m: Mark, stay?: boolean) => {
+    if (!stay) app.sheet(null);
     if (!same(m, s.emoji, s.icon)) act(cloud.setStationMark(app.entry.account.sub, app.entry.id, s.id, m), t("web-mobile.stations.emojiWhat"), t("web-mobile.stations.emojiSet"));
   };
   const upload = (f: Blob) => pictureOf(f).then((url) => pick(pictureMark(url)),
@@ -306,7 +307,8 @@ function StationMarkSheet({ s }: { s: StationView }) {
               onChange={(e) => { setTyped(e.target.value); const one = firstEmoji(e.target.value); if (one) pick(emojiMark(one)); }} />
           )}
         </div>
-        {kind === "glyph" ? <GlyphGrid icon={s.icon} size={24} className={css.mMarkGrid} onPick={pick} />
+        {kind === "glyph" && <ColorRow color={color} className={css.mMarkColors} onColor={(c) => { setColor(c); const g = stationGlyph(s.icon); if (g) pick(glyphMark(g, c), true); }} />}
+        {kind === "glyph" ? <GlyphGrid icon={s.icon} color={color} size={24} className={css.mMarkGrid} onPick={pick} />
           : <EmojiGrid emoji={stationGlyph(s.icon) || picture ? null : s.emoji} className={`${css.mMarkGrid} ${css.mMarkEmoji}`} onPick={pick} />}
         <PickRow label={t(picture ? "web-pages.stations.mark.another" : "web-pages.stations.mark.upload")}
           leading={picture ? <img src={picture} alt="" className={css.mMarkPicture} /> : <ImageUpload size={20} />} onClick={() => file.current?.click()} />

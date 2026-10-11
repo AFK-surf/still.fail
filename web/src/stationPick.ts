@@ -2,13 +2,14 @@
 // glyph keeps its emoji beside it, so older clients (which know only emoji) show the nearest; an emoji or a picture
 // takes the other away. "" takes either away.
 import { STATION_ICONS } from "./icons.tsx";
-import { isPicture, stationGlyph } from "./StationMark.tsx";
+import { isPicture, stationGlyph, type MarkColor } from "./StationMark.tsx";
 
 export type Mark = { emoji: string; icon: string };
 export type Kind = "glyph" | "emoji";
 
 export const NO_MARK: Mark = { emoji: "", icon: "" };
-export const glyphMark = (g: (typeof STATION_ICONS)[number]): Mark => ({ icon: `glyph:${g.name}`, emoji: g.emoji });
+/** A glyph in `color` (none: the colour of the words it sits in). */
+export const glyphMark = (g: (typeof STATION_ICONS)[number], color?: MarkColor): Mark => ({ icon: `glyph:${g.name}${color ? `:${color}` : ""}`, emoji: g.emoji });
 export const emojiMark = (emoji: string): Mark => ({ emoji, icon: "" });
 export const pictureMark = (url: string): Mark => ({ emoji: "", icon: url });
 

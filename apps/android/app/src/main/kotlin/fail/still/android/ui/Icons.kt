@@ -133,6 +133,22 @@ object StationIcons {
         StationGlyph("desktop", "🖥️", icon("desktop", listOf("M6 4h12a3 3 0 0 1 3 3v6a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-6a3 3 0 0 1 3 -3Z", "M9 20H16 M12 16V20 M6.5 8H10 M6.5 11H8"), listOf())),
         StationGlyph("laptop", "💻", icon("laptop", listOf("M5 15V6Q5 4 7 4H17Q19 4 19 6V15 M2.5 16H21.5L20 19Q19.5 20 18 20H6Q4.5 20 4 19Z M10 16H14"), listOf())),
         StationGlyph("window", "🪟", icon("window", listOf("M4 4.5L20 3V20.5L4 19Z M11 4V19.5 M4 11.5H20"), listOf())),
+        StationGlyph("mini", "🗄️", icon("mini", listOf("M7 6H17Q18 6 19 7L21 10Q21.5 10.5 21.5 12V16Q21.5 18 19.5 18H4.5Q2.5 18 2.5 16V12Q2.5 10.5 3 10L5 7Q6 6 7 6Z M3 11H21", "M6 14.5H9"), listOf("M17.1 14.5a0.9 0.9 0 1 0 1.8 0a0.9 0.9 0 1 0 -1.8 0Z"))),
+        StationGlyph("phone", "📱", icon("phone", listOf("M8.5 2.5h7a2.5 2.5 0 0 1 2.5 2.5v14a2.5 2.5 0 0 1 -2.5 2.5h-7a2.5 2.5 0 0 1 -2.5 -2.5v-14a2.5 2.5 0 0 1 2.5 -2.5Z", "M10 6H14 M11 18H13"), listOf())),
+        StationGlyph("terminal", "⌨️", icon("terminal", listOf("M5.5 4h13a3 3 0 0 1 3 3v10a3 3 0 0 1 -3 3h-13a3 3 0 0 1 -3 -3v-10a3 3 0 0 1 3 -3Z", "M6.5 8.5L10 12L6.5 15.5 M13.5 15.5H17.5"), listOf())),
+        StationGlyph("code", "🧑‍💻", icon("code", listOf("M7 6L2 12L7 18 M17 6L22 12L17 18 M14 3L10 21"), listOf())),
+        StationGlyph("branch", "🌿", icon("branch", listOf("M6 7V17 M6 14C6 9 18 14 18 7", "M3.5 4.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0Z", "M3.5 19.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0Z", "M15.5 4.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0Z"), listOf())),
+        StationGlyph("merge", "🔀", icon("merge", listOf("M7 17V3 M3.5 6.5L7 3L10.5 6.5 M18 17V14C18 9 7 12 7 7", "M4.5 19.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0Z", "M15.5 19.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0Z"), listOf())),
+        StationGlyph("bug", "🐛", icon("bug", listOf("M8 7V6Q8 3 12 3Q16 3 16 6V7 M6 11L3 8 M6 14H2.5 M7 18L4 21 M18 11L21 8 M18 14H21.5 M17 18L20 21", "M12 7h0a6 6 0 0 1 6 6v2a6 6 0 0 1 -6 6h0a6 6 0 0 1 -6 -6v-2a6 6 0 0 1 6 -6Z", "M12 11V17"), listOf())),
+        StationGlyph("hammer", "🔨", icon("hammer", listOf("M10 11L3.5 17.5Q2 19 4 21Q5 22 6.5 20.5L13 14 M8 6L12 2.5L21 11L17 15Z"), listOf())),
+        StationGlyph("package", "📦", icon("package", listOf("M3 7L12 2.5L21 7V17L12 21.5L3 17Z M3 7L12 12L21 7 M12 12V21.5 M7.5 4.75L16.5 9.5V13"), listOf())),
+        StationGlyph("database", "💾", icon("database", listOf("M4 6C4 2 20 2 20 6C20 10 4 10 4 6Z M4 6V18C4 22 20 22 20 18V6 M4 12C4 16 20 16 20 12"), listOf())),
+        StationGlyph("layers", "🧊", icon("layers", listOf("M2.5 7.5L12 3L21.5 7.5L12 12Z M3 12L12 16.5L21 12 M3 16.5L12 21L21 16.5"), listOf())),
+        StationGlyph("chip", "🧠", icon("chip", listOf("M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z", "M10 9h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1Z", "M9 2V5 M15 2V5 M9 19V22 M15 19V22 M2 9H5 M2 15H5 M19 9H22 M19 15H22"), listOf())),
+        StationGlyph("network", "🌐", icon("network", listOf("M9.5 2.5h5a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1Z", "M12 8.5V13 M5 16V13H19V16", "M3 16h4a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z", "M17 16h4a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z"), listOf())),
+        StationGlyph("shield", "🛡️", icon("shield", listOf("M12 2.5Q16 5 20 5V12Q20 18 12 21.5Q4 18 4 12V5Q8 5 12 2.5Z M8 12L11 15L16 9"), listOf())),
+        StationGlyph("lock", "🔒", icon("lock", listOf("M6.5 10h11a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-11a2 2 0 0 1 -2 -2v-7a2 2 0 0 1 2 -2Z", "M8 10V6.5Q8 2.5 12 2.5Q16 2.5 16 6.5V10 M12 14V17"), listOf())),
+        StationGlyph("robot", "🤖", icon("robot", listOf("M7 7h10a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-10a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3Z", "M12 7V3 M10 3H14 M1.5 12V16 M22.5 12V16 M9 17H15"), listOf("M7.25 12a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z", "M14.25 12a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z"))),
         StationGlyph("home", "🏠", icon("home", listOf("M2.5 11L11 3.5Q12 2.5 13 3.5L21.5 11 M5 9V20H19V9 M10 20V14H14V20 M17 6V3"), listOf())),
         StationGlyph("tower", "🏢", icon("tower", listOf("M5 21V5L18 3V21 M3 21H21 M9 8H10 M14 7H15 M9 12H10 M14 11H15 M9 16H10 M14 15H15 M11 21V19"), listOf())),
         StationGlyph("lighthouse", "🗼", icon("lighthouse", listOf("M8 9H16L18 21H6Z M8 9V5L12 2.5L16 5V9 M7 15H17 M3 7H4 M20 7H21"), listOf())),
@@ -178,10 +194,31 @@ object StationIcons {
         StationGlyph("ghost", "👻", icon("ghost", listOf("M4 20V11Q4 3 12 3Q20 3 20 11V20L16 17L12 21L8 17Z", "M11 14H13"), listOf("M7.8 10a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0Z", "M13.8 10a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0Z"))),
         StationGlyph("fish", "🐟", icon("fish", listOf("M3 12Q10 2 17 10L21 6V18L17 14Q10 22 3 12Z M12 7Q15 12 12 17"), listOf("M6 11a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z"))),
         StationGlyph("turtle", "🐢", icon("turtle", listOf("M3 15Q3 6 10 6Q17 6 17 15Z M17 13V11Q17 8 19.5 8Q22 8 22 11Q22 15 17 15 M6 15L5 19H8 M14 15L15 19H18 M8 6.5L11 10L10 15 M11 10H15"), listOf())),
+        StationGlyph("dice-1", "🎲", icon("dice-1", listOf("M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12a3 3 0 0 1 3 -3Z"), listOf("M10.65 12a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z"))),
+        StationGlyph("dice-2", "🎲", icon("dice-2", listOf("M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12a3 3 0 0 1 3 -3Z"), listOf("M6.65 8a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M14.65 16a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z"))),
+        StationGlyph("dice-3", "🎲", icon("dice-3", listOf("M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12a3 3 0 0 1 3 -3Z"), listOf("M6.15 7.5a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M10.65 12a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M15.15 16.5a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z"))),
+        StationGlyph("dice-4", "🎲", icon("dice-4", listOf("M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12a3 3 0 0 1 3 -3Z"), listOf("M6.15 7.5a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M15.15 7.5a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M6.15 16.5a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M15.15 16.5a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z"))),
+        StationGlyph("dice-5", "🎲", icon("dice-5", listOf("M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12a3 3 0 0 1 3 -3Z"), listOf("M6.15 7.5a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M15.15 7.5a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M10.65 12a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M6.15 16.5a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M15.15 16.5a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z"))),
+        StationGlyph("dice-6", "🎲", icon("dice-6", listOf("M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12a3 3 0 0 1 3 -3Z"), listOf("M6.15 7a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M15.15 7a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M6.15 12a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M15.15 12a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M6.15 17a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z", "M15.15 17a1.35 1.35 0 1 0 2.7 0a1.35 1.35 0 1 0 -2.7 0Z"))),
+        StationGlyph("chess-pawn", "♟️", icon("chess-pawn", listOf("M8.5 6.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z", "M9 11H15 M10 11Q11 15 7 18H17Q13 15 14 11", "M5 21H19"), listOf())),
+        StationGlyph("chess-knight", "🐴", icon("chess-knight", listOf("M7 18Q7 14 11 11L7 12L4 9L9 4L9.5 2.5L14 4Q19 7 18 18Z", "M5 21H19"), listOf("M10 7a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z"))),
+        StationGlyph("chess-bishop", "⛪", icon("chess-bishop", listOf("M12 2.5Q4 8 9 12H15Q20 8 12 2.5Z M15 5L12 8 M10 12Q11 15 7 18H17Q13 15 14 12", "M5 21H19"), listOf())),
+        StationGlyph("chess-rook", "🏰", icon("chess-rook", listOf("M5 3H8V7H10.5V3H13.5V7H16V3H19V10L16 12V18H8V12L5 10Z M8 12H16", "M5 21H19"), listOf())),
+        StationGlyph("chess-queen", "👸", icon("chess-queen", listOf("M5 6L8 14H16L19 6L15 9L12 3L9 9Z M8 14L7 18H17L16 14", "M5 21H19"), listOf())),
+        StationGlyph("chess-king", "👑", icon("chess-king", listOf("M12 2V8 M9 4.5H15 M8 13Q3 6 8 8L12 10L16 8Q21 6 16 13Z M9 13L7 18H17L15 13", "M5 21H19"), listOf())),
+        StationGlyph("suit-spade", "♠️", icon("suit-spade", listOf("M12 3C10 6 3.5 9 3.5 13Q3.5 18 9 16L8 21H16L15 16Q20.5 18 20.5 13C20.5 9 14 6 12 3Z"), listOf())),
+        StationGlyph("suit-heart", "♥️", icon("suit-heart", listOf("M12 6C6 0 0 6 4 12C6 15 9 18 12 21C15 18 18 15 20 12C24 6 18 0 12 6Z"), listOf())),
+        StationGlyph("suit-diamond", "♦️", icon("suit-diamond", listOf("M12 2.5L20 12L12 21.5L4 12Z"), listOf())),
+        StationGlyph("suit-club", "♣️", icon("suit-club", listOf("M8 9C5 5 8 2.5 12 2.5C16 2.5 19 5 16 9C23 7 23 19 15 16L16 21H8L9 16C1 19 1 7 8 9Z"), listOf())),
+        StationGlyph("moon-new", "🌑", icon("moon-new", listOf("M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0Z"), listOf())),
+        StationGlyph("moon-crescent", "🌒", icon("moon-crescent", listOf("M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0Z"), listOf("M12 3A9 9 0 0 1 12 21C18 18 18 6 12 3Z"))),
+        StationGlyph("moon-half", "🌓", icon("moon-half", listOf("M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0Z"), listOf("M12 3A9 9 0 0 1 12 21Z"))),
+        StationGlyph("moon-gibbous", "🌔", icon("moon-gibbous", listOf("M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0Z"), listOf("M12 3A9 9 0 0 1 12 21C6 18 6 6 12 3Z"))),
+        StationGlyph("moon-full", "🌕", icon("moon-full", listOf(), listOf("M2.125 12a9.875 9.875 0 1 0 19.75 0a9.875 9.875 0 1 0 -19.75 0Z"))),
     )
 
     private val byName = all.associateBy { it.name }
 
-    /** The one a station's icon names (glyph:<name>); null for a picture, none, or one this build does not know. */
-    fun of(icon: String?): StationGlyph? = icon?.takeIf { it.startsWith("glyph:") }?.let { byName[it.removePrefix("glyph:")] }
+    /** The one a station's icon names (glyph:<name>, or glyph:<name>:<colour>); null for a picture, none, or one this build does not know. */
+    fun of(icon: String?): StationGlyph? = icon?.takeIf { it.startsWith("glyph:") }?.let { byName[it.removePrefix("glyph:").substringBefore(':')] }
 }

@@ -42,6 +42,18 @@ export const choice = style({
     "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "-2px" },
   },
 });
+// In a colour, every icon is that colour (the grid's), the one it has only on its ground.
+globalStyle(`${grid}[data-color] > ${choice}${choice}`, { color: "inherit" });
+/** The colours, in a row over the grid: a dot each, the one picked ringed in its own colour. The words' colour is the first. */
+export const colors = style({ display: "flex", gap: "2px", padding: "2px 0" });
+export const color = style({
+  position: "relative", width: "24px", height: "24px", padding: "0", border: "0", borderRadius: "50%", background: "none", color: vars.text, cursor: "pointer",
+  "::before": { content: "", position: "absolute", inset: "6px", borderRadius: "50%", background: "currentColor" },
+  selectors: {
+    "&[aria-pressed=true]": { boxShadow: "inset 0 0 0 2px currentColor" },
+    "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "1px" },
+  },
+});
 /** Putting up a picture and having none, side by side under the grid, as a menu's rows. */
 export const foot = style({ display: "flex", gap: "2px" });
 export const footButton = style({

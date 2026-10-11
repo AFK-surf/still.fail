@@ -453,21 +453,40 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
 fun IconIn(icon: ImageVector, size: Dp = 18.dp, tint: Color = C.ink, modifier: Modifier = Modifier) = Icon(icon, null, modifier.size(size), tint = tint)
 
 /**
- * A station where it is named (web/src/StationMark.tsx): its `icon` first, one of still.fail's (glyph:<name>, StationIcons)
- * or a picture put up (a data URL); else its emoji; else `none` (nothing when null). A glyph this build does not know shows
- * the emoji kept beside it.
+ * A station where it is named (web/src/StationMark.tsx): its `icon` first, one of still.fail's (glyph:<name>, StationIcons;
+ * glyph:<name>:<colour> in one of MARK_COLORS, else `tint`) or a picture put up (a data URL); else its emoji; else `none`
+ * (nothing when null). A glyph this build does not know shows the emoji kept beside it.
  */
 @Composable
 fun StationMark(emoji: String?, icon: String?, size: Dp, tint: Color, modifier: Modifier = Modifier, none: ImageVector? = null) {
     val glyph = StationIcons.of(icon)
     val picture = remember(icon) { stationPicture(icon) }
     when {
-        glyph != null -> Icon(glyph.icon, null, modifier.size(size), tint = tint)
+        glyph != null -> Icon(glyph.icon, null, modifier.size(size), tint = markColor(glyphColor(icon)) ?: tint)
         picture != null -> Image(picture, null, modifier.size(size).clip(RoundedCornerShape(size * 0.24f)), contentScale = ContentScale.Crop)
         emoji != null -> Text(emoji, fontSize = (size.value * 0.9f).sp, lineHeight = size.value.sp, modifier = modifier)
         none != null -> Icon(none, null, modifier.size(size), tint = tint)
     }
 }
+
+/** The colours a glyph can be given, in the picker's order (web/src/StationMark.tsx's MARK_COLORS). */
+val MARK_COLORS = listOf("red", "orange", "amber", "green", "teal", "blue", "purple", "pink")
+
+/** The colour a glyph was given (glyph:<name>:<colour>); null for none, or one this build does not know. */
+fun glyphColor(icon: String?): String? = icon?.takeIf { it.startsWith("glyph:") }?.removePrefix("glyph:")?.substringAfter(':', "")?.takeIf { it in MARK_COLORS }
+
+/** A colour of MARK_COLORS for the theme in use (web/src/StationMark.css.ts's); null for none. */
+@Composable
+fun markColor(color: String?): Color? = if (color == null) null else (if (C.dark) MARK_DARK else MARK_LIGHT)[color]
+
+private val MARK_LIGHT = mapOf(
+    "red" to Color(0xFFBC4945), "orange" to Color(0xFFB75400), "amber" to Color(0xFFA16700), "green" to Color(0xFF0E8C41),
+    "teal" to Color(0xFF008D90), "blue" to Color(0xFF2D74CA), "purple" to Color(0xFF835CBE), "pink" to Color(0xFFB24981),
+)
+private val MARK_DARK = mapOf(
+    "red" to Color(0xFFFB9890), "orange" to Color(0xFFF5A06F), "amber" to Color(0xFFE0AE57), "green" to Color(0xFF7CCD8E),
+    "teal" to Color(0xFF3BCFCF), "blue" to Color(0xFF82BAFF), "purple" to Color(0xFFC3A5F9), "pink" to Color(0xFFF197C2),
+)
 
 /** Whether a station has anything to be shown by (StationMark draws nothing for it otherwise). */
 fun hasStationMark(emoji: String?, icon: String?): Boolean = !emoji.isNullOrEmpty() || !icon.isNullOrEmpty()

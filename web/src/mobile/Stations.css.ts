@@ -50,7 +50,12 @@ export const mMarkField = style({
 export const mMarkGrid = style({});
 // Doubled, to win over the wide grid's eight columns whatever order the sheets load in.
 globalStyle(`${mMarkGrid}${mMarkGrid}`, { gridTemplateColumns: "repeat(6, 1fr)", gap: "4px", padding: "0 14px 10px" });
-globalStyle(`${mMarkGrid} > button:not([aria-pressed=true])`, { color: "var(--m-ink)" });
+globalStyle(`${mMarkGrid}:not([data-color]) > button:not([aria-pressed=true])`, { color: "var(--m-ink)" });
+/** The colours over the grid: as wide as it, a thumb's room each. */
+export const mMarkColors = style({});
+globalStyle(`${mMarkColors}${mMarkColors}`, { justifyContent: "space-between", padding: "0 18px 10px", color: "var(--m-ink)" });
+globalStyle(`${mMarkColors} > button`, { width: "32px", height: "32px" });
+globalStyle(`${mMarkColors} > button::before`, { inset: "7px" });
 export const mMarkEmoji = style({});
 globalStyle(`${mMarkEmoji}${mMarkEmoji}`, { fontSize: `calc(${vars.textTitle} * 1.6)` });
 export const mMarkPicture = style({ width: "20px", height: "20px", objectFit: "cover", borderRadius: "24%" });

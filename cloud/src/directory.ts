@@ -1083,11 +1083,12 @@ function cleanName(value: unknown): string | null {
 
 /**
  * A station's icon: one of still.fail's by its name (`glyph:rocket`, design/station-icons; a name a client does not know
- * falls back to the emoji), or a small picture put up, as a data URL the clients made (96px, a few KB); else null.
+ * falls back to the emoji), which may be given a colour (`glyph:rocket:blue`; the clients know which), or a small picture
+ * put up, as a data URL the clients made (96px, a few KB); else null.
  */
 function cleanIcon(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  if (/^glyph:[a-z0-9-]{1,40}$/.test(value)) return value;
+  if (/^glyph:[a-z0-9-]{1,40}(:[a-z]{1,16})?$/.test(value)) return value;
   return value.length <= ICON_BYTES && /^data:image\/(png|webp|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
 }
 /** How long a picture's data URL may be: it goes to every member with the workspace. */

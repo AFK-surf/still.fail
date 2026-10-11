@@ -539,6 +539,70 @@ function StationWindow(props: IconProps) {
   return <Svg {...props}><path d="M4 4.5L20 3V20.5L4 19Z M11 4V19.5 M4 11.5H20" /></Svg>;
 }
 
+function StationMini(props: IconProps) {
+  return <Svg {...props}><path d="M7 6H17Q18 6 19 7L21 10Q21.5 10.5 21.5 12V16Q21.5 18 19.5 18H4.5Q2.5 18 2.5 16V12Q2.5 10.5 3 10L5 7Q6 6 7 6Z M3 11H21" /><path d="M6 14.5H9" /><circle cx="18" cy="14.5" r="0.9" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationPhone(props: IconProps) {
+  return <Svg {...props}><rect x="6" y="2.5" width="12" height="19" rx="2.5" /><path d="M10 6H14 M11 18H13" /></Svg>;
+}
+
+function StationTerminal(props: IconProps) {
+  return <Svg {...props}><rect x="2.5" y="4" width="19" height="16" rx="3" /><path d="M6.5 8.5L10 12L6.5 15.5 M13.5 15.5H17.5" /></Svg>;
+}
+
+function StationCode(props: IconProps) {
+  return <Svg {...props}><path d="M7 6L2 12L7 18 M17 6L22 12L17 18 M14 3L10 21" /></Svg>;
+}
+
+function StationBranch(props: IconProps) {
+  return <Svg {...props}><path d="M6 7V17 M6 14C6 9 18 14 18 7" /><circle cx="6" cy="4.5" r="2.5" /><circle cx="6" cy="19.5" r="2.5" /><circle cx="18" cy="4.5" r="2.5" /></Svg>;
+}
+
+function StationMerge(props: IconProps) {
+  return <Svg {...props}><path d="M7 17V3 M3.5 6.5L7 3L10.5 6.5 M18 17V14C18 9 7 12 7 7" /><circle cx="7" cy="19.5" r="2.5" /><circle cx="18" cy="19.5" r="2.5" /></Svg>;
+}
+
+function StationBug(props: IconProps) {
+  return <Svg {...props}><path d="M8 7V6Q8 3 12 3Q16 3 16 6V7 M6 11L3 8 M6 14H2.5 M7 18L4 21 M18 11L21 8 M18 14H21.5 M17 18L20 21" /><rect x="6" y="7" width="12" height="14" rx="6" /><path d="M12 11V17" /></Svg>;
+}
+
+function StationHammer(props: IconProps) {
+  return <Svg {...props}><path d="M10 11L3.5 17.5Q2 19 4 21Q5 22 6.5 20.5L13 14 M8 6L12 2.5L21 11L17 15Z" /></Svg>;
+}
+
+function StationPackage(props: IconProps) {
+  return <Svg {...props}><path d="M3 7L12 2.5L21 7V17L12 21.5L3 17Z M3 7L12 12L21 7 M12 12V21.5 M7.5 4.75L16.5 9.5V13" /></Svg>;
+}
+
+function StationDatabase(props: IconProps) {
+  return <Svg {...props}><path d="M4 6C4 2 20 2 20 6C20 10 4 10 4 6Z M4 6V18C4 22 20 22 20 18V6 M4 12C4 16 20 16 20 12" /></Svg>;
+}
+
+function StationLayers(props: IconProps) {
+  return <Svg {...props}><path d="M2.5 7.5L12 3L21.5 7.5L12 12Z M3 12L12 16.5L21 12 M3 16.5L12 21L21 16.5" /></Svg>;
+}
+
+function StationChip(props: IconProps) {
+  return <Svg {...props}><rect x="5" y="5" width="14" height="14" rx="2" /><rect x="9" y="9" width="6" height="6" rx="1" /><path d="M9 2V5 M15 2V5 M9 19V22 M15 19V22 M2 9H5 M2 15H5 M19 9H22 M19 15H22" /></Svg>;
+}
+
+function StationNetwork(props: IconProps) {
+  return <Svg {...props}><rect x="8.5" y="2.5" width="7" height="6" rx="1" /><path d="M12 8.5V13 M5 16V13H19V16" /><rect x="2" y="16" width="6" height="5" rx="1" /><rect x="16" y="16" width="6" height="5" rx="1" /></Svg>;
+}
+
+function StationShield(props: IconProps) {
+  return <Svg {...props}><path d="M12 2.5Q16 5 20 5V12Q20 18 12 21.5Q4 18 4 12V5Q8 5 12 2.5Z M8 12L11 15L16 9" /></Svg>;
+}
+
+function StationLock(props: IconProps) {
+  return <Svg {...props}><rect x="4.5" y="10" width="15" height="11" rx="2" /><path d="M8 10V6.5Q8 2.5 12 2.5Q16 2.5 16 6.5V10 M12 14V17" /></Svg>;
+}
+
+function StationRobot(props: IconProps) {
+  return <Svg {...props}><rect x="4" y="7" width="16" height="14" rx="3" /><path d="M12 7V3 M10 3H14 M1.5 12V16 M22.5 12V16 M9 17H15" /><circle cx="8.5" cy="12" r="1.25" fill="currentColor" stroke="none" /><circle cx="15.5" cy="12" r="1.25" fill="currentColor" stroke="none" /></Svg>;
+}
+
 function StationHome(props: IconProps) {
   return <Svg {...props}><path d="M2.5 11L11 3.5Q12 2.5 13 3.5L21.5 11 M5 9V20H19V9 M10 20V14H14V20 M17 6V3" /></Svg>;
 }
@@ -719,11 +783,111 @@ function StationTurtle(props: IconProps) {
   return <Svg {...props}><path d="M3 15Q3 6 10 6Q17 6 17 15Z M17 13V11Q17 8 19.5 8Q22 8 22 11Q22 15 17 15 M6 15L5 19H8 M14 15L15 19H18 M8 6.5L11 10L10 15 M11 10H15" /></Svg>;
 }
 
+function StationDice1(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDice2(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="8" cy="8" r="1.35" fill="currentColor" stroke="none" /><circle cx="16" cy="16" r="1.35" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDice3(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="7.5" cy="7.5" r="1.35" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none" /><circle cx="16.5" cy="16.5" r="1.35" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDice4(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="7.5" cy="7.5" r="1.35" fill="currentColor" stroke="none" /><circle cx="16.5" cy="7.5" r="1.35" fill="currentColor" stroke="none" /><circle cx="7.5" cy="16.5" r="1.35" fill="currentColor" stroke="none" /><circle cx="16.5" cy="16.5" r="1.35" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDice5(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="7.5" cy="7.5" r="1.35" fill="currentColor" stroke="none" /><circle cx="16.5" cy="7.5" r="1.35" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none" /><circle cx="7.5" cy="16.5" r="1.35" fill="currentColor" stroke="none" /><circle cx="16.5" cy="16.5" r="1.35" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationDice6(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="7.5" cy="7" r="1.35" fill="currentColor" stroke="none" /><circle cx="16.5" cy="7" r="1.35" fill="currentColor" stroke="none" /><circle cx="7.5" cy="12" r="1.35" fill="currentColor" stroke="none" /><circle cx="16.5" cy="12" r="1.35" fill="currentColor" stroke="none" /><circle cx="7.5" cy="17" r="1.35" fill="currentColor" stroke="none" /><circle cx="16.5" cy="17" r="1.35" fill="currentColor" stroke="none" /></Svg>;
+}
+
+function StationChessPawn(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="6.5" r="3.5" /><path d="M9 11H15 M10 11Q11 15 7 18H17Q13 15 14 11" /><path d="M5 21H19" /></Svg>;
+}
+
+function StationChessKnight(props: IconProps) {
+  return <Svg {...props}><path d="M7 18Q7 14 11 11L7 12L4 9L9 4L9.5 2.5L14 4Q19 7 18 18Z" /><circle cx="11" cy="7" r="1" fill="currentColor" stroke="none" /><path d="M5 21H19" /></Svg>;
+}
+
+function StationChessBishop(props: IconProps) {
+  return <Svg {...props}><path d="M12 2.5Q4 8 9 12H15Q20 8 12 2.5Z M15 5L12 8 M10 12Q11 15 7 18H17Q13 15 14 12" /><path d="M5 21H19" /></Svg>;
+}
+
+function StationChessRook(props: IconProps) {
+  return <Svg {...props}><path d="M5 3H8V7H10.5V3H13.5V7H16V3H19V10L16 12V18H8V12L5 10Z M8 12H16" /><path d="M5 21H19" /></Svg>;
+}
+
+function StationChessQueen(props: IconProps) {
+  return <Svg {...props}><path d="M5 6L8 14H16L19 6L15 9L12 3L9 9Z M8 14L7 18H17L16 14" /><path d="M5 21H19" /></Svg>;
+}
+
+function StationChessKing(props: IconProps) {
+  return <Svg {...props}><path d="M12 2V8 M9 4.5H15 M8 13Q3 6 8 8L12 10L16 8Q21 6 16 13Z M9 13L7 18H17L15 13" /><path d="M5 21H19" /></Svg>;
+}
+
+function StationSuitSpade(props: IconProps) {
+  return <Svg {...props}><path d="M12 3C10 6 3.5 9 3.5 13Q3.5 18 9 16L8 21H16L15 16Q20.5 18 20.5 13C20.5 9 14 6 12 3Z" /></Svg>;
+}
+
+function StationSuitHeart(props: IconProps) {
+  return <Svg {...props}><path d="M12 6C6 0 0 6 4 12C6 15 9 18 12 21C15 18 18 15 20 12C24 6 18 0 12 6Z" /></Svg>;
+}
+
+function StationSuitDiamond(props: IconProps) {
+  return <Svg {...props}><path d="M12 2.5L20 12L12 21.5L4 12Z" /></Svg>;
+}
+
+function StationSuitClub(props: IconProps) {
+  return <Svg {...props}><path d="M8 9C5 5 8 2.5 12 2.5C16 2.5 19 5 16 9C23 7 23 19 15 16L16 21H8L9 16C1 19 1 7 8 9Z" /></Svg>;
+}
+
+function StationMoonNew(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9" /></Svg>;
+}
+
+function StationMoonCrescent(props: IconProps) {
+  return <Svg {...props}><path d="M12 3A9 9 0 0 1 12 21C18 18 18 6 12 3Z" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="9" /></Svg>;
+}
+
+function StationMoonHalf(props: IconProps) {
+  return <Svg {...props}><path d="M12 3A9 9 0 0 1 12 21Z" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="9" /></Svg>;
+}
+
+function StationMoonGibbous(props: IconProps) {
+  return <Svg {...props}><path d="M12 3A9 9 0 0 1 12 21C6 18 6 6 12 3Z" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="9" /></Svg>;
+}
+
+function StationMoonFull(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="9.875" fill="currentColor" stroke="none" /></Svg>;
+}
+
 /** The icons a station can have (design/station-icons), in the picker's order, each with the emoji kept beside it for older clients. */
 export const STATION_ICONS: readonly { emoji: string; name: string; Icon: (props: IconProps) => React.JSX.Element }[] = [
   { emoji: "🖥️", name: "desktop", Icon: StationDesktop },
   { emoji: "💻", name: "laptop", Icon: StationLaptop },
   { emoji: "🪟", name: "window", Icon: StationWindow },
+  { emoji: "🗄️", name: "mini", Icon: StationMini },
+  { emoji: "📱", name: "phone", Icon: StationPhone },
+  { emoji: "⌨️", name: "terminal", Icon: StationTerminal },
+  { emoji: "🧑‍💻", name: "code", Icon: StationCode },
+  { emoji: "🌿", name: "branch", Icon: StationBranch },
+  { emoji: "🔀", name: "merge", Icon: StationMerge },
+  { emoji: "🐛", name: "bug", Icon: StationBug },
+  { emoji: "🔨", name: "hammer", Icon: StationHammer },
+  { emoji: "📦", name: "package", Icon: StationPackage },
+  { emoji: "💾", name: "database", Icon: StationDatabase },
+  { emoji: "🧊", name: "layers", Icon: StationLayers },
+  { emoji: "🧠", name: "chip", Icon: StationChip },
+  { emoji: "🌐", name: "network", Icon: StationNetwork },
+  { emoji: "🛡️", name: "shield", Icon: StationShield },
+  { emoji: "🔒", name: "lock", Icon: StationLock },
+  { emoji: "🤖", name: "robot", Icon: StationRobot },
   { emoji: "🏠", name: "home", Icon: StationHome },
   { emoji: "🏢", name: "tower", Icon: StationTower },
   { emoji: "🗼", name: "lighthouse", Icon: StationLighthouse },
@@ -769,4 +933,25 @@ export const STATION_ICONS: readonly { emoji: string; name: string; Icon: (props
   { emoji: "👻", name: "ghost", Icon: StationGhost },
   { emoji: "🐟", name: "fish", Icon: StationFish },
   { emoji: "🐢", name: "turtle", Icon: StationTurtle },
+  { emoji: "🎲", name: "dice-1", Icon: StationDice1 },
+  { emoji: "🎲", name: "dice-2", Icon: StationDice2 },
+  { emoji: "🎲", name: "dice-3", Icon: StationDice3 },
+  { emoji: "🎲", name: "dice-4", Icon: StationDice4 },
+  { emoji: "🎲", name: "dice-5", Icon: StationDice5 },
+  { emoji: "🎲", name: "dice-6", Icon: StationDice6 },
+  { emoji: "♟️", name: "chess-pawn", Icon: StationChessPawn },
+  { emoji: "🐴", name: "chess-knight", Icon: StationChessKnight },
+  { emoji: "⛪", name: "chess-bishop", Icon: StationChessBishop },
+  { emoji: "🏰", name: "chess-rook", Icon: StationChessRook },
+  { emoji: "👸", name: "chess-queen", Icon: StationChessQueen },
+  { emoji: "👑", name: "chess-king", Icon: StationChessKing },
+  { emoji: "♠️", name: "suit-spade", Icon: StationSuitSpade },
+  { emoji: "♥️", name: "suit-heart", Icon: StationSuitHeart },
+  { emoji: "♦️", name: "suit-diamond", Icon: StationSuitDiamond },
+  { emoji: "♣️", name: "suit-club", Icon: StationSuitClub },
+  { emoji: "🌑", name: "moon-new", Icon: StationMoonNew },
+  { emoji: "🌒", name: "moon-crescent", Icon: StationMoonCrescent },
+  { emoji: "🌓", name: "moon-half", Icon: StationMoonHalf },
+  { emoji: "🌔", name: "moon-gibbous", Icon: StationMoonGibbous },
+  { emoji: "🌕", name: "moon-full", Icon: StationMoonFull },
 ];

@@ -154,12 +154,16 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     await expect(on, { alice: [ws], bob: [ws] }, "station icon");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.deepEqual([seen.icon, seen.emoji], ["glyph:rocket", "🚀"]);
+    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: "glyph:dice-3:blue", emoji: "🎲" });
+    await expect(on, { alice: [ws], bob: [ws] }, "station icon in a colour");
+    seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
+    assert.equal(seen.icon, "glyph:dice-3:blue");
     const picture = "data:image/png;base64,iVBORw0KGgo=";
     await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: picture });
     await expect(on, { alice: [ws], bob: [ws] }, "station picture");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.equal(seen.icon, picture);
-    for (const bad of ["rocket", "glyph:Rocket!", "data:image/svg+xml;base64,PHN2Zz4=", `data:image/png;base64,${"A".repeat(60_000)}`]) {
+    for (const bad of ["rocket", "glyph:Rocket!", "glyph:rocket:", "glyph:rocket:blue:red", "data:image/svg+xml;base64,PHN2Zz4=", `data:image/png;base64,${"A".repeat(60_000)}`]) {
       assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: bad })).status, 400, bad.slice(0, 30));
     }
     await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: "", emoji: "" });

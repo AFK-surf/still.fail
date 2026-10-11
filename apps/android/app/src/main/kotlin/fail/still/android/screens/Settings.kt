@@ -18,6 +18,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import fail.still.android.ui.Seg
 import fail.still.android.ui.hasStationMark
+import fail.still.android.ui.MARK_COLORS
+import fail.still.android.ui.glyphColor
+import fail.still.android.ui.markColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,6 +40,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -569,15 +573,15 @@ fun FirstStation(current: WorkspaceEntry) {
 
 /**
  * A station's mark, picked in a sheet (the web's: web/src/cloud/MarkPick.tsx, the phone web's sheet): one of still.fail's
- * icons or an emoji (any, pasted or typed), a picture put up, or none; set at once. What is sent is web/src/stationPick.ts's:
+ * icons (in a colour, or the words') or an emoji (any, pasted or typed), a picture put up, or none; set at once. What is sent is web/src/stationPick.ts's:
  * a glyph keeps its emoji beside it for older clients, an emoji or a picture takes the other away.
  */
 private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationView) {
     val cloud = Cloud(app.core, current.account.sub)
-    val pick = { emoji: String, icon: String ->
-        app.sheet = null
+    val set = { emoji: String, icon: String ->
         if (emoji != (s.emoji ?: "") || icon != (s.icon ?: "")) app.act(t("android-settings.station.emojiWhat"), t("android-settings.station.emojiSet")) { cloud.setStationMark(current.workspace.id, s.id, emoji, icon) }
     }
+    val pick = { emoji: String, icon: String -> app.sheet = null; set(emoji, icon) }
     val glyph = StationIcons.of(s.icon)
     val picture = s.icon?.takeIf { it.startsWith("data:image/") }
     app.sheet = SheetSpec(0.78f) {
@@ -585,6 +589,8 @@ private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationVi
         val scope = rememberCoroutineScope()
         var emojis by remember { mutableStateOf(glyph == null && picture == null && s.emoji != null) }
         var typed by remember { mutableStateOf("") }
+        var color by remember { mutableStateOf(glyphColor(s.icon)) }
+        val tint = markColor(color)
         val upload = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
             if (uri != null) scope.launch {
                 val url = try { stationPictureOf(context, uri) } catch (_: Exception) { null }
@@ -598,6 +604,19 @@ private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationVi
                 Seg(listOf(t("android-settings.station.glyphs"), "Emoji"), if (emojis) 1 else 0, { emojis = it == 1 }, Modifier.fillMaxWidth(), height = 34.dp, fill = true, radius = 17.dp)
                 if (emojis) Field(typed, { v -> typed = v; firstEmoji(v)?.let { pick(it, "") } }, t("android-settings.station.emojiPaste"))
             }
+            // The icons' colour: the words' own first, then MARK_COLORS; the one picked ringed. It colours the grid, and the
+            // icon the station has, at once.
+            if (!emojis) Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                (listOf<String?>(null) + MARK_COLORS).forEach { c ->
+                    val of = markColor(c) ?: C.ink
+                    Box(
+                        Modifier.size(32.dp).clip(CircleShape).then(if (c == color) Modifier.border(2.dp, of, CircleShape) else Modifier)
+                            .clickable { color = c; if (glyph != null) set(glyph.emoji, "glyph:${glyph.name}" + (c?.let { ":$it" } ?: "")) }
+                            .semantics { contentDescription = c ?: "default" },
+                        contentAlignment = Alignment.Center,
+                    ) { Box(Modifier.size(18.dp).background(of, CircleShape)) }
+                }
+            }
             // Six to a row, wide enough for a thumb; the one it has on the accent's wash.
             val kept = if (emojis) s.emoji?.takeIf { glyph == null && picture == null }?.replace("\uFE0F", "") else glyph?.name
             val offered = if (!emojis) StationIcons.all.map { it.name } else if (kept != null && STATION_EMOJI.none { it.replace("\uFE0F", "") == kept }) listOf(s.emoji!!) + STATION_EMOJI.dropLast(1) else STATION_EMOJI
@@ -608,12 +627,12 @@ private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationVi
                             val on = (if (emojis) key.replace("\uFE0F", "") else key) == kept
                             Box(
                                 Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(14.dp)).background(if (on) C.accentBg else Color.Transparent)
-                                    .clickable { if (emojis) pick(key, "") else StationIcons.all.first { it.name == key }.let { g -> pick(g.emoji, "glyph:${g.name}") } }
+                                    .clickable { if (emojis) pick(key, "") else StationIcons.all.first { it.name == key }.let { g -> pick(g.emoji, "glyph:${g.name}" + (color?.let { ":$it" } ?: "")) } }
                                     .semantics { contentDescription = key },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (emojis) Text(key, fontSize = 26.sp, lineHeight = 30.sp)
-                                else IconIn(StationIcons.all.first { it.name == key }.icon, 24.dp, if (on) C.accent else C.ink)
+                                else IconIn(StationIcons.all.first { it.name == key }.icon, 24.dp, tint ?: if (on) C.accent else C.ink)
                             }
                         }
                         repeat(6 - row.size) { Spacer(Modifier.weight(1f)) }
