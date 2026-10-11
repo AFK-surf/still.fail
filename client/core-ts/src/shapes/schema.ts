@@ -1595,7 +1595,7 @@ export const SHAPES: Record<string, Shape> = {
     ["id", "String"],
     ["name", "String"],
     ["emoji", opt("String"), { doc: "The one its workspace gave it (the settings), shown where it is named; none when none." }],
-    ["icon", opt("String"), { doc: "The icon its workspace gave it, shown before the emoji: glyph:<name> (one of still.fail's, design/station-icons; a client\nthat does not know the name shows the emoji) or a picture put up, as a data URL; none when none." }],
+    ["icon", opt("String"), { doc: "The icon its workspace gave it, shown before the emoji: glyph:<name> (one of still.fail's, design/station-icons, or glyph:<name>:<colour>\nin a colour; a client that does not know it shows the emoji) or a picture put up, as a data URL; none when none." }],
     ["summary", "String", { doc: "Its line in a list: offline since when, or what it is and whether its agents work." }],
     ["face", opt("String"), { doc: "Its buddy's face: offline | working | idle; and what it is under its name (its processor, else 在线/离线)." }],
     ["line", opt("String")],

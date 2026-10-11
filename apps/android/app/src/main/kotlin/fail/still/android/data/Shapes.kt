@@ -2694,8 +2694,8 @@ data class StationView (
 	val name: String,
 	/// The one its workspace gave it (the settings), shown where it is named; none when none.
 	val emoji: String? = null,
-	/// The icon its workspace gave it, shown before the emoji: glyph:<name> (one of still.fail's, design/station-icons; a client
-	/// that does not know the name shows the emoji) or a picture put up, as a data URL; none when none.
+	/// The icon its workspace gave it, shown before the emoji: glyph:<name> (one of still.fail's, design/station-icons, or glyph:<name>:<colour>
+	/// in a colour; a client that does not know it shows the emoji) or a picture put up, as a data URL; none when none.
 	val icon: String? = null,
 	/// Its line in a list: offline since when, or what it is and whether its agents work.
 	val summary: String,

@@ -2669,8 +2669,8 @@ export interface StationView {
 	/** The one its workspace gave it (the settings), shown where it is named; none when none. */
 	emoji?: string;
 	/**
-	 * The icon its workspace gave it, shown before the emoji: glyph:<name> (one of still.fail's, design/station-icons; a client
-	 * that does not know the name shows the emoji) or a picture put up, as a data URL; none when none.
+	 * The icon its workspace gave it, shown before the emoji: glyph:<name> (one of still.fail's, design/station-icons, or glyph:<name>:<colour>
+	 * in a colour; a client that does not know it shows the emoji) or a picture put up, as a data URL; none when none.
 	 */
 	icon?: string;
 	/** Its line in a list: offline since when, or what it is and whether its agents work. */
