@@ -1056,6 +1056,9 @@ test("a_chats_decisions_show_their_options_and_where_they_stand", async () => {
   assert.equal(m[0].decision, undefined);
   assert.equal(v.decision.text, "奏 · 那 C 呢？");
   assert.equal(v.archivable, undefined);
+  // What waits undecided: the page leads to it, and its post says it can be let go there; no other post does.
+  assert.deepEqual(v.asks, [{ seq: 4, card: true, mine: false, text: "那 C 呢？" }]);
+  assert.deepEqual(m.map((x: J) => x.asked ?? false), [false, false, false, true]);
 });
 
 test("chat_is_a_thread_its_messages_and_its_agents", async () => {

@@ -129,6 +129,7 @@
   "web-main.chat.archive": "归档",
   "web-main.chat.archiveAsk": "归档「{title}」？",
   "web-main.chat.archiveFailed": "没能归档：{error}",
+  "web-main.chat.asks.dismiss": "忽略",
   "web-main.chat.asks.go": "跳到待决策的消息",
   "web-main.chat.copyLink": "复制会话链接",
   "web-main.chat.historyRefTitle": "执行记录：{title}",

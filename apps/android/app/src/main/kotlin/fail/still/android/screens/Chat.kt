@@ -966,6 +966,21 @@ private fun JumpToLatest(shown: Boolean, count: Long?, haze: HazeState, modifier
     }
 }
 
+/** 忽略 under a post that asks what no one has decided: the viewer lets it go, gone at once and back if that fails. */
+@Composable
+private fun AskDismiss(ctx: Here, m: ChatMessage) {
+    val app = LocalApp.current
+    var gone by remember(m.seq) { mutableStateOf(false) }
+    if (gone) return
+    Text(
+        t("android-chat.asks.dismiss"), fontSize = 12.sp, lineHeight = 18.sp, color = C.muted,
+        modifier = Modifier.padding(top = 6.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+            gone = true
+            app.act(t("android-misc.decisions.dismissWhat"), failed = { gone = false }) { app.api(ctx.station).dismissDecision(m.thread, m.seq) }
+        },
+    )
+}
+
 /** The way to what waits to be decided in the chat: a bell, as the way to its end (JumpToLatest) comes and goes. */
 @Composable
 private fun JumpToAsk(shown: Boolean, haze: HazeState, modifier: Modifier, onJump: () -> Unit) {
@@ -1174,6 +1189,8 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             if (m.authorKind == "person") Files(ctx, m.attachments)
             // A decision it asks (its options): them under it, a line saying how it went once it has.
             if (decide) DecisionUnder(ctx, m)
+            // It asks what no one has decided (the core's `asked`): letting it go, right under it (web Chat.tsx AskDismiss).
+            if (decide && m.asked == true) AskDismiss(ctx, m)
             // What the archive check made of the chat (web Chat.tsx archiveCheck): a quiet line, red when it failed.
             if (decide && ctx.checkUnder == m.seq) ctx.view.archiveCheck?.let { Text(it.text, fontSize = 12.sp, lineHeight = 18.sp, color = if (it.failed) C.red else C.muted, modifier = Modifier.padding(top = 6.dp)) }
             // Under its agent's latest 做完了 while nothing is left in the chat: archiving it, right there.

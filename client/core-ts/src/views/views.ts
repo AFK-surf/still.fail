@@ -1236,11 +1236,15 @@ export class Views implements Owner {
     if (watch !== null) view.watch = watch;
     const card = row !== undefined ? decisions.ofRow(row) : null;
     if (card !== null && open(card)) view.decision = decisions.shown(card);
-    // What is asked here and not decided yet (a card, or an agent needing a person), for the bar above the composer
-    // that leads to each.
+    // What is asked here and not decided yet (a card, or an agent needing a person): the page leads to each, and the
+    // post that asks says so (`asked`: it can be let go there).
     view.asks = row !== undefined && view.archived !== true
       ? decisions.undecided(row).filter((d) => u64(d.seq) !== null && open(d)).map((d) => decisions.askOf(row, d, view.me))
       : [];
+    for (const ask of view.asks) {
+      const m = messages.find((x) => u64(get(x, "seq")) === ask.seq);
+      if (isObject(m)) (m as J).asked = true;
+    }
     if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
     const check = row !== undefined && view.archived !== true ? present.archiveCheck(row.archiveCheck) : null;
     if (check !== null) view.archiveCheck = check;

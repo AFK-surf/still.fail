@@ -1443,6 +1443,11 @@ export interface ChatMessage {
 	card?: MessageCard;
 	/** With a card: whether it still waits for an answer, and who answered it how. */
 	decision?: MessageDecision;
+	/**
+	 * In a chat's page: it asks what no one has decided and the viewer has not let go (one of the chat's `asks`, a card
+	 * or an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise.
+	 */
+	asked?: boolean;
 }
 
 /** A range of a text, `from` to `to` (UTF-16 units). */

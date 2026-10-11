@@ -1442,7 +1442,10 @@ data class ChatMessage (
 	/// The card it carries (options to pick, or a text field), as shown. Absent for a message with none.
 	val card: MessageCard? = null,
 	/// With a card: whether it still waits for an answer, and who answered it how.
-	val decision: MessageDecision? = null
+	val decision: MessageDecision? = null,
+	/// In a chat's page: it asks what no one has decided and the viewer has not let go (one of the chat's `asks`, a card
+	/// or an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise.
+	val asked: Boolean? = null
 )
 
 /// A range of a text, `from` to `to` (UTF-16 units).

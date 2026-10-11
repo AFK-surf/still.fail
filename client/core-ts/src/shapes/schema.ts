@@ -191,6 +191,7 @@ export const SHAPES: Record<string, Shape> = {
     ["options", opt(vec("DecisionOption")), { doc: "An agent's post with an options card: the answers to pick, in the order they are shown (the one the agent\nrecommends last), as `card.options`; drawn under the message. Absent for every other message." }],
     ["card", opt("MessageCard"), { doc: "The card it carries (options to pick, or a text field), as shown. Absent for a message with none." }],
     ["decision", opt("MessageDecision"), { doc: "With a card: whether it still waits for an answer, and who answered it how." }],
+    ["asked", opt("bool"), { doc: "In a chat's page: it asks what no one has decided and the viewer has not let go (one of the chat's `asks`, a card\nor an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise." }],
   ], { doc: "A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said\nit, and whether its agents have yet to take it." }),
   MessageCard: struct([
     ["assignee", opt("String"), { doc: "The person the agent asks to decide, by email. Absent on legacy cards." }],

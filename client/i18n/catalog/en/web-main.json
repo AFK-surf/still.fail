@@ -147,6 +147,7 @@
   "web-main.chat.archive": "Archive",
   "web-main.chat.archiveAsk": "Archive \"{title}\"?",
   "web-main.chat.archiveFailed": "Couldn't archive: {error}",
+  "web-main.chat.asks.dismiss": "Dismiss",
   "web-main.chat.asks.go": "Go to what awaits a decision",
   "web-main.chat.copyLink": "Copy chat link",
   "web-main.chat.historyRefTitle": "History: {title}",

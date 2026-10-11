@@ -147,6 +147,24 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
 }
 
 /**
+ * 忽略 under a post that asks what no one has decided: the viewer lets it go (`decision.dismiss`: their lists and
+ * the bell say nothing of it any more), gone at once and back if that fails.
+ */
+function AskDismiss({ thread, seq }: { thread: number; seq: number }) {
+  const station = useStation().address;
+  const call = useCall();
+  const act = useAct();
+  const [gone, setGone] = useState(false);
+  if (gone) return null;
+  return (
+    <button type="button" className={css.askDismiss} onClick={() => {
+      setGone(true);
+      act(call("decision.dismiss", { station, thread, seq }).catch((e: unknown) => { setGone(false); throw e; }), t("web-main.decisions.dismissWhat"));
+    }}>{t("web-main.chat.asks.dismiss")}</button>
+  );
+}
+
+/**
  * The way to what waits to be decided in this chat (the core's `asks`: a card no one has answered, or what an agent
  * needs a person for) while its post does not show: a bell, no words, where the way to the chat's end is (over it when
  * both show: `above`). Pressed, the chat goes to the post (jumpTo.ts), then to the next one's the next time, round again.
@@ -1005,6 +1023,8 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
       {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
+      {/* It asks what no one has decided (the core's `asked`): letting it go, right under it. */}
+      {options && m.asked && thread !== null && <AskDismiss thread={thread} seq={m.seq} />}
       {check && <p className={css.archiveCheck} data-failed={check.failed || undefined}>{check.text}</p>}
       {archive && <ArchiveOption thread={m.thread} onArchive={archive} />}
     </OthersMessage>
