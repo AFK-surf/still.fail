@@ -19,10 +19,13 @@ const desktop = {
   /** The cloud's origin: its links (https://…/o/…) are the app's own. */
   cloudOrigin: ipcRenderer.sendSync("app:cloud-origin") as string,
   /**
-   * The window's frame: `inset` (macOS) has no title bar, its buttons in the page's top row, which drags it
-   * (web/index.html data-desktop); `system` (Windows) has the system's title bar over the page.
+   * The window's frame (main.ts open): `inset` (macOS) and `overlay` (Windows) have no title bar, the window's buttons
+   * in the page's top row (at its left, at its right), which drags it (web/index.html data-desktop); `system` (a page
+   * in a window of its own, Linux) has the system's title bar over the page.
    */
-  frame: process.platform === "darwin" ? "inset" : "system",
+  frame: ipcRenderer.sendSync("app:frame") as "inset" | "overlay" | "system",
+  /** The colours of the window's buttons (`overlay`): the page's top row under them, and their symbols (main.ts). */
+  windowColors: (color: string, symbolColor: string) => ipcRenderer.send("window:colors", color, symbolColor),
   /** This build's version (0.1.<commits>). */
   version: ipcRenderer.sendSync("app:version") as string,
   /** The beta app (「youdid.wtf」, beside the released one: main.ts BETA). */

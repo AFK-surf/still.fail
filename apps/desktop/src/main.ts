@@ -4,7 +4,7 @@
 // the page is served from app://ember, the core runs in Node (client/core-ts,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
-import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
 import { autoUpdater } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -161,6 +161,16 @@ ipcMain.on("app:version", (event) => { event.returnValue = app.getVersion(); });
 // The beta app or not, and the scheme its sign-in comes back on (web/src/cloud/accounts.ts).
 ipcMain.on("app:beta", (event) => { event.returnValue = BETA; });
 ipcMain.on("app:scheme", (event) => { event.returnValue = SCHEMES[0]; });
+// The window's frame, for the page's top row (preload.ts `frame`, open below).
+ipcMain.on("app:frame", (event) => { event.returnValue = frames.get(event.sender.id) ?? "system"; });
+// The colours of the window's buttons on Windows, from the page's own (web/src/titleBar.ts): its top row under them.
+ipcMain.on("window:colors", (event, color: unknown, symbolColor: unknown) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window || frames.get(event.sender.id) !== "overlay" || typeof color !== "string" || typeof symbolColor !== "string") return;
+  if (!/^#[0-9a-f]{6}$/i.test(color) || !/^#[0-9a-f]{6}$/i.test(symbolColor)) return;
+  window.setTitleBarOverlay({ color, symbolColor });
+  window.setBackgroundColor(color);
+});
 // The language the page speaks (web/src/main.tsx): the app's menus and dialogs speak it too.
 ipcMain.on("app:language", (event, lang: unknown) => {
   if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || (lang !== "zh" && lang !== "en") || lang === chosenLang) return;
@@ -942,22 +952,39 @@ function wholeImage(page: WebContents, src: string): Promise<Uint8Array<ArrayBuf
   });
 }
 
+type Frame = "inset" | "overlay" | "system";
+/** Each window's frame, by its page (webContents id): what preload.ts tells the page. */
+const frames = new Map<number, Frame>();
+/** The top row of the page the window's buttons sit in (web/src/styles): 44 px. */
+const TOP_ROW = 44;
+
 /**
- * A window of the app at `path`. On macOS the app's own window has no title bar: its buttons sit in the page's top row
- * (44 px, web/src/styles), centred on it. A page of the app opened in a new window (a web service's page of its own)
- * has one: its page has no row for them. Elsewhere every window has the system's (preload.ts `frame`).
+ * A window of the app at `path`. The app's own window has no title bar: the page's top row (44 px, web/src/styles)
+ * is it, and drags the window. On macOS its buttons sit in it at the left, centred on it; on Windows at the right, drawn
+ * by the system over the page (Electron's titleBarOverlay) in the row's colours, which the page tells (window:colors).
+ * A page of the app opened in a new window (a web service's page of its own) has the system's title bar: its page has
+ * no row for them; so has every window on Linux (preload.ts `frame`).
  */
 function open(path = "/", titled = false): BrowserWindow {
+  const frame: Frame = titled ? "system" : process.platform === "darwin" ? "inset" : process.platform === "win32" ? "overlay" : "system";
+  // Before the page says its colours: the canvas of the system's theme (web/src/styles/global.css.ts), and its text.
+  const dark = nativeTheme.shouldUseDarkColors;
   const window = new BrowserWindow({
     width: titled ? 1100 : 1280,
     height: 820,
     show: false,
-    ...(titled || process.platform !== "darwin" ? {} : { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 15 } } as const),
+    ...(frame === "inset" ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 15 } } as const : {}),
+    ...(frame === "overlay" ? {
+      titleBarStyle: "hidden",
+      titleBarOverlay: { color: dark ? "#1f2023" : "#ffffff", symbolColor: dark ? "#e9e9ea" : "#3b3e43", height: TOP_ROW },
+      backgroundColor: dark ? "#1f2023" : "#ffffff",
+    } as const : {}),
     webPreferences: { preload: join(__dirname, "preload.js"), sandbox: true, contextIsolation: true },
   });
   window.once("ready-to-show", () => window.show());
   // The menu bar's page items follow the window in front (followMenu): a new one is, though the app may not be.
   const contents = window.webContents.id;
+  frames.set(contents, frame);
   front = window;
   window.on("focus", () => {
     front = window;
@@ -965,6 +992,7 @@ function open(path = "/", titled = false): BrowserWindow {
   });
   window.on("closed", () => {
     menuStates.delete(contents);
+    frames.delete(contents);
     if (front === window) front = null;
     followMenu();
   });

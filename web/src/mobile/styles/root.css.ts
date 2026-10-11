@@ -69,9 +69,10 @@ export const m = style({
       colorScheme: "dark",
       vars: darkVars,
     },
-    // In the desktop app the window has no title bar: its buttons sit at the top left, over where a phone's status bar is,
-    // and the bars at the top move the window.
-    ":root[data-desktop] &": { vars: { "--m-top": "30px" } },
+    // In the desktop app the window has no title bar: its buttons sit at the top left (macOS) or right (Windows), over
+    // where a phone's status bar is, and the bars at the top move the window.
+    ':root[data-desktop="inset"] &': { vars: { "--m-top": "30px" } },
+    ':root[data-desktop="overlay"] &': { vars: { "--m-top": "env(titlebar-area-height, 44px)" } },
   },
   "@media": {
     "(prefers-color-scheme: dark)": {

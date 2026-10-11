@@ -528,8 +528,14 @@ export interface StillFailDesktop {
   };
   /** Shows a file of this machine in Finder (a directory opened): false when it is not there; an app from before it has none. */
   reveal?(path: string): Promise<boolean>;
-  /** The window's frame: `inset` (macOS, no title bar: the page's top row is it), `system` (Windows); none from apps before it, all inset. */
-  frame?: "inset" | "system";
+  /**
+   * The window's frame: `inset` (macOS) and `overlay` (Windows) have no title bar, the page's top row is it with the
+   * window's buttons at its left or right; `system` has the system's. None from apps before it, all inset; apps before
+   * `overlay` said `system` on Windows.
+   */
+  frame?: "inset" | "overlay" | "system";
+  /** The colours of the window's buttons on Windows (`overlay`), as #rrggbb: the top row's under them, their symbols'. */
+  windowColors?(color: string, symbolColor: string): void;
   /** The cloud's origin (https://app.still.fail): its links are the app's own, though the app is at app://ember. */
   cloudOrigin?: string;
   /** The app's version (0.1.<commits>); an app from before it has none. */

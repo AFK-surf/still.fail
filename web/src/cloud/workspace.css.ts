@@ -62,6 +62,8 @@ export const onboarding = style({
 export const onboardingBar = style({
   flex: "none", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
   padding: "0 12px 0 0", WebkitAppRegion: "drag",
+  // The Windows app's window buttons over its right end (styles/global.css.ts).
+  selectors: { '[data-desktop="overlay"] &': { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" } },
 });
 export const onboardingAccount = style({ width: "240px", WebkitAppRegion: "no-drag" });
 export const onboardingMain = style({

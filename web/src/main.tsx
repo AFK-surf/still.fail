@@ -2,6 +2,7 @@ import "./renamed.ts";
 import "./styles/index.ts";
 import { followAppearance } from "./theme.ts";
 import { startScrollbars } from "./scrollbars.ts";
+import { followWindowColors } from "./titleBar.ts";
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { I18nRoot, useLang } from "./i18n.ts";
@@ -16,6 +17,7 @@ import { webUpdates } from "./core/webUpdates.ts";
 if (import.meta.env.PROD) webUpdates.start();
 followAppearance();
 startScrollbars();
+followWindowColors();
 // The desktop app's 「复制图片」 on a chat's thumbnail copies the image it stands in for.
 window.stillfailDesktop?.onImageWanted?.(wholeImage);
 
