@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { busyRing } from "./styles/busyRing.ts";
 import { vars } from "./styles/tokens.css.ts";
+import { panel } from "./styles/glass.ts";
 import { appearKeyframes, dialogInKeyframes, fadeKeyframes, pulseKeyframes, spinKeyframes } from "./styles/keyframes.css.ts";
 import { gate, muted } from "./styles/shell.css.ts";
 import { pageBar } from "./styles/sidebar.css.ts";
@@ -221,7 +222,7 @@ export const overlay = style({
 export const dialog = style({
   position: "fixed", left: "50%", top: "50%", zIndex: "50", transform: "translate(-50%, -50%)", display: "flex",
   flexDirection: "column", width: "min(520px, calc(100vw - 32px))", maxHeight: "calc(100dvh - 48px)",
-  borderRadius: vars.rDialog, background: vars.canvas, color: vars.text, boxShadow: `0 24px 64px ${vars.shadow}`,
+  borderRadius: vars.rDialog, ...panel, color: vars.text, boxShadow: `0 24px 64px ${vars.shadow}`,
   animation: `${dialogInKeyframes} 200ms ${vars.easeOut}`, cornerShape: vars.cornerShape,
   selectors: {
     "&:focus": { outline: "none" },

@@ -112,7 +112,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
         </Popover.Trigger>
       </span>
       <Popover.Portal>
-        <Popover.Content className={`${controlsCss.popover} ${controlsCss.popoverSolid} ${css2.runPickerPanel}`} side={side} align="start" sideOffset={6} collisionPadding={8}>
+        <Popover.Content className={`${controlsCss.popover} ${css2.runPickerPanel}`} side={side} align="start" sideOffset={6} collisionPadding={8}>
           {/* The accounts' panel stands beside this one: this one is what it is placed by. */}
           <Popover.Root open={showAccounts} onOpenChange={setShowAccounts}>
           <Popover.Anchor asChild><div>
@@ -182,7 +182,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
           </div></Popover.Anchor>
               <Popover.Portal>
                 {/* The accounts: a panel beside this one, its foot on this one's foot. */}
-                <Popover.Content className={`${controlsCss.popover} ${controlsCss.popoverSolid} ${css2.runPickerAccountsPanel} ${css2.runPickerAccounts}`} side="right" align="end" sideOffset={14} alignOffset={-6} collisionPadding={8}
+                <Popover.Content className={`${controlsCss.popover} ${css2.runPickerAccountsPanel} ${css2.runPickerAccounts}`} side="right" align="end" sideOffset={14} alignOffset={-6} collisionPadding={8}
                   onOpenAutoFocus={(e) => e.preventDefault()}>
                   <h4>{t("web-main.model.account")}</h4>
                   {v.dropped && <p className={css2.runPickerNote}>{v.dropped}</p>}

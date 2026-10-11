@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
-import { glass, solid } from "./glass.ts";
+import { panel } from "./glass.ts";
 import { popKeyframes } from "./keyframes.css.ts";
 import { inputRow } from "./additions.css.ts";
 import { command, field, skeletonRow } from "../ui.css.ts";
@@ -78,14 +78,10 @@ export const input = style({
 /** A one-line field is a pill, as the buttons beside it are; a textarea keeps --r-field (its lines in a pill would not sit right). */
 globalStyle(`input${input}`, { borderRadius: "999px", paddingLeft: "16px", paddingRight: "16px", cornerShape: "round" });
 export const popover = style({
-  zIndex: "60", padding: "6px", borderRadius: vars.rMenu, ...glass,
+  zIndex: "60", padding: "6px", borderRadius: vars.rMenu, ...panel,
   boxShadow: `0 12px 32px ${vars.shadow}`, transformOrigin: "var(--radix-popper-transform-origin, top)",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`, cornerShape: vars.cornerShape,
 });
-/** A popover on the solid ground rather than the glass (the sidebar's menus: styles/glass.ts \`solid\`). */
-export const popoverSolid = style({});
-// Doubled, to win over the popover's glass whatever order the sheets load in.
-globalStyle(`${popoverSolid}${popoverSolid}`, solid);
 export const menuList = style({ minWidth: "180px" });
 export const menuItem = style({
   display: "flex", alignItems: "center", gap: "8px", width: "100%", minHeight: "34px", padding: "7px 10px", lineHeight: "20px",
@@ -97,8 +93,8 @@ export const menuItem = style({
     "&[data-danger]": { color: vars.red },
   },
 });
-// Menus float on glass lighter than the page, so the page's line would read as a dark groove there; a tint of the
-// text instead is lighter than the glass in dark and darker in light.
+// A tint of the text rather than the page's line: in dark the panel is lighter than the page, and the line would read
+// as a dark groove on it.
 export const menuSep = style({ height: "1px", margin: "6px 4px", background: `color-mix(in srgb, ${vars.text} 12%, transparent)` });
 export const menuLabel = style({ padding: "6px 10px 4px", fontSize: vars.textMeta, color: vars.muted });
 export const steps = style({

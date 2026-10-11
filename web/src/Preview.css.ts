@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
-import { glass } from "./styles/glass.ts";
+import { glass, panel } from "./styles/glass.ts";
 import { enterUpKeyframes, jobBreatheKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
 import { iconBtn } from "./styles/pages.css.ts";
 import { msg } from "./styles/conversation.css.ts";
@@ -77,7 +77,7 @@ globalStyle(`${enrollWait} > span:last-child`, { display: "grid", gap: "2px", fo
 export const loadRing = style({ color: vars.muted, flex: "none", selectors: { '&[data-failed]': { color: vars.red } } });
 export const loadDetails = style({
   zIndex: 1000, width: "min(420px, calc(100vw - 24px))", padding: "14px", borderRadius: vars.rCard,
-  ...glass, color: vars.text,
+  ...panel, color: vars.text,
   boxShadow: `0 2px 8px ${vars.shadow}`, fontSize: vars.textUi,
 });
 export const loadHeading = style({ fontWeight: "500", marginBottom: "4px" });
