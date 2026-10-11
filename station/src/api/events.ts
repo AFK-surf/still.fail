@@ -54,6 +54,10 @@ export type EventsDeps = {
   /// A session's live steps, from `from`, to `send`, until the returned function is called (live.rs); its transcript
   /// entries in brief (`brief`, read/transcript.ts) for a client that asks so.
   live?(key: string, from: number, last: number | null, send: (message: unknown) => void, brief: boolean): () => void;
+  /// How far what was said on this station goes (the place of the last entry, store.ts `saidAt`): told as a stream
+  /// opens and with each keepalive, so a client that is not that far reads what it lacks (GET /said) whatever its
+  /// stream did or did not bring.
+  saidAt?(): number;
   /// Whether a session is still there (a summary is told only of one that is).
   sessionExists(key: string): boolean;
   /// The overview as `viewer` sees it, in `lang` (GET /overview); none until the agents' side is up.
@@ -160,6 +164,7 @@ export class Events {
       end: () => remove(),
     };
     push("retry: 3000\n\n");
+    push(this.at());
     // Coming back where all that was told since is kept (their sidebar told on this run too).
     const k = `${viewer.email}\0${lang}`;
     const resumes = since !== null && this.rowsTold.has(k) && this.log.has(since);
@@ -293,7 +298,14 @@ export class Events {
   }
 
   private startTimers() {
-    this.timers.push(this.time.every(PING_MS, () => this.clients.forEach((c) => c.raw(": ping\n\n"))));
+    // The keepalive says how far what was said goes (a comment line, to a station without places): a client short of
+    // it reads what it lacks.
+    this.timers.push(
+      this.time.every(PING_MS, () => {
+        const at = this.at();
+        this.clients.forEach((c) => c.raw(at));
+      }),
+    );
     this.timers.push(
       this.time.every(HOST_MS, () => {
         if (!this.clients.some((c) => c.host)) return;
@@ -312,6 +324,12 @@ export class Events {
     for (const stop of this.timers) stop();
     this.timers = [];
     this.lastHost = "";
+  }
+
+  /// How far what was said goes, as a stream is told it (`at`; a comment line where the station has no places).
+  private at(): string {
+    const at = this.deps.saidAt?.();
+    return at === undefined ? ": ping\n\n" : `event: at\ndata: ${JSON.stringify({ said: at })}\n\n`;
   }
 
   /// Tells everyone `to` chooses: one id for all of them, kept for a stream that takes over from one of them or comes

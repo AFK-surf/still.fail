@@ -8,6 +8,7 @@ const chatsOf = (r: Request) => ({ viewer: r.viewer, archived: param(r, "archive
 export const routes = ({ read }: Tools): Route[] => [
   { method: "GET", pattern: /^\/chats$/, handle: (r: Request) => read(r, "chats", chatsOf(r)) },
   { method: "POST", pattern: /^\/changed\/chats$/, handle: (r: Request) => changed(read, r, "chats", chatsOf(r), "id") },
+  { method: "GET", pattern: /^\/said$/, handle: (r: Request) => read(r, "said", { viewer: r.viewer, params: r.query }) },
   {
     method: "GET",
     pattern: /^\/threads\/([^/]+)\/entries$/,

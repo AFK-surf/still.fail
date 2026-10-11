@@ -28,6 +28,8 @@ export function entryJson(e: EntryRow): Record<string, Json> {
   if (e.options !== undefined) v.options = e.options;
   if (e.card !== undefined) v.card = e.card;
   v.at = e.at;
+  // Its place among all that was said (an entry from before places has none): kept, so it is the same once back.
+  if (e.pos !== undefined) v.pos = e.pos;
   return v;
 }
 
@@ -42,6 +44,7 @@ export function archivedEntry(e: Json): EntryRow {
     authorKind: authorKind(e.authorKind), author: e.author, text: e.text ?? null, attachments: (e.attachments ?? []).map(attachment),
     quotes: (e.quotes ?? []).map(quote), declared: e.declared ?? null, client: e.client ?? null, profile: e.profile ?? null,
     options: some(e.options), card: some(e.card), at: e.at,
+    ...(typeof e.pos === "number" ? { pos: e.pos } : {}),
   };
 }
 

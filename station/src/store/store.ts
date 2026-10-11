@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   toMessage, toOpened, toSession, toSessionThread, toThread, toTurnSummary,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addWatchColumn } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addEntryPlace, addWatchColumn } from "./schema.ts";
 import * as usage from "./usage.ts";
 
 export * from "./rows.ts";
@@ -86,6 +86,7 @@ export class Store {
       addClientColumn(db);
       addAutoTitleColumns(db);
       addWatchColumn(db);
+      addEntryPlace(db);
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     } catch (e) {
       db.close();
@@ -701,6 +702,11 @@ export class Store {
       // `.ok()`: a failing read is no suggestion.
     }
     return version !== null && version === this.lastEntry(thread);
+  }
+
+  /// How far what was said on this station goes: the place of the last thing said.
+  saidAt(): number {
+    return this.#one("SELECT value FROM counters WHERE name = 'said'")?.value ?? 0;
   }
 
   /// The thread's last entry number, 0 before anything is said.
@@ -1472,6 +1478,9 @@ export class Store {
     this.#tx(() => {
       const n: number | null = this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", entry.thread).n;
       entry.n = (n ?? this.#lastKnown(entry.thread)) + 1;
+      // Its place among all that is said on this station, given in the same write as the entry.
+      this.#run("UPDATE counters SET value = value + 1 WHERE name = 'said'");
+      entry.pos = this.saidAt();
       this.#insertEntry(entry);
     });
     changes.push({ type: "thread", id: entry.thread, entries: [{ ...entry }] });
@@ -1613,7 +1622,7 @@ export class Store {
 
   #insertEntry(e: EntryRow): void {
     this.#run(
-      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, options, card, at, agent_identity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, options, card, at, agent_identity, pos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       e.thread, e.n, e.kind, e.target, e.ts, e.authorKind, e.author, e.text,
       jsonList<Attachment>(e.attachments, attachment), jsonList<Quote>(e.quotes, quote),
       e.declared, e.client, e.profile,
@@ -1621,6 +1630,7 @@ export class Store {
       e.card === undefined ? null : JSON.stringify(e.card),
       e.at,
       e.agentIdentity === undefined ? null : JSON.stringify(e.agentIdentity),
+      e.pos ?? null,
     );
   }
 }

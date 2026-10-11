@@ -68,6 +68,9 @@ export type EntryRow = {
   authorKind: AuthorKind; author: string; text: string | null; attachments: Attachment[]; quotes: Quote[];
   declared: string | null; client: string | null; profile: string | null; options: Json | undefined; card: Json | undefined;
   at: number;
+  /// Its place among all that was said on this station (schema.ts `addEntryPlace`); none for one from before places, or
+  /// brought back from an archive.
+  pos?: number;
 };
 
 /// A message as it reads now: its latest edit's words, files and quotes.
@@ -295,6 +298,7 @@ export function toEntry(r: Json): EntryRow {
     target: r.target, ts: r.ts, authorKind: authorKind(r.author_kind), author: r.author, text: r.text,
     attachments: fromJsonList(r.attachments, attachment), quotes: fromJsonList(r.quotes, quote), declared: r.declared,
     client: r.client, profile: r.profile, options: parsed(r.options), card: parsed(r.card), at: r.at,
+    ...(typeof r.pos === "number" ? { pos: r.pos } : {}),
   };
 }
 

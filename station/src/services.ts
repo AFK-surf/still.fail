@@ -111,6 +111,7 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
         tail,
         outputAt,
         sessionExists: (key) => store.getSession(key) !== null,
+        saidAt: () => store.saidAt(),
       });
     }),
   );

@@ -348,6 +348,25 @@ export function addArchiveColumns(db: DatabaseSync): void {
   );
 }
 
+/// What is said on a station is one log: each entry has its place in it (`pos`), counted up from 1 for the station and
+/// never given twice (`counters.said`: the last given; rows go as a thread is archived, so neither the rowid nor the
+/// highest place left says what comes next). A client keeps the place it has everything up to, and reads from there
+/// (GET /said). Entries from before places take their rowids (the order they were written in); those brought back from
+/// an archive have none: they were said before whatever place a client keeps.
+export function addEntryPlace(db: DatabaseSync): void {
+  db.exec("CREATE TABLE IF NOT EXISTS counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL)");
+  if (!has(db, "entries", "pos")) {
+    db.exec(
+      `BEGIN;
+       ALTER TABLE entries ADD COLUMN pos INTEGER;
+       UPDATE entries SET pos = rowid;
+       COMMIT;`,
+    );
+  }
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS entries_pos ON entries (pos) WHERE pos IS NOT NULL");
+  db.exec("INSERT OR IGNORE INTO counters (name, value) VALUES ('said', (SELECT COALESCE(MAX(pos), 0) FROM entries))");
+}
+
 /// add_client_column: the column a message's app came with (entries.client) and those after it, and the `merged` view
 /// made anew with them.
 export function addClientColumn(db: DatabaseSync): void {

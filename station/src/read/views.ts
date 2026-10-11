@@ -561,7 +561,32 @@ function entryJson(e: EntryRow): Json {
   if (e.options !== undefined) v.options = e.options;
   if (e.card !== undefined) v.card = e.card;
   v.at = e.at;
+  if (e.pos !== undefined) v.pos = e.pos;
   return v;
+}
+
+/// GET /said?after=<place>&limit=<n>: what was said on this station after a place, in the order it was said, whatever
+/// thread it was said in (each entry as GET /threads/:id/entries has it, with its `pos`), and `at`: how far what was
+/// said goes now. `limit` entries at most (200 unless asked, 1000 at most): one that got as many asks again from the
+/// last it got. A client keeps the place it has everything up to; this is all it needs to have the rest.
+export function said(station: Store, _viewer: Viewer, params: Record<string, string> | [string, string][]): Json {
+  useNames(station);
+  const pairs = Array.isArray(params) ? params : Object.entries(params);
+  const number = (name: string, otherwise: number): number => {
+    const v = pairs.find(([k]) => k === name)?.[1];
+    if (v === undefined) return otherwise;
+    if (!/^\d+$/.test(v)) throw new HttpError(400, tr("station.admin.notInteger", { name }));
+    return Number(v);
+  };
+  const api = apiOf(station);
+  // Read first: what is said meanwhile is after it, and asked for next.
+  const at = store.saidAt(api.store);
+  const found = store.saidAfter(api.store, number("after", 0), Math.min(Math.max(number("limit", 200), 1), 1000));
+  const byThread = new Map<number, EntryRow[]>();
+  for (const e of found) byThread.set(e.thread, [...(byThread.get(e.thread) ?? []), e]);
+  const views = new Map<number, Json>();
+  for (const [thread, rows] of byThread) for (const view of entryViews(api, thread, rows)) views.set(view.pos, view);
+  return { at, entries: found.map((e) => views.get(e.pos!)) };
 }
 
 /// Entries with their authors' names.

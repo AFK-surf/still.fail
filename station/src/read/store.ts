@@ -52,6 +52,8 @@ export type EntryRow = {
   ts: string | null; authorKind: AuthorKind; author: string; text: string | null; attachments: Json[]; quotes: Json[];
   declared: string | null; client: string | null; profile: string | null; options: Json | undefined; card: Json | undefined;
   at: number;
+  /// Its place among all that was said on this station (store/schema.ts `addEntryPlace`), where it has one.
+  pos?: number;
 };
 
 /// A message as it reads now: its latest edit's words, files and quotes.
@@ -199,6 +201,7 @@ function toEntry(r: Json): EntryRow {
     options: parsed(r.options),
     card: parsed(r.card),
     at: r.at,
+    ...(typeof r.pos === "number" ? { pos: r.pos } : {}),
   };
 }
 
@@ -479,6 +482,25 @@ export function lastEntry(s: Store, thread: number, at?: number | null): number 
   const archived = archivedSummary(s, thread, at);
   if (archived !== null) return archived.last;
   return one(s, "SELECT MAX(n) AS n FROM entries WHERE thread = ?", thread).n ?? 0;
+}
+
+/// How far what was said on this station goes: the place of the last thing said (0 before anything is, or on a
+/// database no station with places has opened).
+export function saidAt(s: Store): number {
+  try {
+    return one(s, "SELECT value FROM counters WHERE name = 'said'")?.value ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/// What was said after place `after`, in the order it was said, `limit` at most, whatever thread it was said in.
+export function saidAfter(s: Store, after: number, limit: number): EntryRow[] {
+  try {
+    return all(s, "SELECT * FROM entries WHERE pos > ? ORDER BY pos LIMIT ?", after, limit).map(toEntry);
+  } catch {
+    return [];
+  }
 }
 
 /// Entries after n: what came since (`n + 1` wraps at i64::MAX, as a release build's does).
