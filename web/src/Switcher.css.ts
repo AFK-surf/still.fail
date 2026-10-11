@@ -35,6 +35,8 @@ export const row = style({
   selectors: { '&[aria-selected="true"]': { background: `color-mix(in srgb, ${vars.text} 7%, transparent)` } },
 });
 export const picture = style({ flex: "none", display: "grid", placeItems: "center", width: 20, height: 20 });
+// An action's row: a quiet ⌘ where a chat has its picture, its keys where a chat says where and when.
+export const actionMark = style({ color: vars.muted });
 export const title = style({
   flex: 1, ...ellipsis,
   selectors: { "&[data-unread]": { fontWeight: 600 } },

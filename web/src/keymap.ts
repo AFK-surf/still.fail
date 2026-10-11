@@ -241,6 +241,16 @@ export function useShortcut(action: Action, handler: Handler | null): void {
   }, [action, on]);
 }
 
+/** The actions that can be done now (some mounted component does each), in the order ACTIONS lists them. */
+export function availableActions(): Action[] {
+  return (Object.keys(ACTIONS) as Action[]).filter((a) => handlers.get(a)?.length);
+}
+
+/** Does an action as its key would (⌘K's list, the menu bar). */
+export function runAction(action: Action): void {
+  void handlers.get(action)?.at(-1)?.(new KeyboardEvent("keydown"));
+}
+
 // The desktop app's menu bar offers the actions too (apps/desktop/src/main.ts, setMenu): it is told the keys each is
 // bound to and which can be done now, and a menu item chosen does the action as its key would.
 const menu = window.stillfailDesktop?.menu;
@@ -264,7 +274,6 @@ if (menu) {
   onPrefs(tellMenu);
   tellMenu();
   menu.onAction((action) => {
-    if (!(action in ACTIONS)) return;
-    void handlers.get(action as Action)?.at(-1)?.(new KeyboardEvent("keydown"));
+    if (action in ACTIONS) runAction(action as Action);
   });
 }
