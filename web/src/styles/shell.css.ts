@@ -28,6 +28,10 @@ export const main = style({
 export const gate = style({
   height: "100%", display: "grid", placeContent: "center", justifyItems: "center", gap: "8px", padding: "24px",
   textAlign: "center",
+  selectors: {
+    // A page of its own (signing in, an invitation): in the desktop app, with no title bar, its top drags the window.
+    "[data-desktop] &::before": { content: '""', position: "fixed", top: 0, left: 0, right: 0, height: 44, WebkitAppRegion: "drag" },
+  },
 });
 export const muted = style({ color: vars.muted });
 export const mono = style({ fontFamily: vars.fontMono });

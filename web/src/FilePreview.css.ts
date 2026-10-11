@@ -50,6 +50,8 @@ export const fpHead = style({
   ...floating,
   top: "max(16px, env(safe-area-inset-top))", width: "max-content", maxWidth: "min(100% - 32px, 1080px)", height: "44px", gap: "12px",
   padding: "0 6px 0 16px",
+  // Under the Windows app's window buttons, which the system draws over the page's top right (styles/global.css.ts).
+  selectors: { '[data-desktop="overlay"]:not([data-fullscreen]) &': { top: "calc(env(titlebar-area-height, 44px) + 8px)" } },
   "@media": {
     "(max-width: 640px)": { top: "max(8px, env(safe-area-inset-top))", maxWidth: "calc(100% - 16px)", gap: "4px", padding: "0 2px 0 12px" },
     "(prefers-reduced-motion: reduce)": { transition: "none" },

@@ -43,8 +43,8 @@ export function Lockup({ height = 30, alt = NAME }: { height?: number; alt?: str
   return <Themed name={LOCKUP.name} width={Math.round((height * LOCKUP.width) / 60)} height={height} alt={alt} className={css.brandLockup} />;
 }
 
-/** The desktop app's window with no title bar (macOS: its buttons are in the page's top row, no room for the name); Windows has the system's. */
-const titleless = () => !!window.stillfailDesktop && window.stillfailDesktop.frame !== "system";
+/** The macOS app's window: its buttons are in the page's top row at the left, no room for the name (Windows' are at the right). */
+const titleless = () => !!window.stillfailDesktop && (window.stillfailDesktop.frame ?? "inset") === "inset";
 
 /**
  * The sidebar's top. The buddy holds the sidebar open: it stands on the sidebar's edge pushing it, and a click closes

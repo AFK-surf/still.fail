@@ -32,11 +32,12 @@ globalStyle(`${sidebar} > :not(${resizeHandle})`, { "@media": { [wide]: { minWid
 export const brand = style({
   display: "flex", alignItems: "center", gap: 8, height: 56, padding: "0 16px",
   selectors: {
-    // The desktop app has no title bar: the top row holds the window's buttons (apps/desktop/src/main.ts puts them in
-    // it), the buddy beside them, and drags the window.
-    "[data-desktop] &": { height: 44, paddingLeft: 86, WebkitAppRegion: "drag" },
+    // The desktop app has no title bar: the top row drags the window. On macOS it holds the window's buttons
+    // (apps/desktop/src/main.ts puts them in it), the buddy beside them; on Windows they are at the page's right.
+    "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
+    '[data-desktop="inset"] &': { paddingLeft: 86 },
     // Full screen, the window's buttons are gone.
-    "[data-desktop][data-fullscreen] &": { paddingLeft: 16 },
+    '[data-desktop="inset"][data-fullscreen] &': { paddingLeft: 16 },
   },
 });
 /** 云端侧边栏：lockup 在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */
