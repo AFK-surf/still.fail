@@ -45,9 +45,17 @@ export function archivedEntry(e: Json): EntryRow {
   };
 }
 
-/// A thread's archive file as entries (fails as std::fs::read does when it is not there).
+/// A thread's archive file as entries. One that is not there (lost with the disk it was on) is a thread nothing is
+/// left of: no entries, not a failure, which would fail every list the thread is in.
 export function readArchive(path: string): EntryRow[] {
-  const text = zstdDecompressSync(readFileSync(path)).toString("utf8");
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(path);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw e;
+  }
+  const text = zstdDecompressSync(bytes).toString("utf8");
   return text
     .split("\n")
     .map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l))

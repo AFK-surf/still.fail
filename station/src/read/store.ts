@@ -3,7 +3,8 @@
 // archive directory (`archive/threads/<id>.jsonl.zst` beside the database) and is read from there, as the Rust does.
 //
 // serde's reading of a stored value is kept where it shows: a list of files or quotes that does not read is none, a
-// card or identity that does not parse is none, an archive file that does not read fails the request.
+// card or identity that does not parse is none, an archive file that does not read fails the request (one that is not
+// there is a thread with nothing left in it).
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -730,7 +731,7 @@ export function archivedEntries(s: Store, thread: number): EntryRow[] {
     return cached![2];
   }
   s.archived = s.archived.filter(([id]) => id !== thread);
-  const text = zstdDecompressSync(readFileSync(path)).toString("utf8");
+  const text = version === LOST ? "" : zstdDecompressSync(readFileSync(path)).toString("utf8");
   const entries = text
     .split("\n")
     .map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l))
@@ -743,15 +744,19 @@ export function archivedEntries(s: Store, thread: number): EntryRow[] {
 
 /// An archive file as it is now (its size and when it was written): one written anew (the thread brought back and
 /// archived again) is another. Read from a reader, the writer's moving of threads to and from their files is only seen so.
+/// One that is not there (lost with the disk it was on) is LOST: its thread reads as one with no entries, so the
+/// lists it is in are still read.
 function fileVersion(path: string): string {
   try {
     const st = statSync(path);
     return `${st.size}:${st.mtimeMs}`;
   } catch {
-    // As anyhow shows std::fs::read failing.
-    throw new Error("No such file or directory (os error 2)");
+    return LOST;
   }
 }
+
+/// The version of an archive file that is not there.
+const LOST = "lost";
 
 // ── usage (store/usage.rs) ──
 

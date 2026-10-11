@@ -11,6 +11,7 @@ import {
   AUTO, type AuthorKind, type EntryRow, type JobRow, MANUAL, type NewMessage, SCHEMA_VERSION, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
+import * as read from "../src/read/store.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -237,6 +238,45 @@ test("archiving writes a thread out to a zstd file and back", () => {
   assert.deepEqual(removed.changes.flatMap((c) => (c.type === "threadRemoved" ? [c.id] : [])), [own.id]);
   assert.ok(!existsSync(file));
   assert.deepEqual(store.entriesAfter(shared.id, 0).map((e) => e.text), ["hi"], "b's archived thread stays");
+});
+
+test("an archived thread whose file is lost reads as empty, and is counted on from what was read of it", () => {
+  const data = tempdir();
+  const store = open(join(data, "stillfail.db"), join(data, "archive"));
+  session(store, "a");
+  session(store, "b");
+  const lost = store.openThread("ember", "EMBER", "1.1", null, null);
+  const kept = store.openThread("ember", "EMBER", "2.1", null, null);
+  store.joinThread(lost.id, "a", "ember");
+  store.joinThread(kept.id, "b", "ember");
+  say(store, lost.id, "1.2", "person", "local", "看看");
+  say(store, lost.id, "1.3", "agent", "a", "好");
+  say(store, lost.id, "1.4", "agent", "a", "做完了");
+  say(store, kept.id, "2.2", "person", "local", "还有这个");
+  store.setRead("local", lost.id, 3);
+  store.setArchived("a", true, MANUAL);
+  assert.deepEqual(store.lostArchives(), []);
+  rmSync(archiveFile(store, lost.id));
+  assert.deepEqual(store.lostArchives(), [lost.id]);
+
+  // Every list it is in is still read, by the station and by its readers (another connection over the same file).
+  const reader = read.openStore(data);
+  for (const threads of [store.listThreads("local", null, null), read.listThreads(reader, "local", null, null)]) {
+    assert.deepEqual(threads.map((t) => [t.thread.id, t.lastMessage?.text ?? null, t.unread]), [[kept.id, "还有这个", 0], [lost.id, null, 0]]);
+  }
+  assert.deepEqual(store.entriesAfter(lost.id, 0), []);
+  assert.deepEqual(read.entriesAfter(reader, lost.id, 0n), []);
+  assert.equal(store.lastEntry(lost.id), 0);
+  reader.db.close();
+
+  // Said in again, it comes back with that alone, numbered after what was read of it: what a client keeps of the
+  // thread (1 to 3) is not numbered again.
+  assert.deepEqual(say(store, lost.id, "1.5", "person", "local", "还在吗"), [4, true]);
+  assert.deepEqual(store.entriesAfter(lost.id, 0).map((e) => [e.n, e.text]), [[4, "还在吗"]]);
+  assert.deepEqual(store.lostArchives(), []);
+  // A thread nothing was said in starts at 1 as before.
+  const fresh = store.openThread("ember", "EMBER", "3.1", null, null);
+  assert.deepEqual(say(store, fresh.id, "3.2", "person", "local", "新的"), [1, true]);
 });
 
 test("thread ids are never used again", () => {

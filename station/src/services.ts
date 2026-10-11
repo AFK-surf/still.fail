@@ -16,6 +16,7 @@ import type { Provider } from "./cloud/provider.ts";
 import { type Mesh, loadMesh } from "./mesh/native.ts";
 import { Readers as ReaderPool } from "./read/pool.ts";
 import { Agents } from "./sessions/agents.ts";
+import { log } from "./ops/log.ts";
 
 /// Where the station keeps its data, and the release it runs from.
 export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string }>()("stillfail/Paths") {}
@@ -82,7 +83,12 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
     Effect.gen(function* () {
       const { data } = yield* Paths;
       return yield* Effect.acquireRelease(
-        Effect.sync(() => StationStore.open(join(data, "stillfail.db"), join(data, "archive"))),
+        Effect.sync(() => {
+          const store = StationStore.open(join(data, "stillfail.db"), join(data, "archive"));
+          const lost = store.lostArchives();
+          if (lost.length > 0) log.warn("store", "archived threads whose file is not there read as empty", { n: lost.length, threads: lost.join(" ") });
+          return store;
+        }),
         (store) => Effect.sync(() => store.close()),
       );
     }),

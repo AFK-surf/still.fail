@@ -11,7 +11,7 @@ import { latest as latestNote } from "../agents/migrations.ts";
 // the same points as the Rust, in the same order.
 import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
-import { mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
@@ -1471,7 +1471,7 @@ export class Store {
     if (this.#isArchived(entry.thread)) this.#restoreThread(entry.thread);
     this.#tx(() => {
       const n: number | null = this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", entry.thread).n;
-      entry.n = (n ?? 0) + 1;
+      entry.n = (n ?? this.#lastKnown(entry.thread)) + 1;
       this.#insertEntry(entry);
     });
     changes.push({ type: "thread", id: entry.thread, entries: [{ ...entry }] });
@@ -1541,7 +1541,24 @@ export class Store {
     if (thread.hiddenAt !== null && thread.home === null) this.#setThreadHidden(thread.id, false, AUTO, changes);
   }
 
+  /// The last entry number known of a thread with no entries: 0 for a new one. One whose archive file was lost is
+  /// counted on from what was read and delivered of it, so that what clients keep of it is not numbered again.
+  #lastKnown(thread: number): number {
+    const r = this.#one(
+      "SELECT MAX(n) AS n FROM (SELECT MAX(n) AS n FROM reads WHERE thread = ?1 UNION ALL SELECT MAX(n) FROM deliveries WHERE thread = ?1)",
+      thread,
+    );
+    return r.n ?? 0;
+  }
+
   // ── archive ──
+
+  /// The archived threads whose file is not there (lost with the disk it was on): each reads as one with no entries.
+  lostArchives(): number[] {
+    return this.#all("SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id")
+      .map((r) => r.id as number)
+      .filter((id) => !existsSync(this.#threadFile(id)));
+  }
 
   #isArchived(thread: number): boolean {
     const r = this.#one("SELECT archived_at FROM threads WHERE id = ?", thread);
