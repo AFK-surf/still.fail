@@ -56,4 +56,35 @@ class ChatAsksTest {
         // Its post in view, nothing more is said of it over the field.
         rule.onNodeWithText("下周单独升。", substring = true).assertDoesNotExist()
     }
+
+    /** Its post before the pages loaded: they are brought in, then it shows. */
+    @Test
+    fun aPostNotLoadedIsBroughtIn() {
+        val h = Harness(rule)
+        val topic = Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))
+        val ask = ChatAsk(seq = 2u, card = true, mine = true, text = want)
+        h.fake.answer = { name, _ ->
+            if (name == "chat.older") h.fake.put(topic, Fixtures.chat(long).copy(asks = listOf(ask)))
+            kotlinx.serialization.json.JsonNull
+        }
+        h.fake.put(topic, Fixtures.chat(long.drop(12)).copy(asks = listOf(ask), more = true))
+        h.launch(listOf(Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        rule.onNodeWithText("下周单独升。", substring = true).assertIsDisplayed().performClick()
+        h.settle()
+        h.settle()
+        rule.onNodeWithText("第 2 条", substring = true).assertIsDisplayed()
+    }
+
+    /** A need whose post already shows: tapped, the post flashes where it is. */
+    @Test
+    fun aNeedInViewFlashesItsPost() {
+        val h = Harness(rule)
+        open(h, ChatAsk(seq = 24u, card = false, mine = true, text = want))
+        val notice = rule.onNodeWithText("下周单独升。", substring = true).assertIsDisplayed()
+        val flash = h.record("asks-in-view")
+        flash.frame { notice.performClick() }
+        flash.frames(12)
+        flash.end()
+        rule.onNodeWithText("第 24 条", substring = true).assertIsDisplayed()
+    }
 }

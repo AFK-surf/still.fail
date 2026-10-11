@@ -851,7 +851,7 @@ private fun ArchiveNotice(offline: Boolean, restore: suspend () -> Unit) {
 
 /**
  * What waits to be decided in the chat (the core's `asks`: a card no one has answered, or what an agent needs a person
- * for), over the field: the next of them, all of it, wrapped; tapped, the list goes to its post (Host.showSaid), then to the one
+ * for), over the field: the next of them, all of it, wrapped; tapped, the list goes to its post (Host.goTo: loaded first when it is not), then to the one
  * after it the next time, round again. One with no card to let it go on its post has 忽略 here. Web Chat.tsx AsksBar.
  */
 @Composable
@@ -862,7 +862,7 @@ private fun AsksNotice(asks: List<ChatAsk>, host: Host, dismiss: (seq: Long, fai
     val next = left.getOrNull(turn % maxOf(left.size, 1)) ?: return
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
-            Modifier.weight(1f).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { host.showSaid?.invoke(next.seq.toLong()); turn++ },
+            Modifier.weight(1f).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { host.goTo = next.seq.toLong(); turn++ },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             IconIn(Icons.Bell, 14.dp, C.ink)

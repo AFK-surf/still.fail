@@ -609,11 +609,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     motion.follow = follow
     val scope = rememberCoroutineScope()
     motion.scope = scope
-    // What waits to be decided, tapped over the composer's field (Composer.kt AsksNotice): the message that asked it, as
-    // a quote's (no passage: it flashes whole).
     val jumpTo = rememberJump(list, rows, motion)
     val accent = chatInk().accent
-    SideEffect { host.showSaid = { seq -> rows.firstNotNullOfOrNull { (it as? Entry.Said)?.m?.takeIf { m -> m.seq == seq } }?.let { jumpTo(it.ts, "") } } }
     // Whether every card waiting to be decided shows in the list (web Chat.tsx useAsksShown): nothing is said of them
     // over the composer's field then. One with no card, or whose post is not loaded, does not.
     val cards = view.asks.orEmpty().takeIf { all -> all.isNotEmpty() && all.all { it.card } }
@@ -625,11 +622,12 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     }
     // The page before asked for (once per page: here, or near the top below).
     val asked = remember { mutableStateOf<Long?>(null) }
-    // Opened at a message (a row's state line: what it is about), once the list is in place: there, flashing; the
+    // Opened at a message (a row's state line: what it is about), or asked to show one while open (what waits to be
+    // decided, tapped over the composer's field: Composer.kt AsksNotice), once the list is in place: there, flashing; the
     // pages before brought in until it is loaded (none left, or it is gone: where the chat opened).
     // Whether the unread line was gone to (or is not to be: the chat opened at a message asked for, below).
     val lineShown = remember { mutableStateOf(false) }
-    LaunchedEffect(follow.placed, first, reveal.revealing) {
+    LaunchedEffect(follow.placed, first, reveal.revealing, host.goTo) {
         val target = host.goTo ?: return@LaunchedEffect
         if (!follow.placed || reveal.revealing) return@LaunchedEffect
         val m = rows.firstNotNullOfOrNull { (it as? Entry.Said)?.m?.takeIf { m -> m.seq == target } }
