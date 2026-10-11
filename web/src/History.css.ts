@@ -9,6 +9,7 @@ import { textToggle } from "./styles/controls.css.ts";
 import { chooserMenu } from "./styles/chat.css.ts";
 import { accountMenu } from "./cloud/workspace.css.ts";
 import { detailRow, details, sessionDetails, sideContent } from "./pages/ChatPage.css.ts";
+import { msgRoute } from "./Chat.css.ts";
 
 export const history = style({
   minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column", borderLeft: `1px solid ${vars.line}`,
@@ -215,6 +216,9 @@ globalStyle(`${historyDetails} ${detailRow}`, {
 });
 globalStyle(`${historyDetails} ${detailRow} dd`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${hPlace} > svg`, { flex: "none" });
+/** In a chat message's head (Chat.tsx SentElsewhere): the place is what is cut short there, not what follows it. */
+globalStyle(`${msgRoute} > ${hPlace}`, { overflow: "hidden" });
+globalStyle(`${msgRoute} > ${hPlace} ~ *`, { flex: "none" });
 globalStyle(`${historyDetails} ${details}`, { gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" });
 /** Here rather than with its class: it comes after .history-details .detail-row, and wins over it. */
 globalStyle(`${msg}[data-held] > *`, { minHeight: "0", overflow: "hidden", visibility: "hidden" });

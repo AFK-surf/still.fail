@@ -1042,7 +1042,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s, agentHere, onOpenHi
   const received = s.received === true;
   const place = s.place
     ? <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
-    : <><SlackLogo size={12} />Slack</>;
+    : <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>Slack</span></>;
   return (
     <OthersMessage data-role={received ? "person" : "agent"} data-author={s.by.name} data-elsewhere="" time={s.time?.createdAt}
       avatar={received

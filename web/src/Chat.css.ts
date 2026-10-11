@@ -522,10 +522,11 @@ globalStyle(`${msgHead} ${msgName}`, {
   fontWeight: "600", fontSize: vars.textUi, color: vars.accentText, maxWidth: "240px", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
-/** Where a message said elsewhere went or came from, in its head after the name: a long place is cut short. */
+/** Where a message said elsewhere went or came from, in its head after the name: a long place is cut short, and the
+ * name only once nothing of the place is left to cut (shrinking a millionth as much, it keeps its whole width). */
 export const msgRoute = style({
-  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontSize: vars.textMeta, color: vars.muted,
-  whiteSpace: "nowrap",
+  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", flexShrink: "1000000", fontSize: vars.textMeta,
+  color: vars.muted, whiteSpace: "nowrap",
 });
 globalStyle(`${msgRoute} > svg`, { flex: "none", color: vars.accent });
 globalStyle(`${msgHead} > ${msgRoute} ~ *`, { flex: "none", whiteSpace: "nowrap" });
@@ -562,6 +563,9 @@ globalStyle(`${inlineHeads} ${msgRow}`, { gridTemplateColumns: "minmax(0, 1fr)",
 globalStyle(`${inlineHeads} ${msgRow} > ${msgAvatar}`, { position: "absolute", left: "0", top: "3px", margin: "0" });
 globalStyle(`${inlineHeads} ${msgRow} > ${msgMain} > ${msgHead}`, { paddingLeft: "25px" });
 globalStyle(`${inlineHeads} ${msgRow}[data-emitting] > ${msgMain}`, { transformOrigin: "9px 12px" });
+/** No room beside the name there: where it went or came from has the line under it, from the row's start. */
+globalStyle(`${inlineHeads} ${msgHead}:has(> ${msgRoute})`, { flexWrap: "wrap", rowGap: "4px" });
+globalStyle(`${inlineHeads} ${msgHead} > ${msgRoute}`, { order: "1", flex: "none", width: "calc(100% + 25px)", marginLeft: "-25px" });
 /** Here rather than with its class: it comes after .send-btn .spinner, and wins over it. */
 globalStyle(`${msgWaiting} ${spinner}`, { width: "10px", height: "10px", borderWidth: "1.5px" });
 globalStyle(`${fileCardOpen} ${fileCard}`, { transition: `background ${vars.dur} ${vars.easeOut}` });
