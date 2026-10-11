@@ -337,7 +337,10 @@ export class SessionActor {
         await this.agent.session.abort();
         return;
       }
-      if (!this.turn) await this.stopWaiting();
+      if (this.turn) return;
+      await this.stopWaiting();
+      // Nothing runs: whatever is still said to be under way (a start that failed) is not.
+      this.deps.live?.turnEnded(this.key);
     });
   }
 
@@ -695,6 +698,8 @@ export class SessionActor {
       this.phase = "idle";
       if (turn) store.endTurn(turn.id, "failed", `other: ${message}`, null, null);
       store.setRunning(this.key, false);
+      // It was said to be starting: no turn runs.
+      this.deps.live?.turnEnded(this.key);
       this.doneWorking();
       await this.notice(`⚠️ ${t("station.notice.cannotStart", { error: message })}`);
       throw error;
