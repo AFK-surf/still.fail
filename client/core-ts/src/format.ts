@@ -29,12 +29,13 @@ function monthDay(lang: Lang, month: number, day: number): string {
   return tr(lang, `core-logic.format.date.${month}`, { day });
 }
 
-/// 950, 1.2K, 3.4M.
+/// 950, 1.2K, 3.4M, 2.4B.
 export function compactNumber(n: number): string {
   const cut = (v: number, unit: string) => {
     const s = fixed1(v);
     return `${s.endsWith(".0") ? s.slice(0, -2) : s}${unit}`;
   };
+  if (n >= 1_000_000_000) return cut(n / 1_000_000_000, "B");
   if (n >= 1_000_000) return cut(n / 1_000_000, "M");
   if (n >= 1000) return cut(n / 1000, "K");
   return String(round(n));
