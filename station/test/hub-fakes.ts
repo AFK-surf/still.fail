@@ -165,6 +165,8 @@ export class FakeDriver implements AgentDriver {
   sessions: FakeSession[] = [];
   /// Runtime session ids that resume fails for.
   unresumable = new Set<string>();
+  /// Why every process it is asked to start does not (like a borrowed login its host did not lend).
+  refuses: string | null = null;
   private n = 1;
   /// Times every process it started was ended.
   shutdowns = 0;
@@ -184,6 +186,7 @@ export class FakeDriver implements AgentDriver {
     return this.sessions.length;
   }
   async open(options: OpenOptions, events: (event: RuntimeEvent) => void) {
+    if (this.refuses !== null) throw new Error(this.refuses);
     if (options.resume !== undefined && this.unresumable.has(options.resume)) throw new Error("no such session");
     const session = new FakeSession(options.resume ?? `${this.kind}-${this.n++}`, options, events);
     this.sessions.push(session);
