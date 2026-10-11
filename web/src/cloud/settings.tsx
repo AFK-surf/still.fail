@@ -7,8 +7,9 @@ import { Illustration } from "../brand.tsx";
 import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
-import { ArrowLeft, Bell, Brain, Chart, Check, ChevronRight, Info, Key, LogOut, Monitor, Plug, Plus, Refresh, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, Bell, Brain, Chart, Check, ChevronRight, Info, Key, LogOut, Monitor, Plug, Plus, Refresh, Server, Settings, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "../icons.tsx";
+import { useCommands } from "../commands.ts";
+import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from "react-router";
 import { useProfiles, useStations, type Profile, type StationView } from "../api.ts";
 import type { Mark } from "../stationPick.ts";
@@ -62,31 +63,62 @@ export const ROLE_HINT: Record<Role, string> = {
   get member() { return t("web-pages.roles.memberHint"); },
 };
 
+/** A settings page, as its sidebar lists it and ⌘K finds it. */
+interface SettingsPage { path: string; label: string; icon: ComponentType<IconProps>; words: string; group: "client" | "station" | "cloud" }
+
+/** The settings pages there are here: connects and profiles are a station's, none to show before there is one. */
+function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
+  const page = (group: SettingsPage["group"], path: string, label: string, icon: ComponentType<IconProps>, words: string, shown = true) =>
+    shown ? [{ group, path, label, icon, words }] : [];
+  return [
+    ...page("client", "appearance", t("web-pages.settings.nav.appearance"), Sliders, "appearance theme language"),
+    ...page("client", "notifications", t("web-pages.settings.nav.notifications"), Bell, "notifications", CAN_NOTIFY),
+    ...page("client", "shortcuts", t("web-pages.settings.nav.shortcuts"), Command, "shortcuts keys", CHANGEABLE),
+    ...page("client", "version", t("web-pages.settings.nav.version"), Info, "version update", HAS_VERSION),
+    ...page("client", "changelog", t("web-pages.settings.nav.changelog"), Sparks, "changelog"),
+    ...page("station", "stations", "Station", Server, "station"),
+    ...page("station", "connects", t("web-pages.settings.nav.connects"), Plug, "connects slack", some),
+    ...page("station", "profiles", "Profile", Key, "profile", some),
+    ...page("station", "automatic-decisions", t("web-pages.automaticDecisions.title"), Check, "automatic decisions", some),
+    ...page("station", "memory", t("web-pages.settings.nav.memory"), Brain, "memory", some),
+    ...page("station", "usage", t("web-pages.settings.nav.usage"), Chart, "usage", some),
+    ...page("cloud", "workspace", `Workspace · ${entry.name}`, Users, "workspace members"),
+    ...page("cloud", "account", entry.account.email, User, "account sign out"),
+  ];
+}
+
+/** ⌘K finds each settings page by its name (or typing 设置 for them all): mounted once under a workspace's pages. */
+export function useSettingsCommands(entry: WorkspaceEntry): void {
+  const navigate = useNavigate();
+  const some = (useStations(entry.id).value?.length ?? 0) > 0;
+  const settings = t("web-pages.settings.title");
+  useCommands(settingsPages(entry, some).map((p) => ({
+    id: `settings/${p.path}`, label: `${settings} · ${p.label}`, icon: p.icon, words: `settings ${p.words}`, typed: true,
+    run: () => navigate(`/w/${entry.id}/settings/${p.path}`),
+  })));
+}
+
 /** The sidebar while in settings. */
 export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   const base = `/w/${entry.id}/settings`;
-  // Connects and profiles are a station's: none to show before there is one.
   const some = (useStations(entry.id).value?.length ?? 0) > 0;
   const back = useLastChat(entry.id, `/w/${entry.id}`) ?? `/w/${entry.id}`;
+  const pages = settingsPages(entry, some);
+  const heading = { client: t("web-pages.settings.nav.client"), station: "Station", cloud: "Cloud" };
   return (
     <div className={nav.navScroll}>
       <NavLink className={nav.navRow} to={back} end><ArrowLeft {...ICON} />{some ? t("web-pages.settings.nav.backToChats") : t("common.back")}</NavLink>
-      <div className={nav.navHeading}>{t("web-pages.settings.nav.client")}</div>
-      <NavLink className={nav.navRow} to={`${base}/appearance`}><Sliders {...ICON} />{t("web-pages.settings.nav.appearance")}</NavLink>
-      {CAN_NOTIFY && <NavLink className={nav.navRow} to={`${base}/notifications`}><Bell {...ICON} />{t("web-pages.settings.nav.notifications")}</NavLink>}
-      {CHANGEABLE && <NavLink className={nav.navRow} to={`${base}/shortcuts`}><Command {...ICON} />{t("web-pages.settings.nav.shortcuts")}</NavLink>}
-      {HAS_VERSION && <NavLink className={nav.navRow} to={`${base}/version`}><Info {...ICON} />{t("web-pages.settings.nav.version")}</NavLink>}
-      <NavLink className={nav.navRow} to={`${base}/changelog`}><Sparks {...ICON} />{t("web-pages.settings.nav.changelog")}</NavLink>
-      <div className={nav.navHeading}>Station</div>
-      <NavLink className={nav.navRow} to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
-      {some && <NavLink className={nav.navRow} to={`${base}/connects`}><Plug {...ICON} />{t("web-pages.settings.nav.connects")}</NavLink>}
-      {some && <NavLink className={nav.navRow} to={`${base}/profiles`}><Key {...ICON} />Profile</NavLink>}
-      {some && <NavLink className={nav.navRow} to={`${base}/automatic-decisions`}><Check {...ICON} />{t("web-pages.automaticDecisions.title")}</NavLink>}
-      {some && <NavLink className={nav.navRow} to={`${base}/memory`}><Brain {...ICON} />{t("web-pages.settings.nav.memory")}</NavLink>}
-      {some && <NavLink className={nav.navRow} to={`${base}/usage`}><Chart {...ICON} />{t("web-pages.settings.nav.usage")}</NavLink>}
-      <div className={nav.navHeading}>Cloud</div>
-      <NavLink className={nav.navRow} to={`${base}/workspace`}><Users {...ICON} /><span className={nav.navText}>Workspace · {entry.name}</span></NavLink>
-      <NavLink className={nav.navRow} to={`${base}/account`}><Avatar account={entry.account} size={18} /><span className={nav.navText}>{entry.account.email}</span></NavLink>
+      {(["client", "station", "cloud"] as const).map((group) => (
+        <Fragment key={group}>
+          <div className={nav.navHeading}>{heading[group]}</div>
+          {pages.filter((p) => p.group === group).map((p) => (
+            <NavLink key={p.path} className={nav.navRow} to={`${base}/${p.path}`}>
+              {p.path === "account" ? <Avatar account={entry.account} size={18} /> : <p.icon {...ICON} />}
+              {group === "cloud" ? <span className={nav.navText}>{p.label}</span> : p.label}
+            </NavLink>
+          ))}
+        </Fragment>
+      ))}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 // The desktop app's own version, and looking for a newer build now rather than at the next check (apps/desktop/src/main.ts).
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import { useAppUpdate } from "../brand.tsx";
 import type { UpdateCheck } from "../core/client.ts";
 import { Button, MobileBack, Section } from "../ui.tsx";
@@ -34,6 +35,13 @@ function AppVersion() {
     setChecking(true);
     void check().then(setFound, (error: Error) => setFound({ current: desktop?.version ?? "", error: error.message })).finally(() => setChecking(false));
   };
+  // Opened to look now (⌘K's 检查更新, ?check): it looks as it opens, once.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (!params.has("check")) return;
+    setParams((p) => { p.delete("check"); return p; }, { replace: true });
+    if (!update) run();
+  }, [params]);
   const note = update?.phase === "downloading" ? t("web-pages.version.downloading", { version: update.version, percent: update.percent })
     : update?.phase === "installing" ? t("web-pages.version.installing", { version: update.version })
     : update?.phase === "failed" ? t("web-pages.version.failed", { version: update.version, error: update.message })

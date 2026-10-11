@@ -2,14 +2,16 @@
 // message by its words, or something to do here by its name (↑/↓ pick, ↩ opens, Esc closes, as everywhere; nothing
 // says so).
 import { Dialog as RDialog } from "radix-ui";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import { useNavigate } from "react-router";
 import { useChatSearch, type ChatItem } from "./api.ts";
 import type { FoundMessage } from "./core/shapes.ts";
 import { Marked } from "./Marked.tsx";
 import { jumpTo } from "./jumpTo.ts";
-import { Mark } from "./brand.tsx";
-import { Command } from "./icons.tsx";
+import { Mark, useAppUpdate } from "./brand.tsx";
+import { commands, useCommands, type Command } from "./commands.ts";
+import { webUpdates } from "./core/webUpdates.ts";
+import { Archive, Command as CommandIcon, Compose, Download, Edit, File, PanelOpen, Refresh, Settings, Stop, Thread, Web, type IconProps } from "./icons.tsx";
 import { ACTIONS, availableActions, labelOf, runAction, shortcutOf, useShortcut, type Action } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { stationBase } from "./station.tsx";
@@ -31,6 +33,7 @@ export function GlobalShortcuts({ scope, newChat, settings }: { scope: string; n
   useShortcut("settings", () => navigate(settings));
   useShortcut("nav.back", () => history.back());
   useShortcut("nav.forward", () => history.forward());
+  useCommands(useUpdateCommands(settings));
   return (
     <>
       <ChatSwitcher scope={scope} open={switching} onClose={() => setSwitching(false)} />
@@ -39,23 +42,40 @@ export function GlobalShortcuts({ scope, newChat, settings }: { scope: string; n
   );
 }
 
+/**
+ * Updating what runs here: the page to a newer build of it (as the sidebar's foot offers), the desktop app to its newer
+ * build (as 更新 beside the buddy does), or looking for one now (its version page, looking as it opens).
+ */
+function useUpdateCommands(settings: string): Command[] {
+  const navigate = useNavigate();
+  const page = useSyncExternalStore(webUpdates.subscribe, webUpdates.snapshot, () => null);
+  const app = useAppUpdate();
+  const updates = window.stillfailDesktop?.appUpdate;
+  return [
+    ...(page ? [{ id: "update.page", words: "update refresh", label: t("web-main.webUpdate.foundRefresh"), icon: Refresh, run: webUpdates.refresh }] : []),
+    ...(updates && app && (app.phase === "available" || app.phase === "failed")
+      ? [{ id: "update.app", words: "update", label: t("web-pages.version.updateTo", { version: app.version }), icon: Download, run: () => updates.start() }] : []),
+    ...(updates?.check && !app ? [{ id: "update.check", words: "check update", label: t("web-pages.version.check"), icon: Refresh, typed: true, run: () => navigate(`${settings}/version?check`) }] : []),
+  ];
+}
+
 function ChatSwitcher({ scope, open, onClose }: { scope: string; open: boolean; onClose(): void }) {
-  // An action picked is done once the list has closed and given the focus back to where it was, so what the action
-  // opens (rename's field) keeps it.
-  const picked = useRef<Action | null>(null);
-  const done = (action: Action) => { picked.current = action; onClose(); };
+  // What is picked is done once the list has closed and given the focus back to where it was, so what it opens
+  // (rename's field) keeps it.
+  const picked = useRef<Command | null>(null);
+  const done = (command: Command) => { picked.current = command; onClose(); };
   return (
     <RDialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <RDialog.Portal>
         <RDialog.Overlay className={css.overlay} />
         <RDialog.Content className={css.switcher} aria-describedby={undefined}
           onCloseAutoFocus={() => {
-            const action = picked.current;
+            const command = picked.current;
             picked.current = null;
-            if (action) setTimeout(() => runAction(action));
+            if (command) setTimeout(() => command.run());
           }}>
           <RDialog.Title className={css.hidden}>{t("web-main.switcher.title")}</RDialog.Title>
-          {open && <Finder scope={scope} onClose={onClose} onAction={done} />}
+          {open && <Finder scope={scope} onClose={onClose} onCommand={done} />}
         </RDialog.Content>
       </RDialog.Portal>
     </RDialog.Root>
@@ -66,42 +86,66 @@ function ChatSwitcher({ scope, open, onClose }: { scope: string; open: boolean; 
 const MESSAGES = 30;
 
 type Found =
-  | { chat: ChatItem; message?: undefined; action?: undefined }
-  | { chat: ChatItem; message: FoundMessage; action?: undefined }
-  | { action: Action };
+  | { chat: ChatItem; message?: undefined; command?: undefined }
+  | { chat: ChatItem; message: FoundMessage; command?: undefined }
+  | { command: Listed };
+
+/** A command as the list shows it: with the keys that do it too, when it is a key's action. */
+type Listed = Command & { keys?: string | null };
 
 /**
- * Not offered in the list: ⌘K itself, Esc (which closes the list), and the moves that are only worth a key (back,
- * forward, the chat above or below, the composer, the latest message).
+ * The keys' actions not offered in the list: ⌘K itself, Esc (which closes the list), and the moves that are only worth
+ * a key (back, forward, the chat above or below, the composer, the latest message).
  */
 const UNLISTED: Action[] = ["chat.switch", "panel.close", "nav.back", "nav.forward", "chat.prev", "chat.next", "composer.focus", "chat.latest"];
 
-/** The actions that can be done now whose name (or its id, "chat.archive") has what was typed: the chat's first. */
-function actionsFor(query: string): Action[] {
+const ACTION_ICON: Partial<Record<Action, ComponentType<IconProps>>> = {
+  "chat.new": Compose, "settings": Settings, "shortcuts": CommandIcon, "sidebar.toggle": PanelOpen,
+  "composer.file": File, "chat.stop": Stop, "chat.history": Thread, "chat.jobs": Web, "chat.archive": Archive, "chat.rename": Edit,
+};
+
+const keyCommand = (action: Action): Listed => ({
+  id: action, label: labelOf(action), icon: ACTION_ICON[action] ?? CommandIcon, keys: shortcutOf(action), run: () => runAction(action),
+});
+
+/**
+ * What can be done now whose name (or its id, "chat.archive", or its other words) has what was typed: the chat's
+ * actions first, then what the page offers (an update), then the rest of the keys' actions, then what is only found by
+ * typing (a settings page).
+ */
+function commandsFor(query: string): Listed[] {
   const q = query.trim().toLowerCase();
-  const found = availableActions().filter((a) => !UNLISTED.includes(a) && (!q || labelOf(a).toLowerCase().includes(q) || a.includes(q)));
-  return [...found.filter((a) => ACTIONS[a].group === "chat"), ...found.filter((a) => ACTIONS[a].group !== "chat")];
+  const keys = availableActions().filter((a) => !UNLISTED.includes(a));
+  const offered = commands();
+  const all: Listed[] = [
+    ...keys.filter((a) => ACTIONS[a].group === "chat").map(keyCommand),
+    ...offered.filter((c) => !c.typed),
+    ...keys.filter((a) => ACTIONS[a].group !== "chat").map(keyCommand),
+    ...offered.filter((c) => c.typed),
+  ];
+  if (!q) return all.filter((c) => !c.typed);
+  return all.filter((c) => [c.label, c.id, c.words ?? ""].some((w) => w.toLowerCase().includes(q)));
 }
 
 /**
  * Its chats as the sidebar lists them, newest first; typing narrows them to those whose title (or else where they are,
  * or what was said last) has it, and lists under them the messages that have it, newest first (the core's `chatSearch`):
- * one picked opens its chat at it. The actions that can be done here (those whose keys the page answers now) are
- * listed too: under the chats with nothing typed, over them once their name has what was typed.
+ * one picked opens its chat at it. What can be done here (the keys' actions the page answers now, and what it offers:
+ * commands.ts) is listed too: under the chats with nothing typed, over them once its name has what was typed.
  */
-function Finder({ scope, onClose, onAction }: { scope: string; onClose(): void; onAction(action: Action): void }) {
+function Finder({ scope, onClose, onCommand }: { scope: string; onClose(): void; onCommand(command: Command): void }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const search = useChatSearch({ scope, query, messages: MESSAGES });
   const view = search.value;
   const typed = !!query.trim();
-  const actions = actionsFor(query);
+  const actions = commandsFor(query);
   const chats = view?.items ?? [];
   const messages = typed ? view?.messages ?? [] : [];
   const found: Found[] = [
-    ...(typed ? actions.map((action) => ({ action })) : []),
+    ...(typed ? actions.map((command) => ({ command })) : []),
     ...chats.map((chat) => ({ chat })),
-    ...(typed ? [] : actions.map((action) => ({ action }))),
+    ...(typed ? [] : actions.map((command) => ({ command }))),
     ...messages.map((message) => ({ chat: message.chat, message })),
   ];
   const firstChat = typed ? actions.length : 0;
@@ -115,7 +159,7 @@ function Finder({ scope, onClose, onAction }: { scope: string; onClose(): void; 
   }, [at]);
   const go = (pick: Found | undefined) => {
     if (!pick) return;
-    if (pick.action) return onAction(pick.action);
+    if (pick.command) return onCommand(pick.command);
     onClose();
     if (pick.message) jumpTo({ station: pick.message.station, thread: pick.message.thread, seq: pick.message.seq, words: view?.words });
     navigate(`${stationBase(pick.chat.station)}/chats/${encodeURIComponent(pick.chat.id)}`);
@@ -127,11 +171,11 @@ function Finder({ scope, onClose, onAction }: { scope: string; onClose(): void; 
   const actionRows = actions.length > 0 && (
     <>
       <div className={css.section} role="presentation">{t("web-main.switcher.actions")}</div>
-      {actions.map((action, k) => (
-        <div key={action} className={css.row} {...option(firstAction + k)}>
-          <span className={`${css.picture} ${css.actionMark}`} aria-hidden="true"><Command size={16} /></span>
-          <span className={css.title}>{labelOf(action)}</span>
-          <span className={css.meta}>{shortcutOf(action)}</span>
+      {actions.map((command, k) => (
+        <div key={command.id} className={css.row} {...option(firstAction + k)}>
+          <span className={`${css.picture} ${css.actionMark}`} aria-hidden="true"><command.icon size={16} /></span>
+          <span className={css.title}>{command.label}</span>
+          {command.keys && <span className={css.meta}>{command.keys}</span>}
         </div>
       ))}
     </>
