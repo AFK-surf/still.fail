@@ -310,3 +310,61 @@ test("after something is said in a thread, each viewer is told it as GET /thread
   await a.close();
   await b.close();
 });
+
+test("only what is told again has an id: a stream's ids are the log from where it was asked, in order", async () => {
+  // A client asks the next stream for what came after the last id it heard. A session's steps, numbered as the latest
+  // and told before what was missed, left a client whose stream went in between with the latest id and nothing of
+  // what it missed.
+  const { events, change } = setup(testClock().clock);
+  const first = reader((await events.open(viewer("a@x"), "zh", false, [], [], null)).body as AsyncIterable<Buffer>);
+  change({ type: "session", key: "s1" });
+  await settle();
+  const heard = first.got.findLast((e) => e.id)!.id!;
+  await first.close();
+  for (const id of [4, 5, 6]) change({ type: "thread", id, entries: [{ n: 1 } as any] });
+  await settle();
+  // A session followed says its steps as the stream opens.
+  events.follow({ live: (_key, _from, _last, send) => (send({ type: "steps", steps: [] }), () => {}) });
+  const back = reader((await events.open(viewer("a@x"), "zh", false, [["k", 0, null]], [], heard)).body as AsyncIterable<Buffer>);
+  await settle();
+  // What is its own has no id, whenever it comes: nothing goes on from it.
+  assert.equal(back.got.filter((e) => e.event === "live").length, 1);
+  assert.equal(back.got.find((e) => e.event === "live")!.id, undefined);
+  change({ type: "thread", id: 7, entries: [{ n: 1 } as any] });
+  await settle();
+  // With an id: what was told after `heard`, then what is told from now, each number above the one before.
+  const logged = back.got.filter((e) => e.id);
+  assert.deepEqual(logged.filter((e) => e.event === "thread").map((e) => e.data.id), [4, 5, 6, 7]);
+  const ns = logged.map((e) => Number(e.id!.split(".")[1]));
+  assert.ok(ns.every((n, i) => n > Number(heard.split(".")[1]) && (i === 0 || n > ns[i - 1]!)), `${heard}: ${ns}`);
+  await back.close();
+});
+
+test("what says a thing whole is kept as it was last told only", async () => {
+  const { events, overview, change } = setup(testClock().clock);
+  const first = reader((await events.open(viewer("a@x"), "zh", false, [], [], null)).body as AsyncIterable<Buffer>);
+  change({ type: "session", key: "s1" });
+  await settle();
+  const heard = first.got.findLast((e) => e.id)!.id!;
+  // While it is away (another of its viewer's follows on): a session and the overview change again and again, a thread
+  // is said in twice.
+  const other = reader((await events.open(viewer("a@x"), "zh", false, [], [], null)).body as AsyncIterable<Buffer>);
+  await first.close();
+  for (let i = 1; i <= 5; i++) {
+    overview.running = i;
+    change({ type: "processes" } as StoreChange);
+    change({ type: "session", key: "s2" });
+    if (i % 2 === 1) change({ type: "thread", id: 4, entries: [{ n: i } as any] });
+    await settle();
+  }
+  assert.equal(other.got.filter((e) => e.event === "overview").length, 5, "one following hears each as it is told");
+  const back = reader((await events.open(viewer("a@x"), "zh", false, [], [], heard)).body as AsyncIterable<Buffer>);
+  await settle();
+  const count = (name: string) => back.got.filter((e) => e.event === name).length;
+  // Every thing said in a thread (each adds to it); the session, the overview and the thread's summary once, as they
+  // were last told.
+  assert.deepEqual([count("thread"), count("session"), count("overview"), count("thread-view")], [3, 1, 1, 1]);
+  assert.deepEqual(back.got.find((e) => e.event === "overview")!.data, { running: 5 });
+  await back.close();
+  await other.close();
+});
