@@ -248,5 +248,7 @@ export const waitingDetail = style({ opacity: 0.7 });
 export const statusLine = style({ display: "block", marginTop: 4, fontSize: vars.textMeta, color: vars.muted });
 
 /** The foot's status line: the stations, and the services left up long beside them (cloud/workspace.tsx). */
-export const navFootStatus = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 });
+export const navFootStatus = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, marginBottom: 4, selectors: { "&:empty": { marginBottom: 0 } } });
 globalStyle(`${navFootStatus} > :first-child`, { flex: "1", minWidth: 0 });
+// The line keeps the gap under it, not the stations' row: with the row's own margin the chip beside it centred 2px low.
+globalStyle(`${navFootStatus} > :is(${stationRow}, ${stationTrouble})`, { marginBottom: 0 });
