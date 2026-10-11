@@ -23,6 +23,8 @@ import { StationAddr } from "./addr.ts";
 import { IDEMPOTENCY_KEY, READS, RESUMED, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { SseParser } from "./sse.ts";
+import { Cursor } from "./cursor.ts";
+import * as fill from "./thread-fill.ts";
 import { readAll, replyHeader, type StationWire } from "./wire.ts";
 
 /// How long a failed or ended stream waits before it is opened again; a station not reached is tried again at
@@ -112,14 +114,6 @@ export function applyStep(view: LiveView, event: unknown, now: number): void {
   }
 }
 
-/// An event's id heard on a link's stream: the station's run and its number in it (`<run>.<n>`), kept the latest of.
-function heardEvent(link: Link, id: string): void {
-  const m = /^([0-9a-f]+)\.(\d+)$/.exec(id);
-  if (!m) return;
-  const n = Number(m[2]);
-  if (link.lastEvent === null || link.lastEvent.run !== m[1] || n > link.lastEvent.n) link.lastEvent = { run: m[1]!, n };
-}
-
 /// One station's link and what is held of it beyond the records.
 export class Link {
   readonly address: string;
@@ -136,13 +130,8 @@ export class Link {
   heard: number | null = null;
   /// When the station last answered a request (2xx); null until one is.
   answered: number | null = null;
-  /// The last event its streams gave, by its id: the station's run and its number in it (a station from before has
-  /// none). A stream taking over from another asks for what came after it (`since`).
-  lastEvent: { run: string; n: number } | null = null;
-  /// The last event as written down with what it told (`heard`); `restored`: it was, by a core before this one, and no
-  /// stream has opened since.
-  keptEvent: { run: string; n: number } | null = null;
-  restored = false;
+  /// Where it is in the station's log of events: what its next stream goes on from (cursor.ts).
+  cursor = new Cursor();
   /// Sessions at work as their stream says (steps, phase, rate, usage).
   readonly lives = new Map<string, LiveView>();
   /// Threads whose summaries are read again once a burst of events is over.
@@ -289,9 +278,7 @@ export class StationsSync {
     // when its lists are not held (a database begun anew): they are read.
     const heard = core.data.record("heard", address);
     const held = (["chats", "sessions", "threads"] as const).every((list) => core.data.listed(address, list));
-    if (typeof heard === "string" && held) heardEvent(link, heard);
-    link.keptEvent = link.lastEvent;
-    link.restored = link.lastEvent !== null;
+    link.cursor = new Cursor(typeof heard === "string" && held ? heard : null);
     // How it was last time, until the link finds out anew: kept in its workspace's database, there as the link is.
     const last = core.data.record("link", address);
     if (last === "online" || last === "offline") link.state = { state: "connecting", last };
@@ -385,7 +372,7 @@ export class StationsSync {
 
   /// The stream's path for `wants`, each session asked for from the transcript items held; `since`: the last event the
   /// stream it takes over from gave (what was told after it comes first, else `missed`).
-  #path(address: string, wants: EventsFor, since: Link["lastEvent"] = null): string {
+  #path(address: string, wants: EventsFor, since: string | null = null): string {
     const query: string[] = [];
     if (wants.host) query.push("host=1");
     for (const key of wants.live) {
@@ -396,7 +383,7 @@ export class StationsSync {
     // Their transcript entries in brief: what a history shows before a step is opened (`detail` reads it whole then).
     if (wants.live.length > 0) query.push("brief=1");
     for (const [job, lines] of wants.logs) query.push(`job=${encode(job)}&lines=${lines}`);
-    if (since !== null) query.push(`since=${encode(`${since.run}.${since.n}`)}`);
+    if (since !== null) query.push(`since=${encode(since)}`);
     return query.length === 0 ? "/events" : `/events?${query.join("&")}`;
   }
 
@@ -433,7 +420,7 @@ export class StationsSync {
           Effect.gen(function* () {
             // Asked anew each time: a session is followed from what is held of it by then. From the last event heard
             // (taking over from a stream still open, or coming back after one went): what came after it comes first.
-            const since = link.lastEvent;
+            const since = link.cursor.since;
             const path = self.#path(address, wants, since);
             const sent = core.host.nowMs();
             const races = self.wire.races?.() ?? false;
@@ -483,13 +470,13 @@ export class StationsSync {
             // `missed` when it cannot tell all it missed).
             const resumed = since !== null && replyHeader(opened.success, RESUMED) === "1";
             span.set("stillfail.resumed", resumed);
-            if (link.restored) span.set("stillfail.restored", true);
+            if (link.cursor.restored) span.set("stillfail.restored", true);
             span.end();
             let snapshotted = !handing && !resumed;
             if (snapshotted) self.snapshot(address, span.context);
             // Taken up from where a core before this one was: its history is swept as a reading of everything would.
-            else if (link.restored) self.#historyStart(address);
-            link.restored = false;
+            else if (link.cursor.restored) self.#historyStart(address);
+            link.cursor.restored = false;
             handing = false;
             const parser = new SseParser();
             const openedAt = core.host.nowMs();
@@ -532,13 +519,11 @@ export class StationsSync {
                   if (!snapshotted) self.snapshot(address);
                   snapshotted = true;
                 } else self.onEvent(address, name, data);
-                if (id !== undefined) heardEvent(link, id);
+                if (id !== undefined) link.cursor.heard(id);
               }
               // Written down in the same write as what the events changed: a core after this one takes up from it.
-              if (link.lastEvent !== link.keptEvent && link.lastEvent !== null) {
-                core.data.put("heard", address, `${link.lastEvent.run}.${link.lastEvent.n}`);
-                link.keptEvent = link.lastEvent;
-              }
+              const keep = link.cursor.toKeep();
+              if (keep !== null) core.data.put("heard", address, keep);
             }
             if (link.generation !== generation) return { done: true } as const;
             link.heard = null;
@@ -895,47 +880,24 @@ export class StationsSync {
     this.#enqueue(address, `entries/${id}`, priority, this.#entriesPage(address, id, priority, once));
   }
 
-  /// The highest entry a thread is missing on the device, as far as it is known to go (`held`: the numbers held, in
-  /// order).
-  #missing(address: string, id: number, held: number[]): number | null {
-    let n = Math.max(this.#core.data.threadLast(address, id), held.length > 0 ? held[held.length - 1] : 0);
-    for (let i = held.length - 1; n >= 1; n--) {
-      while (i >= 0 && held[i] > n) i--;
-      if (i < 0 || held[i] !== n) return n;
-    }
-    return null;
-  }
-
-  /// The read that brings a thread's next page of entries onto the device: what came after what is held, then any gap
-  /// (from just past the held entry below it, a page at most), the latest page when none is held; null when it has
-  /// them all, or they were let go for room and it was not opened since.
+  /// The read that brings a thread's next page of entries onto the device (thread-fill.ts `next`); null when it has them
+  /// all, or they were let go for room and it was not opened since.
   #entriesPath(address: string, id: number): string | null {
     const data = this.#core.data;
     if (data.evicted("entry", address, String(id))) return null;
-    const held = data.logNumbers("entry", address, String(id));
-    if (held.length === 0) return `/threads/${id}/entries?limit=${PAGE}`;
-    const top = held[held.length - 1];
-    if (data.threadLast(address, id) > top) return `/threads/${id}/entries?after=${top}`;
-    const missing = this.#missing(address, id, held);
-    if (missing === null) return null;
-    let below = 0;
-    for (const n of held) if (n < missing && n > below) below = n;
-    return `/threads/${id}/entries?from=${Math.max(below + 1, missing - PAGE + 1)}&to=${missing}`;
+    const read = fill.next(data.logNumbers("entry", address, String(id)), data.threadLast(address, id), PAGE);
+    return read === null ? null : fill.path(id, read, PAGE);
   }
 
   /// Whether a thread misses entries between the lowest it holds and its latest (a gap what was told left), as against
   /// history older than what is held (brought with the station's, #history).
   #gapAbove(address: string, id: number): boolean {
-    const held = this.#core.data.logNumbers("entry", address, String(id));
-    if (held.length === 0) return false;
-    const missing = this.#missing(address, id, held);
-    return missing !== null && missing > held[0]!;
+    return fill.holeAbove(this.#core.data.logNumbers("entry", address, String(id)), this.#core.data.threadLast(address, id));
   }
 
   /// Whether a thread's latest entries are not on the device: none held, or its summary goes further.
   latestMissing(address: string, id: number): boolean {
-    const held = this.#core.data.logSpan("entry", address, String(id));
-    return held === null || this.#core.data.threadLast(address, id) > held.max;
+    return fill.latestMissing(this.#core.data.logSpan("entry", address, String(id))?.max ?? null, this.#core.data.threadLast(address, id));
   }
 
   #entriesPage(address: string, id: number, priority: number, once: boolean): Effect.Effect<void, CoreError> {
@@ -959,7 +921,7 @@ export class StationsSync {
       if (!link || !this.reachable(address) || this.#core.data.evicted("entry", address, String(id))) return;
       const held = this.#core.data.logSpan("entry", address, String(id));
       if (held === null) return;
-      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", `/threads/${id}/entries?after=${held.max}`, null, { quiet: true }));
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", fill.path(id, { after: held.max }, PAGE), null, { quiet: true }));
       if (answer._tag === "Success") {
         const last = u64(get(answer.success, "last"));
         if (last !== null) this.#core.data.raiseLast(address, id, last);
