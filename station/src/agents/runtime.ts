@@ -22,6 +22,9 @@ export type RuntimeEvent =
   | { type: "turnEnded"; outcome: TurnOutcome }
   /// The runtime process (or its shared host) went away; the session is unusable.
   | { type: "closed"; why: string }
+  /// The station's tools (its MCP endpoint) failed it as unreachable: what it says through them reaches nobody until its
+  /// process starts again.
+  | { type: "toolsLost"; why: string }
   | { type: "live"; event: LiveEvent };
 
 export type Profile = {
@@ -74,6 +77,17 @@ export interface AgentSession {
   snapshot(): unknown;
   /// Lets go of the process without ending it (this station stops; a next one adopts it).
   detach(): void;
+  /// The address of the station's tools the runtime was given (one taken up from another station: as it was given
+  /// then); null when not known.
+  mcpUrl?(): string | null;
+}
+
+/// The station's tools by their server's name (before the rename: ember).
+export const TOOL_SERVERS = ["stillfail", "ember"];
+
+/// A tool call's error that says the station's tools could not be reached at all (not that the tool refused).
+export function unreachable(text: string): boolean {
+  return /ECONNREFUSED|ECONNRESET|Unable to connect|is not connected|fetch failed|socket hang up|connection refused/i.test(text);
 }
 
 export interface AgentDriver {

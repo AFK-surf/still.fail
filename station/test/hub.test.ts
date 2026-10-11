@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE } from "../src/agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
 import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
@@ -539,6 +539,105 @@ test("handed over to the next station, a running turn goes on and what came mean
   assert.ok((taken.prompts as string[])[0]!.includes(NUDGE));
   await hub.shutdown();
   await first.close();
+});
+
+test("taken up by a station whose tools are elsewhere, a process told the old address starts again: idle at once, running once its turn ends", async () => {
+  const first = new Rig();
+  const busy = message();
+  const idle = message();
+  await first.accept(busy);
+  await first.accept(idle);
+  await settle();
+  const [runningOld, idleOld] = first.claude.sessions;
+  idleOld!.complete();
+  await settle();
+  await first.call(sessionKey("cl", "C1", idle.threadTs), "chat_state", { kind: "all_done", done: "answered" });
+  idleOld!.complete();
+  await settle();
+  assert.ok(!idleOld!.busy() && runningOld!.busy());
+  await first.hub.handOver();
+  // The next station could not have the port again: its tools are at another address.
+  const claude = new FakeDriver("claude");
+  const moved = "http://127.0.0.1:2/mcp";
+  const hub = first.newHub({ chats: (id) => (id === "cl" ? first.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false, mcpUrl: moved });
+  await hub.takeUp();
+  const [running, idleTaken] = claude.sessions;
+  assert.equal(running!.toolsUrl, "http://127.0.0.1:1/mcp", "as it was told");
+  hub.toolsAt(moved);
+  hub.recover();
+  await settle();
+  assert.ok(idleTaken!.disposed, "idle: ended at once");
+  assert.ok(!running!.disposed, "running: its turn goes on");
+  // Its turn ends (it could not post): not nudged in the old process, but resumed in a new one, told why.
+  running!.complete();
+  await settle();
+  assert.ok(running!.disposed);
+  const again = claude.last();
+  assert.notEqual(again, running);
+  assert.equal(again.options.resume, running!.sessionId);
+  assert.equal(again.options.mcpUrl, moved);
+  assert.ok(again.prompts[0]!.includes(TOOLS_LOST), JSON.stringify(again.prompts));
+  // The idle one's next message starts a new process at the new address, resuming.
+  await hub.accept("cl", reply(idle, "9999.8", "and another thing"));
+  await settle();
+  assert.equal(claude.last().options.resume, idleTaken!.sessionId);
+  assert.equal(claude.last().options.mcpUrl, moved);
+  await hub.shutdown();
+  await first.close();
+});
+
+test("an agent that loses the station's tools is started again rather than nudged, then its last words are shown", async () => {
+  const r = new Rig({ maxNudges: 2 });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const first = r.claude.last();
+  first.says("Here is the answer: 42.");
+  first.events({ type: "toolsLost", why: "ECONNREFUSED: Unable to connect" });
+  first.complete();
+  await settle();
+  assert.ok(first.disposed, "the process that lost them ends");
+  const second = r.claude.last();
+  assert.notEqual(second, first);
+  assert.equal(second.options.resume, first.sessionId);
+  assert.deepEqual(second.prompts, [TOOLS_LOST]);
+  assert.ok(!r.chat.texts().some((t) => t.includes("42")));
+  // Lost again: given up on (no nudge, no third process); its last words are shown, marked as the station's.
+  second.events({ type: "toolsLost", why: 'MCP server "stillfail" is not connected' });
+  second.complete();
+  await settle();
+  assert.equal(r.claude.count(), 2);
+  assert.ok(matches(r.chat.lastText(), ["没有在聊天里回复", "兜底", "> Here is the answer: 42."]), r.chat.lastText());
+  // A new message: a new process, the tools' again.
+  await r.accept(reply(m, "9999.9", "still there?"));
+  await settle();
+  assert.equal(r.claude.count(), 3);
+  await r.close();
+});
+
+test("a turn given up on after its nudges shows the agent's last words, unless it posted", async () => {
+  const r = new Rig({ maxNudges: 1 });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const s = r.claude.last();
+  s.says("The build passes.");
+  s.complete();
+  await settle();
+  s.complete();
+  await settle();
+  assert.ok(matches(r.chat.lastText(), ["兜底", "> The build passes."]), r.chat.lastText());
+  // It posted this time: what it said was seen, the notice is the plain one.
+  await r.accept(reply(m, "9999.10", "and now?"));
+  await settle();
+  s.says("Now it fails.");
+  await r.call(sessionKey("cl", "C1", m.threadTs), "chat_post", { to: `C1/${m.threadTs}`, text: "Now it fails." });
+  s.complete();
+  await settle();
+  s.complete();
+  await settle();
+  assert.ok(r.chat.lastText().includes("没有给出结果"), r.chat.lastText());
+  await r.close();
 });
 
 test("held turns start once released, with what waited meanwhile", async () => {

@@ -13,7 +13,7 @@ import { LiveFromCodex, chars, type CodexLiveState } from "./live.ts";
 import { linkCodexAuth, type Env } from "./machine-logins.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
-import { cleanEnv, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { TOOL_SERVERS, cleanEnv, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import type { RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -319,6 +319,8 @@ export type CodexSnapshot = {
   host: CodexHostSnapshot;
   /// The model and effort it was retuned to, given with its turns (optional: a station from before it does not say).
   tuned?: { model: string; effort: string } | null;
+  /// The address of the station's tools its thread was given (optional: a station from before it does not say).
+  mcpUrl?: string | null;
 };
 
 export type CodexDriverOptions = {
@@ -509,6 +511,7 @@ export class CodexDriver implements AgentDriver {
     if (typeof threadId !== "string") throw new Error("codex gave no thread id");
     const session = new CodexSession(this, threadId, host, options.profile, { busy: false, turnId: null, closed: false }, new LiveFromCodex(), events);
     session.running = { model, effort: options.effort };
+    session.toolsUrl = options.mcpUrl;
     host.addThread(threadId, session.sink());
     return session;
   }
@@ -534,6 +537,7 @@ export class CodexDriver implements AgentDriver {
       session = new CodexSession(this, handed.threadId, host, options.profile, { busy: handed.busy, turnId: handed.turnId, closed: false }, new LiveFromCodex(handed.live), events);
       session.tuned = handed.tuned ?? null;
       session.running = session.tuned;
+      session.toolsUrl = handed.mcpUrl ?? null;
     } else {
       const threadId = options.resume;
       if (threadId === undefined) throw new Error("a codex thread is taken up by its id (resume)");
@@ -563,6 +567,15 @@ type ThreadState = { busy: boolean; turnId: string | null; closed: boolean };
 
 const input = (text: string) => [{ type: "text", text }];
 
+/// What a thread's notification says of the station's tools being out of reach (null: nothing): a call to one of them
+/// that failed as unreachable.
+export function codexToolsLost(method: string, params: Json): string | null {
+  const item = params?.item;
+  if (method !== "item/completed" || item?.type !== "mcpToolCall" || !TOOL_SERVERS.includes(item.server) || item.status !== "failed") return null;
+  const error = typeof item.error?.message === "string" ? item.error.message : "";
+  return unreachable(error) ? chars(error, 300) : null;
+}
+
 export class CodexSession implements AgentSession {
   private driver: CodexDriver;
   private threadId: string;
@@ -575,6 +588,8 @@ export class CodexSession implements AgentSession {
   tuned: { model: string; effort: string } | null = null;
   /// What its turns run with: as opened, or retuned to; null when not known (taken up from another station).
   running: { model: string | undefined; effort: string | undefined } | null = null;
+  /// The address of the station's tools its thread was given; null when not known (taken up after a crash).
+  toolsUrl: string | null = null;
 
   constructor(driver: CodexDriver, threadId: string, host: Host, profile: Profile, state: ThreadState, live: LiveFromCodex, events: (event: RuntimeEvent) => void) {
     this.driver = driver;
@@ -603,6 +618,8 @@ export class CodexSession implements AgentSession {
       }
       const { method, params } = notice;
       for (const event of this.live.feed(method, params)) this.events({ type: "live", event });
+      const lost = codexToolsLost(method, params);
+      if (lost !== null) this.events({ type: "toolsLost", why: lost });
       if (method === "turn/started") {
         const id = params?.turn?.id;
         if (typeof id === "string") this.state.turnId = id;
@@ -631,6 +648,10 @@ export class CodexSession implements AgentSession {
 
   id() {
     return this.threadId;
+  }
+
+  mcpUrl() {
+    return this.toolsUrl;
   }
 
   busy() {
@@ -718,6 +739,7 @@ export class CodexSession implements AgentSession {
       live: this.live.state(),
       host: this.host.snapshot(),
       tuned: this.tuned,
+      mcpUrl: this.toolsUrl,
     };
   }
 

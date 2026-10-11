@@ -16,6 +16,7 @@ import { Remote } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
+import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
 import { AdbShares, ControlPlane, Events, Key, Paths, Readers, Store } from "../services.ts";
 import { Notifier } from "../cloud/notify.ts";
 import { adbTools } from "../tools/adb.ts";
@@ -353,22 +354,35 @@ export const AgentsLive = (control: Control) =>
         writeFileSync(join(run, "hub.json"), JSON.stringify({ pid: process.pid }) + "\n");
         if (!inWorkspace) hub.hold("unbound");
         await hub.takeUp();
-        // The launcher's socket; on its own, 4750 or the port config.json names (taken by something else: a free one,
-        // unless it was named, ports.rs).
+        // The launcher's socket; on its own, as the launcher's ports.rs would: the port config.json names; else the one
+        // remembered (the agents left running know it), 4750 on the machine's own data directory, any free one.
         const named = config.raw()?.http?.port;
         const notified = (authorization: string | undefined, body: Buffer) => notifyEndpoint(jobs, authorization, body);
+        if (control.mcpFd !== undefined) door = await openAgentsDoor({ fd: control.mcpFd }, mcp, notified);
         // Behind the launcher's entrance (launcher.ts `ports`): any port here, its port the one agents are told.
-        const at = control.mcpFd !== undefined ? { fd: control.mcpFd } : control.ports ? { port: 0, shown: control.ports.mcp } : { port: Number(named ?? 4750) };
-        try {
-          door = await openAgentsDoor(at, mcp, notified);
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE" || named !== undefined) throw error;
-          door = await openAgentsDoor({ port: 0 }, mcp, notified);
+        else if (control.ports) door = await openAgentsDoor({ port: 0, shown: control.ports.mcp }, mcp, notified);
+        else {
+          const remembered = rememberedMcpPort(data);
+          const tries = portsToTry(named === undefined ? undefined : Number(named), remembered, 4750, ownData(data));
+          for (const [i, port] of tries.entries()) {
+            try {
+              door = await openAgentsDoor({ port }, mcp, notified);
+              break;
+            } catch (error) {
+              // The one remembered is passed over whatever keeps it; the usual one only when it is taken.
+              const passed = (port === remembered && port !== 4750) || (error as NodeJS.ErrnoException).code === "EADDRINUSE";
+              if (!passed || i === tries.length - 1) throw error;
+            }
+          }
+          writeFileSync(mcpPortFile(data), `{"port":${door!.port}}\n`);
         }
-        jobs.setNotifyUrl(door.url.replace(/\/mcp$/, "/jobs/notify"));
+        const opened = door!;
+        jobs.setNotifyUrl(opened.url.replace(/\/mcp$/, "/jobs/notify"));
         // Taken over and serving: the launcher's entrance comes here now (not before: launcher/src/lifecycle.rs).
-        control.serving("mcp", door.port);
-        log.info("station", "agents' door open", { url: door.url });
+        control.serving("mcp", opened.port);
+        log.info("station", "agents' door open", { url: opened.url });
+        // Processes taken up that were told another address start again (the port could not be had again).
+        hub.toolsAt(opened.url);
         taken = true;
         if (inWorkspace) {
           await slack.reconcile();

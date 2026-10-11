@@ -500,6 +500,12 @@ export class Hub {
     if (others.length > 0) this.deliver(thread, n, others, text);
   }
 
+  /// The station's tools are open at `url`: a process taken up that was told another address (the station before had
+  /// them elsewhere) starts again, as it can (SessionActor `toolsAt`).
+  toolsAt(url: string) {
+    for (const actor of this.actors.values()) void actor.toolsAt(url);
+  }
+
   /// After a restart: resume cut-off turns (those not taken up with their runtime), then deliver whatever is still
   /// pending.
   recover() {

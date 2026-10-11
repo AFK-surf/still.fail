@@ -164,6 +164,7 @@
   "station.notice.failed": "This turn failed: {error}",
   "station.notice.file": "(File)",
   "station.notice.noResult": "This turn stopped without a result; reply to continue",
+  "station.notice.noResultSaid": "The agent did not reply in the chat this turn. Its last words follow, passed on by the station as a fallback (not a post of its own); reply to continue:",
   "station.notice.rateLimit": "Hit a usage or rate limit; continuing with another account or model, or reply later: {error}",
   "station.notice.refused": "Anthropic refused the request. This is usually the network, not the sign-in: the station's outgoing address is in a region it does not serve, or it does not go through your proxy (Claude Code only follows HTTPS_PROXY / HTTP_PROXY; set them in the profile's environment): {error}",
   "station.notice.stopped": "Stopped the task",
