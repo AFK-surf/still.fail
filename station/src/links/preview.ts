@@ -1,18 +1,23 @@
 // What a web link in a message is, for its preview card on the pages (GET /link-preview, src/api/routes/links.ts): a
 // GitHub pull request or issue as GitHub says it (its state, author, size and checks; through `gh` where it is signed
-// in, so private repositories too, else GitHub's public API), any other page by its title, description and icon.
-// Only public addresses are fetched (a link in a chat is no way into the station's own network), a little of each, and
-// what was found is kept a while, so a card opened again shows at once.
+// in, so private repositories too, else GitHub's public API), a video as its site's oEmbed says it (YouTube, Vimeo:
+// their pages are a megabyte of script before their head's tags), any other page by its title, description, icon and
+// picture (og:image). Only public addresses are fetched (a link in a chat is no way into the station's own network), a
+// little of each, and what was found is kept a while, so a card opened again shows at once.
 import { execFile } from "node:child_process";
 import { lookup } from "node:dns/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { wall } from "../ops/fibers.ts";
+import { thumbnail } from "../sessions/thumbs.ts";
 
 type Json = any;
 
 export type Person = { login: string; avatar?: string };
 export type LinkPreview =
-  | { kind: "page"; url: string; title: string; description?: string; site?: string; icon?: string }
+  | { kind: "page"; url: string; title: string; description?: string; site?: string; icon?: string; image?: string }
   | {
       kind: "github_pull_request";
       url: string;
@@ -43,10 +48,13 @@ export type LinkPreview =
 const UA = { "user-agent": "stillfail-station (link preview)" };
 /// How long one fetch may take.
 const TIMEOUT_MS = 6000;
-/// The most of a page read for its head.
-const PAGE_BYTES = 512 * 1024;
+/// The most of a page read for its head (it ends at `</head>`, often long before).
+const PAGE_BYTES = 2 * 1024 * 1024;
 /// The most an icon or avatar may be (it goes across inline).
 const ICON_BYTES = 48 * 1024;
+/// The most a page's picture is fetched at, and the most it goes across inline (as its thumbnail when it is bigger).
+const PICTURE_BYTES = 4 * 1024 * 1024;
+const PICTURE_INLINE = 192 * 1024;
 /// How long a preview is kept; a pull request's state moves, so not long.
 const KEEP_MS = 5 * 60 * 1000;
 const KEPT = 300;
@@ -77,7 +85,45 @@ async function find(href: string): Promise<LinkPreview | null> {
     const found = await github(gh[1]!, gh[2]!, gh[3] === "pull", Number(gh[4]), href).catch(() => null);
     if (found) return found;
   }
+  const endpoint = oembedOf(url);
+  if (endpoint) {
+    const found = await oembed(endpoint, url).catch(() => null);
+    if (found) return found;
+  }
   return page(url);
+}
+
+// ---- videos, by oEmbed ----
+
+/// The oEmbed endpoint that says what a video link is, for the sites whose pages hide their head's tags under a megabyte
+/// of script; null for any other link.
+export function oembedOf(url: URL): string | null {
+  const host = url.hostname.toLowerCase();
+  const youtube =
+    (/^(?:www\.|m\.|music\.)?youtube\.com$/.test(host) && /^\/(?:watch$|shorts\/|live\/|embed\/)/.test(url.pathname)) || (host === "youtu.be" && url.pathname.length > 1);
+  if (youtube) return `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url.toString())}`;
+  if (/^(?:www\.|player\.)?vimeo\.com$/.test(host) && /\/\d+(?:\/|$)/.test(url.pathname)) return `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url.toString())}`;
+  return null;
+}
+
+async function oembed(endpoint: string, url: URL): Promise<LinkPreview | null> {
+  const res = await fetchPublic(new URL(endpoint), "application/json");
+  if (!res?.ok) {
+    await res?.body?.cancel();
+    return null;
+  }
+  const said: Json = JSON.parse((await bodyUpTo(res, 64 * 1024)).toString("utf8"));
+  const title = typeof said?.title === "string" ? htmlText(said.title) : "";
+  if (!title) return null;
+  const site = typeof said.provider_name === "string" ? htmlText(said.provider_name) : "";
+  const [icon, image] = await Promise.all([
+    typeof said.provider_url === "string" ? iconOf(new URL("/favicon.ico", said.provider_url).toString()) : null,
+    typeof said.thumbnail_url === "string" ? picture(said.thumbnail_url) : null,
+  ]);
+  return {
+    kind: "page", url: url.toString(), title: cut(title, 200), ...(site ? { site: cut(site, 60) } : {}),
+    ...(icon ? { icon } : {}), ...(image ? { image } : {}),
+  };
 }
 
 // ---- GitHub ----
@@ -105,7 +151,7 @@ const count = (n: unknown): number | null => (typeof n === "number" && Number.is
 
 async function person(user: Json): Promise<Person | null> {
   if (typeof user?.login !== "string") return null;
-  const avatar = typeof user.avatar_url === "string" ? await image(`${user.avatar_url}${user.avatar_url.includes("?") ? "&" : "?"}s=48`) : null;
+  const avatar = typeof user.avatar_url === "string" ? await iconOf(`${user.avatar_url}${user.avatar_url.includes("?") ? "&" : "?"}s=48`) : null;
   return { login: user.login, ...(avatar ? { avatar } : {}) };
 }
 
@@ -177,10 +223,11 @@ async function fetchPublic(start: URL, accept: string): Promise<Response | null>
   return null;
 }
 
-/// The start of a body, at most `max` bytes.
-async function bodyUpTo(res: Response, max: number): Promise<Buffer> {
+/// The start of a body, at most `max` bytes; with `until`, no more once what was read has it (a page's `</head>`).
+export async function bodyUpTo(res: Response, max: number, until?: RegExp): Promise<Buffer> {
   const parts: Buffer[] = [];
   let got = 0;
+  let tail = "";
   const reader = res.body?.getReader();
   if (!reader) return Buffer.alloc(0);
   while (got < max) {
@@ -188,22 +235,64 @@ async function bodyUpTo(res: Response, max: number): Promise<Buffer> {
     if (done) break;
     parts.push(Buffer.from(value));
     got += value.length;
+    if (until) {
+      // With the last few bytes before it, so a tag cut in two between chunks is still seen.
+      const seen = tail + Buffer.from(value).toString("latin1");
+      if (until.test(seen)) break;
+      tail = seen.slice(-16);
+    }
   }
   await reader.cancel().catch(() => {});
   return Buffer.concat(parts).subarray(0, max);
 }
 
-/// An image as a data: URL (an icon, an avatar), small ones only.
-async function image(href: string): Promise<string | null> {
+/// An image's type and bytes; null when it is not an image, or is over `max`.
+async function fetchImage(href: string, max: number): Promise<{ type: string; bytes: Buffer } | null> {
   try {
     const res = await fetchPublic(new URL(href), "image/*");
-    const type = res?.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
-    if (!res?.ok || !type.startsWith("image/")) return null;
-    const bytes = await bodyUpTo(res, ICON_BYTES + 1);
-    return bytes.length > ICON_BYTES || bytes.length === 0 ? null : `data:${type};base64,${bytes.toString("base64")}`;
+    const type = res?.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
+    if (!res?.ok || !type.startsWith("image/")) {
+      await res?.body?.cancel();
+      return null;
+    }
+    const bytes = await bodyUpTo(res, max + 1);
+    return bytes.length > max || bytes.length === 0 ? null : { type, bytes };
   } catch {
     return null;
   }
+}
+
+const dataUrl = (type: string, bytes: Buffer) => `data:${type};base64,${bytes.toString("base64")}`;
+
+/// An icon or an avatar as a data: URL (it goes across inline), small ones only.
+async function iconOf(href: string): Promise<string | null> {
+  const found = await fetchImage(href, ICON_BYTES);
+  return found ? dataUrl(found.type, found.bytes) : null;
+}
+
+const PICTURE_EXT: Record<string, string> = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp" };
+
+/// A page's picture as a data: URL: itself when it is small, else its thumbnail (sessions/thumbs.ts, made in a directory
+/// of its own, gone after); null when it is neither (too big, and no thumbnail made of it).
+async function picture(href: string): Promise<string | null> {
+  const found = await fetchImage(href, PICTURE_BYTES);
+  if (!found) return null;
+  const ext = PICTURE_EXT[found.type];
+  if (ext && found.bytes.length > PICTURE_INLINE) {
+    const dir = await mkdtemp(join(tmpdir(), "stillfail-link-"));
+    try {
+      const file = join(dir, `picture.${ext}`);
+      await writeFile(file, found.bytes);
+      const small = await thumbnail(file, dir);
+      if (small) {
+        const bytes = await readFile(small.path);
+        return bytes.length > PICTURE_INLINE ? null : dataUrl(small.type, bytes);
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+  return found.bytes.length > PICTURE_INLINE ? null : dataUrl(found.type, found.bytes);
 }
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
@@ -221,8 +310,11 @@ export function htmlText(s: string): string {
     .trim();
 }
 
-/// What a page's head says of it: its title (og:title, else <title>), description, site and icon's address.
-export function headOf(html: string, base: URL): { title?: string; description?: string; site?: string; icon?: string } {
+const cut = (s: string, n: number) => (Array.from(s).length > n ? `${Array.from(s).slice(0, n).join("")}…` : s);
+
+/// What a page's head says of it: its title (og:title, else <title>), description, site, and its icon's and picture's
+/// (og:image) addresses.
+export function headOf(html: string, base: URL): { title?: string; description?: string; site?: string; icon?: string; image?: string } {
   const end = html.search(/<\/head>/i);
   const head = end < 0 ? html : html.slice(0, end);
   const metas = [...head.matchAll(/<meta\b[^>]*>/gi)].map((m) => m[0]);
@@ -245,8 +337,16 @@ export function headOf(html: string, base: URL): { title?: string; description?:
   try {
     icon = new URL(iconTag ? (attr(iconTag, "href") ?? "/favicon.ico") : "/favicon.ico", base).toString();
   } catch {}
-  const cut = (s: string | undefined, n: number) => (s === undefined || s === "" ? undefined : Array.from(s).length > n ? `${Array.from(s).slice(0, n).join("")}…` : s);
-  return { ...(title ? { title: cut(title, 200)! } : {}), ...(description ? { description: cut(description, 300)! } : {}), ...(site ? { site: cut(site, 60)! } : {}), ...(icon ? { icon } : {}) };
+  const imageAt = meta("og:image:secure_url", "og:image", "og:image:url", "twitter:image", "twitter:image:src");
+  let image: string | undefined;
+  try {
+    const at = imageAt ? new URL(imageAt, base) : undefined;
+    if (at?.protocol === "https:" || at?.protocol === "http:") image = at.toString();
+  } catch {}
+  return {
+    ...(title ? { title: cut(title, 200) } : {}), ...(description ? { description: cut(description, 300) } : {}), ...(site ? { site: cut(site, 60) } : {}),
+    ...(icon ? { icon } : {}), ...(image ? { image } : {}),
+  };
 }
 
 async function page(url: URL): Promise<LinkPreview | null> {
@@ -257,9 +357,12 @@ async function page(url: URL): Promise<LinkPreview | null> {
     await res.body?.cancel();
     return null;
   }
-  const html = (await bodyUpTo(res, PAGE_BYTES)).toString("utf8");
+  const html = (await bodyUpTo(res, PAGE_BYTES, /<\/head>/i)).toString("utf8");
   const found = headOf(html, new URL(res.url || url.toString()));
   if (!found.title) return null;
-  const icon = found.icon ? await image(found.icon) : null;
-  return { kind: "page", url: url.toString(), title: found.title, ...(found.description ? { description: found.description } : {}), ...(found.site ? { site: found.site } : {}), ...(icon ? { icon } : {}) };
+  const [icon, image] = await Promise.all([found.icon ? iconOf(found.icon) : null, found.image ? picture(found.image) : null]);
+  return {
+    kind: "page", url: url.toString(), title: found.title, ...(found.description ? { description: found.description } : {}), ...(found.site ? { site: found.site } : {}),
+    ...(icon ? { icon } : {}), ...(image ? { image } : {}),
+  };
 }

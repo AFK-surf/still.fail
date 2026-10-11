@@ -37,6 +37,9 @@ export const tileTitle = style({
   fontWeight: "500", overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: "2", overflowWrap: "anywhere",
 });
 export const tileUrl = style({ fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** A page's picture over its tile: as wide as a full card, 16:9 (a video's frame; a wider og:image is cropped a little). */
+export const tileWithPicture = style({ display: "flex", flexDirection: "column", gap: "10px", width: "min(296px, calc(100vw - 40px))" });
+export const picture = style({ display: "block", width: "100%", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: "8px", background: vars.hover });
 
 // ---- the rich card: state and reference with the time at the right; the title; who, and a few facts ----
 
