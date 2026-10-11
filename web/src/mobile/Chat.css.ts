@@ -38,7 +38,7 @@ export const mBarJoinedAgent = style({
 export const mBarJoinedStation = style({
   display: "inline-flex", alignItems: "center", height: "var(--mark)", maxWidth: "96px", padding: "0", border: "0",
   background: "none", color: "inherit", font: "inherit", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis",
-  selectors: { "&[data-name]": { display: "block", lineHeight: "var(--mark)", paddingLeft: "1px" } },
+  selectors: { "&[data-name]": { display: "block", lineHeight: "var(--mark)" } },
 });
 /** A message held for its menu (a long press): its words marked while the menu is open; the system's own menu never comes. */
 globalStyle(`${mMessages} [data-author]`, { WebkitTouchCallout: "none" });

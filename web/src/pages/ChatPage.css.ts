@@ -21,17 +21,20 @@ export const agentStation = style({
   selectors: { "&[data-on]": { boxShadow: `0 0 0 2px ${vars.accent}` } },
 });
 export const agentStationAgent = style({
-  display: "grid", placeItems: "center", width: "var(--mark)", height: "var(--mark)", padding: "0", border: "0", borderRadius: "inherit",
+  display: "grid", placeItems: "center", width: "var(--mark)", height: "var(--mark)", padding: "0", border: "0",
   background: "none", color: "inherit", cursor: "pointer",
-  selectors: { "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "2px" } },
+  selectors: {
+    "&:hover, &[data-state=open]": { background: vars.hover },
+    "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "2px" },
+  },
 });
 /** The station's part: its icon, or its name (kept short) where it has none. */
 export const agentStationPart = style({
   display: "inline-flex", alignItems: "center", height: "var(--mark)", maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis",
   cursor: "default", outline: "none",
   selectors: {
-    "&[data-name]": { display: "block", lineHeight: "var(--mark)", paddingLeft: "1px" },
-    "&:hover, &[data-state=open], &:focus-visible": { color: vars.text },
+    "&[data-name]": { display: "block", lineHeight: "var(--mark)" },
+    "&:hover, &[data-state=open], &:focus-visible": { color: vars.text, background: vars.hover },
   },
 });
 /** The machine it runs on, beside the title: a quiet tag. */
