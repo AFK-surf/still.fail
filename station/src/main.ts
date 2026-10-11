@@ -12,7 +12,7 @@ import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
 import { enroll, id, status } from "./cli.ts";
 import { MeshLive } from "./mesh/mesh.ts";
 import { AgentsLive } from "./sessions/agents.ts";
-import { dataDir, flag } from "./ops/files.ts";
+import { dataDir, flag, ownData } from "./ops/files.ts";
 import { setStationLang } from "./ops/i18n.ts";
 import { type Control, launcher } from "./ops/launcher.ts";
 import { hearErrors, log } from "./ops/log.ts";
@@ -77,13 +77,14 @@ const Loopback = (control: Control) =>
           if (control.loopbackFd !== undefined) server.listen({ fd: control.loopbackFd });
           else if (control.ports) server.listen(0, "127.0.0.1");
           else {
-            // On its own (no launcher): 4760, or a free port when that is taken and none was named (local.rs).
+            // On its own (no launcher): 4760 on the machine's own data directory, or a free port when that is taken
+            // (or another data directory) and none was named (local.rs).
             const named = flag(args, "--port");
             server.on("error", (e: NodeJS.ErrnoException) => {
               if (e.code === "EADDRINUSE" && !named) server.listen(0, "127.0.0.1");
               else log.error("station", "the loopback port is not had", { error: e.message });
             });
-            server.listen(Number(named ?? 4760), "127.0.0.1");
+            server.listen(Number(named ?? (ownData(data) ? 4760 : 0)), "127.0.0.1");
           }
           return server;
         }),

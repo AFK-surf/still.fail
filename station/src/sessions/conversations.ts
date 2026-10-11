@@ -163,6 +163,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   const [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card });
   hub.shared(thread.thread.id, n, key, text);
   const actor = actorOf(hub, key);
+  await actor?.postedNow();
   if (need !== null) await actor?.need(need);
   if (kind !== null) {
     // What the state is about: as said, else for need_help the card still pending in this chat (this post's, when it

@@ -8,7 +8,8 @@
 import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { chars } from "../agents/live.ts";
 import { latest as latestNote, untold } from "../agents/migrations.ts";
 import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
@@ -134,6 +135,11 @@ export type Snapshot = {
 
 const t = (key: string, args?: Record<string, unknown>) => tr(stationLang(), key, args);
 
+/// Times a process that lost the station's tools is started again before the turn is given up on.
+const MAX_TOOLS_RESTARTS = 1;
+/// The most of the agent's last words shown in its place.
+const FALLBACK_MOST = 4000;
+
 export class SessionActor {
   readonly key: string;
   readonly runtime: "claude" | "codex";
@@ -152,6 +158,15 @@ export class SessionActor {
   private phase: Phase = "idle";
   private turn: Turn | null = null;
   private nudges = 0;
+  /// Its process lost the station's tools during the running turn (why): at the turn's end it starts again.
+  private toolsLost: string | null = null;
+  /// Times it was started again for that since it last ended a turn in a state (or was given something new).
+  private toolsRestarts = 0;
+  /// The agent's last words (a text step of its own) since it was last given something, and whether it posted since:
+  /// what is shown, marked as the station's, when it is given up on without having posted.
+  private saying: { id: string; text: string } | null = null;
+  private lastSaid = "";
+  private posted = false;
   private stopRequested = false;
   private resumeLost = false;
   /// Started afresh: what it is told of it with its next prompt.
@@ -248,6 +263,33 @@ export class SessionActor {
   notify(text: string): Promise<void> {
     this.notices.push(text);
     return this.enqueue(() => this.giveNotices());
+  }
+
+  /// It posted in a chat (chat_post), in turn order.
+  postedNow(): Promise<void> {
+    return this.enqueue(async () => {
+      this.posted = true;
+    });
+  }
+
+  /// The station's tools are at `url` now. A process told another address (taken up from a station that had its tools
+  /// elsewhere) cannot reach them: idle, it ends (the next turn starts one, resuming); running, it starts again once
+  /// its turn ends.
+  toolsAt(url: string): Promise<void> {
+    return this.enqueue(async () => {
+      const agent = this.agent;
+      const was = agent?.session.mcpUrl?.() ?? null;
+      if (!agent || was === null || was === url) return;
+      if (this.turn || agent.session.busy()) {
+        this.toolsLost ??= `its process was told the station's tools are at ${was}, not ${url}`;
+        log.warn("session", "the process taken up was told another address of the station's tools; it starts again once its turn ends", { session: this.key, was, now: url });
+        return;
+      }
+      this.agent = null;
+      log.warn("session", "the process taken up was told another address of the station's tools; ending it, its next turn resumes in a new one", { session: this.key, was, now: url });
+      await agent.session.dispose();
+      this.deps.store.notify(this.key);
+    });
   }
 
   /// What a tool says of the running turn, recorded in turn order (the tool answers once this resolves).
@@ -489,6 +531,7 @@ export class SessionActor {
       return; // otherwise delivered when the turn ends
     }
     this.nudges = 0;
+    this.toolsRestarts = 0;
     this.workFor(pending);
     // The turn is for the first person whose message it takes.
     const first = pending.find((m: any) => m.message.authorKind === "person");
@@ -637,6 +680,11 @@ export class SessionActor {
   }
 
   private beginTurn(kind: string, by: TurnFor) {
+    // Given something new: what it says from here on is what counts.
+    if (kind === "input" || kind === "job") {
+      this.lastSaid = "";
+      this.posted = false;
+    }
     const id = crypto.randomUUID();
     this.turn = { id, declared: null, authRetried: kind === "auth_retry", by };
     this.phase = "running";
@@ -733,7 +781,15 @@ export class SessionActor {
         break;
       case "live":
         this.deps.live?.event(this.key, event.event);
+        if (this.isCurrent(generation)) this.heard(event.event);
         this.onLive(event.event);
+        break;
+      case "toolsLost":
+        void this.enqueue(async () => {
+          if (!this.isCurrent(generation) || this.toolsLost !== null) return;
+          log.warn("session", "the agent cannot reach the station's tools", { session: this.key, why: event.why });
+          this.toolsLost = event.why;
+        });
         break;
       case "closed":
         void this.enqueue(async () => {
@@ -743,6 +799,15 @@ export class SessionActor {
           this.deps.store.notify(this.key);
         });
         break;
+    }
+  }
+
+  /// The agent's own words as they come (not a subagent's, not its thinking).
+  private heard(event: LiveEvent) {
+    if (event.kind === "start" && event.step === "text" && !event.subagent && event.parent === undefined) this.saying = { id: event.id, text: "" };
+    else if (event.kind === "delta" && event.field === "text" && event.id === this.saying?.id) {
+      this.saying.text += event.text;
+      if (this.saying.text.trim() !== "") this.lastSaid = this.saying.text.trim();
     }
   }
 
@@ -761,6 +826,18 @@ export class SessionActor {
       const wait = turn.declared?.kind === "waiting" ? turn.declared.seconds : null;
       store.endTurn(turn.id, outcome.kind, detail, turn.declared?.kind ?? null, wait);
     }
+    // Its process could not reach the station's tools: what it said through them reached nobody, and its next turn
+    // would fare no better. It ends; the next one (resuming) is given the station's tools as they are now.
+    const lost = this.toolsLost;
+    this.toolsLost = null;
+    if (lost !== null) {
+      const agent = this.agent;
+      this.agent = null;
+      log.warn("session", "ending the process that lost the station's tools; the next one resumes it", { session: this.key, why: lost });
+      await agent?.session.dispose();
+      store.notify(this.key);
+    }
+    if (turn?.declared) this.toolsRestarts = 0;
     // Reopen Claude once so it reads the current credentials (and refreshes an expiring machine token). Resume its
     // transcript with a continuation, never replay the original request: it may already have run tools.
     if (this.runtime === "claude" && outcome.kind === "failed" && outcome.reason === "auth" && !stopRequested && !this.deps.held() && turn && !turn.authRetried && !turn.declared) {
@@ -827,13 +904,35 @@ export class SessionActor {
       return;
     }
     if (this.deps.held()) return;
+    // Not nudged (it could not have answered): told to go on in the new process, once; lost again, given up on.
+    if (lost !== null) {
+      this.nudges = 0;
+      if (this.toolsRestarts < MAX_TOOLS_RESTARTS) {
+        this.toolsRestarts++;
+        log.info("session", "the turn reached nobody; going on in a new process", { session: this.key, attempt: this.toolsRestarts });
+        return this.startTurn("resume", TOOLS_LOST);
+      }
+      this.toolsRestarts = 0;
+      return this.giveUp();
+    }
     if (this.nudges < this.deps.maxNudges()) {
       this.nudges++;
       log.info("session", "turn ended without a state; nudging", { session: this.key, attempt: this.nudges });
       return this.startTurn("nudge", NUDGE);
     }
     this.nudges = 0;
-    await this.notice(`⚠️ ${t("station.notice.noResult")}`);
+    await this.giveUp();
+  }
+
+  /// No turn ended in a state, and no more are asked for: the thread is told so, with the agent's last words when it
+  /// posted none (it may have answered where nobody reads: its tools out of reach), marked as the station's.
+  private async giveUp() {
+    const said = this.posted ? "" : this.lastSaid;
+    this.lastSaid = "";
+    if (said === "") return this.notice(`⚠️ ${t("station.notice.noResult")}`);
+    log.info("session", "the turn reached nobody; its last words are shown in its place", { session: this.key });
+    const quoted = chars(said, FALLBACK_MOST).split("\n").map((line) => `> ${line}`).join("\n");
+    await this.notice(`⚠️ ${t("station.notice.noResultSaid")}\n\n${quoted}`);
   }
 
   /// Stopped while it waits: the wait ends, and so does the work that would bring it back (session.rs `stop_waiting`).

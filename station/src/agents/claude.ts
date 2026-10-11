@@ -18,7 +18,7 @@ import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken, type Env, type MachineToken
 import { fileCredentials, takeBack } from "./no-keychain.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { bothNames, expandRoute, isMachine, profileEnv, profileModel } from "./profiles.ts";
-import { cleanEnv, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
 
 type Json = any;
@@ -32,6 +32,40 @@ const flagOf = (args: string[], flag: string) => {
   const at = args.indexOf(flag);
   return at >= 0 ? args[at + 1] : undefined;
 };
+
+/// The address of the station's tools a process was started with (its --mcp-config); null when it does not say.
+export function mcpUrlOf(args: string[]): string | null {
+  try {
+    const servers = JSON.parse(flagOf(args, "--mcp-config") ?? "")?.mcpServers ?? {};
+    const url = TOOL_SERVERS.map((name) => servers[name]?.url).find((u) => typeof u === "string");
+    return url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/// What a frame says of the station's tools being out of reach (null: nothing): their server failed to connect as a
+/// turn started, or a call to one of them (`calls`: the ids of those made, noted here as they are) failed as
+/// unreachable. Seen in the field as `ECONNREFUSED: Unable to connect…`, then `MCP server "stillfail" is not connected`.
+export function toolsLostIn(frame: Json, calls: Set<string>): string | null {
+  const kind = frame?.type;
+  const content: Json[] = Array.isArray(frame?.message?.content) ? frame.message.content : [];
+  if (kind === "system" && frame.subtype === "init" && Array.isArray(frame.mcp_servers)) {
+    const server = frame.mcp_servers.find((s: Json) => TOOL_SERVERS.includes(s?.name));
+    if (server?.status === "failed") return `the ${server.name} MCP server failed to connect`;
+  } else if (kind === "assistant") {
+    for (const c of content) {
+      if (c?.type === "tool_use" && typeof c.id === "string" && TOOL_SERVERS.some((s) => String(c.name ?? "").startsWith(`mcp__${s}__`))) calls.add(c.id);
+    }
+  } else if (kind === "user") {
+    for (const c of content) {
+      if (c?.type !== "tool_result" || !calls.delete(c.tool_use_id) || c.is_error !== true) continue;
+      const text = typeof c.content === "string" ? c.content : Array.isArray(c.content) ? c.content.map((x: Json) => (typeof x?.text === "string" ? x.text : "")).join("\n") : "";
+      if (unreachable(text)) return chars(text, 300);
+    }
+  }
+  return null;
+}
 
 export const userMessage = (text: string) => JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } });
 
@@ -212,6 +246,7 @@ export class ClaudeDriver implements AgentDriver {
 
     const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false }, machine?.expiresAt ?? null, new LiveFromClaude(), events, options.effort);
     const label = `claude ${sessionId}`;
+    session.toolsUrl = options.mcpUrl;
     session.attach(await AgentProcess.start(this.data, runnerId("claude", options.key), this.command, args, env, options.cwd, session.processOptions(label)));
     this.live.add(session);
     return session;
@@ -246,6 +281,8 @@ export class ClaudeDriver implements AgentDriver {
       // A turn is running that this station did not start.
       if (turn.busy) events({ type: "turnStarted" });
     }
+    // The address it was told is in its arguments: the station's may have moved since (hub.ts `toolsAt`).
+    session.toolsUrl = mcpUrlOf(info.args);
     session.attach(AgentProcess.adopt(info, session.processOptions(`claude ${session.id()}`)));
     this.live.add(session);
     return session;
@@ -278,6 +315,10 @@ export class ClaudeSession implements AgentSession {
   private events: (event: RuntimeEvent) => void;
   /// The effort it was started with: fixed for the process (`--effort` has no switch while it runs).
   private effort: string | undefined;
+  /// The address of the station's tools it was started with (fixed for the process too).
+  toolsUrl: string | null = null;
+  /// Its calls to the station's tools not answered yet (toolsLostIn).
+  private calls = new Set<string>();
 
   constructor(driver: ClaudeDriver, sessionId: string, turn: Turn, machineExpires: number | null, live: LiveFromClaude, events: (event: RuntimeEvent) => void, effort: string | undefined) {
     this.driver = driver;
@@ -296,6 +337,8 @@ export class ClaudeSession implements AgentSession {
         const frame = parse(line);
         if (frame === undefined) return;
         for (const event of this.live.feed(frame)) this.events({ type: "live", event });
+        const lost = toolsLostIn(frame, this.calls);
+        if (lost !== null) this.events({ type: "toolsLost", why: lost });
         onFrame(frame, this.turn, this.events, () => this.proc.write(interruptRequest()));
       },
       exit: (said: string, stderr: string) => {
@@ -318,6 +361,10 @@ export class ClaudeSession implements AgentSession {
 
   id() {
     return this.sessionId;
+  }
+
+  mcpUrl() {
+    return this.toolsUrl;
   }
 
   busy() {

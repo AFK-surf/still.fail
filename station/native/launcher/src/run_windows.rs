@@ -209,7 +209,11 @@ pub fn run(options: Options) -> i32 {
     };
     let _ = std::fs::remove_file(run.join("drained"));
     // The ports, held by the launcher for good (as on Unix), so a handover keeps them: Node serves behind them.
-    let bound = crate::ports::mcp(&config).and_then(|mcp| Ok((mcp, crate::ports::admin(&options.data, options.port, options.named, config.english)?)));
+    let bound = {
+        // Only the machine's own data directory has the usual ports (ports.rs).
+        let own = data::is_default(&data::home(), &options.data);
+        crate::ports::mcp(&options.data, &config, own).and_then(|mcp| Ok((mcp, crate::ports::admin(&options.data, options.port, options.named, own, config.english)?)))
+    };
     let (mcp, admin) = match bound {
         Ok(bound) => bound,
         Err(error) => {

@@ -95,12 +95,25 @@ export class FakeSession implements AgentSession {
   /// What it was retuned to in place (the model and effort of each), and whether it can be (as Claude cannot for effort).
   retuned: [string | undefined, string | undefined][] = [];
   retunable = true;
+  /// The address of the station's tools it was given (one taken up: as the station before gave it).
+  toolsUrl: string;
 
   constructor(id: string, options: OpenOptions, events: (event: RuntimeEvent) => void, busy = false) {
     this.sessionId = id;
     this.options = options;
     this.events = events;
     this.busyNow = busy;
+    this.toolsUrl = options.mcpUrl;
+  }
+  /// The test has it say `text` (a text step of its own).
+  says(text: string) {
+    const id = `text-${next()}`;
+    this.events({ type: "live", event: { kind: "start", id, step: "text" } });
+    this.events({ type: "live", event: { kind: "delta", id, field: "text", text } });
+    this.events({ type: "live", event: { kind: "end", id } });
+  }
+  mcpUrl() {
+    return this.toolsUrl;
   }
   /// The test ends the running turn.
   end(outcome: TurnOutcome) {
@@ -142,7 +155,7 @@ export class FakeSession implements AgentSession {
     this.disposed = true;
   }
   snapshot() {
-    return { id: this.sessionId, busy: this.busyNow };
+    return { id: this.sessionId, busy: this.busyNow, mcpUrl: this.toolsUrl };
   }
   detach() {}
 }
@@ -177,9 +190,10 @@ export class FakeDriver implements AgentDriver {
     return session;
   }
   async adopt(options: OpenOptions, snapshot: unknown, events: (event: RuntimeEvent) => void) {
-    const handed = snapshot as { id: string; busy: boolean } | null;
+    const handed = snapshot as { id: string; busy: boolean; mcpUrl?: string } | null;
     if (!handed) throw new Error("no runner");
     const session = new FakeSession(handed.id, options, events, handed.busy);
+    if (handed.mcpUrl !== undefined) session.toolsUrl = handed.mcpUrl;
     this.sessions.push(session);
     return session;
   }
@@ -278,13 +292,13 @@ export class Rig {
   }
 
   /// A hub over this rig's store and config (another station's, after a restart: given its own drivers).
-  newHub(o: { chats: (id: string) => ChatSurface | undefined; link?: boolean; cold?: ColdStorage; drivers?: AgentDriver[]; internal?: boolean }) {
+  newHub(o: { chats: (id: string) => ChatSurface | undefined; link?: boolean; cold?: ColdStorage; drivers?: AgentDriver[]; internal?: boolean; mcpUrl?: string }) {
     return new Hub({
       config: () => this.config,
       store: this.store,
       chats: o.chats,
       drivers: o.drivers ?? [this.claude, this.codex],
-      mcpUrl: "http://127.0.0.1:1/mcp",
+      mcpUrl: o.mcpUrl ?? "http://127.0.0.1:1/mcp",
       internal: o.internal === false ? null : new InternalChat(),
       link: o.link ? (key) => `https://ember.test/o/ws/st/${key.replaceAll(":", "%3A")}` : undefined,
       runners: () => [],

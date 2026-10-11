@@ -44,6 +44,16 @@ fn same(a: &Path, b: &Path) -> bool {
     a.components().eq(b.components())
 }
 
+/// Whether `data` is the machine's own data directory (~/.stillfail, or ~/.ember not moved yet). Only its station
+/// takes the usual ports: one on another directory (a test's, a development station's) takes free ones, so it never
+/// keeps the machine's station off them.
+pub fn is_default(home: &Path, data: &Path) -> bool {
+    // Windows' paths are the same whatever their case (a drive letter given as c: or C:).
+    #[cfg(windows)]
+    let same = |a: &Path, b: &Path| a.to_string_lossy().trim_end_matches(['\\', '/']).eq_ignore_ascii_case(b.to_string_lossy().trim_end_matches(['\\', '/']));
+    [home.join(DATA_DIR), home.join(FORMER_DATA_DIR)].iter().any(|d| same(d, data))
+}
+
 fn exists(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok()
 }
@@ -194,6 +204,15 @@ mod tests {
         assert_eq!(std::fs::read_link(home.join(".ember")).unwrap(), home.join(".stillfail"));
         assert_eq!(data_dir(&home, None), home.join(".stillfail"));
         std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn only_the_home_data_directory_is_the_default() {
+        let home = PathBuf::from("/home/u");
+        assert!(is_default(&home, &home.join(".stillfail")));
+        assert!(is_default(&home, &home.join(".ember")));
+        assert!(!is_default(&home, &PathBuf::from("/tmp/scratchpad/inst")));
+        assert!(!is_default(&home, &home.join(".stillfail-dev")));
     }
 
     #[test]

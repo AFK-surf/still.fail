@@ -311,7 +311,11 @@ pub fn run(options: Options) -> i32 {
     };
     let _ = std::fs::remove_file(run.join("drained"));
     // Both at descriptors of 10 and up (keep_low_fds).
-    let bound = crate::ports::mcp(&config).and_then(|mcp| Ok((mcp, crate::ports::admin(&options.data, options.port, options.named, config.english)?)));
+    let bound = {
+        // Only the machine's own data directory has the usual ports (ports.rs).
+        let own = data::is_default(&data::home(), &options.data);
+        crate::ports::mcp(&options.data, &config, own).and_then(|mcp| Ok((mcp, crate::ports::admin(&options.data, options.port, options.named, own, config.english)?)))
+    };
     let (mcp, admin): (OwnedFd, OwnedFd) = match bound {
         Ok((mcp, admin)) => (mcp.into(), admin.into()),
         Err(error) => {

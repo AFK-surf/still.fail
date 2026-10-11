@@ -164,6 +164,7 @@
   "station.notice.failed": "这一轮出错：{error}",
   "station.notice.file": "（文件）",
   "station.notice.noResult": "这一轮没有给出结果就停了，回复可继续",
+  "station.notice.noResultSaid": "这一轮 agent 没有在聊天里回复，下面是它最后输出的文字，由 station 兜底转发（不是它发的帖子）；回复可继续：",
   "station.notice.rateLimit": "触发额度或限流，换个账号或模型会接着做，稍后回复也可继续：{error}",
   "station.notice.refused": "请求被 Anthropic 拒绝，通常是网络问题而不是登录问题：station 的出口地区不受支持，或者没有走代理（Claude Code 只认 HTTPS_PROXY / HTTP_PROXY，可以写进 profile 的环境变量）：{error}",
   "station.notice.stopped": "已停止当前任务",

@@ -1,5 +1,5 @@
 // Files the station keeps: where its data directory is, and writing them whole (a reader never sees half a file).
-import { closeSync, fsyncSync, mkdirSync, openSync, opendirSync, renameSync, writeSync } from "node:fs";
+import { closeSync, fsyncSync, mkdirSync, openSync, opendirSync, readFileSync, renameSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { tr, type Lang } from "./i18n.ts";
@@ -11,6 +11,34 @@ export function dataDir(args: string[]): string {
   const at = args.indexOf("--data");
   if (at >= 0 && args[at + 1]) return args[at + 1];
   return process.env.STILLFAIL_DATA || process.env.EMBER_DATA || join(homedir(), ".stillfail");
+}
+
+/// Whether `data` is the machine's own data directory (~/.stillfail, or ~/.ember not moved yet), as the launcher's
+/// data.rs `is_default`: only its station takes the usual ports (4750, 4760); one on another directory (a test's, a
+/// development station's) takes free ones, so it never keeps the machine's station off them.
+export function ownData(data: string, home = homedir()): boolean {
+  const key = (path: string) => platform.paths.key(platform.paths.clean(path));
+  return [".stillfail", ".ember"].some((d) => key(join(home, d)) === key(data));
+}
+
+/// Where the MCP endpoint's port is remembered (the launcher's ports.rs writes it too): agents a station leaves running
+/// for the next were told it, so the next takes it again when it is free.
+export const mcpPortFile = (data: string) => join(data, "run", "mcp.json");
+
+export function rememberedMcpPort(data: string): number | undefined {
+  try {
+    const port = JSON.parse(readFileSync(mcpPortFile(data), "utf8")).port;
+    return Number.isInteger(port) && port > 0 && port < 65536 ? port : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/// The ports to try, in order, for a listener of the station's own (no launcher): the one named alone; else the one
+/// remembered, then the usual one on the machine's own data directory, then any (0).
+export function portsToTry(named: number | undefined, remembered: number | undefined, usual: number, own: boolean): number[] {
+  if (named !== undefined) return [named];
+  return [...new Set([remembered, own ? usual : undefined, 0].filter((p): p is number => p !== undefined))];
 }
 
 /// The value after `flag` in argv, wherever it is (as the Rust station reads its flags).

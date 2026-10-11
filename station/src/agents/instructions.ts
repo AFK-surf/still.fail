@@ -96,6 +96,8 @@ export const GO_ON_AFTER_AUTH = `Your last turn stopped on an authentication err
 
 export const GO_ON_AFTER_SPENT = `Your last turn was cut off: the account it ran on hit its usage limit. You now run on another account (or model). Check where you were, then continue the work. Post only if people need to know.`;
 
+export const TOOLS_LOST = `Your last turn could not reach the station's tools (chat_post, chat_state and the rest failed or were not connected), so nothing you said reached anyone. The station restarted your process; the tools work again. Check where you were, then post what people still need to see (your answer, results, questions) and end the turn with a state as usual.`;
+
 export const RESUME_LOST = `Your earlier conversation could not be restored. Read the relevant threads with chat_history to catch up before answering.`;
 
 /// It goes on in a new runtime session: the earlier one is not taken up; it reads back what it needs from it.
