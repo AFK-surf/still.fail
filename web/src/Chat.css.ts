@@ -616,7 +616,7 @@ globalStyle(`${msgVideo}[data-unavailable] .${msgVideoName}`, {
 
 /** 忽略 under a post that asks (Chat.tsx AskDismiss): quiet words, as the line a settled decision leaves. */
 export const askDismiss = style({
-  display: "block", margin: "6px 0 0", padding: "0", border: "0", background: "none", font: "inherit", fontSize: vars.textMeta, lineHeight: "18px",
+  display: "block", alignSelf: "flex-start", width: "fit-content", margin: "6px 0 0", padding: "0", border: "0", background: "none", font: "inherit", fontSize: vars.textMeta, lineHeight: "18px", textAlign: "left",
   color: vars.subtle, cursor: "pointer", selectors: { "&:hover": { color: vars.text, textDecoration: "underline" } },
 });
 
