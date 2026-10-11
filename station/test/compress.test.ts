@@ -5,6 +5,8 @@ import { test } from "node:test";
 import { createZstdDecompress, zstdDecompressSync } from "node:zlib";
 import type { Answer } from "../src/api/request.ts";
 import { ZSTD, compressed } from "../src/mesh/compress.ts";
+import type { Stream } from "../src/mesh/native.ts";
+import { send } from "../src/mesh/serve.ts";
 
 const asks = { "accept-encoding": `gzip, ${ZSTD}` };
 const json = (body: unknown): Answer => ({ status: 200, headers: { "content-type": "application/json" }, body: Buffer.from(JSON.stringify(body)) });
@@ -75,4 +77,29 @@ test("an event stream is compressed event by event, each whole as it arrives, an
   read.close();
   await it.return?.();
   assert.equal(let_go, true);
+});
+
+test("an answer whose head cannot be written lets go of the stream it would have sent", async () => {
+  // The caller went while its answer was being made (GET /events reads the sidebar first): the events' follower made
+  // for it is let go of, not kept and told everything for good.
+  let let_go = 0;
+  const source: AsyncIterableIterator<Buffer> = {
+    [Symbol.asyncIterator]: () => source,
+    next: () => new Promise(() => {}),
+    return: async () => {
+      let_go++;
+      return { done: true, value: undefined };
+    },
+  };
+  const gone: Stream = {
+    read: async () => null,
+    write: async () => {
+      throw new Error("Cannot call write after a stream was destroyed");
+    },
+    finish: async () => {},
+    stopped: () => new Promise(() => {}),
+    reset: async () => {},
+  };
+  await assert.rejects(send(gone, { status: 200, headers: { "content-type": "text/event-stream" }, body: source }), /destroyed/);
+  assert.equal(let_go, 1);
 });

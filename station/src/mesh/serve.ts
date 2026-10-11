@@ -4,7 +4,7 @@
 // one request: a JSON head line `{method, path, headers}`, then the body until the stream finishes, answered by a
 // JSON head line `{status, headers}` and the response body.
 import type { Admin } from "../api/admin.ts";
-import { langOfCore, queryPairs } from "../api/request.ts";
+import { type Answer, langOfCore, queryPairs } from "../api/request.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
@@ -291,25 +291,34 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     lang: langOfCore(headers),
   });
   // Compressed, for a client that asks so (compress.ts).
-  const response = await compressed(handled, headers, rest);
-  await writeLine(stream, { status: response.status, headers: response.headers });
-  if (Buffer.isBuffer(response.body)) await stream.write(response.body);
-  else {
-    // A stream (GET /events) ends when the caller stops reading or goes, even while nothing is being written to it.
-    const chunks = response.body[Symbol.asyncIterator]();
-    const end = () => void chunks.return?.();
-    stream.stopped().then(end, end);
-    try {
-      for (;;) {
-        const next = await chunks.next();
-        if (next.done) break;
-        await stream.write(next.value);
-      }
-    } finally {
-      end();
-    }
-  }
+  await send(stream, await compressed(handled, headers, rest));
   await stream.finish();
+}
+
+/// An answer onto its stream: its head line, then its body. A body that is a stream (GET /events) ends when the caller
+/// stops reading or goes, even while nothing is being written to it, and is let go of however the writing ends: one
+/// whose head could not be written (the caller gone while its answer was being made) stayed a follower of the events
+/// for good, told everything into a queue nobody read.
+export async function send(stream: Stream, response: Answer) {
+  const head = { status: response.status, headers: response.headers };
+  if (Buffer.isBuffer(response.body)) {
+    await writeLine(stream, head);
+    await stream.write(response.body);
+    return;
+  }
+  const chunks = response.body[Symbol.asyncIterator]();
+  const end = () => void chunks.return?.();
+  stream.stopped().then(end, end);
+  try {
+    await writeLine(stream, head);
+    for (;;) {
+      const next = await chunks.next();
+      if (next.done) break;
+      await stream.write(next.value);
+    }
+  } finally {
+    end();
+  }
 }
 
 /// A WebSocket of a web service on this machine, for a preview's page (preview.ts `openSocket`): answered 101 once the
