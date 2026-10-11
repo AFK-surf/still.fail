@@ -45,17 +45,20 @@ export const agentMark = style({
   "@media": { "(prefers-reduced-motion: reduce)": { selectors: { "&[data-badge=\"run\"]::before": { animation: "none" } } } },
 });
 /**
- * With the station it runs on: one tile, as tall, the maker's part square, the station's (its icon or its name) after it;
- * with a badge on its corner, room enough that the badge covers none of the station's.
+ * With the station it runs on: one tile, as tall, the maker's part square, the station's (its icon or its name) after it,
+ * centred in its own part; a badge sits further out on the corner, so it covers none of the station's.
  */
 export const agentMarkJoined = style({
   display: "inline-flex", width: "auto", gap: "0", color: vars.muted, fontSize: vars.textMeta, lineHeight: "1", whiteSpace: "nowrap",
+  selectors: {
+    "&[data-badge]::after": { right: "-7px" },
+    "&[data-badge=\"run\"]::before": { right: "-5px" },
+  },
 });
 // Each part rounded all round as the tile is, so a tint on one (pointed at) is a tile of its own within it.
 const joinedCorner = `calc(var(--mark) * .3 * ${vars.cornerScale})`;
 globalStyle(`${agentMarkJoined} > *`, { borderRadius: joinedCorner, cornerShape: vars.cornerShape });
-globalStyle(`${agentMarkJoined} > :last-child`, { paddingLeft: "2px", paddingRight: "calc(var(--mark) * .19)" });
-globalStyle(`${agentMarkJoined}[data-badge] > :last-child`, { paddingRight: "calc(var(--mark) * .19 + 7px)" });
+globalStyle(`${agentMarkJoined} > :last-child`, { paddingInline: "calc(var(--mark) * .19 + 1px)" });
 export const empty = style({
   flex: "1", display: "grid", placeContent: "center", justifyItems: "center", gap: "6px", padding: "40px",
   textAlign: "center", color: vars.muted,
