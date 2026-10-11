@@ -16,6 +16,7 @@ test("words_as_the_clients_had_them", () => {
   assert.equal(f.compactNumber(1200), "1.2K");
   assert.equal(f.compactNumber(70_600), "70.6K");
   assert.equal(f.compactNumber(3_000_000), "3M");
+  assert.equal(f.compactNumber(2_413_900_000), "2.4B");
   assert.equal(f.duration(850), "850ms");
   assert.equal(f.duration(185_000), "3 分 5 秒");
   const now = 1_790_467_200_000;
