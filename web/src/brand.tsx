@@ -43,25 +43,28 @@ export function Lockup({ height = 30, alt = NAME }: { height?: number; alt?: str
   return <Themed name={LOCKUP.name} width={Math.round((height * LOCKUP.width) / 60)} height={height} alt={alt} className={css.brandLockup} />;
 }
 
+/** The desktop app's window with no title bar (macOS: its buttons are in the page's top row, no room for the name); Windows has the system's. */
+const titleless = () => !!window.stillfailDesktop && window.stillfailDesktop.frame !== "system";
+
 /**
  * The sidebar's top. The buddy holds the sidebar open: it stands on the sidebar's edge pushing it, and a click closes
  * the sidebar while it hops to rest at the top left (beside the window's buttons in the desktop app); a click there
- * opens it again. On the web the name stays at the top; on a phone, where the sidebar is a page, it is the lockup.
+ * opens it again. On the web and in the Windows app the name stays at the top; on a phone, where the sidebar is a page, it is the lockup.
  */
 export function SidebarBrand() {
   return (
     <>
-      {!window.stillfailDesktop && <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />}
-      {!window.stillfailDesktop && <span className={css.brandPhone}><Lockup /></span>}
+      {!titleless() && <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />}
+      {!titleless() && <span className={css.brandPhone}><Lockup /></span>}
       <SidebarBuddy />
       <UpdateButton />
     </>
   );
 }
 
-/** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app, whose window has its title bar there. */
+/** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app on macOS, whose window has its buttons there. */
 export function PageBrand() {
-  return window.stillfailDesktop ? null : <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />;
+  return titleless() ? null : <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />;
 }
 
 type Pose = "push" | "hop" | "rest";
