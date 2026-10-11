@@ -84,4 +84,21 @@ class ChatAsksTest {
         rule.onNodeWithText("第 24 条", substring = true).assertIsDisplayed()
         rule.onNodeWithContentDescription(bell).assertDoesNotExist()
     }
+
+    /** The post that asks has 忽略 under it: tapped, the decision is let go (`decision.dismiss`) and the word is gone. */
+    @Test
+    fun thePostThatAsksLetsItGo() {
+        val h = Harness(rule)
+        val asking = long.map { if (it.seq == 24L) it.copy(asked = true) else it }
+        h.fake.put(topic, Fixtures.chat(asking).copy(asks = listOf(ChatAsk(seq = 24u, card = false, mine = true, text = want))))
+        h.launch(listOf(Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        val dismiss = rule.onNodeWithText("忽略").assertIsDisplayed()
+        val shot = h.record("asks-dismiss")
+        shot.frame()
+        shot.end()
+        dismiss.performClick()
+        h.settle()
+        rule.onNodeWithText("忽略").assertDoesNotExist()
+        org.junit.Assert.assertTrue(h.fake.calls.any { it.first == "decision.dismiss" })
+    }
 }
