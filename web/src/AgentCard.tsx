@@ -1,11 +1,14 @@
-// An agent of the chat in brief, over its avatar while it is pointed at (Hover, Peeks.tsx): what it runs, where it
-// stands and for how long, and what the core says of it (the `agentCard` view, views/brief.ts): what it has done, cost
-// and used, its account and what is left of it, its jobs, what is wrong.
+// An agent of the chat in brief, over its avatar while it is pointed at (Hover, Peeks.tsx), the same card wherever the
+// avatar is (beside its messages, in the chat's bar): what it runs, where it stands and for how long, what it does now
+// (with a stop for it alone), and what the core says of it (the `agentCard` view, views/brief.ts): what it has done,
+// cost and used, its account and what is left of it, its jobs, what is wrong.
 import { createContext, useContext, type ReactElement } from "react";
-import { useAgentCard, type ChatAgent } from "./api.ts";
+import { useAgentCard, useApi, useLives, type ChatAgent } from "./api.ts";
 import { useStation } from "./station.tsx";
 import { Hover } from "./Peeks.tsx";
 import { AgentMark, Tip } from "./ui.tsx";
+import { Stop } from "./icons.tsx";
+import { useAct } from "./toast.tsx";
 import { EdgeChip } from "./components.tsx";
 import { t } from "./i18n.ts";
 import { Elapsed, Waited } from "./Chat.tsx";
@@ -17,20 +20,25 @@ export const ChatAgents = createContext<readonly ChatAgent[]>([]);
 /** `children` (an agent's avatar) with its card while it is pointed at; as it is for an agent not of this chat. */
 export function AgentHover({ agent, children }: { agent: string | null | undefined; children: ReactElement }) {
   const agents = useContext(ChatAgents);
-  if (!agent || !agents.some((a) => a.session.key === agent)) return children;
-  return <Hover tile content={<AgentCard agent={agent} />}>{children}</Hover>;
+  const of = agent ? agents.find((a) => a.session.key === agent) : undefined;
+  if (!of) return children;
+  return <Hover tile content={<AgentCard agent={of} />}>{children}</Hover>;
 }
 
 /**
- * What it runs and where it stands now (for how long), then what the core says of it (the `agentCard` view): the
+ * What it runs (with a stop for it alone while it works) and where it stands now (for how long), what it does now,
+ * then what the core says of it (the `agentCard` view): the
  * figures that say most (cost, the cache's hit rate, how full its context is) large, side by side; its account with
  * what is left of it; the rest (its turns, tokens) in a quiet line; its jobs and what is wrong under them.
  */
-function AgentCard({ agent: key }: { agent: string }) {
-  const agent = useContext(ChatAgents).find((a) => a.session.key === key);
-  const card = useAgentCard(useStation().address, key).value;
-  if (!agent) return null;
+export function AgentCard({ agent }: { agent: ChatAgent }) {
   const { session: s, wait } = agent;
+  const station = useStation().address;
+  const card = useAgentCard(station, s.key).value;
+  const api = useApi();
+  const act = useAct();
+  const working = agent.status === "running" || agent.status === "queued";
+  const now = useLives(station, [s.key]).get(s.key)?.activity?.now?.text;
   const account = agent.account ?? agent.profile;
   const quota = agent.account?.quota?.state === "ok" ? agent.account.quota.windows : [];
   const context = card?.context;
@@ -40,6 +48,12 @@ function AgentCard({ agent: key }: { agent: string }) {
       <div className={css.head}>
         <AgentMark maker={s.maker} runtime={s.runtime} badge={agent.badge} badgeText={s.badgeText} size={28} />
         <span className={css.name}>{s.agentText}</span>
+        {working && (
+          <button type="button" className={css.stop}
+            onClick={() => act(api.stop(s.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"))}>
+            <Stop size={11} fill="currentColor" />{t("web-pages.chat.stopTurn")}
+          </button>
+        )}
       </div>
       <p className={css.status} data-tone={s.tone}>
         {s.statusText}
@@ -47,6 +61,7 @@ function AgentCard({ agent: key }: { agent: string }) {
           ? <span className={css.elapsed}> · <Waited since={wait.since} seconds={wait.seconds} /></span>
           : agent.since ? <span className={css.elapsed}> · <Elapsed since={agent.since} /></span> : null}
       </p>
+      {working && now && <p className={css.now}>{now}</p>}
       {(card?.cost || card?.cache || context) && (
         <div className={css.tiles}>
           {card?.cost && <span className={css.tile}><b>{card.cost}</b><small>{t("web-main.chat.agentCard.cost")}</small></span>}
