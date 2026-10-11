@@ -33,6 +33,21 @@ test("no code outside src/platform/ asks which machine this is", () => {
   assert.deepEqual(found, [], "ask platform (src/platform/index.ts) instead:\n" + found.join("\n"));
 });
 
+test("whether a path is rooted is the machine's to say, not a leading /", () => {
+  // `p.startsWith("/") ? p : join(base, p)` takes C:\… for relative on Windows and joins it again (a borrowed
+  // subscription's home was made at <data>\C:\…\homes\…): ops/paths.ts joinPath, or path's isAbsolute.
+  const joinsUnlessSlash = /startsWith\(["'`]\/["'`]\)\s*\?\s*[\w.]+\s*:\s*join\(/;
+  const found: string[] = [];
+  for (const file of files(src)) {
+    const rel = relative(src, file).replaceAll("\\", "/");
+    if (rel.startsWith("platform/")) continue;
+    readFileSync(file, "utf8").split("\n").forEach((line, i) => {
+      if (joinsUnlessSlash.test(line)) found.push(`src/${rel}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(found, [], "join with ops/paths.ts joinPath instead:\n" + found.join("\n"));
+});
+
 test("a group of processes is started and ended in ops/processes.ts only", () => {
   // The runner starts apart from the rest (agents/runner.ts): it is no group of a command's, but what agents run under.
   const allowed = new Set(["ops/processes.ts", "agents/runner.ts"]);
