@@ -50,4 +50,3 @@ export const mComposerOffline = style({ margin: "0", padding: "2px 8px", fontSiz
 export const mComposerError = style({ margin: "0", padding: "0 6px", fontSize: vars.textCaption });
 
 /** What is said on top of the capsule (the chat's waiting): a little inset, just over it. */
-export const mComposerAbove = style({ margin: "0 10px 6px" });

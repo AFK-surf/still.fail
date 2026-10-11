@@ -611,19 +611,21 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     motion.scope = scope
     val jumpTo = rememberJump(list, rows, motion)
     val accent = chatInk().accent
-    // Whether every card waiting to be decided shows in the list (web Chat.tsx useAsksShown): nothing is said of them
-    // over the composer's field then. One with no card, or whose post is not loaded, does not.
-    val cards = view.asks.orEmpty().takeIf { all -> all.isNotEmpty() && all.all { it.card } }
-        ?.map { a -> rows.firstNotNullOfOrNull { r -> (r as? Entry.Said)?.takeIf { it.m.seq == a.seq.toLong() }?.id } }
-    LaunchedEffect(cards) {
-        val ids = cards.orEmpty().filterNotNull()
-        if (cards == null || ids.size < cards.size) { host.asksShow = false; return@LaunchedEffect }
-        snapshotFlow { list.layoutInfo.visibleItemsInfo.map { it.key }.containsAll(ids) }.collect { host.asksShow = it }
+    // What waits to be decided (the core's `asks`) whose post does not show in the list (web Chat.tsx useAsksShown): a
+    // bell over the list leads to it (JumpToAsk). One whose post is not loaded does not show.
+    val asks = if (view.archived == true || thread == null) emptyList() else view.asks.orEmpty()
+    val posts = asks.map { a -> rows.firstNotNullOfOrNull { r -> (r as? Entry.Said)?.takeIf { it.m.seq == a.seq.toLong() }?.id } }
+    var asksShow by remember { mutableStateOf(false) }
+    LaunchedEffect(posts) {
+        val ids = posts.filterNotNull()
+        if (ids.size < posts.size) { asksShow = false; return@LaunchedEffect }
+        snapshotFlow { list.layoutInfo.visibleItemsInfo.map { it.key }.containsAll(ids) }.collect { asksShow = it }
     }
+    var askTurn by remember { mutableIntStateOf(0) }
     // The page before asked for (once per page: here, or near the top below).
     val asked = remember { mutableStateOf<Long?>(null) }
-    // Opened at a message (a row's state line: what it is about), or asked to show one while open (what waits to be
-    // decided, tapped over the composer's field: Composer.kt AsksNotice), once the list is in place: there, flashing; the
+    // Opened at a message (a row's state line: what it is about), or asked to show one while open (the bell that leads to what
+    // waits to be decided: JumpToAsk), once the list is in place: there, flashing; the
     // pages before brought in until it is loaded (none left, or it is gone: where the chat opened).
     // Whether the unread line was gone to (or is not to be: the chat opened at a message asked for, below).
     val lineShown = remember { mutableStateOf(false) }
@@ -885,10 +887,17 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         // chat's latest page in place of what shows and goes to its end at once.
         // Its latest page asked for and not come yet: a spinner in it, not asked again.
         val fetching = thread != null && app.isDoing("chat.latest", "station" to api.station, "thread" to thread.id)
-        JumpToLatest(awayFromEnd(list) || short, thread?.unread?.takeIf { short && it > 0 }, haze, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = bottom + 2.dp), busy = fetching) {
+        val toEnd = awayFromEnd(list) || short
+        JumpToLatest(toEnd, thread?.unread?.takeIf { short && it > 0 }, haze, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = bottom + 2.dp), busy = fetching) {
             if (!short || thread == null) return@JumpToLatest follow.jump()
             toLatest[0] = true
             try { api.latest(thread.id) } catch (e: CoreException) { toLatest[0] = false; app.toast = t("android-chat.chat.latest.failed", "error" to errorText(e)) }
+        }
+        // What waits to be decided and does not show: a bell there, no words (over the way to the end when both show),
+        // leading to its post, then the next one's, round again.
+        val lift by androidx.compose.animation.core.animateDpAsState(if (toEnd) 44.dp else 0.dp, tween(200, easing = Ease.Standard), label = "ask-lift")
+        JumpToAsk(asks.isNotEmpty() && !asksShow, haze, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = bottom + 2.dp + lift)) {
+            asks.getOrNull(askTurn % maxOf(asks.size, 1))?.let { host.goTo = it.seq.toLong(); askTurn++ }
         }
       }
         // The avatar flying with a message out of it: over the list, under the bars and the composer (as the web's, in
@@ -955,6 +964,25 @@ private fun JumpToLatest(shown: Boolean, count: Long?, haze: HazeState, modifier
             Text(t("android-chat.chat.newMessages", "n" to n), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1)
         }
     }
+}
+
+/** The way to what waits to be decided in the chat: a bell, as the way to its end (JumpToLatest) comes and goes. */
+@Composable
+private fun JumpToAsk(shown: Boolean, haze: HazeState, modifier: Modifier, onJump: () -> Unit) {
+    val fade by animateFloatAsState(if (shown) 1f else 0f, tween(if (shown) 180 else 150, easing = Ease.Css), label = "ask-fade")
+    val grow by animateFloatAsState(if (shown) 1f else 0f, tween(if (shown) 220 else 180, easing = Ease.Standard), label = "ask-grow")
+    val rise = with(LocalDensity.current) { 18.dp.toPx() }
+    if (fade == 0f && grow == 0f) return
+    Box(
+        modifier.graphicsLayer {
+            alpha = fade
+            translationY = rise * (1f - grow)
+            scaleX = 0.6f + 0.4f * grow; scaleY = scaleX
+        }.size(36.dp).floating(haze, CircleShape)
+            .clickable(enabled = shown) { onJump() }
+            .semantics { contentDescription = t("android-chat.asks.go") },
+        contentAlignment = Alignment.Center,
+    ) { IconIn(Icons.Bell, 18.dp, C.ink) }
 }
 
 /** Over the first message that was unread when the chat opened: the accent, a rule each side (web Chat.css.ts → chatUnreadLine). */

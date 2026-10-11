@@ -56,6 +56,10 @@ export const mJump = style({
     },
   },
 });
+/** The way to what waits to be decided (Chat.tsx): as mJump, over it when both show. */
+export const mJumpAsk = style({
+  selectors: { "&[data-above]": { bottom: "calc(var(--m-composer-room) + var(--asks-height, 0px) + 46px)" } },
+});
 export const mComposerBar = style({
   display: "flex", alignItems: "flex-end", gap: "2px",
   selectors: { "&[data-expanded]": { display: "grid", gridTemplateColumns: "36px 1fr 36px", rowGap: "4px" } },

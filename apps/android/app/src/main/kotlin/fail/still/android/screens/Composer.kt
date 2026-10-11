@@ -91,7 +91,6 @@ import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -109,7 +108,6 @@ import dev.chrisbanes.haze.HazeState
 import fail.still.android.AppState
 import fail.still.android.LocalApp
 import fail.still.android.data.Attachment
-import fail.still.android.data.ChatAsk
 import fail.still.android.data.ChatOf
 import fail.still.android.data.ChatView
 import fail.still.android.data.ChatSearchView
@@ -850,38 +848,6 @@ private fun ArchiveNotice(offline: Boolean, restore: suspend () -> Unit) {
 }
 
 /**
- * What waits to be decided in the chat (the core's `asks`: a card no one has answered, or what an agent needs a person
- * for), over the field: the next of them, all of it, wrapped; tapped, the list goes to its post (Host.goTo: loaded first when it is not), then to the one
- * after it the next time, round again. One with no card to let it go on its post has 忽略 here. Web Chat.tsx AsksBar.
- */
-@Composable
-private fun AsksNotice(asks: List<ChatAsk>, host: Host, dismiss: (seq: Long, failed: () -> Unit) -> Unit) {
-    var turn by remember { mutableIntStateOf(0) }
-    var gone by remember { mutableStateOf(emptyList<ULong>()) }
-    val left = asks.filter { it.seq !in gone }
-    val next = left.getOrNull(turn % maxOf(left.size, 1)) ?: return
-    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            Modifier.weight(1f).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { host.goTo = next.seq.toLong(); turn++ },
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            IconIn(Icons.Bell, 14.dp, C.ink)
-            Text(
-                buildAnnotatedString {
-                    pushStyle(SpanStyle(fontWeight = FontWeight.SemiBold)); append(t("android-chat.asks.lead")); pop()
-                    if (next.text.isNotEmpty()) append("  ${next.text}")
-                },
-                fontSize = 13.sp, lineHeight = 19.sp, color = C.ink,
-            )
-        }
-        if (!next.card) Text(t("android-chat.asks.dismiss"), fontSize = 13.sp, color = C.muted, modifier = Modifier.clickable {
-            gone = gone + next.seq
-            dismiss(next.seq.toLong()) { gone = gone - next.seq }
-        })
-    }
-}
-
-/**
  * What the chat's composer (the host's: ChatHost.kt) writes to. The composer empties at once: the message lives in the
  * chat's outbox until the station has it (a failure shows there too), its words flying from the composer to its place in
  * the list (Host.sending). Before the agent has a chat, what is sent waits in the outbox while the core has the station
@@ -903,10 +869,6 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
         notices = {
             if (archived) ArchiveNotice(view.offline) { api.setArchived(thread?.id, (of as? ChatOf.Session)?.key ?: keeper ?: "", false) }
             if (view.offline) Text(t("android-chat.composer.offline"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
-            val asks = view.asks.orEmpty()
-            if (!archived && thread != null && asks.isNotEmpty() && !host.asksShow) AsksNotice(asks, host) { seq, failed ->
-                app.act(t("android-misc.decisions.dismissWhat"), failed = failed) { api.dismissDecision(thread.id, seq) }
-            }
         },
         onPlus = { openAttach(app, launchers) },
         // Typing starts the session's runtime, so a cold start overlaps the writing.

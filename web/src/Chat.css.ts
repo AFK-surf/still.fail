@@ -614,27 +614,18 @@ globalStyle(`${msgVideo}[data-unavailable] .${msgVideoName}`, {
 });
 
 
+/** The way to what waits to be decided (Chat.tsx ToAsk), as the way to the chat's end (chatToBottom) and over it when both show. */
+export const chatToAsk = style({
+  selectors: {
+    "&[data-above]": { bottom: "54px" },
+    [`${chat}[data-under-composer] &[data-above]`]: { bottom: "calc(52px + var(--composer-room) + var(--asks-height, 0px))" },
+  },
+});
+
 /** What the archive check made of the chat, under its agent's all-done post: a quiet line; red when the check failed. */
 export const archiveCheck = style({
   margin: "6px 0 0", fontSize: vars.textMeta, color: vars.muted, lineHeight: "18px",
   selectors: { "&[data-failed]": { color: vars.red } },
-});
-
-/** What waits to be decided in the chat (Chat.tsx AsksBar): on top of the composer (composerAbove), all of it, wrapped. */
-export const waitingBar = style({
-  display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 6px 6px 12px", borderRadius: "10px",
-  background: vars.amberBg, color: vars.text, fontSize: vars.textUi, lineHeight: vars.leadingUi,
-});
-export const waitingText = style({
-  flex: "1", minWidth: "0", display: "flex", alignItems: "flex-start", gap: "6px", padding: "0", border: "0", background: "none",
-  color: "inherit", font: "inherit", textAlign: "left", cursor: "pointer", overflowWrap: "anywhere",
-});
-globalStyle(`${waitingText} > svg`, { flex: "none", marginTop: "3px", color: vars.amber });
-globalStyle(`${waitingText} b`, { marginRight: "6px", fontWeight: "600" });
-globalStyle(`${waitingText}:hover > span > span`, { textDecoration: "underline" });
-export const waitingDismiss = style({
-  flex: "none", padding: "0 8px", lineHeight: vars.leadingUi, border: "0", borderRadius: "7px", background: "none", color: vars.muted, font: "inherit",
-  fontSize: vars.textMeta, cursor: "pointer", selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
 
 /** What is said right on top of the composer's box (ComposerProps `above`): as wide as it, a little inset. */

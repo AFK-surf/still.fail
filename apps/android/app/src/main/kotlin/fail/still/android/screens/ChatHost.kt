@@ -254,11 +254,8 @@ class Host {
     internal var graphics: GraphicsContext? = null
     /** The composer's file tiles, by the draft's id for each. */
     internal val tiles = mutableMapOf<Long, Tile>()
-    /** Every card waiting to be decided in the chat shows in its list, its options there to be picked: said by the list;
-     * what the composer says of them (Composer.kt AsksNotice) is left out then. */
-    internal var asksShow by mutableStateOf(false)
-    /** A message (seq) to show once the chat's list is in place (Screen.Chat.at), or now that it is (what waits to be
-     * decided, tapped over the composer's field: Composer.kt AsksNotice), the pages before it brought in. */
+    /** A message (seq) to show once the chat's list is in place (Screen.Chat.at), or now that it is (the bell that leads to
+     * what waits to be decided: Chat.kt JumpToAsk), the pages before it brought in. */
     internal var goTo by mutableStateOf<Long?>(null)
     /** The words to mark in that message (opened from a search, Search.kt), instead of flashing it. */
     internal var goToWords: List<String> = emptyList()

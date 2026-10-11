@@ -14,7 +14,8 @@ import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
-import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, Copy, External, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
+import { jumpTo } from "../jumpTo.ts";
+import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, External, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
@@ -194,6 +195,9 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
 }) {
   const app = useApp();
   const rows = useMessageList(list, floor, view, `${here.station}:${view.thread?.id ?? here.key}`, lives);
+  const asks = useAsksShown(list, view);
+  const asking = asks.length > 0 && !!view.thread;
+  const [turn, setTurn] = useState(0);
   // Sent to by the page's key until its thread is known (a chat made here, or the agent's: useComposer).
   const to = view.thread?.id ?? here.key;
   const images = () => chatImages([...rows.messages, ...view.outbox.map((o) => ({ authorKind: "person", ...o }))], (f) => ownerIn(view, f));
@@ -257,6 +261,9 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
       {/* Short of the chat's end (a window of it), with how many new messages wait there. */}
       <button type="button" className={`${css.mJump} ${pagesCss.mFloating}`} data-shown={rows.away || undefined} data-count={rows.waiting > 0 || undefined}
         aria-label={t("web-mobile.chat.toLatest")} onClick={rows.toEnd}><ArrowDown size={18} />{rows.waiting > 0 && <span>{t("web-mobile.chat.newMessages", { n: rows.waiting })}</span>}</button>
+      {/* What waits to be decided and does not show: a bell there (over the way to the end when both show), leading to its post, then the next one's. */}
+      <button type="button" className={`${css.mJump} ${css.mJumpAsk} ${pagesCss.mFloating}`} data-shown={asking || undefined} data-above={rows.away || undefined}
+        aria-label={t("web-main.chat.asks.go")} onClick={() => { const next = asks[turn % asks.length]; if (next && view.thread) { jumpTo({ station: here.station, thread: view.thread.id, seq: next.seq }); setTurn((n) => n + 1); } }}><Bell size={18} /></button>
     </OpenFile.Provider>
   );
 }
@@ -409,7 +416,6 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
 function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
   const api = useApi();
   const keeper = view.agents[0]?.session.key ?? null;
-  const asks = useAsksShown(list, view);
   const warmed = useRef(0);
   const send = (draft: Draft) => {
     if (view.offline || view.archived) return;
@@ -426,7 +432,6 @@ function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => vo
   };
   useLayoutEffect(() => use({
     station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : t("web-mobile.chat.placeholder"), offline: view.offline, archived: !!view.archived, send,
-    asks: asks.length > 0 && view.thread ? { thread: view.thread.id, asks } : null,
     restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {
