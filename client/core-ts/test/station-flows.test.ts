@@ -191,6 +191,66 @@ test("a_station_the_cloud_says_is_not_online_is_tried_seldom_and_at_once_when_it
   core.close();
 });
 
+test("a_station_that_was_up_is_tried_again_at_once_though_the_cloud_says_it_is_not_online", async () => {
+  // The cloud hears of a station on a way of its own: it says the station is not online while its stream here is open.
+  const { host, core, end, push } = await started();
+  const tries = () => host.requests.filter((r) => r.url.includes("/admin/api/events")).length;
+  host.socketSend("/v1/events", JSON.stringify({ type: "station", workspace: "ws", id: "st", online: false }));
+  await host.settle();
+  const before = tries();
+  // Its stream ends: opened again as one coming back, not left OFFLINE_RETRY_MS.
+  end();
+  await host.time.pass(RECONNECT_MS + 50, 50);
+  assert.equal(tries(), before + 1);
+  assert.equal(core.inner.data.record("link", ST), "online");
+  // And what the agent says comes as it is said.
+  push("thread", { id: 7, entries: [entry(4, "来了")] });
+  await host.settle();
+  assert.deepEqual([...core.inner.data.logRange("entry", ST, "7", 4, 4).keys()], [4]);
+  core.close();
+});
+
+test("a_station_that_answers_a_request_has_its_stream_tried_now_not_when_its_wait_ends", async () => {
+  // Not reached while the cloud says it is not online: tried again in OFFLINE_RETRY_MS.
+  const answers = { ...base(), "POST /threads/7/messages": { n: 4 }, "GET /threads/7/entries?limit=50": { last: 4, entries: entries(1, 4) } };
+  const { host, core, gate, push } = await started(answers, 0, undefined, (s) => {
+    s.gate.stream = "fail";
+    s.cloud.online = false;
+  });
+  const tries = () => host.requests.filter((r) => r.url.includes("/admin/api/events")).length;
+  await host.time.pass(RECONNECT_MAX_MS, 1_000);
+  const before = tries();
+  // A person's message goes through (the station is there after all): its stream is opened now.
+  gate.stream = "open";
+  assert.equal(await run(core.inner.stations.post(ST, 7, { text: "在吗" }, null)), 4);
+  await host.time.pass(1_000, 100);
+  assert.equal(tries(), before + 1);
+  assert.equal(core.inner.data.record("link", ST), "online");
+  // What the agent says after it comes as it is said, without another message asked for.
+  push("thread", { id: 7, entries: [entry(5, "在")] });
+  await host.settle();
+  assert.deepEqual([...core.inner.data.logRange("entry", ST, "7", 5, 5).keys()], [5]);
+  core.close();
+});
+
+test("a_station_the_cloud_lists_online_again_is_tried_at_once_though_its_event_went_by", async () => {
+  const { host, core, gate, cloud } = await started(base(), 0, undefined, (s) => {
+    s.gate.stream = "fail";
+    s.cloud.online = false;
+  });
+  const tries = () => host.requests.filter((r) => r.url.includes("/admin/api/events")).length;
+  await host.time.pass(RECONNECT_MAX_MS, 1_000);
+  const before = tries();
+  // The workspace read anew (its socket was down as the station came back) lists it online.
+  gate.stream = "open";
+  cloud.online = true;
+  host.socketSend("/v1/events", JSON.stringify({ type: "workspace", id: "ws" }));
+  await host.time.pass(1_000, 100);
+  assert.equal(tries(), before + 1);
+  assert.equal(core.inner.data.record("link", ST), "online");
+  core.close();
+});
+
 test("a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks", async () => {
   const { host, core, gate } = await started(base(), 0, undefined, (s) => (s.gate.stream = "fail"));
   const ui = core.connect();

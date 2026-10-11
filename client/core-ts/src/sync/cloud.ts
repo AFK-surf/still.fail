@@ -183,7 +183,15 @@ export class CloudSync {
       if (answer._tag === "Success") {
         this.errors.delete(id);
         this.forgetGoneStations(id, answer.success);
+        // Stations it said were not online and now says are (their `station` event went by while the socket was
+        // down): tried now, as when the event says so.
+        const was = core.data.shared(topic);
+        const offline = new Set((isObject(was) && Array.isArray(was.stations) ? was.stations : []).flatMap((s) => (isObject(s) && typeof s.id === "string" && s.online === false ? [s.id] : [])));
         core.data.set(topic, answer.success);
+        const now = answer.success;
+        for (const s of isObject(now) && Array.isArray(now.stations) ? now.stations : []) {
+          if (isObject(s) && typeof s.id === "string" && s.online === true && offline.has(s.id)) core.stations?.cameOnline(`${id}/${s.id}`);
+        }
         this.onReach?.();
       } else {
         const error = answer.failure;

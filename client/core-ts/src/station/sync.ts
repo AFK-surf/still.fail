@@ -134,6 +134,8 @@ export class Link {
   replaced: Fiber.Fiber<void, never> | null = null;
   /// When the open stream last gave anything; null while none is open.
   heard: number | null = null;
+  /// When the station last answered a request (2xx); null until one is.
+  answered: number | null = null;
   /// The last event its streams gave, by its id: the station's run and its number in it (a station from before has
   /// none). A stream taking over from another asks for what came after it (`since`).
   lastEvent: { run: string; n: number } | null = null;
@@ -189,6 +191,7 @@ export class StationsSync {
   constructor(core: Inner, wire: StationWire) {
     this.#core = core;
     this.requests = new Requests(core, wire);
+    this.requests.onAnswered = (station) => this.#answered(station.toString());
   }
 
   get wire(): StationWire {
@@ -221,6 +224,16 @@ export class StationsSync {
     if (!back) return;
     this.#backs.delete(address);
     Deferred.doneUnsafe(back, Effect.void);
+  }
+
+  /// The station answered a request: it is reached, and its stream waiting to be tried again (for as long as
+  /// OFFLINE_RETRY_MS) is tried now. A person's message went through and what it brought was read, while what the
+  /// agent said after it stayed unsaid until the wait was over.
+  #answered(address: string): void {
+    const link = this.#links.get(address);
+    if (!link) return;
+    link.answered = this.#core.host.nowMs();
+    if (link.heard === null) this.cameOnline(address);
   }
 
   /// Whether still.fail cloud says the station is not online (its workspace as held lists it so).
@@ -414,6 +427,7 @@ export class StationsSync {
             span.set("stillfail.previous.events", previous.events);
           }
         }
+        const tried = core.host.nowMs();
         // Each try in a scope of its own: the stream closes with it.
         const ended = yield* Effect.scoped(
           Effect.gen(function* () {
@@ -541,9 +555,14 @@ export class StationsSync {
           if (ended.again) continue;
         } else previous = { why: ended.failed, lasted: 0, bytes: 0, read: 0, events: 0 };
         // Not reached: less and less often, and seldom while still.fail cloud says it is not online or it has not been
-        // reached for long. A UI back after being away wants it now, and so does the cloud saying it is back.
-        const offline = self.#cloudSaysOffline(address) || misses >= LONG_MISSES;
-        const wait = offline ? OFFLINE_RETRY_MS : Math.min(RECONNECT_MS * 2 ** Math.min(Math.max(misses - 1, 0), 8), RECONNECT_MAX_MS);
+        // reached for long. A UI back after being away wants it now, and so does the cloud saying it is back, or the
+        // station answering a request. One that was up is coming back for MISSES tries whatever the cloud says (the
+        // cloud hears of a station on another way than this one: a station whose stream had just ended was left
+        // OFFLINE_RETRY_MS untried); one that answered a request since this try began is tried again as one that is up.
+        const answered = link.answered !== null && link.answered >= tried;
+        const comingBack = reached && misses < MISSES;
+        const offline = !answered && (misses >= LONG_MISSES || (!comingBack && self.#cloudSaysOffline(address)));
+        const wait = offline ? OFFLINE_RETRY_MS : answered ? RECONNECT_MS : Math.min(RECONNECT_MS * 2 ** Math.min(Math.max(misses - 1, 0), 8), RECONNECT_MAX_MS);
         const back = self.#backOf(address);
         const woken = yield* Effect.raceFirst(Effect.sleep(wait).pipe(Effect.as(false)), Effect.raceFirst(core.wakes.next.pipe(Effect.as(true)), Deferred.await(back).pipe(Effect.as(true))));
         if (woken) self.#retrying(address);

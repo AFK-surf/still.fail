@@ -89,6 +89,8 @@ function isNoRoute(body: Uint8Array): boolean {
 export class Requests {
   readonly #core: Inner;
   readonly wire: StationWire;
+  /// Told of a station that answered a request whole and well (2xx): it is reached, whatever its stream found.
+  onAnswered: (station: StationAddr) => void = () => {};
 
   constructor(core: Inner, wire: StationWire) {
     this.#core = core;
@@ -136,6 +138,7 @@ export class Requests {
             const bytes = yield* readAll(plain(counted));
             span.set("http.response.body.size", came);
             if (came !== bytes.length) span.set("stillfail.body.decompressed", bytes.length);
+            if (reply.status >= 200 && reply.status < 300) this.onAnswered(station);
             return { status: reply.status, headers: reply.headers, body: bytes };
           }).pipe(Effect.ensuring(Effect.sync(() => waiting?.end()))),
         );
