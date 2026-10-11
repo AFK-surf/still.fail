@@ -238,9 +238,18 @@ cloud 的端口、`doing` 的 `since`。
   Trace、wake（hedge/drop 用 race）、call 的执行（可取消的 call 是可 interrupt 的 fiber）。
 - 同步调度器 `src/sync/scheduler.ts`（按 lane 限并发、按 key 去重、按优先级取，UI 只能 `prioritize`）和 cloud 同步
   `src/sync/cloud.ts`（socket、/v1/me、workspace、登录设备、运营列表）。订阅只读记录（`core/routing.ts`）。
-- station 同步 `src/station/sync.ts`：workspace 能到就建链路，events 流每次打开都把 station 整个读一遍（交给调度器），
-  事件更新记录；thread 的 entries 和 transcript 是日志记录（按需从库里懒加载），整段从最新页往前补全；写操作用
-  `afterWrite` 只读它影响的记录。station 话题 `src/station/topics.ts` 只读记录（thread 窗口、live、net 采样、place）。
+- station 同步分三块（`src/station/`），station 话题 `topics.ts` 只读记录（thread 窗口、live、net 采样、place）：
+  - 链路 `link.ts`：workspace 能到就建，events 流的开、断、重连、接管；只管「通不通」，流上来了什么、开流时读什么
+    都交给同步。
+  - 只追加的 `channels.ts`（两种见 `channel-kinds.ts`：thread 的 entries、会话的 transcript）：每个 channel 一条带编号的
+    日志，设备在其中的位置就是手里有的编号（和条目一起落盘），没有别的游标。推送（`thread`、`live` 事件）存下并记
+    「说到第几条」；其它说到第几条的来源（thread 摘要的 `last`、读取的答案、发消息得到的编号）走同一个入口；只有一条
+    规则：手里有一部分、而说到的比手里多或中间有洞，就按编号读（`settle`，读哪一段是 `channel-fill.ts` 的纯函数）。
+    channel 不靠「流把该说的都说了」保持最新：流断了重开时，界面开着的 channel 问一次手里最后一条之后的
+    （`catchUp`），其余的等摘要说它落后。channels 不知道 chat、窗口、谁开着，调用方只给优先级。
+  - 会变的 `sync.ts`（列表和行、thread 摘要、overview、job、已读）：只有最新值有意义。流推最新值；流回来时先按设备
+    在 station 事件日志里的位置（`cursor.ts`）补发这期间变过的，补不了就重读（`snapshot`，手里有的列表按摘要只取变了
+    的行）。写操作用 `afterWrite` 只读它影响的记录。后台再把其余的搬到设备上（`#history`：各会话详情和每个 channel）。
 - 文字和显示：`present.ts`、`decisions.ts`、`jobs.ts`、`footprint.ts`、`looks.ts`、`history.ts`、`refs.ts`、`notices.ts`、
   `attend.ts`、`pill.ts`、`changelog.ts`、`asks.ts`、`preview-load.ts`、`format.ts`。
 - 视图 `src/views/`：chats/chatSearch/chat/stations/connects/decisions/history/archive/workspaceMarks/chatJobs/longJobs/
