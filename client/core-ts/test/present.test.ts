@@ -274,13 +274,14 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const card = { seq: 4, card: { type: "text" }, message: { seq: 4, text: "**域名用哪个？**\n细节" } };
   const asked = row([done], false);
   asked.card = card;
-  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["奏 · 域名用哪个？", 4]]);
+  // A line that asks for a decision is about no message: the chat leads to what it asks.
+  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["奏 · 域名用哪个？", null]]);
   asked.agents = [agent(null, "running")];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
   asked.agents = [waits];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
   asked.agents = [helped];
-  assert.deepEqual(p.rowStateLine(asked), ["要你帮忙：要 key", 4]);
+  assert.deepEqual(p.rowStateLine(asked), ["要你帮忙：要 key", null]);
   asked.agents = [agent({ outcome: "failed", detail: "auth: 401" }, "warm")];
   assert.equal(p.rowStateText(asked), "出问题：登录失效");
   asked.agents = [agent({ declared: "block", ending: "need_decision", outcome: "completed" }, "warm")];
