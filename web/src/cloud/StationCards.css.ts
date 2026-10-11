@@ -76,9 +76,12 @@ globalStyle(`${peekNet} b[data-level="red"]`, { color: vars.red });
 export const peekNetHead = style({ display: "flex", gap: "8px", color: vars.text });
 /** ↑ and ↓ a row each: arrow, rate, and what went that way pushed to the right. */
 export const peekRates = style({ display: "grid", gridTemplateColumns: "auto 1fr auto", columnGap: "8px", rowGap: "2px", alignItems: "baseline" });
-/** Its settings, as a row that reads as one to click: the words and a chevron, a tint under it on hover. */
+/** Its settings, as a row that reads as one to click: the words and a chevron, a tint under it on hover. Last in the card
+ * (Hover.css.ts `card`, padded 10px 12px), it sits as far from the bottom as from the sides, its corners the card's own
+ * shape less that distance: a fixed small radius left a wedge against the card's rounder corner. */
 export const peekLink = style({
-  display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 -6px", padding: "5px 6px", borderRadius: "6px",
+  display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 -6px", padding: "5px 6px",
+  borderRadius: `calc(${vars.rMenu} - 6px)`, cornerShape: vars.cornerShape,
   fontSize: vars.textMeta, color: vars.muted, textDecoration: "none",
-  selectors: { "&:hover": { color: vars.text, background: vars.hover } },
+  selectors: { "&:hover": { color: vars.text, background: vars.hover }, "&:last-child": { marginBottom: "-4px" } },
 });
