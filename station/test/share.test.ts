@@ -145,6 +145,27 @@ test("a shared subscription: the other borrows tokens from its host, with no log
   assert.equal(b.sharing.profileView(copy)!.reachable, false);
 });
 
+test("a borrowed Codex subscription's login is written in its home, the profile as the runtime has it (its home resolved)", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const CODEX = { id: "plus", name: "ChatGPT Plus", runtime: "codex", access: { kind: "subscription" }, home: "homes/plus", env: {} };
+  const a = station(cloud, A, () => all, [CODEX]);
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  const jwt = (claims: object) => ["{}", JSON.stringify(claims), "s"].map((p) => Buffer.from(p).toString("base64url")).join(".");
+  mkdirSync(join(a.data, "homes", "plus"), { recursive: true });
+  writeFileSync(join(a.data, "homes", "plus", "auth.json"), JSON.stringify({ tokens: { id_token: "id", access_token: jwt({ exp: Math.floor(Date.now() / 1000) + 86400 }), account_id: "acct", refresh_token: "r" } }));
+  await a.sharing.shareProfile("plus", true, null);
+  await settle(a, b);
+  const copy = b.config.raw().profiles[0];
+  // As sessions/config.ts gives it to the runtime: its home absolute (C:\… on Windows; a doubled one was made there).
+  const home = join(b.data, copy.home);
+  await b.sharing.lendCodex({ ...copy, home });
+  const auth = JSON.parse(readFileSync(join(home, "auth.json"), "utf8"));
+  assert.equal(auth.tokens.account_id, "acct");
+  assert.equal(auth.tokens.refresh_token, "lent-by-another-station");
+});
+
 test("a shared subscription moves to another station: login handed over, the old host keeps a copy", async () => {
   const cloud = new FakeCloud();
   const all = new Map<string, Station>();

@@ -33,7 +33,7 @@ import { Fibers } from "../ops/fibers.ts";
 import { writePrivate } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { linkSync } from "../ops/links.ts";
-import { relativeParts } from "../ops/paths.ts";
+import { joinPath, relativeParts } from "../ops/paths.ts";
 
 type Json = any;
 
@@ -238,7 +238,8 @@ export class Sharing {
 
   private home(p: Json): string {
     const home = String(p.home ?? `homes/${p.id}`);
-    return home.startsWith("/") ? home : join(this.deps.data, home);
+    // Relative to the data directory unless rooted (as each machine roots paths: C:\… on Windows).
+    return joinPath(this.deps.data, home);
   }
 
   private skillsDir(): string {

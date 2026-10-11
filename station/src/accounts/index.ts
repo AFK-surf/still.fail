@@ -27,6 +27,7 @@ import { hubConfig, type Profile } from "../sessions/config.ts";
 import { type Capability, discover as discoverDecisions, fingerprint, resolvedModel } from "../sessions/decision.ts";
 import { type ProfileHealth, serves, usable } from "../sessions/pool.ts";
 import type { Store } from "../store/store.ts";
+import { joinPath } from "../ops/paths.ts";
 import { modelKey } from "../read/usage.ts";
 import { titleOf } from "../read/views.ts";
 import { currentPolicy, LEGACY_OPTIONS, savePolicy } from "../sessions/archive-policy.ts";
@@ -252,7 +253,7 @@ export class Accounts {
   async claudeToken(profile: Json): Promise<MachineToken> {
     if (profile.machine === true) return this.machineToken();
     const home = String(profile.home ?? "");
-    const [token, expiresAt] = await claudeOAuthToken(this.env, home.startsWith("/") ? home : join(this.deps.data, home), null, this.urls.claudeToken);
+    const [token, expiresAt] = await claudeOAuthToken(this.env, joinPath(this.deps.data, home), null, this.urls.claudeToken);
     return { token, expiresAt };
   }
 
