@@ -93,7 +93,7 @@ export function useSettingsCommands(entry: WorkspaceEntry): void {
   const some = (useStations(entry.id).value?.length ?? 0) > 0;
   const settings = t("web-pages.settings.title");
   useCommands(settingsPages(entry, some).map((p) => ({
-    id: `settings/${p.path}`, label: `${settings} · ${p.label}`, icon: p.icon, words: `settings ${p.words}`, typed: true,
+    id: `settings/${p.path}`, group: "settings" as const, label: p.label, icon: p.icon, words: `${settings} settings ${p.words}`, typed: true,
     run: () => navigate(`/w/${entry.id}/settings/${p.path}`),
   })));
 }

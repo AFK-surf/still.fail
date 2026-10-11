@@ -2,7 +2,7 @@
 // message by its words, or something to do here by its name (↑/↓ pick, ↩ opens, Esc closes, as everywhere; nothing
 // says so).
 import { Dialog as RDialog } from "radix-ui";
-import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import { useNavigate } from "react-router";
 import { useChatSearch, type ChatItem } from "./api.ts";
 import type { FoundMessage } from "./core/shapes.ts";
@@ -52,18 +52,18 @@ function useUpdateCommands(settings: string): Command[] {
   const app = useAppUpdate();
   const updates = window.stillfailDesktop?.appUpdate;
   return [
-    ...(page ? [{ id: "update.page", words: "update refresh", label: t("web-main.webUpdate.foundRefresh"), icon: Refresh, run: webUpdates.refresh }] : []),
+    ...(page ? [{ id: "update.page", group: "update" as const, words: "update refresh", label: t("web-main.webUpdate.foundRefresh"), icon: Refresh, run: webUpdates.refresh }] : []),
     ...(updates && app && (app.phase === "available" || app.phase === "failed")
-      ? [{ id: "update.app", words: "update", label: t("web-pages.version.updateTo", { version: app.version }), icon: Download, run: () => updates.start() }] : []),
-    ...(updates?.check && !app ? [{ id: "update.check", words: "check update", label: t("web-pages.version.check"), icon: Refresh, typed: true, run: () => navigate(`${settings}/version?check`) }] : []),
+      ? [{ id: "update.app", group: "update" as const, words: "update", label: t("web-pages.version.updateTo", { version: app.version }), icon: Download, run: () => updates.start() }] : []),
+    ...(updates?.check && !app ? [{ id: "update.check", group: "update" as const, words: "check update", label: t("web-pages.version.check"), icon: Refresh, typed: true, run: () => navigate(`${settings}/version?check`) }] : []),
   ];
 }
 
 function ChatSwitcher({ scope, open, onClose }: { scope: string; open: boolean; onClose(): void }) {
   // What is picked is done once the list has closed and given the focus back to where it was, so what it opens
   // (rename's field) keeps it.
-  const picked = useRef<Command | null>(null);
-  const done = (command: Command) => { picked.current = command; onClose(); };
+  const picked = useRef<Listed | null>(null);
+  const done = (command: Listed) => { picked.current = command; onClose(); };
   return (
     <RDialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <RDialog.Portal>
@@ -90,8 +90,12 @@ type Found =
   | { chat: ChatItem; message: FoundMessage; command?: undefined }
   | { command: Listed };
 
-/** A command as the list shows it: with the keys that do it too, when it is a key's action. */
-type Listed = Command & { keys?: string | null };
+/** A command as the list shows it: under its part, with the keys that do it too when it is a key's action. */
+type Listed = Omit<Command, "group"> & { group: Group; keys?: string | null };
+
+/** The parts of what can be done, in the list's order: this chat's, updates, the app's, settings' pages. */
+type Group = "chat" | "update" | "global" | "settings";
+const GROUPS: Group[] = ["chat", "update", "global", "settings"];
 
 /**
  * The keys' actions not offered in the list: ⌘K itself, Esc (which closes the list), and the moves that are only worth
@@ -105,26 +109,18 @@ const ACTION_ICON: Partial<Record<Action, ComponentType<IconProps>>> = {
 };
 
 const keyCommand = (action: Action): Listed => ({
-  id: action, label: labelOf(action), icon: ACTION_ICON[action] ?? CommandIcon, keys: shortcutOf(action), run: () => runAction(action),
+  id: action, group: ACTIONS[action].group, label: labelOf(action), icon: ACTION_ICON[action] ?? CommandIcon, keys: shortcutOf(action), run: () => runAction(action),
 });
 
 /**
- * What can be done now whose name (or its id, "chat.archive", or its other words) has what was typed: the chat's
- * actions first, then what the page offers (an update), then the rest of the keys' actions, then what is only found by
- * typing (a settings page).
+ * What can be done now whose name (or its id, "chat.archive", or its other words) has what was typed, part by part
+ * (GROUPS); with nothing typed, all but what is only found by typing (a settings page).
  */
 function commandsFor(query: string): Listed[] {
   const q = query.trim().toLowerCase();
-  const keys = availableActions().filter((a) => !UNLISTED.includes(a));
-  const offered = commands();
-  const all: Listed[] = [
-    ...keys.filter((a) => ACTIONS[a].group === "chat").map(keyCommand),
-    ...offered.filter((c) => !c.typed),
-    ...keys.filter((a) => ACTIONS[a].group !== "chat").map(keyCommand),
-    ...offered.filter((c) => c.typed),
-  ];
-  if (!q) return all.filter((c) => !c.typed);
-  return all.filter((c) => [c.label, c.id, c.words ?? ""].some((w) => w.toLowerCase().includes(q)));
+  const all: Listed[] = [...availableActions().filter((a) => !UNLISTED.includes(a)).map(keyCommand), ...commands()];
+  const found = q ? all.filter((c) => [c.label, c.id, c.words ?? ""].some((w) => w.toLowerCase().includes(q))) : all.filter((c) => !c.typed);
+  return GROUPS.flatMap((group) => found.filter((c) => c.group === group));
 }
 
 /**
@@ -133,7 +129,7 @@ function commandsFor(query: string): Listed[] {
  * one picked opens its chat at it. What can be done here (the keys' actions the page answers now, and what it offers:
  * commands.ts) is listed too: under the chats with nothing typed, over them once its name has what was typed.
  */
-function Finder({ scope, onClose, onCommand }: { scope: string; onClose(): void; onCommand(command: Command): void }) {
+function Finder({ scope, onClose, onCommand }: { scope: string; onClose(): void; onCommand(command: Listed): void }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const search = useChatSearch({ scope, query, messages: MESSAGES });
@@ -168,18 +164,16 @@ function Finder({ scope, onClose, onCommand }: { scope: string; onClose(): void;
     role: "option", "aria-selected": i === at, "data-at": i,
     onMouseMove: () => { if (i !== at) setAt(i); }, onClick: () => go(found[i]),
   });
-  const actionRows = actions.length > 0 && (
-    <>
-      <div className={css.section} role="presentation">{t("web-main.switcher.actions")}</div>
-      {actions.map((command, k) => (
-        <div key={command.id} className={css.row} {...option(firstAction + k)}>
-          <span className={`${css.picture} ${css.actionMark}`} aria-hidden="true"><command.icon size={16} /></span>
-          <span className={css.title}>{command.label}</span>
-          {command.keys && <span className={css.meta}>{command.keys}</span>}
-        </div>
-      ))}
-    </>
-  );
+  const actionRows = actions.map((command, k) => (
+    <Fragment key={command.id}>
+      {command.group !== actions[k - 1]?.group && <div className={css.section} role="presentation">{t(`web-main.switcher.group.${command.group}`)}</div>}
+      <div className={css.row} {...option(firstAction + k)}>
+        <span className={`${css.picture} ${css.actionMark}`} aria-hidden="true"><command.icon size={16} /></span>
+        <span className={css.title}>{command.label}</span>
+        {command.keys && <span className={css.meta}>{command.keys}</span>}
+      </div>
+    </Fragment>
+  ));
   return (
     <>
       <input className={css.search} autoFocus placeholder={t("web-main.switcher.search")} aria-label={t("web-main.switcher.search")} value={query} spellCheck={false}
@@ -194,7 +188,7 @@ function Finder({ scope, onClose, onCommand }: { scope: string; onClose(): void;
         {search.error && !view && <p className={css.none}>{t("web-main.switcher.update", { app: NAME })}</p>}
         {view && found.length === 0 && <p className={css.none}>{query ? t("web-main.switcher.noMatch") : t("web-main.switcher.none")}</p>}
         {typed && actionRows}
-        {typed && chats.length > 0 && actions.length > 0 && <div className={css.section} role="presentation">{t("web-main.switcher.chats")}</div>}
+        {chats.length > 0 && actions.length > 0 && <div className={css.section} role="presentation">{t("web-main.switcher.chats")}</div>}
         {chats.map((item, i) => (
           <div key={`${item.station}/${item.id}`} className={css.row} {...option(firstChat + i)}>
             <ChatPicture item={item} />

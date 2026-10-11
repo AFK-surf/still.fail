@@ -16,7 +16,7 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
   const busy = useDoing("software.update", { station, id: "station" });
   const update = () => act(api.updateSoftware("station"), t("web-main.stationUpdate.updateAction"));
   // ⌘K offers it too while its chat is open.
-  useCommands(notice?.canUpdate && !busy ? [{ id: "update.station", words: "update station", label: notice.station ? `${t("web-main.stationUpdate.updateAction")} · ${notice.station}` : t("web-main.stationUpdate.updateAction"), icon: Download, run: update }] : []);
+  useCommands(notice?.canUpdate && !busy ? [{ id: "update.station", group: "update", words: "update station", label: notice.station ? `${t("web-main.stationUpdate.updateAction")} · ${notice.station}` : t("web-main.stationUpdate.updateAction"), icon: Download, run: update }] : []);
   const control = (action: string) => act(core().call("station.updateNotice", { station, action, version: notice?.version }), t("web-main.stationUpdate.noticeAction"));
   if (!notice) return null;
   return <Popover.Root open={notice.open ?? false} onOpenChange={(open) => control(open ? "open" : "close")}>
