@@ -235,13 +235,14 @@ test("a station added on the test channel installs its release: on its host, or 
     assert.equal(stable.install, `curl -fsSL ${h.origin}/install.sh | sh -s -- ${stable.token}`);
     assert.equal(stable.installWindows, `& ([scriptblock]::Create((irm ${h.origin}/install.ps1))) ${stable.token}`);
     for (const made of [await add("beta"), await fromApp()]) {
-      // The stable host's installer all the same (the station joins it), asked for the test channel's release.
-      assert.equal(made.install, `curl -fsSL '${h.origin}/install.sh?channel=beta' | sh -s -- ${made.token}`);
-      assert.equal(made.installWindows, `& ([scriptblock]::Create((irm ${h.origin}/install.ps1?channel=beta))) ${made.token}`);
+      // The test channel's installer, from its host (the station joins the stable host all the same).
+      assert.equal(made.install, `curl -fsSL ${h.betaOrigin}/install.sh | sh -s -- ${made.token}`);
+      assert.equal(made.installWindows, `& ([scriptblock]::Create((irm ${h.betaOrigin}/install.ps1))) ${made.token}`);
       assert.equal(made.command, `stillfail station enroll ${h.origin} ${made.token}`);
     }
-    const windows = await (await h.fetch("/install.ps1?channel=beta")).text();
+    const windows = await (await h.fetchBeta("/install.ps1")).text();
     assert.match(windows, /else \{ 'beta' \}/);
+    assert.match(windows, new RegExp(`origin = '${h.origin}'`));
   } finally {
     await h.close();
   }
