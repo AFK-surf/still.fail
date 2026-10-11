@@ -1035,7 +1035,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
 /**
  * What an agent of the chat said in Slack rather than here, or a person's Slack message it was given (the core reads
  * them from its transcript; the chat does not keep them): drawn as a message of theirs, Slack's mark on the avatar, with
- * where it went or came from over its words beside a bar, as the execution history has it.
+ * where it went or came from after its name, and its words beside a bar, as the execution history has them.
  */
 const SentElsewhere = memo(function SentElsewhere({ sent: s, agentHere, onOpenHistory }: { sent: ChatSentElsewhere; agentHere: boolean; onOpenHistory: (key: string) => void }) {
   const agent = agentHere ? s.by.agent : undefined;
@@ -1050,16 +1050,18 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s, agentHere, onOpenHi
         : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack agent={agent} />}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{s.by.name}</button>
-        : <span className={css.msgName}>{s.by.name}</span>}>
-      <div className={`${historyCss.hReceived} ${historyCss.hPost}`} data-failed={s.failed ?? false}>
-        <div className={historyCss.hLabel}>
+        : <span className={css.msgName}>{s.by.name}</span>}
+      route={
+        <span className={css.msgRoute}>
           {received ? <Received {...ICON} size={14} /> : <Send {...ICON} size={14} />}
           {t(received ? "web-main.chat.fromSlack" : "web-main.history.sentTo")}
           {s.place?.url
             ? <a className={historyCss.hPlace} href={s.place.url} target="_blank" rel="noopener">{place}</a>
             : <span className={historyCss.hPlace}>{place}</span>}
           {s.failed && <Pill tone="red">{t("web-main.history.sendFailed")}</Pill>}
-        </div>
+        </span>
+      }>
+      <div className={historyCss.hPost} data-failed={s.failed ?? false}>
         <div className={`${historyCss.hQuote} ${historyCss.hQuoteMd} ${conversationCss.markdown}`}><Prose>{s.text}</Prose></div>
       </div>
     </OthersMessage>
@@ -1161,14 +1163,16 @@ function SystemNotice({ text, profile, time, ts, enter, caught }: { text: string
   );
 }
 
-/** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says. */
-export function OthersMessage({ avatar, name, time, children, ...data }: Data & { avatar: ReactNode; name: ReactNode; time: Stamp | undefined; children: ReactNode }) {
+/** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says; `route` (where it
+ * went or came from, when not here) between the two. */
+export function OthersMessage({ avatar, name, route, time, children, ...data }: Data & { avatar: ReactNode; name: ReactNode; route?: ReactNode; time: Stamp | undefined; children: ReactNode }) {
   return (
     <div className={`${conversationCss.msg} ${css.msgRow}`} {...data}>
       {avatar}
       <div className={css.msgMain}>
         <div className={conversationCss.msgHead}>
           {name}
+          {route}
           <Time className={conversationCss.msgTime} stamp={time} />
         </div>
         {children}

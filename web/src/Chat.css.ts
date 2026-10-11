@@ -522,6 +522,13 @@ globalStyle(`${msgHead} ${msgName}`, {
   fontWeight: "600", fontSize: vars.textUi, color: vars.accentText, maxWidth: "240px", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
+/** Where a message said elsewhere went or came from, in its head after the name: a long place is cut short. */
+export const msgRoute = style({
+  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontSize: vars.textMeta, color: vars.muted,
+  whiteSpace: "nowrap",
+});
+globalStyle(`${msgRoute} > svg`, { flex: "none", color: vars.accent });
+globalStyle(`${msgHead} > ${msgRoute} ~ *`, { flex: "none", whiteSpace: "nowrap" });
 globalStyle(`${fileCard} ${spinner}`, { width: "14px", height: "14px", flex: "none" });
 globalStyle(`${fileCard} svg`, { flex: "none", color: vars.muted });
 globalStyle(`${msgImage} img`, { display: "block", maxWidth: "100%", maxHeight: "300px", width: "auto", height: "auto" });
