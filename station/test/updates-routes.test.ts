@@ -55,7 +55,7 @@ test("the update channel is said with the versions and set by an admin", async (
   assert.equal(status, 200);
   assert.equal(stationOf(lines).channel, "beta", "installed from the beta, on it");
   assert.deepEqual(lines.map((l: any) => l.id), ["station", "claude", "codex"]);
-  assert.equal(stationOf(lines).idleOnly, true);
+  assert.equal(stationOf(lines).idleOnly, undefined, "automatic updates wait for nothing");
   assert.equal(typeof stationOf(lines).checkedAt, "number");
 
   // A member may not; nor a channel that is not one.

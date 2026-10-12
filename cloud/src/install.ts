@@ -9,8 +9,8 @@
 // Without a token, on a station already in a workspace, it updates the station (`stillfail update` runs it so). An update
 // does not stop the agents when it can help it: with the service's definition unchanged, the running station hands
 // over to the new release in its own process (SIGUSR2, the Rust station's main.rs), turns, runtimes and jobs going on;
-// else, or if that fails, the station is first drained (SIGUSR1: no new turns, and it says once none runs), then
-// restarted. A station older than these says neither (no run/station.json): it is restarted as before.
+// else, or if that fails, the station is first drained (SIGUSR1: it says when it may be stopped; the TS station at
+// once, its turns handed over to the next start; the Rust one once no turn runs), then restarted. A station older than these says neither (no run/station.json): it is restarted as before.
 // The service's PATH is the caller's (the agents are found on it), so it is not what makes a definition "changed": an
 // update from another shell (an agent's, the station's own) would never hand over. Started from inside the station (an
 // agent's turn, a job), a restart goes on in the background, apart from the caller: the drain waits for the caller's

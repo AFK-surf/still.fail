@@ -121,8 +121,6 @@ export class Admin {
   async handle(r: Request): Promise<Answer> {
     // Who asks is remembered by name, as the cloud's names (`deps.names`): what chats show of people who wrote.
     if (r.viewer.name !== "") this.readers.names.set(r.viewer.email, r.viewer.name);
-    // Someone uses the station: an automatic update waits for a quiet moment.
-    this.deps.agents?.updates?.used();
     // A write with a key is done once, however often it is asked (once.rs); the key is the viewer's own.
     const key = Object.entries(r.headers).find(([k]) => k.toLowerCase() === ONCE_KEY)?.[1];
     const keyed = key !== undefined && key !== "" && key.length <= 200 && r.method !== "GET" && r.method !== "HEAD";

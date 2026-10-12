@@ -59,7 +59,6 @@ export type SoftwareVersion = {
   downgrade: boolean;
   channel?: string;
   auto?: boolean;
-  idleOnly?: boolean;
   updatable: boolean;
   note?: string;
   state: "idle" | "updating" | "failed";
@@ -75,9 +74,6 @@ export type Timing = {
   /// How often what is out is read again, and while the station updates itself.
   every: number;
   autoEvery: number;
-  /// How long the station is quiet before it updates itself, and how often that is looked at while it does.
-  idleFor: number;
-  idlePoll: number;
   /// How long a runtime's update may take; the station's installer.
   runtimeLimit: number;
   stationLimit: number;
@@ -90,10 +86,7 @@ export type Timing = {
 export const TIMING: Timing = {
   every: 6 * 3600_000,
   autoEvery: 10 * 60_000,
-  idleFor: 5 * 60_000,
-  idlePoll: 10_000,
   runtimeLimit: 10 * 60_000,
-  // A drain alone may take 10 minutes (install.ts).
   stationLimit: 20 * 60_000,
   doneShown: 10 * 60_000,
   followLook: 5_000,
@@ -195,7 +188,6 @@ export class Updates {
   private checkedAt: number | null = null;
   private checking: Promise<void> | null = null;
   private listeners = new Set<() => void>();
-  private lastUsed: number;
   /// The version the station's last update in this process went for: updating by itself, not tried again.
   tried: string | null = null;
   private lastCheck: number | null = null;
@@ -226,7 +218,6 @@ export class Updates {
     // Read before an update can replace the release.
     this.installed = releaseChannel(this.app) ?? channelOf(this.config.raw(), this.app);
     this.fibers = new Fibers("updates", o.clock);
-    this.lastUsed = this.fibers.now();
   }
 
   // ---- what is wired in after it is made (the hub, the event streams, the machine's logins) ----
@@ -239,11 +230,6 @@ export class Updates {
   /// What to do when a runtime was installed or updated from here.
   onRuntimeChanged(f: () => void) {
     this.runtimeChanged = f;
-  }
-
-  /// Someone used the station (a request, an event stream): an automatic update waits five quiet minutes after.
-  used() {
-    this.lastUsed = this.fibers.now();
   }
 
   /// Hears each change of what `get` says; gives the function that stops it.
@@ -307,24 +293,22 @@ export class Updates {
     return this.fibers.after(ms, f);
   }
 
-  /// The next look: when the next reading is due, or (while it updates itself) soon, to see whether it is quiet.
+  /// The next look: when the next reading is due.
   private schedule() {
     if (this.closed || !this.started) return;
     if (this.tick) void Effect.runFork(Fiber.interrupt(this.tick));
     const due = this.lastCheck === null ? 0 : Math.max(0, this.lastCheck + (this.auto() ? this.timing.autoEvery : this.timing.every) - this.fibers.now());
-    const wait = this.auto() ? Math.min(due, this.timing.idlePoll) : due;
-    this.tick = this.fibers.fork(Effect.sleep(wait).pipe(Effect.andThen(Effect.promise(() => this.look()))));
+    this.tick = this.fibers.fork(Effect.sleep(due).pipe(Effect.andThen(Effect.promise(() => this.look()))));
   }
 
   private async look() {
     this.tick = null;
     try {
-      this.idle();
       const every = this.auto() ? this.timing.autoEvery : this.timing.every;
       // A reading under way (asked from a page) is waited for, not looked at again and again.
       if (this.checking) await this.checking;
       else if (this.lastCheck === null || this.fibers.now() - this.lastCheck >= every) await this.check();
-      this.autoUpdate("the station idle");
+      this.autoUpdate("a newer release read");
     } catch (e) {
       // Not read: tried again when the next reading is due, not at once.
       this.lastCheck = this.fibers.now();
@@ -372,7 +356,6 @@ export class Updates {
         downgrade,
         channel: here ? channel : undefined,
         auto: here ? this.auto() : undefined,
-        idleOnly: station ? true : undefined,
         updatable: item.how !== null || here,
         note: item.note ? say(item.note, lang) : undefined,
         state: item.updating !== null ? "updating" : item.failed !== null ? "failed" : "idle",
@@ -512,28 +495,17 @@ export class Updates {
 
   // ---- updating by itself ----
 
-  /// Quiet: no turn runs, and nothing was asked of it a while (idleFor). A client only watching (its event stream
-  /// open, a page left open on a desk) is no use: waited for, a station watched all day was not updated for days. It
-  /// takes them a reconnect, and their lists read as what changed of them.
-  private idle(): boolean {
-    if (this.running() > 0) {
-      this.used();
-      return false;
-    }
-    return this.fibers.now() - this.lastUsed >= this.timing.idleFor;
-  }
-
   /// The runtime being installed or updated now, when one is: the station is not updated meanwhile (its update hands
   /// over to another process or restarts, and the install would go on unfollowed).
   private runtimeUpdating(): Kind | null {
     return RUNTIMES.find((k) => this.items[k].updating !== null) ?? null;
   }
 
-  /// The version the station updates itself to now, when it does: it updates itself, is quiet, can be updated from
-  /// here, is not updating, and its channel's latest is newer (not an older stable one back from the beta) and not one
-  /// it already went for.
+  /// The version the station updates itself to now, when it does: it updates itself, can be updated from here, is not
+  /// updating, and its channel's latest is newer (not an older stable one back from the beta) and not one it already
+  /// went for. Running turns are not waited for: the update hands them over (or, restarting, to the next start).
   toUpdateTo(): string | null {
-    if (!this.auto() || !this.idle()) return null;
+    if (!this.auto()) return null;
     const item = this.items.station;
     if (item.note !== null || item.updating !== null || item.channel !== this.channel() || this.runtimeUpdating() !== null) return null;
     if (item.latest === null) return null;
@@ -948,10 +920,6 @@ export class Updates {
   /// Sets a line's state by hand (tests).
   poke(kind: Kind, f: (i: Item) => void) {
     f(this.items[kind]);
-  }
-
-  backdateUse(ms: number) {
-    this.lastUsed = this.fibers.now() - ms;
   }
 }
 

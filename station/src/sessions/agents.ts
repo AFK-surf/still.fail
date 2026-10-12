@@ -54,10 +54,6 @@ import { reviewUndecided, startReview } from "./review.ts";
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
 
-/// How long a drain waits for running turns to end, and how long a drained station waits to be stopped before it takes
-/// turns again (whoever asked went away).
-const DRAIN_LIMIT_MS = 600_000;
-const DRAINED_LIMIT_MS = 300_000;
 /// How long the previous station process is waited for before its sessions are taken up all the same.
 const PREVIOUS_LIMIT_MS = 40_000;
 
@@ -472,32 +468,13 @@ export const AgentsLive = (control: Control) =>
       });
       time.after(120_000, reviewing);
 
-      // A drain (SIGUSR1): no new turns; said when none runs (run/drained), turns again if nobody stops the station.
-      let draining = false;
+      // A drain (SIGUSR1), asked before a restart: said at once. Nothing need wait for the running turns: stopping hands
+      // them over to the next start (their runtimes run on under their runners), and holding turns meanwhile kept
+      // people's messages waiting for up to 10 minutes.
       control.on("drain", () => {
-        if (draining) return;
-        draining = true;
-        log.info("station", "draining: no new turns; waiting for running ones to end");
-        hub.hold("drain");
-        const done = (said: "idle" | "timeout") => {
-          stopListening();
-          limit();
-          log.info("station", "drained", { said });
-          writeFileSync(join(run, "drained"), `${said}\n`);
-          control.drained(said);
-          time.after(DRAINED_LIMIT_MS, () => {
-            log.warn("station", "drained but not stopped; taking turns again");
-            rmSync(join(run, "drained"), { force: true });
-            hub.release("drain");
-            draining = false;
-          });
-        };
-        // A turn's end is a session change: looked at then, not on a timer.
-        const stopListening = store.subscribe((change) => {
-          if (change.type === "session" && !hub.anyRunning()) done("idle");
-        });
-        const limit = time.after(DRAIN_LIMIT_MS, () => done("timeout"));
-        if (!hub.anyRunning()) done("idle");
+        log.info("station", "drained: running turns are handed over to the next start");
+        writeFileSync(join(run, "drained"), "idle\n");
+        control.drained("idle");
       });
 
       // Stopping hands the sessions over, whether to the next process now (handover) or the next start: their runtimes
