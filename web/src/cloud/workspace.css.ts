@@ -35,6 +35,8 @@ export const menuWorkspaceText = style({ overflow: "hidden", textOverflow: "elli
 /** The workspace in use, a soft card atop the menu: its name and what it holds, and the way into its settings. */
 export const menuCurrent = style({
   marginBottom: "4px", padding: "10px 10px 10px 12px", background: `color-mix(in srgb, ${vars.text} 5%, transparent)`,
+  // By the menu's top corners, and tall enough to show it: the corner's own shape, less the menu's padding.
+  borderRadius: `calc(${vars.rMenu} - 6px)`,
 });
 export const menuCurrentText = style({ flex: "1", minWidth: "0", display: "grid", gap: "1px" });
 export const menuCurrentGo = style({ display: "flex", alignItems: "center", gap: "2px", flex: "none", fontSize: vars.textMeta, color: vars.muted });

@@ -25,7 +25,7 @@ export const search = style({
 });
 export const results = style({ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0" });
 export const row = style({
-  display: "flex", alignItems: "center", gap: 10, minHeight: 38, padding: "8px 12px", borderRadius: vars.rOption,
+  display: "flex", alignItems: "center", gap: 10, minHeight: 38, padding: "8px 12px", borderRadius: `calc(${vars.rDialog} - 10px)`,
   fontSize: vars.textUi, cursor: "pointer", userSelect: "none", cornerShape: vars.cornerShape,
   // A shade of the text, as the menus' rows are lit.
   selectors: { '&[aria-selected="true"]': { background: `color-mix(in srgb, ${vars.text} 7%, transparent)` } },
