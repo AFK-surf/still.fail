@@ -48,6 +48,10 @@ A station from before these methods takes them for tasks and refuses them; the r
 
 Stations also share profiles and skills over this transport (`share.get`, `share.lend`, `share.status`, `share.put`, `share.take`; [station-share.md](station-share.md)). Any station of the workspace may ask; what each share allows is checked by its host, which keeps it (still.fail cloud keeps nothing of shares). No `remoteTasks.allow` is needed: these are not execution.
 
+## Chats shared with other workspaces
+
+A chat may be shared with other workspaces ([chat-share.md](chat-share.md)). Its station then also hears the stations of those workspaces over this transport, though they are not in its roster: each request must name its workspace, and only `xshare.*`, reads of the chats shared with theirs (`session.read`, `session.file`) and, where allowed, writes to them (`session.put`, `session.message`) are answered; tasks, `session.create` and `session.notice` are not. A station of another workspace is asked only when a chat is shared with it or from it (`xshare/index.ts` decides; `peer.ts` checks), and may answer a session here that wrote to it. Which stations those workspaces have is kept between the stations, not by the control plane.
+
 ## Transport
 
 ALPN `stillfail/station/1` is separate from the member/admin protocol. Each bounded request contains `{workspace, request:{method,...}}`, answered with `{result}` or `{error}` on a QUIC bidirectional stream. Services accept explicit methods (`describe`, `task.*`, `file.*`); this is not an arbitrary management-path proxy. Network timeouts explicitly report uncertain execution. The transport can carry further services without encoding build-specific concepts.
