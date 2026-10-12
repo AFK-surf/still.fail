@@ -35,6 +35,7 @@ import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
 import { core, useCall } from "./core/react.ts";
 import { ChatRefMenu, markBefore, refAt, RefMirror, WithRefs } from "./ChatRef.tsx";
+import { useOutsideShare } from "./OutsideShare.tsx";
 import { useMorph } from "./morph.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
@@ -1526,8 +1527,12 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
     warmed.current = Date.now();
     void api.warm(sessionKey).catch(() => {});
   };
+  const station = useStation().address;
+  const outside = useOutsideShare();
   const send = async () => {
     if (submitDraft) { submitDraft(draft); return; }
+    // Chats of other workspaces it refers to: shared with this one first, as the viewer says (OutsideShare.tsx).
+    if (!(await outside.ask(station, draft.text))) return;
     // In a chat (not a new one's first message, onSending's): its words stay where they were typed until its row is in
     // the list, then go there (madeChat.ts), over the dock.
     const field = input.current;
@@ -1568,6 +1573,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   useMorph(box, `${multiline}|${text}|${files.length}|${quotes.length}`, roomy);
   return (
     <div className={cloudCss.composerWrap}>
+      {outside.node}
       {menu}
       {above && <div className={css.composerAbove}>{above}</div>}
       <form ref={box} className={`${composerCss.composerBox} ${refCss.refHost}`} data-multiline={multiline || undefined} data-dragging={dragging || undefined}
@@ -1658,7 +1664,8 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     const end = el.selectionStart;
     setReference(null);
     // Its mark, from the core, which keeps its link until it is sent; in its place if the `@words` are still there.
-    void core().call("chat.ref", { station: item.station, id: item.id, title: item.title, base }).then((answer) => {
+    // One of another workspace's: its link kept for this workspace's messages too (`into`).
+    void core().call("chat.ref", { station: item.station, id: item.id, title: item.title, base, into: scopeOf(here) }).then((answer) => {
       const { mark } = answer as { mark: string };
       const now = input.current?.value ?? "";
       if (now[start] !== "@") return;

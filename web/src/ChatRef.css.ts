@@ -62,3 +62,9 @@ export const refChipStation = style({
 });
 export const refChipStationIcon = style({ verticalAlign: "-1px", marginRight: "2px" });
 
+
+/** The chats of other workspaces a message is about to share (OutsideShare.tsx): one a line, whose after its title. */
+export const outsideList = style({ listStyle: "none", margin: "0", padding: "0", display: "grid", gap: "10px" });
+export const outsideItem = style({ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "4px 0", fontSize: vars.textUi, lineHeight: "1.5" });
+/** What may not be shared, said under it. */
+export const outsideCannot = style({ flexBasis: "100%", margin: "0", fontSize: vars.textMeta, color: vars.red });

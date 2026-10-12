@@ -89,8 +89,8 @@ export function useChats(scope: string, mine: boolean, watching = false): TopicS
  * `exclude`, `limit` at most; with `messages`, that many of the messages that have the words too, newest first. While the
  * next words are looked up, what the last ones found stays.
  */
-export function useChatSearch({ scope, query, station, exclude, limit, messages }: { scope: string; query: string; station?: string; exclude?: string | null; limit?: number; messages?: number }): TopicState<ChatSearchView> {
-  const state = useTopic<ChatSearchView>({ topic: "chatSearch", scope, query, ...(station ? { station } : {}), ...(exclude ? { exclude } : {}), ...(limit ? { limit } : {}), ...(messages ? { messages } : {}) });
+export function useChatSearch({ scope, query, station, exclude, limit, messages, elsewhere }: { scope: string; query: string; station?: string; exclude?: string | null; limit?: number; messages?: number; elsewhere?: boolean }): TopicState<ChatSearchView> {
+  const state = useTopic<ChatSearchView>({ topic: "chatSearch", scope, query, ...(station ? { station } : {}), ...(exclude ? { exclude } : {}), ...(limit ? { limit } : {}), ...(messages ? { messages } : {}), ...(elsewhere ? { elsewhere } : {}) });
   const last = useRef<ChatSearchView | undefined>(undefined);
   if (state.value) last.current = state.value;
   return state.value || !last.current || state.error ? state : { ...state, value: last.current };

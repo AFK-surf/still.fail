@@ -7,6 +7,7 @@ import { useChats, useChatSearch, useStations, type ChatItem } from "./api.ts";
 import { ChatMark, stateLine } from "./ChatMark.tsx";
 import { StationMark } from "./StationMark.tsx";
 import { scopeOf, useStation } from "./station.tsx";
+import { useWorkspaces } from "./cloud/api.ts";
 import { ModelLogo, Time } from "./ui.tsx";
 import { chatOfLink, copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy, stationOfLink } from "./chatRefs.ts";
 import { failure } from "./toast.tsx";
@@ -27,20 +28,24 @@ export function refAt(text: string, caret: number): { start: number; query: stri
 
 /**
  * A reference in a message: a chip that opens the chat (ChatPage opens its link in the page); one on another station of
- * the workspace says which after its title.
+ * the workspace says which after its title, one of another workspace which workspace.
  */
 export function RefChip({ title, href }: { title: ReactNode; href: string }) {
   const here = useStation().address;
   const there = stationOfLink(href);
   const elsewhere = there !== null && here.includes("/") && there !== here;
   const stations = useStations(scopeOf(here)).value;
-  const found = elsewhere ? stations?.find((s) => s.station === there) : undefined;
-  const name = elsewhere ? (found?.name ?? there.slice(there.indexOf("/") + 1, there.indexOf("/") + 9)) : null;
+  // One of another workspace's (shared with this one, docs/chat-share.md) says that workspace's name.
+  const accounts = useWorkspaces().value;
+  const outside = elsewhere && here.includes("/") && scopeOf(there) !== scopeOf(here);
+  const found = elsewhere && !outside ? stations?.find((s) => s.station === there) : undefined;
+  const workspace = outside ? accounts?.flatMap((a) => a.workspaces).find((w) => w.id === scopeOf(there))?.name : undefined;
+  const name = !elsewhere ? null : outside ? (workspace ?? scopeOf(there).slice(0, 8)) : (found?.name ?? there.slice(there.indexOf("/") + 1, there.indexOf("/") + 9));
   return (
     <Hover content={<RefPreview href={href} here={here} station={name} emoji={found?.emoji} icon={found?.icon} />}>
       <a className={css.refChip} href={href}>
         <span className={css.refChipHash}>@</span>{title}
-        {name && <span className={css.refChipStation}><StationMark emoji={found?.emoji} icon={found?.icon} size={11} className={css.refChipStationIcon} />{name}</span>}
+        {name && <span className={css.refChipStation}>{!outside && <StationMark emoji={found?.emoji} icon={found?.icon} size={11} className={css.refChipStationIcon} />}{name}</span>}
       </a>
     </Hover>
   );
@@ -137,7 +142,7 @@ export function useCopyChatLink(toast: (text: string) => void) {
 
 /**
  * The chats `query` finds on this station's workspace (an agent reads one on any of its stations), titles first, but
- * not `here` (the chat written in); another station's say which. `found` hands them to the composer, whose keys move `active`.
+ * not `here` (the chat written in); another station's say which; then the viewer's other workspaces', saying whose. `found` hands them to the composer, whose keys move `active`.
  */
 export function ChatRefMenu({ query, here, active, onPick, found }: {
   query: string; here: string | null; active: number;
@@ -145,7 +150,9 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
   found(items: ChatItem[]): void;
 }) {
   const station = useStation();
-  const search = useChatSearch({ scope: scopeOf(station.address), query, exclude: here, limit: SHOWN });
+  // The viewer's other workspaces' too (`elsewhere`), after this one's, each saying whose: one referred to is shared
+  // with this workspace as the message goes (OutsideShare.tsx).
+  const search = useChatSearch({ scope: scopeOf(station.address), query, exclude: here, limit: SHOWN, elsewhere: true });
   const items = search.value?.items;
   useEffect(() => found(items ?? []), [items]);
   const list = useRef<HTMLDivElement>(null);
@@ -158,13 +165,14 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
         : items.map((item, i) => {
           const agent = item.agents[0];
           return (
-            <button type="button" key={item.id} className={css.refItem} role="option" aria-selected={i === active} data-active={i === active || undefined}
+            <button type="button" key={`${item.station}\t${item.id}`} className={css.refItem} role="option" aria-selected={i === active} data-active={i === active || undefined}
               onClick={(e) => { e.stopPropagation(); onPick(item); }}>
               <span className={css.refLogo}>{agent && <ModelLogo maker={agent.maker} runtime={agent.runtime} size={14} />}</span>
               {/* Another station's: its name after the title, as a reference to it shows it (the row keeps its three columns). */}
               <span className={css.refTitleCell}>
                 <span className={css.refTitle}>{item.title}</span>
-                {item.station !== station.address && <span className={css.refChipStation}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={11} className={css.refChipStationIcon} />{item.stationName}</span>}
+                {item.outside ? <span className={css.refChipStation}>{item.outside}</span>
+                  : item.station !== station.address && <span className={css.refChipStation}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={11} className={css.refChipStationIcon} />{item.stationName}</span>}
               </span>
               <Time className={css.refTime} stamp={item.time?.lastActiveAt} fixed />
             </button>

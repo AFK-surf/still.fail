@@ -30,6 +30,8 @@ import { AgentSince, openAgent } from "./AgentSheet.tsx";
 import { annotatePath } from "./Annotate.tsx";
 import { Button, GroupLabel, InfoList, InfoRow, ModelMark, NavButton, PickRow, QuotaRings, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
+import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideShare.tsx";
+import { useAction } from "../action.ts";
 import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
 import { stillfailLinkClicked } from "../stillfailLink.ts";
@@ -441,10 +443,18 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
  */
 function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
   const api = useApi();
+  const app = useApp();
   const keeper = view.agents[0]?.session.key ?? null;
   const warmed = useRef(0);
+  // Chats of other workspaces it refers to: shared with this one first, as the viewer says (../OutsideShare.tsx).
   const send = (draft: Draft) => {
     if (view.offline || view.archived) return;
+    void outsideOf(here.station, draft.text).catch(() => []).then((chats) => {
+      if (chats.length === 0) go(draft);
+      else openOutside(app, chats, here.station, () => go(draft));
+    });
+  };
+  const go = (draft: Draft) => {
     // Sent to by the page's key until its thread is known: a chat made here, or the agent whose page it is (what is sent
     // waits in the outbox at once while the core has the station make its chat).
     const to = view.thread?.id ?? here.key;
@@ -762,6 +772,33 @@ function ShareSheet({ here, thread, share }: { here: Here; thread: ChatThread; s
         </div>
         <div className={partsCss.mPad}>
           <Button primary label={t("common.done")} onClick={save} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Asks to share the chats of other workspaces a message refers to with this one; shared (or sent anyway), `go` sends it. */
+function openOutside(app: MobileApp, chats: Outside[], station: string, go: () => void) {
+  app.sheet({ height: Math.min(0.9, (25 + 48 + 44 + chats.length * 52 + 12 + 66 + 24) / window.innerHeight), content: () => <OutsideSheet chats={chats} station={station} go={go} /> });
+}
+
+function OutsideSheet({ chats, station, go }: { chats: Outside[]; station: string; go: () => void }) {
+  const app = useApp();
+  const sharable = chats.some((c) => c.may);
+  const operation = useAction(() => (sharable ? shareOutside(chats, station) : Promise.resolve()), () => { app.sheet(null); go(); });
+  const error = operation.error ? t("web-main.outside.failed", { error: operation.error.message }) : null;
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-main.outside.title")} />
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
+        <p className={partsCss.mMuted}>{t("web-main.outside.lead")}</p>
+        <OutsideList chats={chats} />
+        {error && <p className={partsCss.mError}>{error}</p>}
+        <div className={sheetsCss.mFormActions}>
+          <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+          <Button label={sharable ? t("web-main.outside.share") : t("web-main.outside.anyway")} primary busy={operation.busy} onClick={() => void operation.run()} />
         </div>
       </div>
     </>
