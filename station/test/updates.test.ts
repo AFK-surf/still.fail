@@ -328,8 +328,6 @@ describe("updates", { concurrency: true }, () => {
     assert.equal(updates.toUpdateTo(), null, "not unless turned on");
     new ConfigFile(dir).update((raw) => (raw.autoUpdate = true));
     assert.equal(updates.stationWith("0.1.1310").auto, true);
-    assert.equal(updates.toUpdateTo(), null, "wait for five minutes of quiet");
-    updates.backdateUse(5 * 60_000);
     assert.equal(updates.toUpdateTo(), "0.1.1310");
     // Already the latest, or the latest is older: nothing.
     updates.stationWith("0.1.1300");
@@ -365,25 +363,15 @@ describe("updates", { concurrency: true }, () => {
     assert.equal(beta.toUpdateTo(), null);
   });
 
-  test("automatic updates wait for turns and a quiet period, not for clients only watching", async (t) => {
+  test("automatic updates do not wait for running turns or people using the station", async (t) => {
     const dir = temp();
     const updates = installed(dir, "1300", null);
     t.after(() => updates.close());
     new ConfigFile(dir).update((raw) => (raw.autoUpdate = true));
     updates.stationWith("0.1.1310");
-    let running = false;
-    updates.countRunning(() => (running ? 1 : 0));
-    // Quiet a while, whoever has a stream open: updated.
-    updates.backdateUse(5 * 60_000);
+    // A turn running (a Slack one too): it is handed over, not waited for.
+    updates.countRunning(() => 1);
     assert.equal(updates.toUpdateTo(), "0.1.1310");
-    running = true;
-    assert.equal(updates.toUpdateTo(), null, "a turn (a Slack one too) postpones the update");
-    running = false;
-    assert.equal(updates.toUpdateTo(), null, "and the quiet period begins again after it");
-    updates.backdateUse(5 * 60_000);
-    assert.equal(updates.toUpdateTo(), "0.1.1310");
-    updates.used();
-    assert.equal(updates.toUpdateTo(), null, "a request resets the quiet period");
   });
 
   // The installer here is install.sh, piped to sh; Windows' (install.ps1, by a scheduled task) is the next test's.
@@ -443,12 +431,12 @@ describe("updates", { concurrency: true }, () => {
     assert.equal(readFileSync(join(dir, "run", "update.exit"), "utf8").trim(), "0");
   });
 
-  test("turned on, a quiet station updates itself by the installer, once", shInstaller, async (t) => {
+  test("turned on, the station updates itself by the installer as soon as it reads a newer release, once", shInstaller, async (t) => {
     const dir = temp();
     const [origin, server, asked] = await cloudWithRelease("0.1.1310", "1310");
     t.after(() => server.close());
     const time = testClock();
-    const updates = installed(dir, "1300", null, { origin: () => origin, env: { PATH: "/usr/bin:/bin" }, timing: { followLook: 200, idlePoll: 50, idleFor: 100 }, clock: time.clock });
+    const updates = installed(dir, "1300", null, { origin: () => origin, env: { PATH: "/usr/bin:/bin" }, timing: { followLook: 200 }, clock: time.clock });
     t.after(() => updates.close());
     new ConfigFile(dir).update((raw) => (raw.autoUpdate = true));
     /// Moves its time on by `ms` until `f` holds (what it waits for meanwhile may be a real process).
@@ -463,7 +451,7 @@ describe("updates", { concurrency: true }, () => {
     let readAgain = false;
     updates.changes(() => void (feeds() >= 2 && (readAgain = true)));
     updates.start();
-    // It reads what is out at once; quiet for 100 ms of its time, it updates itself by the installer.
+    // It reads what is out at once, and updates itself by the installer.
     await until("read", () => station(updates).latest === "0.1.1310");
     await steps(50, () => station(updates).state === "updating");
     await until("the installer ended", () => existsSync(join(dir, "run", "update.exit")));
