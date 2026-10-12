@@ -261,6 +261,50 @@ describe("the Codex driver", { concurrency: true }, () => {
     await until(ended(1));
   });
 
+  test("codex updated under its app-server: replaced once no turn runs on it, its sessions opened again", async () => {
+    let installed = "1.0.0";
+    const d = driver({ installedVersion: async () => installed });
+    const p = profile();
+    writeFileSync(`${p.dump}.version`, "1.0.0");
+    const a = listen();
+    const b = listen();
+    const one = await d.open(options(p), a.push);
+    const two = await d.open(options(p), b.push);
+    await one.prompt("hold:1");
+    await a.until((e) => deltas(e).length >= 1);
+    // Updated: the files of the one running are gone (its version is not the one installed now).
+    installed = "2.0.0";
+    writeFileSync(`${p.dump}.version`, "2.0.0");
+    await d.runtimeChanged();
+    assert.equal(starts(p.dump).length, 1, "a turn runs on it: it keeps serving");
+    await one.abort();
+    await a.until(ended(1));
+    // The turn over, it is replaced: its threads closed, to be opened again with their next turn.
+    await a.until((e) => e.some((x) => x.type === "closed"));
+    await b.until((e) => e.some((x) => x.type === "closed"));
+    const c = listen();
+    const three = await d.open(options(p), c.push);
+    assert.equal(starts(p.dump).length, 2);
+    await three.prompt("say:back");
+    await c.until(ended(1));
+  });
+
+  test("a turn asked of an app-server Codex was updated under is refused, so it is opened again on a new one", async () => {
+    // Codex updated from outside the station, while the app-server started: it runs the old one.
+    const d = driver({ installedVersion: async () => "2.0.0" });
+    const p = profile();
+    writeFileSync(`${p.dump}.version`, "1.0.0");
+    const one = await d.open(options(p), () => {});
+    writeFileSync(`${p.dump}.version`, "2.0.0");
+    await assert.rejects(one.prompt("say:x"), /updated/);
+    await one.dispose();
+    const { push, until } = listen();
+    const two = await d.open(options(p), push);
+    assert.equal(starts(p.dump).length, 2);
+    await two.prompt("say:x");
+    await until(ended(1));
+  });
+
   test("a subscription's turns say their service tier; models and rate limits come from the app-server", async () => {
     let fast: boolean | undefined = true;
     const d = driver({ fast: () => fast });
