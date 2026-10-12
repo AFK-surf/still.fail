@@ -443,18 +443,9 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
  */
 function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
   const api = useApi();
-  const app = useApp();
   const keeper = view.agents[0]?.session.key ?? null;
   const warmed = useRef(0);
-  // Chats of other workspaces it refers to: shared with this one first, as the viewer says (../OutsideShare.tsx).
   const send = (draft: Draft) => {
-    if (view.offline || view.archived) return;
-    void outsideOf(here.station, draft.text).catch(() => []).then((chats) => {
-      if (chats.length === 0) go(draft);
-      else openOutside(app, chats, here.station, () => go(draft));
-    });
-  };
-  const go = (draft: Draft) => {
     // Sent to by the page's key until its thread is known: a chat made here, or the agent whose page it is (what is sent
     // waits in the outbox at once while the core has the station make its chat).
     const to = view.thread?.id ?? here.key;
@@ -776,6 +767,18 @@ function ShareSheet({ here, thread, share }: { here: Here; thread: ChatThread; s
       </div>
     </>
   );
+}
+
+/**
+ * Sends what `text` says by `go`, written on `station`, once this workspace's agents can read what it refers to: the
+ * chats of the viewer's other workspaces not shared with it yet are asked about first (../OutsideShare.tsx), as every
+ * composer of the phone's does (ChatHost.tsx).
+ */
+export function sendSharing(app: MobileApp, station: string, text: string, go: () => void) {
+  void outsideOf(station, text).catch((): Outside[] => []).then((chats) => {
+    if (chats.length === 0) go();
+    else openOutside(app, chats, station, go);
+  });
 }
 
 /** Asks to share the chats of other workspaces a message refers to with this one; shared (or sent anyway), `go` sends it. */

@@ -7,7 +7,7 @@ import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRe
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { ChatScreen, openAttach, openedAs, useComposerBar, type Draft } from "./Chat.tsx";
+import { ChatScreen, openAttach, openedAs, sendSharing, useComposerBar, type Draft } from "./Chat.tsx";
 import { ComposerExtras } from "../Chat.tsx";
 import { useDraft } from "../draft.ts";
 import { settling, useMorph } from "../morph.ts";
@@ -151,7 +151,11 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, uplo
   }, [root]);
   const { menu, bar, expanded } = useComposerBar({
     draft, draftKey, sessionKey: shown.session ?? null, placeholder: shown.placeholder, locked,
-    onPlus: () => openAttach(app, upload), onType: () => latest.current?.type?.(), onSend: () => latest.current?.send(now.current),
+    onPlus: () => openAttach(app, upload), onType: () => latest.current?.type?.(), onSend: () => {
+      // What it refers to of other workspaces is shared first, when the viewer says (Chat.tsx sendSharing).
+      const spec = latest.current;
+      if (spec) sendSharing(app, spec.station, now.current.text, () => spec.send(now.current));
+    },
   });
   // Growing or shrinking (a line more, a file, a quote, sent and emptied) in one motion, as the wide screen's
   // (morph.ts): after the text box has taken its height (useComposerBar), so that it is read with it.
