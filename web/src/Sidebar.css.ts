@@ -209,8 +209,14 @@ export const rowArchiveChip = style({
   },
   "@media": { "(hover: none)": { opacity: 1, pointerEvents: "auto" } },
 });
-globalStyle(`${navSessionWrap}[data-archivable]:hover ${navSessionHead}`, { paddingRight: 48 });
-globalStyle(`${navSessionWrap}[data-archivable] ${navSessionHead}`, { "@media": { "(hover: none)": { paddingRight: 48 } } });
+/** The chip's room at the title line's end, as wide as its word in the language shown (Archive is wider than 归档), so the
+ * station's and Slack's marks before it are never under it: 10px from the last of them to the chip. */
+export const rowArchiveRoom = style({
+  display: "none", flex: "none", padding: "0 9px", fontSize: vars.textMeta, fontWeight: 500, visibility: "hidden",
+  selectors: { [`${navSessionWrap}:hover &`]: { display: "block" } },
+  "@media": { "(hover: none)": { display: "block" } },
+});
+globalStyle(`${navSessionWrap}[data-archivable]:hover ${navSessionHead}`, { paddingRight: 0 });
 
 /** Stations not working: a row at the top of the sidebar's foot, over the account; its dot says the worst of it. */
 export const stationTrouble = style({ marginBottom: 4, color: vars.text });

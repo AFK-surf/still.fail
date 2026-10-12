@@ -486,7 +486,7 @@ function AgentButton({ agent, marked, onHistory, station = false }: { agent: Cha
   const { session } = agent;
   const where = useChatStation();
   const label = t("web-pages.chat.historyOf", { agent: session.agentText });
-  // With the station it runs on (once the workspace has more than one), one tile: the maker opens the history and has
+  // With the station it runs on, one tile: the maker opens the history and has
   // the agent's card, the station's part its own.
   if (station && where) {
     return (
@@ -745,12 +745,12 @@ function Evict({ session }: { session: string }) {
   );
 }
 
-/** The machine the chat runs on, once the workspace has more than one: its name, its view (once it comes) and its host. */
+/** The machine the chat runs on: its name, its view (once it comes) and its host. */
 function useChatStation() {
   const station = useStation();
   const stations = useStations(scopeOf(station.address)).value;
   const host = useHost(station.address).value;
-  if (!stations || stations.length < 2) return null;
+  if (!stations) return null;
   const name = station.name || host?.hostname || t("web-pages.chat.thisMachine");
   return { name, view: stations.find((s) => s.station === station.address), host, settings: `${station.settings}/stations` };
 }

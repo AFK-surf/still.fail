@@ -45,7 +45,7 @@ export const mChatBack = style({
 export const mChatBarTitle = style({
   flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "8px", paddingRight: "8px",
 });
-/** The station it runs on, after the title (with more than one): a quiet tag, cut short. */
+/** The station it runs on, after the title: a quiet tag, cut short. */
 export const mBarStation = style({
   flex: "none", display: "inline-flex", alignItems: "center", gap: "4px", maxWidth: "104px", padding: "1px 8px",
   border: `1px solid ${vars.line}`, borderRadius: "999px", background: "none", color: vars.muted,

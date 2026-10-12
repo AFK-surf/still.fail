@@ -309,7 +309,7 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
 internal fun toneDot(tone: String): String = when (tone) { "green" -> "online"; "red" -> "error"; "neutral" -> "offline"; else -> "busy" }
 
 /**
- * The station a chat runs on, in its bar once its workspace has more than one: its icon and name, short; a tap opens
+ * The station a chat runs on, in its bar: its icon and name, short; a tap opens
  * its card (the web's is a hover card over the same tag: web/src/cloud/StationCards.tsx StationPeek).
  */
 @Composable
@@ -317,7 +317,6 @@ internal fun ChatStationChip(address: String) {
     val app = LocalApp.current
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(address.substringBefore('/')))
     val list = stations.value ?: return
-    if (list.size < 2) return
     val s = list.firstOrNull { it.station == address } ?: return
     StationTag(s.name, s.emoji, s.icon, Modifier.clickable { openStationPeek(app, address) })
 }

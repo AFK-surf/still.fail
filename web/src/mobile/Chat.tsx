@@ -142,7 +142,7 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
       {view.agents.map((a, i) => {
         const history = () => agentCard(app, here, a.session.key);
         const label = t("web-mobile.agent.card", { agent: a.session.agentText });
-        // The first shares its tile with the station it runs on (once the workspace has more than one): its icon, or its
+        // The first shares its tile with the station it runs on: its icon, or its
         // name where it has none; tapped, the station's card.
         if (i === 0 && station) {
           return (
@@ -166,7 +166,7 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
 }
 
 /**
- * The station the chat runs on, after its title once the workspace has more than one: its icon and name; a tap opens its
+ * The station the chat runs on, after its title: its icon and name; a tap opens its
  * card in a sheet (the wide screen's is a hover card over the same tag, ../cloud/StationCards.tsx StationPeek).
  */
 function StationChip({ station }: { station: string }) {
@@ -180,10 +180,10 @@ function StationChip({ station }: { station: string }) {
   );
 }
 
-/** The station the chat runs on, once the workspace has more than one. */
+/** The station the chat runs on. */
 function useChatStation(station: string) {
   const stations = useStations(scopeOf(station)).value;
-  if (!stations || stations.length < 2) return undefined;
+  if (!stations) return undefined;
   return stations.find((x) => x.station === station);
 }
 
