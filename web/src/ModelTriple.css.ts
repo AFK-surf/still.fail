@@ -26,6 +26,8 @@ export const runOptionText = style({ display: "grid", gap: "1px", flex: "1", min
 const rule = `1px solid color-mix(in srgb, ${vars.text} 10%, transparent)`;
 /** The panel: the filter across its top, the columns side by side under it with a line between, the foot under a line. */
 export const runPickerPanel = style({ padding: "0", overflow: "hidden" });
+/** What sits by a panel's corner (6px in from it) takes the corner's own shape, less that: squarer, it looks cut in; a pill leaves a crescent. */
+const inner = `calc(${vars.rMenu} - 6px)`;
 export const runPickerAccountsPanel = style({ padding: "6px" });
 export const runPickerSearch = style({
   display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", borderBottom: rule, color: vars.subtle,
@@ -37,7 +39,7 @@ globalStyle(`${runPickerSearch} input`, {
 globalStyle(`${runPickerSearch} input::placeholder`, { color: vars.subtle });
 export const runPicker = style({ display: "flex", maxHeight: "360px" });
 export const runPickerFoot = style({
-  display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "8px", padding: "8px 10px",
+  display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "8px", padding: "6px",
   borderTop: rule,
 });
 /** A column: only the models' scrolls (the others are short); each after the first has a line before it. */
@@ -62,7 +64,7 @@ export const runPickerWhoRoom = style({ flex: "1 1 0", width: 0, minWidth: 0, di
 /** The foot's line that says who runs it, and opens the accounts. */
 export const runPickerWho = style({
   display: "inline-flex", alignItems: "center", gap: "4px", minWidth: 0, maxWidth: "100%", height: "28px", padding: "0 8px",
-  border: 0, borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none",
+  border: 0, borderRadius: inner, cornerShape: vars.cornerShape, background: "none",
   color: vars.muted, font: "inherit", fontSize: vars.textMeta, cursor: "pointer",
   selectors: {
     "&:hover, &[data-state=open]": { background: vars.hover, color: vars.text },
@@ -77,7 +79,7 @@ export const runPickerWhoChevron = style({
 export const runPickerEfforts = style({ minWidth: "136px" });
 export const runPickerOption = style({
   display: "flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: "4px 8px", border: "0",
-  borderRadius: `calc(6px * ${vars.cornerScale})`, background: "none", color: vars.text, font: "inherit",
+  borderRadius: inner, background: "none", color: vars.text, font: "inherit",
   fontSize: vars.textUi, textAlign: "left", cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover },
