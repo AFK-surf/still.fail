@@ -15,7 +15,7 @@ import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
-import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
+import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Stop, Users, Web } from "../icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
@@ -28,13 +28,13 @@ import { ask, confirm } from "./sheets.tsx";
 import { openHistory } from "./History.tsx";
 import { AgentSince, openAgent } from "./AgentSheet.tsx";
 import { annotatePath } from "./Annotate.tsx";
-import { GroupLabel, InfoList, InfoRow, ModelMark, NavButton, QuotaRings, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
+import { Button, GroupLabel, InfoList, InfoRow, ModelMark, NavButton, PickRow, QuotaRings, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
 import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
 import { stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
-import type { ChatJobsView, Job } from "../core/shapes.ts";
+import type { ChatJobsView, ChatShare, Job } from "../core/shapes.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
 import { sendingHere } from "../madeChat.ts";
@@ -49,6 +49,7 @@ import * as barsCss from "./styles/bars.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
+import * as connectsCss from "./Connects.css.ts";
 
 import { t } from "../i18n.ts";
 export function ChatScreen() {
@@ -643,7 +644,7 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
  * within reach: pin it, open it in Slack, archive it.
  */
 function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
-  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + 1) * 41;
+  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + 1) * 41;
   // As tall as what it shows: its name and line, its agents, its rows.
   app.sheet({ height: Math.min(0.9, (25 + 84 + rows + 10 + 34) / window.innerHeight), content: () => <ChatInfo here={here} thread={thread} /> });
 }
@@ -698,7 +699,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
             })}
           </InfoList>
         )}
-        {(open || view.slackUrl) && (
+        {(open || view.slackUrl || view.xshare) && (
           <InfoList>
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
             {open && view.pinned != null && (
@@ -707,10 +708,61 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
                 <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? t("web-mobile.home.unpin") : t("web-mobile.chat.pinTop")}</span>
               </InfoRow>
             )}
+            {view.xshare && <ShareRow here={here} thread={thread} share={view.xshare} />}
             {view.slackUrl && <a className={listsCss.mInfoRow} href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openSlack")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a>}
             {open && <ArchiveRow here={here} view={view} thread={thread} />}
           </InfoList>
         )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The chat's sharing with the viewer's other workspaces (docs/chat-share.md): where it is shared at the row's end, under
+ * way a spinner there; a tap opens the sheet that changes it, for those who may (its starter, an owner or admin).
+ */
+function ShareRow({ here, thread, share }: { here: Here; thread: ChatThread; share: ChatShare }) {
+  const app = useApp();
+  const session = share.session;
+  const busy = useDoing("chat.xshare", { station: here.station, session });
+  const failed = useDoingFailed("chat.xshare", { station: here.station, session });
+  const body = <><Users size={16} /><span className={css.mShareLabel}>{t("web-pages.chat.xshare")}</span><span className={css.mShareText}>{share.text}</span></>;
+  if (!share.may) return <InfoRow>{body}</InfoRow>;
+  // As tall as what it shows: its head and line, a row a workspace, the switch, the button.
+  const open = () => app.sheet({ height: Math.min(0.9, (25 + 48 + 44 + share.places.length * 52 + 12 + 66 + 48) / window.innerHeight), content: () => <ShareSheet here={here} thread={thread} share={share} /> });
+  return <InfoRow busy={busy} failed={failed} onClick={open}>{body}{!busy && failed === undefined && <ChevronRight size={14} className={partsCss.mSubtle} />}</InfoRow>;
+}
+
+/** Which of the viewer's other workspaces it is shared with, ticked, and whether their agents may send: done, the sheet goes at once. */
+function ShareSheet({ here, thread, share }: { here: Here; thread: ChatThread; share: ChatShare }) {
+  const app = useApp();
+  const call = useStationCall(here.station);
+  const api = useMemo(() => stationApi(call), [call]);
+  const [ticked, setTicked] = useState(() => new Set(share.places.filter((p) => p.on).map((p) => p.workspace)));
+  const [write, setWrite] = useState(share.write);
+  const save = () => {
+    app.sheet(null);
+    api.xshare({ thread: thread.id, session: share.session }, share.places.filter((p) => ticked.has(p.workspace)).map((p) => p.workspace), write)
+      .catch((error) => app.toast(t("web-main.act.failed", { what: t("web-pages.chat.xshare.verb"), error: error instanceof Error ? error.message : String(error) })));
+  };
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-pages.chat.xshare")} />
+      <div className={sheetsCss.mSheetScroll}>
+        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{t("web-pages.chat.xshare.lead")}</p>
+        {share.places.map((p) => <PickRow key={p.workspace} label={p.name} checked={ticked.has(p.workspace)}
+          onClick={() => setTicked((was) => { const next = new Set(was); if (next.has(p.workspace)) next.delete(p.workspace); else next.add(p.workspace); return next; })} />)}
+        <div className={css.mShareWrite}>
+          <button type="button" className={connectsCss.mSwitchRow} disabled={ticked.size === 0} onClick={() => setWrite(!write)}>
+            <span className={partsCss.mGrow}><b>{t("web-pages.chat.xshare.write")}</b><span>{t("web-pages.chat.xshare.writeNote")}</span></span>
+            <span className={connectsCss.mSwitch} data-on={(write && ticked.size > 0) || undefined} />
+          </button>
+        </div>
+        <div className={partsCss.mPad}>
+          <Button primary label={t("common.done")} onClick={save} />
+        </div>
       </div>
     </>
   );

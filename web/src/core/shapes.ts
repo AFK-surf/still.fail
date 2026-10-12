@@ -1538,6 +1538,36 @@ export interface ChatSentElsewhere {
 	time?: Record<string, Stamp>;
 }
 
+/** A workspace a chat is shared with. */
+export interface ChatShareTo {
+	workspace: string;
+	name: string;
+}
+
+/** One of the viewer's other workspaces, and whether the chat is shared with it. */
+export interface ChatSharePlace {
+	workspace: string;
+	name: string;
+	/** The chat is shared with it. */
+	on: boolean;
+}
+
+/** A chat's sharing with other workspaces, for its "…": its line, and what changing it offers. */
+export interface ChatShare {
+	/** The session its station keeps its sharing by (its thread's own, else its first): `chat.xshare` names it. */
+	session: string;
+	/** Where it is shared, in a line: 未分享, or the workspaces and 只读/可发消息 (`A、C · 只读`). */
+	text: string;
+	/** The workspaces it is shared with (what was asked here, until its station has it). */
+	to: ChatShareTo[];
+	/** Their agents may send messages in it, not only read it. */
+	write: boolean;
+	/** The viewer may change it (the chat's starter, or an owner or admin of its workspace); else it is only shown. */
+	may: boolean;
+	/** The viewer's other workspaces, to tick (`chat.xshare` takes those ticked). */
+	places: ChatSharePlace[];
+}
+
 /** Who is looking: the account that reaches the workspace, by its email. */
 export interface Me {
 	id?: string;
@@ -1676,6 +1706,11 @@ export interface ChatView {
 	archivable?: boolean;
 	/** What the archive check made of it as it stands (the option picked, or a failure). Absent when none did. */
 	archiveCheck?: ArchiveCheck;
+	/**
+	 * Its sharing with the viewer's other workspaces (docs/chat-share.md); absent while it has no chat or agent, or
+	 * the viewer is in no other workspace.
+	 */
+	xshare?: ChatShare;
 }
 
 export interface StationState {

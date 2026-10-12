@@ -322,6 +322,15 @@ class StationApi(private val core: StillFailCore, val station: String) {
     }
     /** Keeps a chat at the top of the viewer's list, or lets it go (by its item's id, its session's key). */
     suspend fun setPinned(session: String, pinned: Boolean) { ops.chatPin(session = session) { this.pinned = pinned } }
+    /** Shares a chat with the viewer's other workspaces ticked (none: no longer), their agents sending in it too when `write`. */
+    suspend fun share(thread: Long?, session: String, to: List<String>, write: Boolean) {
+        op("chat.xshare") {
+            put("session", session)
+            if (thread != null) put("thread", thread)
+            putJsonArray("to") { to.forEach { add(JsonPrimitive(it)) } }
+            put("write", write)
+        }
+    }
     /** Deletes a session for good: its chat, its history and its workspace directory. */
     suspend fun deleteSession(key: String) { ops.sessionDelete(key = key) }
 

@@ -32,6 +32,7 @@ import { workspaceProfiles } from "./profiles.ts";
 import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes } from "./models.ts";
 import * as brief from "./brief.ts";
+import * as xshare from "./xshare.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -290,6 +291,10 @@ export type ViewsEnv = {
   betaOf: (workspace: string) => boolean;
   /// What still.fail calls the relay at a host.
   relayName: (host: string) => string | null;
+  /// Every workspace the signed-in accounts are in (xshare.ts); none where not given.
+  places?: () => xshare.Place[];
+  /// A chat's sharing asked here (`chat.xshare`) and not answered yet.
+  xshareAsked?: (station: string, session: string) => xshare.Asked | undefined;
 };
 
 /// The views' environment in a core.
@@ -308,6 +313,8 @@ export function envOf(core: Inner): ViewsEnv {
       const sub = owner(workspace);
       return sub !== null && get(get(core.data.record("me", sub), "user"), "beta") === true;
     },
+    places: () => xshare.places(core),
+    xshareAsked: (station, session) => xshare.asked(core, station, session),
     relayName: (host) => {
       for (const account of core.accounts.list()) {
         const names = get(core.data.record("me", account.sub), "relay_names");
@@ -555,6 +562,8 @@ export class Views implements Owner {
           { topic: "overview", station },
           { topic: "link", station },
           { topic: "workspace", workspace: ofAddress(station) },
+          // Its sharing names the viewer's other workspaces.
+          { topic: "workspaces" },
         );
         return topics;
       }
@@ -690,6 +699,9 @@ export class Views implements Owner {
     const manager = role === "owner" || role === "admin";
     const dismissed = get(get(prefs, "stationUpdatesDismissed"), station);
     v.stationUpdate = looks.stationUpdate(overview, v, typeof dismissed === "string" ? dismissed : null, this.#updateNoticesOpen.has(station), manager, this.stationName(station));
+    // Its sharing with the viewer's other workspaces, as asked here meanwhile.
+    const shared = xshare.shown({ places: this.#core.places?.() ?? [], asked: (session) => this.#core.xshareAsked?.(station, session), me: str(get(v.me, "email")) }, station, v.thread);
+    if (shared !== null) v.xshare = shared;
     return out;
   }
 

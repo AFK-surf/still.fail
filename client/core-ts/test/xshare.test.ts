@@ -1,0 +1,220 @@
+// A chat shared with the viewer's other workspaces (views/xshare.ts, docs/chat-share.md): what its "…" shows, and
+// `chat.xshare` — the chat's station told first, then each workspace newly given it through one of its own stations
+// that answers; shown at once and under way (`doing`) until its station has it.
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { Effect } from "effect";
+import { CoreError } from "../src/error.ts";
+import type { HttpRequest } from "../src/host.ts";
+import type { StationAddr } from "../src/station/addr.ts";
+import { HostWire, type RequestHead, type StationWire, type WireReply } from "../src/station/wire.ts";
+import { jsonResponse, type FakeHost } from "../src/testing.ts";
+import { apply, call, subscribe, v } from "./helpers.ts";
+import { base, started, stationReplies, status, threadView } from "./station-fixture.ts";
+
+// deno-lint-ignore no-explicit-any
+type J = any;
+
+const ORIGIN = "https://stillfail.test";
+const json = (b: Uint8Array | null | undefined) => (b ? JSON.parse(new TextDecoder().decode(b)) : null);
+
+/// What the other workspaces' stations were asked: by station, method and path, with the body.
+type Asked = { station: string; method: string; path: string; body: J };
+
+/// `ws/st` as the fixture has it; every other station answers only `PUT /xshare/hosts` (`down`: not reached), and
+/// nothing else (its links stay down).
+class Wire implements StationWire {
+  readonly asked: Asked[] = [];
+  readonly down = new Set<string>();
+  readonly #host: HostWire;
+  constructor(host: FakeHost) {
+    this.#host = new HostWire(host);
+  }
+  request(station: StationAddr, head: RequestHead, body: Uint8Array) {
+    const at = station.toString();
+    if (at === "ws/st") return this.#host.request(station, head, body);
+    const path = head.path.replace("/admin/api", "");
+    if (!(head.method === "PUT" && path === "/xshare/hosts")) return Effect.fail(CoreError.host("连不上"));
+    this.asked.push({ station: at, method: head.method, path, body: json(body) });
+    if (this.down.has(at)) return Effect.fail(CoreError.host("连不上"));
+    const bytes = new TextEncoder().encode(JSON.stringify({ ok: true }));
+    let given = false;
+    const reply: WireReply = { status: 200, headers: [], body: { take: Effect.sync(() => (given ? null : ((given = true), bytes))) }, via: null };
+    return Effect.succeed(reply);
+  }
+}
+
+/// The viewer is in three workspaces: the chat's (`ws`, W, as `role`), 甲 (`wa`, one station) and 丙 (`wc`, two).
+async function setUp(role = "admin", thread: J = threadView(7, 3)) {
+  let wire: Wire | null = null;
+  const s = await started({ ...base(), "GET /threads": [thread] }, 0, (host) => (wire = new Wire(host)), ({ host }) => {
+    const fetch = host.fetch.bind(host);
+    host.fetch = (req: HttpRequest) => {
+      const path = req.url.replace(ORIGIN, "");
+      if (path === "/v1/me") {
+        return Effect.succeed(jsonResponse(200, {
+          workspaces: [{ id: "ws", name: "W", role }, { id: "wa", name: "甲", role: "member" }, { id: "wc", name: "丙", role: "member" }],
+          invitations: [],
+          relay_url: null,
+        }));
+      }
+      if (path === "/v1/workspaces/wa") return Effect.succeed(jsonResponse(200, { id: "wa", role: "member", stations: [{ id: "a1", name: "A1", last_seen: null }] }));
+      if (path === "/v1/workspaces/wc") return Effect.succeed(jsonResponse(200, { id: "wc", role: "member", stations: [{ id: "c1", name: "C1", last_seen: null }, { id: "c2", name: "C2", last_seen: null }] }));
+      return fetch(req);
+    };
+  });
+  await s.host.time.pass(500);
+  return { ...s, wire: wire! };
+}
+
+/// The chat's station: `PUT /sessions/k1/xshare` answered as it would (the shares asked, `at` 5), its bodies kept.
+function shareAnswers(host: FakeHost, answer?: (body: J) => unknown) {
+  const bodies: J[] = [];
+  stationReplies(host, (req) => {
+    if (!(req.method === "PUT" && req.url === `${ORIGIN}/admin/api/sessions/k1/xshare`)) return undefined;
+    const body = json(req.body);
+    bodies.push(body);
+    if (answer) return answer(body);
+    const to = body.to.map((w: J) => ({ workspace: w.workspace, name: w.name }));
+    return { xshare: to.length === 0 ? null : { to, write: body.write, by: "a@x.com", at: 5 } };
+  });
+  return bodies;
+}
+
+function answerOf(host: FakeHost, values: Map<number, unknown>, id: number): J {
+  const said = host.takeEmitted();
+  const found = said.map(([, m]) => m as J).find((m) => m.id === id && ("ok" in m || "error" in m));
+  host.emitted.push(...said);
+  apply(host, values);
+  return found;
+}
+
+test("a_chat_shared_shows_at_once_and_tells_each_new_workspace_through_a_station_that_answers", async () => {
+  const { host, core, wire } = await setUp();
+  const bodies = shareAnswers(host);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  subscribe(core, ui, 2, { topic: "doing" });
+  await host.settle();
+  apply(host, values);
+  // Not shared: the viewer's other workspaces to tick; an admin of the chat's may. Kept by its thread's first session
+  // (a Slack thread's; one of its own has `home`).
+  assert.deepEqual(v(values, 1).xshare, {
+    session: "k1", text: "未分享", to: [], write: false, may: true,
+    places: [{ workspace: "wa", name: "甲", on: false }, { workspace: "wc", name: "丙", on: false }],
+  });
+
+  // Shared with both, read only: shown so at once, under way until its station has it.
+  const release = host.hold("/sessions/k1/xshare");
+  call(core, ui, 3, "chat.xshare", { station: "ws/st", session: "k1", thread: 7, to: ["wa", "wc", "wa"], write: false });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).xshare.text, "甲、丙 · 只读");
+  assert.deepEqual(v(values, 1).xshare.places.map((p: J) => p.on), [true, true]);
+  assert.deepEqual(v(values, 2).doing.map((d: J) => [d.call, d.params.station, d.params.session, d.stage]), [["chat.xshare", "ws/st", "k1", "running"]]);
+  // c1 is not reached: c2, the other of 丙's, is told instead.
+  wire.down.add("wc/c1");
+  release();
+  await host.settle();
+  const answered = answerOf(host, values, 3);
+  assert.ok(answered && "ok" in answered, JSON.stringify(answered));
+  // The chat's station got every workspace with its stations, as the viewer's account has them.
+  assert.deepEqual(bodies, [{
+    to: [
+      { workspace: "wa", name: "甲", stations: [{ id: "a1", name: "A1" }] },
+      { workspace: "wc", name: "丙", stations: [{ id: "c1", name: "C1" }, { id: "c2", name: "C2" }] },
+    ],
+    write: false,
+  }]);
+  const told = { workspace: "ws", name: "W", station: "st", stationName: "studio" };
+  assert.deepEqual(wire.asked, [
+    { station: "wa/a1", method: "PUT", path: "/xshare/hosts", body: told },
+    { station: "wc/c1", method: "PUT", path: "/xshare/hosts", body: told },
+    { station: "wc/c2", method: "PUT", path: "/xshare/hosts", body: told },
+  ]);
+  // Done: as its station has it now (into its thread as held), nothing under way.
+  assert.equal(v(values, 1).xshare.text, "甲、丙 · 只读");
+  assert.deepEqual(v(values, 2).doing, []);
+
+  // Down to 甲, its agents sending too: 甲 was told already, nobody is told again.
+  call(core, ui, 4, "chat.xshare", { station: "ws/st", session: "k1", thread: 7, to: ["wa"], write: true });
+  await host.settle();
+  assert.ok("ok" in answerOf(host, values, 4));
+  assert.deepEqual(bodies[1], { to: [{ workspace: "wa", name: "甲", stations: [{ id: "a1", name: "A1" }] }], write: true });
+  assert.equal(wire.asked.length, 3);
+  assert.equal(v(values, 1).xshare.text, "甲 · 可发消息");
+
+  // None: no longer shared.
+  call(core, ui, 5, "chat.xshare", { station: "ws/st", session: "k1", thread: 7, to: [] });
+  await host.settle();
+  assert.ok("ok" in answerOf(host, values, 5));
+  assert.deepEqual(bodies[2], { to: [], write: false });
+  assert.equal(v(values, 1).xshare.text, "未分享");
+  core.close();
+});
+
+test("a_share_that_fails_is_shown_as_it_was_and_says_why", async () => {
+  const { host, core, wire } = await setUp();
+  // A station from before sharing has no such route.
+  shareAnswers(host, () => status(404, { error: "no route PUT /sessions/k1/xshare" }));
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  subscribe(core, ui, 2, { topic: "doing" });
+  await host.settle();
+  call(core, ui, 3, "chat.xshare", { station: "ws/st", session: "k1", thread: 7, to: ["wa"], write: false });
+  await host.settle();
+  const answered = answerOf(host, values, 3);
+  assert.equal(answered.error.message, "这台 station 还没更新");
+  assert.equal(v(values, 1).xshare.text, "未分享");
+  assert.deepEqual(v(values, 2).doing.map((d: J) => [d.call, d.stage, d.error]), [["chat.xshare", "failed", "这台 station 还没更新"]]);
+  assert.deepEqual(wire.asked, [], "nobody is told of a share its station does not have");
+  core.close();
+});
+
+test("a_workspace_with_no_station_answering_is_said_by_name", async () => {
+  const { host, core, wire } = await setUp();
+  shareAnswers(host);
+  wire.down.add("wc/c1");
+  wire.down.add("wc/c2");
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  call(core, ui, 1, "chat.xshare", { station: "ws/st", session: "k1", thread: 7, to: ["wc"], write: false });
+  await host.settle();
+  assert.equal(answerOf(host, values, 1).error.message, "丙 没有在线的 station");
+  core.close();
+});
+
+test("a_member_sees_how_it_is_shared_and_its_starter_may_change_it", async () => {
+  {
+    // Shared by its station with 甲 and with a workspace the viewer is not in: those are named as the station has them.
+    const shared = { ...threadView(7, 3), xshare: { to: [{ workspace: "wa", name: "甲" }, { workspace: "wz", name: "Z" }], write: true, by: "b@x.com", at: 5 } };
+    const { host, core } = await setUp("member", shared);
+    const bodies = shareAnswers(host);
+    const ui = core.connect();
+    const values = new Map<number, unknown>();
+    subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+    await host.settle();
+    apply(host, values);
+    const x = v(values, 1).xshare;
+    assert.equal(x.text, "甲、Z · 可发消息");
+    assert.equal(x.may, false);
+    assert.deepEqual(x.places, [{ workspace: "wa", name: "甲", on: true }, { workspace: "wc", name: "丙", on: false }]);
+    // What the viewer cannot tick stays shared whatever is ticked.
+    call(core, ui, 2, "chat.xshare", { station: "ws/st", session: "k1", thread: 7, to: ["wc"], write: true });
+    await host.settle();
+    assert.deepEqual(bodies[0].to.map((w: J) => w.workspace), ["wc", "wz"]);
+    core.close();
+  }
+  const mine = { ...threadView(7, 3), home: "k0", creator: { id: "a@x.com", name: "a", via: "cloud" }, createdBy: "a@x.com" };
+  const { host, core } = await setUp("member", mine);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).xshare.may, true);
+  assert.equal(v(values, 1).xshare.session, "k0", "a chat of its own is kept by its home session");
+  core.close();
+});

@@ -339,6 +339,9 @@ export function stationApi(t: StationCall) {
       ops.chatRename<unknown>({ session: of.session, ...(of.thread == null ? {} : { thread: of.thread }), title }),
     /** Keeps a chat at the top of the viewer's list, or lets it go (by its item's id, its session's key). */
     pin: (of: { session: string }, pinned: boolean) => ops.chatPin<unknown>({ session: of.session, pinned }),
+    /** Shares a chat with the viewer's other workspaces ticked (none: no longer), their agents sending in it too when `write`. */
+    xshare: (of: { thread?: number | null; session: string }, to: string[], write: boolean) =>
+      t.op<unknown>("chat.xshare", { session: of.session, ...(of.thread == null ? {} : { thread: of.thread }), to, write }),
     deleteSession: (key: string) => ops.sessionDelete<{ ok: true }>({ key }),
     evict: (key: string) => ops.sessionEvict<{ ok: true }>({ key }),
     putConnect: (id: string, input: ConnectInput) => ops.connectPut<Overview>({ id, input }),

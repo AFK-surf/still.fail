@@ -1534,6 +1534,39 @@ data class ChatSentElsewhere (
 	val time: Map<String, Stamp>? = null
 )
 
+/// A workspace a chat is shared with.
+@Serializable
+data class ChatShareTo (
+	val workspace: String,
+	val name: String
+)
+
+/// One of the viewer's other workspaces, and whether the chat is shared with it.
+@Serializable
+data class ChatSharePlace (
+	val workspace: String,
+	val name: String,
+	/// The chat is shared with it.
+	val on: Boolean
+)
+
+/// A chat's sharing with other workspaces, for its "…": its line, and what changing it offers.
+@Serializable
+data class ChatShare (
+	/// The session its station keeps its sharing by (its thread's own, else its first): `chat.xshare` names it.
+	val session: String,
+	/// Where it is shared, in a line: 未分享, or the workspaces and 只读/可发消息 (`A、C · 只读`).
+	val text: String,
+	/// The workspaces it is shared with (what was asked here, until its station has it).
+	val to: List<ChatShareTo>,
+	/// Their agents may send messages in it, not only read it.
+	val write: Boolean,
+	/// The viewer may change it (the chat's starter, or an owner or admin of its workspace); else it is only shown.
+	val may: Boolean,
+	/// The viewer's other workspaces, to tick (`chat.xshare` takes those ticked).
+	val places: List<ChatSharePlace>
+)
+
 /// Who is looking: the account that reaches the workspace, by its email.
 @Serializable
 data class Me (
@@ -1657,7 +1690,10 @@ data class ChatView (
 	/// (`chat.archive`). Absent otherwise.
 	val archivable: Boolean? = null,
 	/// What the archive check made of it as it stands (the option picked, or a failure). Absent when none did.
-	val archiveCheck: ArchiveCheck? = null
+	val archiveCheck: ArchiveCheck? = null,
+	/// Its sharing with the viewer's other workspaces (docs/chat-share.md); absent while it has no chat or agent, or
+	/// the viewer is in no other workspace.
+	val xshare: ChatShare? = null
 )
 
 @Serializable

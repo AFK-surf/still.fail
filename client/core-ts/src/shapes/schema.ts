@@ -1576,7 +1576,25 @@ export const SHAPES: Record<string, Shape> = {
     ["asks", vec("ChatAsk"), { default: true, doc: "What is asked in it that no one has decided and the viewer has not let go (a card, or an agent needing a\nperson), the oldest first, for the bar above the composer that leads to each. Empty when nothing is." }],
     ["archivable", opt("bool"), { doc: "Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap\n(`chat.archive`). Absent otherwise." }],
     ["archiveCheck", opt("ArchiveCheck"), { default: true, doc: "What the archive check made of it as it stands (the option picked, or a failure). Absent when none did." }],
+    ["xshare", opt("ChatShare"), { doc: "Its sharing with the viewer's other workspaces (docs/chat-share.md); absent while it has no chat or agent, or\nthe viewer is in no other workspace." }],
   ], { doc: "An item's page: its chat (with the viewer's read position), or its agent before it has one." }),
+  ChatShare: struct([
+    ["session", "String", { doc: "The session its station keeps its sharing by (its thread's own, else its first): `chat.xshare` names it." }],
+    ["text", "String", { doc: "Where it is shared, in a line: 未分享, or the workspaces and 只读/可发消息 (`A、C · 只读`)." }],
+    ["to", vec("ChatShareTo"), { doc: "The workspaces it is shared with (what was asked here, until its station has it)." }],
+    ["write", "bool", { doc: "Their agents may send messages in it, not only read it." }],
+    ["may", "bool", { doc: "The viewer may change it (the chat's starter, or an owner or admin of its workspace); else it is only shown." }],
+    ["places", vec("ChatSharePlace"), { doc: "The viewer's other workspaces, to tick (`chat.xshare` takes those ticked)." }],
+  ], { doc: "A chat's sharing with other workspaces, for its \"…\": its line, and what changing it offers." }),
+  ChatShareTo: struct([
+    ["workspace", "String"],
+    ["name", "String"],
+  ], { doc: "A workspace a chat is shared with." }),
+  ChatSharePlace: struct([
+    ["workspace", "String"],
+    ["name", "String"],
+    ["on", "bool", { doc: "The chat is shared with it." }],
+  ], { doc: "One of the viewer's other workspaces, and whether the chat is shared with it." }),
   ChatAsk: struct([
     ["seq", "u64", { doc: "The post it is about (`decision.dismiss`, and where the bar jumps to)." }],
     ["card", "bool", { doc: "A card: its options are on that post." }],

@@ -31,6 +31,7 @@ export type Call =
   | { kind: "profileModels"; op: ops.Request; id: string; models: unknown }
   | { kind: "chatArchive"; op: ops.Request; thread: number | null; session: string; archived: boolean }
   | { kind: "chatChange"; op: ops.Request; thread: number | null; session: string; title: string | null; pinned: boolean | null; keep: boolean }
+  | { kind: "chatXshare"; station: string; workspace: string | null; session: string; thread: number | null; to: string[]; write: boolean }
   | { kind: "chatSend"; station: string; thread: number; text: string; attachments: unknown; quotes: unknown; client: string | null }
   | { kind: "chatCreate"; station: string; ask: Record<string, unknown> }
   | { kind: "chatSendTo"; station: string; session: string; text: string; attachments: unknown; quotes: unknown; client: string | null }
@@ -128,6 +129,7 @@ export function counts(call: Call, name: string): boolean {
       return call.op.method !== "GET" && !ops.QUIET_WRITES.includes(name);
     case "chatArchive":
     case "chatChange":
+    case "chatXshare":
     case "chatRetry":
     case "chatRetryIn":
     case "chatDiscard":
@@ -436,6 +438,17 @@ export function parseCall(name: string, params: unknown): Call {
       const shaped = conform("DraftView", rest);
       if ("error" in shaped) throw CoreError.invalid(t("core-misc.params.invalid", { error: shaped.error }));
       return { kind: "draftPut", station, chat, draft: shaped.ok };
+    }
+    case "chat.xshare": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["workspace", S, "opt"],
+        ["session", S, "req"],
+        ["thread", "u64", "opt"],
+        ["to", "strings", "req"],
+        ["write", "bool", "default"],
+      ]);
+      return { kind: "chatXshare", station: p.station as string, workspace: p.workspace as string | null, session: p.session as string, thread: p.thread as number | null, to: [...new Set(p.to as string[])], write: p.write as boolean };
     }
     case "chat.ref": {
       const p = read(params, [

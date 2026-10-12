@@ -27,14 +27,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fail.still.android.AppState
 import fail.still.android.data.ChatOf
+import fail.still.android.data.ChatShare
 import fail.still.android.data.ChatView
 import fail.still.android.data.ChatThread
 import fail.still.android.data.Topics
@@ -59,7 +62,7 @@ import fail.still.android.ui.Smooth
  * done with it, within reach: pin it, open it in Slack, archive it. As tall as what it shows.
  */
 fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread, first: ChatView? = null) {
-    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + 1) * 40
+    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + (if (first?.xshare != null) 1 else 0) + 1) * 40
     app.sheet = SheetSpec(0.55f, fit = (22 + 84 + rows + 10 + 30).dp) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
         val view = chat.value
@@ -113,7 +116,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                 }
                 Spacer(Modifier.height(10.dp))
             }
-            if (open || view?.slackUrl != null) InfoList {
+            if (open || view?.slackUrl != null || view?.xshare != null) InfoList {
                 // A station from before pins says nothing of them: its chats are not pinned from here.
                 if (open) view!!.pinned?.let { pinned ->
                     // Under way: a spinner on the row, not tapped again.
@@ -126,6 +129,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                         if (pinning) Spinner(14.dp)
                     }
                 }
+                view?.xshare?.let { share -> ShareRow(app, station, about.id, share) }
                 view?.slackUrl?.let { url ->
                     val context = LocalContext.current
                     InfoRow(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }) {
@@ -146,6 +150,63 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                 }) {
                     IconIn(Icons.Archive, 16.dp, C.ink)
                     Text(t("android-chat.info.archive"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The chat's sharing with the viewer's other workspaces (docs/chat-share.md; web mobile/Chat.tsx ShareRow): where it is
+ * shared at the row's end, under way a spinner there; a tap opens the sheet that changes it, for those who may (its
+ * starter, an owner or admin).
+ */
+@Composable
+private fun ShareRow(app: AppState, station: String, thread: Long, share: ChatShare) {
+    val session = share.session
+    val busy = app.isDoing("chat.xshare", "station" to station, "session" to session)
+    val failed = app.failedOf("chat.xshare", "station" to station, "session" to session)
+    InfoRow(onClick = if (!share.may || busy) null else ({ openShare(app, station, thread, session, share) })) {
+        IconIn(Icons.Users, 16.dp, C.ink)
+        // Its name whole; where it is shared after it, at the row's end, cut short rather than wrapped.
+        Text(t("web-pages.chat.xshare"), fontSize = 14.sp, color = C.ink, maxLines = 1, softWrap = false)
+        Text(share.text, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+        if (busy || failed != null) DoingMark(busy, failed)
+        else if (share.may) IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+    }
+}
+
+/** Which of the viewer's other workspaces it is shared with, ticked, and whether their agents may send: done, the sheet goes at once. */
+private fun openShare(app: AppState, station: String, thread: Long, session: String, share: ChatShare) {
+    app.sheet = SheetSpec(0.6f, fit = (22 + 48 + 44 + share.places.size * 48 + 12 + 66 + 70).dp) {
+        var ticked by remember { mutableStateOf(share.places.filter { it.on }.map { it.workspace }.toSet()) }
+        var write by remember { mutableStateOf(share.write) }
+        SheetGrab()
+        SheetHead(t("web-pages.chat.xshare"))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Text(t("web-pages.chat.xshare.lead"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+            share.places.forEach { p ->
+                PickRow(p.name, checked = p.workspace in ticked) { ticked = if (p.workspace in ticked) ticked - p.workspace else ticked + p.workspace }
+            }
+            Box(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 16.dp)) {
+                val none = ticked.isEmpty()
+                Row(
+                    Modifier.fillMaxWidth().clip(Smooth(14.dp)).background(C.ink.copy(alpha = 0.05f)).clickable(enabled = !none) { write = !write }
+                        .padding(horizontal = 14.dp, vertical = 10.dp).alpha(if (none) 0.5f else 1f),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(t("web-pages.chat.xshare.write"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                        Text(t("web-pages.chat.xshare.writeNote"), fontSize = 13.sp, color = C.muted)
+                    }
+                    Switch(write && !none)
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.End) {
+                Button(t("common.done"), primary = true) {
+                    app.sheet = null
+                    val to = share.places.filter { it.workspace in ticked }.map { it.workspace }
+                    app.act(t("web-pages.chat.xshare.verb")) { app.api(station).share(thread, session, to, write) }
                 }
             }
         }

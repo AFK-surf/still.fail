@@ -1066,7 +1066,8 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   const u = ui();
   t.subscribe(1, chatTopic("ws/a", 7));
   await t.read(u, 1);
-  sameTopics(t.started(), [threads("ws/a"), sessions("ws/a"), pageOf("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a"), workspace(), prefs()]);
+  // The viewer's workspaces too: its sharing names the others (views/xshare.ts).
+  sameTopics(t.started(), [threads("ws/a"), sessions("ws/a"), pageOf("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a"), workspace(), prefs(), { topic: "workspaces" }]);
   assert.equal(u.value === undefined, true);
   const now = t.host.nowMs();
   const chat = { ...thread(7, ["k", "j"], now), title: "排查", people: [{ id: "local", name: "本机管理页", email: null, via: "local" }] };

@@ -20,6 +20,9 @@ import fail.still.android.data.AgentCardView
 import fail.still.android.data.Attention
 import fail.still.android.data.ChatAgent
 import fail.still.android.data.ChatOf
+import fail.still.android.data.ChatShare
+import fail.still.android.data.ChatSharePlace
+import fail.still.android.data.ChatShareTo
 import fail.still.android.data.Creator
 import fail.still.android.data.HistoryView
 import fail.still.android.data.Job
@@ -34,6 +37,9 @@ import fail.still.android.data.Stamp
 import fail.still.android.data.Topics
 import fail.still.android.data.TurnRecord
 import fail.still.android.data.UsageLine
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -85,7 +91,7 @@ class AgentSheetTest {
 
     private val chatPage = listOf(Screen.Home, Screen.Chat(Fixtures.STATION, of))
 
-    private fun open(running: Boolean, dark: Boolean = false, left: Long = 72, context: Double = 61.0, notes: List<AgentCardNote> = emptyList(), pinned: Boolean? = false, stack: List<Screen> = chatPage): Harness {
+    private fun open(running: Boolean, dark: Boolean = false, left: Long = 72, context: Double = 61.0, notes: List<AgentCardNote> = emptyList(), pinned: Boolean? = false, stack: List<Screen> = chatPage, xshare: ChatShare? = null): Harness {
         val h = Harness(rule)
         h.fake.put(Topics.live(Fixtures.STATION, key), Live(loaded = true, timeline = emptyList(), steps = emptyList(), activity = if (running) Activity(ActivityNow("now", "编辑 AgentSheet.kt")) else null))
         h.fake.put(Topics.agentCard(Fixtures.STATION, key), card(running, context, notes))
@@ -94,7 +100,7 @@ class AgentSheetTest {
             creator = Creator(id = "alice", name = "Alice", via = "ember", shown = people[0].shown),
             time = mapOf("createdAt" to Stamp(Fixtures.NOW.toDouble(), "3 小时前", "9月30日 07:00", "", true)),
         )
-        h.fake.put(topic, Fixtures.chat(talk, thread = thread).copy(agents = listOf(agent(running, left, notes)), people = people, pinned = pinned))
+        h.fake.put(topic, Fixtures.chat(talk, thread = thread).copy(agents = listOf(agent(running, left, notes)), people = people, pinned = pinned, xshare = xshare))
         h.fake.put(Topics.history(Fixtures.STATION, key), HistoryView(
             items = emptyList(), live = emptyList(), edge = "已到 Session 开始处", empty = false, loaded = true,
             usage = listOf(UsageLine("模型调用", "142 次"), UsageLine("输入", "1.2M"), UsageLine("其中缓存", "1.1M"), UsageLine("输出", "34K"), UsageLine("缓存命中率", "92%"), UsageLine("上下文", "122K / 200K（61%）"), UsageLine("费用估算", "$4.20")),
@@ -167,6 +173,56 @@ class AgentSheetTest {
         h.settle()
         rule.onNodeWithText("$4.20").assertIsDisplayed()
         rule.onNodeWithText("归档对话").assertDoesNotExist()
+    }
+
+    /** Shared with two of the viewer's other workspaces, read only (views/xshare.ts `shown`). */
+    private fun shared(may: Boolean) = ChatShare(
+        session = key, text = "设计组、Acme 海外 · 只读", write = false, may = may,
+        to = listOf(ChatShareTo("wb", "设计组"), ChatShareTo("wc", "Acme 海外")),
+        places = listOf(ChatSharePlace("wb", "设计组", true), ChatSharePlace("wc", "Acme 海外", true), ChatSharePlace("wd", "个人", false)),
+    )
+
+    /** Its sharing with other workspaces: a row of the chat's sheet with where it is shared, whose sheet ticks them. */
+    @Test
+    fun theChatsSharingIsTickedInASheetOfItsOwn() = sharing(dark = false)
+
+    @Test
+    fun theChatsSharingInTheDark() = sharing(dark = true)
+
+    private fun sharing(dark: Boolean) {
+        val h = open(running = false, dark = dark, xshare = shared(may = true))
+        rule.onNodeWithContentDescription("对话信息").performClick()
+        h.settle()
+        rule.onNodeWithText("设计组、Acme 海外 · 只读").assertIsDisplayed()
+        picture(h, if (dark) "chat-info-share-dark" else "chat-info-share")
+        rule.onNodeWithText("分享给其他 workspace").performClick()
+        h.settle()
+        rule.onNodeWithText("勾选的 workspace 里的 agent 能读这个对话").assertIsDisplayed()
+        rule.onNodeWithText("个人").performClick()
+        rule.onNodeWithText("可以发消息").performClick()
+        h.settle()
+        picture(h, if (dark) "share-sheet-dark" else "share-sheet")
+        rule.onNodeWithText("完成").performClick()
+        h.settle()
+        rule.runOnIdle { assertEquals(null, h.app.sheet) }
+        val asked = h.fake.calls.last { it.first == "chat.xshare" }.second
+        assertEquals(Fixtures.STATION, asked["station"]!!.jsonPrimitive.content)
+        assertEquals(key, asked["session"]!!.jsonPrimitive.content)
+        assertEquals(listOf("wb", "wc", "wd"), asked["to"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals(true, asked["write"]!!.jsonPrimitive.boolean)
+    }
+
+    /** One who may not change it (not its starter, nor an owner or admin) sees where it is shared, and nothing opens. */
+    @Test
+    fun theChatsSharingIsOnlyShownToWhoMayNotChangeIt() {
+        val h = open(running = false, xshare = shared(may = false))
+        rule.onNodeWithContentDescription("对话信息").performClick()
+        h.settle()
+        rule.onNodeWithText("设计组、Acme 海外 · 只读").assertIsDisplayed()
+        rule.onNodeWithText("分享给其他 workspace").performClick()
+        h.settle()
+        rule.onNodeWithText("勾选的 workspace 里的 agent 能读这个对话").assertDoesNotExist()
+        assertTrue(h.fake.calls.none { it.first == "chat.xshare" })
     }
 
     /** Its history's details open with the same: where it stands and its figures, over how it runs and what it used. */

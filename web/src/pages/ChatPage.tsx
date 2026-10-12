@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, EdgeChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Web } from "../icons.tsx";
+import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
@@ -13,7 +13,7 @@ import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from
 import { PENDING } from "../lastChat.ts";
 import { ownOrigin } from "../stillfailLink.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
-import type { ChatJobsView } from "../core/shapes.ts";
+import type { ChatJobsView, ChatShare } from "../core/shapes.ts";
 import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
@@ -32,8 +32,8 @@ import { chatOpening, track } from "../telemetry.ts";
 import { useReady } from "../core/react.ts";
 import { failure, useAct, useToast } from "../toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
-import { DoingShown } from "../DoingMark.tsx";
-import { AgentMark, Confirm, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, Time, Tip } from "../ui.tsx";
+import { DoingShown, useDoingState } from "../DoingMark.tsx";
+import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, SwitchRow, Time, Tip } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
 import { TitleInput, useRenaming } from "../Rename.tsx";
 import * as renameCss from "../Rename.css.ts";
@@ -554,8 +554,12 @@ function ChatInfo({ chat, thread }: { chat: ChatView; thread: ChatThread }) {
   const connect = slackConnect(chat);
   const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
   const where = chat.place;
+  const [open, setOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const share = chat.xshare;
   return (
-    <Popover.Root>
+    <>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label={t("web-pages.chat.info")}>
         <Popover.Trigger asChild>
           <button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.chat.info")}><Info {...ICON} /></button>
@@ -577,9 +581,66 @@ function ChatInfo({ chat, thread }: { chat: ChatView; thread: ChatThread }) {
               {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
             </ul>
           )}
+          {share && <ShareRow share={share} onOpen={() => { setOpen(false); setSharing(true); }} />}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+    {share && sharing && <ShareDialog share={share} thread={thread.id} onClose={() => setSharing(false)} />}
+    </>
+  );
+}
+
+/**
+ * The chat's sharing with the viewer's other workspaces (docs/chat-share.md), last in its info: where it is shared at
+ * the row's end, under way a turning ring there. Only those who may change it (its starter, an owner or admin) open it.
+ */
+function ShareRow({ share, onOpen }: { share: ChatShare; onOpen(): void }) {
+  const station = useStation().address;
+  const state = useDoingState("chat.xshare", { station, session: share.session });
+  const body = (
+    <>
+      <Users size={14} /><span className={css.shareLabel}>{t("web-pages.chat.xshare")}</span>
+      <span className={css.shareText}>{share.text}</span>
+      <DoingShown state={state} className={controlsCss.iconSpinner} size={12} label={t("web-pages.chat.xshare.saving")} />
+    </>
+  );
+  return share.may
+    ? <button type="button" className={`${controlsCss.menuItem} ${css.shareRow}`} data-may="" onClick={onOpen}>{body}</button>
+    : <div className={`${controlsCss.menuItem} ${css.shareRow}`}>{body}</div>;
+}
+
+/**
+ * Which of the viewer's other workspaces it is shared with, ticked, and whether their agents may send in it: done, the
+ * dialog goes at once and the core shows it so while its station is told (`chat.xshare`).
+ */
+function ShareDialog({ share, thread, onClose }: { share: ChatShare; thread: number; onClose(): void }) {
+  const station = useStation().address;
+  const api = stationApi(useStationCall(station));
+  const act = useAct();
+  const [ticked, setTicked] = useState(() => new Set(share.places.filter((p) => p.on).map((p) => p.workspace)));
+  const [write, setWrite] = useState(share.write);
+  const toggle = (id: string) => setTicked((was) => { const next = new Set(was); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const save = () => {
+    onClose();
+    act(api.xshare({ thread, session: share.session }, share.places.filter((p) => ticked.has(p.workspace)).map((p) => p.workspace), write), t("web-pages.chat.xshare.verb"));
+  };
+  return (
+    <Dialog open onClose={onClose} title={t("web-pages.chat.xshare")} description={t("web-pages.chat.xshare.lead")}
+      footer={<Button variant="primary" onClick={save}>{t("common.done")}</Button>}>
+      <ul className={css.shareList}>
+        {share.places.map((p) => (
+          <li key={p.workspace}>
+            <label className={pagesCss.listRow}>
+              <input type="checkbox" checked={ticked.has(p.workspace)} onChange={() => toggle(p.workspace)} />
+              <span className={pagesCss.listRowTitle}>{p.name}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className={css.shareWrite}>
+        <SwitchRow title={t("web-pages.chat.xshare.write")} description={t("web-pages.chat.xshare.writeNote")} checked={write} onChange={setWrite} disabled={ticked.size === 0} />
+      </div>
+    </Dialog>
   );
 }
 

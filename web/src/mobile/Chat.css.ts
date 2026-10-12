@@ -24,6 +24,16 @@ globalStyle(`${mInfoFacts} > span:last-child`, { minWidth: "0", overflow: "hidde
 export const mInfoAgent = style({ display: "flex", flexDirection: "column", minWidth: "0" });
 /** Where the agent stands and for how long, under its name. */
 export const mInfoStatus = style({});
+/** The row's name, whole on its line; where the chat is shared after it, at its end, cut short rather than wrapped. */
+export const mShareLabel = style({ flex: "none", whiteSpace: "nowrap" });
+export const mShareText = style({
+  flex: "1 1 0", width: "0", textAlign: "right", fontSize: vars.textMeta, color: "var(--m-muted)",
+  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+/** In its sheet, under the workspaces: whether their agents may send (faint while none is ticked). */
+export const mShareWrite = style({ padding: "12px 20px 16px" });
+globalStyle(`${mShareWrite} > button`, { width: "100%" });
+globalStyle(`${mShareWrite} > button:disabled`, { opacity: "0.5", cursor: "default" });
 export const mChatBar = style({
   position: "absolute", top: "0", left: "0", right: "0", zIndex: "3", display: "flex", alignItems: "center",
   padding: "calc(var(--m-top) + 6px) 16px 8px 4px",

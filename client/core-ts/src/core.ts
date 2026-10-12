@@ -44,6 +44,7 @@ import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
 import { envOf, Views } from "./views/views.ts";
+import * as xshare from "./views/xshare.ts";
 import { isObject } from "./util.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
@@ -185,6 +186,7 @@ export class Core {
       inner.router.owners.push(inner.views);
       inner.viewCalls = new ViewCalls(inner, inner.views);
       inner.viewCalls.install();
+      xshare.install(inner);
       inner.attention = new Attention(inner, yield* Attend.load(inner.host));
       inner.router.owners.push(inner.attention);
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);

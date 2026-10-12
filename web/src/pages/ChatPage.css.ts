@@ -164,6 +164,22 @@ export const detailRow = style({
   display: "grid", gridTemplateColumns: "6em minmax(0, 1fr)", gap: "12px", fontSize: vars.textUi, alignItems: "center",
 });
 export const detailInline = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
+/** The chat's sharing with other workspaces, last in its info: a row as a menu's, where it is shared at its end. */
+export const shareRow = style({
+  margin: "8px -8px -4px", width: "calc(100% + 16px)", color: vars.text,
+  selectors: {
+    "&[data-may]:hover": { background: vars.hover },
+    "&:not([data-may])": { cursor: "default" },
+  },
+});
+export const shareLabel = style({ flex: "none", whiteSpace: "nowrap" });
+export const shareText = style({
+  flex: "1 1 0", width: "0", textAlign: "right", color: vars.muted, fontSize: vars.textMeta,
+  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+/** In its dialog, the workspaces to tick, then whether their agents may send. */
+export const shareList = style({ margin: "0 -12px", padding: "0", listStyle: "none" });
+export const shareWrite = style({ marginTop: "8px" });
 export const detailLink = style({
   display: "inline-flex", alignItems: "center", gap: "6px",
   selectors: {
