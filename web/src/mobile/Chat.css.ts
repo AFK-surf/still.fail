@@ -6,9 +6,24 @@ import { mChat, mMessages } from "./styles/chat.css.ts";
 export const mCenter = style({
   flex: "1", display: "grid", placeItems: "center", padding: "32px", textAlign: "center", fontSize: vars.textUi,
 });
-export const mInfoLabel = style({ width: "72px", flex: "none", color: "var(--m-muted)" });
-export const mInfoName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" });
-export const mInfoAgent = style({ display: "flex", flexDirection: "column" });
+/** The chat's own sheet: its name, two lines at most, with the way to change it at its end. */
+export const mInfoHead = style({ display: "flex", alignItems: "flex-start", gap: "12px", paddingTop: "4px" });
+globalStyle(`${mInfoHead} > b`, {
+  flex: "1", minWidth: "0", fontSize: vars.textTitle, lineHeight: vars.leadingTitle, fontWeight: "600", overflowWrap: "anywhere",
+  display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical", overflow: "hidden",
+});
+export const mInfoEdit = style({
+  display: "grid", placeItems: "center", flex: "none", width: "32px", height: "32px", marginTop: "-4px", padding: "0", border: "0",
+  borderRadius: "50%", background: "color-mix(in srgb, var(--m-ink) 5%, transparent)", cursor: "pointer",
+});
+/** Who started it, how many take part, when it was last written in: a quiet line under its name. */
+export const mInfoFacts = style({
+  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", padding: "6px 0 16px", fontSize: vars.textMeta, color: "var(--m-muted)",
+});
+globalStyle(`${mInfoFacts} > span:last-child`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const mInfoAgent = style({ display: "flex", flexDirection: "column", minWidth: "0" });
+/** Where the agent stands and for how long, under its name. */
+export const mInfoStatus = style({});
 export const mChatBar = style({
   position: "absolute", top: "0", left: "0", right: "0", zIndex: "3", display: "flex", alignItems: "center",
   padding: "calc(var(--m-top) + 6px) 16px 8px 4px",

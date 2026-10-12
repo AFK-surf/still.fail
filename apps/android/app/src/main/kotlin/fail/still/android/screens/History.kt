@@ -83,6 +83,7 @@ import fail.still.android.data.HistoryView
 import fail.still.android.data.ModelOption
 import fail.still.android.data.PickView
 import fail.still.android.data.Host
+import fail.still.android.data.AgentCardView
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
 import fail.still.android.data.errorText
@@ -520,18 +521,28 @@ private fun PhaseLine(phase: HistoryPhase) {
     }
 }
 
-/** How it runs (which can be changed here), what it has used, the station. */
+/** Where it stands and its figures, how it runs (which can be changed here), what it has used, the station. */
 @Composable
 private fun Details(station: String, of: ChatOf, agent: ChatAgent, history: HistoryView?, host: Host?) {
     val app = LocalApp.current
     val s = agent.session
+    val card by rememberTopic<AgentCardView>(app.core, Topics.agentCard(station, s.key))
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
+        // Where it stands and the figures that say most, as its card has them (AgentSheet.kt).
+        AgentStatus(agent, Modifier.padding(top = 2.dp))
+        AgentTiles(card.value)
+        AgentNotes(card.value)
+        Box(Modifier.height(6.dp))
         // Changing how it runs is a screen of its own.
         RunRow(agent) { app.push(Screen.RunSettings(station, of, s.key)) }
         Column(Modifier.padding(top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Detail(t("android-chat.history.detail.runtime"), s.runtimeText)
             s.processText?.let { Detail(t("android-chat.history.detail.process"), it) }
-            history?.usage?.forEach { Detail(it.label, it.value) }
+            card.value?.work?.let { Detail(t("android-chat.agent.turns"), it) }
+        }
+        history?.usage?.takeIf { it.isNotEmpty() }?.let { usage ->
+            GroupLabel(t("android-chat.agent.usage"))
+            Column(Modifier.padding(top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { usage.forEach { Detail(it.label, it.value) } }
         }
         GroupLabel("Station")
         Column(Modifier.padding(top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -559,6 +570,7 @@ private fun RunRow(agent: ChatAgent, onOpen: () -> Unit) {
             " · ${s.effort ?: t("android-chat.pick.effort.default")} · ${if (s.profilePinned == true) name else t("android-chat.history.run.auto", "name" to name)}",
             fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
         )
+        QuotaRings(agent.account?.quota)
         IconIn(Icons.ChevronDown, 14.dp, C.muted)
     }
 }
@@ -746,7 +758,8 @@ internal fun PickLine(label: String, sub: String? = null, checked: Boolean, onCl
 @Composable
 private fun Detail(label: String, value: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(label, fontSize = 14.sp, color = C.muted, modifier = Modifier.width(64.dp))
+        // As wide as the longest of them (缓存命中率): a label is not broken.
+        Text(label, fontSize = 14.sp, color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(76.dp))
         Text(value, fontSize = 14.sp, color = C.ink)
     }
 }

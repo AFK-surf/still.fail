@@ -243,13 +243,16 @@ export interface Runs { choices: ModelOption[]; profile: Profile }
  * few hundred thousand tokens each. */
 export function agentCardView(chat: DemoChat): AgentCardView {
   const turns = chat.messages.filter((m) => m.authorKind === "person").length;
-  if (turns === 0) return { recent: [], attention: [] };
+  if (turns === 0) return { latest: [], attention: [] };
   const context = turns * 19;
   return {
     work: `${turns} 轮 · 共干了 ${turns * 7} 分钟`, cost: `$${(turns * 0.62).toFixed(2)}`, tokens: `输入 ${turns * 420}K · 输出 ${turns * 11}K`,
     cache: { percent: 91, text: "91%", level: "ok" },
     context: { percent: context, text: `${turns * 38}K / 200K`, level: context >= 95 ? "red" : context >= 80 ? "amber" : "ok" },
-    recent: chat.messages.filter((m) => m.authorKind === "agent").slice(-3).map((m) => ({ key: `${m.seq}`, text: m.text.split("\n")[0]!.replace(/`/g, "") })),
+    latest: [
+      ...chat.messages.filter((m) => m.authorKind === "agent").map((m) => ({ key: `${m.seq}`, text: m.text.split("\n")[0]!.replace(/`/g, "") })),
+      ...(chat.running ? [{ key: "now", text: chat.running.activity, now: true }] : []),
+    ].slice(-3),
     attention: [],
   };
 }
@@ -265,7 +268,9 @@ export function chatView(chat: DemoChat, runs?: Runs): ChatView {
       account: { id: runs.profile.id, name: runs.profile.name, current: true, kind: runs.profile.access.kind, runtime: "claude" as const, ...(runs.profile.quota ? { quota: runs.profile.quota } : {}) },
       profiles: [{ id: runs.profile.id, name: runs.profile.name, current: true, kind: runs.profile.access.kind, runtime: "claude" as const }],
     } : { profiles: [], choices: [] }),
-    attention: chat.failed ? [{ kind: "account", text: "账号被停用" }] : [], turns: [], threads: [], jobs: [],
+    // A turn for each message of a person's, as its card counts them (agentCardView).
+    attention: chat.failed ? [{ kind: "account", text: "账号被停用" }] : [], threads: [], jobs: [],
+    turns: chat.messages.filter((m) => m.authorKind === "person").map((m) => ({ id: `t${m.seq}`, kind: "input", startedAt: m.createdAt, endedAt: m.createdAt + 7 * 60_000 })),
   };
   // A chat the visitor started is theirs.
   const creator = chat.people[0] ?? { id: "local", name: "你", via: "local", shown: { name: "你", display: "你", mine: true } };

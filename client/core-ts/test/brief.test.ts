@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import { card, jobsText, recentOf, workText } from "../src/views/brief.ts";
+import { card, jobsText, latestOf, recentOf, workText } from "../src/views/brief.ts";
 
 holdLanguage();
 const MIN = 60_000;
@@ -43,7 +43,7 @@ test("the_card_says_what_it_did_cost_and_used", () => {
   assert.deepEqual(c.attention, [{ text: "磁盘剩 8 GB", level: "amber" }, { text: "「lin」要重新登录", level: "red" }]);
   // Before its first turn and its usage is read: nothing.
   const none = card({ turns: [], attention: [], jobs: [] }, null);
-  assert.deepEqual([none.work, none.cost, none.cache, none.context, none.jobs, none.recent, none.attention], [null, undefined, undefined, undefined, null, [], []]);
+  assert.deepEqual([none.work, none.cost, none.cache, none.context, none.jobs, none.latest, none.attention], [null, undefined, undefined, undefined, null, [], []]);
 });
 
 test("the_latest_three_things_it_did_oldest_first", () => {
@@ -66,5 +66,20 @@ test("the_latest_three_things_it_did_oldest_first", () => {
   // A key is its entry's place in the whole transcript: the same as older entries are left out of what is read.
   assert.deepEqual(lines({ first: 100, timeline: timeline.slice(4) }), ["100 跑登录测试", "103 测试过了。", "104 改好了"]);
   assert.deepEqual(recentOf(null), []);
-  assert.equal(card({ turns: [], attention: [], jobs: [] }, { timeline }).recent.length, 3);
+  assert.equal(card({ turns: [], attention: [], jobs: [] }, { timeline }).latest.length, 3);
+});
+
+test("its_latest_lines_end_with_what_it_does_now_while_it_works", () => {
+  const call = (description: string) => ({ kind: "tool_call", tool: "Bash", text: JSON.stringify({ command: "x", description }) });
+  const timeline = [call("拉代码"), call("装依赖"), call("跑测试")];
+  const live = (text: string) => ({ timeline, activity: { now: { key: "k", text } } });
+  const lines = (agent: unknown, l: unknown) => latestOf(agent, l).map((r) => `${r.key} ${r.text}${r.now ? " now" : ""}`);
+  // At work: what it does now is the last of the three, the oldest thing done gives way.
+  assert.deepEqual(lines({ status: "running" }, live("写报告")), ["1 装依赖", "2 跑测试", "now 写报告 now"]);
+  assert.deepEqual(lines({ status: "queued" }, { timeline: [], activity: { now: { key: "k", text: "排队中" } } }), ["now 排队中 now"]);
+  // What it does now is the last thing done already: said once.
+  assert.deepEqual(lines({ status: "running" }, live("跑测试")), ["0 拉代码", "1 装依赖", "2 跑测试"]);
+  // Not at work: only what it did.
+  assert.deepEqual(lines({ status: "final" }, live("写报告")), ["0 拉代码", "1 装依赖", "2 跑测试"]);
+  assert.deepEqual(latestOf({ status: "running" }, null), []);
 });

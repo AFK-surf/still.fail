@@ -78,6 +78,7 @@ import "../mobile/styles/settings.css.ts";
 import "../mobile/Home.css.ts";
 import "../mobile/parts.css.ts";
 import "../mobile/History.css.ts";
+import "../mobile/AgentSheet.css.ts";
 import "../mobile/Workspaces.css.ts";
 import "../mobile/ChatHost.css.ts";
 import "../mobile/NewChat.css.ts";

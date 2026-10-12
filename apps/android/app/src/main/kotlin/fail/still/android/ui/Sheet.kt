@@ -78,6 +78,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,8 +87,11 @@ import kotlinx.coroutines.launch
 import fail.still.android.data.t
 
 
-/** A sheet: how much of the screen it takes at first, and whether its grabber drags it. */
-class SheetSpec(val height: Float, val draggable: Boolean = false, val content: @Composable ColumnScope.() -> Unit)
+/**
+ * A sheet: how much of the screen it takes at first, and whether its grabber drags it. `fit`: as tall as what it shows
+ * instead (that much, over the navigation bar), for one whose content is a known few lines.
+ */
+class SheetSpec(val height: Float, val draggable: Boolean = false, val fit: Dp? = null, val content: @Composable ColumnScope.() -> Unit)
 
 /** Drags the open sheet by its top; `release` has the finger's speed (px/s of height, up is positive). */
 class SheetDrag(val draggable: Boolean, val drag: (Float) -> Unit, val release: (Float) -> Unit, val tap: () -> Unit)
@@ -126,12 +130,15 @@ fun SheetHost(spec: SheetSpec?, haze: HazeState, close: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val total = constraints.maxHeight.toFloat()
         val density = LocalDensity.current
-        val height = remember { Animatable(current.height * total) }
-        val offset = remember { Animatable(current.height * total) }
+        // How tall a sheet is at first: its share of the screen, or what it shows over the navigation bar (most of the screen at most).
+        val foot = WindowInsets.navigationBars.getBottom(density)
+        fun tall(of: SheetSpec) = of.fit?.let { minOf(with(density) { it.toPx() } + foot, total * 0.9f) } ?: (of.height * total)
+        val height = remember { Animatable(tall(current)) }
+        val offset = remember { Animatable(tall(current)) }
         val scope = rememberCoroutineScope()
         LaunchedEffect(spec) {
             if (spec != null) {
-                val target = spec.height * total
+                val target = tall(spec)
                 if (offset.value > 1f) {
                     height.snapTo(target)
                     offset.animateTo(0f, SheetSpring)
@@ -144,7 +151,7 @@ fun SheetHost(spec: SheetSpec?, haze: HazeState, close: () -> Unit) {
             }
         }
         val min = with(density) { 120.dp.toPx() }
-        val base = current.height * total
+        val base = tall(current)
         var held by remember { mutableStateOf<Float?>(null) }
         // Let go: on to where it settles at the speed the finger left it (height per second, up is more).
         fun settle(to: Float, velocity: Float = 0f) { scope.launch { height.animateTo(to, SheetSpring, velocity) } }

@@ -3,7 +3,7 @@
 // (with a stop for it alone), and what the core says of it (the `agentCard` view, views/brief.ts): what it has done,
 // cost and used, its account and what is left of it, its jobs, what is wrong.
 import { createContext, useContext, useLayoutEffect, useRef, type ReactElement, type RefObject } from "react";
-import { useAgentCard, useApi, useLives, type ChatAgent } from "./api.ts";
+import { useAgentCard, useApi, type ChatAgent } from "./api.ts";
 import { useStation } from "./station.tsx";
 import { Hover } from "./Peeks.tsx";
 import { AgentMark, Tip } from "./ui.tsx";
@@ -96,12 +96,9 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
   const api = useApi();
   const act = useAct();
   const working = agent.status === "running" || agent.status === "queued";
-  const now = useLives(station, [s.key]).get(s.key)?.activity?.now?.text;
-  // Its latest lines, three at most: what it did, then (unless that is the last of them) what it does now. Three once
-  // it has done as much, so their room stays as it is while they run on (useLinesMotion).
-  const recent = card?.recent ?? [];
-  const doing = working && now && now !== recent.at(-1)?.text ? [{ key: "now", text: now, now: true }] : [];
-  const latest: { key: string; text: string; now?: boolean }[] = [...recent, ...doing].slice(-3);
+  // Its latest lines, three at most (the core's): what it did, then what it does now. Three once it has done as much,
+  // so their room stays as it is while they run on (useLinesMotion).
+  const latest = card?.latest ?? [];
   const lines = useRef<HTMLOListElement>(null);
   useLinesMotion(lines);
   const account = agent.account ?? agent.profile;

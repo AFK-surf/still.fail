@@ -58,6 +58,15 @@ data class AdbShareView (
 	val pairPort: UInt? = null
 )
 
+@Serializable
+data class AgentCardLine (
+	/// Its entry in the transcript; `now` for what it does now.
+	val key: String,
+	val text: String,
+	/// What it does now, not a thing done.
+	val now: Boolean? = null
+)
+
 /// How full something is.
 typealias Level = String
 
@@ -76,7 +85,7 @@ data class AgentCardNote (
 	val level: Level
 )
 
-/// A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): each part only when it
+/// A chat's agent in brief, for its card (the `agentCard` view, views/brief.ts): each part only when it
 /// has one. Its account and what is left of it are the chat's agent's (`ChatAgent::account`).
 @Serializable
 data class AgentCardView (
@@ -92,8 +101,8 @@ data class AgentCardView (
 	val context: AgentCardMeter? = null,
 	/// Its jobs at work now: 服务在线：web · 在盯着：CI.
 	val jobs: String? = null,
-	/// The latest things it did, oldest first (three at most), each in a line as its execution history names it, keyed by its entry in the transcript.
-	val recent: List<ActivityNow>,
+	/// Its latest lines, oldest first (three at most): the things it did, each as its execution history names it, then what it does now while it works.
+	val latest: List<AgentCardLine>,
 	/// What is wrong (an account that cannot run, the disk filling up); a quota running out is its account's windows'.
 	val attention: List<AgentCardNote>
 )

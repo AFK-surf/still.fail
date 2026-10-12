@@ -1307,9 +1307,14 @@ export const SHAPES: Record<string, Shape> = {
     ["cache", opt("AgentCardMeter"), { doc: "How much of what it sent was read from the cache." }],
     ["context", opt("AgentCardMeter"), { doc: "The context it carries on with, against its model's window (amber from 80%, red from 95%)." }],
     ["jobs", opt("String"), { doc: "Its jobs at work now: 服务在线：web · 在盯着：CI." }],
-    ["recent", vec("ActivityNow"), { doc: "The latest things it did, oldest first (three at most), each in a line as its execution history names it, keyed by its entry in the transcript." }],
+    ["latest", vec("AgentCardLine"), { doc: "Its latest lines, oldest first (three at most): the things it did, each as its execution history names it, then what it does now while it works." }],
     ["attention", vec("AgentCardNote"), { doc: "What is wrong (an account that cannot run, the disk filling up); a quota running out is its account's windows'." }],
-  ], { doc: "A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): each part only when it\nhas one. Its account and what is left of it are the chat's agent's (`ChatAgent::account`)." }),
+  ], { doc: "A chat's agent in brief, for its card (the `agentCard` view, views/brief.ts): each part only when it\nhas one. Its account and what is left of it are the chat's agent's (`ChatAgent::account`)." }),
+  AgentCardLine: struct([
+    ["key", "String", { doc: "Its entry in the transcript; `now` for what it does now." }],
+    ["text", "String"],
+    ["now", opt("bool"), { doc: "What it does now, not a thing done." }],
+  ]),
   AgentCardMeter: struct([
     ["percent", "f64"],
     ["text", "String"],

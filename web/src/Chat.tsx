@@ -231,12 +231,14 @@ export function ownersOf(chat: ChatView): string {
 /**
  * What a chat's list holds, the same on both screens (this page; the phone's, mobile/Chat.tsx): older pages loading, its
  * messages with the unread line, what is sent from here on its way (`to`: where it goes), and its agents at work.
- * `owner` and `onOpenHistory` stay the same functions while the page lasts; `owners` says when whose files are whose
+ * `owner`, `onOpenHistory` and `onOpenAgent` stay the same functions while the page lasts; `owners` says when whose files are whose
  * has changed.
  */
-export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchive }: {
+export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onOpenAgent, onArchive }: {
   chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null; owners: string;
   owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
+  /** What an agent's name beside its messages opens, where it is not its history (the phone: its card in a sheet). */
+  onOpenAgent?: ((key: string) => void) | undefined;
   /** Archives the chat (its page's 归档). */
   onArchive?: (() => void) | undefined;
 }) {
@@ -255,7 +257,9 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
   // What its agents sent to Slack meanwhile, each after the message it followed (0: before the first).
   const sentAfter = new Map<number, ChatSentElsewhere[]>();
   for (const s of chat.elsewhere ?? []) sentAfter.set(s.after, [...(sentAfter.get(s.after) ?? []), s]);
-  const sent = (after: number) => sentAfter.get(after)?.map((s) => <SentElsewhere key={s.key} sent={s} agentHere={here(s.by.agent ?? undefined)} onOpenHistory={onOpenHistory} />);
+  // An agent's name opens its history, or what the page has for it; its activity always its history.
+  const onName = onOpenAgent ?? onOpenHistory;
+  const sent = (after: number) => sentAfter.get(after)?.map((s) => <SentElsewhere key={s.key} sent={s} agentHere={here(s.by.agent ?? undefined)} onOpenHistory={onName} />);
   return (
     <ChatAgents.Provider value={chat.agents}>
       {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
@@ -274,7 +278,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
           <Fragment key={m.seq}>
             {line}
             <MessageRow message={m} enter={enter} emitted={emitted} caught={caught} thread={thread}
-              agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory}
+              agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onName}
               {...(archiveAt === m.seq ? { archive: onArchive } : {})} {...(checkAt === m.seq ? { check: chat.archiveCheck } : {})} />
             {sent(m.seq)}
           </Fragment>

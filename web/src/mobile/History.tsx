@@ -7,7 +7,7 @@ import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "../motion.ts";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { stationApi, useChat, useHistory, useHistoryDetail, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
+import { stationApi, useAgentCard, useChat, useHistory, useHistoryDetail, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
 import { ArrowRight, Check, ChevronDown, Copy, ChevronRight, Wait, Received, Send, Stop, Unplug } from "../icons.tsx";
 import { optionOf } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
@@ -30,6 +30,7 @@ import * as listsCss from "./styles/lists.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 import { Tip } from "../ui.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
+import { AgentNotes, AgentStatus, AgentTiles } from "./AgentSheet.tsx";
 import { MeterChips, QuotaRing } from "../components.tsx";
 import * as chatPageCss from "../pages/ChatPage.css.ts";
 
@@ -336,15 +337,28 @@ function Details({ station, chat, agent, history }: { station: string; chat: str
   const host = useHost(station).value;
   const name = useStationName(station);
   const s = agent.session;
+  const card = useAgentCard(station, s.key).value;
   return (
     <div className={css.mHDetails}>
+      {/* Where it stands and the figures that say most, as its card has them (AgentSheet.tsx). */}
+      <div className={css.mHAbout}>
+        <AgentStatus agent={agent} />
+        <AgentTiles card={card} />
+        <AgentNotes card={card} />
+      </div>
       {/* Changing how it runs is a screen of its own. */}
       <RunRow agent={agent} onOpen={() => app.push(`${stationBase(station)}/chats/${encodeURIComponent(chat)}/run/${encodeURIComponent(s.key)}`)} />
       <div className={css.mHFacts}>
         <Detail label={t("web-mobile.history.runtime")} value={s.runtimeText} />
         {s.processText && <Detail label={t("web-mobile.history.process")} value={s.processText} />}
-        {history?.usage?.map((u) => <Detail key={u.label} label={u.label} value={u.value} />)}
+        {card?.work && <Detail label={t("web-mobile.agent.turns")} value={card.work} />}
       </div>
+      {history?.usage && history.usage.length > 0 && (
+        <>
+          <GroupLabel>{t("web-mobile.agent.usage")}</GroupLabel>
+          <div className={css.mHFacts}>{history.usage.map((u) => <Detail key={u.label} label={u.label} value={u.value} />)}</div>
+        </>
+      )}
       <GroupLabel>Station</GroupLabel>
       <div className={css.mHFacts}>
         <Detail label={t("web-mobile.workspaces.name")} value={name} />
@@ -375,6 +389,7 @@ function RunRow({ agent, onOpen }: { agent: ChatAgent; onOpen: () => void }) {
       <MakerIcon maker={s.maker} runtime={s.runtime} size={15} />
       <b>{s.model ? s.modelName ?? s.model : t("web-mobile.history.pickModel")}</b>
       <span>{` · ${s.effort ?? t("web-mobile.newChat.effortDefault")} · ${s.profilePinned ? name : t("web-mobile.history.autoAccount", { name })}`}</span>
+      <QuotaRings quota={agent.account?.quota} />
       <ChevronDown size={14} />
     </button>
   );

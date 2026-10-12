@@ -15,7 +15,7 @@ import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
-import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, External, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
+import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
@@ -26,6 +26,7 @@ import { LOCAL_MS } from "../motion.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { openHistory } from "./History.tsx";
+import { AgentSince, openAgent } from "./AgentSheet.tsx";
 import { annotatePath } from "./Annotate.tsx";
 import { GroupLabel, InfoList, InfoRow, ModelMark, NavButton, QuotaRings, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
@@ -49,7 +50,6 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 
-import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 export function ChatScreen() {
   const { chat: address = "" } = useParams();
@@ -120,7 +120,7 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   );
 }
 
-/** The chat's bar: back, its title, then its people, then its agents' marks (each opens its history), as the wide screen's title has them; "…" is the chat's own sheet. */
+/** The chat's bar: back, its title, then its people, then its agents' marks (each opens its card), as the wide screen's title has them; "…" is the chat's own sheet. */
 function ChatBar({ view, here }: { view: ChatView; here: Here }) {
   const app = useApp();
   const thread = view.thread;
@@ -137,8 +137,8 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
       <StationUpdate station={here.station} notice={view.stationUpdate} />
       <PeopleStack people={view.people} max={5} />
       {view.agents.map((a, i) => {
-        const history = () => openHistory(app, here.station, here.key, a.session.key);
-        const label = t("web-mobile.chat.agentHistory", { agent: a.session.agentText });
+        const history = () => agentCard(app, here, a.session.key);
+        const label = t("web-mobile.agent.card", { agent: a.session.agentText });
         // The first shares its tile with the station it runs on (once the workspace has more than one): its icon, or its
         // name where it has none; tapped, the station's card.
         if (i === 0 && station) {
@@ -233,6 +233,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
   const [stable] = useState(() => ({
     owner: (file: Parameters<typeof ownerIn>[1]) => ownerIn(latest.current.here.view, file),
     open: (key: string) => { const { app, here } = latest.current; openHistory(app, here.station, here.key, key); },
+    agent: (key: string) => { const { app, here } = latest.current; agentCard(app, here, key); },
     quote: (q: Omit<Quote, "comment">) => latest.current.draft.current.quote(q),
     images: () => latest.current.images(),
     hold: (ts: string) => { const { app, here } = latest.current; app.push(annotatePath(here.station, here.key, ts)); },
@@ -276,7 +277,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
       <Gallery.Provider value={stable.images}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
         <DraftKey.Provider value={draftKeyOf(here.station, here.key)}>
-          <ChatRows chat={view} rows={rows} to={to} owners={ownersOf(view)} owner={stable.owner} onOpenHistory={stable.open} onArchive={view.thread ? stable.archive : undefined} />
+          <ChatRows chat={view} rows={rows} to={to} owners={ownersOf(view)} owner={stable.owner} onOpenHistory={stable.open} onOpenAgent={stable.agent} onArchive={view.thread ? stable.archive : undefined} />
         </DraftKey.Provider>
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
@@ -480,6 +481,16 @@ function JobsButton({ here, alarm }: { here: Here; alarm: string | undefined }) 
   );
 }
 
+/** One of the chat's agents in brief, in a sheet (AgentSheet.tsx): from its name, its mark in the bar, its row in the chat's sheet. */
+function agentCard(app: MobileApp, here: Here, key: string) {
+  const agent = here.view.agents.find((a) => a.session.key === key);
+  if (!agent) return;
+  openAgent(app, { station: here.station, chat: here.key, key }, agent, {
+    history: () => openHistory(app, here.station, here.key, key),
+    jobs: () => openJobs(app, here),
+  });
+}
+
 /** What matters now of the chat's services and jobs, as the desktop's title bar popover has it; the rest a tap away. */
 function openJobs(app: MobileApp, here: Here) {
   app.sheet({ height: 0.62, draggable: true, content: () => <JobsNow here={here} /> });
@@ -626,79 +637,80 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
 
 // ── the chat's own sheet ───────────────────────────────────────────────
 
-/** The chat itself: where it came from, who started it and takes part, its agents (each leads to its history). */
+/**
+ * The chat itself, from "…": its name (with a way to change it) over who started it, how many take part and when it was
+ * last written in, in a line; its agents, each where it stands (a tap opens its card); then what can be done with it,
+ * within reach: pin it, open it in Slack, archive it.
+ */
 function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
-  app.sheet({ height: 0.72, draggable: true, content: () => <ChatInfo here={here} thread={thread} /> });
+  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + 1) * 41;
+  // As tall as what it shows: its name and line, its agents, its rows.
+  app.sheet({ height: Math.min(0.9, (25 + 84 + rows + 10 + 34) / window.innerHeight), content: () => <ChatInfo here={here} thread={thread} /> });
 }
 
 function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   const app = useApp();
   const view = useChat(here.station, { session: here.key }).value ?? here.view;
-  const jobs = useChatJobs(here.station, { session: here.key }).value ?? NO_JOBS;
   const thread = view.thread ?? first;
   const call = useStationCall(here.station);
   const pinning = useDoing("chat.pin", { station: here.station, session: here.key });
   const pinFailed = useDoingFailed("chat.pin", { station: here.station, session: here.key });
+  const open = !view.archived && !view.offline;
+  const rename = () => ask(app, {
+    title: t("web-mobile.home.renameTitle"), value: view.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"), atOnce: "web-main.rename.failed",
+    run: (title) => stationApi(call).rename({ thread: thread.id, session: here.key }, title),
+  });
+  // Who started it and when, how many take part, when it was last written in: what there is of them, in a line.
+  const creator = thread.creator?.shown?.display;
+  const created = thread.time?.createdAt?.ago;
+  const facts = [
+    view.place ? `Slack · ${view.place}` : null,
+    creator && created ? t("web-mobile.chat.startedByAt", { name: creator, ago: created }) : creator ?? created ?? null,
+    view.people.length > 1 ? t("web-mobile.chat.peopleCount", { n: view.people.length }) : null,
+    thread.lastMessage?.time?.createdAt?.ago ? t("web-mobile.chat.latestAt", { ago: thread.lastMessage.time.createdAt.ago }) : null,
+  ].filter(Boolean).join(" · ");
   return (
     <>
       <SheetGrab />
-      <SheetHead title={t("web-mobile.chat.info")} />
       <div className={`${sheetsCss.mSheetScroll} ${partsCss.mPad18}`}>
-        {!view.archived && !view.offline && (
+        <div className={css.mInfoHead}>
+          <b>{view.title}</b>
+          {open && <button type="button" className={css.mInfoEdit} aria-label={t("web-mobile.home.renameTitle")} onClick={rename}><Edit size={16} /></button>}
+        </div>
+        <div className={css.mInfoFacts}><PeopleStack people={view.people} max={5} /><span>{facts}</span></div>
+        {view.agents.length > 0 && (
           <InfoList>
-            <InfoRow onClick={() => ask(app, {
-              title: t("web-mobile.home.renameTitle"), value: view.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"), atOnce: "web-main.rename.failed",
-              run: (title) => stationApi(call).rename({ thread: thread.id, session: here.key }, title),
-            })}>
-              <span className={css.mInfoLabel}>{t("web-mobile.chat.name")}</span><span className={`${partsCss.mGrow} ${css.mInfoName}`}>{view.title}</span><ChevronRight size={14} className={partsCss.mSubtle} />
-            </InfoRow>
+            {view.agents.map((a) => {
+              const s = a.session;
+              // The account it runs on now, with what is left of it (so a glance here saves the trip to settings).
+              const account = a.account ?? a.profile;
+              return (
+                <InfoRow key={s.key} onClick={() => agentCard(app, { ...here, view }, s.key)}>
+                  <ModelMark maker={s.maker} runtime={s.runtime} size={36} state={stateOf(a.badge)} around="var(--m-surface2)" />
+                  <span className={`${partsCss.mGrow} ${css.mInfoAgent}`}>
+                    <b>{s.agentText}</b>
+                    <span className={css.mInfoStatus}>{s.statusText}<AgentSince agent={a} /></span>
+                  </span>
+                  <QuotaRings quota={account?.quota} />
+                  <ChevronRight size={14} className={partsCss.mSubtle} />
+                </InfoRow>
+              );
+            })}
+          </InfoList>
+        )}
+        {(open || view.slackUrl) && (
+          <InfoList>
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
-            {view.pinned != null && (
+            {open && view.pinned != null && (
               <InfoRow busy={pinning} failed={pinFailed} onClick={() => { stationApi(call).pin({ session: here.key }, !view.pinned)
                 .catch((error) => app.toast(t(view.pinned ? "web-mobile.home.unpinFailed" : "web-mobile.home.pinFailed", { error: error instanceof Error ? error.message : String(error) }))); }}>
                 <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? t("web-mobile.home.unpin") : t("web-mobile.chat.pinTop")}</span>
               </InfoRow>
             )}
+            {view.slackUrl && <a className={listsCss.mInfoRow} href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openSlack")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a>}
+            {open && <ArchiveRow here={here} view={view} thread={thread} />}
           </InfoList>
         )}
-        <InfoList>
-          <InfoDetail label={t("web-mobile.chat.from")} value={view.place ? `Slack · ${view.place}` : t("web-mobile.chat.fromApp", { name: NAME })} />
-          <InfoDetail label={t("web-mobile.chat.startedBy")} value={thread.creator?.shown?.display ?? t("web-mobile.chat.unknown")} />
-          <InfoDetail label={t("web-mobile.chat.people")} value={t("web-mobile.chat.peopleCount", { n: view.people.length })} extra={<PeopleStack people={view.people} max={8} />} />
-          <InfoDetail label={t("web-mobile.chat.created")} value={thread.time?.createdAt?.ago ?? ""} />
-          {thread.lastMessage && <InfoDetail label={t("web-mobile.chat.lastMessage")} value={thread.lastMessage.time?.createdAt?.ago ?? ""} />}
-        </InfoList>
-        <JobGroups here={here} view={jobs} jobs={jobs.jobs} />
-        {view.slackUrl && (
-          <>
-            <GroupLabel>{t("web-mobile.chat.inSlack")}</GroupLabel>
-            <InfoList><a className={listsCss.mInfoRow} href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openSlack")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a></InfoList>
-          </>
-        )}
-        {view.agents.length > 0 && (
-          <>
-            <GroupLabel>{t("web-mobile.chat.agents")}</GroupLabel>
-            <InfoList>
-              {view.agents.map((a) => {
-                const s = a.session;
-                // The account it runs on now, with what is left of it (so a glance here saves the trip to settings).
-                const account = a.account ?? a.profile;
-                return (
-                  <InfoRow key={s.key} onClick={() => openHistory(app, here.station, here.key, s.key)}>
-                    <ModelMark maker={s.maker} runtime={s.runtime} size={36} state={stateOf(a.badge)} around="var(--m-surface2)" />
-                    <span className={`${partsCss.mGrow} ${css.mInfoAgent}`}>
-                      <b>{s.agentText}</b>
-                      <span>{a.connect && <SlackMark size={11} />}{[a.connect?.name, account?.name, s.processText, s.time?.lastActiveAt?.ago].filter(Boolean).join(" · ")}</span>
-                    </span>
-                    <QuotaRings quota={account?.quota} />
-                    <ChevronRight size={14} className={partsCss.mSubtle} />
-                  </InfoRow>
-                );
-              })}
-            </InfoList>
-          </>
-        )}
-        {!view.archived && !view.offline && <ArchiveRow here={here} view={view} thread={thread} />}
       </div>
     </>
   );
@@ -719,15 +731,8 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
   };
   // Asked first, then as at once.
   const asked = () => { app.pop(); return api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived"))); };
-  return (
-    <>
-      <GroupLabel>{t("web-mobile.home.archive")}</GroupLabel>
-      <InfoList>
-        {/* A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words). */}
-        <InfoRow onClick={() => view.watch ? confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed", run: asked }) : archive()}><Archive size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.archive")}</span></InfoRow>
-      </InfoList>
-    </>
-  );
+  // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+  return <InfoRow onClick={() => view.watch ? confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed", run: asked }) : archive()}><Archive size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.archive")}</span></InfoRow>;
 }
 
 /** In the bar while nothing is left in the chat: archives it with one tap, back to the list at once (as ArchiveRow). */
@@ -753,6 +758,3 @@ function useArchiveChat(here: Here, view: ChatView, thread: ChatThread | null) {
   };
 }
 
-function InfoDetail({ label, value, extra }: { label: string; value: string; extra?: ReactNode }) {
-  return <InfoRow><span className={css.mInfoLabel}>{label}</span>{extra}<span className={partsCss.mGrow}>{value}</span></InfoRow>;
-}

@@ -51,6 +51,14 @@ export interface AdbShareView {
 	pairPort?: number;
 }
 
+export interface AgentCardLine {
+	/** Its entry in the transcript; `now` for what it does now. */
+	key: string;
+	text: string;
+	/** What it does now, not a thing done. */
+	now?: boolean;
+}
+
 /** How full something is. */
 export type Level = "ok" | "amber" | "red";
 
@@ -68,7 +76,7 @@ export interface AgentCardNote {
 }
 
 /**
- * A chat's agent in brief, for its card over its avatar (the `agentCard` view, views/brief.ts): each part only when it
+ * A chat's agent in brief, for its card (the `agentCard` view, views/brief.ts): each part only when it
  * has one. Its account and what is left of it are the chat's agent's (`ChatAgent::account`).
  */
 export interface AgentCardView {
@@ -84,8 +92,8 @@ export interface AgentCardView {
 	context?: AgentCardMeter;
 	/** Its jobs at work now: 服务在线：web · 在盯着：CI. */
 	jobs?: string;
-	/** The latest things it did, oldest first (three at most), each in a line as its execution history names it, keyed by its entry in the transcript. */
-	recent: ActivityNow[];
+	/** Its latest lines, oldest first (three at most): the things it did, each as its execution history names it, then what it does now while it works. */
+	latest: AgentCardLine[];
 	/** What is wrong (an account that cannot run, the disk filling up); a quota running out is its account's windows'. */
 	attention: AgentCardNote[];
 }

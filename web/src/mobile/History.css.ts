@@ -93,6 +93,8 @@ export const mHPhase = style({ display: "inline-flex", alignItems: "center", gap
 export const mHDetails = style({
   position: "absolute", inset: "0", overflowY: "auto", overscrollBehavior: "contain", padding: "0 18px 30px",
 });
+/** Where it stands and its figures, over how it runs. */
+export const mHAbout = style({ paddingBottom: "6px" });
 export const mRunRow = style({
   display: "flex", alignItems: "center", gap: "6px", boxSizing: "border-box", width: "100%", marginTop: "6px",
   padding: "10px 12px", border: "1px solid var(--m-line)", borderRadius: "10px", background: "none", textAlign: "left",
@@ -161,11 +163,11 @@ globalStyle(`${mHGroupHead} > span[data-open]`, {
 globalStyle(`${mHGroupHead} > span[data-failed]`, { color: "var(--m-red)" });
 globalStyle(`${mHPhase} i`, { width: "7px", height: "7px", borderRadius: "50%", background: "var(--m-accent)" });
 globalStyle(`${mRunRow} b`, { flex: "none", fontSize: vars.textUi, fontWeight: "400", whiteSpace: "nowrap" });
-globalStyle(`${mRunRow} span`, {
+globalStyle(`${mRunRow} > span`, {
   flex: "1", minWidth: "0", fontSize: vars.textMeta, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
-globalStyle(`${mRunRow} svg:last-child`, { flex: "none", color: "var(--m-muted)" });
+globalStyle(`${mRunRow} > svg:last-child`, { flex: "none", color: "var(--m-muted)" });
 globalStyle(`${mHDetail} > span:first-child`, { whiteSpace: "nowrap", color: "var(--m-muted)" });
 globalStyle(`${mRunLine} svg`, { flex: "none" });
 globalStyle(`${mSettingRow} > svg:last-child`, { flex: "none", color: "var(--m-muted)" });

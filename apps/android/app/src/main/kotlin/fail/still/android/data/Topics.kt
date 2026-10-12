@@ -224,6 +224,8 @@ object Topics {
     fun live(station: String, key: String) = buildJsonObject { put("topic", "live"); put("station", station); put("key", key) }
     /** An agent's execution history, read for people (the core's). */
     fun history(station: String, key: String) = buildJsonObject { put("topic", "history"); put("station", station); put("key", key) }
+    /** A chat's agent in brief, for its card (client/core-ts/src/views/brief.ts; AgentSheet.kt). */
+    fun agentCard(station: String, key: String) = buildJsonObject { put("topic", "agentCard"); put("station", station); put("key", key) }
     /** A chat's services and background jobs as its pages show them (the same `of` as its `chat`; Jobs.kt). */
     fun chatJobs(station: String, of: ChatOf) = buildJsonObject {
         put("topic", "chatJobs"); put("station", station)

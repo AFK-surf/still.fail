@@ -294,7 +294,7 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
 }
 
 /**
- * The chat's bar: its title from the left, then its people, then its agents' marks (each opens its history); its
+ * The chat's bar: its title from the left, then its people, then its agents' marks (each opens its card); its
  * services and jobs (with a dot when one died lately or a service restarts), and "…", the chat's own page.
  */
 // A quick start and a soft landing, shared by both archive actions.
@@ -308,7 +308,7 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
     val alarm = jobs.value?.alarm?.let(::toneOf)
     // Nothing left in it: archived with one tap from its bar (as its row's 归档).
     val session = archiveSession(of, view, agents)
-    BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }, modifier = modifier, trailing = {
+    BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread, view) }, modifier = modifier, trailing = {
         val canArchive = view.archivable == true && view.archived != true && session != null
         AnimatedVisibility(
             visible = canArchive,
@@ -331,7 +331,7 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
         if (view.people.isNotEmpty()) PeopleStack(view.people.take(5), 16.dp)
         agents.forEach { a ->
             // Not clipped: the state's dot sits over the mark's corner, partly outside it.
-            Box(Modifier.clickable { openHistory(app, station, of, a.key) }) { ModelMark(a.maker, a.runtime, 22.dp, a.state, listMark = true) }
+            Box(Modifier.clickable { openAgent(app, station, of, a.view) }) { ModelMark(a.maker, a.runtime, 22.dp, a.state, listMark = true) }
         }
     }
 }
@@ -348,7 +348,7 @@ private fun BarFrame(title: String, more: Boolean, onMore: () -> Unit = {}, modi
                 after()
             }
             trailing()
-            if (more) NavButton(Icons.More, onMore)
+            if (more) Box(Modifier.semantics { contentDescription = t("android-chat.info.title") }) { NavButton(Icons.More, onMore) }
         }
     }
 }
@@ -1101,7 +1101,7 @@ private fun SentElsewhere(ctx: Here, s: ChatSentElsewhere) {
                 Text(
                     s.by.name, fontSize = 15.sp, fontWeight = FontWeight(650), color = ink.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 240.dp).let { mod ->
-                        if (agent != null) mod.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { openHistory(app, ctx.station, ctx.of, agent.key) } else mod
+                        if (agent != null) mod.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { openAgent(app, ctx.station, ctx.of, agent.view) } else mod
                     },
                 )
                 MessageTime(s.time?.get("createdAt"))
@@ -1153,7 +1153,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
         return
     }
     // Someone else's: the avatar and name in line over what they say (web: the phone's inline heads), the name an
-    // agent's opens its history.
+    // agent's opens its card (AgentSheet.kt).
     val agent = m.by.agent?.let { ctx.agent(it) }
     val who = m.by.name
     val (hold, press) = holdMenu(ctx, m.text, m.ts)
@@ -1170,7 +1170,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
                     modifier = Modifier.widthIn(max = 240.dp).let { mod ->
                         val from = m.by.from
                         when {
-                            agent != null -> mod.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { openHistory(app, ctx.station, ctx.of, agent.key) }
+                            agent != null -> mod.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { openAgent(app, ctx.station, ctx.of, agent.view) }
                             // Another chat's agent (session_send): its name opens that chat.
                             from != null -> mod.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { app.openLink(from) }
                             else -> mod
@@ -1602,7 +1602,7 @@ private fun steady(said: ActivityNow): ActivityNow {
 }
 
 /** A running clock's reading in short, as the web's: 45s, 3m 20s, 1h 5m. */
-private fun elapsed(ms: Long): String {
+internal fun elapsed(ms: Long): String {
     val s = (ms / 1000).coerceAtLeast(0)
     return when {
         s < 60 -> "${s}s"
