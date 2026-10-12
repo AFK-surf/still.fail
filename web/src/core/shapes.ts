@@ -915,6 +915,13 @@ export interface Profile {
 	checkTone: Tone;
 	/** The first problem to resolve, with its next step; absent when nothing needs attention. */
 	trouble?: ProfileTrouble;
+	/**
+	 * The kind of account it is listed under: claude (Claude's subscription), chatgpt, key (the rest). A station's
+	 * profiles come by kind, in that order.
+	 */
+	group?: string;
+	/** That kind in words: Claude 订阅. */
+	groupTitle?: string;
 	/** The makers of its models, and of those its check found, by model. */
 	makers: Record<string, Maker>;
 	/** Its models, its default and those its check found as people call them (Opus 5.5), by model. */

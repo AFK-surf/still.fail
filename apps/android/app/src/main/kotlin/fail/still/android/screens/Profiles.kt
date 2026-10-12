@@ -144,10 +144,17 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
         else stations.forEach { s ->
             if (one == null) SectionHeader(if (s.online) s.name else t("android-settings.connects.offline", "name" to s.name), start = 24.dp)
             val overview = s.overview
-            ListCard {
-                if (overview == null) ListRow { Text(if (s.online) t("android-settings.reading") else t("android-settings.profiles.stationOffline"), fontSize = 15.sp, color = C.muted) }
-                else if (overview.profiles.isEmpty()) ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) }
-                else overview.profiles.forEach { ProfileRow(s.station, it) }
+            if (overview == null || overview.profiles.isEmpty()) {
+                ListCard {
+                    if (overview == null) ListRow { Text(if (s.online) t("android-settings.reading") else t("android-settings.profiles.stationOffline"), fontSize = 15.sp, color = C.muted) }
+                    else ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) }
+                }
+            } else {
+                // A section each kind of account, as the workspace's list (the core lists them by kind, in order).
+                overview.profiles.groupBy { it.group }.forEach { (_, g) ->
+                    SectionHeader(g.first().groupTitle.orEmpty(), start = 24.dp)
+                    ListCard { g.forEach { ProfileRow(s.station, it) } }
+                }
             }
             // The machine's own logins not used yet, each offered as a profile.
             if (s.online && overview != null) MachineLoginOffers(s.station, overview)

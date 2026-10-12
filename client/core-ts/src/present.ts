@@ -12,6 +12,7 @@ import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
 import { SHAPES } from "./shapes/schema.ts";
+import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -569,6 +570,9 @@ export function profile(p: J): void {
   o.checkText = text;
   o.checkTone = tone;
   o.trouble = profileTrouble(o);
+  // The kind of account it is listed under, as the workspace's list has it (views/profiles.ts).
+  o.group = profileGroup(o);
+  o.groupTitle = profileGroupTitle(o.group);
   const found: J[] = [...(arr(get(o.check, "models")) ?? []), ...(arr(o.modelsSaving) ?? [])];
   const strs = (list: J[]) => list.filter((m): m is string => typeof m === "string");
   const models = arr(o.models) ?? [];
@@ -890,8 +894,9 @@ function overview(v: J, c: Clock): void {
   const profiles = arr(v.profiles);
   if (profiles) {
     for (const p of profiles) profile(p);
-    // A stable sort: those in trouble first.
-    const sortedProfiles = [...profiles].sort((a, b) => Number(get(a, "trouble") === null) - Number(get(b, "trouble") === null));
+    // A stable sort: by kind of account (a station's list is a section each), those in trouble first in each.
+    const kindOf = (p: J) => PROFILE_GROUPS.indexOf(get(p, "group"));
+    const sortedProfiles = [...profiles].sort((a, b) => kindOf(a) - kindOf(b) || Number(get(a, "trouble") === null) - Number(get(b, "trouble") === null));
     profiles.splice(0, profiles.length, ...sortedProfiles);
   }
   const subscriptions: [J, string][] = [];

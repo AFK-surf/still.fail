@@ -325,6 +325,27 @@ test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {
   assert.deepEqual(o.machineLogins.map((l: J) => l.offered === true), [false, true, false, false]);
 });
 
+test("a_stations_profiles_come_by_kind_of_account_those_in_trouble_first_in_each", () => {
+  const sub = (id: string, runtime: string, extra: J = {}) => ({ id, runtime, access: { kind: "subscription" }, ...extra });
+  const o: J = {
+    profiles: [
+      { id: "key", runtime: "claude", access: { kind: "anthropic-api" } },
+      sub("gpt", "codex"),
+      sub("claude-ok", "claude"),
+      { id: "key-failed", runtime: "codex", access: { kind: "env" }, check: { state: "failed", detail: "timeout" } },
+      sub("claude-failed", "claude", { check: { state: "failed", detail: "timeout" } }),
+    ],
+  };
+  p.decorate({ topic: "overview", station: "w/s" }, o, { now: 0, offsetMin: 0 });
+  assert.deepEqual(o.profiles.map((q: J) => [q.group, q.groupTitle, q.id]), [
+    ["claude", "Claude 订阅", "claude-failed"],
+    ["claude", "Claude 订阅", "claude-ok"],
+    ["chatgpt", "ChatGPT 订阅", "gpt"],
+    ["key", "API Key", "key-failed"],
+    ["key", "API Key", "key"],
+  ]);
+});
+
 test("bound_subscriptions_hide_only_the_same_machine_account", () => {
   const o: J = {
     profiles: [

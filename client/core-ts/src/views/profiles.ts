@@ -28,12 +28,15 @@ function account(p: J): string | null {
 
 /// The kinds of account the list is grouped by, in their order: a vendor's subscription (Claude's, ChatGPT's), then
 /// keys and the rest.
-const GROUPS = ["claude", "chatgpt", "key"] as const;
+export const GROUPS = ["claude", "chatgpt", "key"] as const;
 
-function group(p: J): (typeof GROUPS)[number] {
+export function group(p: J): (typeof GROUPS)[number] {
   if (p.access?.kind !== "subscription") return "key";
   return p.runtime === "codex" ? "chatgpt" : "claude";
 }
+
+/// A kind of account in words: Claude 订阅.
+export const groupTitle = (kind: (typeof GROUPS)[number]) => t(`core-views.profiles.group.${kind}`);
 
 /// `stations`: the `stations` view's items (each with its decorated overview).
 export function workspaceProfiles(stations: J[]): J {
@@ -76,7 +79,7 @@ export function workspaceProfiles(stations: J[]): J {
     items.push({
       key,
       group: kind,
-      groupTitle: t(`core-views.profiles.group.${kind}`),
+      groupTitle: groupTitle(kind),
       station: String(s.station),
       stationId: String(s.id),
       stationName: String(s.name),

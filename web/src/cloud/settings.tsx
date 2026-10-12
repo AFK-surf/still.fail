@@ -395,9 +395,9 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** The workspace's profiles a run each kind of account, as the core lists them (by kind, in order). */
-export function profileGroups(items: WorkspaceProfile[]): WorkspaceProfile[][] {
-  const groups: WorkspaceProfile[][] = [];
+/** Profiles (the workspace's, or a station's own) a run each kind of account, as the core lists them (by kind, in order). */
+export function profileGroups<T extends { group?: string }>(items: T[]): T[][] {
+  const groups: T[][] = [];
   for (const e of items) {
     const last = groups[groups.length - 1];
     if (last && last[0]!.group === e.group) last.push(e);

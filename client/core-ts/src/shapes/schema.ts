@@ -432,6 +432,8 @@ export const SHAPES: Record<string, Shape> = {
     ["checkText", "String"],
     ["checkTone", "Tone"],
     ["trouble", opt("ProfileTrouble"), { doc: "The first problem to resolve, with its next step; absent when nothing needs attention." }],
+    ["group", "String", { default: true, doc: "The kind of account it is listed under: claude (Claude's subscription), chatgpt, key (the rest). A station's\nprofiles come by kind, in that order." }],
+    ["groupTitle", "String", { default: true, doc: "That kind in words: Claude 订阅." }],
     ["makers", map(opt("Maker")), { doc: "The makers of its models, and of those its check found, by model." }],
     ["names", map("String"), { doc: "Its models, its default and those its check found as people call them (Opus 5.5), by model." }],
     ["series", vec("ModelSeries"), { doc: "Its models and those its check found, by series (Claude's biggest first, the rest by name; 其他 last), newest\nfirst: how the list to enable them from is laid out." }],

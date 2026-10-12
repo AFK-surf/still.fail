@@ -71,11 +71,17 @@ export function ProfilesScreen() {
       {!stations ? <Loading text={t("web-mobile.memory.readingStations")} /> : stations.filter(() => !!one).map((s) => (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
           {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} />}
-          <ListCard>
-            {!s.overview ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.online ? t("web-mobile.reading") : t("web-mobile.profiles.offline")}</span></ListRow>
-              : s.overview.profiles.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow>
-              : s.overview.profiles.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}
-          </ListCard>
+          {!s.overview || s.overview.profiles.length === 0 ? (
+            <ListCard>
+              <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.overview ? t("web-mobile.profiles.none") : s.online ? t("web-mobile.reading") : t("web-mobile.profiles.offline")}</span></ListRow>
+            </ListCard>
+          ) : profileGroups(s.overview.profiles).map((g) => (
+            // A section each kind of account, as the workspace's list (the core's order).
+            <Fragment key={g[0]!.group}>
+              <SectionHeader title={g[0]!.groupTitle ?? ""} start={24} />
+              <ListCard>{g.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}</ListCard>
+            </Fragment>
+          ))}
           {/* The machine's own logins not used yet, each offered as a profile. */}
           {s.online && s.overview && <MachineLoginOffers logins={s.overview.machineLogins} onSignIn={(kind) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${kind}`))} />}
         </StationContext.Provider>

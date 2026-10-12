@@ -935,6 +935,11 @@ data class Profile (
 	val checkTone: Tone,
 	/// The first problem to resolve, with its next step; absent when nothing needs attention.
 	val trouble: ProfileTrouble? = null,
+	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, key (the rest). A station's
+	/// profiles come by kind, in that order.
+	val group: String? = null,
+	/// That kind in words: Claude 订阅.
+	val groupTitle: String? = null,
 	/// The makers of its models, and of those its check found, by model.
 	val makers: Map<String, Maker?>,
 	/// Its models, its default and those its check found as people call them (Opus 5.5), by model.
