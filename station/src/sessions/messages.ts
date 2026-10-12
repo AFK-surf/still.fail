@@ -81,6 +81,7 @@ export async function sessionSend(hub: Hub, key: string, args: Args): Promise<st
       if (error instanceof Refused && fromBefore(old)) {
         throw new Error(`not sent to ${to}: that station is not updated yet and takes no ${files.length > 0 ? "files" : "messages"}`);
       }
+      if (error instanceof Refused) throw new Error(`not sent to ${to}: ${old}`);
       throw new Error(`not sent to ${to}: ${old}. If it timed out, it may have arrived: ask before sending it again`);
     }
     const place = typeof answer?.thread === "string" ? answer.thread : "its chat";
