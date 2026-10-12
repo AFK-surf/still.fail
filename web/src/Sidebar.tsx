@@ -267,7 +267,6 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
           {item.offline || item.reconnecting
             ? <Tip label={item.offline ?? item.reconnecting}><span className={nav.sessionKind} aria-label={item.offline ?? item.reconnecting}><Unplug size={12} /></span></Tip>
             : connect && <Tip label={item.originText ?? "Slack"}><span className={nav.sessionKind}><ConnectKindIcon kind="slack" size={12} /></span></Tip>}
-          {menu && !editing && item.archivable && <span className={nav.rowArchiveRoom} aria-hidden="true">{t("web-main.chat.archive")}</span>}
         </span>
         {/* The last thing said, who is in the chat, and when (in their place while pointed at). */}
         <span className={nav.navSessionMeta}>
@@ -281,7 +280,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
     </NavLink>
   );
   return (
-    <div className={nav.navSessionWrap} data-editing={editing || undefined} data-flip={rowKey(item)} data-archivable={(menu && !editing && item.archivable) || undefined}>
+    <div className={nav.navSessionWrap} data-editing={editing || undefined} data-flip={rowKey(item)}>
     {menu ? (
       // Right-clicking a row: what can be done to the chat.
       <ContextMenu.Root modal={false}>
@@ -298,7 +297,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         </ContextMenu.Portal>
       </ContextMenu.Root>
     ) : row}
-    {menu && !editing && (item.archivable ? <ArchiveChip item={item} archive={archiveAsked} /> : <ArchiveButton item={item} archive={archiveAsked} />)}
+    {menu && !editing && <ArchiveButton item={item} archive={archiveAsked} />}
     {item.watch && <Confirm open={asking} title={t("web-main.chat.archiveAsk", { title: item.title })} description={item.watch.ask} action={t("web-main.chat.archive")}
       onConfirm={() => { setAsking(false); void archive(); }} onClose={() => setAsking(false)} />}
     </div>
@@ -369,15 +368,6 @@ function ArchiveButton({ item, archive }: { item: ChatItem; archive: () => void 
         <Archive size={16} />
       </button>
     </Tip>
-  );
-}
-
-/** Nothing left in its chat (the core's `archivable`): 归档 in words at the row's end while it is pointed at. */
-function ArchiveChip({ item, archive }: { item: ChatItem; archive: () => void }) {
-  return (
-    <button type="button" className={nav.rowArchiveChip} aria-label={t("web-main.chat.archiveNamed", { title: item.title })} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
-      {t("web-main.chat.archive")}
-    </button>
   );
 }
 

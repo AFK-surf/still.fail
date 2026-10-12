@@ -197,26 +197,6 @@ export const rowArchive = style({
   position: "absolute", top: 5, right: 6, width: 24, height: 24, opacity: 0, pointerEvents: "none",
   selectors: { [`${navSessionWrap}:hover &, &:focus-visible`]: { opacity: 1, pointerEvents: "auto" } },
 });
-/** 归档 in words, for a chat with nothing left in it (the core's `archivable`): a small chip on the title line, in the
- * icon's place, while the row is pointed at (always, on a touch screen). */
-export const rowArchiveChip = style({
-  position: "absolute", top: 7, right: 8, height: 20, padding: "0 8px", border: 0, borderRadius: 10,
-  background: `color-mix(in srgb, ${vars.text} 8%, transparent)`, color: vars.text, fontFamily: "inherit",
-  fontSize: vars.textMeta, lineHeight: "20px", fontWeight: 500, cursor: "pointer", opacity: 0, pointerEvents: "none",
-  selectors: {
-    [`${navSessionWrap}:hover &, &:focus-visible`]: { opacity: 1, pointerEvents: "auto" },
-    "&:hover": { background: `color-mix(in srgb, ${vars.text} 13%, transparent)` },
-  },
-  "@media": { "(hover: none)": { opacity: 1, pointerEvents: "auto" } },
-});
-/** The chip's room at the title line's end, as wide as its word in the language shown (Archive is wider than 归档), so the
- * station's and Slack's marks before it are never under it: 10px from the last of them to the chip. */
-export const rowArchiveRoom = style({
-  display: "none", flex: "none", padding: "0 9px", fontSize: vars.textMeta, fontWeight: 500, visibility: "hidden",
-  selectors: { [`${navSessionWrap}:hover &`]: { display: "block" } },
-  "@media": { "(hover: none)": { display: "block" } },
-});
-globalStyle(`${navSessionWrap}[data-archivable]:hover ${navSessionHead}`, { paddingRight: 0 });
 
 /** Stations not working: a row at the top of the sidebar's foot, over the account; its dot says the worst of it. */
 export const stationTrouble = style({ marginBottom: 4, color: vars.text });
