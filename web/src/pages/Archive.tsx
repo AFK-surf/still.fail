@@ -1,8 +1,9 @@
 // The archive: chats archived by hand or by the station once they idled (a
 // day by default), of every station online in one list, newest first and
 // grouped by the day they were archived; each can be shown again, and one
-// archived with its session deleted for good. Anything new said in a chat
-// brings it back by itself.
+// archived with its session deleted for good. Anything new said in a chat the
+// station archived brings it back by itself; one archived by hand takes no
+// messages until shown again.
 import { useState } from "react";
 import { stationApi, stationCall, useArchiveView } from "../api.ts";
 import { useCall } from "../core/react.ts";

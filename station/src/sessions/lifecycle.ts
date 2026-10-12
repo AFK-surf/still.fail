@@ -87,6 +87,7 @@ export function addToThread(hub: Hub, thread: number, session: string) {
 /// session in the chat, like a Slack message. `client`: the app it was sent from, as it said. Its entry number.
 export function say(hub: Hub, thread: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = [], client: string | null = null): number {
   stillfailChat(hub, thread);
+  if (hub.store.manuallyArchived(thread)) throw new Error(tr(stationLang(), "station.chat.archived"));
   const [n] = hub.store.insertMessage({ thread, ts: hub.nextTs(), authorKind: "person", author: user, text, attachments, quotes, client });
   const sessions = hub.store.threadSessions(thread).map((m) => m.session);
   hub.deliver(thread, n, sessions, text);
@@ -187,7 +188,10 @@ export function archiveBy(hub: Hub, key: string, archived: boolean, by: string):
   hub.store.setArchived(key, archived, by);
   hub.closed(key);
   const actor = hub.actor(row);
-  void actor.evict().then(() => actor.cleanArchive());
+  void actor
+    .putAway()
+    .then(() => actor.evict())
+    .then(() => actor.cleanArchive());
 }
 
 /// Hides a session from lists, or shows it again, by hand.

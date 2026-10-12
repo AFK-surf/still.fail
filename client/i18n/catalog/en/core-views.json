@@ -297,7 +297,7 @@
   "core-views.present.uses.decision": "Automatic decisions",
   "core-views.present.waiting": "Waiting",
   "core-views.present.waiting_for": "Waiting: {what}",
-  "core-views.present.watch_ask": "Still watching {names}. Archived, it keeps running and returns to the list on new messages.",
+  "core-views.present.watch_ask": "Still watching {names}. Archiving stops it.",
   "core-views.present.watching": "Watching",
   "core-views.present.watching_names": "Watching: {names}",
   "core-views.present.working": "Working",

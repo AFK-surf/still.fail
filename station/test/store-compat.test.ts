@@ -107,12 +107,17 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
          WHERE t.archived_at IS NULL AND t.hidden_at IS NULL AND s.archived_at IS NULL ORDER BY t.id DESC LIMIT 1`,
       )
       .get() as any ??
-      // A station whose chats are all in the archive: any thread with a session (writing brings it back).
+      // A station whose chats are all in the archive: any thread with a session.
       (store.db.prepare(`SELECT thread, session FROM thread_sessions ORDER BY thread DESC LIMIT 1`).get() as any);
     if (!live) {
       // A station with no chat yet (a new one): nothing to write a message into.
       t.diagnostic("no thread with a session in this station's data: the write cycle is not run");
       return;
+    }
+    // Archived by hand, it takes no messages: shown again first, as a person would.
+    if (store.manuallyArchived(live.thread)) {
+      store.setArchived(live.session, false, MANUAL);
+      if (store.getThread(live.thread)!.hiddenAt !== null) store.setThreadHidden(live.thread, false, MANUAL);
     }
     {
       const last = store.lastEntry(live.thread);

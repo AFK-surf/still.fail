@@ -120,6 +120,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   if (kind === null && args.about !== undefined && args.about !== null) throw new Error("about goes with kind: the message the state this post records is about");
   if (text === "" && paths.length === 0) throw new Error("text is empty");
   const thread = target(hub, key, args.to);
+  if (store.manuallyArchived(thread.thread.id)) throw new Error(`${threadAddress(thread.thread.channel, thread.thread.threadTs)} was archived by hand: it takes no messages until someone restores it`);
   if (card !== null && thread.thread.surface !== STILLFAIL_SURFACE) {
     throw new Error('cards (options, a text field) are shown only in still.fail chats (EMBER/…); in a Slack thread, write the choices or the question in the text and end with kind "need_human"');
   }

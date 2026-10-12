@@ -243,7 +243,7 @@
   "core-views.present.uses.decision": "自动决策",
   "core-views.present.waiting": "等待中",
   "core-views.present.waiting_for": "在等：{what}",
-  "core-views.present.watch_ask": "{names}还在监控。归档后它照常运行，有新消息时对话会回到列表。",
+  "core-views.present.watch_ask": "{names}还在监控。归档会停掉它。",
   "core-views.present.watching": "监控中",
   "core-views.present.watching_names": "监控中：{names}",
   "core-views.present.working": "在做",

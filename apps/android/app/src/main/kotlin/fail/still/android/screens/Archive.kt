@@ -1,7 +1,7 @@
 // The archive (web/src/pages/Archive.tsx): chats archived by hand or by the station once they idled (a day by
 // default), of every station online in one list, newest first and grouped by the day they were archived. Each can be
-// put back in the list, and one archived with its session deleted for good. Anything new said in a chat brings it
-// back by itself. A row: its title with when (and where) at the end of its line, then what can be done with it; its
+// put back in the list, and one archived with its session deleted for good. Anything new said in a chat the station
+// archived brings it back by itself; one archived by hand takes no messages until shown again. A row: its title with when (and where) at the end of its line, then what can be done with it; its
 // last message the whole line under it. No lines between.
 package fail.still.android.screens
 

@@ -350,6 +350,15 @@ export class Store {
     this.#with((changes) => this.#setArchived(key, archived, by, changes));
   }
 
+  /// Out of lists by hand: the chat archived itself, or its sessions archived with one of them by hand. It takes no
+  /// messages until shown again by hand; one archived by the station comes back with anything new said.
+  manuallyArchived(thread: number): boolean {
+    const r = this.#one("SELECT hidden_by FROM threads WHERE id = ?", thread);
+    if (r === undefined || !this.#outOfLists(thread)) return false;
+    if (r.hidden_by === MANUAL) return true;
+    return this.#one("SELECT 1 FROM thread_sessions ts JOIN sessions s ON s.key = ts.session WHERE ts.thread = ? AND s.archived_by = ? LIMIT 1", thread, MANUAL) !== undefined;
+  }
+
   /// Hides a chat of its own from lists, or shows it again; its sessions stay as they are.
   setThreadHidden(thread: number, hidden: boolean, by: string): void {
     this.#with((changes) => this.#setThreadHidden(thread, hidden, by, changes));
@@ -1555,16 +1564,19 @@ export class Store {
     else if (!out && filed) this.#restoreThread(thread);
   }
 
-  /// Something new said in a thread brings what it is about back into lists: the chat, if it was archived alone, and
-  /// the archived sessions that hear it (a person's message goes to every session of the thread) or said it.
+  /// Something new said in a thread brings what it is about back into lists: the chat, if the station archived it
+  /// alone, and the sessions the station archived that hear it (every session of the thread) or said it. What was
+  /// archived by hand stays archived: it takes no messages (manuallyArchived).
   #bringBack(entry: EntryRow, changes: Changes): void {
     if (entry.kind !== "message" || entry.authorKind === "ember") return;
     const thread = this.getThread(entry.thread);
-    if (thread === null) return;
-    const archived: string[] =
-      entry.authorKind === "agent"
-        ? this.#all("SELECT key FROM sessions WHERE key = ? AND archived_at IS NOT NULL", entry.author).map((r) => r.key)
-        : this.#all("SELECT s.key FROM thread_sessions ts JOIN sessions s ON s.key = ts.session WHERE ts.thread = ? AND s.archived_at IS NOT NULL", entry.thread).map((r) => r.key);
+    if (thread === null || this.manuallyArchived(thread.id)) return;
+    const archived: string[] = this.#all(
+      "SELECT key FROM sessions WHERE archived_at IS NOT NULL AND archived_by IS NOT ?1 AND (key IN (SELECT session FROM thread_sessions WHERE thread = ?2) OR key = ?3)",
+      MANUAL,
+      entry.thread,
+      entry.authorKind === "agent" ? entry.author : null,
+    ).map((r) => r.key);
     for (const key of archived) this.#setArchived(key, false, AUTO, changes);
     if (thread.hiddenAt !== null && thread.home === null) this.#setThreadHidden(thread.id, false, AUTO, changes);
   }

@@ -368,7 +368,7 @@ test("a session's own chat is archived with it, a chat of its own alone; anythin
   assert.equal(row().shownAt, null, "brought back by what was said, not by hand");
   assert.equal(thread(own.id).hiddenAt, null);
 
-  store.setThreadHidden(other.id, true, MANUAL);
+  store.setThreadHidden(other.id, true, AUTO);
   assert.ok(thread(other.id).hiddenAt !== null);
   assert.equal(row().archivedAt, null, "its sessions stay");
   assert.ok(existsSync(archiveFile(store, other.id)), "out of lists: in its archive file");
@@ -376,11 +376,31 @@ test("a session's own chat is archived with it, a chat of its own alone; anythin
   // Someone writes in it: shown again.
   say(store, other.id, "2.4", "person", "local", "again");
   assert.equal(thread(other.id).hiddenAt, null);
+  // Hidden by hand, it stays hidden.
+  store.setThreadHidden(other.id, true, MANUAL);
+  assert.ok(store.manuallyArchived(other.id));
+  say(store, other.id, "2.41", "agent", "a", "late");
+  assert.ok(thread(other.id).hiddenAt !== null);
+  store.setThreadHidden(other.id, false, MANUAL);
 
-  // Shown again by hand: the idle clock starts over.
+  // Archived by hand, nothing said brings it back: it takes no messages.
   store.setArchived("a", true, MANUAL);
+  assert.ok(store.manuallyArchived(own.id));
+  say(store, own.id, "1.2", "agent", "a", "late");
+  assert.equal(row().archivedBy, MANUAL);
+  assert.ok(thread(own.id).hiddenAt !== null);
+  // Shown again by hand: the idle clock starts over.
   store.setArchived("a", false, MANUAL);
   assert.ok(row().shownAt !== null);
+  assert.equal(store.manuallyArchived(own.id), false);
+
+  // Archived by the station, an agent's word in its chat brings back every session that hears it.
+  session(store, "b");
+  store.joinThread(other.id, "b", "ember");
+  store.setArchived("a", true, AUTO);
+  store.setArchived("b", true, AUTO);
+  say(store, other.id, "2.5", "agent", "b", "news");
+  assert.deepEqual([row().archivedAt, store.getSession("b")!.archivedAt], [null, null]);
 });
 
 test("a database made before archiving gains its columns and each session's first chat is its own", () => {

@@ -30,7 +30,7 @@ import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { iso, transcriptPaths } from "../read/transcript.ts";
-import { type Attachment, type SessionRow, type Store, STILLFAIL_SURFACE, slackSurface, type ThreadRow } from "../store/store.ts";
+import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, slackSurface, type ThreadRow } from "../store/store.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { isStopCommand } from "./args.ts";
@@ -406,6 +406,13 @@ export class Hub {
     // Chatter this connect is not part of, in a thread no session takes part in.
     if (!wanted && members.length === 0) return;
     const here: ThreadRef = { channel: message.channel, threadTs: message.threadTs };
+    // Archived by hand: it takes no messages until someone shows it again; told so, once per message.
+    if (existing && this.store.manuallyArchived(existing.id)) {
+      if (this.store.messageAt(existing.id, message.ts) === null) {
+        await chat.post(here, `⚠️ ${tr(stationLang(), "station.chat.archived")}`, []).catch((error) => log.warn("hub", "archived notice not posted", { thread: existing.id, error: (error as Error).message }));
+      }
+      return;
+    }
     const createdBy = `slack:${connect.id}:${message.user}`;
     if (wanted && !exists) {
       try {
@@ -485,8 +492,10 @@ export class Hub {
   }
 
   /// Gives sessions a message they have not had: each runs it, or stops for `-stop` (hub.rs `hand_over`).
+  /// A session archived by hand hears nothing until shown again.
   deliver(thread: number, n: number, sessions: string[], text: string) {
-    for (const key of this.store.deliver(thread, n, sessions)) {
+    const hearing = sessions.filter((key) => this.store.getSession(key)?.archivedBy !== MANUAL);
+    for (const key of this.store.deliver(thread, n, hearing)) {
       this.store.touch(key);
       const row = this.store.getSession(key);
       if (!row) continue;
@@ -842,6 +851,18 @@ export class Hub {
           try {
             await jobs.stop(job.id);
             log.info("hub", "job stopped with its session's wait", { session: key, job: job.id });
+          } catch (error) {
+            log.warn("hub", "job not stopped", { session: key, job: job.id, error: (error as Error).message });
+          }
+        }
+      },
+      endJobs: async (key) => {
+        const jobs = this.jobs;
+        if (!jobs) return;
+        for (const job of this.store.listJobs(key).filter((j) => j.state === "running" || (j.state === "exited" && j.port !== null))) {
+          try {
+            await jobs.stop(job.id);
+            log.info("hub", "job stopped with its session archived", { session: key, job: job.id });
           } catch (error) {
             log.warn("hub", "job not stopped", { session: key, job: job.id, error: (error as Error).message });
           }

@@ -104,6 +104,7 @@ export async function sessionSend(hub: Hub, key: string, args: Args): Promise<st
     thread = { thread: what.thread, connect };
     targets = members.map((m) => m.session);
   }
+  if (hub.store.manuallyArchived(thread.thread.id)) throw new Error(`not sent to ${to}: that chat was archived by hand: it takes no messages until someone restores it`);
   // Kept in the uploads of the session the chat's files are read from (its first agent's).
   const files = paths.length > 0 ? attach(hub, key, paths, targets[0] ?? key) : [];
   const place = await postFrom(hub, thread, key, title, link, text, targets, files);
@@ -118,6 +119,7 @@ export async function fromPeer(hub: Hub, peer: string, request: Json): Promise<J
   if (text === "" || target === "" || from === "" || chars(text) > MAX_TEXT) throw new Error(`a message needs to, session and text (at most ${MAX_TEXT} characters)`);
   if (hub.store.getSession(target) === null) throw new Error(`no session ${target} on this station (it may have been deleted)`);
   const thread = sessionThreadOf(hub, target);
+  if (hub.store.manuallyArchived(thread.thread.id)) throw new Error(`that chat was archived by hand: it takes no messages until someone restores it`);
   const targets = hub.store.threadSessions(thread.thread.id).map((m) => m.session);
   // Files sent ahead of it (session.put), into the uploads of the session the chat's files are read from.
   const files = claim(hub, peer, from, targets[0] ?? target, request?.files);
