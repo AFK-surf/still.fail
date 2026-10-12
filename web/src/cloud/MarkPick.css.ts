@@ -60,7 +60,7 @@ export const color = style({
 /** Putting up a picture and having none, side by side under the grid, as a menu's rows. */
 export const foot = style({ display: "flex", gap: "2px" });
 export const footButton = style({
-  width: "auto", flex: "1", justifyContent: "center", color: vars.muted, borderRadius: inner,
+  width: "auto", flex: "1", justifyContent: "center", color: vars.muted, borderRadius: inner, cornerShape: vars.cornerShape,
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
 /** The picture it has, in the button that puts up another. */

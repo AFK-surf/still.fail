@@ -6,13 +6,15 @@ import { mJobHead, mJobText, mJobsAll, mJobsEmpty } from "./Chat.css.ts";
 export const mChoices = style({ display: "flex", flexDirection: "column", gap: "8px" });
 export const mChoice = style({
   display: "flex", flexDirection: "column", gap: "2px", padding: "12px 14px", border: "1px solid var(--m-line)",
-  borderRadius: "14px", background: "var(--m-surface)", textAlign: "left", cursor: "pointer",
+  borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "var(--m-surface)",
+  textAlign: "left", cursor: "pointer",
   selectors: {
     "&[data-on]": { borderColor: "var(--m-accent)", boxShadow: "inset 0 0 0 1px var(--m-accent)" },
   },
 });
 export const mSwitchRow = style({
-  display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", border: "0", borderRadius: "14px",
+  display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", border: "0",
+  borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "var(--m-chip)", textAlign: "left", cursor: "pointer",
 });
 export const mSwitch = style({

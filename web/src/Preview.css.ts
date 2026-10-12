@@ -76,7 +76,7 @@ globalStyle(`${enrollWait} > span:last-child`, { display: "grid", gap: "2px", fo
 
 export const loadRing = style({ color: vars.muted, flex: "none", selectors: { '&[data-failed]': { color: vars.red } } });
 export const loadDetails = style({
-  zIndex: 1000, width: "min(420px, calc(100vw - 24px))", padding: "14px", borderRadius: vars.rCard,
+  zIndex: 1000, width: "min(420px, calc(100vw - 24px))", padding: "14px", borderRadius: vars.rCard, cornerShape: vars.cornerShape,
   ...panel, color: vars.text,
   boxShadow: `0 2px 8px ${vars.shadow}`, fontSize: vars.textUi,
 });

@@ -12,7 +12,8 @@ export const mModelRow = style({
   border: "0", background: "none", textAlign: "left", cursor: "pointer",
 });
 export const mCheck = style({
-  display: "grid", placeItems: "center", flex: "none", width: "20px", height: "20px", borderRadius: "6px",
+  display: "grid", placeItems: "center", flex: "none", width: "20px", height: "20px",
+  borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "var(--m-chip)", color: "var(--m-bg)",
   selectors: {
     "&[data-on]": { background: "var(--m-accent)" },
@@ -37,7 +38,7 @@ export const mPresence = style({
 });
 export const mWrap = style({ whiteSpace: "normal" });
 export const mCallout = style({
-  margin: "0 12px 10px", padding: "10px 12px", borderRadius: "12px",
+  margin: "0 12px 10px", padding: "10px 12px", borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "color-mix(in srgb, var(--m-warn) 12%, transparent)", fontSize: vars.textMeta, lineHeight: "1.5",
   selectors: {
     [`${mForm} &`]: { margin: "0" },

@@ -19,5 +19,5 @@ export const vizPage = style({
   borderRadius: vars.rCard, cornerShape: vars.cornerShape, background: vars.paper,
 });
 /** Where a visualization's frame comes while its file is fetched, as tall as the frame will be (Viz.tsx sets it), quietly. */
-export const vizWait = style({ borderRadius: `calc(12px * ${vars.cornerScale})`, background: vars.paper });
+export const vizWait = style({ borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.paper });
 export const vizNote = style({ padding: "24px", color: vars.muted, fontSize: vars.textUi });

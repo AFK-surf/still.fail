@@ -17,6 +17,7 @@ import { forwardRef, Fragment, useEffect, useId, useRef, useState, type ButtonHT
 import * as controlsCss from "./styles/controls.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./ui.css.ts";
+import { vars } from "./styles/tokens.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -268,7 +269,7 @@ export function Avatar({ id, name, size = 20 }: { id: string; name: string; size
   const letter = ([...word][0] ?? "?").toUpperCase();
   return (
     <span className={css.avatar} aria-hidden="true"
-      style={{ width: size, height: size, fontSize: Math.round(size * .52), background: AVATAR_TONES[hash % AVATAR_TONES.length], borderRadius: Math.min(size * .375, 12) }}>
+      style={{ width: size, height: size, fontSize: Math.round(size * .52), background: AVATAR_TONES[hash % AVATAR_TONES.length], borderRadius: `calc(${Math.min(size * .375, 12)}px * ${vars.cornerScale})` }}>
       {letter}
     </span>
   );

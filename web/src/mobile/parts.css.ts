@@ -25,7 +25,7 @@ export const mMaker = style({
 export const mModelMark = style({ position: "relative", display: "inline-block", flex: "none" });
 export const mModelTile = style({
   display: "grid", placeItems: "center", width: "100%", height: "100%", boxSizing: "border-box",
-  background: "var(--m-surface)", border: "1px solid var(--m-line)",
+  background: "var(--m-surface)", border: "1px solid var(--m-line)", cornerShape: vars.cornerShape,
 });
 export const mBadge = style({ display: "block" });
 export const mAvatar = style({
@@ -44,6 +44,8 @@ export const mSeg = style({
   position: "relative", boxSizing: "border-box", overflow: "hidden",
   selectors: {
     "&[data-track]": { background: "color-mix(in srgb, var(--m-ink) 6%, transparent)" },
+    // Not a capsule (parts.tsx Seg): the smooth corner, its thumb's too.
+    "&[data-smooth]": { cornerShape: vars.cornerShape },
   },
 });
 export const mSegRow = style({ position: "relative", display: "flex", height: "100%" });
@@ -61,6 +63,7 @@ export const mSegThumb = style({
   background: "color-mix(in srgb, var(--m-ink) 8%, transparent)",
   selectors: {
     [`${mSeg}[data-track] &`]: { background: "var(--m-thumb)", boxShadow: "inset 0 0 0 0.5px var(--m-line)" },
+    [`${mSeg}[data-smooth] &`]: { cornerShape: vars.cornerShape },
     [`:root[data-theme="dark"] ${m} ${mSeg}:not([data-track]) &`]: { background: "color-mix(in srgb, var(--m-ink) 13%, transparent)" },
     "&[data-moved]": {
       transition: "transform 240ms cubic-bezier(0, 0, .2, 1), width 240ms cubic-bezier(0, 0, .2, 1)",
@@ -79,7 +82,8 @@ export const mSegThumb = style({
 });
 export const mNavBack = style({
   display: "inline-flex", alignItems: "center", gap: "0", padding: "4px 6px 4px 0", border: "0", background: "none",
-  borderRadius: "8px", color: "var(--m-accent) !important", fontSize: `${vars.textTitle} !important`, lineHeight: "24px",
+  borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, color: "var(--m-accent) !important",
+  fontSize: `${vars.textTitle} !important`, lineHeight: "24px",
   cursor: "pointer",
 });
 export const mNavbar = style({
@@ -99,7 +103,8 @@ export const mTopBackRow = style({ display: "flex", alignItems: "center", justif
 export const mLargeTitle = style({ padding: "0 16px 6px" });
 export const mSection = style({ display: "flex", alignItems: "flex-end", padding: "14px 20px 6px" });
 export const mListCard = style({
-  margin: "0 12px 10px", borderRadius: "16px", background: "var(--m-surface)", overflow: "hidden",
+  margin: "0 12px 10px", borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "var(--m-surface)", overflow: "hidden",
   selectors: {
     [`${mSteps} &`]: { margin: "0" },
   },
@@ -131,7 +136,8 @@ export const mPickAside = style({ textAlign: "right" });
 export const mPickLabel = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
 export const mPickLabelText = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const mInfoList = style({
-  borderRadius: "14px", background: "color-mix(in srgb, var(--m-ink) 5%, transparent)", overflow: "hidden",
+  borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "color-mix(in srgb, var(--m-ink) 5%, transparent)", overflow: "hidden",
   // Two lists one after the other, with no group label between them, are still two cards.
   selectors: { "& + &": { marginTop: "10px" } },
 });

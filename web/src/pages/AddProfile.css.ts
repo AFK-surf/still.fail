@@ -11,7 +11,8 @@ export const tiles = style({
 /** A provider: its mark and its name, nothing else; flat, a ground on hover. */
 export const tile = style({
   display: "flex", alignItems: "center", gap: "12px", minWidth: "0", padding: "10px 12px", textAlign: "left", border: "0",
-  borderRadius: vars.rField, background: "transparent", color: vars.text, fontSize: vars.textBody, cursor: "pointer",
+  borderRadius: vars.rField, cornerShape: vars.cornerShape, background: "transparent", color: vars.text, fontSize: vars.textBody,
+  cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover } },
 });
 export const tileName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
@@ -22,6 +23,7 @@ export const methods = style({
 });
 export const method = style({
   display: "grid", gap: "6px", alignContent: "start", padding: "18px", textAlign: "left", border: "0", borderRadius: vars.rCard,
+  cornerShape: vars.cornerShape,
   background: vars.paper, color: vars.text, cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover } },
 });

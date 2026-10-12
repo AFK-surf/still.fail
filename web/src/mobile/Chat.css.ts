@@ -126,7 +126,8 @@ export const mJobHead = style({ display: "flex", alignItems: "flex-start", gap: 
 export const mJobBody = style({});
 export const mJobNotices = style({ display: "grid", gap: "12px", fontSize: vars.textUi, overflowY: "auto" });
 export const mJobOutput = style({
-  margin: "0", padding: "12px 14px", maxHeight: "50vh", overflow: "auto", borderRadius: "16px",
+  margin: "0", padding: "12px 14px", maxHeight: "50vh", overflow: "auto", borderRadius: `calc(16px * ${vars.cornerScale})`,
+  cornerShape: vars.cornerShape,
   background: "color-mix(in srgb, var(--m-ink) 5%, transparent)",
   font: `${vars.textCaption}/1.6 ui-monospace, SFMono-Regular, Menlo, monospace`, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
 });
@@ -167,7 +168,8 @@ export const mJobsAllLine = style({ display: "inline-flex", alignItems: "center"
 globalStyle(`${mJobsAll} ${mJobsAllLine}`, { fontSize: "inherit", color: "inherit" });
 globalStyle(`${mAttach} button`, {
   flex: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", padding: "16px 0 12px",
-  border: "0", borderRadius: "18px", background: "var(--m-chip)", cursor: "pointer",
+  border: "0", borderRadius: `calc(18px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "var(--m-chip)",
+  cursor: "pointer",
 });
 // The dot on the name's 21px line, half a pixel up for CJK ink (rounded to a whole pixel).
 globalStyle(`${mJob} > ${jobDot}`, { marginTop: "6px" });

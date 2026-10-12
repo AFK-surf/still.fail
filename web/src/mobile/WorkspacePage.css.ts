@@ -2,7 +2,8 @@ import { style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 
 export const mYou = style({
-  display: "inline-block", marginLeft: "6px", padding: "0 6px", borderRadius: "6px", background: "var(--m-accent-bg)",
+  display: "inline-block", marginLeft: "6px", padding: "0 6px", borderRadius: `calc(6px * ${vars.cornerScale})`,
+  cornerShape: vars.cornerShape, background: "var(--m-accent-bg)",
   color: "var(--m-accent-ink)", fontSize: vars.textCaption, verticalAlign: "1px",
 });
 /** The name as the title, renamed by a tap. */

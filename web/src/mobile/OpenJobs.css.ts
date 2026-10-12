@@ -8,11 +8,13 @@ export const mOpenGroup = style({ display: "flex", flexDirection: "column", gap:
 export const mOpenHead = style({ padding: "2px 10px", fontSize: vars.textCaption, color: "var(--m-muted)" });
 /** Its buttons inherit (./styles/root.css.ts): their colour and size are the row's. */
 export const mOpenMore = style({
-  alignSelf: "flex-start", padding: "3px 10px", border: "0", borderRadius: "8px", background: "none", fontSize: `${vars.textCaption} !important`,
+  alignSelf: "flex-start", padding: "3px 10px", border: "0", borderRadius: `calc(8px * ${vars.cornerScale})`,
+  cornerShape: vars.cornerShape, background: "none", fontSize: `${vars.textCaption} !important`,
   color: "var(--m-muted) !important", cursor: "pointer",
 });
 export const mOpenRow = style({
-  display: "flex", alignItems: "center", gap: "10px", padding: "5px 4px 5px 10px", borderRadius: "10px",
+  display: "flex", alignItems: "center", gap: "10px", padding: "5px 4px 5px 10px",
+  borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   selectors: { "&[data-link]": { cursor: "pointer" }, "&[data-link]:active": { background: "var(--m-chip)" } },
 });
 /** The dot, in the column the rows' icons take. */

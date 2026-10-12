@@ -36,7 +36,8 @@ globalStyle(`${item}[data-seen] ${itemTitle}`, { color: vars.muted });
 export const itemLine = style({ fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 /** 忽略: small words, only on the row pointed at (or focused). */
 export const dismiss = style({
-  flex: "none", padding: "1px 4px", border: "0", borderRadius: vars.rOption, background: "none", color: vars.muted,
+  flex: "none", padding: "1px 4px", border: "0", borderRadius: vars.rOption, cornerShape: vars.cornerShape, background: "none",
+  color: vars.muted,
   font: "inherit", fontSize: vars.textMeta, cursor: "pointer", visibility: "hidden",
   selectors: { "&:hover": { color: vars.text, background: vars.hover } },
 });

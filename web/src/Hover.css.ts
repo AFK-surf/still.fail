@@ -27,7 +27,8 @@ export const cardTile = style({ width: "auto", minWidth: "220px", maxWidth: "min
 
 export const tile = style({ display: "flex", alignItems: "center", gap: "10px", minWidth: "0" });
 export const tileThumb = style({
-  display: "grid", placeItems: "center", flex: "0 0 auto", width: "36px", height: "36px", borderRadius: "9px", background: vars.hover, color: vars.muted,
+  display: "grid", placeItems: "center", flex: "0 0 auto", width: "36px", height: "36px",
+  borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.hover, color: vars.muted,
   overflow: "hidden",
 });
 export const tileIcon = style({ width: "20px", height: "20px", objectFit: "contain" });
@@ -39,7 +40,7 @@ export const tileTitle = style({
 export const tileUrl = style({ fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 /** A page's picture over its tile: as wide as a full card, 16:9 (a video's frame; a wider og:image is cropped a little). */
 export const tileWithPicture = style({ display: "flex", flexDirection: "column", gap: "10px", width: "min(296px, calc(100vw - 40px))" });
-export const picture = style({ display: "block", width: "100%", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: "8px", background: vars.hover });
+export const picture = style({ display: "block", width: "100%", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.hover });
 
 // ---- the rich card: state and reference with the time at the right; the title; who, and a few facts ----
 
@@ -58,7 +59,8 @@ export const filePath = style({
 /** What can be done with a file's path (copied, shown in Finder), at the end of its facts. */
 export const actions = style({ display: "inline-flex", gap: "2px", marginLeft: "auto" });
 export const action = style({
-  display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 6px", border: "0", borderRadius: "6px", background: "transparent",
+  display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 6px", border: "0",
+  borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "transparent",
   color: vars.muted, font: "inherit", cursor: "pointer", whiteSpace: "nowrap",
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
@@ -89,16 +91,18 @@ export const del = style({ color: vars.red });
 
 /** A file's lines, numbered, the one named marked. */
 export const lines = style({
-  margin: "0", padding: "6px 0", borderRadius: "8px", background: vars.hover, fontFamily: vars.fontMono, fontSize: vars.textCaption, lineHeight: "1.55",
+  margin: "0", padding: "6px 0", borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: vars.hover, fontFamily: vars.fontMono, fontSize: vars.textCaption, lineHeight: "1.55",
   overflow: "hidden", whiteSpace: "pre",
 });
 export const line = style({ display: "flex", paddingRight: "8px", selectors: { "&[data-at]": { background: vars.accentBg } } });
 export const lineNo = style({ flex: "0 0 auto", width: "34px", paddingRight: "8px", textAlign: "right", color: vars.muted, userSelect: "none" });
 export const lineText = style({ overflow: "hidden", textOverflow: "ellipsis" });
-export const thumb = style({ display: "block", maxWidth: "100%", maxHeight: "180px", borderRadius: "8px", margin: "0 auto", background: vars.hover });
+export const thumb = style({ display: "block", maxWidth: "100%", maxHeight: "180px", borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, margin: "0 auto", background: vars.hover });
 /** A directory's entries, in two columns, each with its icon. */
 export const entries = style({
-  display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "2px 12px", margin: "0", padding: "6px 8px", borderRadius: "8px",
+  display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "2px 12px", margin: "0", padding: "6px 8px",
+  borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: vars.hover, listStyle: "none", fontFamily: vars.fontMono, fontSize: vars.textCaption, lineHeight: "1.55", color: vars.text,
 });
 export const entry = style({ display: "flex", alignItems: "center", gap: "5px", minWidth: "0" });
@@ -120,7 +124,8 @@ export const bar = style({
 // ---- a file named in a message: a chip, its icon and name ----
 
 export const fileChip = style({
-  display: "inline-flex", alignItems: "baseline", gap: "4px", maxWidth: "100%", padding: "0 6px", borderRadius: "6px", border: "0",
+  display: "inline-flex", alignItems: "baseline", gap: "4px", maxWidth: "100%", padding: "0 6px",
+  borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, border: "0",
   background: `color-mix(in srgb, ${vars.muted} 13%, transparent)`, color: vars.text, fontFamily: vars.fontMono, fontSize: "0.88em",
   lineHeight: "inherit", cursor: "pointer", verticalAlign: "baseline", textAlign: "left",
   selectors: {

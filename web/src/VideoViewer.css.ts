@@ -48,7 +48,8 @@ export const vvDim = style({ color: vars.muted });
 export const vvPixel = style({
   ...glass,
   position: "fixed", zIndex: "70", display: "flex", alignItems: "center", gap: "8px", padding: "4px 8px",
-  borderRadius: "8px", pointerEvents: "none", color: vars.text, fontFamily: vars.fontMono, fontSize: vars.textMeta,
+  borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, pointerEvents: "none", color: vars.text,
+  fontFamily: vars.fontMono, fontSize: vars.textMeta,
   fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
 });
 export const vvSwatch = style({

@@ -76,4 +76,4 @@ globalStyle(`${msgMine} ${msgBubble}`, {
   maxWidth: "min(78%, 560px)", padding: "8px 14px", borderRadius: `calc(18px * ${vars.cornerScale})`,
   background: vars.neutralBg, cornerShape: vars.cornerShape,
 });
-globalStyle(`${msgAvatar} ${avatar}`, { borderRadius: "50% !important" });
+globalStyle(`${msgAvatar} ${avatar}`, { borderRadius: "50% !important", cornerShape: "round" });

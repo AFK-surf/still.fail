@@ -13,5 +13,5 @@ globalStyle(`${mHPhase} small`, { fontSize: vars.textCaption, color: "var(--m-su
 /** Here rather than with its class: it comes after .m-invite small, and wins over it. */
 globalStyle(`${mSettingText} small`, { fontSize: vars.textCaption });
 
-export const mCurrent = style({ margin: "4px 12px 16px", borderRadius: "16px", background: "var(--m-bg)" });
+export const mCurrent = style({ margin: "4px 12px 16px", borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "var(--m-bg)" });
 export const mActions = style({ flexShrink: 0, padding: "8px 0 16px" });

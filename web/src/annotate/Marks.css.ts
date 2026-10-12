@@ -15,7 +15,7 @@ export const layer = style({ position: "absolute", inset: "0", overflow: "hidden
 
 /** The element marked: a thin line round it, stronger while its bubble is open. */
 export const outline = style({
-  position: "absolute", boxSizing: "border-box", borderRadius: "4px",
+  position: "absolute", boxSizing: "border-box", borderRadius: `calc(4px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   boxShadow: `0 0 0 1.5px color-mix(in srgb, ${vars.accent} 55%, transparent)`,
   transition: `box-shadow ${vars.dur} ${vars.easeOut}, background ${vars.dur} ${vars.easeOut}`,
   selectors: {

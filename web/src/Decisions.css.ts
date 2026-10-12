@@ -178,7 +178,8 @@ export const hint = style({
   ...glass,
 });
 export const hintButton = style({
-  height: "20px", padding: "0 4px", border: "0", borderRadius: "6px", background: "none", color: vars.subtle,
+  height: "20px", padding: "0 4px", border: "0", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "none", color: vars.subtle,
   fontFamily: "inherit", fontSize: vars.textMeta, lineHeight: "20px", cursor: "pointer",
   selectors: { "&:hover": { color: vars.text } },
 });

@@ -53,7 +53,8 @@ export const chatEmpty = style({
 export const chatError = style({ padding: "0 32px 10px" });
 /** A chat whose station is offline: read from what was kept, not written to. */
 export const offlineNotice = style({
-  margin: "0 auto 8px", maxWidth: "760px", width: "calc(100% - 64px)", padding: "8px 12px", borderRadius: "10px",
+  margin: "0 auto 8px", maxWidth: "760px", width: "calc(100% - 64px)", padding: "8px 12px",
+  borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: vars.hover, color: vars.muted, fontSize: vars.textUi,
   selectors: {
     [`${chat}[data-under-composer] > &`]: { marginBottom: "calc(8px + var(--composer-room))" },
@@ -69,7 +70,7 @@ export const msgSystemBox = style({
   fontSize: vars.textUi, cursor: "pointer",
   selectors: {
     "&[data-failed]": { background: vars.redBg, color: vars.red },
-    "&[data-open]": { borderRadius: "16px" },
+    "&[data-open]": { borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape },
   },
 });
 /** What went wrong in a notice about a profile: a link to that profile's page, in the pill's own colour, underlined. */
@@ -650,7 +651,8 @@ export const composerAbove = style({ margin: "0 12px 6px" });
 /** The activity line and, for one of several agents, its own stop: shown on hover. */
 export const activityRow = style({ display: "flex", alignItems: "center", gap: "4px", minWidth: "0" });
 export const activityStop = style({
-  display: "grid", placeItems: "center", width: "22px", height: "22px", padding: "0", border: "0", borderRadius: "6px",
+  display: "grid", placeItems: "center", width: "22px", height: "22px", padding: "0", border: "0",
+  borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "none", color: vars.muted, cursor: "pointer", opacity: "0", transition: "opacity 120ms",
   selectors: {
     [`${activityRow}:hover &, &:focus-visible`]: { opacity: "1" },

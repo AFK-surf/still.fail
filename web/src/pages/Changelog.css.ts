@@ -12,7 +12,8 @@ export const heading = style({ margin: "20px 10px 2px", fontSize: vars.textMeta,
 export const change = style({ display: "grid", gap: "4px", padding: "8px 10px", borderRadius: vars.rField, cornerShape: vars.cornerShape });
 export const row = style({ display: "grid", gridTemplateColumns: "52px minmax(0, 1fr) auto", alignItems: "baseline", columnGap: "10px" });
 export const kind = style({
-  justifySelf: "start", padding: "0 6px", borderRadius: "6px", fontSize: vars.textCaption, lineHeight: "18px",
+  justifySelf: "start", padding: "0 6px", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  fontSize: vars.textCaption, lineHeight: "18px",
   color: vars.muted, background: vars.neutralBg, whiteSpace: "nowrap",
   selectors: {
     "&:empty": { padding: "0", background: "none" },
@@ -42,6 +43,7 @@ export const newsLine = style({ color: vars.muted, overflow: "hidden", textOverf
 export const newsMore = style({ color: vars.muted });
 export const newsClose = style({
   position: "absolute", top: "6px", right: "6px", display: "grid", placeItems: "center", width: "24px", height: "24px",
-  border: "0", borderRadius: "8px", color: vars.muted, background: "transparent", cursor: "pointer",
+  border: "0", borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, color: vars.muted,
+  background: "transparent", cursor: "pointer",
   selectors: { "&:hover": { color: vars.text, background: vars.hover } },
 });

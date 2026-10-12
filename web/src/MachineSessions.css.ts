@@ -7,6 +7,7 @@ const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", wh
 /** Under the composer, quiet as the words around it until pointed at. */
 export const offer = style({
   display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", border: 0, borderRadius: vars.rNav,
+  cornerShape: vars.cornerShape,
   background: "transparent", color: vars.muted, font: "inherit", fontSize: vars.textUi, lineHeight: "20px", cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
@@ -15,7 +16,8 @@ export const list = style({ listStyle: "none", margin: "0 -12px", padding: 0, di
 
 export const row = style({
   width: "100%", display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", alignItems: "center", gap: 12,
-  padding: "10px 12px", border: 0, borderRadius: vars.rOption, background: "transparent", color: vars.text,
+  padding: "10px 12px", border: 0, borderRadius: vars.rOption, cornerShape: vars.cornerShape, background: "transparent",
+  color: vars.text,
   font: "inherit", textAlign: "left", cursor: "pointer",
   selectors: { "&:hover:not(:disabled)": { background: vars.hover }, "&:disabled": { cursor: "default" } },
 });

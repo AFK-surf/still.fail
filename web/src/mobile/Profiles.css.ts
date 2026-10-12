@@ -8,7 +8,8 @@ export const mMono = style({
 export const mProfileNote = style({ padding: "8px 24px", fontSize: vars.textMeta, color: "var(--m-muted)" });
 export const mCheckPill = style({ marginLeft: "0", fontSize: vars.textCaption });
 export const mDeviceCode = style({
-  alignSelf: "flex-start", padding: "8px 14px", borderRadius: "10px", background: "var(--m-chip)",
+  alignSelf: "flex-start", padding: "8px 14px", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "var(--m-chip)",
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: vars.textHeading, letterSpacing: "2px",
 });
 export const mEnvRow = style({

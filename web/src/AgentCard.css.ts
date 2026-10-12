@@ -43,7 +43,8 @@ export const elapsed = style({ color: vars.muted, fontVariantNumeric: "tabular-n
 /** The figures that say most, each large over its name, side by side. */
 export const tiles = style({ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0, 1fr))", gap: "6px" });
 export const tile = style({
-  display: "flex", flexDirection: "column", gap: "1px", minWidth: "0", padding: "7px 9px", borderRadius: "8px", background: vars.hover,
+  display: "flex", flexDirection: "column", gap: "1px", minWidth: "0", padding: "7px 9px",
+  borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.hover,
 });
 globalStyle(`${tile}[data-level=amber] b`, { color: vars.amber });
 globalStyle(`${tile}[data-level=red] b`, { color: vars.red });

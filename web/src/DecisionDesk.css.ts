@@ -36,14 +36,16 @@ export const page = style({ display: "flex", flexDirection: "column", flex: 1, m
 /** The bar: its chat (opening it) on the left, 待定 and 不再提醒 on the right. */
 export const barLead = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0, gridColumn: "1 / 3", fontSize: vars.textUi });
 export const barChat = style({
-  minWidth: 0, padding: "2px 6px", border: 0, borderRadius: 6, background: "none", color: vars.text, fontFamily: "inherit",
+  minWidth: 0, padding: "2px 6px", border: 0, borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "none", color: vars.text, fontFamily: "inherit",
   fontSize: vars.textUi, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover } },
 });
 export const barStation = style({ flex: "none", color: vars.subtle, fontSize: vars.textMeta });
 export const barActions = style({ display: "flex", justifyContent: "flex-end", gap: 2 });
 export const barButton = style({
-  height: 28, padding: "0 10px", border: 0, borderRadius: 8, background: "none", color: vars.muted, fontFamily: "inherit",
+  height: 28, padding: "0 10px", border: 0, borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "none", color: vars.muted, fontFamily: "inherit",
   fontSize: vars.textMeta, cursor: "pointer",
   selectors: { "&:hover:not(:disabled)": { background: vars.hover, color: vars.text }, "&:disabled": { opacity: 0.4, cursor: "default" } },
 });

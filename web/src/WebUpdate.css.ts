@@ -5,12 +5,12 @@ export const notice = style({
   position: "fixed", zIndex: 150, bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)", left: "calc(env(safe-area-inset-left, 0px) + 12px)",
   display: "flex", alignItems: "center", gap: 12,
   width: "max-content", maxWidth: "calc(100vw - 24px)", padding: "8px 10px 8px 16px",
-  borderRadius: vars.rCard, background: `color-mix(in srgb, ${vars.raised} 92%, transparent)`,
+  borderRadius: vars.rCard, cornerShape: vars.cornerShape, background: `color-mix(in srgb, ${vars.raised} 92%, transparent)`,
   backdropFilter: "blur(20px)", boxShadow: "0 2px 12px #00000018", color: vars.text,
   fontSize: vars.textUi, lineHeight: "24px", whiteSpace: "nowrap",
 });
 export const refresh = style({
-  border: 0, borderRadius: vars.rField, padding: "4px 10px", font: "inherit", cursor: "pointer",
+  border: 0, borderRadius: vars.rField, cornerShape: vars.cornerShape, padding: "4px 10px", font: "inherit", cursor: "pointer",
   color: vars.onPrimary, background: vars.primary,
   ":hover": { background: vars.primaryHover },
 });

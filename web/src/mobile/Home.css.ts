@@ -53,7 +53,8 @@ export const mHomeMe = style({
 });
 export const mHomeWorkspace = style({
   flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "6px", padding: "0", border: "0",
-  borderRadius: "8px", background: "none", textAlign: "left", cursor: "pointer",
+  borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", textAlign: "left",
+  cursor: "pointer",
 });
 export const mHomeToolbar = style({
   position: "absolute", left: "0", right: "0", bottom: "0", zIndex: "3",
@@ -178,7 +179,7 @@ export const mRecentAll = style({
   padding: "12px 16px 12px 18px", border: "0", borderTop: "0.5px solid var(--m-line)", background: "none",
   color: "var(--m-accent-ink) !important", fontSize: `${vars.textUi} !important`, cursor: "pointer",
 });
-globalStyle(`${mRecentRows} ${mChatRow}`, { height: "60px", padding: "0 12px 0 14px", borderRadius: "14px" });
+globalStyle(`${mRecentRows} ${mChatRow}`, { height: "60px", padding: "0 12px 0 14px", borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape });
 globalStyle(`${mRecentRows} ${mChatRow}[data-open]`, { background: "var(--m-accent-bg)" });
 globalStyle(`${mRecentRows} ${mChatRow}[data-open] ${mChatTitle}`, { color: "var(--m-accent-ink)", fontWeight: "600" });
 globalStyle(`${mNewChat}[data-small]`, { width: "32px", height: "32px" });

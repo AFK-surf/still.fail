@@ -3,7 +3,8 @@ import { vars } from "./tokens.css.ts";
 
 export const runtimeTags = style({});
 export const runtimeTag = style({
-  display: "inline-flex", alignItems: "center", gap: "3px", padding: "0 5px", height: "18px", borderRadius: "5px",
+  display: "inline-flex", alignItems: "center", gap: "3px", padding: "0 5px", height: "18px",
+  borderRadius: `calc(5px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: vars.hover, color: vars.muted, fontSize: vars.textCaption, fontWeight: "500",
 });
 export const spinner = style({});

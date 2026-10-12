@@ -9,7 +9,7 @@ export const newChatSub = style({
   fontSize: vars.textUi, lineHeight: "20px",
 });
 export const spentNotice = style({
-  margin: "0 0 8px", padding: "8px 12px", borderRadius: "10px",
+  margin: "0 0 8px", padding: "8px 12px", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: `color-mix(in srgb, ${vars.amber} 12%, transparent)`, color: vars.text, fontSize: vars.textUi,
 });
 /** New chat: a centred composer with the choices of where and on what it runs. */

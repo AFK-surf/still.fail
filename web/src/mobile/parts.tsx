@@ -11,6 +11,7 @@ import { doingMatches, failed as itFailed, useDoing, useDoingFailed } from "../d
 import type { DoingItem } from "../core/shapes.ts";
 import { useApp } from "./app.tsx";
 import * as css from "./parts.css.ts";
+import { vars } from "../styles/tokens.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
@@ -70,7 +71,7 @@ export function ModelMark({ maker, runtime, size = 36, state, around = "var(--m-
   const badge = xs ? 11 : 15;
   return (
     <span className={css.mModelMark} style={{ width: size, height: size }}>
-      <span className={css.mModelTile} style={{ borderRadius: xs ? 6 : 11 }}>
+      <span className={css.mModelTile} style={{ borderRadius: `calc(${xs ? 6 : 11}px * ${vars.cornerScale})` }}>
         <MakerIcon maker={maker} runtime={runtime} size={Math.round(size * (xs ? 0.6 : 0.56))} />
       </span>
       {state && state !== "done" && <Badge state={state} size={badge} ring={xs ? 1.5 : 2} around={around} style={{ position: "absolute", right: -3, bottom: -3 }} />}
@@ -141,6 +142,8 @@ export function Seg({ options, selected, onSelect, height = 30, fill = false, ra
 }) {
   const row = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ x: number; w: number; moved: boolean } | null>(null);
+  // A capsule stays round; a rounded rectangle takes the smooth corner over the longer radius.
+  const smooth = radius * 2 < height;
   useLayoutEffect(() => {
     const el = row.current?.querySelectorAll<HTMLElement>(`.${css.mSegOption}`)[selected];
     if (!el) return;
@@ -149,10 +152,10 @@ export function Seg({ options, selected, onSelect, height = 30, fill = false, ra
   }, [selected, options.length]);
   return (
     <div className={`${css.mSeg}${className ? ` ${className}` : ""}`} data-track={track || undefined} data-fill={fill || undefined}
-      style={{ height, borderRadius: radius, padding: inset }}>
+      data-smooth={smooth || undefined} style={{ height, borderRadius: smooth ? `calc(${radius}px * ${vars.cornerScale})` : radius, padding: inset }}>
       <div className={css.mSegRow} ref={row}>
         {thumb && <span className={css.mSegThumb} data-moved={thumb.moved || undefined}
-          style={{ transform: `translateX(${thumb.x}px)`, width: thumb.w, borderRadius: Math.max(0, radius - inset) }} />}
+          style={{ transform: `translateX(${thumb.x}px)`, width: thumb.w, borderRadius: smooth ? `calc(${radius}px * ${vars.cornerScale} - ${inset}px)` : Math.max(0, radius - inset) }} />}
         {options.map((label, i) => (
           <button key={label} type="button" className={css.mSegOption} data-on={i === selected || undefined} onClick={() => onSelect(i)}>{label}</button>
         ))}

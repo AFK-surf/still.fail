@@ -74,13 +74,15 @@ export const ceiling = style({ position: "absolute", left: "0", right: "0", top:
 /** A day: the whole column is what hovers, the bar sits at its foot. */
 export const day = style({
   flex: "1", minWidth: "0", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "stretch",
-  padding: "0", border: "0", background: "none", cursor: "default", borderRadius: "4px 4px 0 0",
+  padding: "0", border: "0", background: "none", cursor: "default",
+  borderRadius: `calc(4px * ${vars.cornerScale}) calc(4px * ${vars.cornerScale}) 0 0`, cornerShape: vars.cornerShape,
   transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: { "&:hover": { background: u.hover } },
 });
 export const bar = style({
   display: "flex", flexDirection: "column-reverse", gap: "2px", margin: "0 auto", width: "min(100%, 28px)",
-  borderRadius: "4px 4px 0 0", overflow: "hidden",
+  borderRadius: `calc(4px * ${vars.cornerScale}) calc(4px * ${vars.cornerScale}) 0 0`, cornerShape: vars.cornerShape,
+  overflow: "hidden",
 });
 export const part = style({ flex: "none", minHeight: "1px" });
 export const labels = style({ display: "flex", gap: "6px", marginTop: "6px", selectors: { "&[data-many]": { gap: "3px" } } });
@@ -123,7 +125,7 @@ export const notes = style({ display: "grid", gap: "4px", margin: "0", padding: 
 export const empty = style({ margin: "0", padding: "28px 0", textAlign: "center", fontSize: vars.textUi, color: u.muted });
 
 /** The phone's: what sits on a card of its own (the days, a list). */
-export const card = style({ padding: "14px 12px", borderRadius: "18px", background: u.tile });
+export const card = style({ padding: "14px 12px", borderRadius: `calc(18px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: u.tile });
 export const cardHead = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "0 4px 10px" });
 
 /** The picks over the page and the lists: each option on one line, as wide as the widest. */

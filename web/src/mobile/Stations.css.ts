@@ -31,7 +31,7 @@ export const mBarChips = style({ display: "flex", gap: "4px", height: "20px", ma
 export const mBarNet = style({ flex: "1", display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px" });
 globalStyle(`${mBarNet} > span`, { display: "flex", flexDirection: "column", gap: "9px" });
 globalStyle(`${mStationBars} i`, { display: "block", height: "10px", borderRadius: "5px", background: "color-mix(in srgb, var(--m-line) 70%, transparent)" });
-globalStyle(`${mBarChips} i`, { display: "block", height: "20px", borderRadius: "6px", background: "color-mix(in srgb, var(--m-line) 70%, transparent)" });
+globalStyle(`${mBarChips} i`, { display: "block", height: "20px", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "color-mix(in srgb, var(--m-line) 70%, transparent)" });
 export const mStationOffline = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", paddingTop: "6px", textAlign: "center",
 });
@@ -58,4 +58,4 @@ globalStyle(`${mMarkColors} > button`, { width: "32px", height: "32px" });
 globalStyle(`${mMarkColors} > button::before`, { inset: "7px" });
 export const mMarkEmoji = style({});
 globalStyle(`${mMarkEmoji}${mMarkEmoji}`, { fontSize: `calc(${vars.textTitle} * 1.6)` });
-export const mMarkPicture = style({ width: "20px", height: "20px", objectFit: "cover", borderRadius: "24%" });
+export const mMarkPicture = style({ width: "20px", height: "20px", objectFit: "cover", borderRadius: "24%", cornerShape: vars.cornerShape });

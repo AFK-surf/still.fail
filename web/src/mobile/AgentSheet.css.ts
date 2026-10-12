@@ -40,7 +40,8 @@ globalStyle(`${mAgentLines} > li[data-now]`, { color: "var(--m-ink)" });
 /** The figures that say most, each large over its name, side by side: in the ink, but one worth a look in its level's colour. */
 export const mAgentTiles = style({ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0, 1fr))", gap: "8px", marginTop: "14px" });
 export const mAgentTile = style({
-  display: "flex", flexDirection: "column", minWidth: "0", padding: "9px 12px 8px", borderRadius: "14px",
+  display: "flex", flexDirection: "column", minWidth: "0", padding: "9px 12px 8px",
+  borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "color-mix(in srgb, var(--m-ink) 5%, transparent)",
 });
 globalStyle(`${mAgentTile} b`, { fontSize: vars.textHeading, lineHeight: vars.leadingHeading, fontWeight: "600", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });

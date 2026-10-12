@@ -6,7 +6,8 @@ import { mButton } from "./parts.css.ts";
 
 export const mDangerButton = style({});
 export const mCommand = style({
-  display: "flex", alignItems: "flex-start", gap: "8px", padding: "10px 10px 10px 12px", borderRadius: "12px",
+  display: "flex", alignItems: "flex-start", gap: "8px", padding: "10px 10px 10px 12px",
+  borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "var(--m-surface2)", border: "1px solid var(--m-line)",
   selectors: {
     [`${mDetails} &`]: { marginTop: "6px" },
@@ -20,7 +21,7 @@ globalStyle(`${mCommand} code`, {
 });
 globalStyle(`${mCommand} button`, {
   display: "grid", placeItems: "center", flex: "none", width: "32px", height: "32px", padding: "0", border: "0",
-  borderRadius: "8px", background: "var(--m-chip)", cursor: "pointer",
+  borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "var(--m-chip)", cursor: "pointer",
 });
 /** Here rather than with its class: it comes after .m-command code, and wins over it. */
 globalStyle(`${mJobLast} code`, {

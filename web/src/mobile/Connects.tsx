@@ -29,6 +29,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as historyCss from "./styles/history.css.ts";
 import * as css from "./Connects.css.ts";
+import { vars } from "../styles/tokens.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
 
 import { NAME } from "../channel.ts";
@@ -692,8 +693,8 @@ function AppLook({ settings, onChange, icon, onIcon }: {
   });
   const isPicked = (a: Avatar) => picked !== null && !("upload" in picked) && picked.avatar.id === a.id;
   const tile = (a: Avatar, maker: boolean) => (
-    <button key={a.id} type="button" aria-label={a.label} onClick={() => pick(a, maker)}
-      style={{ display: "grid", placeItems: "center", aspectRatio: "1", padding: 0, border: 0, borderRadius: 12, overflow: "hidden", background: a.bg, cursor: "pointer",
+    <button key={a.id} type="button" className={partsCss.mSmooth} aria-label={a.label} onClick={() => pick(a, maker)}
+      style={{ display: "grid", placeItems: "center", aspectRatio: "1", padding: 0, border: 0, borderRadius: `calc(12px * ${vars.cornerScale})`, overflow: "hidden", background: a.bg, cursor: "pointer",
         boxShadow: isPicked(a) ? "0 0 0 2px var(--m-bg), 0 0 0 4px var(--m-accent)" : undefined }}>
       <img src={a.thumb ?? a.src} alt="" loading="lazy"
         style={maker ? { width: "55%", height: "55%", filter: a.mono ? "brightness(0) invert(1)" : undefined } : { width: "100%", height: "100%", transform: "scale(1.18)" }} />
@@ -704,8 +705,8 @@ function AppLook({ settings, onChange, icon, onIcon }: {
     <>
       <b className={sheetsCss.mFormLabel}>{t("web-mobile.connects.avatar")}</b>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <button type="button" aria-label={t("web-mobile.connects.upload")} onClick={() => file.current?.click()}
-          style={{ flex: "none", width: 72, height: 72, padding: 0, border: 0, borderRadius: 18, overflow: "hidden", background: settings.backgroundColor || undefined, cursor: "pointer" }}>
+        <button type="button" className={partsCss.mSmooth} aria-label={t("web-mobile.connects.upload")} onClick={() => file.current?.click()}
+          style={{ flex: "none", width: 72, height: 72, padding: 0, border: 0, borderRadius: `calc(18px * ${vars.cornerScale})`, overflow: "hidden", background: settings.backgroundColor || undefined, cursor: "pointer" }}>
           {icon ? <img src={icon} alt={t("web-mobile.connects.avatar")} width={72} height={72} style={{ display: "block" }} /> : <span className={`${partsCss.mSmall} ${partsCss.mMuted}`}>{t("web-mobile.connects.uploadShort")}</span>}
         </button>
         <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>

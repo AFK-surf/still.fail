@@ -207,6 +207,7 @@ export const statusDot = style({
 });
 export const avatar = style({
   display: "inline-grid", placeItems: "center", flex: "none", color: "#fff", fontWeight: "600", lineHeight: "1",
+  cornerShape: vars.cornerShape,
 });
 export const tooltip = style({});
 /** A tip's keys, after what it says: quieter. */

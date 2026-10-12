@@ -13,7 +13,8 @@ export const mNote = style({
 export const mChange = style({ display: "flex", flexDirection: "column", gap: "2px", padding: "10px 16px" });
 export const mLine = style({ fontSize: vars.textBody, lineHeight: "21px", color: "var(--m-ink)" });
 export const mKind = style({
-  display: "inline-block", marginRight: "6px", padding: "0 6px", borderRadius: "6px", fontSize: vars.textMeta, lineHeight: "19px",
+  display: "inline-block", marginRight: "6px", padding: "0 6px", borderRadius: `calc(6px * ${vars.cornerScale})`,
+  cornerShape: vars.cornerShape, fontSize: vars.textMeta, lineHeight: "19px",
   verticalAlign: "1px", color: "var(--m-muted)", background: "var(--m-chip)",
   selectors: { '&[data-kind="new"]': { color: "var(--m-accent-ink)", background: "var(--m-accent-bg)" } },
 });
@@ -23,10 +24,10 @@ globalStyle(`${mMeta} [data-has="false"]`, { color: "var(--m-accent-ink)" });
 
 // After an update, at the top of the list: what it brought, put away by its ×. Its buttons inherit
 // (./styles/root.css.ts): their colour and size are set here, as strongly.
-export const mNews = style({ position: "relative", margin: "4px 12px 10px", borderRadius: "16px", background: "var(--m-surface)" });
+export const mNews = style({ position: "relative", margin: "4px 12px 10px", borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "var(--m-surface)" });
 export const mNewsBody = style({
   display: "flex", flexDirection: "column", gap: "2px", width: "100%", padding: "12px 44px 12px 16px", border: "0",
-  borderRadius: "inherit", background: "none", textAlign: "left", cursor: "pointer",
+  borderRadius: "inherit", cornerShape: vars.cornerShape, background: "none", textAlign: "left", cursor: "pointer",
   selectors: { "&:active": { background: "var(--m-chip)" } },
 });
 export const mNewsHead = style({ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px", fontSize: vars.textBody, fontWeight: 600, color: "var(--m-ink)" });

@@ -16,3 +16,5 @@ export const mLink = style({
   cursor: "pointer",
 });
 export const mIllus = style({ display: "block", maxWidth: "100%", height: "auto" });
+/** A rounded rectangle whose radius is set where it is used: the corner is the smooth one all the same. */
+export const mSmooth = style({ cornerShape: vars.cornerShape });

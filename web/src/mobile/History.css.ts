@@ -30,7 +30,7 @@ export const mHSteps = style({
 });
 export const mHEdge = style({ padding: "10px 0", fontSize: vars.textCaption, color: "var(--m-subtle)", textAlign: "center" });
 export const mHItem = style({
-  borderRadius: "8px", transition: "background 900ms",
+  borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, transition: "background 900ms",
   selectors: {
     "&[data-marked]": { background: "color-mix(in srgb, var(--m-accent) 10%, transparent)" },
   },
@@ -46,7 +46,8 @@ export const mHLabel = style({
 export const mHQuote = style({ paddingLeft: "10px", borderLeft: "2px solid var(--m-line)" });
 export const mHBrief = style({
   display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical", overflow: "hidden",
-  boxSizing: "border-box", width: "100%", padding: "0", border: "0", borderRadius: "6px", background: "none",
+  boxSizing: "border-box", width: "100%", padding: "0", border: "0", borderRadius: `calc(6px * ${vars.cornerScale})`,
+  cornerShape: vars.cornerShape, background: "none",
   color: "var(--m-ink) !important", fontSize: `${vars.textUi} !important`, lineHeight: "21px", textAlign: "left",
   cursor: "pointer",
 });
@@ -54,14 +55,15 @@ export const mHSub = style({ paddingLeft: "12px" });
 export const mHMark = style({ display: "flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, color: "var(--m-muted)" });
 export const mHPlace = style({
   display: "inline-flex", alignItems: "center", gap: "3px", maxWidth: "100%", minWidth: "0", padding: "0", border: "0",
-  borderRadius: "4px", background: "none", verticalAlign: "middle",
+  borderRadius: `calc(4px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", verticalAlign: "middle",
   selectors: {
     "&[data-link]": { cursor: "pointer" },
   },
 });
 export const mHGroupHead = style({
   display: "flex", alignItems: "center", gap: "6px", boxSizing: "border-box", width: "100%", padding: "4px 0",
-  border: "0", borderRadius: "6px", background: "none", color: "var(--m-subtle) !important", textAlign: "left",
+  border: "0", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none",
+  color: "var(--m-subtle) !important", textAlign: "left",
   cursor: "pointer",
 });
 export const mHGroupBody = style({ display: "flex", flexDirection: "column", gap: "6px", padding: "4px 0 4px 19px" });
@@ -97,7 +99,8 @@ export const mHDetails = style({
 export const mHAbout = style({ paddingBottom: "6px" });
 export const mRunRow = style({
   display: "flex", alignItems: "center", gap: "6px", boxSizing: "border-box", width: "100%", marginTop: "6px",
-  padding: "10px 12px", border: "1px solid var(--m-line)", borderRadius: "10px", background: "none", textAlign: "left",
+  padding: "10px 12px", border: "1px solid var(--m-line)", borderRadius: `calc(10px * ${vars.cornerScale})`,
+  cornerShape: vars.cornerShape, background: "none", textAlign: "left",
   cursor: "pointer",
 });
 /**
@@ -111,7 +114,8 @@ export const mHDetail = style({ display: "contents", fontSize: vars.textUi });
 export const mHRings = style({ display: "flex", gap: "18px", padding: "10px 0" });
 /** Changing how it runs. */
 export const mRunSummary = style({
-  display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px", padding: "14px", borderRadius: "14px",
+  display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px", padding: "14px",
+  borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "var(--m-chip)",
 });
 export const mRunLine = style({ display: "flex", alignItems: "center", gap: "8px" });
@@ -127,13 +131,15 @@ export const mRunBecomes = style({
 });
 export const mSettingRow = style({
   display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", minHeight: "46px",
-  padding: "12px 14px", border: "0", borderRadius: "12px", background: "var(--m-chip)", textAlign: "left", cursor: "pointer",
+  padding: "12px 14px", border: "0", borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "var(--m-chip)", textAlign: "left", cursor: "pointer",
 });
 export const mSettingText = style({ display: "flex", flexDirection: "column" });
 export const mPickLine = style({
   display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", minHeight: "44px",
   padding: "11px 4px",
-  border: "0", borderRadius: "10px", background: "none", fontSize: `${vars.textBody} !important`, textAlign: "left",
+  border: "0", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none",
+  fontSize: `${vars.textBody} !important`, textAlign: "left",
   cursor: "pointer",
 });
 export const mPickCheck = style({

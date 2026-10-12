@@ -106,7 +106,8 @@ export const mTray = style({
   overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain",
 });
 export const mCard = style({
-  display: "flex", flexDirection: "column", gap: "3px", width: "160px", flex: "none", padding: "9px 12px", border: "0", borderRadius: "16px",
+  display: "flex", flexDirection: "column", gap: "3px", width: "160px", flex: "none", padding: "9px 12px", border: "0",
+  borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   color: "var(--m-ink)", textAlign: "left", cursor: "pointer",
   selectors: { "&[data-open]": { boxShadow: "inset 0 0 0 1.5px var(--m-accent), 0 1px 3px rgb(0 0 0 / .04)" } },
 });

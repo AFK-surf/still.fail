@@ -7,7 +7,8 @@ import { resizeHandle } from "../ui.css.ts";
 import { sessionMain } from "../styles/jobs.css.ts";
 
 export const agentMarkBtn = style({
-  display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer", borderRadius: "6px",
+  display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer",
+  borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   selectors: {
     "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "2px" },
     // Its history is the one shown beside the chat (among several agents).

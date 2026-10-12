@@ -5,7 +5,8 @@ export const frequent = style({ width: "100%", display: "flex", flexDirection: "
 export const label = style({ fontSize: vars.textMeta, color: vars.muted });
 export const choices = style({ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "6px", maxWidth: "100%" });
 export const combo = style({
-  border: "0", borderRadius: vars.rField, padding: "8px 10px", color: vars.muted, background: vars.hover,
+  border: "0", borderRadius: vars.rField, cornerShape: vars.cornerShape, padding: "8px 10px", color: vars.muted,
+  background: vars.hover,
   fontSize: vars.textUi, lineHeight: "18px", cursor: "pointer", maxWidth: "100%", overflowWrap: "anywhere",
   selectors: { '&[aria-pressed="true"]': { background: vars.selected, color: vars.text }, '&:hover': { color: vars.text } },
 });

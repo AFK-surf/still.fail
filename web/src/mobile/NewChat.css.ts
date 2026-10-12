@@ -23,7 +23,7 @@ export const mNewProblem = style({
   },
 });
 export const mNewSpent = style({
-  margin: "0 12px", padding: "8px 12px", borderRadius: "12px",
+  margin: "0 12px", padding: "8px 12px", borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "color-mix(in srgb, var(--m-warn) 12%, var(--m-bg))", fontSize: vars.textMeta,
 });
 export const mNewBottom = style({
