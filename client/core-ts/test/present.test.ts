@@ -422,7 +422,7 @@ test("a_watching_chat_says_what_it_watches_and_what_archiving_it_means", () => {
   const agent = (watch: J) => ({ key: "a", watch });
   assert.equal(p.rowWatch([{ key: "a" }]), null);
   const marked = p.rowWatch([agent({ names: ["盯 CI"], since: 0, at: 1 }), { key: "b" }, agent({ names: ["relay 延迟"], since: 0, at: 0 })]);
-  assert.deepEqual(marked, { text: "监控中：盯 CI、relay 延迟", ask: "「盯 CI」、「relay 延迟」还在监控。归档后它照常运行，有新消息时对话会回到列表。" });
+  assert.deepEqual(marked, { text: "监控中：盯 CI、relay 延迟", ask: "「盯 CI」、「relay 延迟」还在监控。归档会停掉它。" });
 });
 
 test("alert_capacity_is_remaining_while_its_edge_is_used_percent", () => {
