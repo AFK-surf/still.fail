@@ -94,6 +94,11 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       // Only messages' room is held: what a pane shows before it has any (loading, an empty chat's note) is not.
       if (!lastMessage()) reached = 0;
       reached = Math.max(reached, end);
+      // Only the room down to the pane's bottom is held (where it is, or is put back to after being pulled up: `placed`):
+      // below it no one sees it go, and kept it would be blank room to scroll down into, as tall as what left. Let go
+      // once the reader scrolls up, it is not held again.
+      const after = el.scrollHeight - end - f.offsetHeight;
+      reached = Math.min(reached, Math.max(end, Math.max(el.scrollTop, placed) + el.clientHeight - after));
       // Not rounded: what grows above it by a fraction of a pixel a frame (an activity opening) would make the content
       // a pixel taller and shorter by turns, and the pane shake.
       const height = `${reached - end}px`;
@@ -193,6 +198,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       stop();
       anchor = null;
       placed = el.scrollTop;
+      keepHeight();
       following = !isShort.current && distance() <= 2;
       if (following) reading = null;
       else note();
