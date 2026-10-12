@@ -232,6 +232,8 @@ export function install(inner: Inner): void {
   handlers.chatXshareAdd = (_inner, call, _progress, _at, ctx) => {
     const c = call as Of<"chatXshareAdd">;
     const row = rowOf(inner, c.station, c.id);
+    // Not read yet: whom it is shared with is not known, and must not be lost.
+    if (row === undefined) return Effect.fail(new CoreError("not_ready", t("core-misc.xshare.notRead", { name: inner.views.stationName(c.station) })));
     const was = rowShare(row);
     if (was.to.includes(c.workspace)) return Effect.succeed(null);
     const session = str(get(row, "session")) ?? c.id;

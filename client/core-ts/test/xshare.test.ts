@@ -286,6 +286,10 @@ test("a_chat_already_shared_with_the_workspace_written_in_asks_nothing", async (
   call(core, ui, 3, "chat.outsideRefs", { station: "ws/st", text: mark });
   await host.settle();
   assert.deepEqual(answerOf(host, values, 3).ok.chats, []);
+  // One whose row is not read: not shared, lest whom it is shared with be lost.
+  call(core, ui, 4, "chat.xshareAdd", { station: "wc/c1", id: "nope", workspace: "ws" });
+  await host.settle();
+  assert.equal(answerOf(host, values, 4).error.code, "not_ready");
   core.close();
 });
 
