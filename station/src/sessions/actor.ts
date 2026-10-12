@@ -105,6 +105,8 @@ export type SessionDeps = {
   held(): boolean;
   /// Stopped while it waits: ends the session's jobs that would bring it back.
   stopJobs(key: string): Promise<void>;
+  /// Archived: ends every job and service of the session.
+  endJobs(key: string): Promise<void>;
   toolStatus(tool: string): string;
   nextTs(): string;
   /// Its time (the hub's).
@@ -259,10 +261,20 @@ export class SessionActor {
   }
 
   /// A word from the station for the agent outside any conversation (a job's notice): it joins the running turn, or
-  /// runs as a turn of its own; one the running turn cannot take waits for its end.
+  /// runs as a turn of its own; one the running turn cannot take waits for its end. An archived session is not told.
   notify(text: string): Promise<void> {
+    if (this.archived()) return Promise.resolve();
     this.notices.push(text);
     return this.enqueue(() => this.giveNotices());
+  }
+
+  /// Archived (by hand or by the station): its wait ends and so does every job and service of its own; a running turn
+  /// goes on to its end and waits on nothing after. Only a new message brings it back (one archived by hand takes none).
+  putAway(): Promise<void> {
+    return this.enqueue(async () => {
+      this.notices = [];
+      if (!this.turn && !this.agent?.session.busy()) await this.letGo();
+    });
   }
 
   /// It posted in a chat (chat_post), in turn order.
@@ -332,7 +344,7 @@ export class SessionActor {
   /// Its last turn stopped at its account's allowance and it was changed since: it goes on where it stopped.
   goOn(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.deps.held() || this.turn || this.agent?.session.busy()) return;
+      if (this.deps.held() || this.archived() || this.turn || this.agent?.session.busy()) return;
       if (this.deps.store.pendingMessages(this.key).length > 0) return this.pump();
       await this.startTurn("resume", GO_ON_AFTER_SPENT);
     });
@@ -343,6 +355,7 @@ export class SessionActor {
     return this.enqueue(async () => {
       const store = this.deps.store;
       store.setRunning(this.key, false);
+      if (this.archived()) return this.letGo();
       const pending = store.pendingMessages(this.key);
       const [said, widgets] = await this.format(pending);
       await this.startTurn("resume", said === "" ? RESUME_AFTER_RESTART : `${RESUME_AFTER_RESTART}\n\n${said}`);
@@ -502,6 +515,10 @@ export class SessionActor {
 
   private async giveNotices() {
     if (this.deps.held()) return;
+    if (this.archived()) {
+      this.notices = [];
+      return;
+    }
     if (this.agent?.session.busy()) {
       const text = this.takeNotices();
       if (text === null) return;
@@ -514,7 +531,7 @@ export class SessionActor {
   }
 
   private async pump() {
-    if (this.deps.held()) return; // they stay pending
+    if (this.deps.held() || this.archived()) return; // they stay pending
     const store = this.deps.store;
     const pending = store.pendingMessages(this.key);
     if (pending.length === 0) return;
@@ -625,6 +642,11 @@ export class SessionActor {
   /// messages pending for the next attempt.
   private async startTurn(kind: string, text: string, by: TurnFor = nobody): Promise<void> {
     const store = this.deps.store;
+    // Archived: only a new message starts a turn (and has brought it back by then).
+    if (kind !== "input" && this.archived()) {
+      log.info("session", "archived: no turn of its own", { session: this.key, kind });
+      return;
+    }
     try {
       // Until the runtime says it has sent its request, the turn is starting.
       this.deps.live?.event(this.key, { kind: "phase", phase: "starting" });
@@ -889,6 +911,12 @@ export class SessionActor {
         }
       }
     }
+    // Archived while it ran: it waits on nothing.
+    if (this.archived()) {
+      await this.letGo();
+      this.deps.idle(this.key);
+      return;
+    }
     if (store.pendingMessages(this.key).length > 0) return this.pump();
     if (this.notices.length > 0) return this.giveNotices();
     const declared = turn?.declared ?? null;
@@ -955,6 +983,25 @@ export class SessionActor {
     await this.notice(t("station.notice.stopped"));
   }
 
+  /// Archived (by hand or by the station): what would bring it back ends, without a word in its thread.
+  private async letGo() {
+    this.notices = [];
+    this.nudges = 0;
+    const waited = this.waiting !== null;
+    this.waiting = null;
+    if (this.phase === "waiting") this.phase = "idle";
+    const last = this.deps.store.lastTurn(this.key);
+    if (waited || (last && last.endedAt !== null && last.declared === "waiting")) {
+      log.info("session", "archived: its wait ends", { session: this.key });
+      this.deps.store.stopWait(this.key);
+    }
+    await this.deps.endJobs(this.key);
+  }
+
+  private archived(): boolean {
+    return (this.deps.store.getSession(this.key)?.archivedAt ?? null) !== null;
+  }
+
   /// Asks the agent again after `seconds`, unless a turn has started by then.
   private wait(seconds: number) {
     this.waitMs(seconds, seconds * 1000);
@@ -974,6 +1021,7 @@ export class SessionActor {
             this.enqueue(async () => {
               // Held: the wait stays, for the next station to take up.
               if (this.deps.held() || this.waiting !== wait) return;
+              if (this.archived()) return this.letGo();
               this.waiting = null;
               this.phase = "idle";
               // Keeping watch: the watch brings it back (its notices, its end), not the clock; it waits on.

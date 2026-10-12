@@ -18,7 +18,7 @@ import { FETCHED, fileForPeer, putForPeer } from "../src/sessions/peer-files.ts"
 import { packWorkspaceIf } from "../src/sessions/archive.ts";
 import { roomOf } from "../src/sessions/footprint.ts";
 import { Refused } from "../src/sessions/neighbours.ts";
-import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
+import { archive, newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { review, reviewUndecided } from "../src/sessions/review.ts";
 import { cleanTitle } from "../src/sessions/titles.ts";
 import { adbTools } from "../src/tools/adb.ts";
@@ -646,6 +646,26 @@ test("an agent writes to another session's chat, which sees whom it is from", as
   await r.call(keyB, "session_send", { to: keyA, text: "tests pass" });
   assert.ok((await r.refused(keyA, "session_send", { to: keyA, text: "hi" })).includes("chat_post"));
   assert.ok((await r.refused(keyA, "session_send", { to: `C1/${a.threadTs}`, text: "hi" })).includes("chat_post"));
+  await r.close();
+});
+
+test("a chat archived by hand takes no messages: session_send and chat_post are refused, and it is not brought back", async () => {
+  const r = new Rig({ link: true });
+  const [a, b] = [say("<@UBOT> build it"), say("<@UBOT> test it")];
+  await r.accept(a);
+  await r.accept(b);
+  await settle();
+  const [keyA, keyB] = [sessionKey("cl", "C1", a.threadTs), sessionKey("cl", "C1", b.threadTs)];
+  archive(r.hub, keyB, true);
+  await settle();
+  assert.ok((await r.refused(keyA, "session_send", { to: keyB, text: "tests pass?" })).includes("archived by hand"));
+  assert.ok((await r.refused(keyB, "chat_post", { to: `C1/${b.threadTs}`, text: "late words" })).includes("archived by hand"));
+  assert.ok(r.store.getSession(keyB)!.archivedAt !== null);
+  assert.deepEqual(r.store.pendingMessages(keyB), []);
+  // Shown again, it takes them.
+  archive(r.hub, keyB, false);
+  const sent = await r.call(keyA, "session_send", { to: keyB, text: "tests pass?" });
+  assert.ok(sent.includes(keyB), sent);
   await r.close();
 });
 

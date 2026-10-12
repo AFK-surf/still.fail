@@ -377,10 +377,24 @@ test("a session's own chat is archived with it, a chat of its own alone; anythin
   say(store, other.id, "2.4", "person", "local", "again");
   assert.equal(thread(other.id).hiddenAt, null);
 
-  // Shown again by hand: the idle clock starts over.
+  // Archived by hand, nothing said brings it back: it takes no messages.
   store.setArchived("a", true, MANUAL);
+  assert.ok(store.manuallyArchived(own.id));
+  say(store, own.id, "1.2", "agent", "a", "late");
+  assert.equal(row().archivedBy, MANUAL);
+  assert.ok(thread(own.id).hiddenAt !== null);
+  // Shown again by hand: the idle clock starts over.
   store.setArchived("a", false, MANUAL);
   assert.ok(row().shownAt !== null);
+  assert.equal(store.manuallyArchived(own.id), false);
+
+  // Archived by the station, an agent's word in its chat brings back every session that hears it.
+  session(store, "b");
+  store.joinThread(other.id, "b", "ember");
+  store.setArchived("a", true, AUTO);
+  store.setArchived("b", true, AUTO);
+  say(store, other.id, "2.5", "agent", "b", "news");
+  assert.deepEqual([row().archivedAt, store.getSession("b")!.archivedAt], [null, null]);
 });
 
 test("a database made before archiving gains its columns and each session's first chat is its own", () => {

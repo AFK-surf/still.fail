@@ -9,7 +9,7 @@ import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/a
 import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
-import { addToThread, autoArchive, archive, archiveChat, bindSingle, configure, deleteSession, newSession, openChat, say as sayIn } from "../src/sessions/lifecycle.ts";
+import { addToThread, autoArchive, archive, archiveBy, archiveChat, bindSingle, configure, deleteSession, newSession, openChat, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { AUTO, MANUAL } from "../src/store/store.ts";
 import { FakeDriver, Rig, matches, message, reply, say, settle, testClock } from "./hub-fakes.ts";
 
@@ -1006,6 +1006,54 @@ test("archiving hands an idle session to cold storage, never on a timer for what
   archive(r.hub, key, false);
   assert.deepEqual(restored, [key]);
   await r.close();
+});
+
+test("archiving ends the wait and every job and service; only a new message wakes it, and none reaches one archived by hand", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+  for (const by of [AUTO, MANUAL]) {
+    const r = new Rig();
+    const stopped: string[] = [];
+    r.hub.setJobs({
+      stop: async (id) => {
+        stopped.push(id);
+        r.store.jobEnded(id, "stopped", null);
+        return r.store.getJob(id)!;
+      },
+    });
+    const m = message();
+    await r.accept(m);
+    await settle();
+    const key = sessionKey("cl", "C1", m.threadTs);
+    r.store.insertJob({ ...watchJob(key), id: "build", token: "tb", watch: false });
+    r.store.insertJob({ ...watchJob(key), id: "page", token: "tp", port: 47123, watch: false });
+    await r.call(key, "chat_state", { kind: "waiting", seconds: 10, for: "任务跑完" });
+    r.claude.last().complete();
+    await settle();
+    archiveBy(r.hub, key, true, by);
+    await settle();
+    assert.deepEqual(stopped.sort(), ["build", "page"], by);
+    t.mock.timers.tick(30_000);
+    r.hub.notify(key, "a job ended");
+    await settle();
+    assert.equal(r.claude.last().prompts.length, 1, `${by}: neither the clock nor a notice wakes it`);
+    assert.ok(r.store.getSession(key)!.archivedAt !== null);
+    await r.accept(reply(m, "9999.2", "<@UBOT> 还在吗", { addressed: true }));
+    await settle();
+    if (by === AUTO) {
+      assert.equal(r.store.getSession(key)!.archivedAt, null, "a new message brings it back");
+      assert.ok(r.claude.last().prompts.at(-1)!.includes("还在吗"));
+    } else {
+      assert.ok(r.store.getSession(key)!.archivedAt !== null, "archived by hand, it stays so");
+      assert.equal(r.claude.last().prompts.length, 1);
+      assert.ok(r.chat.lastText().includes("已手动归档"), r.chat.lastText());
+      // Shown again by hand, it hears what is said from then on.
+      archive(r.hub, key, false);
+      await r.accept(reply(m, "9999.3", "<@UBOT> 回来了", { addressed: true }));
+      await settle();
+      assert.ok(r.claude.last().prompts.at(-1)!.includes("回来了"));
+    }
+    await r.close();
+  }
 });
 
 test("idle chats that are done are archived by the station; busy, blocked, unread and bound ones stay", async () => {
