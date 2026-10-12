@@ -331,6 +331,16 @@ class StationApi(private val core: StillFailCore, val station: String) {
             put("write", write)
         }
     }
+    /**
+     * The chats of other workspaces a text written here refers to by its marks that are not shared with this station's
+     * workspace yet (sending it would leave this workspace's agents unable to read them): docs/chat-share.md.
+     */
+    suspend fun outsideRefs(text: String): List<OutsideRef> =
+        decode(OutsideRefs.serializer(), op("chat.outsideRefs") { put("text", text) }).chats
+    /** Shares this station's chat `id` with one workspace more (`workspace`), telling its station `prefer` first. */
+    suspend fun shareInto(id: String, workspace: String, prefer: String?) {
+        op("chat.xshareAdd") { put("id", id); put("workspace", workspace); prefer?.let { put("prefer", it) } }
+    }
     /** Deletes a session for good: its chat, its history and its workspace directory. */
     suspend fun deleteSession(key: String) { ops.sessionDelete(key = key) }
 
@@ -527,3 +537,10 @@ private val LIMIT_ERRORS get() = mapOf(
 )
 
 fun errorText(e: CoreException): String = INVITE_ERRORS[e.code] ?: LIMIT_ERRORS[e.code] ?: e.message
+
+/** A chat of another workspace a text refers to (`chat.outsideRefs`): `may`, whether the viewer may share it (its starter, or an owner or admin there). */
+@kotlinx.serialization.Serializable
+data class OutsideRef(val station: String, val id: String, val title: String, val workspace: String, val workspaceName: String, val may: Boolean)
+
+@kotlinx.serialization.Serializable
+private class OutsideRefs(val chats: List<OutsideRef> = emptyList())

@@ -95,6 +95,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
@@ -130,8 +131,12 @@ import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.MainScope
+import fail.still.android.data.OutsideRef
+import fail.still.android.data.StationApi
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -179,6 +184,8 @@ class Draft {
     val files = mutableStateListOf<Pending>()
     /** A new chat is being made for the first message. */
     var starting by mutableStateOf(false)
+    /** What it refers to is being looked at before it goes (sendSharing): a second tap of send does nothing meanwhile. */
+    internal var checking = false
     var error by mutableStateOf<String?>(null)
     /** The quote whose comment line takes the focus. */
     var focusQuote by mutableStateOf<Long?>(null)
@@ -371,8 +378,9 @@ private fun scopeOf(address: String) = address.substringBefore('/')
 
 /**
  * `@` and a few letters in the text: the chats of this station it finds (another station's agents cannot read them,
- * the core's `chatSearch`), titles first, but not `here` (the chat written in); the one picked goes in as the mark the
- * core makes of it. Over the composer, in its glass.
+ * the core's `chatSearch`), titles first, but not `here` (the chat written in); then those of the viewer's other
+ * workspaces (`elsewhere`), each with its workspace's name after its title, as a tag (sent, one is shared with this
+ * workspace first: sendSharing). The one picked goes in as the mark the core makes of it. Over the composer, in its glass.
  */
 @Composable
 fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, modifier: Modifier = Modifier) {
@@ -384,7 +392,7 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
     if (found == null && draft.refClosed != null) draft.refClosed = null
     if (ref == null) return
     val (start, query) = ref
-    val search by rememberTopic<ChatSearchView>(app.core, Topics.chatSearch(scopeOf(station), query, station, here, 8))
+    val search by rememberTopic<ChatSearchView>(app.core, Topics.chatSearch(scopeOf(station), query, station, here, 8, elsewhere = true))
     val items = search.value?.items ?: emptyList()
     val pick = { item: fail.still.android.data.ChatItem ->
         val caret = field.selection.start
@@ -392,7 +400,7 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
         scope.launch {
             // Its mark, from the core, which keeps its link until it is sent; in its place if the `@words` are still there.
             val mark = try {
-                app.core.call("chat.ref", buildJsonObject { put("station", item.station); put("id", item.id); put("title", item.title); put("base", app.cloudOrigin) })
+                app.core.call("chat.ref", buildJsonObject { put("station", item.station); put("id", item.id); put("title", item.title); put("base", app.cloudOrigin); put("into", scopeOf(station)) })
                     .jsonObject["mark"]?.jsonPrimitive?.content
             } catch (e: CoreException) { app.toast = t("android-chat.ref.failed", "error" to errorText(e)); null } ?: return@launch
             val now = draft.input.text
@@ -418,8 +426,86 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Box(Modifier.width(16.dp), contentAlignment = Alignment.Center) { item.agents.firstOrNull()?.let { MakerIcon(it.maker, it.runtime, 14.dp) } }
-                    Text(item.title, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    // Another workspace's: its name right after the title (cut short first), as a tag.
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(item.title, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        item.outside?.let { StationTag(it, null, null) }
+                    }
                     item.time?.get("lastActiveAt")?.let { Text(it.ago, fontSize = 13.sp, color = C.muted, maxLines = 1) }
+                }
+            }
+        }
+    }
+}
+
+// ── sharing what is referred to (docs/chat-share.md) ─────────────────────
+
+/**
+ * Sends what `draft` holds by `send`, written on `station`, once this workspace's agents can read what it refers to:
+ * the chats of the viewer's other workspaces its marks name that are not shared with this one yet (the core's
+ * `chat.outsideRefs`). With none, it goes at once; else a sheet says which first (as the phone's web does).
+ */
+fun AppState.sendSharing(draft: Draft, station: String, send: () -> Unit) {
+    val text = draft.text.trim()
+    // No mark, nothing referred to: no need to ask.
+    if (!ChatRefs.MARK.containsMatchIn(text)) { send(); return }
+    if (draft.checking) return
+    draft.checking = true
+    scope.launch {
+        // A core that cannot say (one before sharing) leaves it as before: sent as it is.
+        val outside = try { api(station).outsideRefs(text) } catch (_: CoreException) { emptyList() }
+        draft.checking = false
+        if (outside.isEmpty()) send() else askToShare(this@sendSharing, draft, station, outside, send)
+    }
+}
+
+/**
+ * Which chats of other workspaces this workspace's agents will read once it is sent, each saying whose; those the
+ * viewer may not share (neither its starter nor an owner or admin there) say so. 分享并发送 shares those they may with
+ * this workspace (`chat.xshareAdd`, its station told first; the button turning meanwhile, as the phone's web does), then
+ * closes the sheet and sends; a share failing is said in the sheet, and nothing is sent (the draft stays). With none they
+ * may share, 仍然发送 sends it as it is. 取消 leaves the draft as it was.
+ */
+private fun askToShare(app: AppState, draft: Draft, station: String, chats: List<OutsideRef>, send: () -> Unit) {
+    val may = chats.filter { it.may }
+    val rows = chats.sumOf { if (it.may) 34 else 54 }
+    app.sheet = SheetSpec(0.5f, fit = (22 + 48 + 30 + rows + 16 + 38 + 24).dp) {
+        SheetGrab()
+        SheetHead(t("web-main.outside.title"))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+            Text(t("web-main.outside.lead"), fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
+            // Each as a reference shows (its title after `@`, in the accent), whose after it as the `@` menu says it.
+            chats.forEach { c ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            buildAnnotatedString { withStyle(SpanStyle(color = C.accent.copy(alpha = C.accent.alpha * 0.7f))) { append("@") }; append(c.title) },
+                            fontSize = 15.sp, lineHeight = 22.sp, color = C.accent, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                        )
+                        StationTag(t("web-main.outside.from", "name" to c.workspaceName), null, null)
+                    }
+                    if (!c.may) Text(t("web-main.outside.cannot"), fontSize = 13.sp, lineHeight = 18.sp, color = C.red, modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+            var busy by remember { mutableStateOf(false) }
+            var error by remember { mutableStateOf<String?>(null) }
+            error?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.red, modifier = Modifier.padding(top = 8.dp)) }
+            Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                Button(t("common.cancel"), primary = false) { app.sheet = null }
+                Button(t(if (may.isEmpty()) "web-main.outside.anyway" else "web-main.outside.share"), primary = true, busy = busy) {
+                    if (busy) return@Button
+                    if (may.isEmpty()) { app.sheet = null; send(); return@Button }
+                    busy = true
+                    error = null
+                    app.scope.launch {
+                        // All at once; each told on its own (one failing does not stop the rest).
+                        val failed = may.map { c ->
+                            async { try { app.api(c.station).shareInto(c.id, scopeOf(station), station); null } catch (e: CoreException) { e } }
+                        }.awaitAll().firstOrNull { it != null }
+                        busy = false
+                        if (failed != null) error = t("web-main.outside.failed", "error" to errorText(failed))
+                        else { app.sheet = null; send() }
+                    }
                 }
             }
         }
@@ -865,6 +951,7 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
     val thread = view.thread
     val archived = view.archived == true
     draft.locked = view.offline || archived
+    val send = app.chatSend(host, api, of, view, keeper, draft)
     return ComposerSpec(
         station = station, here = keeper, draft = draft, placeholder = if (archived) t("android-chat.composer.archived.placeholder") else t("android-chat.chat.placeholder"),
         notices = {
@@ -879,36 +966,40 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
                 scope.launch { try { api.warm(keeper) } catch (_: CoreException) {} }
             }
         },
-        onSend = {
-            if (!draft.locked) {
-                // Its words stay where they were typed until its row is in the list, then go there. Not from a window short
-                // of the chat's end: its row is past the window until the station has the message (at no time known); it
-                // comes in as rows do.
-                if (view.newer != true) host.sending(draft.text.trim(), carried = false, files = draft.files.toList())
-                val taken = draft.take()
-                // Refused by the core before it reached the outbox (`invalid_params`: no such chat, a bad address): the words
-                // come back if nothing was written since, and why is said. A station's failure is in the outbox (未发送, 重试).
-                val refused = { e: CoreException ->
-                    host.notSent()
-                    if (e.code == "invalid_params") {
-                        if (draft.empty) { draft.restore(taken); draft.error = errorText(e) }
-                        else app.toast = t("android-chat.composer.send.failed", "error" to errorText(e))
-                    }
-                    Unit
-                }
-                // Sent to by the page's key until its thread is known: a chat made here (`new:…`), or the agent's, whose
-                // chat the core has its station make behind what is sent (it waits in the outbox meanwhile).
-                val to = thread?.id
-                val key = (of as? ChatOf.Session)?.key ?: keeper
-                // Sent from the app's scope: the page may move on before the station answers.
-                app.scope.launch {
-                    try {
-                        if (to != null) api.send(to, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
-                        else if (key != null) api.sendIn(key, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
-                        else host.notSent()
-                    } catch (e: CoreException) { refused(e) }
-                }
-            }
-        },
+        onSend = { if (!draft.locked) app.sendSharing(draft, station, send) },
     )
+}
+
+/** Sends what the chat's composer holds (once what it refers to can be read here: sendSharing). */
+private fun AppState.chatSend(host: Host, api: StationApi, of: ChatOf, view: ChatView, keeper: String?, draft: Draft): () -> Unit = {
+    val app = this
+    if (!draft.locked) {
+        // Its words stay where they were typed until its row is in the list, then go there. Not from a window short
+        // of the chat's end: its row is past the window until the station has the message (at no time known); it
+        // comes in as rows do.
+        if (view.newer != true) host.sending(draft.text.trim(), carried = false, files = draft.files.toList())
+        val taken = draft.take()
+        // Refused by the core before it reached the outbox (`invalid_params`: no such chat, a bad address): the words
+        // come back if nothing was written since, and why is said. A station's failure is in the outbox (未发送, 重试).
+        val refused = { e: CoreException ->
+            host.notSent()
+            if (e.code == "invalid_params") {
+                if (draft.empty) { draft.restore(taken); draft.error = errorText(e) }
+                else app.toast = t("android-chat.composer.send.failed", "error" to errorText(e))
+            }
+            Unit
+        }
+        // Sent to by the page's key until its thread is known: a chat made here (`new:…`), or the agent's, whose
+        // chat the core has its station make behind what is sent (it waits in the outbox meanwhile).
+        val to = view.thread?.id
+        val key = (of as? ChatOf.Session)?.key ?: keeper
+        // Sent from the app's scope: the page may move on before the station answers.
+        app.scope.launch {
+            try {
+                if (to != null) api.send(to, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
+                else if (key != null) api.sendIn(key, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
+                else host.notSent()
+            } catch (e: CoreException) { refused(e) }
+        }
+    }
 }
