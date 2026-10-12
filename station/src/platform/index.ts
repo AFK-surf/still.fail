@@ -14,10 +14,6 @@ export type Env = Record<string, string | undefined>;
 export type Found = { onPath: string; real: string };
 /// A program and its arguments, as runtimes are installed and updated.
 export type How = { program: string; args: string[] };
-/// A process of the machine as `ps` lists it: its parent, group, resident memory (kB) and program.
-export type ProcessEntry = { pid: number; ppid: number; pgid: number; rssKb: number; command: string };
-/// How short of memory the machine is, as its system says.
-export type MemoryPressure = "normal" | "warn" | "critical";
 
 /// How the host page says the machine (GET /host): memory, CPU, uptime, the OS.
 export type Host = {
@@ -77,13 +73,6 @@ export type Platform = {
   groupOutlivesLeader: boolean;
   /// Memory of each group (kB).
   groupMemory(pgids: number[]): Promise<Map<number, number>>;
-  /// Every process of the machine, what the guard (ops/guard.ts) finds its agents' commands among; none where it does
-  /// not look (Windows, whose commands cannot be paused).
-  processTable(): Promise<ProcessEntry[]>;
-  /// The working directory of `pid`; none when it cannot be read.
-  cwdOf(pid: number): Promise<string | null>;
-  /// How short of memory the machine is; none where it is not read.
-  memoryPressure(): Promise<MemoryPressure | null>;
 
   // Paths.
   paths: {
