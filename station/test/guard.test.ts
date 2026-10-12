@@ -83,7 +83,7 @@ test("the disk running low: the agents at work are told once; nothing is paused"
   await guard.look();
   assert.deepEqual(said.map(([s]) => s), ["ember:c-a", "ember:c-z"]);
   assert.match(said[0]![1], /6\.0 GB left/);
-  assert.deepEqual(signals, []);
+  assert.equal(signals.length, 0);
 });
 
 test("the disk all but full: the commands running are paused and their agents told; with room again they go on", async () => {
@@ -101,7 +101,7 @@ test("the disk all but full: the commands running are paused and their agents to
   signals.length = 0;
   state.free = 3 * GiB;
   await guard.look();
-  assert.deepEqual(signals, []);
+  assert.equal(signals.length, 0);
   state.free = 5 * GiB;
   await guard.look();
   assert.deepEqual(signals.map(([pid, s]) => `${pid} ${s}`).sort(), [20, 21, 22, 40, 41, 50, 51].map((pid) => `${pid} SIGCONT`).sort());
@@ -122,7 +122,7 @@ test("memory at critical pressure: the biggest command is ended and its agent to
   const { guard, said, signals, stopped, state } = fake();
   state.pressure = "warn";
   await guard.look();
-  assert.deepEqual(signals, []);
+  assert.equal(signals.length, 0);
   state.pressure = "critical";
   await guard.look();
   // cargo's shell holds 1.3 GB, the job's browser 1.2 GB.
@@ -132,8 +132,8 @@ test("memory at critical pressure: the biggest command is ended and its agent to
   signals.length = 0;
   state.now = 20_000;
   await guard.look();
-  assert.deepEqual(signals, []);
-  assert.deepEqual(stopped, []);
+  assert.equal(signals.length, 0);
+  assert.equal(stopped.length, 0);
 });
 
 test("a job ended for memory is stopped as a job; a shared runtime's command is told to the session working where it runs", async () => {
@@ -156,6 +156,6 @@ test("nothing big enough to free memory: nothing is ended", async () => {
   const { guard, signals, stopped, state } = fake({ processes: async () => small });
   state.pressure = "critical";
   await guard.look();
-  assert.deepEqual(signals, []);
-  assert.deepEqual(stopped, []);
+  assert.equal(signals.length, 0);
+  assert.equal(stopped.length, 0);
 });
