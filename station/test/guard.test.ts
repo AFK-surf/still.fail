@@ -85,6 +85,17 @@ test("the disk running low: the agents at work are told once; nothing is paused"
   assert.deepEqual(said.map(([s]) => s), ["ember:c-a", "ember:c-z"]);
   assert.match(said[0]![1], /6\.0 GB left/);
   assert.equal(signals.length, 0);
+  // Back over the line and under it again: not told again until it had room.
+  for (const free of [8.5, 7.5, 9.5, 7]) {
+    state.free = free * GiB;
+    await guard.look();
+  }
+  assert.equal(said.length, 2);
+  state.free = 11 * GiB;
+  await guard.look();
+  state.free = 7 * GiB;
+  await guard.look();
+  assert.equal(said.length, 4);
 });
 
 test("the disk all but full: the commands running are paused and their agents told; with room again they go on", async () => {

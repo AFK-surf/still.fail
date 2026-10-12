@@ -12,6 +12,7 @@ stillfail-runner --dir <run/runners> --id <id> [--cwd <dir>] -- <program> <args�
 ```
 - 环境变量原样传给 agent（station 在启动 runner 时就把 agent 的环境配好）。
 - station 用 `nice -n 10` 启动 runner（`STILLFAIL_AGENT_NICE` 可改，0 不降；Windows 不降），agent 和它起的子进程（构建、浏览器）都比 station 低一档 CPU 优先级：机器被 agent 的活占满时，station 自己回请求、推变化不被拖住（`station/src/ops/nice.ts`）；后台任务（jobs）同样。
+- agent 和 station 是同一个系统用户，不在沙箱里：Seatbelt 包住后，被包的程序不能再给自己开沙箱（Chromium 不加 `--no-sandbox` 就崩，Claude Code 自己的沙箱、SwiftPM 同理）；带配额的独立卷要 root 改属主和挂载，也管不到 `/tmp` 和各种缓存。所以由 station 的守卫（`station/src/ops/guard.ts`，每 10 秒看一次）盯会把它拖垮的两样：数据盘剩余低于 8G（小盘按 10%）时告诉正在干活的 agent 清理；低于 2G（3%）时暂停（SIGSTOP）agent 当时在跑的命令，剩余回到 2 倍线后继续（SIGCONT），之后新起的命令不停，好让 agent 清理；系统内存压力到 critical 时结束占内存最多（至少 512M）的那个命令，并告诉它的 agent，两次之间至少隔 30 秒。「命令」指 runtime 起的每个 shell 及其下所有进程，以及 job 的进程组；runtime 本身和它的 MCP server 不动。
 - runner 先 `setsid()`（离开 station 的进程组和会话，launchd 结束 station 时不会带走它），再 fork 出 agent：agent 自己 `setpgid(0,0)` 成一个进程组（station 按 pgid 结束 agent 及其子进程，与现在一样）。
 - 写 `<dir>/<id>.json`（0600，原子写）：`{"id","runner":pid,"pid":agent pid,"pgid","startedAt":ms,"program","args","socket":"<dir>/<id>.sock","out":"<dir>/<id>.out","err":"<dir>/<id>.err"}`。
 - agent 的 stdout、stderr 原样追加到 `<id>.out`、`<id>.err`（不改内容）。stdin 由 runner 持有。

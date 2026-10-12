@@ -21,6 +21,8 @@ export function diskLimits(total: number): { low: number; full: number } {
 
 /// Paused commands go on once twice the `full` room is free: not at the line itself, where the next write stops them.
 const RESUME_FACTOR = 2;
+/// The disk counts as having room again (its agents told anew when it next runs low) above this much of `low`.
+const LOW_CLEARED_FACTOR = 1.25;
 /// A command is ended for memory only when it holds this much (kB): ending a smaller one frees nothing that matters.
 const KILL_MIN_KB = 512 * 1024;
 /// After ending one, the system is given this long to take its memory back before another is.
@@ -151,6 +153,8 @@ export class Guard {
     const { low, full } = diskLimits(room.total);
     let level: "ok" | "low" | "full" = room.free < full ? "full" : room.free < low ? "low" : "ok";
     if (this.#disk === "full" && room.free < full * RESUME_FACTOR) level = "full";
+    // Nor is the disk taken as having room the moment it crosses back over `low`: it would be told again at each wobble.
+    if (this.#disk === "low" && level === "ok" && room.free < low * LOW_CLEARED_FACTOR) level = "low";
     const was = this.#disk;
     if (level === was) return;
     this.#disk = level;
