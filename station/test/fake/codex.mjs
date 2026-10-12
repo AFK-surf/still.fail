@@ -8,11 +8,17 @@
 //   hold:<k>      k deltas, then waits until steered (the steers its deltas) or interrupted
 //   gate:<n>:<k>:<name>   k of n deltas; the rest once FAKE_DUMP.<name>.a (a fifo) is written, then FAKE_DUMP.<name>.said
 //                 made; the end once FAKE_DUMP.<name>.b is (what the test lets happen when, not a time)
-// FAKE_DUMP: its argv and env are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin.
+// FAKE_DUMP: its argv and env are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin. The
+// version it says it is (`--version`, its userAgent) is FAKE_DUMP.version's when there is one, else 0.
 import fs from "node:fs";
 import readline from "node:readline";
 
 const dump = process.env.FAKE_DUMP;
+const version = dump && fs.existsSync(`${dump}.version`) ? fs.readFileSync(`${dump}.version`, "utf8").trim() : "0";
+if (process.argv[2] === "--version") {
+  console.log(`codex-cli ${version}`);
+  process.exit(0);
+}
 if (dump) fs.appendFileSync(dump, JSON.stringify({ argv: process.argv.slice(2), env: process.env, pid: process.pid }) + "\n");
 
 const say = (msg) => fs.writeSync(1, JSON.stringify(msg) + "\n");
@@ -132,7 +138,7 @@ function handle(msg) {
   if (method === "initialize") {
     if (initialized) return fail("Already initialized");
     initialized = true;
-    return reply({ userAgent: "fake-codex/0" });
+    return reply({ userAgent: `fake-codex/${version} (fake)` });
   }
   if (method === "initialized") return;
   if (!initialized) return fail("Not initialized");

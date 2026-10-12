@@ -6,7 +6,7 @@
 // - per-session settings (the MCP endpoint and token) travel in the thread/start|resume `config`, not the process
 //   environment;
 // - threads need sandbox "danger-full-access" with approvalPolicy "never", or MCP tool calls are refused.
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
 import { LiveFromCodex, chars, type CodexLiveState } from "./live.ts";
@@ -16,6 +16,8 @@ import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profile
 import { TOOL_SERVERS, cleanEnv, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import type { RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
+import { run } from "../updates/runtimes.ts";
+import { versionIn } from "../updates/versions.ts";
 
 type Json = any;
 
@@ -139,6 +141,35 @@ function hostArgs(profile: Profile): string[] {
   return args;
 }
 
+/// The version in what an app-server answered `initialize` with ("stillfail/0.162.1 (Mac OS …) …").
+export function userAgentVersion(userAgent: unknown): string | null {
+  if (typeof userAgent !== "string") return null;
+  return versionIn(userAgent.split(/\s/)[0]?.split("/")[1] ?? "");
+}
+
+/// The version an app-server a runner keeps runs: its answer to `initialize`, the first line it wrote.
+function versionInOutput(file: string): string | null {
+  let fd: number;
+  try {
+    fd = openSync(file, "r");
+  } catch {
+    return null;
+  }
+  try {
+    const buf = Buffer.alloc(4096);
+    const n = readSync(fd, buf, 0, buf.length, 0);
+    const first = buf.subarray(0, n).toString("utf8").split("\n")[0] ?? "";
+    return userAgentVersion(JSON.parse(first)?.result?.userAgent);
+  } catch {
+    return null;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/// How often what `codex` on the PATH is now is read again, while app-servers are looked at.
+const INSTALLED_MS = 60_000;
+
 type Pending = { method: string; resolve: (v: Json) => void; reject: (e: Error) => void };
 
 /// One app-server process and its JSON-RPC connection.
@@ -146,6 +177,11 @@ class Host {
   proc!: AgentProcess;
   readonly pending = new Map<number, Pending>();
   readonly threads = new Map<string, Sink>();
+  /// Its threads in a turn (one asked to start counts).
+  readonly turns = new Set<string>();
+  /// The Codex it runs (null: not known). Updated on the disk, the files it starts its helpers from are gone, and every
+  /// tool call of its threads fails: it is replaced once no turn runs on it.
+  version: string | null = null;
   private ready: boolean;
   private readying: Promise<void> | null = null;
   /// Notices for threads not taken up yet, while sessions are being taken up (null otherwise).
@@ -258,6 +294,7 @@ class Host {
     this.pending.clear();
     const threads = [...this.threads.values()];
     this.threads.clear();
+    this.turns.clear();
     for (const thread of threads) thread({ kind: "hostExited", reason });
   }
 
@@ -265,7 +302,8 @@ class Host {
     while (this.readying) await this.readying;
     if (this.ready) return;
     this.readying = (async () => {
-      await this.request("initialize", { clientInfo: { name: "stillfail", version: "0" }, capabilities: { experimentalApi: true } });
+      const answer = await this.request("initialize", { clientInfo: { name: "stillfail", version: "0" }, capabilities: { experimentalApi: true } });
+      this.version = userAgentVersion(answer?.userAgent);
       this.proc.write(JSON.stringify({ method: "initialized", params: {} }));
       this.ready = true;
     })();
@@ -341,6 +379,8 @@ export type CodexDriverOptions = {
   /// Another station's subscription, borrowed (share/index.ts): its home's auth.json written with tokens lent by the
   /// station signed in on it (none Codex could renew with); when they run out.
   lent?: { borrowed(profile: Profile): boolean; write(profile: Profile): Promise<number> };
+  /// The version of Codex `codex` on the PATH is now (null: not known); `codex --version` by default.
+  installedVersion?: () => Promise<string | null>;
 };
 
 /// A borrowed login this close to its end is replaced (its app-server started again, once idle).
@@ -366,6 +406,9 @@ export class CodexDriver implements AgentDriver {
   readonly options: CodexDriverOptions;
   private hosts = new Map<string, Host>();
   private hostQueue: Promise<unknown> = Promise.resolve();
+  /// What `codex` on the PATH was when last read, and when.
+  private installed: { version: string | null; at: number } | null = null;
+  private installedReading: Promise<string | null> | null = null;
 
   constructor(options: CodexDriverOptions) {
     this.options = options;
@@ -385,6 +428,60 @@ export class CodexDriver implements AgentDriver {
     return this.hosts.get(profileId)?.alive() === true;
   }
 
+  /// The version of Codex installed now, read again when the last reading is old or `fresh` asks.
+  private async installedVersion(fresh = false): Promise<string | null> {
+    if (!fresh && this.installed !== null && wall.now() - this.installed.at < INSTALLED_MS) return this.installed.version;
+    if (this.installedReading) return this.installedReading;
+    const read = this.options.installedVersion ?? (async () => {
+      const [ok, said] = await run(this.command, ["--version"], cleanEnv(SCRUBBED), 20_000).catch(() => [false, ""] as const);
+      return ok ? versionIn(said) : null;
+    });
+    this.installedReading = read()
+      .catch(() => null)
+      .then((version) => {
+        this.installed = { version, at: wall.now() };
+        return version;
+      })
+      .finally(() => {
+        this.installedReading = null;
+      });
+    return this.installedReading;
+  }
+
+  /// An app-server running a Codex other than the one installed now: updated under it.
+  private stale(host: Host): boolean {
+    const installed = this.installed?.version ?? null;
+    return host.version !== null && installed !== null && host.version !== installed;
+  }
+
+  /// Replaces a profile's app-server Codex was updated under, once no turn runs on it: its sessions are opened again on a
+  /// new one with their next turn.
+  private async retireStale(profileId: string, installed: string | null) {
+    const host = this.hosts.get(profileId);
+    if (!host || !host.alive() || !this.stale(host) || host.turns.size > 0) return;
+    log.info("agents::codex", "codex was updated under its app-server; restarting it", { profile: profileId, running: host.version, installed });
+    this.hosts.delete(profileId);
+    await host.proc.kill(5000);
+  }
+
+  /// Codex installed or updated (from the station's pages): app-servers of the old one are replaced once idle.
+  async runtimeChanged() {
+    const installed = await this.installedVersion(true);
+    await this.serial(async () => {
+      for (const id of [...this.hosts.keys()]) await this.retireStale(id, installed);
+    });
+  }
+
+  /// A turn ended on a host: if Codex was updated under it, it is replaced now that it may be idle.
+  hostIdle(host: Host) {
+    if (host.turns.size > 0 || this.hosts.get(host.profile) !== host) return;
+    void (async () => {
+      const installed = await this.installedVersion();
+      if (!this.stale(host)) return;
+      await this.serial(() => this.retireStale(host.profile, installed));
+    })().catch((error) => log.warn("agents::codex", "a codex app-server not replaced", { profile: host.profile, error: String(error) }));
+  }
+
   /// One at a time, as Rust's hosts mutex: starting, replacing and taking up hosts.
   private serial<T>(work: () => Promise<T>): Promise<T> {
     const next = this.hostQueue.then(work, work);
@@ -393,7 +490,9 @@ export class CodexDriver implements AgentDriver {
   }
 
   private async host(profile: Profile): Promise<Host> {
+    const installed = await this.installedVersion();
     const host = await this.serial(async () => {
+      await this.retireStale(profile.id, installed);
       const current = this.hosts.get(profile.id);
       // A borrowed login about to run out: a new process with a new one, once none of its sessions is in a turn.
       if (current && current.alive() && current.lentUntil !== null && current.lentUntil - wall.now() < LENT_RENEW_MS && current.threads.size === 0) {
@@ -456,7 +555,10 @@ export class CodexDriver implements AgentDriver {
     // Its signature is the profile's if it runs with what the profile says now (the arguments carry the overrides).
     const same = JSON.stringify(info.args) === JSON.stringify(hostArgs(profile));
     // Ids above any the previous station can have sent.
-    return Host.adopt(profile.id, info, same ? hostSignature(profile) : "unknown", wall.now(), true, recovered);
+    const host = Host.adopt(profile.id, info, same ? hostSignature(profile) : "unknown", wall.now(), true, recovered);
+    host.version = versionInOutput(out);
+    for (const [thread, r] of recovered) if (r.busy) host.turns.add(thread);
+    return host;
   }
 
   /// The account's rate-limit windows, as the profile's app-server reports them (ChatGPT subscriptions).
@@ -529,6 +631,7 @@ export class CodexDriver implements AgentDriver {
       const host = handed
         ? Host.adopt(profileId, info, handed.host.signature, handed.host.nextId, handed.host.ready)
         : await this.takeUp(options.profile, info);
+      if (handed) host.version = versionInOutput(outFile(this.data, info.id));
       this.hosts.set(profileId, host);
       return host;
     });
@@ -548,7 +651,17 @@ export class CodexDriver implements AgentDriver {
       if (r?.busy) events({ type: "turnStarted" });
     }
     host.addThread(session.id(), session.sink());
+    if (session.busy()) host.turns.add(session.id());
+    // Left running by a station from before Codex was updated: replaced once the sessions on it are taken up and idle.
+    wall.after(ORPHANS_MS, () => this.hostIdle(host));
     return session;
+  }
+
+  /// Whether a host runs a Codex other than the one installed.
+  async outdated(host: Host): Promise<boolean> {
+    if (host.version === null) return false;
+    await this.installedVersion();
+    return this.stale(host);
   }
 
   async shutdown() {
@@ -604,7 +717,9 @@ export class CodexSession implements AgentSession {
   private endTurn(outcome: TurnOutcome) {
     this.state.busy = false;
     this.state.turnId = null;
+    this.host.turns.delete(this.threadId);
     this.events({ type: "turnEnded", outcome });
+    this.driver.hostIdle(this.host);
   }
 
   /// A thread's share of its app-server's notifications: its turns and live steps, as events.
@@ -625,6 +740,7 @@ export class CodexSession implements AgentSession {
         if (typeof id === "string") this.state.turnId = id;
         const was = this.state.busy;
         this.state.busy = true;
+        this.host.turns.add(this.threadId);
         if (!was) this.events({ type: "turnStarted" });
       } else if (method === "turn/completed") {
         const turn = params?.turn ?? null;
@@ -660,9 +776,14 @@ export class CodexSession implements AgentSession {
 
   async prompt(text: string) {
     const fast = this.driver.options.fast?.(this.threadId);
+    // Codex was updated under its app-server, whose tools would all fail: opened again on a new one, unless another turn
+    // runs on it yet.
+    const outdated = this.host.turns.size === 0 && (await this.driver.outdated(this.host));
     if (this.state.closed) throw new Error("codex session is closed");
     if (this.state.busy) throw new Error("a turn is already running");
+    if (outdated) throw new Error("codex was updated under its app-server");
     this.state.busy = true;
+    this.host.turns.add(this.threadId);
     const params: Json = { threadId: this.threadId, input: input(text) };
     if (this.tuned) Object.assign(params, this.tuned);
     const p = this.driver.options.currentProfile ? this.driver.options.currentProfile(this.host.profile) : this.profile;
@@ -676,6 +797,7 @@ export class CodexSession implements AgentSession {
       if (typeof id === "string") this.state.turnId = id;
     } catch (error) {
       this.state.busy = false;
+      this.host.turns.delete(this.threadId);
       throw error;
     }
   }
@@ -720,6 +842,7 @@ export class CodexSession implements AgentSession {
     if (this.state.closed) return;
     this.state.closed = true;
     this.host.threads.delete(this.threadId);
+    this.host.turns.delete(this.threadId);
     // Handed over, the thread is the next station's.
     if (this.host.proc.handed()) return;
     // Best effort: the thread just stays loaded.

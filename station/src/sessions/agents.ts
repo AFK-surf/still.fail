@@ -308,7 +308,11 @@ export const AgentsLive = (control: Control) =>
         followed: () => accounts.followed(),
       });
       // A runtime installed or updated from the pages: the machine's logins read again.
-      updates.onRuntimeChanged(() => void accounts.machine?.refresh());
+      updates.onRuntimeChanged(() => {
+        void accounts.machine?.refresh();
+        // Codex updated: its app-servers of the old version are replaced (their files are gone).
+        void codex.runtimeChanged().catch((error) => log.warn("agents::codex", "codex app-servers not checked after an update", { error: String(error) }));
+      });
       // What the overview shows changes: told on the event streams.
       const unlistenOverview = [
         accounts.onChange(() => events.overviewChanged()),
