@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +63,7 @@ import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.floatingStill
+import fail.still.android.ui.Smooth
 
 /** Whether the screen is wide (App.kt Pages): Home leaves its new-chat button to WideCorners then, the composer room for Recent. */
 val LocalWide = androidx.compose.runtime.staticCompositionLocalOf { false }
@@ -134,7 +134,7 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
     ) {
         val chats by rememberTopic<ChatsView>(app.core, Topics.chats(current.workspace.id, false))
         val view = chats.value
-        val shape = RoundedCornerShape(22.dp)
+        val shape = Smooth(22.dp)
         Column(Modifier.width(340.dp).heightIn(max = 560.dp).shadow(14.dp, shape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.2f)).floatingStill(shape)) {
             Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(t("android-misc.wide.recent"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.weight(1f))
@@ -161,7 +161,7 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
                     val here = top is Screen.Chat && top.station == item.station && top.of == item.page
                     ChatRowBody(
                         item, view.leading ?: "agents", false, stationTag = view.stations.size > 1,
-                        modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(if (here) C.accentBg else Color.Transparent)
+                        modifier = Modifier.clip(Smooth(14.dp)).background(if (here) C.accentBg else Color.Transparent)
                             .clickable { open = false; if (!here) app.open(Screen.Chat(item.station, item.page)) },
                     )
                 }

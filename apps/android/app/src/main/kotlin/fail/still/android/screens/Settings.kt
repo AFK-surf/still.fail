@@ -41,7 +41,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -94,6 +93,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.StationIcons
+import fail.still.android.ui.Smooth
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
@@ -159,12 +159,12 @@ fun CommandBox(text: String) {
     val app = LocalApp.current
     val context = LocalContext.current
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface2).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+        Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface2).border(1.dp, C.line, Smooth(12.dp)).padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(text, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = CodeFont, color = C.ink, modifier = Modifier.weight(1f))
         Box(
-            Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(C.chip).clickable {
+            Modifier.size(32.dp).clip(Smooth(8.dp)).background(C.chip).clickable {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", text))
                 app.toast = t("common.copied")
             },
@@ -312,7 +312,7 @@ private fun RowAction(label: String, color: androidx.compose.ui.graphics.Color, 
 
 @Composable
 private fun You(text: String) =
-    Text(text, fontSize = 12.sp, color = C.accentInk, modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(C.accentBg).padding(horizontal = 6.dp))
+    Text(text, fontSize = 12.sp, color = C.accentInk, modifier = Modifier.clip(Smooth(6.dp)).background(C.accentBg).padding(horizontal = 6.dp))
 
 @Composable
 private fun ColumnScope.MemberSheet(view: WorkspaceView, m: Member, cloud: Cloud) {
@@ -564,7 +564,7 @@ fun FirstStation(current: WorkspaceEntry) {
                     Spinner(13.dp); Text(topic.error?.message ?: t("android-settings.workspace.reading"), fontSize = 14.sp, color = C.muted)
                 }
                 !view.manager -> Text(t("android-settings.station.wait"), fontSize = 13.sp, lineHeight = 19.5.sp, color = C.ink,
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp))
+                    modifier = Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp))
                 else -> AddStationSteps(current, emptyList(), label = t("android-settings.station.firstName"), placeholder = t("android-settings.station.firstPlaceholder")) {}
             }
         }
@@ -631,7 +631,7 @@ private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationVi
                         row.forEach { key ->
                             val on = (if (emojis) key.replace("\uFE0F", "") else key) == kept
                             Box(
-                                Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(14.dp)).background(if (on) C.accentBg else Color.Transparent)
+                                Modifier.weight(1f).aspectRatio(1f).clip(Smooth(14.dp)).background(if (on) C.accentBg else Color.Transparent)
                                     .clickable { if (emojis) pick(key, "") else StationIcons.all.first { it.name == key }.let { g -> pick(g.emoji, "glyph:${g.name}" + (color?.let { ":$it" } ?: "")) } }
                                     .semantics { contentDescription = key },
                                 contentAlignment = Alignment.Center,

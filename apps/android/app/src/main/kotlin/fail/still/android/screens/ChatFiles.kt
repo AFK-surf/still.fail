@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -76,6 +75,7 @@ import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.ThumbHash
+import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
@@ -358,7 +358,7 @@ fun imageBox(file: Attachment, least: Float = 16f): MediaSize {
     return mediaSize(w, h, least)
 }
 
-private val ImageShape = RoundedCornerShape(10.dp)
+private val ImageShape = Smooth(10.dp)
 private val EaseOut = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
 
 /** Images already brushed in on this run (station, session and path): shown again, they just show. */
@@ -589,7 +589,7 @@ suspend fun download(context: Context, name: String, from: File): Boolean = with
 @Composable
 internal fun FileCard(
     name: String, size: Long, note: String? = null, busy: Boolean = false, onRemove: (() -> Unit)? = null,
-    shape: Shape = RoundedCornerShape(8.dp), onClick: (() -> Unit)? = null,
+    shape: Shape = Smooth(8.dp), onClick: (() -> Unit)? = null,
 ) {
     Row(
         // The wide screen's neutral ground (web toast.css.ts → fileCard: --neutral-bg), a cool grey, not the page's warm chip.

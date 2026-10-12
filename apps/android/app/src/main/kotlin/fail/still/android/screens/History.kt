@@ -107,6 +107,7 @@ import fail.still.android.ui.Seg
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.Follow
 import fail.still.android.ui.rememberFollow
+import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.animation.core.tween
@@ -258,7 +259,7 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: Histor
                 when (line) {
                     is Line.Item -> {
                         val shade by androidx.compose.animation.animateColorAsState(if (line.item.key == marked) C.accent.copy(alpha = 0.10f) else androidx.compose.ui.graphics.Color.Transparent, tween(900), label = "marked")
-                        Box(Modifier.clip(RoundedCornerShape(8.dp)).background(shade)) { Item(line.item, station, of, agent) }
+                        Box(Modifier.clip(Smooth(8.dp)).background(shade)) { Item(line.item, station, of, agent) }
                     }
                     is Line.Live -> Text(line.step.text, fontSize = 13.sp, color = C.muted, maxLines = 1)
                     is Line.Phase -> PhaseLine(line.phase)
@@ -336,7 +337,7 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
 private fun Brief(text: String, open: () -> Unit) {
     Text(
         plain(text), fontSize = 14.sp, lineHeight = 21.sp, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(onClick = open),
+        modifier = Modifier.fillMaxWidth().clip(Smooth(6.dp)).clickable(onClick = open),
     )
 }
 
@@ -376,7 +377,7 @@ internal fun around(key: String): Pair<String, String> = t(key).split("{name}", 
 
 @Composable
 internal fun Pill(text: String, color: androidx.compose.ui.graphics.Color) =
-    Text(text, fontSize = 11.sp, color = color, modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp))
+    Text(text, fontSize = 11.sp, color = color, modifier = Modifier.padding(start = 6.dp).clip(Smooth(6.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp))
 
 /**
  * A place, as the core names it: its platform's mark and its name; a chat on still.fail's page leads to it, a Slack thread
@@ -397,7 +398,7 @@ internal fun Place(station: String, of: ChatOf, place: fail.still.android.data.P
     }
     val open = chat ?: slack
     Row(
-        Modifier.clip(RoundedCornerShape(4.dp)).let { if (open != null) it.clickable(onClick = open) else it },
+        Modifier.clip(Smooth(4.dp)).let { if (open != null) it.clickable(onClick = open) else it },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         if (place.surface in setOf("ember", "stillfail")) Mark(12.dp) else SlackMark(12.dp)
@@ -419,7 +420,7 @@ private fun SlackName(station: String, user: String, name: String, mine: Boolean
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             name, fontSize = 13.sp, color = C.accentInk, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.clip(RoundedCornerShape(4.dp)).clickable(enabled = !binding) {
+            modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.clip(Smooth(4.dp)).clickable(enabled = !binding) {
                 app.menu = MenuSpec(bounds, listOf(MenuItem(if (mine) t("android-chat.history.identity.notMe") else t("android-chat.history.identity.me"), if (mine) Icons.Close else Icons.Check) {
                     app.act(if (mine) t("android-chat.history.identity.unbind") else t("android-chat.history.identity.bind")) { app.api(station).slackIdentity(user, !mine) }
                 }))
@@ -434,7 +435,7 @@ private fun Group(g: HistoryGroup) {
     var open by remember { mutableStateOf(false) }
     val follow = LocalFollow.current
     Column {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clip(Smooth(6.dp)).clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconIn(if (open) Icons.ChevronDown else Icons.ChevronRight, 13.dp, C.subtle)
             Text(g.summary, color = if (g.failures > 0) C.red else C.muted, fontSize = 14.sp, maxLines = if (open) 3 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             if (g.failures > 0) Pill(t("android-chat.history.group.failed", "n" to g.failures), C.red)
@@ -560,8 +561,8 @@ private fun RunRow(agent: ChatAgent, onOpen: () -> Unit) {
     // The account it runs on now, as the core says.
     val name = agent.account?.name ?: ""
     Row(
-        Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(10.dp))
-            .border(1.dp, C.line, RoundedCornerShape(10.dp)).clickable(onClick = onOpen).padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().padding(top = 6.dp).clip(Smooth(10.dp))
+            .border(1.dp, C.line, Smooth(10.dp)).clickable(onClick = onOpen).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         MakerIcon(s.maker, s.runtime, 15.dp)
@@ -607,7 +608,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
         if (list == "account") return AccountList(v.accounts, s.runtime, chosen) { p -> pick { put("profile", p) }; list = null }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             // Always on top: what it was, and what it becomes, the changes marked; and when the account must change, why.
-            Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(Smooth(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Each property on its line: what it was, and, when it changes, an arrow to what it becomes.
                 (listOf(t("android-chat.run.label.model"), t("android-chat.run.label.effort"), t("android-chat.run.label.account")) + if (v.fastAvailable == true) listOf(t("android-chat.run.label.speed")) else emptyList()).forEachIndexed { i, label ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -650,7 +651,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
         val go = v.changed && v.option != null && !busy
         Box(
             Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().heightIn(min = 52.dp)
-                .clip(RoundedCornerShape(16.dp)).background(if (v.changed) C.ink else C.chip)
+                .clip(Smooth(16.dp)).background(if (v.changed) C.ink else C.chip)
                 .clickable(enabled = !busy) {
                     // Back at once, not waiting on the station; failed, a toast says why.
                     app.pop()
@@ -675,7 +676,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
 @Composable
 internal fun SettingRow(onClick: () -> Unit, leading: @Composable () -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.chip).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.chip).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         leading()
@@ -742,7 +743,7 @@ internal fun EffortChips(efforts: List<String?>, picked: String?, onPick: (Strin
 @Composable
 internal fun PickLine(label: String, sub: String? = null, checked: Boolean, onClick: () -> Unit, leading: (@Composable () -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 11.dp),
+        Modifier.fillMaxWidth().clip(Smooth(10.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         leading?.invoke()

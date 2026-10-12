@@ -92,6 +92,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
+import fail.still.android.ui.Smooth
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import fail.still.android.data.errorText
@@ -277,7 +278,7 @@ fun ConnectScreen(station: String, id: String) {
 
 @Composable
 private fun Callout(content: @Composable () -> Unit) {
-    Box(Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp)) { content() }
+    Box(Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp)) { content() }
 }
 
 /** What is done to a connect less often: reconnecting, its tokens, Slack, turning it off or on, its owner, deleting it. */
@@ -359,7 +360,7 @@ private fun ModeChoices(mode: String, requireMention: Boolean, onChange: (String
         listOf("multi-session", "single-session").forEach { m ->
             val on = mode == m
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.surface).border(if (on) 2.dp else 1.dp, if (on) C.accent else C.line, RoundedCornerShape(14.dp))
+                Modifier.fillMaxWidth().clip(Smooth(14.dp)).background(C.surface).border(if (on) 2.dp else 1.dp, if (on) C.accent else C.line, Smooth(14.dp))
                     .clickable { onChange(m, if (m == "multi-session") true else requireMention) }.padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
                 Text(MODE_LABEL[m] ?: m, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
@@ -367,7 +368,7 @@ private fun ModeChoices(mode: String, requireMention: Boolean, onChange: (String
             }
         }
         if (mode == "single-session") Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.chip).clickable { onChange(mode, !requireMention) }.padding(horizontal = 14.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().clip(Smooth(14.dp)).background(C.chip).clickable { onChange(mode, !requireMention) }.padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(Modifier.weight(1f)) {
@@ -400,7 +401,7 @@ private fun ColumnScope.ModeSheet(station: String, item: ConnectItem) {
     SheetHead(t("android-settings.mode.title"))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ModeChoices(mode, mention) { m, r -> mode = m; mention = r }
-        if (effects.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (effects.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(t("android-settings.mode.after"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
             effects.forEach { Text("· $it", fontSize = 13.sp, color = C.ink) }
         }
@@ -514,7 +515,7 @@ private fun openTokens(app: AppState, station: String, connect: Connect) {
 /** A token's line: shown as dots, pasted into. */
 @Composable
 internal fun SecretField(value: String, onChange: (String) -> Unit, placeholder: String) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
+    Box(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface).border(1.dp, C.line, Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
         if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = CodeFont, maxLines = 1, overflow = TextOverflow.Ellipsis)
         BasicTextField(value, { onChange(it.trim()) }, singleLine = true, cursorBrush = SolidColor(C.accent), visualTransformation = PasswordVisualTransformation(),
             textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = CodeFont), modifier = Modifier.fillMaxWidth())
@@ -585,7 +586,7 @@ fun ConnectRunScreen(station: String, id: String) {
         }
         Box(
             Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().heightIn(min = 52.dp)
-                .clip(RoundedCornerShape(16.dp)).background(if (changed) C.ink else C.chip)
+                .clip(Smooth(16.dp)).background(if (changed) C.ink else C.chip)
                 .clickable(enabled = !busy && !(changed && model == null)) {
                     // Back at once, not waiting on the station; failed, a toast says why.
                     app.pop()
@@ -662,7 +663,7 @@ fun NewConnectScreen(station: String) {
                     Text(t("android-settings.flow.manualInSlack"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("manual") })
                 } else {
                     Text(t("android-settings.flow.whichTeam"), fontSize = 14.sp, color = C.muted)
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+                    Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
                         teams.forEach { t -> PickRow(t.name, t.owner?.let { o -> o.user + (o.teamDomain?.let { " · $it.slack.com" } ?: "") }, checked = chosen?.teamId == t.teamId) { flow.edit { put("team", t.teamId) } } }
                     }
                     Text(t("android-settings.flow.addTeamToken"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("token") })
@@ -723,7 +724,7 @@ fun NewConnectScreen(station: String) {
                 else -> {
                     GroupLabel(t("android-settings.connect.model"))
                     if (models.isEmpty()) Text(t("android-settings.flow.noModels"), fontSize = 13.sp, color = C.warn)
-                    else Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+                    else Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
                         models.forEach { m -> PickRow(m.name, m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, checked = entry?.model == m.model, leading = { MakerIcon(m.maker, m.runtimes.first(), 18.dp) }) { flow.choose { put("model", m.model) } } }
                     }
                     if (entry != null && entry.runtimes.size > 1) {

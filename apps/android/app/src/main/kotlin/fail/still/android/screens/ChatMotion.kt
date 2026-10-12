@@ -16,7 +16,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -40,6 +39,7 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
+import fail.still.android.ui.drawSmooth
 
 internal val LocalChatMotion = staticCompositionLocalOf<ChatMotion?> { null }
 
@@ -332,7 +332,7 @@ internal fun accentBg() = if (fail.still.android.ui.C.dark) Color(0xFF43251A) el
 internal fun Modifier.flashed(motion: ChatMotion?, ts: String?, color: Color): Modifier =
     if (motion == null || ts == null) this else drawBehind {
         if (motion.flashed != ts || motion.mark?.found == true) return@drawBehind
-        drawRoundRect(color.copy(alpha = color.alpha * motion.flash.value), cornerRadius = CornerRadius(12.dp.toPx()))
+        drawSmooth(color.copy(alpha = color.alpha * motion.flash.value), 12.dp.toPx())
     }
 
 private fun lerp(a: Offset, b: Offset, t: Float) = Offset(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)

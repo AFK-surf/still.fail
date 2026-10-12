@@ -44,7 +44,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -132,6 +131,8 @@ import fail.still.android.ui.Seg
 import fail.still.android.ui.ZoomState
 import fail.still.android.ui.highlight
 import fail.still.android.ui.zoomable
+import fail.still.android.ui.Smooth
+import fail.still.android.ui.smoothOutline
 import fail.still.core.CoreException
 import java.io.File
 import kotlin.math.abs
@@ -199,7 +200,7 @@ internal class ViewerOpen(val station: String, val opened: Shown, val gallery: (
 }
 
 /** Where a thumbnail in the chat is (in the window), what it shows, and whether any of it is on the screen. */
-internal class Thumb(val bounds: Rect, val visible: Boolean, val radius: Float, val letterbox: Boolean, val picture: () -> ImageBitmap?)
+internal class Thumb(val bounds: Rect, val visible: Boolean, val radius: Float, val letterbox: Boolean, val smooth: Boolean, val picture: () -> ImageBitmap?)
 
 /** The viewer open, if one is; the chat's thumbnails by the file each shows; the one hidden while the viewer is its picture. */
 object FileViewers {
@@ -219,10 +220,10 @@ object FileViewers {
  * A thumbnail in the chat the viewer opens from (`id`: FileViewers.id): where it is, kept as it moves; hidden while the
  * viewer shows its picture in its place (one picture on the screen, never two).
  */
-internal fun Modifier.viewerThumb(id: String, radius: Float, letterbox: Boolean = false, picture: () -> ImageBitmap?): Modifier =
+internal fun Modifier.viewerThumb(id: String, radius: Float, letterbox: Boolean = false, smooth: Boolean = true, picture: () -> ImageBitmap?): Modifier =
     onGloballyPositioned { c ->
         val at = c.positionInRoot()
-        FileViewers.thumbs[id] = Thumb(Rect(at, Size(c.size.width.toFloat(), c.size.height.toFloat())), c.boundsInRoot().let { it.width > 0 && it.height > 0 }, radius, letterbox, picture)
+        FileViewers.thumbs[id] = Thumb(Rect(at, Size(c.size.width.toFloat(), c.size.height.toFloat())), c.boundsInRoot().let { it.width > 0 && it.height > 0 }, radius, letterbox, smooth, picture)
     }.graphicsLayer { alpha = if (FileViewers.hidden == id) 0f else 1f }
 
 @Composable
@@ -246,6 +247,8 @@ internal class ViewerFlight {
     /** The thumbnail's box on the stage. */
     var from: Rect? = null
     var radius = 0f
+    /** Its corners are smooth ones (ui/Corners.kt), as a message's picture has; plain round in the composer. */
+    var smooth = true
     /** The picture is letterboxed in the thumbnail's box (ChatFiles.kt's imageBox): fitted inside it, not cropped. */
     var letterbox = false
     /** The picture's box on the stage, as it is now (null until known). */
@@ -286,7 +289,7 @@ internal fun Modifier.viewerFlying(f: ViewerFlight): Modifier = graphicsLayer {
             val box = Rect(Offset(to.center.x - w / 2, to.center.y - h / 2), Size(w, h))
             shape = object : Shape {
                 override fun createOutline(size: Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density) =
-                    Outline.Rounded(RoundRect(box, CornerRadius(r)))
+                    if (f.smooth) smoothOutline(box, r) else Outline.Rounded(RoundRect(box, CornerRadius(r)))
             }
             clip = true
         }
@@ -324,7 +327,7 @@ private fun ViewerLayer(open: ViewerOpen) {
         } != null
         if (thumb != null && known) {
             flight.from = thumb.bounds.translate(-origin)
-            flight.radius = thumb.radius
+            flight.radius = thumb.radius; flight.smooth = thumb.smooth
             flight.letterbox = thumb.letterbox
             flight.p.snapTo(0f)
             FileViewers.hidden = idOf(open.opened)
@@ -345,7 +348,7 @@ private fun ViewerLayer(open: ViewerOpen) {
             val thumb = thumbOf(current)
             if (thumb != null && flight.target() != null) {
                 flight.from = thumb.bounds.translate(-origin)
-                flight.radius = thumb.radius
+                flight.radius = thumb.radius; flight.smooth = thumb.smooth
                 flight.letterbox = thumb.letterbox
                 if (flight.phase != ViewerFlight.Phase.Flying) flight.p.snapTo(1f)
                 // The thumbnail it lands in shows the frame it goes back with (hidden until then, so never seen changing).
@@ -520,7 +523,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                 shownLoaded is FileLoad.Loading -> Note { if (progress != null) Progress(progress, file.size, dark = false) else Waiting() }
                 shownLoaded is FileLoad.Failed -> Note { Text(t("android-chat.file.loadFailed", "error" to shownLoaded.message), fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center) }
                 disk != null -> when (kind) {
-                    PreviewKind.Video -> VideoViewer(disk, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, RoundedCornerShape(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
+                    PreviewKind.Video -> VideoViewer(disk, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, Smooth(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
                         startAtUs = FileViewers.frames[FileViewers.id(station, key, file.path)]?.atUs ?: 0L, frameOut = { flight.frame = it })
                     PreviewKind.Audio -> Note { AudioViewer(disk, file.name) }
                     PreviewKind.Pdf -> PdfViewer(disk, ::toggle)
@@ -528,7 +531,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                     else -> Note {
                         Text(t("android-chat.file.tooBigToShow"), fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center)
                         Row(
-                            Modifier.clip(RoundedCornerShape(12.dp)).background(C.chip).clickable { scope.launch { app.toast = if (download(context, file.name, disk)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") } }
+                            Modifier.clip(Smooth(12.dp)).background(C.chip).clickable { scope.launch { app.toast = if (download(context, file.name, disk)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") } }
                                 .padding(horizontal = 14.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) { IconIn(Icons.Download, 16.dp, C.ink); Text(t("android-chat.file.download"), fontSize = 15.sp, color = C.ink) }
@@ -536,7 +539,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                 }
                 bytes == null -> {}
                 kind == PreviewKind.Video -> OnDisk(fullId, file.name, bytes, waiting = { if (still != null) Poster(still, videoZoom, Modifier.viewerFlying(flight)) else Note { Waiting() } }) {
-                    VideoViewer(it, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, RoundedCornerShape(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
+                    VideoViewer(it, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, Smooth(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
                         startAtUs = FileViewers.frames[FileViewers.id(station, key, file.path)]?.atUs ?: 0L, frameOut = { flight.frame = it })
                 }
                 kind == PreviewKind.Audio -> OnDisk(fullId, file.name, bytes) { Note { AudioViewer(it, file.name) } }
@@ -545,7 +548,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                 else -> Note {
                     Text(t("android-chat.file.cantPreview"), fontSize = 15.sp, color = C.muted)
                     Row(
-                        Modifier.clip(RoundedCornerShape(12.dp)).background(C.chip).clickable { scope.launch { app.toast = if (download(context, file.name, bytes)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") } }
+                        Modifier.clip(Smooth(12.dp)).background(C.chip).clickable { scope.launch { app.toast = if (download(context, file.name, bytes)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") } }
                             .padding(horizontal = 14.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) { IconIn(Icons.Download, 16.dp, C.ink); Text(t("android-chat.file.download"), fontSize = 15.sp, color = C.ink) }
@@ -568,7 +571,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
         val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding().coerceAtLeast(8.dp)
         BoxWithConstraints(Modifier.fillMaxWidth().padding(top = top).graphicsLayer { alpha = flight.chrome }, contentAlignment = Alignment.TopCenter) {
             var widest by remember { mutableIntStateOf(0) }
-            val shape = RoundedCornerShape(14.dp)
+            val shape = Smooth(14.dp)
             val tint = if (dark) DarkMuted else C.muted
             Row(
                 Modifier.widthIn(min = with(LocalDensity.current) { widest.toDp() }, max = maxWidth - 16.dp).width(IntrinsicSize.Max)
@@ -594,7 +597,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                     coming -> {}
                     known.kind == PreviewKind.Image -> {
                         PictureButton(Icons.Minus, t("android-chat.file.zoomOut"), enabled = zoom.scale > zoom.minScale + 1e-4f, tint = tint) { zoom.zoomTo(zoom.scale / 1.25f, scope = scope) }
-                        Box(Modifier.height(32.dp).widthIn(min = 52.dp).clip(RoundedCornerShape(12.dp)).clickable { zoom.reset(scope) }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.height(32.dp).widthIn(min = 52.dp).clip(Smooth(12.dp)).clickable { zoom.reset(scope) }, contentAlignment = Alignment.Center) {
                             Text("${(zoom.scale * 100).roundToInt()}%", fontSize = 13.sp, color = tint)
                         }
                         PictureButton(Icons.Plus, t("android-chat.file.zoomIn"), enabled = zoom.scale < fail.still.android.ui.MAX_SCALE - 1e-4f, tint = tint) { zoom.zoomTo(zoom.scale * 1.25f, scope = scope) }
@@ -613,7 +616,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
             }
         }
         if (marks.on) Box(Modifier.align(Alignment.BottomCenter).padding(WindowInsets.navigationBars.asPaddingValues()).padding(bottom = 8.dp)) {
-            MarksFoot(marks, haze, darkGlass(haze, RoundedCornerShape(14.dp)))
+            MarksFoot(marks, haze, darkGlass(haze, Smooth(14.dp)))
         }
     }
 }
@@ -700,7 +703,7 @@ private fun Progress(got: Pair<Long, Long?>, sent: Long, dark: Boolean, inBar: B
         Text(words, fontSize = 13.sp, color = muted, maxLines = 1)
         track(48.dp)
     } else Column(
-        Modifier.width(220.dp).clip(RoundedCornerShape(14.dp)).background(if (C.dark) C.surface2 else C.surface).padding(horizontal = 14.dp, vertical = 12.dp),
+        Modifier.width(220.dp).clip(Smooth(14.dp)).background(if (C.dark) C.surface2 else C.surface).padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(words, fontSize = 15.sp, color = muted, textAlign = TextAlign.Center)

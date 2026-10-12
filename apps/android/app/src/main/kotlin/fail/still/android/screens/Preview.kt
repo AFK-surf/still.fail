@@ -111,6 +111,7 @@ import fail.still.android.ui.NavBar
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
+import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import java.io.ByteArrayOutputStream
 import kotlin.coroutines.resume
@@ -705,7 +706,7 @@ private fun openViewportSheet(app: AppState, first: Viewport?, set: (Viewport?) 
 @Composable
 private fun SizeOption(checked: Boolean, name: String, note: String, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 10.dp),
+        Modifier.fillMaxWidth().height(48.dp).clip(Smooth(12.dp)).clickable(onClick = onClick).padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) { if (checked) IconIn(Icons.Check, 16.dp, C.accent) }
@@ -730,7 +731,7 @@ private fun CustomSize(viewport: Viewport?, set: (Viewport?) -> Unit, turn: () -
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(t("android-chat.preview.custom"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
         @Composable fun Field(value: String, change: (String) -> Unit, hint: String) = Box(
-            Modifier.width(72.dp).height(36.dp).clip(RoundedCornerShape(10.dp)).background(C.chip).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart,
+            Modifier.width(72.dp).height(36.dp).clip(Smooth(10.dp)).background(C.chip).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart,
         ) {
             if (value.isEmpty()) Text(hint, fontSize = 15.sp, color = C.subtle)
             BasicTextField(
@@ -806,8 +807,8 @@ private fun androidx.compose.foundation.layout.BoxScope.MarksOver(state: PageSta
                 val open = state.editing == m.picked.n
                 Box(
                     Modifier.offset { IntOffset(x.roundToInt(), y.roundToInt()) }.size(w.toDp(), h.toDp())
-                        .border(if (open) 2.dp else 1.5.dp, if (open) C.accent else C.accent.copy(alpha = 0.55f), RoundedCornerShape(4.dp))
-                        .background(if (open) C.accent.copy(alpha = 0.08f) else Color.Transparent, RoundedCornerShape(4.dp)),
+                        .border(if (open) 2.dp else 1.5.dp, if (open) C.accent else C.accent.copy(alpha = 0.55f), Smooth(4.dp))
+                        .background(if (open) C.accent.copy(alpha = 0.08f) else Color.Transparent, Smooth(4.dp)),
                 )
                 // The pin's point on the element's top-left corner (kept in sight at the page's edges).
                 val pinX = maxOf(2.dp.toPx(), x); val pinY = maxOf(24.dp.toPx(), y)

@@ -59,6 +59,7 @@ import fail.still.android.ui.Card
 import fail.still.android.ui.Markdown
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.Seg
+import fail.still.android.ui.Smooth
 
 private val DAYS get() = listOf(7 to t("android-misc.usage.days", "n" to 7), 30 to t("android-misc.usage.days", "n" to 30))
 
@@ -112,7 +113,7 @@ private fun Tiles(view: UsageView, openPrices: () -> Unit) {
         view.tiles.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEach { tile ->
-                    Column(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(C.surface).then(if (tile == view.tiles.firstOrNull()) Modifier.clickable(onClick = openPrices) else Modifier).padding(horizontal = 16.dp, vertical = 14.dp)) {
+                    Column(Modifier.weight(1f).clip(Smooth(18.dp)).background(C.surface).then(if (tile == view.tiles.firstOrNull()) Modifier.clickable(onClick = openPrices) else Modifier).padding(horizontal = 16.dp, vertical = 14.dp)) {
                         Text(tile.label, fontSize = 12.sp, color = C.muted)
                         Text(tile.value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1)
                         Text(if (tile == view.tiles.firstOrNull()) t("android-misc.usage.seePrices") else tile.sub, fontSize = 12.sp, color = C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -142,7 +143,7 @@ private fun Days(view: UsageView) {
     Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(if (many) 3.dp else 6.dp)) {
         view.daily.forEach { d ->
             Column(
-                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                Modifier.weight(1f).fillMaxHeight().clip(Smooth(topStart = 4.dp, topEnd = 4.dp))
                     .background(if (d.day == day?.day) C.chip else Color.Transparent).clickable { picked = d.day },
                 verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.CenterHorizontally,
             ) { Bar(d, view) }
@@ -172,7 +173,7 @@ private fun Days(view: UsageView) {
 private fun Bar(d: UsageDay, view: UsageView) {
     if (view.max <= 0 || d.cost <= 0) return
     val share = (d.cost / view.max).toFloat().coerceIn(0f, 1f)
-    Column(Modifier.widthIn(max = 28.dp).fillMaxWidth().fillMaxHeight(share).clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)),
+    Column(Modifier.widthIn(max = 28.dp).fillMaxWidth().fillMaxHeight(share).clip(Smooth(topStart = 4.dp, topEnd = 4.dp)),
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.Bottom)) {
         // Top first: the column is drawn from the top, the first person at the foot.
         d.parts.withIndex().reversed().filter { it.value > 0 }.forEach { (i, p) ->
@@ -193,14 +194,14 @@ private fun Lists(view: UsageView, open: (UsageItem) -> Unit) {
         val items = if (all) list.items else list.items.take(8)
         items.forEachIndexed { i, item -> ItemRow(item, i + 1, list.key, open) }
         if (list.items.size > 8) Text(if (all) t("android-misc.usage.collapse") else t("android-misc.usage.showAll", "n" to list.items.size), fontSize = 14.sp, color = C.muted,
-            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { all = !all }.padding(horizontal = 4.dp, vertical = 10.dp))
+            modifier = Modifier.clip(Smooth(10.dp)).clickable { all = !all }.padding(horizontal = 4.dp, vertical = 10.dp))
     }
 }
 
 @Composable
 private fun ItemRow(item: UsageItem, rank: Int, kind: String, open: (UsageItem) -> Unit) {
     val opens = kind == "chats" && item.chat != null
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).let { if (opens) it.clickable { open(item) } else it }.padding(vertical = 10.dp)) {
+    Column(Modifier.fillMaxWidth().clip(Smooth(12.dp)).let { if (opens) it.clickable { open(item) } else it }.padding(vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             val person = item.person
             if (kind == "people" && person != null) Avatar(person.email ?: person.id, person.shown?.name ?: item.title, 22.dp, picture = person.shown?.picture)

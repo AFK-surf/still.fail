@@ -137,6 +137,7 @@ import fail.still.android.ui.SlackMark
 import fail.still.android.ui.avatarColor
 import kotlinx.coroutines.launch
 import fail.still.android.ui.initial
+import fail.still.android.ui.Smooth
 
 @Composable
 fun HomeScreen(current: WorkspaceEntry) {
@@ -191,7 +192,7 @@ fun HomeScreen(current: WorkspaceEntry) {
         ) {
             // Settings, at the top left (SettingsHome.kt): the account, the workspace's things, this device's.
             Box(Modifier.semantics { contentDescription = t("android-chat.home.settings") }) { NavButton(Icons.Settings, { app.push(Screen.Settings) }, 22.dp) }
-            Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { openWorkspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.weight(1f).clip(Smooth(8.dp)).clickable { openWorkspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(current.workspace.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 // The other workspaces have something waiting: its dot by the name, before an invitation's.
                 val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current.workspace.id))

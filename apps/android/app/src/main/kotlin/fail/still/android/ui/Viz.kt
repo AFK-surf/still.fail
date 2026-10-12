@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -224,7 +223,7 @@ fun VizFrame(html: String, state: JsonElement? = null, fill: Boolean = false, mo
             val h = minOf((w * 9f / 16f).toInt(), most.roundToPx())
             val p = m.measure(androidx.compose.ui.unit.Constraints.fixed(w, h))
             layout(w, h) { p.place(0, 0) }
-        }.clip(RoundedCornerShape(20.dp)).background(if (dark) androidx.compose.ui.graphics.Color(0xFF26272B) else androidx.compose.ui.graphics.Color(0xFFF6F2EA))
+        }.clip(Smooth(20.dp)).background(if (dark) androidx.compose.ui.graphics.Color(0xFF26272B) else androidx.compose.ui.graphics.Color(0xFFF6F2EA))
         else -> modifier.fillMaxWidth().height((height.takeIf { it > 0 } ?: 120).dp)
     }
     AndroidView(

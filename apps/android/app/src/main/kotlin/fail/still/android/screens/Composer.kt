@@ -123,6 +123,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.floating
+import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import fail.still.android.data.errorText
 import java.io.ByteArrayOutputStream
@@ -543,7 +544,7 @@ fun openAttach(app: AppState, launchers: Triple<() -> Unit, () -> Unit, () -> Un
         Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             listOf(Triple(t("android-chat.attach.camera"), Icons.Camera, launchers.first), Triple(t("android-chat.attach.photos"), Icons.Photo, launchers.second), Triple(t("android-chat.attach.files"), Icons.File, launchers.third)).forEach { (label, icon, go) ->
                 Column(
-                    Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(C.chip).clickable { app.sheet = null; go() }.padding(top = 16.dp, bottom = 12.dp),
+                    Modifier.weight(1f).clip(Smooth(18.dp)).background(C.chip).clickable { app.sheet = null; go() }.padding(top = 16.dp, bottom = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     IconIn(icon, 24.dp)
@@ -634,7 +635,7 @@ private fun Modifier.draftPicture(f: Pending, station: String?): Modifier {
     val id = FileViewers.id(station, "", file.path)
     ForgetThumb(id)
     if (open) FilePreview(station, "", file, canDraft = false) { open = false }
-    return viewerThumb(id, with(LocalDensity.current) { (ComposerCorner - ComposerInset).toPx() }) { f.preview }
+    return viewerThumb(id, with(LocalDensity.current) { (ComposerCorner - ComposerInset).toPx() }, smooth = false) { f.preview }
         .clickable {
             FileData.keep(FileData.id(station, "", file, thumb = false), bytes)
             open = true

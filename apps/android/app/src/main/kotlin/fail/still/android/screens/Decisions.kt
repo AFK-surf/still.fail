@@ -119,6 +119,7 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.MoveSpring
 import fail.still.android.ui.reducedMotion
+import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import kotlin.math.abs
 import kotlinx.coroutines.launch
@@ -137,7 +138,7 @@ private val Digits = listOf(Icons.Option1, Icons.Option2, Icons.Option3, Icons.O
 @Composable
 internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier, enabled: Boolean = true, busy: String? = null, onPick: (DecisionOption) -> Unit) {
     val hairline = C.ink.copy(alpha = 0.07f)
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.chip)) {
+    Column(modifier.fillMaxWidth().clip(Smooth(20.dp)).background(C.chip)) {
         options.forEachIndexed { i, o ->
             val strong = o.recommended == true
             val said = if (strong) t("common.recommended") else null
@@ -187,7 +188,7 @@ internal fun OptionButton(label: String, modifier: Modifier = Modifier, strong: 
     )
     Row(
         modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(12.dp)).background(if (strong) C.accent else C.chip)
+            .clip(Smooth(12.dp)).background(if (strong) C.accent else C.chip)
             .alpha(if (enabled) 1f else 0.5f)
             .clickable(enabled = enabled && !busy, interactionSource = touch, indication = ripple(color = ink)) { onPick() }
             .padding(horizontal = 14.dp, vertical = 10.dp)
@@ -372,7 +373,7 @@ private fun IdleTitle(text: String) {
 @Composable
 private fun IdleRow(main: String, meta: String, at: String, busy: Boolean, onOpen: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onOpen).padding(horizontal = 10.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().clip(Smooth(10.dp)).clickable(onClick = onOpen).padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(Modifier.padding(top = 4.dp).size(12.dp), contentAlignment = Alignment.Center) {
@@ -628,7 +629,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
                 else -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(t("android-misc.decisions.replyInChat"), fontSize = 13.sp, color = C.muted)
                     Box(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.ink)
+                        Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.ink)
                             .clickable { app.push(Screen.Chat(item.station, of, at = item.seq)) }.padding(vertical = 12.dp),
                         contentAlignment = Alignment.Center,
                     ) { Text(t("android-misc.decisions.goReply"), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.bg) }

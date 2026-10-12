@@ -66,8 +66,6 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.GraphicsContext
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -98,6 +96,9 @@ import fail.still.android.ui.floatingStill
 import fail.still.android.ui.reducedMotion
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import fail.still.android.ui.drawSmooth
+import fail.still.android.ui.smoothOutline
+import androidx.compose.ui.graphics.addOutline
 
 /** What the composer writes to, as the page above it says: where (its station, and the chat not offered to `@`), the draft, and what its buttons do. */
 class ComposerSpec(
@@ -593,7 +594,7 @@ private fun FlightLayer(host: Host) {
             }
             if (ground != null && flight.groundColor.isSpecified) {
                 val corner = 18.dp.toPx()
-                drawRoundRect(flight.groundColor, ground.topLeft, ground.size, androidx.compose.ui.geometry.CornerRadius(corner), alpha = flight.ground())
+                drawSmooth(flight.groundColor, corner, ground, flight.ground())
             }
             if (words != null && pieces != null && spots != null) for ((i, p) in pieces.withIndex()) {
                 val there = spots[i]
@@ -672,7 +673,7 @@ private fun DrawScope.files(flight: Flight, overlay: LayoutCoordinates) {
         val h = a.height + (end.height - a.height) * up
         val c = maxOf(w / end.width, h / end.height)
         val corner = fromCorner + (toCorner - fromCorner) * up
-        val box = Path().apply { addRoundRect(RoundRect(left, top, left + w, top + h, CornerRadius(corner))) }
+        val box = Path().apply { addOutline(smoothOutline(Rect(left, top, left + w, top + h), corner, amount = up)) }
         clipPath(box) {
             translate(left + (w - end.width * c) / 2, top + (h - end.height * c) / 2) {
                 scale(c, c, pivot = Offset.Zero) { drawLayer(drawn) }

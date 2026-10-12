@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +35,7 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.VizFrame
 import fail.still.android.ui.VizFull
 import fail.still.android.ui.webSubtle
+import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
@@ -71,7 +71,7 @@ fun VizFile(station: String, key: String, file: Attachment, failed: @Composable 
     var full by remember { mutableStateOf(false) }
     when (val l = loaded) {
         Loaded.Failed -> failed()
-        Loaded.Waiting -> Box(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(120.dp).clip(RoundedCornerShape(12.dp)).background(if (C.dark) androidx.compose.ui.graphics.Color(0xFF26272B) else androidx.compose.ui.graphics.Color(0xFFF6F2EA)))
+        Loaded.Waiting -> Box(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(120.dp).clip(Smooth(12.dp)).background(if (C.dark) androidx.compose.ui.graphics.Color(0xFF26272B) else androidx.compose.ui.graphics.Color(0xFFF6F2EA)))
         is Loaded.Ready -> {
             var kept by remember(l) { mutableStateOf(l.state) }
             val keep: (JsonElement) -> Unit = { s -> kept = s; keepViz(app, scope, station, key, file.path, s) }
@@ -79,11 +79,11 @@ fun VizFile(station: String, key: String, file: Attachment, failed: @Composable 
                 VizFrame(l.html, l.state, onState = keep)
                 // Under the page, out of its way: the way to open it on its own, an icon in the chat's grey.
                 Row(Modifier.fillMaxWidth().padding(top = 2.dp).height(22.dp), horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End)) {
-                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).semantics { contentDescription = t("android-misc.viz.fullscreen") }.clickable { full = true }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(22.dp).clip(Smooth(6.dp)).semantics { contentDescription = t("android-misc.viz.fullscreen") }.clickable { full = true }, contentAlignment = Alignment.Center) {
                         IconIn(Icons.Expand, 14.dp, webSubtle)
                     }
                     // 在侧边打开: on a phone, as web mobile has it, the file as a page of its own in the preview.
-                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).semantics { contentDescription = t("android-misc.viz.openAside") }.clickable { app.push(fail.still.android.Screen.PreviewFile(station, key, file.path, file.name)) }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(22.dp).clip(Smooth(6.dp)).semantics { contentDescription = t("android-misc.viz.openAside") }.clickable { app.push(fail.still.android.Screen.PreviewFile(station, key, file.path, file.name)) }, contentAlignment = Alignment.Center) {
                         IconIn(Icons.PanelOpen, 14.dp, webSubtle)
                     }
                 }

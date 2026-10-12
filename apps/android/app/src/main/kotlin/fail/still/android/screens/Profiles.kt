@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -91,6 +90,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
+import fail.still.android.ui.Smooth
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
@@ -679,7 +679,7 @@ private fun QuotaSection(station: String, p: Profile) {
 internal fun TonePill(text: String, tone: String, size: androidx.compose.ui.unit.TextUnit = 12.sp) {
     val color = when (tone) { "green" -> C.green; "red" -> C.red; "blue" -> C.blue; "accent" -> C.accentInk; "amber" -> C.warn; else -> C.muted }
     val bg = if (tone == "neutral") C.chip else color.copy(alpha = if (tone == "amber") 0.14f else 0.12f)
-    Text(text, fontSize = size, color = color, maxLines = 1, modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(bg).padding(horizontal = 6.dp, vertical = 1.dp))
+    Text(text, fontSize = size, color = color, maxLines = 1, modifier = Modifier.clip(Smooth(6.dp)).background(bg).padding(horizontal = 6.dp, vertical = 1.dp))
 }
 
 /** Which of its models may be used: one per line, a filter when there are many, and all / none of what is shown. */
@@ -741,7 +741,7 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
                 Modifier.fillMaxWidth().clickable(enabled = !saving) { save(if (on) models - m else models + m) }.padding(horizontal = 24.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (on) C.accent else C.chip), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(20.dp).clip(Smooth(6.dp)).background(if (on) C.accent else C.chip), contentAlignment = Alignment.Center) {
                     if (on) IconIn(Icons.Check, 13.dp, C.bg)
                 }
                 Text(p.names[m] ?: m, fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -813,7 +813,7 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
         job.state == "done" -> waiting(t("android-settings.login.adding"))
         job.state == "needs_approval" && job.url != null && job.userCode != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(job.userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = CodeFont, color = C.ink,
-                modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(C.chip).padding(horizontal = 14.dp, vertical = 8.dp))
+                modifier = Modifier.clip(Smooth(10.dp)).background(C.chip).padding(horizontal = 14.dp, vertical = 8.dp))
             Button(if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true) {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", job.userCode))
                 copied = true; open(job.url)
@@ -945,7 +945,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                     s?.overview?.let { o -> MachineLoginOffers(address, o, inset = 0.dp) { rt -> edit(buildJsonObject { put("provider", if (rt == "claude") "anthropic" else "openai"); put("method", "plan") }) } }
                     d.groups.forEach { g ->
                         Text(g.title, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 6.dp, top = 6.dp))
-                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+                        Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
                             g.providers.forEach { p ->
                                 ListRow(onClick = { edit("provider", p.id) }) {
                                     ProviderMark(p.runtime ?: "claude", (p.kind?.ifEmpty { null } ?: "api-provider"), 18.dp, p.mark)
@@ -956,7 +956,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                         }
                     }
                 }
-                d.step == "method" -> Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+                d.step == "method" -> Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
                     d.choices.forEach { c ->
                         PickRow(c.title, c.hint, leading = { ProviderMark(runtime, if (c.id == "plan") "subscription" else d.tile?.kind ?: "api-provider", 18.dp, d.tile?.mark) }) { edit("method", c.id) }
                     }
@@ -989,7 +989,7 @@ private fun ColumnScope.ConnectForm(d: ProfileFlowView, edit: (String, String) -
     var key by remember(d.tile?.id) { mutableStateOf(d.key) }
     if (d.showEndpoint) {
         Text(t("common.provider.endpoint"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Box(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface).border(1.dp, C.line, Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
             if (endpoint.isEmpty()) Text(d.tile?.endpointExample ?: "https://", color = C.subtle, fontSize = 15.sp, fontFamily = CodeFont, maxLines = 1, overflow = TextOverflow.Ellipsis)
             androidx.compose.foundation.text.BasicTextField(endpoint, { endpoint = it.trim(); edit("endpoint", endpoint) }, singleLine = true, cursorBrush = androidx.compose.ui.graphics.SolidColor(C.accent),
                 textStyle = androidx.compose.ui.text.TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = CodeFont), modifier = Modifier.fillMaxWidth())
@@ -998,13 +998,13 @@ private fun ColumnScope.ConnectForm(d: ProfileFlowView, edit: (String, String) -
     }
     if ((d.regions?.size ?: 0) > 1) {
         Text(t("web-mobile.profiles.region"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+        Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
             d.regions.orEmpty().forEach { r -> PickRow(r.label, checked = r.id == d.region) { edit("region", r.id) } }
         }
     }
     if (d.protocols.size > 1) {
         Text(t("web-mobile.profiles.protocol"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+        Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
             d.protocols.forEach { p -> PickRow(p.label, checked = p.id == d.protocol) { edit("protocol", p.id) } }
         }
     }
@@ -1034,7 +1034,7 @@ fun MachineLoginOffers(station: String, overview: Overview, inset: androidx.comp
     val offers = overview.machineLogins.orEmpty().filter { it.offered == true }
     if (offers.isEmpty()) return
     Text(t("android-settings.machine.title"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = inset + 12.dp, end = inset + 12.dp, top = 8.dp, bottom = 4.dp))
-    Column(Modifier.padding(horizontal = inset).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+    Column(Modifier.padding(horizontal = inset).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
         offers.forEach { l -> MachineLoginRow(l, app.isDoing("profile.useMachineLogin", "station" to station, "runtime" to l.runtime)) {
             if (l.usable == true) {
                 scope.launch {

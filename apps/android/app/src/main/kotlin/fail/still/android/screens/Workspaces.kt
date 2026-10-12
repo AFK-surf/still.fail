@@ -73,6 +73,7 @@ import fail.still.android.ui.Illustration
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
+import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 
@@ -123,7 +124,7 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
                 Title(t("android-misc.invite.received"))
                 pending.forEach { (account, invite) ->
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface).padding(horizontal = 16.dp, vertical = 12.dp),
+                        Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface).padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -201,7 +202,7 @@ internal fun Button(label: String, primary: Boolean, busy: Boolean = false, enab
 @Composable
 internal fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier, lines: Int = 1) {
     Box(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
+        modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface).border(1.dp, C.line, Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null)
         BasicTextField(
@@ -256,7 +257,7 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         if (current != null) {
             Label(t("android-misc.workspace.current"))
-            Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp).clip(RoundedCornerShape(16.dp)).background(C.bg)) {
+            Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp).clip(Smooth(16.dp)).background(C.bg)) {
                 PickRow(current.name, sub = currentOf.account.email, checked = true) { app.sheet = null }
             }
         }

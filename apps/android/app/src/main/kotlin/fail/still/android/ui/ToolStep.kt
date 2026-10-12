@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -116,7 +115,7 @@ private val greenBg @Composable get() = if (C.dark) Color(0xFF1B3426) else Color
 /** The quiet tinted box code and output sit in, kept to `max` high (it scrolls within). */
 @Composable
 private fun Boxed(max: Dp = 360.dp, ground: Color = codeGround, vertical: Dp = 8.dp, horizontal: Dp = 12.dp, content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ground).heightIn(max = max).verticalScroll(rememberScrollState()).padding(horizontal = horizontal, vertical = vertical)) { content() }
+    Box(Modifier.fillMaxWidth().clip(Smooth(10.dp)).background(ground).heightIn(max = max).verticalScroll(rememberScrollState()).padding(horizontal = horizontal, vertical = vertical)) { content() }
 }
 
 private val mono = CodeFont
@@ -126,7 +125,7 @@ private val mono = CodeFont
 private fun Block(text: String, language: String?) {
     val dark = C.dark
     val colored = remember(text, language, dark) { highlight(text, language, dark) }
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(codeGround).heightIn(max = 360.dp).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp)) {
+    Box(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(codeGround).heightIn(max = 360.dp).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp)) {
         Text(colored, fontFamily = mono, fontSize = 12.sp, lineHeight = 18.6.sp, color = C.ink)
     }
 }

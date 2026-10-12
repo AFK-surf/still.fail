@@ -92,7 +92,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -167,6 +166,8 @@ import fail.still.android.ui.endInView
 import fail.still.android.ui.floating
 import fail.still.android.ui.glass
 import fail.still.android.ui.rememberFollow
+import fail.still.android.ui.Smooth
+import fail.still.android.ui.drawSmooth
 import fail.still.core.CoreException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
@@ -1180,7 +1181,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
                 MessageTime(m.time?.get("createdAt"))
             }
             QuoteCards(m.quotes, jump, Alignment.Start)
-            Box(hold.drawBehind { drawRoundRect(press, cornerRadius = CornerRadius(12.dp.toPx())) }) {
+            Box(hold.drawBehind { drawSmooth(press, 12.dp.toPx()) }) {
                 // A person's words as yours are drawn: a reference to another chat as its chip (web Chat.tsx → PersonWords).
                 if (m.authorKind == "person") { if (m.text.isNotEmpty()) { val words = fail.still.android.ui.markWeight(fail.still.android.ui.withRefs(m.text)); val (mark, laid) = passageMark(words.text); val (links, linked) = fail.still.android.ui.linkHold(words); Text(words, mark.then(links), fontSize = 15.sp, lineHeight = 23.sp, color = ink.text, onTextLayout = { laid(it); linked(it) }) } }
                 else AgentWords(ctx, m.text, m.attachments, draft)
@@ -1260,7 +1261,7 @@ private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toP
     val ground = if (failed != null) (if (dark) Color(0xFF442322) else Color(0xFFFFF0EF)) else if (dark) Color.White.copy(alpha = 0.05f) else Color(0xFF262117).copy(alpha = 0.065f)
     val ink = if (failed != null) (if (dark) Color(0xFFF68482) else Color(0xFFA12F35)) else chatInk().text
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        val shape = RoundedCornerShape(if (open) 16.dp else 999.dp)
+        val shape = if (open) Smooth(16.dp) else RoundedCornerShape(50)
         Box(
             Modifier.clip(shape).background(ground)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { open = !open }
@@ -1323,7 +1324,7 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
                         with(density) { flight.bubbleAt(it, host, androidx.compose.ui.geometry.Offset(14.dp.toPx(), 8.dp.toPx()), SendTextStyle.lineHeight.toPx(), SendTextStyle.fontSize.toPx()) }
                     }
                 }
-                .clip(RoundedCornerShape(18.dp)).drawBehind {
+                .clip(Smooth(18.dp)).drawBehind {
                     // Flown in piece by piece, its ground is the host's (round the words on their way); else it comes in with them.
                     val alpha = when { flight == null -> 1f; !flight.carried && host?.flight === flight && flight.pieces() != null -> 0f; else -> flight.e() }
                     drawRect(ink.neutral, alpha = alpha)
@@ -1385,7 +1386,7 @@ private fun Out(ctx: Here, o: Outgoing) {
 private fun UnsentButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, busy: Boolean = false, failed: String? = null, onClick: () -> Unit) {
     val muted = chatMuted()
     Row(
-        Modifier.alpha(if (enabled) 1f else 0.5f).clip(RoundedCornerShape(7.dp)).clickable(enabled = enabled && !busy, onClick = onClick).padding(horizontal = 7.dp, vertical = 3.dp),
+        Modifier.alpha(if (enabled) 1f else 0.5f).clip(Smooth(7.dp)).clickable(enabled = enabled && !busy, onClick = onClick).padding(horizontal = 7.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (busy || failed != null) DoingMark(busy, failed, 12.dp) else IconIn(icon, 12.dp, muted)
@@ -1477,7 +1478,7 @@ private fun QuoteCards(quotes: List<Quote>, onJump: ((String, String) -> Unit)?,
 @Composable
 private fun QuoteCard(q: Quote, onJump: ((String, String) -> Unit)?, modifier: Modifier) {
     val ink = chatInk()
-    Column(modifier.clip(RoundedCornerShape(12.dp)).background(ink.card)) {
+    Column(modifier.clip(Smooth(12.dp)).background(ink.card)) {
         val ts = q.ts
         Text(
             quoteLine(q.author, q.text), inlineContent = quoteMark(), fontSize = 13.sp, lineHeight = 19.5.sp, color = ink.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -1531,7 +1532,7 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean, opening: B
                 scaleX = 0.5f + 0.5f * open.value; scaleY = scaleX
                 transformOrigin = TransformOrigin(if (size.width > 0) 9.dp.toPx() / size.width else 0f, 0.5f)
             }
-            .drawBehind { if (pressed) drawRoundRect(pressInk, cornerRadius = CornerRadius(6.dp.toPx())) }
+            .drawBehind { if (pressed) drawSmooth(pressInk, 6.dp.toPx()) }
             .clickable(interactionSource = touch, indication = null) { openHistory(app, ctx.station, ctx.of, agent.key) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {

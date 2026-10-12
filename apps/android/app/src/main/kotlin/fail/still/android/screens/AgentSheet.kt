@@ -58,6 +58,7 @@ import fail.still.android.ui.ModelMark
 import fail.still.android.ui.QuotaRings
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetSpec
+import fail.still.android.ui.Smooth
 import kotlinx.coroutines.delay
 
 private val ChatAgent.working get() = status == "running" || status == "queued"
@@ -193,7 +194,7 @@ internal fun AgentTiles(card: AgentCardView?, modifier: Modifier = Modifier.padd
         @Composable
         fun tile(figure: String, name: String, color: Color = C.ink) {
             Column(
-                Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(C.ink.copy(alpha = 0.05f)).padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = 8.dp)
+                Modifier.weight(1f).clip(Smooth(14.dp)).background(C.ink.copy(alpha = 0.05f)).padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = 8.dp)
                     .semantics(mergeDescendants = true) { contentDescription = "$name $figure" },
             ) {
                 Box(Modifier.height(26.dp), contentAlignment = Alignment.CenterStart) {

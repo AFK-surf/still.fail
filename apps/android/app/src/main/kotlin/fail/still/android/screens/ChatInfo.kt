@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,6 +52,7 @@ import fail.still.android.ui.SlackMark
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import fail.still.android.ui.QuotaRings
+import fail.still.android.ui.Smooth
 /**
  * The chat itself, from "…": its name (with a way to change it) over who started it, how many take part and when it was
  * last written in, in a line; its agents, each where it stands (a tap opens its card, AgentSheet.kt); then what can be
@@ -182,7 +182,7 @@ fun GroupLabel(text: String) = Text(text, fontSize = 13.sp, color = C.muted, mod
 
 @Composable
 fun InfoList(content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.ink.copy(alpha = 0.05f))) { content() }
+    Column(Modifier.fillMaxWidth().clip(Smooth(14.dp)).background(C.ink.copy(alpha = 0.05f))) { content() }
 }
 
 @Composable

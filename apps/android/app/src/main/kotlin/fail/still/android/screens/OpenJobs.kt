@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,6 +40,7 @@ import fail.still.android.data.rememberTopic
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
+import fail.still.android.ui.Smooth
 
 /** Rows shown before the rest folds under「还有 N 个」. */
 private const val SHOWN = 3
@@ -67,7 +67,7 @@ private fun OpenGroup(group: LongJobsGroup, all: MutableMap<String, Boolean>) {
         shown.forEach { OpenRow(it) }
         if (shown.size < list.size) Text(
             t("android-misc.openJobs.more", "n" to list.size - shown.size), fontSize = 12.sp, color = C.muted,
-            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { all[group.key] = true }.padding(horizontal = 10.dp, vertical = 3.dp),
+            modifier = Modifier.clip(Smooth(8.dp)).clickable { all[group.key] = true }.padding(horizontal = 10.dp, vertical = 3.dp),
         )
     }
 }
@@ -79,7 +79,7 @@ private fun OpenRow(job: Job) {
     val chat = job.chat
     val station = job.station ?: return
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+        Modifier.fillMaxWidth().clip(Smooth(10.dp))
             .then(if (chat != null) Modifier.clickable {
                 app.push(Screen.Chat(station, ChatOf.Session(chat.id)))
                 if (job.service == true) app.push(Screen.Preview(station, job.id))

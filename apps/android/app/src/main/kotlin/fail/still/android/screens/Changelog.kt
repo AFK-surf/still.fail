@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
@@ -63,6 +62,7 @@ import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.Seg
+import fail.still.android.ui.Smooth
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
@@ -134,7 +134,7 @@ private fun Line(line: ChangelogLine) {
         append(line.text)
     }
     val kind = InlineTextContent(Placeholder(width, 19.sp, PlaceholderVerticalAlign.TextCenter)) {
-        Box(Modifier.padding(end = 6.dp).fillMaxSize().clip(RoundedCornerShape(6.dp)).background(if (new) C.accentBg else C.chip), contentAlignment = Alignment.Center) {
+        Box(Modifier.padding(end = 6.dp).fillMaxSize().clip(Smooth(6.dp)).background(if (new) C.accentBg else C.chip), contentAlignment = Alignment.Center) {
             Text(line.label, style = labelStyle, color = if (new) C.accentInk else C.muted, maxLines = 1, softWrap = false)
         }
     }
@@ -152,7 +152,7 @@ fun ChangelogNews() {
     val news = topic.value?.news ?: return
     if (gone == news) return
     val lines = news.entries.flatMap { it.text }
-    Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+    Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp).fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
         Column(Modifier.fillMaxWidth().clickable { app.push(Screen.Changelog) }.padding(start = 16.dp, end = 44.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(Modifier.padding(bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 IconIn(Icons.Sparks, 16.dp, C.ink)

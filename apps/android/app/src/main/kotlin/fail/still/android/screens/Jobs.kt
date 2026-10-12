@@ -67,6 +67,7 @@ import fail.still.android.ui.Seg
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
+import fail.still.android.ui.Smooth
 
 // What a job's dot says, its word, the line under its name and every time in words are the core's (client/core-ts/src/
 // jobs.ts): `tone`, `meta`, `detail`, a notice's `ago` and `clock`; a chat's all together, what matters first, is its
@@ -215,7 +216,7 @@ fun openJobs(app: AppState, station: String, of: ChatOf) {
 @Composable
 private fun SheetLink(onClick: () -> Unit, content: @Composable ColumnScope.() -> Unit) =
     Column(
-        Modifier.padding(top = 14.dp).clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(horizontal = 2.dp, vertical = 6.dp),
+        Modifier.padding(top = 14.dp).clip(Smooth(8.dp)).clickable(onClick = onClick).padding(horizontal = 2.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp), content = content,
     )
 
@@ -279,7 +280,7 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
                 if (follow) scroll.scrollTo(scroll.maxValue)
             }
             Box(
-                Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(min = 120.dp).clip(RoundedCornerShape(16.dp)).background(C.ink.copy(alpha = 0.05f))
+                Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(min = 120.dp).clip(Smooth(16.dp)).background(C.ink.copy(alpha = 0.05f))
                     .verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
                 Text(if (log == null) t("android-misc.reading") else text?.ifEmpty { t("android-misc.jobs.noOutput") } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)

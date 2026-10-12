@@ -462,11 +462,11 @@ fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Mo
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(1500); copied = false } }
     val dark = C.dark
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(codeGround)) {
+    Column(modifier.fillMaxWidth().clip(Smooth(12.dp)).background(codeGround)) {
         if (bar) Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 4.dp).height(24.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             Text(language ?: "text", fontSize = 10.sp, letterSpacing = 0.2.sp, color = webSubtle, modifier = Modifier.padding(horizontal = 6.dp))
             Row(
-                Modifier.height(24.dp).clip(RoundedCornerShape(6.dp)).background(C.surface.copy(alpha = 0.8f)).clickable {
+                Modifier.height(24.dp).clip(Smooth(6.dp)).background(C.surface.copy(alpha = 0.8f)).clickable {
                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("code", code))
                     copied = true
                 }.padding(horizontal = 7.dp),
@@ -500,7 +500,7 @@ private fun Table(table: TableBlock, ctx: Ctx) {
     val line = webLine
     val head = codeGround
     val muted = webMuted
-    val frame = RoundedCornerShape(20.dp)
+    val frame = Smooth(20.dp)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val avail = constraints.maxWidth - with(androidx.compose.ui.platform.LocalDensity.current) { 2.dp.roundToPx() }
         Box(Modifier.clip(frame).border(1.dp, line, frame).background(tableGround).padding(1.dp).horizontalScroll(rememberScrollState())) {

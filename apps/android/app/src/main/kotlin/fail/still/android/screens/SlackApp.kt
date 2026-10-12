@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -74,6 +73,7 @@ import fail.still.android.ui.ListRow
 import fail.still.android.ui.Loading
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.SectionHeader
+import fail.still.android.ui.Smooth
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import java.io.ByteArrayOutputStream
@@ -311,7 +311,7 @@ internal fun AppLook(draft: AppDraft, icon: IconPick?, onIcon: (IconPick?, Strin
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         FormLabel(t("android-settings.slack.icon"))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)).background(Color(parseColor(draft.color, C.chip.toArgbInt()))).clickable { openPicker() }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(72.dp).clip(Smooth(18.dp)).background(Color(parseColor(draft.color, C.chip.toArgbInt()))).clickable { openPicker() }, contentAlignment = Alignment.Center) {
                 if (icon != null) Image(icon.bitmap, t("android-settings.slack.icon"), Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 else Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     IconIn(Icons.ImageUpload, 20.dp, C.muted)
@@ -326,7 +326,7 @@ internal fun AppLook(draft: AppDraft, icon: IconPick?, onIcon: (IconPick?, Strin
         AvatarGrid(buddyList + MAKER_AVATARS, picked?.id) { pick(it) }
         FormLabel(t("android-settings.slack.background"))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Color(parseColor(draft.color))))
+            Box(Modifier.size(44.dp).clip(Smooth(12.dp)).background(Color(parseColor(draft.color))))
             Field(draft.color, { colour(it.trim().uppercase(), true) }, "#RRGGBB", mono = true, modifier = Modifier.weight(1f))
             if (recommended != null && colourSet && !recommended.equals(draft.color, ignoreCase = true)) {
                 Text(t("android-settings.slack.recommended"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { colour(recommended, false) })
@@ -351,8 +351,8 @@ private fun AvatarGrid(list: List<AppAvatar>, picked: String?, onPick: (AppAvata
                     row.forEach { a ->
                         val on = a.id == picked
                         Box(
-                            Modifier.size(side).let { if (on) it.border(2.dp, C.accent, RoundedCornerShape(14.dp)).padding(4.dp) else it }
-                                .clip(RoundedCornerShape(if (on) 9.dp else 12.dp)).background(Color(parseColor(a.bg))).clickable { onPick(a) },
+                            Modifier.size(side).let { if (on) it.border(2.dp, C.accent, Smooth(14.dp)).padding(4.dp) else it }
+                                .clip(Smooth(if (on) 9.dp else 12.dp)).background(Color(parseColor(a.bg))).clickable { onPick(a) },
                             contentAlignment = Alignment.Center,
                         ) {
                             if (a.mark != null) Image(painterResource(a.mark), a.label, Modifier.size(side * 0.55f), colorFilter = if (a.mono) ColorFilter.tint(Color.White) else null)
@@ -437,7 +437,7 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
     val changes = draft.changes()
     val dirty = changes.isNotEmpty() || icon != null
     if (approve && links != null) Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.blue.copy(alpha = 0.10f)).padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.blue.copy(alpha = 0.10f)).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -478,7 +478,7 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
             ) {
                 // Always on, no choice: a tick without a box.
                 if (fixed) Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { IconIn(Icons.Check, 16.dp, C.accent) }
-                else Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (checked) C.accent else C.chip), contentAlignment = Alignment.Center) {
+                else Box(Modifier.size(20.dp).clip(Smooth(6.dp)).background(if (checked) C.accent else C.chip), contentAlignment = Alignment.Center) {
                     if (checked) IconIn(Icons.Check, 13.dp, C.bg)
                 }
                 Text(words.getValue(g).first, fontSize = 14.sp, color = if (checked) C.ink else C.muted)

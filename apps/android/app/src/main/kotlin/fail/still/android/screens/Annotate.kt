@@ -124,6 +124,7 @@ import fail.still.android.ui.floatingStill
 import fail.still.android.ui.pickable
 import fail.still.android.ui.inert
 import fail.still.android.ui.withRefs
+import fail.still.android.ui.Smooth
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -486,7 +487,7 @@ private fun NoteLanding(note: Note, from: Rect, placed: PagePlaces, done: () -> 
     val density = LocalDensity.current
     val rect = { placed.cards[note.n].bounds()?.let { lerpRect(from, it, t.value) } ?: from }
     val corner = with(density) { (26.dp + (16.dp - 26.dp) * t.value) }
-    Box(Modifier.placedAt(placed, rect).floatingStill(RoundedCornerShape(corner))) {
+    Box(Modifier.placedAt(placed, rect).floatingStill(Smooth(corner, t.value))) {
         // What the box held, going; what the card holds, coming (it is laid out at the card's own size throughout).
         Box(Modifier.graphicsLayer { alpha = (1f - t.value * 2.5f).coerceIn(0f, 1f) }.padding(start = 16.dp, end = 16.dp, top = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -512,7 +513,7 @@ private fun QuoteFlight(sent: SentQuote, note: Note?, placed: PagePlaces, p: () 
     val rect = { AnnotateFlight.quotes[sent.quote.id]?.let { lerpRect(sent.from, it, t()) } ?: sent.from }
     val corner = with(density) { 16.dp + (ComposerCorner - ComposerInset - 16.dp) * t() }
     Box(
-        Modifier.placedAt(placed, rect).clip(RoundedCornerShape(corner))
+        Modifier.placedAt(placed, rect).clip(Smooth(corner, 1f - t()))
             .drawBehind { drawRect(androidx.compose.ui.graphics.lerp(raised, ground, t())) },
     ) {
         if (note != null) Box(Modifier.graphicsLayer { alpha = (1f - t() * 2.5f).coerceIn(0f, 1f) }.requiredWidthIn(160.dp)) { CardContent(note) }
@@ -662,7 +663,7 @@ internal fun NoteBox(note: NoteLike, modifier: Modifier, onDone: () -> Unit, onR
 /** A note in the tray at the foot: its number and what is said, over the passage. */
 @Composable
 internal fun Card(note: NoteLike, open: Boolean, haze: HazeState, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = Smooth(16.dp)
     Column(
         modifier.width(160.dp).pop().floating(haze, shape).then(if (open) Modifier.border(1.5.dp, C.accent, shape) else Modifier)
             .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 9.dp),

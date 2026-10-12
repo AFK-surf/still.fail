@@ -44,6 +44,7 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Raised
 import fail.still.android.ui.reducedMotion
+import fail.still.android.ui.Smooth
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -74,7 +75,7 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
             Text(notice.label ?: notice.text, fontSize = 12.sp, lineHeight = 18.sp, color = accent, maxLines = 1)
         }
         if (notice.open == true) {
-            val shape = RoundedCornerShape(14.dp)
+            val shape = Smooth(14.dp)
             val width = minOf(284.dp, (LocalConfiguration.current.screenWidthDp - 24).dp)
             val surface = Raised
             Popup(popupPositionProvider = position, onDismissRequest = { control("close") }, properties = PopupProperties(focusable = true)) {

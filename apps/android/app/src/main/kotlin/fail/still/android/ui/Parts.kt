@@ -174,8 +174,8 @@ fun ModelMark(maker: Maker?, runtime: String, size: Dp = 36.dp, state: ChatState
     val xs = size < 30.dp
     Box(Modifier.size(size)) {
         Box(
-            Modifier.size(size).clip(RoundedCornerShape(if (xs) 6.dp else 11.dp)).background(C.surface)
-                .border(1.dp, C.line, RoundedCornerShape(if (xs) 6.dp else 11.dp)),
+            Modifier.size(size).clip(Smooth(if (xs) 6.dp else 11.dp)).background(C.surface)
+                .border(1.dp, C.line, Smooth(if (xs) 6.dp else 11.dp)),
             contentAlignment = Alignment.Center,
         ) { MakerIcon(maker, runtime, if (xs) size * 0.6f else size * 0.56f) }
         if (listMark) { if (state != null) AgentStateMark(state, around, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp)) }
@@ -425,8 +425,8 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
         w.animateTo(tw, ease)
     }
     val density = LocalDensity.current
-    val thumbShape = RoundedCornerShape((radius - inset).coerceAtLeast(0.dp))
-    Box(modifier.height(height).clip(RoundedCornerShape(radius)).let { if (track) it.background(C.ink.copy(alpha = 0.06f)) else it }.padding(inset)) {
+    val thumbShape = Smooth((radius - inset).coerceAtLeast(0.dp))
+    Box(modifier.height(height).clip(Smooth(radius)).let { if (track) it.background(C.ink.copy(alpha = 0.06f)) else it }.padding(inset)) {
         if (w.value > 0f) Box(
             Modifier.offset { IntOffset(x.value.roundToInt(), 0) }.width(with(density) { w.value.toDp() }).fillMaxHeight().let {
                 // In a capsule, a soft tint of the text colour: the capsule's glass shows through it. On a track, a light
@@ -463,7 +463,7 @@ fun StationMark(emoji: String?, icon: String?, size: Dp, tint: Color, modifier: 
     val picture = remember(icon) { stationPicture(icon) }
     when {
         glyph != null -> Icon(glyph.icon, null, modifier.size(size), tint = markColor(glyphColor(icon)) ?: tint)
-        picture != null -> Image(picture, null, modifier.size(size).clip(RoundedCornerShape(size * 0.24f)), contentScale = ContentScale.Crop)
+        picture != null -> Image(picture, null, modifier.size(size).clip(Smooth(size * 0.24f)), contentScale = ContentScale.Crop)
         emoji != null -> Text(emoji, fontSize = (size.value * 0.9f).sp, lineHeight = size.value.sp, modifier = modifier)
         none != null -> Icon(none, null, modifier.size(size), tint = tint)
     }
@@ -505,7 +505,7 @@ fun stationPicture(icon: String?): ImageBitmap? {
 /** Back, in the accent color, with where it goes back to. */
 @Composable
 fun NavBack(label: String, onClick: () -> Unit) {
-    Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(end = 6.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.clip(Smooth(8.dp)).clickable(onClick = onClick).padding(end = 6.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconIn(Icons.ChevronLeft, 22.dp, C.accent)
         Text(label, fontSize = 17.sp, color = C.accent)
     }
@@ -561,7 +561,7 @@ fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp) {
 @Composable
 fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(
-        modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.surface)
+        modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(20.dp)).background(C.surface)
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 14.dp),
         content = content,
     )
@@ -570,7 +570,7 @@ fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: 
 /** Rows on one rounded card; the card groups them, no lines between. */
 @Composable
 fun ListCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface), content = content)
+    Column(modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(16.dp)).background(C.surface), content = content)
 }
 
 @Composable

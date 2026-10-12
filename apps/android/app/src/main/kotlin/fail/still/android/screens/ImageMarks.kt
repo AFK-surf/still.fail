@@ -74,6 +74,7 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Strokes
 import fail.still.android.ui.ZoomState
+import fail.still.android.ui.Smooth
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -862,7 +863,7 @@ fun MarksTools(marks: ImageMarks, glass: Modifier) {
                 PictureButton(icon, tool.label, pressed = marks.tool == tool) { marks.pickTool(tool) }
             }
             Gap()
-            Box(Modifier.size(32.dp).clip(RoundedCornerShape(12.dp)).clickable { marks.palette = !marks.palette }.semantics { contentDescription = t("android-chat.marks.color") }, contentAlignment = Alignment.Center) { Swatch(marks.shownColor) }
+            Box(Modifier.size(32.dp).clip(Smooth(12.dp)).clickable { marks.palette = !marks.palette }.semantics { contentDescription = t("android-chat.marks.color") }, contentAlignment = Alignment.Center) { Swatch(marks.shownColor) }
             marks.pickedShape?.let { s -> PictureButton(Icons.Trash, t("common.delete")) { marks.remove(s.id) } }
             Gap()
             PictureButton(Icons.Retry, t("android-chat.marks.undo"), enabled = marks.canUndo) { marks.undo() }
@@ -912,7 +913,7 @@ private fun Gap() = Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(1
 @Composable
 fun PictureButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, pressed: Boolean = false, tint: Color = Color.White.copy(alpha = 0.6f), onClick: () -> Unit) {
     Box(
-        Modifier.size(32.dp).clip(RoundedCornerShape(12.dp)).background(if (pressed) Color.White.copy(alpha = 0.16f) else Color.Transparent)
+        Modifier.size(32.dp).clip(Smooth(12.dp)).background(if (pressed) Color.White.copy(alpha = 0.16f) else Color.Transparent)
             .alpha(if (enabled) 1f else 0.35f).clickable(enabled = enabled, onClick = onClick).semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) { IconIn(icon, 18.dp, if (pressed) Color(0xFFF4F4F5) else tint) }

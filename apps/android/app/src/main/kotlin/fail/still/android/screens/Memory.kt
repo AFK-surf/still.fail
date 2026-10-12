@@ -7,7 +7,6 @@ package fail.still.android.screens
 import fail.still.android.data.t
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,6 +55,7 @@ import fail.still.android.ui.Loading
 import fail.still.android.ui.Markdown
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.SectionHeader
+import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 
 @Composable
@@ -143,7 +143,7 @@ private fun SkillRow(skill: SkillFile, station: String, names: Map<String, Strin
     // As the web's row (Memory.tsx, shared by its phone and PC): inset in the card, tinted while open (the web's --hover).
     Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp)) {
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            Modifier.fillMaxWidth().clip(Smooth(12.dp))
                 .background(if (open) C.ink.copy(alpha = if (C.dark) 0.05f else 0.065f) else Color.Transparent)
                 .clickable { open = !open }.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp),

@@ -78,6 +78,7 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.ZoomState
 import fail.still.android.ui.zoomable
+import fail.still.android.ui.Smooth
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.math.roundToInt
@@ -303,7 +304,7 @@ internal fun VideoViewer(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     Box(
-                        Modifier.height(28.dp).widthIn(min = 46.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.1f)).clickable {
+                        Modifier.height(28.dp).widthIn(min = 46.dp).clip(Smooth(10.dp)).background(Color.White.copy(alpha = 0.1f)).clickable {
                             rate = RATES[(RATES.indexOf(rate) + RATES.size - 1) % RATES.size]
                             if (ready && player.isPlaying) try { player.playbackParams = player.playbackParams.setSpeed(rate) } catch (_: Exception) {}
                             wake()

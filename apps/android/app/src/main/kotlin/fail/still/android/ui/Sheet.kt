@@ -190,8 +190,8 @@ fun SheetHost(spec: SheetSpec?, haze: HazeState, close: () -> Unit) {
                 // Its height read as it is laid out: a drag moves it without making its content again.
                 .layout { m, c -> val h = height.value.roundToInt().coerceIn(c.minHeight, c.maxHeight); val p = m.measure(c.copy(minHeight = h, maxHeight = h)); layout(p.width, h) { p.place(0, 0) } }
                 .offset { IntOffset(0, offset.value.toInt()) }
-                .shadow(24.dp, RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
-                .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
+                .shadow(24.dp, Smooth(topStart = 26.dp, topEnd = 26.dp))
+                .clip(Smooth(topStart = 26.dp, topEnd = 26.dp))
                 // Frosted glass over the page, as the bars and capsules are. The web's backdrop has the scrim in it (it
                 // frosts all that is behind it); here the pages alone are the source, so the scrim goes under the glass.
                 .hazeEffect(haze) {
@@ -272,7 +272,7 @@ fun MenuHost(spec: MenuSpec?, closed: () -> Unit) {
             enter = fadeIn(tween(160, easing = Ease.Out)) + scaleIn(MenuSpring, 0.9f, origin),
             exit = fadeOut(tween(120, easing = Ease.CssOut)) + scaleOut(MenuSpring, 0.9f, origin),
         ) {
-            Column(Modifier.widthIn(min = width).width(width).shadow(18.dp, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).background(C.surface)) {
+            Column(Modifier.widthIn(min = width).width(width).shadow(18.dp, Smooth(14.dp)).clip(Smooth(14.dp)).background(C.surface)) {
                 current.items.forEachIndexed { i, item ->
                     Row(
                         Modifier.fillMaxWidth().clickable { closed(); item.action() }.padding(horizontal = 16.dp, vertical = 12.dp),
