@@ -15,11 +15,6 @@ export const spentNotice = style({
 /** New chat: a centred composer with the choices of where and on what it runs. */
 export const newChat = style({
   flex: "1", minHeight: "0", display: "grid", placeItems: "center", padding: "32px", overflowY: "auto",
-  selectors: {
-    // It has no page bar: in the desktop app, with no title bar, the top row of the page (styles/shell.css.ts main) drags
-    // the window as the bars of the other pages do (styles/sidebar.css.ts pageBar).
-    "[data-desktop] &::before": { content: '""', position: "absolute", top: 0, left: 0, right: 0, height: 44, WebkitAppRegion: "drag" },
-  },
 });
 export const newChatInner = style({
   width: "100%", maxWidth: "720px", display: "grid", gap: "10px", justifyItems: "center", textAlign: "center",
