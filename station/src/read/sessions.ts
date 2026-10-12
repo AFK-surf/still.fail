@@ -201,7 +201,7 @@ function threadJson(t: ThreadRow): Json {
 }
 
 /// views.rs `thread_view`: a thread with its sessions, last entry and message, what the viewer read, who wrote.
-function threadView(s: Store, t: ThreadSummary): Json {
+function threadView(s: Store, t: ThreadSummary, shares: ReturnType<typeof store.chatShares> = store.chatShares(s)): Json {
   const names = authorNames(s, t.thread.id);
   const v = threadJson(t.thread);
   v.sessions = t.sessions.map((m) => ({ thread: m.thread, session: m.session, connect: m.connect, joinedAt: m.joinedAt }));
@@ -214,11 +214,15 @@ function threadView(s: Store, t: ThreadSummary): Json {
   // A Slack channel's name, as far as known.
   v.channelName = t.thread.surface === store.STILLFAIL_SURFACE ? null : knownChannel(s, t.sessions.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null, t.thread.channel);
   v.creator = creator(s, t.thread.createdBy);
+  // Which other workspaces it is shared with (docs/chat-share.md), by the session key its link names.
+  const shared = shares.get(t.thread.home ?? t.sessions[0]?.session ?? "");
+  v.xshare = shared === undefined ? null : shared;
   return v;
 }
 
 function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
-  return store.listThreads(s, viewer.email, session, null).map((t) => threadView(s, t));
+  const shares = store.chatShares(s);
+  return store.listThreads(s, viewer.email, session, null).map((t) => threadView(s, t, shares));
 }
 
 /// GET /threads?session= (views.rs `threads`): the threads (of one session).

@@ -56,3 +56,45 @@ test("a peer's request is answered by the other station's remote tasks", async (
     await Promise.all([source.close(), target.close()]);
   }
 });
+
+test("a station of another workspace is asked only when chats are shared with it, and heard only for them", async () => {
+  const mesh = memoryMesh();
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const [source, target, closed] = await Promise.all([bind(), bind(), bind()]);
+  const sourceCloud = cloudOf(source.id(), []);
+  sourceCloud.state.workspace = "home";
+  const targetCloud = cloudOf(target.id(), []);
+  const heard: any[] = [];
+  const remote: any = {
+    handle: async () => ({ inside: true }),
+    hearsOutside: () => true,
+    handleOutside: async (peer: string, request: any) => (heard.push([peer, request.method]), { outside: request.method }),
+  };
+  const serve = (endpoint: typeof target, cloud: any, r: any) =>
+    void (async () => {
+      for (;;) {
+        const conn = await endpoint.accept();
+        if (!conn) return;
+        // As the mesh does (mesh.ts): a connection that is not served is closed.
+        void servePeer(conn, cloud, r).catch(() => conn.close(0, "refused"));
+      }
+    })();
+  serve(target, targetCloud, remote);
+  // A station that hears no other workspace (none shares chats there): not even connected to.
+  serve(closed, cloudOf(closed.id(), []), { handle: async () => ({}) });
+  const ports = new Map([target, closed].map((e) => [e.id(), e.sockets()[0]!.split(":").at(-1)]));
+  let reaches = false;
+  const call = peerCall(source, sourceCloud, (id) => ({ id, ips: [`127.0.0.1:${ports.get(id)}`] }), { reaches: (_t, w) => reaches && w === "ws" });
+  try {
+    await assert.rejects(call(target.id(), "ws", { method: "session.read" }), /shares no chat/);
+    reaches = true;
+    assert.deepEqual(await call(target.id(), "ws", { method: "session.read" }), { outside: "session.read" });
+    assert.deepEqual(heard, [[source.id(), "session.read"]]);
+    // Its requests must name the workspace they are heard in.
+    const wrong = peerCall(source, sourceCloud, (id) => ({ id, ips: [`127.0.0.1:${ports.get(id)}`] }), { reaches: () => true });
+    await assert.rejects(wrong(target.id(), "elsewhere", { method: "session.read" }), (e) => e instanceof Refused && /outside this workspace/.test(e.message));
+    await assert.rejects(wrong(closed.id(), "ws", { method: "session.read" }), (e) => !(e instanceof Refused));
+  } finally {
+    await Promise.all([source.close(), target.close(), closed.close()]);
+  }
+});

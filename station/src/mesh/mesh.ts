@@ -42,7 +42,8 @@ export const MeshLive = Layer.effectDiscard(
       if (Option.isNone(online)) log.warn("mesh", `no relay link after 15 s; going online at ${plane.spec().name} anyway`);
       yield* Effect.forkScoped(plane.presence);
       // The workspace's other stations: asked through this endpoint, their tasks stopped once they are not in it.
-      agents.remote.attach(peerCall(endpoint, cloud.state));
+      // And the stations of other workspaces chats are shared with or from (xshare/index.ts).
+      agents.remote.attach(peerCall(endpoint, cloud.state, undefined, agents.xshare));
       yield* Effect.acquireRelease(
         Effect.sync(() => followRoster(cloud.state, agents.remote, agents.config)),
         (stop) => Effect.sync(stop),

@@ -32,6 +32,7 @@ export const NOTES: [number, string][] = [
   [25, "In still.fail chats a bare URL is no longer turned into a link: write every link as [label](url)."],
   [26, "The formatting rules for Slack (mrkdwn) and still.fail chats (Markdown) are now one side-by-side table in your instructions (Formatting): check it when unsure, and never mix the two."],
   [27, "New tool chat_create: open a still.fail chat with an agent of its own, here or on another station; you are told how each of its turns ends. A chat headed 由…开的/Opened by <a chat's link> was opened for you: work in it with chat_post; its opener hears how your turns end by itself."],
+  [28, "A chat may now be shared with other workspaces (its 「…」 menu): chat_list also lists chats other workspaces share with this one, and chat_read, session_history and session_send (where writing is allowed) take their links. chat_create does not reach other workspaces."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

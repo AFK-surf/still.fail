@@ -33,6 +33,7 @@ import { UsageCounter } from "../usage/counter.ts";
 import { sessionUsage } from "../read/usage.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
+import { ChatShares } from "../xshare/index.ts";
 import { overview } from "../api/overview.ts";
 import { type SlackParts, makeConnections } from "../slack/index.ts";
 import type { Viewer } from "../mesh/credential.ts";
@@ -44,9 +45,9 @@ import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
 import { autoArchive } from "./lifecycle.ts";
-import { fromPeer } from "./messages.ts";
+import { fromPeer, sender } from "./messages.ts";
 import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
-import { forPeer, READ } from "./others.ts";
+import { chatsTouched, forPeer, READ } from "./others.ts";
 import { FILE, fileForPeer, PUT, putForPeer } from "./peer-files.ts";
 import { reviewUndecided, startReview } from "./review.ts";
 
@@ -71,6 +72,8 @@ export type AgentsParts = {
   accounts: Accounts;
   /// What this station shares with the workspace's other stations, and uses of theirs.
   sharing: Sharing;
+  /// Chats shared with other workspaces, and theirs shared with this one.
+  xshare: ChatShares;
   slack: SlackParts;
   /// Where the station is in its control plane while in a workspace.
   place(): { origin: string; workspace: string; station: string } | null;
@@ -176,9 +179,8 @@ export const AgentsLive = (control: Control) =>
       });
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), config: () => config.raw() });
       hub.setJobs(jobs);
-      hub.onPeer((station, request) => remote.ask(station, request));
       hub.onClose((session) => remote.closeSession(session));
-      remote.setInbox(async (peer, request) => {
+      const inbox = async (peer: string, request: any) => {
         switch (request?.method) {
           case READ:
             return forPeer(hub, peer, request);
@@ -193,7 +195,27 @@ export const AgentsLive = (control: Control) =>
           default:
             return fromPeer(hub, peer, request);
         }
+      };
+      remote.setInbox(inbox);
+      // Chats shared with other workspaces, and theirs shared with this one (docs/chat-share.md): their stations are
+      // asked and heard through it, for those chats only.
+      const xshare = new ChatShares({
+        data, store, cloud,
+        ask: (station, request) => remote.ask(station, request),
+        link: (chat) => hub.link(chat) ?? null,
+        title: (chat) => {
+          try {
+            return sender(hub, chat)[0];
+          } catch {
+            return chat;
+          }
+        },
+        touches: (request) => chatsTouched(hub, request),
+        inbox,
       });
+      hub.onPeer((station, request) => remote.ask(station, xshare.address(station, request)));
+      hub.onOutsideChats(() => xshare.borrowed());
+      remote.setOutside({ inside: (peer, request) => xshare.inside(peer, request), outside: (peer, request) => xshare.outside(peer, request) });
 
       const tools = [
         ...chatTools(hub),
@@ -288,6 +310,7 @@ export const AgentsLive = (control: Control) =>
       });
       remote.setShares((peer, request) => sharing!.handle(peer, request));
       sharing.start();
+      xshare.start();
       const slackView = {
         connection: (c: any) => slack.state(c.id),
         teams: (viewer: Viewer) => slack.overview(viewer.email).slackTeams,
@@ -483,6 +506,7 @@ export const AgentsLive = (control: Control) =>
           handing = true;
           await time.close();
           await sharing?.close();
+          await xshare.close();
           unlistenRule();
           notifier.close();
           // Slack's events go to the next process from now on.
@@ -509,6 +533,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, slack, overview: view, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station } : null; } });
+      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station } : null; } });
     }),
   );

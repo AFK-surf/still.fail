@@ -277,6 +277,18 @@ export function toOpened(r: Json): Opened {
   };
 }
 
+/// A chat shared with other workspaces (chat_shares, docs/chat-share.md).
+export type ChatShare = { to: { workspace: string; name: string }[]; write: boolean; by: string; at: number };
+
+export function toChatShare(r: Json): ChatShare {
+  let to: Json = [];
+  try {
+    to = JSON.parse(r.shared);
+  } catch {}
+  const list = Array.isArray(to) ? to.filter((t: Json) => typeof t?.workspace === "string").map((t: Json) => ({ workspace: t.workspace as string, name: String(t.name ?? t.workspace) })) : [];
+  return { to: list, write: r.write === 1, by: r.by, at: r.at };
+}
+
 export function toThread(r: Json): ThreadRow {
   return {
     id: r.id, surface: r.surface, channel: r.channel, threadTs: r.thread_ts, title: r.title, autoTitle: r.auto_title,

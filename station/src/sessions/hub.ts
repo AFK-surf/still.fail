@@ -66,6 +66,9 @@ export const newToken = () => randomBytes(24).toString("base64url");
 /// - unbound: the station is in no workspace (never joined one, or removed from it): it does no work until it is.
 export type Hold = "drain" | "unbound";
 
+/// A chat of another workspace shared with this one, as chat_list lists it (xshare/index.ts `Borrowed`).
+export type OutsideChat = { workspace: string; workspaceName: string; station: string; chat: string; title: string; link: string; write: boolean };
+
 /// Cold storage of archived sessions' files (archive.rs, footprint.rs): an archived, idle session's workspace and
 /// transcripts packed, and restored before its runtime starts again or when it is shown again. The station's is
 /// cold.ts; the default keeps nothing cold.
@@ -138,6 +141,7 @@ export class Hub {
   jobs: Jobs | null = null;
   private closedHook: ((key: string) => void) | null = null;
   private peersHook: ((station: string, request: Json) => Promise<Json>) | null = null;
+  private outsideHook: (() => OutsideChat[]) | null = null;
   readonly deps: SessionDeps;
 
   constructor(options: HubOptions) {
@@ -660,6 +664,15 @@ export class Hub {
 
   peers() {
     return this.peersHook;
+  }
+
+  /// Hooks chat_list up to the chats other workspaces share with this one (xshare/index.ts).
+  onOutsideChats(list: () => OutsideChat[]) {
+    this.outsideHook = list;
+  }
+
+  outsideChats(): OutsideChat[] {
+    return this.outsideHook?.() ?? [];
   }
 
   async shutdown() {

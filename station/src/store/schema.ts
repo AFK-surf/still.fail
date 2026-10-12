@@ -291,6 +291,15 @@ CREATE TABLE IF NOT EXISTS opened_chats (
   PRIMARY KEY (child_station, child)
 );
 CREATE INDEX IF NOT EXISTS opened_chats_by_key ON opened_chats (parent_station, parent, key, child_station);
+-- Chats shared with other workspaces (docs/chat-share.md, xshare/), by the session key their links name: to whom
+-- (to: JSON [{workspace, name}]), whether they may write in it, who changed it last and when.
+CREATE TABLE IF NOT EXISTS chat_shares (
+  session TEXT PRIMARY KEY,
+  shared TEXT NOT NULL,
+  write INTEGER NOT NULL DEFAULT 0,
+  by TEXT NOT NULL,
+  at INTEGER NOT NULL
+);
 `;
 
 /// Each message as it reads now: its latest edit's words, files and quotes.

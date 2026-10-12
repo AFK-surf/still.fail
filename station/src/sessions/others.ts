@@ -141,6 +141,31 @@ export async function forPeer(hub: Hub, peer: string, request: Json): Promise<Js
   throw new Error(`cannot read with ${JSON.stringify(tool)}`);
 }
 
+/// The chats (by the session keys their links name) a session.* request of another station reads or writes in: what
+/// must be shared with its workspace when it is not this one's (xshare/index.ts).
+export function chatsTouched(hub: Hub, request: Json): string[] {
+  const keyOf = (t: ThreadRow) => t.home ?? hub.store.threadSessions(t.id)[0]?.session ?? "";
+  const ofSession = (key: string) => hub.store.sessionThreads(key).map((t) => keyOf(t.thread));
+  switch (request?.method) {
+    case READ: {
+      const what = named(hub, String(request?.args?.chat ?? ""));
+      if (request?.tool === "chat_read") return [keyOf(what.type === "thread" ? what.thread : sessionThreadOf(hub, what.key).thread)];
+      return what.type === "session" ? ofSession(what.key) : [keyOf(what.thread)];
+    }
+    case "session.file": {
+      const what = named(hub, String(request?.chat ?? ""));
+      return what.type === "session" ? ofSession(what.key) : [keyOf(what.thread)];
+    }
+    case "session.put":
+    case "session.message": {
+      const to = typeof request?.to === "string" ? request.to : "";
+      if (hub.store.getSession(to) === null) return [];
+      return [keyOf(sessionThreadOf(hub, to).thread)];
+    }
+  }
+  return [];
+}
+
 /// str::splitn.
 export function splitN(s: string, sep: string, n: number): string[] {
   const parts: string[] = [];
@@ -236,9 +261,14 @@ export function chatList(hub: Hub, key: string, args: Args): string {
     if (last !== "") entry += `: ${line(last, 120)}`;
     lines.push(entry);
   }
-  if (lines.length === 0) return query === "" ? "No conversations on this station." : `No conversation matches ${JSON.stringify(query)}.`;
+  // Chats other workspaces share with this one: read with chat_read, written to with session_send where allowed.
+  const outside = hub.outsideChats().filter((c) => query === "" || `${c.title} ${c.workspaceName} ${c.link}`.toLowerCase().includes(query));
+  const shared = outside.slice(0, limit).map((c) => `- ${c.link} (shared from workspace "${line(c.workspaceName, 40)}", ${c.write ? "you may send to it" : "read only"}) "${line(c.title, 80)}"`);
+  const sharedMore = outside.length > shared.length ? `\n(${outside.length - shared.length} more shared; narrow query)` : "";
+  const sharedPart = shared.length > 0 ? `\n\nShared with this workspace by other workspaces (read with chat_read, by the link):\n${shared.join("\n")}${sharedMore}` : "";
+  if (lines.length === 0) return (query === "" ? "No conversations on this station." : `No conversation matches ${JSON.stringify(query)}.`) + sharedPart;
   const more = matched > lines.length ? `\n(${matched - lines.length} more; raise limit or narrow query)` : "";
-  return `${lines.join("\n")}${more}`;
+  return `${lines.join("\n")}${more}${sharedPart}`;
 }
 
 /// chat_read: the messages of any conversation of the station. `seen` gets the attachments of the messages given.

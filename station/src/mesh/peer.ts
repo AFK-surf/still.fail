@@ -34,16 +34,29 @@ async function readAll(stream: Stream, limit: number): Promise<Buffer> {
 
 const within = wall.within;
 
+/// Stations of other workspaces this one shares chats with (xshare/index.ts): whether it may ask one.
+export type Outside = { reaches(target: string, workspace: string): boolean };
+
+/// The workspace a request to `target` goes to: this one's, when it is one of its stations; another, when it is a
+/// station this one shares chats with (`outside`). Throws why not otherwise.
+function workspaceFor(cloud: Cloud, target: string, workspace: string | null, outside: Outside | undefined): string {
+  const own = cloud.state?.workspace ?? null;
+  if (workspace === null || workspace === own || outside === undefined) return member(cloud, target, workspace);
+  if (own === null || cloud.removed()) throw new Error("station is outside this workspace");
+  if (!outside.reaches(target, workspace)) throw new Error("that station is of another workspace that shares no chat with this one");
+  return workspace;
+}
+
 /// How this station asks the others: a connection kept per peer, dropped when a call fails other than by refusal.
 /// `addr`: where a peer is (its id and still.fail's relays, found by them; tests give its sockets).
-export function peerCall(endpoint: Endpoint, cloud: Cloud, addr: (id: string) => Addr = (id) => ({ id, relays: cloud.relays() })): PeerCall {
+export function peerCall(endpoint: Endpoint, cloud: Cloud, addr: (id: string) => Addr = (id) => ({ id, relays: cloud.relays() }), outside?: Outside): PeerCall {
   const connections = new Map<string, Connection>();
   return async (target, workspace, request) => {
     if (target === "" && request?.method === "peers") {
       const s = cloud.state;
       return { workspace: s?.workspace ?? "", stations: s?.peers ?? [], current: cloud.peersCurrent };
     }
-    const ws = member(cloud, target, workspace);
+    const ws = workspaceFor(cloud, target, workspace, outside);
     // Requests are bounded and retriable by their task key: a timeout is never "not run" (ask again by the key).
     const call = async () => {
       let conn = connections.get(target);
@@ -74,9 +87,17 @@ export function peerCall(endpoint: Endpoint, cloud: Cloud, addr: (id: string) =>
 }
 
 /// Another station's connection: each of its requests answered by the remote tasks, while it belongs.
+/// A station of another workspace is heard too while chats are shared across workspaces (`remote.hearsOutside`): each
+/// of its requests must name this workspace, and only what is shared with its own is answered (xshare/index.ts).
 export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) {
   const peer = conn.remoteId();
-  member(cloud, peer, null);
+  let inside = true;
+  try {
+    member(cloud, peer, null);
+  } catch (error) {
+    if (!remote.hearsOutside?.() || !cloud.state || cloud.removed() || peer === cloud.state.station) throw error;
+    inside = false;
+  }
   for (;;) {
     const stream = await within(60_000, conn.acceptBi(), "peer idle");
     if (stream === null) return;
@@ -84,8 +105,13 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) 
     try {
       const envelope = JSON.parse((await within(15_000, readAll(stream, MAX_MESSAGE), "peer request timed out")).toString("utf8"));
       if (typeof envelope?.workspace !== "string") throw new Error("workspace missing");
-      member(cloud, peer, envelope.workspace);
-      answer = { result: await remote.handle(envelope.workspace, peer, envelope.request ?? null) };
+      if (inside) {
+        member(cloud, peer, envelope.workspace);
+        answer = { result: await remote.handle(envelope.workspace, peer, envelope.request ?? null) };
+      } else {
+        if (cloud.removed() || envelope.workspace !== cloud.state?.workspace) throw new Error("station is outside this workspace");
+        answer = { result: await remote.handleOutside(peer, envelope.request ?? null) };
+      }
     } catch (error) {
       answer = { error: (error as Error).message };
     }

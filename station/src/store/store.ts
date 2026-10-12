@@ -19,12 +19,12 @@ import { liveClock } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { archiveText, readArchive, threadFile, writeCompressed } from "./archive.ts";
 import {
-  type Attachment, type AutoTitle, type CardAnswer, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
+  type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type ProcessRow, type ProfileStatus,
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
-  toMessage, toOpened, toSession, toSessionThread, toThread, toTurnSummary,
+  toChatShare, toMessage, toOpened, toSession, toSessionThread, toThread, toTurnSummary,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addWatchColumn } from "./schema.ts";
 import * as usage from "./usage.ts";
@@ -260,6 +260,34 @@ export class Store {
   /// The profile a runtime session of the session last ran on, if known.
   ranOn(key: string, id: string): string | null {
     return this.#one("SELECT profile FROM runtime_sessions WHERE session_key = ? AND id = ?", key, id)?.profile ?? null;
+  }
+
+  // ── chats shared with other workspaces (chat_shares; xshare/) ──
+
+  /// What a chat (by the session key its link names) is shared with, if anything.
+  chatShare(session: string): ChatShare | null {
+    const r = this.#one("SELECT * FROM chat_shares WHERE session = ?", session);
+    return r ? toChatShare(r) : null;
+  }
+
+  /// Every chat shared with another workspace, by its session key.
+  chatShares(): Map<string, ChatShare> {
+    return new Map(this.#all("SELECT * FROM chat_shares").map((r) => [r.session, toChatShare(r)]));
+  }
+
+  /// Shares a chat with other workspaces (`to`), or (none) no longer; its chat's views change.
+  setChatShare(session: string, to: { workspace: string; name: string }[], write: boolean, by: string): void {
+    this.#with((changes) => {
+      if (to.length === 0) this.#run("DELETE FROM chat_shares WHERE session = ?", session);
+      else {
+        this.#run(
+          "INSERT INTO chat_shares (session, shared, write, by, at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT (session) DO UPDATE SET shared = ?2, write = ?3, by = ?4, at = ?5",
+          session, JSON.stringify(to), write ? 1 : 0, by, this.now(),
+        );
+      }
+      for (const t of this.sessionThreads(session)) changes.push({ type: "thread", id: t.thread.id, entries: [] });
+      changes.push({ type: "session", key: session });
+    });
   }
 
   // ── chats agents opened (opened_chats; sessions/opened.ts) ──

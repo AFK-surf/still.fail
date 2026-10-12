@@ -529,6 +529,29 @@ export function archiveVerdict(s: Store, thread: number): Json | null {
   return v && typeof v === "object" ? { ...v, at: r.at } : null;
 }
 
+// ── chats shared with other workspaces (chat_shares) ──
+
+/// What each chat shared with other workspaces is shared with, by the session key its link names (none on a
+/// database from before the table).
+export function chatShares(s: Store): Map<string, { to: { workspace: string; name: string }[]; write: boolean; by: string; at: number }> {
+  let rows: Json[];
+  try {
+    rows = all(s, "SELECT * FROM chat_shares");
+  } catch {
+    return new Map();
+  }
+  return new Map(
+    rows.map((r) => {
+      let to: Json = [];
+      try {
+        to = JSON.parse(r.shared);
+      } catch {}
+      const list = Array.isArray(to) ? to.filter((t: Json) => typeof t?.workspace === "string").map((t: Json) => ({ workspace: t.workspace, name: String(t.name ?? t.workspace) })) : [];
+      return [r.session, { to: list, write: r.write === 1, by: r.by, at: r.at }];
+    }),
+  );
+}
+
 // ── pins, kept chats ──
 
 /// The chats a viewer pinned (by their session's key), with when.

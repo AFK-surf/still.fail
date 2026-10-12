@@ -238,7 +238,7 @@ export const CHAT_HISTORY = {
 export const CHAT_LIST = {
   name: "chat_list",
   description:
-    "List the conversations on this station (still.fail chats and Slack threads), the latest first: each with its address, title, agents (session keys) and last message. Use it to find a chat people refer to.",
+    "List the conversations on this station (still.fail chats and Slack threads), the latest first: each with its address, title, agents (session keys) and last message; then the chats other workspaces share with this one, by their links. Use it to find a chat people refer to.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -260,7 +260,7 @@ export const CHAT_LIST = {
 export const CHAT_READ = {
   name: "chat_read",
   description:
-    "Read the messages of any conversation on this station or, by its link, on another station of the workspace, not only your own, oldest first: the chat people refer to by its link.",
+    "Read the messages of any conversation on this station or, by its link, on another station of the workspace or a chat another workspace shares with this one, not only your own, oldest first: the chat people refer to by its link.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -296,7 +296,7 @@ export const CHAT_READ = {
 export const SESSION_SEND = {
   name: "session_send",
   description:
-    "Send a message to another session's agent: a chat on this station, or on another station of the workspace. It is posted in that chat for people to see, headed with a link to your chat, and its agent takes it like any message; it answers you the same way, so to wait for the answer end your turn waiting. Use chat_post for your own conversations.",
+    "Send a message to another session's agent: a chat on this station, on another station of the workspace, or one another workspace shares with this one to write to. It is posted in that chat for people to see, headed with a link to your chat, and its agent takes it like any message; it answers you the same way, so to wait for the answer end your turn waiting. Use chat_post for your own conversations.",
   inputSchema: {
     "type": "object",
     "properties": {

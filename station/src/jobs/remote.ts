@@ -150,6 +150,7 @@ export class Remote {
   private call: PeerCall | null = null;
   private inbox: Inbox | null = null;
   private shares: Inbox | null = null;
+  private xshare: { inside: Inbox; outside: Inbox } | null = null;
   /// Target-side requests, the sweep and withdrawals, one at a time.
   private serial: Promise<unknown> = Promise.resolve();
   /// The records followed now (outgoing tasks, closing sessions).
@@ -421,6 +422,25 @@ export class Remote {
     this.shares = shares;
   }
 
+  /// Where requests about chats shared across workspaces go (xshare.*, xshare/index.ts): `inside` those of this
+  /// workspace's stations, `outside` every request of a station that is not of it (the transport lets those through
+  /// only while there is one).
+  setOutside(handlers: { inside: Inbox; outside: Inbox }): void {
+    this.xshare = handlers;
+  }
+
+  /// Whether stations of other workspaces are heard at all.
+  hearsOutside(): boolean {
+    return this.xshare !== null;
+  }
+
+  /// A request of a station that is not of this workspace (the transport checked it names this workspace).
+  async handleOutside(peer: string, request: Json): Promise<Json> {
+    const xshare = this.xshare;
+    if (!xshare) throw new Error("station is starting");
+    return xshare.outside(peer, request);
+  }
+
   /// A request to another station of the workspace (session_send's messages, and this module's own).
   ask(station: string, request: Json): Promise<Json> {
     const call = this.call;
@@ -439,6 +459,11 @@ export class Remote {
     const method = text(request, "method");
     if (method === "describe") {
       return { protocol: 1, os: OS, arch: ARCH, tasks: this.allowed(peer), sessions: true, messages: true, reads: true, files: true, chats: true, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
+    }
+    if (method.startsWith("xshare.")) {
+      const xshare = this.xshare;
+      if (!xshare) throw new Error("station is starting");
+      return xshare.inside(peer, request);
     }
     if (method.startsWith("share.")) {
       const shares = this.shares;
