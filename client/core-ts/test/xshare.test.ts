@@ -234,14 +234,17 @@ test("a_chat_of_another_workspace_referred_to_is_found_by_the_menu_and_shared_wi
   const bodies = shareAnswers(host, undefined, trusted);
   const ui = core.connect();
   const values = new Map<number, unknown>();
-  // The `@` menu in W lists 丙's chats too, after W's own, saying whose.
-  subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "", elsewhere: true, limit: 8 });
+  // Nothing typed: the `@` menu in W lists only W's own.
+  subscribe(core, ui, 6, { topic: "chatSearch", scope: "ws", query: "", elsewhere: true, limit: 8 });
+  // Typed: 丙's chats whose title has it too, after W's own, saying whose.
+  subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "部署", elsewhere: true, limit: 8 });
   await host.settle();
   await host.time.pass(500);
   await host.settle();
   await host.time.pass(2000);
   await host.settle();
   apply(host, values);
+  assert.deepEqual(v(values, 6).items.map((i: J) => [i.station, i.outside ?? null]), [["ws/st", null]]);
   const items = v(values, 1).items;
   assert.deepEqual(items.map((i: J) => [i.station, i.outside ?? null]), [["ws/st", null], ["wc/c1", "丙"], ["wc/c2", "丙"]]);
   const item = items[1];
@@ -273,7 +276,7 @@ test("a_chat_already_shared_with_the_workspace_written_in_asks_nothing", async (
   wire.served.add("wc/c1").add("wc/c2");
   const ui = core.connect();
   const values = new Map<number, unknown>();
-  subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "", elsewhere: true, limit: 8 });
+  subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "部", elsewhere: true, limit: 8 });
   await host.settle();
   await host.time.pass(2000);
   await host.settle();

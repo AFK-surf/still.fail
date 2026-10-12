@@ -146,6 +146,23 @@ export function search(chats: J, query: string, station: string | null | undefin
   return { items: [...titled, ...rest].slice(0, limit ?? Infinity) };
 }
 
+/// At most this many chats of the viewer's other workspaces the `@` menu offers at once.
+export const OUTSIDE_SHOWN = 3;
+
+/// The `@` menu with the viewer's other workspaces' chats (`outside`, each saying whose), as they are offered without
+/// crowding this workspace's: none until something is typed; then only those whose title has it, after this workspace's
+/// whose title has it and before the rest of this workspace's, those already shared with it (`scope`) first, at most
+/// OUTSIDE_SHOWN.
+export function withOutside(local: J[], outside: J[], query: string, scope: string, limit: number | null | undefined): J[] {
+  const q = query.trim().toLowerCase();
+  if (q === "") return local;
+  const titled = (i: J) => typeof get(i, "title") === "string" && (get(i, "title") as string).toLowerCase().includes(q);
+  const shared = (i: J) => arr(get(get(i, "xshare"), "to")).includes(scope);
+  const theirs = outside.filter(titled);
+  const offered = [...theirs.filter(shared), ...theirs.filter((i) => !shared(i))].slice(0, OUTSIDE_SHOWN);
+  return [...local.filter(titled), ...offered, ...local.filter((i) => !titled(i))].slice(0, limit ?? Infinity);
+}
+
 /// The words a search looks for: what is typed, split at spaces, each to be found (case aside).
 export function terms(query: string): string[] {
   return [...new Set(query.toLowerCase().split(/\s+/).filter((w) => w !== ""))];
