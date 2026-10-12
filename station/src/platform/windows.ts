@@ -339,6 +339,9 @@ export const windows: Platform = {
   // A leader gone leaves nothing to know its tree by.
   groupOutlivesLeader: false,
   groupMemory,
+  processTable: async () => [],
+  cwdOf: async () => null,
+  memoryPressure: async () => null,
 
   paths: {
     separator: /[\\/]/,

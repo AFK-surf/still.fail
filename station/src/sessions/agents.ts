@@ -5,11 +5,16 @@
 // over (run/handover.json) and the next takes them up, runtimes and all, from their runners. Under the launcher the
 // next process is up before the previous one hands over: it takes up only once that one is gone (run/hub.json says
 // which process holds the sessions), and opens the agents' door only then, so no call reaches a hub without its session.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statfsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Context, Effect, Layer, Stream } from "effect";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { ClaudeDriver } from "../agents/claude.ts";
+import { runnerId } from "../agents/process.ts";
+import { existingRunners } from "../agents/runner.ts";
+import { GUARD_EVERY_MS, Guard } from "../ops/guard.ts";
+import { clean, within } from "../ops/paths.ts";
+import { platform } from "../platform/index.ts";
 import { CodexDriver } from "../agents/codex.ts";
 import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
 import { Remote } from "../jobs/remote.ts";
@@ -435,6 +440,41 @@ export const AgentsLive = (control: Control) =>
         }
       });
 
+      // What an agent could bring the station down by, the data disk filling and the memory running out, watched
+      // (ops/guard.ts): its commands paused or ended, never its runtime.
+      const guard = new Guard({
+        disk: () => {
+          try {
+            const s = statfsSync(data);
+            return { free: s.bavail * s.bsize, total: s.blocks * s.bsize };
+          } catch {
+            return null;
+          }
+        },
+        memoryPressure: () => platform.memoryPressure(),
+        processes: () => platform.processTable(),
+        runtimes: () => {
+          // A claude runner is one session's; a codex app-server serves its profile's (whose command is found by where it
+          // works, below).
+          const claude = new Map(store.listSessions().filter((s) => s.archivedAt === null).map((s) => [runnerId("claude", s.key), s.key]));
+          return existingRunners(data).map((r) => ({ pid: r.pid, session: claude.get(r.id) ?? null }));
+        },
+        jobs: () => store.listJobs(null).flatMap((j) => (j.state === "running" && j.pgid !== null ? [{ id: j.id, pgid: j.pgid, session: j.sessionKey, name: j.name }] : [])),
+        sessionAt: async (pid) => {
+          const cwd = await platform.cwdOf(pid);
+          if (cwd === null) return null;
+          const at = (dir: string | null) => dir !== null && dir !== "" && within(clean(cwd), clean(dir));
+          return store.listSessions().find((s) => s.archivedAt === null && (at(s.workspace) || at(s.cwd)))?.key ?? null;
+        },
+        atWork: () => [...hub.processes()].flatMap(([key, state]) => (state === "running" ? [key] : [])),
+        signal: (pid, signal) => process.kill(pid, signal),
+        stopJob: async (id) => void (await jobs.stop(id)),
+        tell: (session, text) => hub.notify(session, text),
+        now: () => hub.now(),
+        sleep: (ms) => time.sleep(ms),
+      });
+      time.every(GUARD_EVERY_MS, () => guard.look());
+
       // The archive review turned on, or given another model: the done chats no decision has answered are reviewed then,
       // not only the ones that end all_done from now on; and once after the start (the profiles' checks read by then).
       const reviewing = () => void reviewUndecided(hub).catch((error) => log.warn("hub", "reviewing done chats failed", { error: (error as Error).message }));
@@ -482,6 +522,7 @@ export const AgentsLive = (control: Control) =>
           if (handing) return;
           handing = true;
           await time.close();
+          guard.close();
           await sharing?.close();
           unlistenRule();
           notifier.close();

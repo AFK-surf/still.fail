@@ -6,7 +6,7 @@ import { cpus as cpuList, release, type as osType } from "node:os";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
-import type { Env, Found, Host, Platform } from "./index.ts";
+import type { Env, Found, Host, MemoryPressure, Platform, ProcessEntry } from "./index.ts";
 import { field, firstWord, output, parseF64, parseU64, procStatTicks, trim } from "./text.ts";
 
 const MACOS = process.platform === "darwin";
@@ -229,6 +229,48 @@ export const unix: Platform = {
       }
     } catch {}
     return rss;
+  },
+
+  async processTable() {
+    const { stdout } = await run("ps", ["-axo", "pid=,ppid=,pgid=,rss=,comm="], { maxBuffer: 16 << 20 });
+    const all: ProcessEntry[] = [];
+    for (const line of stdout.split("\n")) {
+      const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/.exec(line);
+      if (m) all.push({ pid: Number(m[1]), ppid: Number(m[2]), pgid: Number(m[3]), rssKb: Number(m[4]), command: m[5]!.trim() });
+    }
+    return all;
+  },
+  async cwdOf(pid) {
+    if (!MACOS) return real(`/proc/${pid}/cwd`);
+    try {
+      const { stdout } = await run("lsof", ["-a", "-p", String(pid), "-d", "cwd", "-Fn"]);
+      const line = stdout.split("\n").find((l) => l.startsWith("n"));
+      return line === undefined ? null : line.slice(1);
+    } catch {
+      return null;
+    }
+  },
+  /// On macOS the kernel's own level (kern.memorystatus_vm_pressure_level: 1, 2, 4), what it acts on itself; elsewhere
+  /// from the memory available (/proc/meminfo).
+  async memoryPressure(): Promise<MemoryPressure | null> {
+    if (MACOS) {
+      try {
+        const { stdout } = await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"]);
+        const level = Number(stdout.trim());
+        return level >= 4 ? "critical" : level >= 2 ? "warn" : level >= 1 ? "normal" : null;
+      } catch {
+        return null;
+      }
+    }
+    try {
+      const info = readFileSync("/proc/meminfo", "utf8");
+      const total = field(info, "MemTotal");
+      if (total <= 0) return null;
+      const left = field(info, "MemAvailable") / total;
+      return left < 0.05 ? "critical" : left < 0.1 ? "warn" : "normal";
+    } catch {
+      return null;
+    }
   },
 
   paths: {
