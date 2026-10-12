@@ -17,6 +17,12 @@ export const shell = style({
 });
 export const main = style({
   position: "relative", minWidth: "0", minHeight: "0", overflow: "hidden", display: "flex", flexDirection: "column",
+  selectors: {
+    // The desktop app has no title bar: the top row of every page drags the window, whether it has a bar (styles/sidebar.css.ts
+    // pageBar) or not (a new chat, settings, the archive…). Under the page, so the page still takes the pointer; what is
+    // pressed in that row does not drag (below).
+    "[data-desktop] &::before": { content: '""', position: "absolute", zIndex: -1, top: 0, left: 0, right: 0, height: 44, WebkitAppRegion: "drag" },
+  },
   "@media": {
     "(max-width: 700px)": {
       selectors: {
@@ -24,6 +30,9 @@ export const main = style({
       },
     },
   },
+});
+globalStyle(`[data-desktop] ${main} :is(a, button, input, select, textarea, label, summary, [role="button"], [role="tab"], [role="link"], [role="menuitem"], [tabindex]:not([tabindex="-1"]), [contenteditable])`, {
+  WebkitAppRegion: "no-drag",
 });
 export const gate = style({
   height: "100%", display: "grid", placeContent: "center", justifyItems: "center", gap: "8px", padding: "24px",
