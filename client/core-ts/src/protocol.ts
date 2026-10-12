@@ -69,7 +69,7 @@ export const TOPICS: Record<string, Spec> = {
   connection: { station: S },
   draft: { station: S, chat: S },
   notify: { workspace: ["string", "skip"] },
-  chatSearch: { scope: S, query: ["string", "def"], station: ["string", "skip"], exclude: ["string", "skip"], limit: ["u32", "skip"], messages: ["u32", "skip"] },
+  chatSearch: { scope: S, query: ["string", "def"], station: ["string", "skip"], exclude: ["string", "skip"], limit: ["u32", "skip"], messages: ["u32", "skip"], elsewhere: ["bool", "skipFalse"] },
   archivedRows: { station: S },
   archive: { scope: S },
   newChat: { scope: S },

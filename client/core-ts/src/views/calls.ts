@@ -302,7 +302,7 @@ export class ViewCalls {
     };
     handlers.chatRef = (_inner, call) => {
       const c = call as Of<"chatRef">;
-      return Effect.sync(() => ({ mark: refs.mark(inner.data, c.base ?? inner.host.cloudOrigin(), c.station, c.id, c.title) }));
+      return Effect.sync(() => ({ mark: refs.mark(inner.data, c.base ?? inner.host.cloudOrigin(), c.station, c.id, c.title, c.into) }));
     };
     handlers.chatRefsKeep = (_inner, call) => {
       const c = call as Of<"chatRefsKeep">;

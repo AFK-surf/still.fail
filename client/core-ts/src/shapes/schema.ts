@@ -1227,7 +1227,13 @@ export const SHAPES: Record<string, Shape> = {
     ["stateText", opt("String"), { doc: "Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a\ncard waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with\nno card waiting, or with nothing to say." }],
     ["stateAbout", opt("i64"), { client: opt("I54"), doc: "The message `stateText` is about (a seq in this chat): the one the agent's state names. Opening the chat from\nthe line may go to it. Absent when none, and for a line that asks for a decision (its chat leads to it: `ChatView.asks`)." }],
     ["tone", opt("String"), { doc: "Its mark, the most urgent first: alert (an agent failed), wait (a card waits, not dismissed by the viewer; or an\nagent needs them: need_help), busy (at work), done (something unread). Absent for none." }],
+    ["xshare", opt("RowShare"), { doc: "The other workspaces it is shared with (docs/chat-share.md). Absent when none, and from stations before sharing." }],
+    ["outside", opt("String"), { doc: "Another workspace's chat, its name: the `@` menu's `elsewhere` lists them after the workspace's own. Absent for\nthe workspace's own." }],
   ], { doc: "An item of the sidebar, as its station puts it together for the viewer, and where it is." }),
+  RowShare: struct([
+    ["to", vec("String"), { doc: "The workspaces' ids." }],
+    ["write", "bool", { doc: "Their agents may send messages in it." }],
+  ], { doc: "Whom a chat is shared with, as its row says (`ChatItem.xshare`)." }),
   RowWatch: struct([
     ["text", "String"],
     ["ask", "String"],

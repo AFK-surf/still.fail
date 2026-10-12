@@ -26,13 +26,15 @@ type Asked = { station: string; method: string; path: string; body: J };
 class Wire implements StationWire {
   readonly asked: Asked[] = [];
   readonly down = new Set<string>();
+  /// Stations answered as `ws/st` is (by the fixture), besides it.
+  readonly served = new Set<string>(["ws/st"]);
   readonly #host: HostWire;
   constructor(host: FakeHost) {
     this.#host = new HostWire(host);
   }
   request(station: StationAddr, head: RequestHead, body: Uint8Array) {
     const at = station.toString();
-    if (at === "ws/st") return this.#host.request(station, head, body);
+    if (this.served.has(at)) return this.#host.request(station, head, body);
     const path = head.path.replace("/admin/api", "");
     if (!(head.method === "PUT" && path === "/xshare/hosts")) return Effect.fail(CoreError.host("连不上"));
     this.asked.push({ station: at, method: head.method, path, body: json(body) });
@@ -45,9 +47,9 @@ class Wire implements StationWire {
 }
 
 /// The viewer is in three workspaces: the chat's (`ws`, W, as `role`), 甲 (`wa`, one station) and 丙 (`wc`, two).
-async function setUp(role = "admin", thread: J = threadView(7, 3)) {
+async function setUp(role = "admin", thread: J = threadView(7, 3), chats?: J[]) {
   let wire: Wire | null = null;
-  const s = await started({ ...base(), "GET /threads": [thread] }, 0, (host) => (wire = new Wire(host)), ({ host }) => {
+  const s = await started({ ...base(), "GET /threads": [thread], ...(chats ? { "GET /chats": chats } : {}) }, 0, (host) => (wire = new Wire(host)), ({ host }) => {
     const fetch = host.fetch.bind(host);
     host.fetch = (req: HttpRequest) => {
       const path = req.url.replace(ORIGIN, "");
@@ -59,7 +61,7 @@ async function setUp(role = "admin", thread: J = threadView(7, 3)) {
         }));
       }
       if (path === "/v1/workspaces/wa") return Effect.succeed(jsonResponse(200, { id: "wa", role: "member", stations: [{ id: "a1", name: "A1", last_seen: null }] }));
-      if (path === "/v1/workspaces/wc") return Effect.succeed(jsonResponse(200, { id: "wc", role: "member", stations: [{ id: "c1", name: "C1", last_seen: null }, { id: "c2", name: "C2", last_seen: null }] }));
+      if (path === "/v1/workspaces/wc") return Effect.succeed(jsonResponse(200, { id: "wc", role: "member", stations: [{ id: "c1", name: "C1", online: true, last_seen: null }, { id: "c2", name: "C2", online: true, last_seen: null }] }));
       return fetch(req);
     };
   });
@@ -67,10 +69,15 @@ async function setUp(role = "admin", thread: J = threadView(7, 3)) {
   return { ...s, wire: wire! };
 }
 
-/// The chat's station: `PUT /sessions/k1/xshare` answered as it would (the shares asked, `at` 5), its bodies kept.
-function shareAnswers(host: FakeHost, answer?: (body: J) => unknown) {
+/// The chat's station: `PUT /sessions/k1/xshare` answered as it would (the shares asked, `at` 5), its bodies kept;
+/// `PUT /xshare/hosts` (`trusted`) answered too, what it was told kept.
+function shareAnswers(host: FakeHost, answer?: (body: J) => unknown, trusted: J[] = []) {
   const bodies: J[] = [];
   stationReplies(host, (req) => {
+    if (req.method === "PUT" && req.url === `${ORIGIN}/admin/api/xshare/hosts`) {
+      trusted.push(json(req.body));
+      return { ok: true };
+    }
     if (!(req.method === "PUT" && req.url === `${ORIGIN}/admin/api/sessions/k1/xshare`)) return undefined;
     const body = json(req.body);
     bodies.push(body);
@@ -218,3 +225,70 @@ test("a_member_sees_how_it_is_shared_and_its_starter_may_change_it", async () =>
   assert.equal(v(values, 1).xshare.session, "k0", "a chat of its own is kept by its home session");
   core.close();
 });
+
+test("a_chat_of_another_workspace_referred_to_is_found_by_the_menu_and_shared_with_the_one_it_is_sent_in", async () => {
+  // Written in W (`ws/st`), referring to a chat of 丙 (`wc`), whose stations answer as the fixture does.
+  const { host, core, wire } = await setUp("admin", threadView(7, 3), [row()]);
+  wire.served.add("wc/c1").add("wc/c2");
+  const trusted: J[] = [];
+  const bodies = shareAnswers(host, undefined, trusted);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  // The `@` menu in W lists 丙's chats too, after W's own, saying whose.
+  subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "", elsewhere: true, limit: 8 });
+  await host.settle();
+  await host.time.pass(500);
+  await host.settle();
+  await host.time.pass(2000);
+  await host.settle();
+  apply(host, values);
+  const items = v(values, 1).items;
+  assert.deepEqual(items.map((i: J) => [i.station, i.outside ?? null]), [["ws/st", null], ["wc/c1", "丙"], ["wc/c2", "丙"]]);
+  const item = items[1];
+  // Picked: its mark kept for W's messages too.
+  call(core, ui, 2, "chat.ref", { station: item.station, id: item.id, title: item.title, base: ORIGIN, into: "ws" });
+  await host.settle();
+  const mark = answerOf(host, values, 2).ok.mark;
+  call(core, ui, 3, "chat.outsideRefs", { station: "ws/st", text: `看看 ${mark} 怎么说` });
+  await host.settle();
+  const found = answerOf(host, values, 3).ok.chats;
+  assert.deepEqual(found.map((c: J) => [c.station, c.id, c.workspace, c.workspaceName, c.may]), [["wc/c1", item.id, "wc", "丙", false]]);
+  // Its own workspace's chats are never asked about.
+  call(core, ui, 4, "chat.outsideRefs", { station: "wc/c1", text: mark });
+  await host.settle();
+  assert.deepEqual(answerOf(host, values, 4).ok.chats, []);
+  // Shared with W (as it was otherwise), W told through the station the message goes to.
+  call(core, ui, 5, "chat.xshareAdd", { station: "wc/c1", id: item.id, workspace: "ws", prefer: "ws/st" });
+  await host.settle();
+  const added = answerOf(host, values, 5);
+  assert.ok("ok" in added, JSON.stringify(added));
+  assert.equal(bodies.length, 1);
+  assert.deepEqual([bodies[0].to.map((w: J) => w.workspace), bodies[0].write], [["ws"], false]);
+  assert.deepEqual(trusted.map((t) => [t.workspace, t.name, t.station]), [["wc", "丙", "c1"]]);
+  core.close();
+});
+
+test("a_chat_already_shared_with_the_workspace_written_in_asks_nothing", async () => {
+  const { host, core, wire } = await setUp("admin", threadView(7, 3), [row({ xshare: { to: ["ws"], write: false } })]);
+  wire.served.add("wc/c1").add("wc/c2");
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "", elsewhere: true, limit: 8 });
+  await host.settle();
+  await host.time.pass(2000);
+  await host.settle();
+  apply(host, values);
+  const item = v(values, 1).items.find((i: J) => i.station === "wc/c1");
+  assert.deepEqual(item.xshare, { to: ["ws"], write: false });
+  call(core, ui, 2, "chat.ref", { station: item.station, id: item.id, title: item.title, base: ORIGIN, into: "ws" });
+  await host.settle();
+  const mark = answerOf(host, values, 2).ok.mark;
+  call(core, ui, 3, "chat.outsideRefs", { station: "ws/st", text: mark });
+  await host.settle();
+  assert.deepEqual(answerOf(host, values, 3).ok.chats, []);
+  core.close();
+});
+
+
+/// A chat's row as its station lists it (`GET /chats`).
+const row = (more: J = {}) => ({ id: "k1", session: "k1", thread: 7, title: "部署", agents: [], last: null, unread: false, mine: true, lastActiveAt: 1, connect: null, origin: null, ...more });

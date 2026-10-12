@@ -1292,6 +1292,15 @@ data class RowDecision (
 	val text: String? = null
 )
 
+/// Whom a chat is shared with, as its row says (`ChatItem.xshare`).
+@Serializable
+data class RowShare (
+	/// The workspaces' ids.
+	val to: List<String>,
+	/// Their agents may send messages in it.
+	val write: Boolean
+)
+
 /// An item of the sidebar, as its station puts it together for the viewer, and where it is.
 @Serializable
 data class ChatItem (
@@ -1356,7 +1365,12 @@ data class ChatItem (
 	val stateAbout: Long? = null,
 	/// Its mark, the most urgent first: alert (an agent failed), wait (a card waits, not dismissed by the viewer; or an
 	/// agent needs them: need_help), busy (at work), done (something unread). Absent for none.
-	val tone: String? = null
+	val tone: String? = null,
+	/// The other workspaces it is shared with (docs/chat-share.md). Absent when none, and from stations before sharing.
+	val xshare: RowShare? = null,
+	/// Another workspace's chat, its name: the `@` menu's `elsewhere` lists them after the workspace's own. Absent for
+	/// the workspace's own.
+	val outside: String? = null
 )
 
 /// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日); or, above them all, the chats the viewer pinned

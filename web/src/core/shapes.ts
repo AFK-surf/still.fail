@@ -1271,6 +1271,14 @@ export interface RowDecision {
 	text?: string;
 }
 
+/** Whom a chat is shared with, as its row says (`ChatItem.xshare`). */
+export interface RowShare {
+	/** The workspaces' ids. */
+	to: string[];
+	/** Their agents may send messages in it. */
+	write: boolean;
+}
+
 /** An item of the sidebar, as its station puts it together for the viewer, and where it is. */
 export interface ChatItem {
 	id: string;
@@ -1349,6 +1357,13 @@ export interface ChatItem {
 	 * agent needs them: need_help), busy (at work), done (something unread). Absent for none.
 	 */
 	tone?: string;
+	/** The other workspaces it is shared with (docs/chat-share.md). Absent when none, and from stations before sharing. */
+	xshare?: RowShare;
+	/**
+	 * Another workspace's chat, its name: the `@` menu's `elsewhere` lists them after the workspace's own. Absent for
+	 * the workspace's own.
+	 */
+	outside?: string;
 }
 
 /**

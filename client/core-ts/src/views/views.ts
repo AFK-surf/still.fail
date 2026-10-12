@@ -578,6 +578,18 @@ export class Views implements Owner {
       topics.push({ topic: "link", station: s.address });
       if (s.online) topics.push(...perStation(s.address));
     }
+    // The `@` menu's other workspaces (`elsewhere`): their chats too, while it is open.
+    if (view.topic === "chatSearch" && view.elsewhere === true) {
+      topics.push({ topic: "workspaces" });
+      for (const place of this.#core.places?.() ?? []) {
+        if (place.id === scope) continue;
+        topics.push({ topic: "workspace", workspace: place.id });
+        for (const s of this.stations(place.id) ?? []) {
+          topics.push({ topic: "link", station: s.address });
+          if (s.online) topics.push(...perStation(s.address));
+        }
+      }
+    }
     return topics;
   }
 
@@ -713,6 +725,17 @@ export class Views implements Owner {
         const chats = this.#chats(view.scope as string, false, false);
         if (chats === undefined || !("ok" in chats)) return chats;
         const found = refs.search(chats.ok, view.query as string, view.station as string | undefined, view.exclude as string | undefined, view.limit as number | undefined);
+        // Then (`elsewhere`, the `@` menu) those of the viewer's other workspaces, each saying whose.
+        if (view.elsewhere === true) {
+          const others: J[] = [];
+          for (const place of this.#core.places?.() ?? []) {
+            if (place.id === view.scope) continue;
+            const theirs = this.#chats(place.id, false, false);
+            if (theirs === undefined || !("ok" in theirs)) continue;
+            for (const item of arr(refs.search(theirs.ok, view.query as string, undefined, undefined, view.limit as number | undefined).items)) others.push({ ...item, outside: place.name });
+          }
+          found.items = [...arr(found.items), ...others.slice(0, (view.limit as number | undefined) ?? Infinity)];
+        }
         if (typeof view.messages === "number" && view.messages > 0) {
           found.messages = this.#foundMessages(chats.ok, view);
           found.words = refs.terms(view.query as string);

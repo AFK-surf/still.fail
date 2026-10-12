@@ -493,6 +493,12 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
   // When the viewer pinned each to the top of their list, or null.
   const pins = store.pins(s, viewer.email);
   for (const row of rows) row.pinned = typeof row.id === "string" ? (pins.get(row.id) ?? null) : null;
+  // Which other workspaces each is shared with (docs/chat-share.md), only those that are.
+  const shares = store.chatShares(s);
+  for (const row of rows) {
+    const shared = typeof row.id === "string" ? shares.get(row.id) : undefined;
+    if (shared) row.xshare = { to: shared.to.map((t) => t.workspace), write: shared.write };
+  }
   return rows;
 }
 

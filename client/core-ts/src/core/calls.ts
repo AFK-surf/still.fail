@@ -68,7 +68,9 @@ export type Call =
   | { kind: "draftPut"; station: string; chat: string; draft: unknown }
   | { kind: "attend"; call: AttendCall }
   | { kind: "draftGet"; station: string; chat: string }
-  | { kind: "chatRef"; station: string; id: string; title: string; base: string | null }
+  | { kind: "chatRef"; station: string; id: string; title: string; base: string | null; into: string | null }
+  | { kind: "chatOutsideRefs"; station: string; text: string }
+  | { kind: "chatXshareAdd"; station: string; id: string; workspace: string; prefer: string | null }
   | { kind: "chatRefsKeep"; links: [string, string][] }
   | { kind: "choose"; name: string; params: Record<string, unknown> }
   | { kind: "prefsSet"; patch: unknown; fill: boolean }
@@ -130,6 +132,7 @@ export function counts(call: Call, name: string): boolean {
     case "chatArchive":
     case "chatChange":
     case "chatXshare":
+    case "chatXshareAdd":
     case "chatRetry":
     case "chatRetryIn":
     case "chatDiscard":
@@ -456,8 +459,25 @@ export function parseCall(name: string, params: unknown): Call {
         ["id", S, "req"],
         ["title", S, "req"],
         ["base", S, "opt"],
+        ["into", S, "opt"],
       ]);
-      return { kind: "chatRef", station: p.station as string, id: p.id as string, title: p.title as string, base: p.base as string | null };
+      return { kind: "chatRef", station: p.station as string, id: p.id as string, title: p.title as string, base: p.base as string | null, into: p.into as string | null };
+    }
+    case "chat.outsideRefs": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["text", S, "req"],
+      ]);
+      return { kind: "chatOutsideRefs", station: p.station as string, text: p.text as string };
+    }
+    case "chat.xshareAdd": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["id", S, "req"],
+        ["workspace", S, "req"],
+        ["prefer", S, "opt"],
+      ]);
+      return { kind: "chatXshareAdd", station: p.station as string, id: p.id as string, workspace: p.workspace as string, prefer: p.prefer as string | null };
     }
     case "chat.refs":
       return { kind: "chatRefsKeep", links: read(params, [["links", "pairs", "req"]]).links as [string, string][] };

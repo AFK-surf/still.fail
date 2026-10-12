@@ -252,9 +252,14 @@ test("the pages share a chat (its starter or a manager) and say which station to
   const reader = openStore(dir);
   const view = threadView(reader, { sub: "a", email: "a@x", name: "A", role: "member", workspace: W1, device: "d" }, String(chat.id), "en");
   assert.deepEqual([view.xshare.to, view.xshare.write], [[{ workspace: W2, name: "Home" }], true]);
+  // The chats' rows say it too, by the workspaces' ids.
+  const { chats } = await import("../src/read/views.ts");
+  const viewer = { sub: "a", email: "a@x", name: "A", role: "member", workspace: W1, device: "d" };
+  assert.deepEqual(chats(reader, viewer, false).find((r: any) => r.id === "s1")?.xshare, { to: [W2], write: true });
   // A manager may stop it.
   assert.deepEqual(await ask("c@x", "admin", "PUT", "/sessions/s1/xshare", { to: [], write: false }), [200, { xshare: null }]);
   assert.equal(threadView(reader, { sub: "a", email: "a@x", name: "A", role: "member", workspace: W1, device: "d" }, String(chat.id), "en").xshare, null);
+  assert.equal(chats(reader, viewer, false).find((r: any) => r.id === "s1")?.xshare, undefined);
   // Any member says this workspace takes chats from a station of another.
   assert.deepEqual(await ask("b@x", "member", "PUT", "/xshare/hosts", { workspace: W2, name: "Home", station: P, stationName: "laptop" }), [200, { ok: true }]);
   assert.equal((await ask("b@x", "member", "PUT", "/xshare/hosts", { workspace: W1, name: "self", station: P }))[0], 400);

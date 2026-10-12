@@ -49,11 +49,12 @@ function links(data: Data, workspace: string): [string, string][] {
   return [...record(data, KEY).filter(([, l]) => workspaceOf(l) === workspace), ...record(data, `${KEY}:${workspace}`)];
 }
 
-/// Keeps these links (title, link), each with its workspace's, the latest, the oldest going past 200.
-export function keep(data: Data, added: Iterable<[string, string]>): void {
+/// Keeps these links (title, link), each with its workspace's (or, `into`, with that workspace's: a chat of another
+/// workspace referred to from one of its chats), the latest, the oldest going past 200.
+export function keep(data: Data, added: Iterable<[string, string]>, into?: string | null): void {
   const by = new Map<string, [string, string][]>();
   for (const [ti, l] of added) {
-    const workspace = workspaceOf(l);
+    const workspace = into ?? workspaceOf(l);
     if (workspace === null || ti === "") continue;
     let all = by.get(workspace);
     if (!all) {
@@ -69,11 +70,36 @@ export function keep(data: Data, added: Iterable<[string, string]>): void {
   }
 }
 
-/// The mark for a chat picked, its link kept until the mark is sent.
-export function mark(data: Data, base: string, station: string, id: string, fullTitle: string): string {
+/// The mark for a chat picked, its link kept until the mark is sent: with the chat's workspace, and with `into` (the
+/// workspace written in) when that is another.
+export function mark(data: Data, base: string, station: string, id: string, fullTitle: string, into?: string | null): string {
   const ti = title(fullTitle);
-  keep(data, [[ti, link(base, station, id)]]);
+  const l = link(base, station, id);
+  keep(data, [[ti, l]]);
+  if (into != null && into !== workspaceOf(l)) keep(data, [[ti, l]], into);
   return `@[${ti}]`;
+}
+
+/// The chats a text written on `station` refers to by its marks, as links (each once, in order).
+export function marked(data: Data, station: string, text: string): string[] {
+  const all = links(data, ofAddress(station));
+  const out: string[] = [];
+  for (const m of text.matchAll(/@\[([^\]\n]{1,120})\]/g)) {
+    const hit = [...all].reverse().find(([x]) => x === m[1]);
+    if (hit && !out.includes(hit[1])) out.push(hit[1]);
+  }
+  return out;
+}
+
+/// The station (`<workspace>/<station>`) and chat a chat's page link names, or null.
+export function linkedChat(l: string): { station: string; id: string } | null {
+  const m = /\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/chats\/([^/?#\s]+)/.exec(l);
+  if (!m) return null;
+  try {
+    return { station: `${m[1]}/${m[2]}`, id: decodeURIComponent(m[3]!) };
+  } catch {
+    return null;
+  }
 }
 
 /// What is written in a chat on `station`, its marks made links to chats of its workspace.
