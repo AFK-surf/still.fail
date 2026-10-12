@@ -8,10 +8,10 @@
 
 下面 B 是 chat 所在的 workspace，X 是 chat 所在的那台 station（host），A 是被分享到的 workspace。
 
-## 开关
+## 入口
 
-- chat 的「…」里有「分享给其他 workspace」：勾选给哪几个 workspace（只列自己也在的），再加一个「可以发消息」，默认关（只能看）。全部取消就是停止分享。
-- 能改的人：chat 的发起人，或 B 的 owner/admin。
+- **在 A 的 chat 里 @ 它**（2026-10-13 用户定的主入口）：输入框的 `@` 菜单先列本 workspace 的 chat，后面接着列自己所在的其他 workspace 的 chat，标上来源 workspace 的名字（core 的 `chatSearch` 带 `elsewhere`）。选中后照常插入引用；回车发送时，如果引用的 chat 还没分享给 A，先弹窗（手机是底部面板）「分享对话：发送后，这个 workspace 里的 agent 就能读到：…」，再按一次回车或点「分享并发送」就分享好再发出（core 的 `chat.outsideRefs` 列出要分享的，`chat.xshareAdd` 逐个加上 A，先信任发消息的那台 A station）。没有权限分享的（不是它的发起人，也不是 B 的 owner/admin）会写明，按钮变成「仍然发送」。
+- chat 的「对话信息」里也有「分享给其他 workspace」：看现在分享给了谁、改成「可以发消息」、取消分享。可以勾选自己所在的其他 workspace，「可以发消息」默认关（只能看）。能改的人：chat 的发起人，或 B 的 owner/admin。
 - 分享的单位是一个 chat：它的消息、附件，和它的 agent 的执行历史。
 
 ## 谁记什么
@@ -62,10 +62,10 @@
 
 ## 界面
 
-- PC：chat 页右上「…」菜单多一项「分享给其他 workspace」，后面写现状（如「A、C · 只读」）；点了弹窗，列出自己所在的其他 workspace 勾选，下面一个「可以发消息」开关。
-- 手机 web 和安卓：chat 的「…」页多一行，同样内容，点开底部面板。
-- 只有自己在不止一个 workspace 时才出现。不是发起人也不是 admin 时只显示现状、不能改。
-- thread 视图多一个可选字段 `xshare: {to: [{workspace, name}], write, by, at} | null`。旧 station 不给，界面当没有分享。
+- `@` 菜单：其他 workspace 的 chat 在本 workspace 的后面，标题后面一个灰胶囊写来源 workspace 的名字（和别的 station 的 chat 写 station 名一样）。发出去的引用也这样标。
+- 发送前的确认：PC 弹窗，回车确认；手机 web 和安卓底部面板。
+- 「对话信息」里的一行：PC 在信息浮层末尾，手机在「…」页；点开 PC 弹窗、手机底部面板。只有自己在不止一个 workspace 时才出现。
+- thread 视图多一个可选字段 `xshare: {to: [{workspace, name}], write, by, at} | null`，chat 列表的行多一个 `xshare: {to: [workspace id], write}`（没分享时没有）。旧 station 不给，界面当没有分享。
 
 ## 兼容和部署
 
