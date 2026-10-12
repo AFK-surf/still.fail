@@ -368,7 +368,7 @@ test("a session's own chat is archived with it, a chat of its own alone; anythin
   assert.equal(row().shownAt, null, "brought back by what was said, not by hand");
   assert.equal(thread(own.id).hiddenAt, null);
 
-  store.setThreadHidden(other.id, true, MANUAL);
+  store.setThreadHidden(other.id, true, AUTO);
   assert.ok(thread(other.id).hiddenAt !== null);
   assert.equal(row().archivedAt, null, "its sessions stay");
   assert.ok(existsSync(archiveFile(store, other.id)), "out of lists: in its archive file");
@@ -376,6 +376,12 @@ test("a session's own chat is archived with it, a chat of its own alone; anythin
   // Someone writes in it: shown again.
   say(store, other.id, "2.4", "person", "local", "again");
   assert.equal(thread(other.id).hiddenAt, null);
+  // Hidden by hand, it stays hidden.
+  store.setThreadHidden(other.id, true, MANUAL);
+  assert.ok(store.manuallyArchived(other.id));
+  say(store, other.id, "2.41", "agent", "a", "late");
+  assert.ok(thread(other.id).hiddenAt !== null);
+  store.setThreadHidden(other.id, false, MANUAL);
 
   // Archived by hand, nothing said brings it back: it takes no messages.
   store.setArchived("a", true, MANUAL);
