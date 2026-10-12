@@ -44,7 +44,7 @@ export type RunningJob = { id: string; pgid: number; session: string; name: stri
 export type Command = { pids: number[]; rssKb: number; session: string | null; what: string; job: RunningJob | null };
 
 /// The agents' commands among the machine's processes: each job's group and what its members started, and each shell a
-/// runtime started with what it started. A runtime's other children (its MCP servers) are its own, not commands.
+/// runtime started with what it started. A runtime's other processes (its MCP servers) are its own, not commands.
 export function commands(table: ProcessEntry[], runtimes: Runtime[], jobs: RunningJob[]): Command[] {
   const children = new Map<number, ProcessEntry[]>();
   for (const p of table) if (p.ppid !== p.pid) children.set(p.ppid, [...(children.get(p.ppid) ?? []), p]);
@@ -78,8 +78,15 @@ export function commands(table: ProcessEntry[], runtimes: Runtime[], jobs: Runni
     if (members.length > 0) found.push(command(members, job.session, job));
   }
   for (const runtime of runtimes) {
-    for (const child of children.get(runtime.pid) ?? []) {
-      if (!SHELLS.has(programName(child.command))) continue;
+    // The first shell down each line from the runtime: one started by it is under what it runs as (codex's npm
+    // launcher runs its binary, which starts the shells).
+    const stack = [...(children.get(runtime.pid) ?? [])];
+    while (stack.length > 0) {
+      const child = stack.pop()!;
+      if (!SHELLS.has(programName(child.command))) {
+        stack.push(...(children.get(child.pid) ?? []));
+        continue;
+      }
       const members = under([child]);
       if (members.length > 0) found.push(command(members, runtime.session, null));
     }

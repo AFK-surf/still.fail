@@ -10,8 +10,8 @@ const MB = 1024; // kB
 
 const p = (pid: number, ppid: number, pgid: number, rssKb: number, command: string): ProcessEntry => ({ pid, ppid, pgid, rssKb, command });
 
-// A claude runtime (10) with an MCP server (11) and a shell (20) running a build (21, 22); a codex app-server (30)
-// with a shell (40); a job (pgid 50) whose shell started a browser (51); the station (1) and what is not the agents'.
+// A claude runtime (10) with an MCP server (11) and a shell (20) running a build (21, 22); a codex app-server (30, its
+// npm launcher, running the binary 31) with a shell (40); a job (pgid 50) whose shell started a browser (51); the station (1) and what is not the agents'.
 const TABLE: ProcessEntry[] = [
   p(1, 0, 1, 200 * MB, "node"),
   p(9, 1, 9, 5 * MB, "/Users/a/.stillfail/app/station/stillfail-runner"),
@@ -21,8 +21,9 @@ const TABLE: ProcessEntry[] = [
   p(21, 20, 20, 900 * MB, "cargo"),
   p(22, 21, 20, 400 * MB, "rustc"),
   p(29, 1, 29, 5 * MB, "stillfail-runner"),
-  p(30, 29, 30, 200 * MB, "codex"),
-  p(40, 30, 40, 2 * MB, "-bash"),
+  p(30, 29, 30, 60 * MB, "node"),
+  p(31, 30, 30, 200 * MB, "/opt/codex/bin/codex"),
+  p(40, 31, 40, 2 * MB, "-bash"),
   p(41, 40, 40, 100 * MB, "node"),
   p(50, 1, 50, 2 * MB, "/bin/sh"),
   p(51, 50, 50, 1200 * MB, "/Applications/Chromium.app/Contents/MacOS/Chromium"),
@@ -42,7 +43,7 @@ test("the agents' commands are their runtimes' shells and their jobs, with all u
   assert.equal(by(41)!.session, null);
   assert.equal(by(41)!.what, "node");
   assert.equal(by(51)!.what, 'job "preview"');
-  for (const pid of [1, 9, 10, 11, 29, 30, 60]) assert.equal(by(pid), undefined, `process ${pid}`);
+  for (const pid of [1, 9, 10, 11, 29, 30, 31, 60]) assert.equal(by(pid), undefined, `process ${pid}`);
 });
 
 test("the limits are 8 and 2 GB, or shares of a small disk", () => {
@@ -144,7 +145,7 @@ test("a job ended for memory is stopped as a job; a shared runtime's command is 
   assert.deepEqual(stopped, ["j1"]);
   assert.deepEqual(said.map(([s]) => s), ["ember:c-b"]);
 
-  const codexOnly = TABLE.filter((x) => [29, 30, 40].includes(x.pid)).concat([p(41, 40, 40, 800 * MB, "node")]);
+  const codexOnly = TABLE.filter((x) => [29, 30, 31, 40].includes(x.pid)).concat([p(41, 40, 40, 800 * MB, "node")]);
   const other = fake({ processes: async () => codexOnly, jobs: () => [] });
   other.state.pressure = "critical";
   await other.guard.look();
