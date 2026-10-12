@@ -55,18 +55,6 @@ export const quotaChipText = style({
   },
 });
 export const quotaChipMark = style({ color: vars.muted });
-export const quotaRing = style({
-  selectors: {
-    "&[data-level=\"amber\"]": { color: vars.amber },
-    "&[data-level=\"red\"]": { color: vars.red },
-  },
-});
-export const quotaRingTrack = style({ fill: "none", stroke: vars.neutralBg });
-export const quotaRingFill = style({ fill: "none", stroke: "currentColor", strokeLinecap: "round" });
-export const quotaRingNumber = style({
-  position: "relative", fontSize: vars.textCaption, fontWeight: "600", color: vars.text, fontVariantNumeric: "tabular-nums",
-  letterSpacing: "-0.02em",
-});
 /** A profile's own page: per window its number large, ten cells lit as far as is left, its name and when it refills. */
 export const quotaDials = style({ display: "flex", flexWrap: "wrap", gap: "12px 36px" });
 export const quotaDial = style({
@@ -92,17 +80,6 @@ export const peopleStack = style({ display: "inline-flex", alignItems: "center",
 export const peopleMore = style({
   fontSize: vars.textCaption, color: vars.muted, paddingLeft: "6px", boxShadow: "none !important",
 });
-export const ring = style({
-  display: "inline-flex", alignItems: "center", gap: "4px", fontSize: vars.textMeta, color: vars.muted,
-});
-export const ringTrack = style({ fill: "none", strokeWidth: "3", stroke: vars.line });
-export const ringFill = style({
-  fill: "none", strokeWidth: "3", stroke: vars.green, strokeLinecap: "round",
-  selectors: {
-    "&[data-level=\"amber\"]": { stroke: vars.amber },
-    "&[data-level=\"red\"]": { stroke: vars.red },
-  },
-});
 globalStyle(`${quotaChipEdge} rect`, {
   x: "1.25px", y: "1.25px", width: "calc(100% - 2.5px)", height: "calc(100% - 2.5px)",
   rx: `calc(6px * ${vars.cornerScale} - 1.25px)`, fill: "none", strokeWidth: "2.5px",
@@ -110,14 +87,9 @@ globalStyle(`${quotaChipEdge} rect`, {
 globalStyle(`${quotaChip}[data-small] ${quotaChipEdge} rect`, {
   x: "1px", y: "1px", width: "calc(100% - 2px)", height: "calc(100% - 2px)", rx: `calc(6px * ${vars.cornerScale} - 1px)`, strokeWidth: "2px",
 });
-globalStyle(`${quotaRing} svg`, { position: "absolute", inset: "0" });
 globalStyle(`${quotaDialNumber} small`, { fontSize: "0.55em", fontWeight: "500", marginLeft: "1px", color: vars.muted });
 globalStyle(`${quotaDialCells} i`, { width: "8px", height: "14px", borderRadius: "2px", background: vars.neutralBg });
 globalStyle(`${quotaDialCells} i[data-on]`, { background: "currentColor" });
 globalStyle(`${peopleStack} > :first-child`, { marginLeft: "0" });
 globalStyle(`${peopleStack} ${personLetter}`, { width: "16px", height: "16px", fontSize: vars.textCaption });
-globalStyle(`${ring} svg`, { flex: "none" });
-globalStyle(`${ring} text`, {
-  fontSize: vars.textCaption, fontWeight: "600", fill: vars.text, fontVariantNumeric: "tabular-nums",
-});
 

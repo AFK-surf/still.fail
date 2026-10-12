@@ -3,7 +3,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { mono, muted } from "./styles/shell.css.ts";
 import { card } from "./styles/pages.css.ts";
-import { quotaChips, quotaRingNumber } from "./components.css.ts";
+import { quotaChips } from "./components.css.ts";
 import { newChat } from "./NewChat.css.ts";
 import { runCardRow } from "./pages/Connect.css.ts";
 import { input } from "./styles/controls.css.ts";
@@ -171,7 +171,6 @@ globalStyle(`${composerChoices} > :not(${modelTripleFit})`, { flex: "none" });
 globalStyle(`${modelPoolItem} ${mono}`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${modelTriple} ${quotaChips}`, { marginLeft: "2px" });
 globalStyle(`${modelTriple} ${chooserChevron}`, { color: vars.muted, flex: "none" });
-globalStyle(`${modelTriple} ${quotaRingNumber}`, { display: "none" });
 globalStyle(`${runPickerGroup} h5`, { margin: "8px 8px 2px", fontSize: vars.textMeta, lineHeight: "18px", fontWeight: "500", color: vars.subtle });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */
 globalStyle(`${runCardRow} > ${modelTripleFit}`, { flex: "1 1 auto", marginTop: "-5px" });

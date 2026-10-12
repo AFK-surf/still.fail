@@ -4,7 +4,6 @@ import { muted } from "../styles/shell.css.ts";
 import { sessionPage } from "../styles/session.css.ts";
 import { pageBarTitle } from "../styles/conversation.css.ts";
 import { resizeHandle } from "../ui.css.ts";
-import { quotaRing, quotaRingNumber } from "../components.css.ts";
 import { sessionMain } from "../styles/jobs.css.ts";
 
 export const agentMarkBtn = style({
@@ -202,8 +201,6 @@ globalStyle(`[data-desktop] ${sideBar} :is(a, button, input, select, textarea, [
 globalStyle(`${sessionPage}[data-panel="true"] > ${sessionMain}`, {
   "@media": { "(min-width: 1101px)": { vars: { "--window-buttons": "0px" } } },
 });
-globalStyle(`${attentionQuota} ${quotaRing}`, { flex: "none" });
-globalStyle(`${attentionQuota} ${quotaRingNumber}`, { fontSize: vars.textCaption });
 globalStyle(`${jobsPanel} section`, { display: "flex", flexDirection: "column" });
 globalStyle(`${jobsPanel} section + section`, { marginTop: "6px" });
 globalStyle(`${detailRow} dt`, { color: vars.muted });

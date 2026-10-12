@@ -4,7 +4,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 // be opened beside them, one tab per agent.
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
-import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
+import { CreatorText, EdgeChip, MeterChips, PeopleStack } from "../components.tsx";
 import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
@@ -607,7 +607,7 @@ function HistorySummary({ agent }: { agent: ChatAgent }) {
       {agent.attention.map((a, i) => (
         a.quota ? (
           <Tip key={i} label={<>{a.text}{a.more && <><br />{a.more}</>}</>}>
-            <span className={`${css.attention} ${css.attentionQuota}`}><QuotaRing left={a.quota.left} level={a.quota.level} size={20} /><span className="quota-ring-letter">{a.quota.mark}</span></span>
+            <span className={`${css.attention} ${css.attentionQuota}`}><EdgeChip fill={a.quota.left} level={a.quota.level} mark={a.quota.mark} label={t("web-main.quota.leftAlone", { left: a.quota.left })} small bare /></span>
           </Tip>
         ) : (
           <span key={i} className={css.attention} data-tone={a.kind === "disk" ? "amber" : "red"}>{a.text}</span>
@@ -659,7 +659,7 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
         {station.name || host?.hostname || t("web-pages.chat.thisMachine")}{host ? ` · ${host.summary}` : ""}
         {host && (
           <span className={css.resourceRings}>
-            {host.meters.map((m) => <Ring key={m.label} percent={m.percent} level={m.level} label={m.short} title={`${m.label} ${m.value}`} />)}
+            <MeterChips meters={host.meters} />
           </span>
         )}
       </dd>

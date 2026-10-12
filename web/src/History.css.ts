@@ -22,9 +22,10 @@ export const historyHead = style({
   display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", height: "45px",
   padding: "0 8px 1px 16px",
 });
+/** What is too long is cut at its end; its start has the room the model control stands out by (ModelTriple.css.ts). */
 export const historyIdentity = style({
   display: "flex", alignItems: "center", gap: "6px", flex: "1", minWidth: "0", fontSize: vars.textUi, color: vars.muted,
-  whiteSpace: "nowrap", overflow: "hidden",
+  whiteSpace: "nowrap", overflow: "hidden", marginLeft: "-11px", paddingLeft: "11px",
 });
 export const historyTools = style({ display: "flex", alignItems: "center", gap: "2px", flex: "none" });
 export const usage = style({

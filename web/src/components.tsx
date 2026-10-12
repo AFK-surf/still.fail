@@ -161,25 +161,6 @@ export function MeterChips({ meters, bare, alerts = false }: { meters: Meter[]; 
   );
 }
 
-/** What is left of a window, as a ring: full when untouched, shorter as it goes, coloured by the core's `level`; the
- * number left inside (up to 99; a full ring says 100 by itself). Use eats it clockwise from the top. */
-export function QuotaRing({ left, level, size = 26 }: { left: number; level: Level; size?: number }) {
-  const used = 100 - left;
-  const stroke = 3;
-  const c = size / 2;
-  const r = c - stroke / 2 - 0.5;
-  const around = 2 * Math.PI * r;
-  return (
-    <span className={css.quotaRing} data-level={level} style={{ width: size, height: size }} role="img" aria-label={t("web-main.quota.leftAlone", { left })}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ strokeWidth: stroke }}>
-        <circle className={css.quotaRingTrack} cx={c} cy={c} r={r} />
-        {left > 0 && <circle className={css.quotaRingFill} cx={c} cy={c} r={r} strokeDasharray={`${(around * left) / 100} ${around}`} transform={`rotate(${-90 + used * 3.6} ${c} ${c})`} />}
-      </svg>
-      {left < 100 && <span className={css.quotaRingNumber}>{left}</span>}
-    </span>
-  );
-}
-
 /** A small stack of people's avatars (as the core names them); names in the tooltip. */
 export function PeopleStack({ people, max = 3 }: { people: { id: string; shown: PersonShown }[] | undefined; max?: number }) {
   if (!people?.length) return null;
@@ -189,24 +170,6 @@ export function PeopleStack({ people, max = 3 }: { people: { id: string; shown: 
         ? <img key={p.id} className={cloudCss.person} src={p.shown.picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
         : <span key={p.id} className={`${cloudCss.person} ${cloudCss.personLetter}`} aria-hidden="true">{([...p.shown.display][0] ?? "?").toUpperCase()}</span>)}
       {people.length > max && <span className={css.peopleMore}>+{people.length - max}</span>}
-    </span></Tip>
-  );
-}
-
-/** A percentage as a small ring, filled clockwise from the top; colour follows the same levels as the bars. */
-export function Ring({ percent, level, size = 28, label, title }: { percent: number; level: Level; size?: number; label: string; title?: string }) {
-  const p = percent;
-  const r = (size - 4) / 2;
-  const c = 2 * Math.PI * r;
-  return (
-    <Tip label={title ?? `${label} ${p}%`}><span className={css.ring}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-        <circle className={css.ringTrack} cx={size / 2} cy={size / 2} r={r} />
-        <circle className={css.ringFill} data-level={level} cx={size / 2} cy={size / 2} r={r}
-          strokeDasharray={`${(c * p) / 100} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-        <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle">{p}</text>
-      </svg>
-      <span className="ring-label">{label}</span>
     </span></Tip>
   );
 }

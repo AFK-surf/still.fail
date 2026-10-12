@@ -5,7 +5,7 @@ import { chatList } from "./styles/session.css.ts";
 import { composerWrap } from "./styles/cloud.css.ts";
 import { runtimeTags, spinner } from "./styles/waiting.css.ts";
 import { about, firstOne, resizeHandle } from "./ui.css.ts";
-import { peopleStack, quotaNote, quotaRing } from "./components.css.ts";
+import { peopleStack, quotaNote } from "./components.css.ts";
 import { sidebarBuddy } from "./brand.css.ts";
 import { modelChips } from "./pages/Accounts.css.ts";
 import { slackTeamIcon } from "./pages/Connect.css.ts";
@@ -40,12 +40,6 @@ globalStyle(hPlace, {
 });
 /** Here rather than with its class: it comes after .toast-viewport, and wins over it. */
 globalStyle(`${chatList} > *`, { width: "100%", maxWidth: "760px", marginLeft: "auto", marginRight: "auto" });
-/** Blocks, not inline: a ring with no number inside would sit on its bottom edge instead of the others' text line. */
-/** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
-globalStyle(quotaRing, {
-  position: "relative", display: "grid", placeItems: "center", flex: "none", width: "26px", height: "26px",
-  color: vars.green,
-});
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(quotaNote, { margin: "0", fontSize: vars.textUi });
 /** Here rather than with its class: it comes after .toast-viewport, and wins over it. */
