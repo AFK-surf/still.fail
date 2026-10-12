@@ -92,6 +92,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -130,7 +131,7 @@ private val Digits = listOf(Icons.Option1, Icons.Option2, Icons.Option3, Icons.O
 /**
  * A decision's options (web Decisions.tsx DecisionOptions): one card, full width, a row each — its number in a circle,
  * the label (medium) and its detail under it, small and quiet, a hairline between two. The recommended one (last, as
- * the core orders them) has its number in the accent and 推荐 after its label. `busy`: the label of the one being sent
+ * the core orders them) is told by its number in the accent alone (said to a screen reader). `busy`: the label of the one being sent
  * (a spinner on it, none pressed meanwhile).
  */
 @Composable
@@ -139,6 +140,7 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.chip)) {
         options.forEachIndexed { i, o ->
             val strong = o.recommended == true
+            val said = if (strong) t("common.recommended") else null
             val free = enabled && busy == null
             if (i > 0) Box(Modifier.padding(start = 48.dp, end = 18.dp).fillMaxWidth().height(1.dp).background(hairline))
             Row(
@@ -146,7 +148,7 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
                     .clickable(enabled = free, interactionSource = remember(o.label) { MutableInteractionSource() }, indication = ripple(color = C.ink)) { onPick(o) }
                     // The card's room above the first and below the last is theirs: the ripple reaches its edge.
                     .padding(start = 14.dp, end = 18.dp, top = if (i == 0) 14.dp else 10.dp, bottom = if (i == options.lastIndex) 14.dp else 10.dp)
-                    .semantics(mergeDescendants = true) {},
+                    .semantics(mergeDescendants = true) { said?.let { stateDescription = it } },
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // As tall as the label's line, a little lower, where Chinese sits.
@@ -159,11 +161,7 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
                         ?: Text("${i + 1}", fontSize = 12.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = ink)
                 }
                 Column(Modifier.weight(1f)) {
-                    // The label a text of its own (what it is found by), 推荐 beside its first line.
-                    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(o.label, Modifier.weight(1f, fill = false), fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.ink)
-                        if (strong) Text(t("common.recommended"), fontSize = 13.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
-                    }
+                    Text(o.label, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.ink)
                     o.detail?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted) }
                 }
                 if (busy == o.label) DoingMark(true, null, 14.dp)

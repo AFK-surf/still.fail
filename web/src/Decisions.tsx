@@ -59,12 +59,9 @@ export function DecisionOptions({ station, thread, seq, options, onPick, classNa
         const Digit = DIGITS[i];
         return (
           <button key={o.label} type="button" className={css.choice} data-recommended={o.recommended || undefined} data-busy={busy || undefined}
-            disabled={!!sending} aria-busy={busy || undefined} onClick={() => pick(o)}>
+            disabled={!!sending} aria-busy={busy || undefined} aria-description={o.recommended ? t("common.recommended") : undefined} onClick={() => pick(o)}>
             <span className={css.choiceNumber} aria-hidden="true">{Digit ? <Digit size={20} /> : i + 1}</span>
-            <span className={css.choiceLabel}>
-              {o.label}
-              {o.recommended && <span className={css.choiceRecommended}>{t("common.recommended")}</span>}
-            </span>
+            <span className={css.choiceLabel}>{o.label}</span>
             {o.detail && <span className={css.choiceDetail}>{o.detail}</span>}
             {busy && <span className={`${waitingCss.spinner} ${css.choiceSpinner}`} aria-hidden="true" />}
           </button>

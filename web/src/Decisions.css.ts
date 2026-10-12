@@ -5,8 +5,8 @@ import { spinner } from "./styles/waiting.css.ts";
 import { glass } from "./styles/glass.ts";
 
 // A decision's options (Decisions.tsx): under the message that asks it in a chat, and at the foot of the decisions
-// page. One card, a row each, numbered in a circle; the recommended one last, its number in the accent and 推荐 after its
-// label. The phone's page colours (`--m-*`) where they are set, the wide screen's otherwise.
+// page. One card, a row each, numbered in a circle; the recommended one last, told by its number in the accent
+// alone. The phone's page colours (`--m-*`) where they are set, the wide screen's otherwise.
 const ground = `var(--m-bg, ${vars.canvas})`;
 const accent = `var(--m-accent, ${vars.accent})`;
 const chip = `var(--m-chip, color-mix(in srgb, ${vars.text} 7%, transparent))`;
@@ -17,7 +17,7 @@ export const options = style({
   cornerShape: vars.cornerShape, background: `var(--m-chip, color-mix(in srgb, ${vars.text} 5%, transparent))`,
 });
 
-/** One option: its number, then its label (and 推荐) over its detail. */
+/** One option: its number, then its label over its detail. */
 export const choice = style({
   position: "relative", display: "grid", gridTemplateColumns: "20px minmax(0, 1fr)", columnGap: "12px", width: "100%",
   boxSizing: "border-box", padding: "10px 18px 10px 14px", border: "0", background: "none", color: vars.text,
@@ -55,9 +55,6 @@ export const choiceLabel = style({
   gridColumn: "2", fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500", overflowWrap: "anywhere",
   selectors: { [`${choice}[data-busy] &`]: { paddingRight: "22px" } },
 });
-/** 推荐, after the recommended one's label. */
-// Its own line height, the type's: the label's 20px around a smaller type would make the line a pixel taller.
-export const choiceRecommended = style({ marginLeft: "8px", color: vars.accentText, fontSize: vars.textMeta, lineHeight: "1", fontWeight: "500" });
 /** Being sent: a small ring at the option's right, level with its label. */
 export const choiceSpinner = style({
   position: "absolute", right: "18px", top: "14px",
