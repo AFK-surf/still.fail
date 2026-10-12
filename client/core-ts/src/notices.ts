@@ -162,7 +162,7 @@ function noticed(row: J, thenSeen: Seen | undefined, me: J, slackUsers: string[]
   }
   const last = get(row, "last");
   const hasLast = last !== null && typeof last === "object" && !Array.isArray(last);
-  let text = hasLast ? format.cleanText(typeof last.text === "string" ? last.text : "") : "";
+  let text = hasLast ? format.cleanText(format.plainText(typeof last.text === "string" ? last.text : "")) : "";
   if (text === "" && hasLast) text = t("core-misc.notice.file");
   const byName = typeof get(by, "name") === "string" ? by.name : "";
   if (now.state === "block" && then.state !== "block" && card === null) {

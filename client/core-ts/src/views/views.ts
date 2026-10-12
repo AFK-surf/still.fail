@@ -974,7 +974,7 @@ export class Views implements Owner {
       row.originText = ["Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
     }
     if (isObject(row.last)) {
-      const text = format.cleanText(str(row.last.text) ?? "");
+      const text = format.cleanText(format.plainText(str(row.last.text) ?? ""));
       row.last.preview = text === "" ? t("core-views.file") : text;
     }
     present.rowPeople(row, me, slackUsers, members_);

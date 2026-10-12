@@ -352,7 +352,7 @@ export function workingLine(row: J): string | null {
   const atWork = agents.some((a) => shownStatus(a) === "queued" || (shownStatus(a) === "running" && waiting(a) === null));
   if (atWork) {
     const text = str(get(get(row, "last"), "text")) ?? "";
-    const last = format.cleanText(lines(text).map((l) => l.trim()).find((l) => l !== "") ?? "");
+    const last = format.cleanText(lines(format.plainText(text)).map((l) => l.trim()).find((l) => l !== "") ?? "");
     return last === "" ? t("core-views.present.working") : t("core-views.present.working.last", { last });
   }
   for (const a of agents) {

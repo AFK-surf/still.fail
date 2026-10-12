@@ -35,6 +35,13 @@ test("words_as_the_clients_had_them", () => {
   assert.equal(f.agentLabel("gpt-6-astra", "medium"), "GPT-6 Astra · medium");
   assert.equal(f.agentLabel("my-model", null), "my-model");
   assert.equal(f.cleanText("<@U1> hi   there"), "hi there");
+  const plain = (s: string) => f.cleanText(f.plainText(s));
+  assert.equal(plain("改成 `tsgo` 了，**快**很多 ~~慢~~ *真的*"), "改成 tsgo 了，快很多 慢 真的");
+  assert.equal(plain("看 [PR #12](https://github.com/a/b/pull/12) 和 https://x.dev/a?b=1"), "看 PR #12 和 [链接]");
+  assert.equal(plain("<https://x.dev|文档> <https://y.dev> <#C1|ops> &lt;b&gt; &amp;"), "文档 [链接] #ops <b> &");
+  assert.equal(plain("![](shot.png) [](/tmp/a.pdf) [报告](report.pdf)"), "[图片] [文件] 报告");
+  assert.equal(plain("## 结论\n- 一\n1. 二\n> 三\n| a | b |\n|---|---|\n```ts\nlet x_y = 1\n```"), "结论 一 二 三 a b let x_y = 1");
+  assert.equal(plain("`**不动**` snake_case_name 2*3*4"), "**不动** snake_case_name 2*3*4");
   assert.deepEqual(f.splitThread("C0OPS/1727.0001"), ["C0OPS", "1727.0001"]);
   assert.equal(f.splitThread("nope"), null);
   assert.equal(f.refillsIn(now + 185 * MINUTE, now), "3 小时 5 分钟后刷新");
