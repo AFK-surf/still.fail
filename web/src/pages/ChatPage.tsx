@@ -352,6 +352,10 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const archiveAsked = () => { if (chat.watch) setAskArchive(true); else void archive(); };
   // What the panel shows: its tabs, or while it slides out, what it showed.
   const side = panel && shown ? { tabs: open, shown } : leaving;
+  // The tabs shown once while the page is open stay made when another is in front (hidden by their styles): coming
+  // back to one only shows it, instead of making its history again, each entry and its words.
+  const seen = useRef(new Set<string>()).current;
+  if (side) seen.add(side.shown);
   const slackUrl = chat.slackUrl;
   // Before its agent has a chat, what is sent goes to the agent: it waits in the outbox at once while the core has the
   // station make the chat behind it; the page stays (the core shows the chat at the same address once it is there).
@@ -453,7 +457,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             {side.tabs.map((key) => {
               if (key === JOBS) {
                 return (
-                  <Tabs.Content key={key} className={css.sideContent} value={key}>
+                  <Tabs.Content key={key} className={css.sideContent} value={key} {...(seen.has(key) ? { forceMount: true as const } : {})}>
                     <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} onService={(job) => openTab(`service:${job}`)} />
                   </Tabs.Content>
                 );
@@ -481,7 +485,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               const a = agents.find((x) => x.session.key === key);
               if (!a) return <Tabs.Content key={key} className={css.sideContent} value={key} />;
               return (
-                <Tabs.Content key={key} className={css.sideContent} value={key}>
+                <Tabs.Content key={key} className={css.sideContent} value={key} {...(seen.has(key) ? { forceMount: true as const } : {})}>
                   <History station={station.address} sessionKey={key} title={view?.title}
                     focus={focus?.key === key ? focus : null}
                     head={<SessionHead agent={a} />}
