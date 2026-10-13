@@ -29,7 +29,7 @@ class StationsLayoutTest {
         memory = Memory(32L shl 30, 12L shl 30), disk = Disk("/", 500L shl 30, 200L shl 30), emberRssBytes = 1, checkedAt = 1,
         summary = "", line = "", facts = emptyList(), usage = "", emberText = "",
         meters = listOf(Meter(label = "CPU", short = "CPU", percent = 20, left = 80, level = "ok", value = "20%", remaining = "剩 80", big = "80", unit = "%", title = "CPU 空闲", total = "负载 2.0"), Meter(label = "内存", short = "内存", percent = 40, left = 60, level = "ok", value = "40%", remaining = "剩 19.2", big = "19.2", unit = "GB", title = "内存剩", total = "共 32 GB"), Meter(label = "磁盘", short = "磁盘", percent = 60, left = 40, level = "ok", value = "60%", remaining = "剩 200", big = "200", unit = "GB", title = "磁盘剩", total = "共 500 GB")),
-        identity = "Apple M2 · 32 GB · macOS", details = listOf(HostDetail("主机名", "studio")),
+        identity = "Apple M2 · 32 GB · macOS", details = listOf(HostDetail("主机名", "h"), HostDetail("芯片", "Apple M2 · 10 核 · arm64"), HostDetail("已运行", "1 天 3 小时"), HostDetail("still.fail", "进程占 38 MB")),
     )
     private val net = StationNet(path = "直连", rtt = NetFigure("12 ms", "ok"), rttHistory = emptyList(), down = "1.2 MB/s", up = "30 KB/s", total = "", downTotal = "212 MB", upTotal = "9.6 MB")
 
