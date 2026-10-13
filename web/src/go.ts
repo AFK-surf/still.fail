@@ -14,6 +14,7 @@ interface History {
   push(to: To, state?: unknown, options?: NavigateOptions): void;
   replace(to: To, state?: unknown, options?: NavigateOptions): void;
   go(delta: number): void;
+  createHref?(to: To): string;
   location?: { pathname: string };
 }
 
@@ -38,6 +39,11 @@ const go = ((to: To | number, options?: NavigateOptions) => {
 
 /** The path of the page open now, read when asked (a click), not followed. */
 const here = () => history?.location?.pathname ?? window.location.pathname;
+
+/** The app's own address of `to` (with the router's base), read when asked. */
+export function hrefOf(to: To): string {
+  return history?.createHref?.(to) ?? (typeof to === "string" ? to : "/");
+}
 
 export function useGo(): Go {
   return go;

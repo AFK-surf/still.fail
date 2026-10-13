@@ -2,7 +2,7 @@
 // `chatSearch`), and the one chosen goes into the text as a chip (chatRefs.ts), sent as a link, [its title](its page).
 // The agent reads that chat by the link (the station's chat_read and session_history tools).
 import { Fragment, useEffect, useRef, type ReactNode, type RefObject } from "react";
-import { useHref } from "react-router";
+import { hrefOf } from "./go.ts";
 import { useChats, useChatSearch, useStationLook, type ChatItem } from "./api.ts";
 import { ChatMark, stateLine } from "./ChatMark.tsx";
 import { StationMark } from "./StationMark.tsx";
@@ -129,11 +129,11 @@ export function markBefore(text: string, caret: number): number | null {
  * agent's execution history (`history`: that agent, at one of its entries). `toast` says it is copied, or why not.
  */
 export function useCopyChatLink(toast: (text: string) => void) {
-  const root = useHref("/");
+  // Read when copied, not followed: every row and history entry that can copy a link was drawn again at each page change.
   return (item: Pick<ChatItem, "station" | "session" | "id" | "title">, history?: { key: string; entry?: number | undefined }) => {
     // Its history named as such: pasted, its reference is told from the chat's own.
     const title = history ? t("web-main.chat.historyRefTitle", { title: item.title }) : item.title;
-    void copyChatLink(title, shareLink(item, root, history)).then(
+    void copyChatLink(title, shareLink(item, hrefOf("/"), history)).then(
       () => toast(t(history ? "web-main.chat.historyLinkCopied" : "web-main.chat.linkCopied")),
       (e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })),
     );
