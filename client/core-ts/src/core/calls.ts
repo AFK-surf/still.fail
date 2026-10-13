@@ -2,6 +2,7 @@
 import { parseAdb, type AdbCall } from "../adb-parse.ts";
 import { parseAsk, type Ask } from "../asks-parse.ts";
 import { parseAttend, type AttendCall } from "../attend-parse.ts";
+import { parseComposer, type ComposerAct } from "../composer.ts";
 import { conform } from "../conform.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
@@ -68,6 +69,7 @@ export type Call =
   | { kind: "draftPut"; station: string; chat: string; draft: unknown }
   | { kind: "attend"; call: AttendCall }
   | { kind: "draftGet"; station: string; chat: string }
+  | { kind: "composer"; key: string; act: ComposerAct }
   | { kind: "chatRef"; station: string; id: string; title: string; base: string | null; into: string | null }
   | { kind: "chatOutsideRefs"; station: string; text: string }
   | { kind: "chatXshareAdd"; station: string; id: string; workspace: string; prefer: string | null }
@@ -201,6 +203,8 @@ export function parseCall(name: string, params: unknown): Call {
   }
   const attend = parseAttend(name, params);
   if (attend) return { kind: "attend", call: attend };
+  const composer = parseComposer(name, params);
+  if (composer) return composer;
   const send = (p: unknown) =>
     read(p, [
       ["station", S, "req"],

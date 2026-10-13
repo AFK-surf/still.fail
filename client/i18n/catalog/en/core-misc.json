@@ -162,5 +162,7 @@
   "core-misc.token.not_yours": "Token draft belongs to another page",
   "core-misc.wake.dropped": "Back in foreground; retrying",
   "core-misc.wake.gone": "Back in foreground; reconnecting",
-  "core-misc.wake.network": "Network changed; reconnecting"
+  "core-misc.wake.network": "Network changed; reconnecting",
+  "core-misc.composer.too_big": "Over 1 GB",
+  "core-misc.composer.upload_failed": "Upload failed"
 }

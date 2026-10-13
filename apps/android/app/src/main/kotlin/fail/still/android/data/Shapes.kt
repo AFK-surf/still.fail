@@ -1796,6 +1796,65 @@ data class ChatsView (
 	val note: ListNote? = null
 )
 
+/// Long words pasted into a composer, kept as a file: how they are named there, and how many characters they are.
+@Serializable
+data class PastedInfo (
+	val preview: String,
+	val characters: Long,
+	/// The words pasted, while they can still be put back into the text.
+	val text: String? = null
+)
+
+/// A file in what is being written: going up, up, or failed.
+@Serializable
+data class ComposerFile (
+	/// The page's id for it (`composer.add`).
+	val id: String,
+	val name: String,
+	val size: Long,
+	/// How much of it the station has, while it goes up.
+	val sent: Long? = null,
+	/// Up: as the station keeps it (in no chat until a message takes it).
+	val done: Attachment? = null,
+	val error: String? = null,
+	val pasted: PastedInfo? = null
+)
+
+/// A passage quoted in what is being written, with what is said about it.
+@Serializable
+data class ComposerQuote (
+	/// Names it while it is written (`composer.comment`, `composer.unquote`).
+	val id: String,
+	val author: String,
+	val text: String,
+	val comment: String,
+	val ts: String? = null,
+	val role: String? = null,
+	val file: String? = null
+)
+
+/// What is being written in a chat (the `composer` topic, by the draft's key), as the core keeps it (composer.ts).
+@Serializable
+data class ComposerView (
+	/// The core's own words for it (read back, taken, put back, carried on): the page shows them when `rev` changes; what
+	/// is typed is the page's until then (`composer.text`).
+	val text: String,
+	val rev: Long,
+	val quotes: List<ComposerQuote>,
+	/// The quote just added: its comment takes the focus (`composer.focused` once it has).
+	val focus: String? = null,
+	val files: List<ComposerFile>,
+	/// A file still going up: nothing can be sent until it is there.
+	val uploading: Boolean,
+	/// Something to send, and nothing holding it: words, a file that is up, or a quote.
+	val ready: Boolean,
+	/// A new chat being made for the message.
+	val starting: Boolean,
+	val error: String? = null,
+	/// Every change, counted: each `composer.*` call answers the one it made.
+	val version: Long
+)
+
 @Serializable
 data class ConfigTokenOwner (
 	val team: String,

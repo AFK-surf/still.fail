@@ -1821,6 +1821,63 @@ export interface ChatsView {
 	note?: ListNote;
 }
 
+/** Long words pasted into a composer, kept as a file: how they are named there, and how many characters they are. */
+export interface PastedInfo {
+	preview: string;
+	characters: number;
+	/** The words pasted, while they can still be put back into the text. */
+	text?: string;
+}
+
+/** A file in what is being written: going up, up, or failed. */
+export interface ComposerFile {
+	/** The page's id for it (`composer.add`). */
+	id: string;
+	name: string;
+	size: number;
+	/** How much of it the station has, while it goes up. */
+	sent?: number;
+	/** Up: as the station keeps it (in no chat until a message takes it). */
+	done?: Attachment;
+	error?: string;
+	pasted?: PastedInfo;
+}
+
+/** A passage quoted in what is being written, with what is said about it. */
+export interface ComposerQuote {
+	/** Names it while it is written (`composer.comment`, `composer.unquote`). */
+	id: string;
+	author: string;
+	text: string;
+	comment: string;
+	ts?: string;
+	role?: string;
+	file?: string;
+}
+
+/** What is being written in a chat (the `composer` topic, by the draft's key), as the core keeps it (composer.ts). */
+export interface ComposerView {
+	/**
+	 * The core's own words for it (read back, taken, put back, carried on): the page shows them when `rev` changes; what
+	 * is typed is the page's until then (`composer.text`).
+	 */
+	text: string;
+	rev: number;
+	quotes: ComposerQuote[];
+	/** The quote just added: its comment takes the focus (`composer.focused` once it has). */
+	focus?: string;
+	files: ComposerFile[];
+	/** A file still going up: nothing can be sent until it is there. */
+	uploading: boolean;
+	/** Something to send, and nothing holding it: words, a file that is up, or a quote. */
+	ready: boolean;
+	/** A new chat being made for the message. */
+	starting: boolean;
+	error?: string;
+	/** Every change, counted: each `composer.*` call answers the one it made. */
+	version: number;
+}
+
 export interface ConfigTokenOwner {
 	team: string;
 	teamDomain?: string;

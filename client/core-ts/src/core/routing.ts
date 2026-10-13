@@ -76,6 +76,8 @@ export class Router implements Source {
       }
       case "draft":
         return { ok: { text: "", quotes: [], files: [] } };
+      case "composer":
+        return { ok: core.composers.value(String(topic.key)) };
       case "adbShare":
         return { ok: core.adb.value() };
       case "previewLoad":

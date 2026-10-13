@@ -106,7 +106,7 @@ export function times(value: unknown, c: Clock): void {
   if (any) map.time = stamps;
 }
 
-const NO_TICK = new Set(["live", "thread", "history", "host", "net", "status", "notices", "notify", "connection", "draft", "prefs", "doing", "adbShare", "slackTokens"]);
+const NO_TICK = new Set(["live", "thread", "history", "host", "net", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "adbShare", "slackTokens"]);
 
 /// Whether a topic shows times in words, sent again each minute while shown.
 export function ticks(topic: Topic): boolean {

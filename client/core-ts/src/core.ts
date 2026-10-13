@@ -27,6 +27,7 @@ import { Kind, SAMPLE, Tracer } from "./trace.ts";
 import { Wakes, WakingHost } from "./wake.ts";
 import { Workspaces } from "./workspace.ts";
 import { install as installStationCalls } from "./station/calls.ts";
+import { Composers, install as installComposer } from "./composer.ts";
 import { StationsSync } from "./station/sync.ts";
 import { StationTopics } from "./station/topics.ts";
 import type { StationWire } from "./station/wire.ts";
@@ -108,6 +109,8 @@ export class Inner {
   /// The calls under way that a UI can stop, by `client/id`.
   calls = new Map<string, Fiber.Fiber<unknown, unknown>>();
   doing = new Doing();
+  /// What is being written in each chat (composer.ts).
+  composers!: Composers;
   /// The accounts as last shown, so a change UIs cannot see (a refreshed token) is not one.
   shownAccounts: AccountView[] = [];
 }
@@ -182,6 +185,8 @@ export class Core {
       inner.stationTopics = new StationTopics(inner, inner.stations);
       inner.router.owners.push(inner.stationTopics);
       installStationCalls();
+      inner.composers = new Composers(inner);
+      installComposer();
       inner.views = new Views(envOf(inner));
       inner.router.owners.push(inner.views);
       inner.viewCalls = new ViewCalls(inner, inner.views);
