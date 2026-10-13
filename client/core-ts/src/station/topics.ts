@@ -8,6 +8,7 @@ import { CoreError } from "../error.ts";
 import { nOf } from "../entries.ts";
 import { t } from "../i18n.ts";
 import { topicKey, topicStation, type Topic } from "../protocol.ts";
+import { terms } from "../refs.ts";
 import type { Owner } from "../core/routing.ts";
 import type { Value } from "../store.ts";
 import { Priority } from "../sync/scheduler.ts";
@@ -18,6 +19,8 @@ import type { StationsSync } from "./sync.ts";
 
 /// A chat shows a window of its thread's entries: at most this many.
 export const WINDOW = 3 * PAGE;
+/// How many entries a message found is to have on either side of it in the window, for the window to be left as it is.
+const AROUND = 10;
 /// How often a station's connection is sampled while its card shows it, and how many samples are kept.
 export const NET_EVERY_MS = 2_000;
 const NET_KEPT = 30;
@@ -468,6 +471,61 @@ export class StationTopics implements Owner {
       found[1].atOffset = null;
       found[1].caught = latest;
       this.#core.store.invalidate({ topic: "thread", station, thread: id });
+    });
+  }
+
+  /// The window of a chat about its entry `seq` (`chat.around`: a message found in it, to be shown): a page before it
+  /// and one after, read now where not held. The chat's list goes to it by itself (the UI's to do).
+  around(station: string, id: number, seq: number): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const found = this.#window(station, id);
+      const latest = this.#latest(station, id);
+      if (!found || seq < 1 || seq > latest) return;
+      const window = found[1];
+      // Already in it, and not at its edge: left as it is (what is around it is on the page).
+      const end = window.last ?? latest;
+      if (seq >= window.first && seq <= end && (seq - window.first >= AROUND || window.first === 1) && (end - seq >= AROUND || window.last === null)) return;
+      const from = Math.max(seq - PAGE, 1);
+      const to = Math.min(seq + PAGE - 1, latest);
+      yield* this.#sync.channels.range(entriesOf(station, id), from, to, { quiet: false });
+      const held = this.#core.data.logRange("entry", station, String(id), from, to);
+      if (!held.has(seq)) return;
+      let first = seq;
+      while (first > from && held.has(first - 1)) first--;
+      let last = seq;
+      while (last < to && held.has(last + 1)) last++;
+      window.first = first;
+      window.last = last >= latest ? null : last;
+      window.at = null;
+      window.atOffset = null;
+      window.caught = Math.max(window.caught, last);
+      this.#core.store.invalidate({ topic: "thread", station, thread: id });
+    });
+  }
+
+  /// The messages of a chat that have every word of `query` (`chat.find`), oldest first, each with how many times the
+  /// words are in its text; and whether all the chat was looked in (`whole`: all of it is on the device), with how
+  /// many of its entries were (`held` of `of`). `bring`: what is not on the device is read first, while its station
+  /// answers.
+  find(station: string, id: number, query: string, bring: boolean): Effect.Effect<{ words: string[]; hits: { seq: number; count: number }[]; held: number; of: number; whole: boolean }, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const channel = entriesOf(station, id);
+      const data = this.#core.data;
+      const whole = () => !data.evicted("entry", station, String(id)) && this.#sync.channels.next(channel) === null;
+      if (bring && this.#sync.link(station) && this.#sync.reachable(station)) {
+        for (let read = this.#sync.channels.next(channel); read !== null; read = this.#sync.channels.next(channel)) {
+          const came = yield* Effect.result(this.#sync.channels.read(channel, read, { quiet: true }));
+          if (came._tag === "Failure" || came.success === 0) break;
+        }
+      }
+      const words = terms(query);
+      const hits = data.findInThread(station, id, words).map(({ seq, text }) => {
+        const lower = text.toLowerCase();
+        let count = 0;
+        for (const w of words) for (let i = lower.indexOf(w); i >= 0; i = lower.indexOf(w, i + w.length)) count++;
+        return { seq, count };
+      });
+      return { words, hits, held: data.logSpan("entry", station, String(id))?.count ?? 0, of: this.#latest(station, id), whole: whole() };
     });
   }
 

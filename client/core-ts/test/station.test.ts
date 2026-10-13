@@ -8,7 +8,7 @@ import { HostError } from "../src/error.ts";
 import type { HttpRequest, Pull } from "../src/host.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
-import { apply, call, readsOf, signIn, subscribe, v } from "./helpers.ts";
+import { answers as answered, apply, call, readsOf, signIn, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
 import { type Answers, base, entries, entry, overview, session, started, stationHost, threadView } from "./station-fixture.ts";
 
@@ -258,4 +258,50 @@ test("a_step_ends_on_new_steps_the_live_value_already_shown_keeps_as_they_were",
   assert.deepEqual(view.steps.map((s) => [(s as { id: string }).id, (s as { ended?: boolean }).ended ?? false]), [["s1", true], ["s2", false]]);
   assert.equal(view.steps[1], shown[1]);
   assert.equal((shown[0] as { ended?: boolean }).ended, undefined);
+});
+
+test("a_chat_is_looked_in_whole_and_its_window_goes_about_a_message_found", async () => {
+  const pages = (answers: Answers) => {
+    for (let from = 201; from >= 1; from -= 50) answers[`GET /threads/7/entries?from=${from}&to=${from + 49}`] = { last: 300, entries: entries(from, from + 49) };
+  };
+  const answers = base();
+  answers["GET /threads"] = [threadView(7, 300)];
+  answers["GET /threads/7/entries?limit=50"] = { last: 300, entries: entries(251, 300) };
+  const { host, core } = await started(answers);
+  const ui = core.connect();
+  const values = new Map();
+  // What call `id` answered (the topics' values kept up with what was told meanwhile).
+  const ok = (id: number) => {
+    const answer = answered(host.emitted.slice(), id);
+    apply(host, values);
+    return answer?.ok;
+  };
+  subscribe(core, ui, 1, { topic: "thread", station: "ws/st", thread: 7 });
+  await host.time.pass(500);
+  apply(host, values);
+  assert.deepEqual([v(values, 1).first, v(values, 1).last, v(values, 1).end], [251, 300, true]);
+  // Its older pages not on the device (the station did not answer them): what is held is looked in, and said so.
+  call(core, ui, 2, "chat.find", { station: "ws/st", thread: 7, query: "M27" });
+  await host.settle();
+  assert.deepEqual(ok(2), { words: ["m27"], hits: [270, 271, 272, 273, 274, 275, 276, 277, 278, 279].map((seq) => ({ seq, count: 1 })), held: 50, of: 300, whole: false });
+  // Asked to bring the rest: read first, then all of it looked in.
+  pages(answers);
+  call(core, ui, 3, "chat.find", { station: "ws/st", thread: 7, query: "m27", bring: true });
+  await host.time.pass(500);
+  const found = ok(3) as { hits: { seq: number }[]; held: number; whole: boolean };
+  assert.deepEqual([found.hits.map((h) => h.seq), found.held, found.whole], [[27, 270, 271, 272, 273, 274, 275, 276, 277, 278, 279], 300, true]);
+  // The window about the one found far back: a page on either side; one near the end reaches it.
+  call(core, ui, 4, "chat.around", { station: "ws/st", thread: 7, seq: 27 });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual([v(values, 1).first, v(values, 1).last, v(values, 1).end], [1, 76, false]);
+  call(core, ui, 5, "chat.around", { station: "ws/st", thread: 7, seq: 40 });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual([v(values, 1).first, v(values, 1).last], [1, 76], "well within the window: left as it is");
+  call(core, ui, 6, "chat.around", { station: "ws/st", thread: 7, seq: 270 });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual([v(values, 1).first, v(values, 1).last, v(values, 1).end], [220, 300, true]);
+  core.close();
 });

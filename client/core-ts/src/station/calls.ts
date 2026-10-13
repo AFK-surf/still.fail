@@ -54,6 +54,14 @@ export function install(): void {
     inner.stationTopics.place(c.station, c.thread, c.seq, c.offset);
     return Effect.succeed(null);
   };
+  handlers.chatAround = (inner, call) => {
+    const c = call as Extract<Call, { kind: "chatAround" }>;
+    return Effect.andThen(parse(c.station), Effect.as(inner.stationTopics.around(c.station, c.thread, c.seq), null));
+  };
+  handlers.chatFind = (inner, call) => {
+    const c = call as Extract<Call, { kind: "chatFind" }>;
+    return Effect.andThen(parse(c.station), inner.stationTopics.find(c.station, c.thread, c.query, c.bring));
+  };
   handlers.historyOlder = (inner, call) => {
     const c = call as Extract<Call, { kind: "historyOlder" }>;
     return Effect.andThen(parse(c.station), Effect.map(inner.stationTopics.historyOlder(c.station, c.key), (more) => ({ more })));

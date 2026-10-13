@@ -672,6 +672,11 @@ export class Data {
     return [...by].flatMap(([db, list]) => db.desk(list));
   }
 
+  /// The messages of one thread that have all of `terms`, oldest first (AccountDb.findInThread).
+  findInThread(station: string, thread: number, terms: string[]): ReturnType<AccountDb["findInThread"]> {
+    return this.of(station)?.findInThread(station, thread, terms) ?? [];
+  }
+
   /// The messages of these stations that have all of `terms`, newest first, across their databases (AccountDb.findSaid).
   findSaid(stations: string[], terms: string[], limit: number): ReturnType<AccountDb["findSaid"]> {
     const by = new Map<AccountDb, string[]>();

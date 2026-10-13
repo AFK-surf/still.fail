@@ -1307,6 +1307,23 @@ export class AccountDb {
       .map((r) => ({ station: String(r[0]), thread: Number(r[1]), seq: Number(r[2]), at: typeof r[3] === "number" ? r[3] : null, text: String(r[4]) }));
   }
 
+  /// The messages of one thread whose latest text has every one of `terms` (case aside), oldest first, with their
+  /// words (a chat's own find: all of them, as `findSaid` looks).
+  findInThread(station: string, thread: number, terms: string[]): { seq: number; text: string }[] {
+    if (this.#said === null || terms.length === 0) return [];
+    const indexed = this.#said === "index" ? terms.filter((t) => [...t].length >= 3) : [];
+    const scanned = terms.filter((t) => !indexed.includes(t));
+    const where = ["s.station = ?", "s.thread = ?", ...scanned.map(() => "s.text LIKE ? ESCAPE '\\'")];
+    const params: SqlValue[] = [station, thread, ...scanned.map((t) => `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`)];
+    let from = "said s";
+    if (indexed.length > 0) {
+      from = "said_index JOIN said s ON s.id = said_index.rowid";
+      where.unshift("said_index MATCH ?");
+      params.unshift(indexed.map((t) => `"${t.replace(/"/g, '""')}"`).join(" "));
+    }
+    return this.sql.all(`SELECT s.seq, s.text FROM ${from} WHERE ${where.join(" AND ")} ORDER BY s.seq`, params).map((r) => ({ seq: Number(r[0]), text: String(r[1]) }));
+  }
+
   // ── what is kept within the device's room ──
 
   /// How much of the database is in use (its pages less the free ones), in bytes.

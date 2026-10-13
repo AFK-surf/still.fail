@@ -47,6 +47,8 @@ export type Call =
   | { kind: "chatNewer"; station: string; thread: number }
   | { kind: "chatLatest"; station: string; thread: number }
   | { kind: "chatPlace"; station: string; thread: number; seq: number | null; offset: number | null }
+  | { kind: "chatAround"; station: string; thread: number; seq: number }
+  | { kind: "chatFind"; station: string; thread: number; query: string; bring: boolean }
   | { kind: "historyOlder"; station: string; key: string }
   | { kind: "historyDetail"; station: string; key: string; from: number; to: number }
   | { kind: "stationMeasure"; station: string }
@@ -384,6 +386,23 @@ export function parseCall(name: string, params: unknown): Call {
         ["offset", "f64", "opt"],
       ]);
       return { kind: "chatPlace", station: p.station as string, thread: p.thread as number, seq: p.seq as number | null, offset: p.offset as number | null };
+    }
+    case "chat.around": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["seq", "u64", "req"],
+      ]);
+      return { kind: "chatAround", station: p.station as string, thread: p.thread as number, seq: p.seq as number };
+    }
+    case "chat.find": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["query", S, "req"],
+        ["bring", "bool", "opt"],
+      ]);
+      return { kind: "chatFind", station: p.station as string, thread: p.thread as number, query: p.query as string, bring: p.bring === true };
     }
     case "history.older": {
       const p = read(params, [
