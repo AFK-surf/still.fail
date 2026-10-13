@@ -95,13 +95,18 @@ class Updates(context: Context, private val origin: String, private val core: St
     /**
      * Downloads the build into the cache, picking up where a cut connection (or an earlier tap) left off: the bytes so
      * far stay in `<name>.part` and the rest is asked for as a range, a few times over with a growing pause while each
-     * try gets further. The whole file is then checked against its sha256.
+     * try gets further. The whole file is then checked against its sha256 and kept until a newer build: one already
+     * here whole (its install was cancelled) is handed over again without a download.
      */
     private suspend fun download(release: AppRelease): File = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
         val apk = File(dir, "stillfail-${release.versionCode}.apk")
         val part = File(dir, "${apk.name}.part")
-        dir.listFiles()?.forEach { if (it != part) it.delete() }
+        dir.listFiles()?.forEach { if (it != part && it != apk) it.delete() }
+        if (apk.exists()) {
+            if (sha256(apk).equals(release.sha256, ignoreCase = true)) return@withContext apk
+            apk.delete()
+        }
         if (release.size > 0 && part.length() > release.size) part.delete()
         var failures = 0
         while (release.size <= 0 || part.length() < release.size) {
@@ -115,8 +120,17 @@ class Updates(context: Context, private val origin: String, private val core: St
                 delay(1_000L shl (failures - 1))
             }
         }
+        if (!sha256(part).equals(release.sha256, ignoreCase = true)) {
+            part.delete()
+            error(t("android-misc.updates.incomplete"))
+        }
+        if (!part.renameTo(apk)) error(t("android-misc.updates.incomplete"))
+        apk
+    }
+
+    private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        part.inputStream().use { input ->
+        file.inputStream().use { input ->
             val buffer = ByteArray(64 * 1024)
             while (true) {
                 val read = input.read(buffer)
@@ -124,13 +138,7 @@ class Updates(context: Context, private val origin: String, private val core: St
                 digest.update(buffer, 0, read)
             }
         }
-        val sum = digest.digest().joinToString("") { "%02x".format(it) }
-        if (!sum.equals(release.sha256, ignoreCase = true)) {
-            part.delete()
-            error(t("android-misc.updates.incomplete"))
-        }
-        if (!part.renameTo(apk)) error(t("android-misc.updates.incomplete"))
-        apk
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     /** One try: appends to `part` from where it ends. Whether the file is whole (the server sent all it had). */
