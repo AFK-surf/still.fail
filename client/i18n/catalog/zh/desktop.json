@@ -77,5 +77,8 @@
   "desktop.update.dev": "开发版不检查更新",
   "desktop.update.later": "稍后",
   "desktop.update.latest": "已是最新版本",
-  "desktop.update.update": "更新"
+  "desktop.update.update": "更新",
+  "desktop.window.controls": "窗口控制",
+  "desktop.window.maximize": "最大化",
+  "desktop.window.restore": "还原"
 }

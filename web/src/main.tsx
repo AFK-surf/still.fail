@@ -11,6 +11,7 @@ import { CloudApp } from "./cloud/CloudApp.tsx";
 import { nameTitle } from "./cloud/beta.tsx";
 import { startTelemetry } from "./telemetry.ts";
 import { wholeImage } from "./wholeImages.ts";
+import { WindowControls } from "./WindowControls.tsx";
 
 import { webUpdates } from "./core/webUpdates.ts";
 
@@ -32,4 +33,4 @@ function SayLanguage() {
   return null;
 }
 
-createRoot(document.getElementById("app")!).render(<StrictMode><SayLanguage /><I18nRoot><CloudApp /></I18nRoot></StrictMode>);
+createRoot(document.getElementById("app")!).render(<StrictMode><SayLanguage /><I18nRoot><CloudApp /><WindowControls /></I18nRoot></StrictMode>);

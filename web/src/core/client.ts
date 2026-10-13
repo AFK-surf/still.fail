@@ -533,7 +533,13 @@ export interface StillFailDesktop {
    * window's buttons at its left or right; `system` has the system's. None from apps before it, all inset; apps before
    * `overlay` said `system` on Windows.
    */
-  frame?: "inset" | "overlay" | "system";
+  frame?: "inset" | "overlay" | "custom" | "system";
+  windowControls?: {
+    state(): Promise<unknown>;
+    action(action: "minimize" | "maximize" | "close"): void;
+    bounds(rect: number[] | null): void;
+    watch(listener: (state: unknown) => void): () => void;
+  };
   /** The colours of the window's buttons on Windows (`overlay`), as #rrggbb: the top row's under them, their symbols'. */
   windowColors?(color: string, symbolColor: string): void;
   /** The cloud's origin (https://app.still.fail): its links are the app's own, though the app is at app://ember. */

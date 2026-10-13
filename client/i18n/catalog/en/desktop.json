@@ -77,5 +77,8 @@
   "desktop.update.dev": "Dev builds don't check for updates",
   "desktop.update.later": "Later",
   "desktop.update.latest": "You're up to date",
-  "desktop.update.update": "Update"
+  "desktop.update.update": "Update",
+  "desktop.window.controls": "Window controls",
+  "desktop.window.maximize": "Maximize",
+  "desktop.window.restore": "Restore"
 }
