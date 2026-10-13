@@ -80,7 +80,10 @@ class Device {
       for (const table of DEVICE_TABLES) {
         const bytes = yield* Effect.orElseSucceed(host.storageGet(`device/${table}`), () => null);
         const v = bytes ? parseJson(bytes) : undefined;
-        if (isObject(v) && !this.#tables.has(table)) this.#tables.set(table, v as Record<string, unknown>);
+        if (!isObject(v) || this.#tables.has(table)) continue;
+        // Each value frozen, as `put` keeps it: shared by whoever reads it (`shared`).
+        for (const key of Object.keys(v)) frozen(v[key]);
+        this.#tables.set(table, v as Record<string, unknown>);
       }
     });
   }

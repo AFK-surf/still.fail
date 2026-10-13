@@ -2,12 +2,13 @@
 // shape (conform.ts), item by item for its keyed lists (collections.ts). An item that is as it was (the same object a
 // view keeps for it, or one equal to it) within the same minute (times in words are a minute's) is the very object
 // that went out before: not copied, decorated, shaped or compared again, so a list of 2000 rows with one changed costs
-// one row. What went out is frozen in `shaped` (util.ts): nothing changes it after.
+// one row. What went out is marked in `shaped` (util.ts), and frozen when shared values are checked: nothing changes it
+// after.
 import { type Spec, keyOf, specOf } from "./collections.ts";
 import { conformTy, type Ty } from "./conform.ts";
 import * as present from "./present.ts";
 import type { Topic } from "./protocol.ts";
-import { equal, isObject, shaped } from "./util.ts";
+import { equal, isObject, shaped, sharedValue } from "./util.ts";
 
 type Memo = { raw: unknown; minute: number; out: unknown };
 
@@ -25,7 +26,10 @@ export class Output {
       const skeleton = spec ? this.#build(topic, raw, spec, ty, "", "", c, minute, next) : raw;
       const v = present.decorate(topic, copy(skeleton), c);
       const out = ty === undefined ? { ok: v } : conformTy(ty, v);
-      if ("ok" in out) this.#memo = next;
+      if ("ok" in out) {
+        this.#memo = next;
+        sharedValue(out.ok);
+      }
       return out;
     } catch (e) {
       if (e instanceof ItemWrong) return { error: e.message };
@@ -84,6 +88,7 @@ function copy(v: unknown): unknown {
   return out;
 }
 
+/// Kept as it went out: marked (`shaped`), and frozen when shared values are checked (util.ts `sharedValue`).
 function freeze(v: unknown): void {
-  if (v !== null && typeof v === "object") shaped.add(v);
+  if (v !== null && typeof v === "object") shaped.add(sharedValue(v));
 }

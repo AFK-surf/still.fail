@@ -76,7 +76,8 @@ export function applyStep(view: LiveView, event: unknown, now: number): void {
     if (typeof parent === "string" && parent !== "") step.parent = parent;
     view.steps.push(step);
   } else if (kind === "end") {
-    for (const s of view.steps) if (equal(get(s, "id"), id) && isObject(s)) s.ended = true;
+    // On new steps: the ones there are in the live topic's value as it was made (shared, docs/core-ts.md).
+    view.steps = view.steps.map((s) => (equal(get(s, "id"), id) && isObject(s) ? { ...s, ended: true } : s));
   }
 }
 

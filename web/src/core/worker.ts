@@ -7,7 +7,7 @@
 // frozen (its page kept in the back/forward cache) and would hold the lock for good, so the lock is taken from it.
 // The core is the TypeScript one (client/core-ts, its web host; docs/core-ts.md); of Rust only iroh is left,
 // client/iroh-wasm, loaded once the mesh is first needed while the core starts from its database.
-import { startWeb, type WasmSqlite, type WebCore } from "@stillfail/core-ts/web";
+import { checkShared, startWeb, type WasmSqlite, type WebCore } from "@stillfail/core-ts/web";
 import { BUILT_AT } from "./built.ts";
 import initIroh, * as iroh from "./iroh-pkg/stillfail_iroh_wasm.js";
 import type { WorkerFault } from "./client.ts";
@@ -308,6 +308,8 @@ async function lead(): Promise<void> {
   const followed = leader !== null;
   // On the test channel the page names the worker so (core/client.ts workerName): the core's words say youdid.wtf.
   // A defect's stack goes to error tracking first (as a fault): the fatal the pages hear is its message only.
+  // In development what the core shares is frozen where it is shared: a write on it throws where it is written.
+  if (import.meta.env.DEV) checkShared(true);
   ready = startWeb(emit, (globalThis as { name?: string }).name?.endsWith("-test") ?? false, loadIroh, (reason, error) => {
     if (!dead) fault(error);
     fatal(reason);

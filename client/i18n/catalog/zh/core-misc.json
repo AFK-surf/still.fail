@@ -152,6 +152,7 @@
   "core-misc.policy.noOption": "没有这个选项",
   "core-misc.policy.notYours": "不是这个页面的归档策略草稿",
   "core-misc.policy.saving": "正在保存",
+  "core-misc.compute": "{topic} 没能算出来：{reason}",
   "core-misc.shape": "{topic} 不合约定：{at}",
   "core-misc.socket.dropped": "连接断开了",
   "core-misc.socket.silent": "连接没有回应",

@@ -152,6 +152,7 @@
   "core-misc.policy.noOption": "No such option",
   "core-misc.policy.notYours": "This archive policy draft belongs to another page",
   "core-misc.policy.saving": "Saving",
+  "core-misc.compute": "{topic} could not be worked out: {reason}",
   "core-misc.shape": "{topic} malformed: {at}",
   "core-misc.socket.dropped": "Connection dropped",
   "core-misc.socket.silent": "No response",

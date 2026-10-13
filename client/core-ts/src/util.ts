@@ -195,6 +195,32 @@ export function compareKeys(a: string, b: string): number {
 /// What went out of the store as it is (output.ts): never changed after, so it is shared and not shaped again.
 export const shaped = new WeakSet<object>();
 
+/// Whether what is shared is frozen where it is shared (docs/core-ts.md, "Who may change what"): what the store keeps,
+/// what a view makes and what goes out. On in the core's tests (node --test, or STILLFAIL_CHECK_SHARED=1) and in the
+/// web's development build (`checkShared`); off in what people run, where only what the core freezes anyway is (the
+/// databases' rows, the device's values, a list's rows made).
+let checking = (() => {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  return env !== undefined && (env.NODE_TEST_CONTEXT !== undefined || env.STILLFAIL_CHECK_SHARED === "1");
+})();
+
+export function checkShared(on: boolean): void {
+  checking = on;
+}
+
+/// Frozen all through when shared values are checked: whatever writes on it then throws where it writes.
+export function sharedValue<T>(v: T): T {
+  if (checking) deepFreeze(v);
+  return v;
+}
+
+/// Frozen all through (a part already frozen is taken as frozen all through).
+export function deepFreeze(v: unknown): void {
+  if (v === null || typeof v !== "object" || Object.isFrozen(v) || ArrayBuffer.isView(v)) return;
+  Object.freeze(v);
+  for (const k of Object.keys(v)) deepFreeze((v as Record<string, unknown>)[k]);
+}
+
 /// JSON text as serde_json writes it: keys sorted.
 export function toJson(v: unknown): string {
   return JSON.stringify(sorted(v));

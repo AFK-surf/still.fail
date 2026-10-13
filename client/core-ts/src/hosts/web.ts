@@ -16,6 +16,9 @@ import { t } from "../i18n.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
 
+/// Shared values frozen where they are shared (util.ts `checkShared`): the web's development build turns it on.
+export { checkShared } from "../util.ts";
+
 const DATABASE = "stillfail-core";
 /// Its name before the rename: what a browser that ran the core then has, copied over on the first open.
 const FORMER_DATABASE = "ember-core";

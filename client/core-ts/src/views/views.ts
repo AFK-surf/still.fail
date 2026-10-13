@@ -21,7 +21,7 @@ import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import * as refs from "../refs.ts";
 import type { Value, Watch } from "../store.ts";
-import { arr as arrU, get as getU, isObject } from "../util.ts";
+import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archive } from "./archive.ts";
@@ -880,6 +880,7 @@ export class Views implements Owner {
           if (kept && kept.sig === sig) row = kept.row;
           else {
             row = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark);
+            // Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
             if (row !== null) deepFreeze(row);
             if (keepable) this.#rowsMade.set(shown, { sig, row });
           }
@@ -1676,11 +1677,4 @@ function drawn<V extends Value | undefined>(out: V): V {
     view.elsewhere = first;
   }
   return { ...out, ok: view } as V;
-}
-
-/// Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
-function deepFreeze(v: unknown): void {
-  if (v === null || typeof v !== "object" || Object.isFrozen(v)) return;
-  for (const k of Object.keys(v)) deepFreeze((v as Record<string, unknown>)[k]);
-  Object.freeze(v);
 }

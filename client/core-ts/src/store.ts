@@ -16,7 +16,7 @@ import { t } from "./i18n.ts";
 import * as present from "./present.ts";
 import { topicDebug, topicKey, type ClientId, type CoreMessage, type RequestId, type Topic } from "./protocol.ts";
 import type { Runner } from "./runtime.ts";
-import { equal } from "./util.ts";
+import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
 
 export const COALESCE_MS = 50;
@@ -247,6 +247,7 @@ export class Store {
   set(topic: Topic, value: Value): void {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry) return;
+    if ("ok" in value) sharedValue(value.ok);
     entry.value = value;
     const schedule = !entry.emitScheduled;
     entry.emitScheduled = true;
@@ -255,12 +256,12 @@ export class Store {
     for (const w of watchers) w();
   }
 
-  /// Changes a topic's value in place, then schedules sending it. Does nothing if the topic has no value yet.
+  /// Replaces a topic's value by what `change` makes of it (a new value: the one kept is shared, and never changed in
+  /// place), then schedules sending it. Does nothing if the topic has no value yet.
   update(topic: Topic, change: (value: unknown) => unknown): void {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry || !entry.value || !("ok" in entry.value)) return;
-    const next = change(entry.value.ok);
-    if (next !== undefined) entry.value = { ok: next };
+    entry.value = { ok: sharedValue(change(entry.value.ok)) };
     const schedule = !entry.emitScheduled;
     entry.emitScheduled = true;
     const watchers = entry.watchers.map(([, w]) => w);
@@ -338,6 +339,21 @@ export class Store {
     for (const topic of pending) this.#flush(topic);
   }
 
+  /// What the source makes of a topic now, kept shared (frozen when that is checked). A source that throws making it
+  /// fails this topic, which says why, not the core and every other topic with it (a chat's view writing on a frozen
+  /// message took the whole core down once, and the page stayed on 正在读取对话).
+  #compute(topic: Topic): Value | undefined {
+    let value: Value | undefined;
+    try {
+      value = this.#source?.compute?.(topic);
+    } catch (error) {
+      console.error(`computing ${topicDebug(topic)} failed`, error);
+      return { err: new CoreError("internal", t("core-misc.compute", { topic: topicDebug(topic), reason: error instanceof Error ? error.message : String(error) })) };
+    }
+    if (value !== undefined && "ok" in value) sharedValue(value.ok);
+    return value;
+  }
+
   #flush(topic: Topic): void {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry) return;
@@ -350,7 +366,7 @@ export class Store {
       if (isHeld && entry.subscribers.length === 0) {
         // Only watched: who watches it reads what is held (and heard of its changes as they were made); what is read
         // here is only what its source says when nothing is held (an error), so nothing is loaded for it.
-        const said = this.#source?.compute?.(topic);
+        const said = this.#compute(topic);
         const was = entry.value;
         if (said === undefined ? was === undefined || !("err" in was) : sameValue(was, said)) return;
         entry.value = said;
@@ -358,7 +374,7 @@ export class Store {
         return;
       }
       const held = this.#heldValue(topic);
-      computed = held !== undefined ? { ok: held } : this.#source?.compute?.(topic);
+      computed = held !== undefined ? { ok: held } : this.#compute(topic);
     }
     const now = this.#topics.get(topicKey(topic));
     if (!now) return;

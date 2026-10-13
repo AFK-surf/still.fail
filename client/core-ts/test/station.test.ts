@@ -245,3 +245,17 @@ test("a_chat_with_something_unread_opens_from_what_is_held_while_what_is_before_
   assert.deepEqual([v(values, 1).first, v(values, 1).last, v(values, 1).end], [71, 120, true]);
   core.close();
 });
+
+test("a_step_ends_on_new_steps_the_live_value_already_shown_keeps_as_they_were", async () => {
+  const { applyStep } = await import("../src/station/sync.ts");
+  const view = { steps: [] as unknown[], phase: null, rate: null, usage: null, loaded: true };
+  applyStep(view, { kind: "start", id: "s1", step: "Bash", input: "ls" }, 1000);
+  applyStep(view, { kind: "start", id: "s2", step: "Read", input: "a.ts" }, 2000);
+  // The live topic's value holds these steps as they were made (shared, frozen when that is checked).
+  const shown = Object.freeze(view.steps.map((s) => Object.freeze(s)));
+  view.steps = shown as unknown[];
+  applyStep(view, { kind: "end", id: "s1" }, 3000);
+  assert.deepEqual(view.steps.map((s) => [(s as { id: string }).id, (s as { ended?: boolean }).ended ?? false]), [["s1", true], ["s2", false]]);
+  assert.equal(view.steps[1], shown[1]);
+  assert.equal((shown[0] as { ended?: boolean }).ended, undefined);
+});

@@ -1113,11 +1113,7 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   assert.deepEqual([v.agents[0].profile.id, v.agents[0].profile.name], ["p2", "主力"]);
   assert.deepEqual(v.link, { state: "online" });
   // A new message goes out as an append.
-  t.store.update(pageOf("ws/a", 7), (p) => {
-    (p as J).entries.push(entry(41, "新的"));
-    (p as J).last = 41;
-    return p;
-  });
+  t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...(p as J).entries, entry(41, "新的")], last: 41 }));
   await t.host.time.pass(100);
   const sent = t.host.takeEmitted();
   assert.equal(sent.length, 1);
@@ -1128,19 +1124,11 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   appended[0].system = false;
   assert.deepEqual(plain(delta), plain([{ path: ["messages"], append: appended }]));
   u.value = applyOps(u.value, delta);
-  t.store.update(pageOf("ws/a", 7), (p) => {
-    (p as J).entries.push({ n: 42, kind: "edit", target: 41, text: "新的（改）", attachments: [], quotes: [], at: 42 });
-    (p as J).last = 42;
-    return p;
-  });
+  t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...(p as J).entries, { n: 42, kind: "edit", target: 41, text: "新的（改）", attachments: [], quotes: [], at: 42 }], last: 42 }));
   await t.read(u, 1);
   v = u.value;
   assert.deepEqual(v.messages.slice(-2).reverse().map((m: J) => [m.text, m.editedAt ?? null]), [["新的（改）", 42], ["第 40 条", null]]);
-  t.store.update(pageOf("ws/a", 7), (p) => {
-    (p as J).entries.unshift(...Array.from({ length: 10 }, (_, i) => entry(i + 1, "旧的")));
-    (p as J).first = 1;
-    return p;
-  });
+  t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...Array.from({ length: 10 }, (_, i) => entry(i + 1, "旧的")), ...(p as J).entries], first: 1 }));
   await t.read(u, 1);
   v = u.value;
   assert.deepEqual([v.messages[0].seq, v.messages.length, v.more], [1, 41, false]);
@@ -1228,11 +1216,7 @@ test("a_sent_message_shows_until_the_chat_has_it", async () => {
   views.outboxSent("ws/a", 7, id, 6);
   await t.read(u, 1);
   assert.equal(u.value.outbox[0].seq, 6);
-  t.store.update(pageOf("ws/a", 7), (p) => {
-    (p as J).entries.push(entry(6, "你好"));
-    (p as J).last = 6;
-    return p;
-  });
+  t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...(p as J).entries, entry(6, "你好")], last: 6 }));
   await t.host.time.pass(100);
   const sent = t.host.takeEmitted();
   assert.equal(sent.length, 1);
@@ -1365,11 +1349,7 @@ test("outgoing_identity_survives_a_coalesced_acknowledgement", async () => {
   const id = views.outboxAdd("ws/a", 7, { text: "你好", attachments: [], quotes: [] });
   await t.read(u, 1);
   views.outboxSent("ws/a", 7, id, 6);
-  t.store.update(pageOf("ws/a", 7), (p) => {
-    (p as J).entries.push(entry(6, "你好"));
-    (p as J).last = 6;
-    return p;
-  });
+  t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...(p as J).entries, entry(6, "你好")], last: 6 }));
   await t.read(u, 1);
   const current = u.value;
   assert.deepEqual(current.outbox, []);
@@ -1391,11 +1371,7 @@ test("a_sent_message_that_arrives_before_its_seq_leaves_the_outbox_with_it", asy
   await t.read(u, 1);
   assert.equal(u.value.outbox.length, 2);
   const mine = (n: number, text: string) => ({ ...entry(n, text), author: "Me@x.com" });
-  t.store.update(pageOf("ws/a", 7), (p) => {
-    (p as J).entries.push(entry(6, "你好"), mine(7, "你好"));
-    (p as J).last = 7;
-    return p;
-  });
+  t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...(p as J).entries, entry(6, "你好"), mine(7, "你好")], last: 7 }));
   await t.read(u, 1);
   assert.deepEqual(u.value.outbox.map((m: J) => m.id), [second]);
   const messages = u.value.messages;
