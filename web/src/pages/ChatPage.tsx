@@ -8,13 +8,13 @@ import { CreatorText, EdgeChip, MeterChips, PeopleStack } from "../components.ts
 import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { PENDING } from "../lastChat.ts";
 import { ownOrigin } from "../stillfailLink.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
-import type { ChatJobsView, ChatShare } from "../core/shapes.ts";
-import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
+import type { ChatJobsView, ChatShare, Host, StationView } from "../core/shapes.ts";
+import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
@@ -29,7 +29,8 @@ import { useShortcut } from "../keymap.ts";
 import { animate, EASE_OUT, LOCAL_MS, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
 import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
-import { useReady } from "../core/react.ts";
+import { useReady, useTopicSelect } from "../core/react.ts";
+import { useEvent } from "../event.ts";
 import { failure, useAct, useToast } from "../toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
@@ -295,11 +296,17 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
   }, [navigate]);
-  const openHistory = (key: string, entry?: number) => {
+  // What the chat and the bar are handed stays the same function: they are not drawn again because this page was.
+  const openHistory = useEvent((key: string, entry?: number) => {
     if (entry === undefined) return toggleHistory(key);
     openTab(key);
     setFocus({ key, entry, n: Date.now() });
-  };
+  });
+  const onHistory = useEvent(toggleHistory);
+  const onService = useEvent((job: string) => openTab(`service:${job}`));
+  const onJobs = useEvent(openJobs);
+  const openFile = useEvent((session: string, file: { path: string; name: string }) => openTab(fileTab(session, file.path, file.name)));
+  const archiveAsked = useEvent(() => { if (chatView.value?.watch) setAskArchive(true); else void archive(); });
   const api = stationApi(call);
   const toast = useToast();
   const running = agents.filter((a) => a.status === "running" || a.status === "queued");
@@ -356,8 +363,6 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   }
   const chat = chatView.value;
   const panel = open.length > 0;
-  // A chat keeping watch is archived only once asked.
-  const archiveAsked = () => { if (chat.watch) setAskArchive(true); else void archive(); };
   // What the panel shows: its tabs, or while it slides out, what it showed.
   const side = panel && shown ? { tabs: open, shown } : leaving;
   const slackUrl = chat.slackUrl;
@@ -380,13 +385,13 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           {agents.length === 0 && <ChatStation />}
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a, i) => (
-            <AgentButton key={a.session.key} agent={a} marked={agents.length > 1 && shown === a.session.key} onHistory={() => toggleHistory(a.session.key)} station={i === 0} />
+            <AgentButton key={a.session.key} agent={a} marked={agents.length > 1 && shown === a.session.key} onHistory={onHistory} station={i === 0} />
           ))}
         </div>
         <div className={css.pageBarActions}>
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
           {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
-          <JobsPanel station={station.address} view={jobsView} onService={(job) => openTab(`service:${job}`)} onTab={openJobs} />
+          <JobsPanel station={station.address} view={jobsView} onService={onService} onTab={onJobs} />
           {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
           {slackUrl && (
             <Tip label={t("web-pages.chat.openInSlack")}>
@@ -398,7 +403,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
       {/* A visualization in a message opens on its own in a tab of the side panel, beside the chat. */}
-      <OpenFile.Provider value={(session, file) => openTab(fileTab(session, file.path, file.name))}>
+      <OpenFile.Provider value={openFile}>
         <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} onArchive={chat.archivable && keeper ? archiveAsked : undefined} {...(sendTo ? { made: sendTo } : {})} />
       </OpenFile.Provider>
       </div>
@@ -461,7 +466,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               if (key === JOBS) {
                 return (
                   <SidePane key={key} of={key} shown={side.shown}>
-                    <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} onService={(job) => openTab(`service:${job}`)} />
+                    <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} onService={onService} />
                   </SidePane>
                 );
               }
@@ -489,11 +494,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               if (!a) return <SidePane key={key} of={key} shown={side.shown} />;
               return (
                 <SidePane key={key} of={key} shown={side.shown}>
-                  <History station={station.address} sessionKey={key} title={view?.title}
-                    focus={focus?.key === key ? focus : null}
-                    head={<SessionHead agent={a} />}
-                    summary={a.attention.length > 0 ? <HistorySummary agent={a} /> : null}
-                    details={<SessionDetails agent={a} />} />
+                  <AgentHistory station={station.address} agent={a} title={view?.title} focus={focus?.key === key ? focus : null} />
                 </SidePane>
               );
             })}
@@ -508,8 +509,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
  * hover, its card (AgentCard.tsx), the one its avatar beside its messages has. Those whose history shows are marked,
  * among several.
  */
-function AgentButton({ agent, marked, onHistory, station = false }: { agent: ChatAgent; marked: boolean; onHistory(): void; station?: boolean }) {
+const AgentButton = memo(function AgentButton({ agent, marked, onHistory: toggle, station = false }: { agent: ChatAgent; marked: boolean; onHistory(key: string): void; station?: boolean }) {
   const { session } = agent;
+  const onHistory = () => toggle(session.key);
   const where = useChatStation();
   const label = t("web-pages.chat.historyOf", { agent: session.agentText });
   // With the station it runs on, one tile: the maker opens the history and has
@@ -531,7 +533,20 @@ function AgentButton({ agent, marked, onHistory, station = false }: { agent: Cha
       </button>
     </Hover>
   );
-}
+});
+
+/**
+ * An agent's execution history in its tab, with its head (how it runs), what needs seeing to and its details: drawn
+ * again only when the agent, the chat's title or the entry asked for changes, not with the rest of the chat's page.
+ */
+const AgentHistory = memo(function AgentHistory({ station, agent, title, focus }: { station: string; agent: ChatAgent; title: string | undefined; focus: { entry: number; n: number } | null }) {
+  return (
+    <History station={station} sessionKey={agent.session.key} title={title} focus={focus}
+      head={<SessionHead agent={agent} />}
+      summary={agent.attention.length > 0 ? <HistorySummary agent={agent} /> : null}
+      details={<SessionDetails agent={agent} />} />
+  );
+});
 
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";
@@ -782,31 +797,42 @@ function Evict({ session }: { session: string }) {
   );
 }
 
-/** The machine the chat runs on: its name, its view (once it comes) and its host. */
+/**
+ * The machine the chat runs on: its name, how it looks (once its view comes) and, until then, its host in a line. Only
+ * what is shown here is followed: its view changes much more often (its load, its agents), and is read by its card.
+ */
 function useChatStation() {
   const station = useStation();
-  const stations = useStations(scopeOf(station.address)).value;
-  const host = useHost(station.address).value;
-  if (!stations) return null;
-  const name = station.name || host?.hostname || t("web-pages.chat.thisMachine");
-  return { name, view: stations.find((s) => s.station === station.address), host, settings: `${station.settings}/stations` };
+  const listed = useTopicSelect<StationView[], boolean>({ topic: "stations", scope: scopeOf(station.address) }, (s) => s.value !== undefined);
+  const look = useStationLook(station.address);
+  const hostname = useTopicSelect<Host, string | undefined>({ topic: "host", station: station.address }, (s) => s.value?.hostname);
+  const line = useTopicSelect<Host, string | undefined>({ topic: "host", station: station.address }, (s) => (look || !s.value ? undefined : `${s.value.hostname} · ${s.value.summary}`));
+  if (!listed) return null;
+  const name = station.name || hostname || t("web-pages.chat.thisMachine");
+  return { name, address: station.address, look, line, settings: `${station.settings}/stations` };
 }
 
 /** The station at a glance on hover (its card, StationCards.tsx); before its view comes, its host in a line. */
 function StationHover({ where, children }: { where: NonNullable<ReturnType<typeof useChatStation>>; children: ReactElement }) {
-  const { view, host, name, settings } = where;
-  if (view) return <Hover content={<StationPeek s={view} settings={settings} />}>{children}</Hover>;
-  return <Tip label={host ? `${host.hostname} · ${host.summary}` : name}>{children}</Tip>;
+  const { look, line, name, address, settings } = where;
+  if (look) return <Hover content={<StationCard address={address} settings={settings} />}>{children}</Hover>;
+  return <Tip label={line ?? name}>{children}</Tip>;
+}
+
+/** The station's card, as its view is now: read only while it shows. */
+function StationCard({ address, settings }: { address: string; settings: string }) {
+  const view = useStations(scopeOf(address)).value?.find((s) => s.station === address);
+  return view ? <StationPeek s={view} settings={settings} /> : null;
 }
 
 /** The station's part of its agent's tile: its icon, or its name where it has none. */
 function StationPart({ where }: { where: NonNullable<ReturnType<typeof useChatStation>> }) {
-  const { view, name } = where;
-  const mark = view && (view.emoji || view.icon);
+  const { look, name } = where;
+  const mark = look && (look.emoji || look.icon);
   return (
     <StationHover where={where}>
-      <span className={css.agentStationPart} data-name={mark ? undefined : true} tabIndex={view ? 0 : undefined} aria-label={mark ? name : undefined}>
-        {mark ? <StationMark emoji={view.emoji} icon={view.icon} size={12} /> : name}
+      <span className={css.agentStationPart} data-name={mark ? undefined : true} tabIndex={look ? 0 : undefined} aria-label={mark ? name : undefined}>
+        {mark ? <StationMark emoji={look.emoji} icon={look.icon} size={12} /> : name}
       </span>
     </StationHover>
   );
@@ -816,10 +842,10 @@ function StationPart({ where }: { where: NonNullable<ReturnType<typeof useChatSt
 function ChatStation() {
   const where = useChatStation();
   if (!where) return null;
-  const { view, name } = where;
+  const { look, name } = where;
   return (
     <StationHover where={where}>
-      <span className={css.chatStation} tabIndex={view ? 0 : undefined}>{(view?.emoji || view?.icon) && <StationMark emoji={view.emoji} icon={view.icon} size={12} />}{name}</span>
+      <span className={css.chatStation} tabIndex={look ? 0 : undefined}>{(look?.emoji || look?.icon) && <StationMark emoji={look.emoji} icon={look.icon} size={12} />}{name}</span>
     </StationHover>
   );
 }

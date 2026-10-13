@@ -6,7 +6,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useReady } from "../core/react.ts";
-import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStations, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
+import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
@@ -180,11 +180,9 @@ function StationChip({ station }: { station: string }) {
   );
 }
 
-/** The station the chat runs on. */
+/** How the station the chat runs on looks: followed alone, not each change of the stations' views. */
 function useChatStation(station: string) {
-  const stations = useStations(scopeOf(station)).value;
-  if (!stations) return undefined;
-  return stations.find((x) => x.station === station);
+  return useStationLook(station);
 }
 
 function StationSheet({ station }: { station: string }) {
@@ -241,6 +239,10 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
     images: () => latest.current.images(),
     hold: (ts: string) => { const { app, here } = latest.current; app.push(annotatePath(here.station, here.key, ts)); },
     archive: () => latest.current.archive(),
+    file: (session: string, file: { path: string; name: string }) => {
+      const { app, here } = latest.current;
+      app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })));
+    },
   }));
   // Words selected with a mouse inside one message offer to quote them; a finger holds a message for its menu.
   const quoting = useSelectionQuote(list, stable.quote);
@@ -274,7 +276,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
     }
   };
   return (
-    <OpenFile.Provider value={(session, file) => app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })))}>
+    <OpenFile.Provider value={stable.file}>
       {quoting.pop}
       {askedFile}
       <Gallery.Provider value={stable.images}>

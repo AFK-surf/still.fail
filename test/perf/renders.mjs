@@ -33,6 +33,7 @@ const { values: opt } = parseArgs({
     dist: { type: "string" },
     chat: { type: "string" },
     other: { type: "string" },
+    title: { type: "string" },
     say: { type: "string" },
     step: { type: "string" },
     runs: { type: "string", default: "3" },
@@ -55,6 +56,7 @@ if (opt.compare) {
 }
 
 if (!opt.dist || !opt.chat) throw new Error("--dist and --chat are needed");
+if (opt.phone && !opt.title) throw new Error("--phone needs --title, words of the chat's title (its row is tapped)");
 const root = join(opt.dist, "cloud-web");
 if (!existsSync(join(root, "index.html"))) throw new Error(`no ${root}/index.html: build with STILLFAIL_PROFILE=1`);
 const cloud = new URL(opt.url);
@@ -238,18 +240,20 @@ const DESKTOP = [
 ];
 
 const PHONE = [
+  // From the chats' list (where a phone opens) to the chat, by its row (--title: words of its title).
+  ["toChat", async (page) => { await page.getByRole("button").filter({ hasText: opt.title }).first().tap(); }, { least: 900 }],
   ["message", async () => { if (opt.say) sh(opt.say); }, { least: 1500 }],
   ["typing", async (page) => { await page.keyboard.type("hello still.fail", { delay: 60 }); }, { least: 300 }, async (page) => {
     await composer(page).tap();
     return async () => { await composer(page).fill(""); await page.evaluate(() => document.activeElement?.blur()); };
   }],
+  // Back to the list, as the browser's back does.
   ["toList", async (page) => { await page.goBack(); }, { least: 900 }],
-  ["toChat", async (page) => { await page.goForward(); }, { least: 900 }],
+  // Last: its page is opened afresh (the agent's history, over the chat), the list and the chat gone.
   ["historyEntry", async () => { if (opt.step) sh(opt.step); }, { least: 1500 }, async (page) => {
-    const agent = await page.evaluate(() => decodeURIComponent(location.pathname.split("/chats/")[1] ?? ""));
-    await page.goto(`${origin}${opt.chat}/history/${encodeURIComponent(agent)}`);
-    await page.waitForTimeout(2500);
-    return async () => { await page.goto(`${origin}${opt.chat}`); };
+    await page.goto(`${origin}${opt.chat}/history/${encodeURIComponent(decodeURIComponent(opt.chat.split("/chats/")[1]))}`, { timeout: 60_000 });
+    await page.waitForTimeout(4000);
+    return null;
   }],
 ];
 
@@ -259,8 +263,9 @@ try {
   for (let i = 0; i < runs; i++) {
     const { context, page, cdp } = await fresh();
     try {
-      await page.goto(`${origin}${opt.chat}`, { timeout: 60_000 });
-      await page.locator('section[aria-label="对话"] [data-ts]').first().waitFor({ timeout: 60_000 }).catch(() => undefined);
+      // The phone opens on the chats' list (it goes to the chat as the first thing done); the desktop on the chat.
+      await page.goto(opt.phone ? `${origin}${opt.chat.split("/s/")[0]}` : `${origin}${opt.chat}`, { timeout: 60_000 });
+      if (!opt.phone) await page.locator('section[aria-label="对话"] [data-ts]').first().waitFor({ timeout: 60_000 }).catch(() => undefined);
       await page.waitForTimeout(4000);
       for (const [name, act, settleOpts, around] of OPS) {
         const after = around ? await around(page) : null;

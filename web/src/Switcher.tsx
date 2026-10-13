@@ -2,8 +2,9 @@
 // message by its words, or something to do here by its name (↑/↓ pick, ↩ opens, Esc closes, as everywhere; nothing
 // says so).
 import { Dialog as RDialog } from "radix-ui";
-import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
+import { Fragment, memo, useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import { useNavigate } from "react-router";
+import { useGo } from "./go.ts";
 import { useChatSearch, type ChatItem } from "./api.ts";
 import type { FoundMessage } from "./core/shapes.ts";
 import { Marked } from "./Marked.tsx";
@@ -23,8 +24,8 @@ import * as css from "./Switcher.css.ts";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 /** Mounted once under a scope's pages (a workspace's): its new chat and settings are at these paths. */
-export function GlobalShortcuts({ scope, newChat, settings }: { scope: string; newChat: string; settings: string }) {
-  const navigate = useNavigate();
+export const GlobalShortcuts = memo(function GlobalShortcuts({ scope, newChat, settings }: { scope: string; newChat: string; settings: string }) {
+  const navigate = useGo();
   const [switching, setSwitching] = useState(false);
   const [listing, setListing] = useState(false);
   useShortcut("chat.switch", () => setSwitching((s) => !s));
@@ -40,14 +41,14 @@ export function GlobalShortcuts({ scope, newChat, settings }: { scope: string; n
       <ShortcutsDialog open={listing} onClose={() => setListing(false)} settings={`${settings}/shortcuts`} />
     </>
   );
-}
+});
 
 /**
  * Updating what runs here: the page to a newer build of it (as the sidebar's foot offers), the desktop app to its newer
  * build (as 更新 beside the buddy does), or looking for one now (its version page, looking as it opens).
  */
 function useUpdateCommands(settings: string): Command[] {
-  const navigate = useNavigate();
+  const navigate = useGo();
   const page = useSyncExternalStore(webUpdates.subscribe, webUpdates.snapshot, () => null);
   const app = useAppUpdate();
   const updates = window.stillfailDesktop?.appUpdate;

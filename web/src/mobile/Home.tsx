@@ -3,6 +3,7 @@
 // at the bottom. The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with nothing to wait for.
 import { StationMark } from "../StationMark.tsx";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEvent } from "../event.ts";
 import { motionValue } from "motion";
 import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
 import { stationApi, useChats, useChatSearch, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
@@ -54,6 +55,7 @@ export function Home() {
   // The lists away while it is open; back as it starts to close, with its field.
   const [away, setAway] = useState(false);
   const search = useCallback((at: DOMRect) => { setSearching(at); setAway(true); }, []);
+  const changeFilter = useEvent(setFilter);
   // Pulled down from its top, a list loads the page again (./pull.ts).
   const pull = usePullToReload(css.mHomePane);
   return (
@@ -69,36 +71,60 @@ export function Home() {
       )}
       <div ref={pull.mark} className={`${css.mPull} ${pagesCss.mFloating}`} aria-hidden="true"><Refresh size={18} /></div>
       {/* The lists run under both bars, which are frosted glass over them. */}
-      <header className={`${css.mHomeBar} ${pagesCss.mGlass}`}>
-        <button type="button" className={`${barsCss.mNavButton} ${css.mHomeMe}`} onClick={() => app.push(app.at("/settings"))} aria-label={t("web-mobile.settings.title")}>
-          <Settings size={22} />
-        </button>
-        <button type="button" className={css.mHomeWorkspace} onClick={() => openWorkspaces(app)}>
-          <b>{app.entry.name}</b>
-          {marks?.others
-            ? <span className={chatMarkCss.chatMarkInline} data-tone={marks.others} role="img" aria-label={marks.othersLabel ?? ""} />
-            : invited && <span className={css.mDot} aria-label={t("web-mobile.home.invited")} />}
-          <ChevronDown size={16} />
-        </button>
-        {/* The filter, and the archive in its menu, as on the wide screen: nothing to narrow or look back on with no station. */}
-        {(all.value?.stations.length ?? 0) > 0 && <FilterButton filter={filter} setFilter={setFilter} />}
-        {/* The stations at a glance (../StationGlyph.tsx); its page says which is which. */}
-        <StationButton view={all.value} />
-      </header>
+      <HomeBar others={marks?.others} othersLabel={marks?.othersLabel} invited={invited} filtering={(all.value?.stations.length ?? 0) > 0}
+        filter={filter} setFilter={changeFilter} glyph={all.value?.glyph} trouble={all.value?.trouble} />
       {/* The new-chat button alone, floating over the list at the bottom right: a disc in the accent. */}
-      {!none && <div className={css.mHomeToolbar}>
-        {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, there at 0 too (奏 alone). */}
-        <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} data-alone={decisions > 0 ? undefined : ""} onClick={() => app.push(app.at("/decisions"))} aria-label={t("web-mobile.home.decisions", { n: decisions })}>
-          <Zou size={40} />{decisions > 0 && <Count n={decisions} />}
-        </button>
-        <div className={css.mHomeCapsule}>
-          <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={44} /></button>
-        </div>
-      </div>}
+      {!none && <HomeToolbar decisions={decisions} />}
       {searching && <SearchPage from={searching} onLeave={() => setAway(false)} onClose={() => setSearching(null)} />}
     </div>
   );
 }
+
+/**
+ * The list's top bar: the viewer's settings, the workspace (and whether others have something waiting), the filter and
+ * the stations at a glance. Drawn again only when what it shows changes, not with each change of the lists under it.
+ */
+const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering, filter, setFilter, glyph, trouble }: {
+  others: string | null | undefined; othersLabel: string | null | undefined; invited: boolean; filtering: boolean;
+  filter: ChatFilter; setFilter: (value: ChatFilter) => void; glyph: ChatsView["glyph"]; trouble: ChatsView["trouble"];
+}) {
+  const app = useApp();
+  return (
+    <header className={`${css.mHomeBar} ${pagesCss.mGlass}`}>
+      <button type="button" className={`${barsCss.mNavButton} ${css.mHomeMe}`} onClick={() => app.push(app.at("/settings"))} aria-label={t("web-mobile.settings.title")}>
+        <Settings size={22} />
+      </button>
+      <button type="button" className={css.mHomeWorkspace} onClick={() => openWorkspaces(app)}>
+        <b>{app.entry.name}</b>
+        {others
+          ? <span className={chatMarkCss.chatMarkInline} data-tone={others} role="img" aria-label={othersLabel ?? ""} />
+          : invited && <span className={css.mDot} aria-label={t("web-mobile.home.invited")} />}
+        <ChevronDown size={16} />
+      </button>
+      {/* The filter, and the archive in its menu, as on the wide screen: nothing to narrow or look back on with no station. */}
+      {filtering && <FilterButton filter={filter} setFilter={setFilter} />}
+      {/* The stations at a glance (../StationGlyph.tsx); its page says which is which. */}
+      <StationButton glyph={glyph} trouble={trouble} />
+    </header>
+  );
+});
+
+/** The decisions waiting for the viewer and a new chat, floating over the list at the bottom. */
+const HomeToolbar = memo(function HomeToolbar({ decisions }: { decisions: number }) {
+  const app = useApp();
+  return (
+    <div className={css.mHomeToolbar}>
+      {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, there at 0 too (奏 alone). */}
+      <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} data-alone={decisions > 0 ? undefined : ""} onClick={() => app.push(app.at("/decisions"))} aria-label={t("web-mobile.home.decisions", { n: decisions })}>
+        <Zou size={40} />{decisions > 0 && <Count n={decisions} />}
+      </button>
+      <div className={css.mHomeCapsule}>
+        {/* A disc in the accent. */}
+        <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={44} /></button>
+      </div>
+    </div>
+  );
+});
 
 /** How many of the messages that have the words the search lists, under the chats. */
 const FOUND_MESSAGES = 50;
@@ -235,7 +261,7 @@ export function Recent() {
 }
 
 /** 全部, 我参与的 or 监控中, and the archive, from a menu under it; marked in the accent while it narrows the list. */
-function FilterButton({ filter, setFilter }: { filter: ChatFilter; setFilter: (value: ChatFilter) => void }) {
+const FilterButton = memo(function FilterButton({ filter, setFilter }: { filter: ChatFilter; setFilter: (value: ChatFilter) => void }) {
   const app = useApp();
   const mark = (on: boolean) => on ? <Check size={16} /> : <span style={{ width: 16 }} />;
   return (
@@ -254,16 +280,16 @@ function FilterButton({ filter, setFilter }: { filter: ChatFilter; setFilter: (v
       <Filter size={20} />
     </button>
   );
-}
+});
 
 /** The bar's way to the stations, drawn as how they are: what the core cannot reach at all (`status` in trouble) puts it to sleep. */
-function StationButton({ view }: { view: ChatsView | undefined }) {
+function StationButton({ glyph, trouble }: { glyph: ChatsView["glyph"]; trouble: ChatsView["trouble"] }) {
   const app = useApp();
   const status = useStatus(app.entry.id);
-  const counts = glyphCounts(view, status?.state === "trouble");
+  const counts = glyphCounts({ glyph }, status?.state === "trouble");
   // Asleep, what the core cannot reach says it; else the stations in words (the core's), and what is wrong with them.
-  const said = counts.asleep ? status?.text ?? "" : view?.glyph?.label ?? "";
-  const label = view?.trouble ? t("web-mobile.home.stationTrouble", { said, trouble: view.trouble.text }) : t("web-mobile.home.station", { said });
+  const said = counts.asleep ? status?.text ?? "" : glyph?.label ?? "";
+  const label = trouble ? t("web-mobile.home.stationTrouble", { said, trouble: trouble.text }) : t("web-mobile.home.station", { said });
   return (
     <button type="button" className={barsCss.mNavButton} onClick={() => app.push(app.at("/settings/stations"))} aria-label={label}>
       <StationGlyph counts={counts} />

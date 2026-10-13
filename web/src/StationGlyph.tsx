@@ -40,7 +40,7 @@ export function glyphLayout(c: GlyphCounts): { arcs: GlyphArc[]; dots: number[] 
 }
 
 /** What the glyph draws: the core's counts for the list (its `glyph`), asleep while the core reaches nothing at all. */
-export function glyphCounts(view: ChatsView | undefined, asleep: boolean): GlyphCounts {
+export function glyphCounts(view: { glyph?: ChatsView["glyph"] | undefined } | undefined, asleep: boolean): GlyphCounts {
   const g = view?.glyph;
   return { online: g?.online ?? 0, dim: g?.dim ?? 0, failing: g?.failing ?? 0, working: g?.working ?? 0, asleep, connecting: g?.connecting ?? 0 };
 }

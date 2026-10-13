@@ -5,7 +5,7 @@
 // into the chat it makes.
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { useNavigate } from "react-router";
+import { useGo } from "./go.ts";
 import { Composer, type ComposerProps } from "./Chat.tsx";
 import { StationContext, type Station } from "./station.tsx";
 import { pageChanging, transitionTo } from "./ui.tsx";
@@ -313,7 +313,7 @@ export function useCarryDraft(): (key: string) => void {
  * left to the link.
  */
 export function useComposerMove(): (event: MouseEvent<HTMLAnchorElement>, to: string, next: "new" | "chat") => void {
-  const navigate = useNavigate();
+  const navigate = useGo();
   return (event, to, next) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const dock = document.querySelector<HTMLElement>(`.${css.composerDock}:not([hidden])`);

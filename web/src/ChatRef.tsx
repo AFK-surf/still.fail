@@ -3,11 +3,12 @@
 // The agent reads that chat by the link (the station's chat_read and session_history tools).
 import { Fragment, useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { useHref } from "react-router";
-import { useChats, useChatSearch, useStations, type ChatItem } from "./api.ts";
+import { useChats, useChatSearch, useStationLook, type ChatItem } from "./api.ts";
 import { ChatMark, stateLine } from "./ChatMark.tsx";
 import { StationMark } from "./StationMark.tsx";
 import { scopeOf, useStation } from "./station.tsx";
-import { useWorkspaces } from "./cloud/api.ts";
+import type { AccountWorkspaces } from "./cloud/api.ts";
+import { useTopicSelect } from "./core/react.ts";
 import { ModelLogo, Time } from "./ui.tsx";
 import { chatOfLink, copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy, stationOfLink } from "./chatRefs.ts";
 import { failure } from "./toast.tsx";
@@ -34,12 +35,11 @@ export function RefChip({ title, href }: { title: ReactNode; href: string }) {
   const here = useStation().address;
   const there = stationOfLink(href);
   const elsewhere = there !== null && here.includes("/") && there !== here;
-  const stations = useStations(scopeOf(here)).value;
-  // One of another workspace's (shared with this one, docs/chat-share.md) says that workspace's name.
-  const accounts = useWorkspaces().value;
   const outside = elsewhere && here.includes("/") && scopeOf(there) !== scopeOf(here);
-  const found = elsewhere && !outside ? stations?.find((s) => s.station === there) : undefined;
-  const workspace = outside ? accounts?.flatMap((a) => a.workspaces).find((w) => w.id === scopeOf(there))?.name : undefined;
+  // Only how its station looks, followed: not each change of the stations' views.
+  const found = useStationLook(elsewhere && !outside ? there : null);
+  // One of another workspace's (shared with this one, docs/chat-share.md) says that workspace's name.
+  const workspace = useTopicSelect<AccountWorkspaces[], string | undefined>(outside ? { topic: "workspaces" } : null, (s) => s.value?.flatMap((a) => a.workspaces).find((w) => w.id === scopeOf(there!))?.name);
   const name = !elsewhere ? null : outside ? (workspace ?? scopeOf(there).slice(0, 8)) : (found?.name ?? there.slice(there.indexOf("/") + 1, there.indexOf("/") + 9));
   return (
     <Hover content={<RefPreview href={href} here={here} station={name} emoji={found?.emoji} icon={found?.icon} />}>

@@ -15,6 +15,7 @@ import { chatOfLink } from "./chatRefs.ts";
 import { PathSession } from "./Peeks.tsx";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
+import { useEvent } from "./event.ts";
 import { placeFiles, Prose, withBareLinks } from "./Prose.tsx";
 import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
@@ -48,7 +49,7 @@ import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast, useAct } from "./toast.tsx";
 import { MessageDecision } from "./Decisions.tsx";
-import { AgentHover, ChatAgents } from "./AgentCard.tsx";
+import { AgentHover, ChatAgentKeys, ChatAgents } from "./AgentCard.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
 import { jumped, jumpTo, jumpWords, useJump } from "./jumpTo.ts";
@@ -86,7 +87,7 @@ export function toMadeChat(go: () => void): void {
  * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
  * `ensureChat` makes the chat with the first message, which `onSent` then follows.
  */
-export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, onSent, made, onArchive }: {
+export const ChatPanel = memo(function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, onSent, made, onArchive }: {
   /** Whose draft the composer shows here. */
   chat: ChatView; draftKey: string; lives: ReadonlyMap<string, Live>; onOpenHistory(key: string, entry?: number): void;
   ensureChat?: () => Promise<{ key: string; thread: ChatTo }>; onSent?: (to: ChatTo) => void;
@@ -159,7 +160,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
         locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
-}
+});
 
 /**
  * 忽略 under a post that asks what no one has decided: the viewer lets it go (`decision.dismiss`: their lists and
@@ -298,6 +299,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onOpenA
   const sent = (after: number) => sentAfter.get(after)?.map((s) => <SentElsewhere key={s.key} sent={s} agentHere={here(s.by.agent ?? undefined)} onOpenHistory={onName} />);
   return (
     <ChatAgents.Provider value={chat.agents}>
+    <ChatAgentKeys.Provider value={chat.agents.map((a) => a.session.key).join("\n")}>
       {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
       {messages.length === 0 && chat.outbox.length === 0 && !chat.elsewhere?.length && (
         <div className={css.chatEmpty}>
@@ -328,6 +330,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onOpenA
         <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)}
           {...(chat.agents.length > 1 ? { onStop: () => act(api.stop(agent.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked")) } : {})} />
       ))}
+    </ChatAgentKeys.Provider>
     </ChatAgents.Provider>
   );
 }
@@ -1596,6 +1599,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   const hint = useSpaceHint(locked);
   useShortcut("composer.file", locked ? null : () => { picker.current?.click(); });
   const ready = draft.ready && !locked;
+  const onFiles = useEvent(add);
   const submit = () => {
     if (ready) void send();
   };
@@ -1621,25 +1625,37 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); if (!locked) add(e.dataTransfer.files); } }}>
         <ComposerExtras draft={draft} focusQuote={focusQuote} onFocused={onFocused} onDone={() => input.current?.focus()} />
         {field}
-        <div className={css.composerToolbar}>
-          <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
-          <Tip label={t("web-main.composer.attach")} shortcut="composer.file">
-            <button type="button" className={css.attachBtn} aria-label={t("web-main.composer.attach")} disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
-              <Plus size={18} />
-            </button>
-          </Tip>
-          {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
-          <Tip label={draft.uploading ? t("web-main.composer.stillUploading") : t("web-main.composer.send")}>
-            <button type="submit" className={css.sendBtn} disabled={!ready} aria-label={t("web-main.composer.send")} aria-busy={draft.starting || undefined}>
-              {draft.starting ? <span className={waitingCss.spinner} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
-            </button>
-          </Tip>
-        </div>
+        <ComposerTools picker={picker} onFiles={onFiles} locked={locked} toolbar={toolbar} uploading={draft.uploading} ready={ready} starting={draft.starting} />
       </form>
       {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
     </div>
   );
 }
+
+/**
+ * The composer's foot: a file to send, what the page puts there (`toolbar`), and send. Drawn again only when what it
+ * shows changes, not at every key typed.
+ */
+const ComposerTools = memo(function ComposerTools({ picker, onFiles, locked, toolbar, uploading, ready, starting }: {
+  picker: RefObject<HTMLInputElement | null>; onFiles(files: FileList): void; locked: boolean; toolbar: ReactNode; uploading: boolean; ready: boolean; starting: boolean;
+}) {
+  return (
+    <div className={css.composerToolbar}>
+      <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) onFiles(e.target.files); e.target.value = ""; }} />
+      <Tip label={t("web-main.composer.attach")} shortcut="composer.file">
+        <button type="button" className={css.attachBtn} aria-label={t("web-main.composer.attach")} disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
+          <Plus size={18} />
+        </button>
+      </Tip>
+      {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
+      <Tip label={uploading ? t("web-main.composer.stillUploading") : t("web-main.composer.send")}>
+        <button type="submit" className={css.sendBtn} disabled={!ready} aria-label={t("web-main.composer.send")} aria-busy={starting || undefined}>
+          {starting ? <span className={waitingCss.spinner} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
+        </button>
+      </Tip>
+    </div>
+  );
+});
 
 /**
  * With a mouse, and nothing that takes keys focused, what the composer's box says instead of its placeholder: that

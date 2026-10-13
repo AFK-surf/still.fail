@@ -31,6 +31,7 @@ import * as additionsCss from "./styles/additions.css.ts";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 import { ReadWhole, useWhole } from "./brief.ts";
+import { useEvent } from "./event.ts";
 
 /** How many of a history's latest items are drawn when it opens, and how many more each time the reader nears its top. */
 const DRAWN = 10;
@@ -66,6 +67,10 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
   const [stableWhere] = useState(() => (place: Place | null) => latest.current(place));
   const [usageOpen, setUsageOpen] = useState(true);
   const copyLink = useCopyChatLink(useToast());
+  // Its link, opening the history at it: the same function for every item, as long as the history shows.
+  const copyItem = useEvent((item: HistoryItem) => {
+    if (title !== undefined) copyLink({ station, session: sessionKey, id: sessionKey, title }, { key: sessionKey, entry: item.entries[0] ?? 0 });
+  });
   // The steps' and thoughts' whole words: read only as one is opened (the core has them in brief till then).
   const detail = useHistoryDetail(station, sessionKey);
   const body = useRef<HTMLDivElement>(null);
@@ -175,13 +180,8 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
             <p className={css.historyEdge}>{history.edge}</p>
             {items.map((item, i) => (
               // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
-              <div key={item.key} className={css.hItem} data-item={i} data-enter={(item.entries[0] ?? 0) > seen.current && item.body.kind !== "text" ? true : undefined}>
-                <HistoryItemView item={item} where={stableWhere} />
-                {title !== undefined && item.entries[0] !== undefined && (
-                  <IconButton className={css.hItemLink} label={t("web-main.history.copyLink")} icon={Copy}
-                    onClick={() => copyLink({ station, session: sessionKey, id: sessionKey, title }, { key: sessionKey, entry: item.entries[0] })} />
-                )}
-              </div>
+              <HistoryRow key={item.key} item={item} at={i} enter={(item.entries[0] ?? 0) > seen.current && item.body.kind !== "text"} where={stableWhere}
+                copy={title !== undefined && item.entries[0] !== undefined ? copyItem : undefined} />
             ))}
             {/* Only thinking and the reply stream here; a tool call shows once it is done, from the transcript. */}
             {history.live.map((s) => <div key={s.id} className={css.hLiveThinking}>{s.text}</div>)}
@@ -234,6 +234,18 @@ function filling(all: HistoryItem[], pane: { width: number; height: number } | n
   }
   return all.length;
 }
+
+/** An item and its link's button, drawn again only when the item changes (or its place in the list). */
+const HistoryRow = memo(function HistoryRow({ item, at, enter, where, copy }: {
+  item: HistoryItem; at: number; enter: boolean; where(place: Place | null): ReactNode; copy: ((item: HistoryItem) => void) | undefined;
+}) {
+  return (
+    <div className={css.hItem} data-item={at} data-enter={enter || undefined}>
+      <HistoryItemView item={item} where={where} />
+      {copy && <IconButton className={css.hItemLink} label={t("web-main.history.copyLink")} icon={Copy} onClick={() => copy(item)} />}
+    </div>
+  );
+});
 
 const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: HistoryItem; where(place: Place | null): ReactNode }) {
   const body = item.body;

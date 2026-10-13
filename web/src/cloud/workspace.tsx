@@ -6,9 +6,10 @@ import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
 import { NewChat } from "../NewChat.tsx";
 import { useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
-import { useChats, useStations } from "../api.ts";
+import { useChats, useStationViews, useStations } from "../api.ts";
+import { useGo } from "../go.ts";
 import type { Topic } from "../core/client.ts";
 import { useTopics } from "../core/react.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
@@ -60,14 +61,16 @@ const NO_STATIONS: Station[] = [];
 
 interface InvitationEntry extends PendingInvitation { account: Account }
 
-export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
-  const view = useWorkspace(entry.id).value;
-  const found = useStations(entry.id);
-  const stations = useStationList(found.value, entry.id) ?? NO_STATIONS;
+/**
+ * Drawn again only as the page changes (its path) or its stations do: what changes more often (the workspace's members,
+ * the views kept read, what the core marks) is read below it, where it is used, so a message coming in or the side panel
+ * opening does not draw the sidebar and the page again from here.
+ */
+export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
+  const known = useStationViews(entry.id);
+  const stations = useStationList(known, entry.id) ?? NO_STATIONS;
   const path = useLocation().pathname;
-  const navigate = useNavigate();
-  useSettingsCommands(entry);
-  useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/chats\/.+)$/.test(p));
+  const navigate = useGo();
   const detail = /\/(s\/[^/]+\/.+|settings|new$|archive$|decisions$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
@@ -75,28 +78,14 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   const decisions = /^\/w\/[^/]+\/decisions$/.test(path);
   const [mode, setMode] = useSidebarMode();
   useEffect(() => { if (decisions && mode !== "decisions") setMode("decisions"); }, [decisions]); // eslint-disable-line react-hooks/exhaustive-deps
-  const people = useMemo(() => new Map((view?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view]);
-  useEffect(() => identify(entry.account), [entry.account]);
-  useEffect(() => window.stillfailDesktop?.inWorkspace(entry.account.sub, entry.id), [entry.account.sub, entry.id]);
-  useInWorkspace(entry.id);
-  // The views the workspace's pages and settings show, subscribed from the start: a page opened the first time draws at
-  // once, with no frame waiting for the core's first answer. What the core keeps in sync is its own call (sync/scheduler.ts);
-  // these only read it.
-  useTopics<unknown>([
-    { topic: "connects", scope: entry.id, mine: false },
-    { topic: "connects", scope: entry.id, mine: true },
-    { topic: "chats", scope: entry.id, mine: false },
-    { topic: "chats", scope: entry.id, mine: true },
-    { topic: "loginSessions", account: entry.account.sub },
-    ...(found.value ?? []).map((s): Topic => ({ topic: "overview", station: s.station })),
-  ]);
 
   // No station yet: nothing of the workspace's pages works, so none is shown; adding the first station is the page.
-  if (found.value && found.value.length === 0 && !settings) return <Onboarding entry={entry} />;
+  if (known && known.length === 0 && !settings) return <><WorkspaceKept entry={entry} /><Onboarding entry={entry} /></>;
 
   return (
-    <PeopleContext.Provider value={people}>
+    <WorkspacePeople id={entry.id}>
       <DecisionDeskProvider workspace={entry.id}>
+      <WorkspaceKept entry={entry} />
       <div className={shellCss.shell} data-detail={detail}>
 
         <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
@@ -106,7 +95,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
         <main className={shellCss.main}>
           <ComposerDock>
           <Routes>
-            <Route index element={<WorkspaceHome id={entry.id} stations={found.value && stations} />} />
+            <Route index element={<WorkspaceHome id={entry.id} stations={known && stations} />} />
             <Route path="settings" element={<Navigate to="stations" replace />} />
             <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} />} />
@@ -131,7 +120,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/usage" element={<UsageSettings entry={entry} />} />
             <Route path="settings/stations/:station/footprint" element={<Navigate to={`/w/${entry.id}/settings/stations`} replace />} />
             <Route path="settings/leave" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
-            <Route path="s/:station/*" element={<StationPages stations={found.value && stations} />} />
+            <Route path="s/:station/*" element={<StationPages stations={known && stations} />} />
             <Route path="archive" element={<ArchivePage scope={entry.id} back={`/w/${entry.id}`} />} />
             <Route path="decisions" element={<DecisionPage onOpen={(to) => navigate(to)} />} />
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
@@ -142,9 +131,40 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
         <Previews />
       </div>
       </DecisionDeskProvider>
-    </PeopleContext.Provider>
+    </WorkspacePeople>
   );
+});
+
+/** The workspace's members, by email, for what shows people (PeopleContext): read here, not by the shell. */
+function WorkspacePeople({ id, children }: { id: string; children: ReactNode }) {
+  const members = useWorkspace(id).value?.members;
+  const people = useMemo(() => new Map((members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [members]);
+  return <PeopleContext.Provider value={people}>{children}</PeopleContext.Provider>;
 }
+
+/**
+ * What the workspace's page keeps going while it is open, drawing nothing: its commands, the chat last open (a core from
+ * before it keeps that itself), who is signed in, and the views its pages and settings show, subscribed from the start:
+ * a page opened the first time draws at once, with no frame waiting for the core's first answer. What the core keeps in
+ * sync is its own call (sync/scheduler.ts); these only read it.
+ */
+const WorkspaceKept = memo(function WorkspaceKept({ entry }: { entry: WorkspaceEntry }) {
+  const found = useStations(entry.id);
+  useSettingsCommands(entry);
+  useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/chats\/.+)$/.test(p));
+  useEffect(() => identify(entry.account), [entry.account]);
+  useEffect(() => window.stillfailDesktop?.inWorkspace(entry.account.sub, entry.id), [entry.account.sub, entry.id]);
+  useInWorkspace(entry.id);
+  useTopics<unknown>([
+    { topic: "connects", scope: entry.id, mine: false },
+    { topic: "connects", scope: entry.id, mine: true },
+    { topic: "chats", scope: entry.id, mine: false },
+    { topic: "chats", scope: entry.id, mine: true },
+    { topic: "loginSessions", account: entry.account.sub },
+    ...(found.value ?? []).map((s): Topic => ({ topic: "overview", station: s.station })),
+  ]);
+  return null;
+});
 
 /** `stations` is undefined until the core has listed them: until then nothing is said (least of all "no such station"). */
 function StationPages({ stations }: { stations: Station[] | undefined }) {
@@ -213,7 +233,8 @@ function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | und
 
 // ── sidebar ─────────────────────────────────────────────────────────────
 
-function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
+/** Drawn again only for another workspace: its lists and foot follow what they show themselves. */
+const WorkspaceSidebar = memo(function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
     <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.workspace.navigation")}>
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} />
@@ -222,7 +243,7 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
   );
-}
+});
 
 /** Under the sidebar's lists: workspace controls, and what wants the viewer (奏 among it). */
 function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {

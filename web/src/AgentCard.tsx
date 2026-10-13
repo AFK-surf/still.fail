@@ -2,7 +2,7 @@
 // avatar is (beside its messages, in the chat's bar): what it runs, where it stands and for how long, what it does now
 // (with a stop for it alone), and what the core says of it (the `agentCard` view, views/brief.ts): what it has done,
 // cost and used, its account and what is left of it, its jobs, what is wrong.
-import { createContext, useContext, useLayoutEffect, useRef, type ReactElement, type RefObject } from "react";
+import { createContext, memo, useContext, useLayoutEffect, useRef, type ReactElement, type RefObject } from "react";
 import { useAgentCard, useApi, type ChatAgent } from "./api.ts";
 import { useStation } from "./station.tsx";
 import { Hover } from "./Peeks.tsx";
@@ -17,13 +17,31 @@ import * as css from "./AgentCard.css.ts";
 
 /** The agents of the chat whose messages are drawn (ChatRows). */
 export const ChatAgents = createContext<readonly ChatAgent[]>([]);
+/**
+ * Their keys, one a line: what an avatar beside a message needs to know (whether its agent is the chat's), the same
+ * while they are, though the agents change with every message (their states, their times).
+ */
+export const ChatAgentKeys = createContext<string>("");
 
 /** `children` (an agent's avatar) with its card while it is pointed at; as it is for an agent not of this chat. */
 export function AgentHover({ agent, children }: { agent: string | null | undefined; children: ReactElement }) {
-  const agents = useContext(ChatAgents);
-  const of = agent ? agents.find((a) => a.session.key === agent) : undefined;
-  if (!of) return children;
-  return <Hover tile content={<AgentCard agent={of} />}>{children}</Hover>;
+  const agents = useContext(ChatAgentKeys);
+  if (!agent || !agents.split("\n").includes(agent)) return children;
+  return <AgentHovered agent={agent}>{children}</AgentHovered>;
+}
+
+/**
+ * Drawn again only for another agent: the chat's agents change with every message (their states, their times), and
+ * what the card says of its agent is read by the card, while it shows.
+ */
+const AgentHovered = memo(function AgentHovered({ agent, children }: { agent: string; children: ReactElement }) {
+  return <Hover tile content={<ChatAgentCard agent={agent} />}>{children}</Hover>;
+});
+
+/** The card of one of the chat's agents, by its key, as the agent is now. */
+function ChatAgentCard({ agent }: { agent: string }) {
+  const of = useContext(ChatAgents).find((a) => a.session.key === agent);
+  return of ? <AgentCard agent={of} /> : null;
 }
 
 const LINES_MS = 240;

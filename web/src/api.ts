@@ -6,7 +6,7 @@ import { bindStationOperations } from "./core/operations.ts";
 // from client/core-ts/src/shapes/schema.ts (core/shapes.ts); what is only sent to a station is
 // declared here.
 import { createContext, useCallback, useContext, useMemo, useRef } from "react";
-import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
+import { useCall, useTopic, useTopicSelect, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
 import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
@@ -113,6 +113,29 @@ export function useArchiveView(scope: string): TopicState<ArchiveView> {
 export function useStations(scope: string): TopicState<StationView[]> {
   return useTopic<StationView[]>({ topic: "stations", scope });
 }
+
+/**
+ * A scope's stations, only what pages are placed by (each one's id, name, address and whether it is online): the same
+ * list while those are, though the core's view changes much more often (its overview, its agents starting and stopping).
+ * Undefined until the core has listed them.
+ */
+export function useStationViews(scope: string): StationView[] | undefined {
+  return useTopicSelect<StationView[], StationView[] | undefined>({ topic: "stations", scope }, (s) => s.value, sameStations);
+}
+/** How a station looks where it is named (its name, emoji, icon); undefined until listed, or for one not listed. */
+export interface StationLook { name: string; emoji?: string | null | undefined; icon?: string | null | undefined }
+
+/** One station's look, by its address (null: none): the same while it is, whatever else of its view changes. */
+export function useStationLook(address: string | null): StationLook | undefined {
+  const scope = address?.split("/")[0];
+  return useTopicSelect<StationView[], StationLook | undefined>(scope ? { topic: "stations", scope } : null, (s) => {
+    const v = s.value?.find((x) => x.station === address);
+    return v && { name: v.name, emoji: v.emoji, icon: v.icon };
+  }, (a, b) => a === b || (!!a && !!b && a.name === b.name && a.emoji === b.emoji && a.icon === b.icon));
+}
+
+const sameStations = (a: StationView[] | undefined, b: StationView[] | undefined) =>
+  a === b || (!!a && !!b && a.length === b.length && a.every((x, i) => x.id === b[i]!.id && x.name === b[i]!.name && x.online === b[i]!.online && x.station === b[i]!.station));
 
 /** The workspace's profiles in one list: each shared one once (the core's `profiles` view). */
 export function useProfiles(scope: string): TopicState<ProfilesView> {

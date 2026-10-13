@@ -5,7 +5,7 @@ import { useAction } from "../action.ts";
 // (how it runs, what it used, the station). Changing how it runs is a page of its own.
 import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "../motion.ts";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAgentCard, useChat, useHistory, useHistoryDetail, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
 import { ArrowRight, Check, ChevronDown, Copy, ChevronRight, Wait, Received, Send, Stop, Unplug } from "../icons.tsx";
@@ -161,9 +161,7 @@ function Steps({ station, chat, agent, history, entry }: { station: string; chat
       <div className={css.mHSteps} ref={list}>
         <Edge text={history.edge} />
         {items.map((item, i) => (
-          <div key={item.key} className={`m-h-line ${css.mHItem}`} data-item={i} data-marked={item.key === marked || undefined}>
-            <Item item={item} station={station} chat={chat} agent={agent} />
-          </div>
+          <Line key={item.key} item={item} at={i} marked={item.key === marked} station={station} chat={chat} agentText={agent.session.agentText} />
         ))}
         {history.live.map((step) => <div key={`live/${step.id}`} className={`m-h-line ${css.mHLive}`}>{step.text}</div>)}
         {history.phase && <div className="m-h-line"><PhaseLine phase={history.phase} /></div>}
@@ -176,7 +174,16 @@ function Edge({ text }: { text: string }) {
   return <p className={css.mHEdge}>{text}</p>;
 }
 
-function Item({ item, station, chat, agent }: { item: HistoryItem; station: string; chat: string; agent: ChatAgent }) {
+/** An item in its line, drawn again only when it changes (or its place, or its mark): not with each one that comes. */
+const Line = memo(function Line({ item, at, marked, station, chat, agentText }: { item: HistoryItem; at: number; marked: boolean; station: string; chat: string; agentText: string }) {
+  return (
+    <div className={`m-h-line ${css.mHItem}`} data-item={at} data-marked={marked || undefined}>
+      <Item item={item} station={station} chat={chat} agentText={agentText} />
+    </div>
+  );
+});
+
+function Item({ item, station, chat, agentText }: { item: HistoryItem; station: string; chat: string; agentText: string }) {
   const app = useApp();
   const body = item.body;
   switch (body.kind) {
@@ -208,7 +215,7 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
     case "text":
       return (
         <div className={body.content.subagent ? css.mHSub : undefined}>
-          <Brief text={body.content.text} open={() => app.reader({ label: <span className={partsCss.mMuted}>{t("web-mobile.history.wrote", { agent: agent.session.agentText })}</span>, content: <div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={body.content.md as Md} /></div> })} />
+          <Brief text={body.content.text} open={() => app.reader({ label: <span className={partsCss.mMuted}>{t("web-mobile.history.wrote", { agent: agentText })}</span>, content: <div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={body.content.md as Md} /></div> })} />
         </div>
       );
     case "group":

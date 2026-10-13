@@ -14,7 +14,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { ChatMessage, DecisionItem, DecisionOption, DecisionsView, MessageCard } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
-import { CoreError, useApi, useStations } from "./api.ts";
+import { CoreError, useApi, useStationViews } from "./api.ts";
 import { StationContext, stationBase, useStation, type Station } from "./station.tsx";
 import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { useAct } from "./toast.tsx";
@@ -206,7 +206,8 @@ export const keyOf = (d: DecisionItem) => `${d.station}/${d.thread}/${d.seq}`;
 export function useDecisionQueue(workspace: string) {
   const view = useTopic<DecisionsView>({ topic: "decisions", workspace });
   const [replying, setReplying] = useState<DecisionItem | null>(null);
-  const stations = useStations(workspace).value;
+  // Only what places a station (its id, name, whether it is online): the same while those are.
+  const stations = useStationViews(workspace);
   const call = useCall();
   const act = useAct();
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
@@ -232,6 +233,21 @@ export function useDecisionQueue(workspace: string) {
   }, [listed]);
   const back = (d: DecisionItem) => setGone((was) => { const now = new Set(was); now.delete(keyOf(d)); return now; });
   const where = (d: DecisionItem) => ({ station: d.station, thread: d.thread, seq: d.seq });
+  // Kept by station while the stations are: a new one each render would draw everything under its StationContext again.
+  const stationOf = useMemo(() => {
+    const made = new Map<string, Station>();
+    return (d: DecisionItem): Station => {
+      const key = `${d.station}\n${d.stationName}`;
+      let kept = made.get(key);
+      if (!kept) {
+        const s = stations?.find((x) => x.station === d.station);
+        kept = { id: s?.id ?? d.station.split("/")[1] ?? "", name: s?.name ?? d.stationName, online: s?.online ?? true,
+          address: d.station, base: stationBase(d.station), settings: `/w/${workspace}/settings` };
+        made.set(key, kept);
+      }
+      return kept;
+    };
+  }, [stations, workspace]);
   return {
     view, items, replying, setReplying,
     /** Whether it was set aside (待定), here or by the core. */
@@ -247,12 +263,8 @@ export function useDecisionQueue(workspace: string) {
     },
     /** Answered here (its option or reply sent): gone. */
     answered: drop,
-    /** The station a decision is on, for its messages (StationContext). */
-    station(d: DecisionItem): Station {
-      const s = stations?.find((x) => x.station === d.station);
-      return { id: s?.id ?? d.station.split("/")[1] ?? "", name: s?.name ?? d.stationName, online: s?.online ?? true,
-        address: d.station, base: stationBase(d.station), settings: `/w/${workspace}/settings` };
-    },
+    /** The station a decision is on, for its messages (StationContext): the same object while the stations are. */
+    station: stationOf,
   };
 }
 

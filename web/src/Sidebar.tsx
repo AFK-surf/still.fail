@@ -3,7 +3,8 @@ import { StationMark } from "./StationMark.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
 import { stationBase, useSidebarMode, type ChatFilter } from "./station.tsx";
 import { SidebarActions } from "./SidebarActions.tsx";
-import { NavLink, useLocation, useNavigate } from "react-router";
+import { NavLink, useLocation } from "react-router";
+import { useGo, useHere } from "./go.ts";
 import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
 import { prime } from "./core/react.ts";
 import { RowAside } from "./RowPicture.tsx";
@@ -54,11 +55,9 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
     instant.current = mode === "decisions" && openedRecently();
     was.current = mode;
   }
-  // The page it was going to is there (or another took its place).
-  const path = useLocation().pathname;
-  useEffect(() => setGoing(null), [path]);
   return (
     <>
+      <GoingArrived />
       <div className={nav.navTop}>
         {top}
         <SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`}
@@ -222,7 +221,7 @@ function useScrolling() {
  * dot before its title (ChatMark.tsx), who is in it small at the second line's end. While a piece of work in it waits,
  * the second line says on whom and what; with all its work over, the row is faded.
  */
-function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
+const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const { connect } = item;
   const to = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const move = useComposerMove();
@@ -238,8 +237,8 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
   const renamingTo = useRenaming(item.station, item.session);
   // Failed: a red mark in the spinner's place a few seconds more, why on hover (the menu that asked has closed).
   const saving = useDoingState(["chat.pin", "chat.rename", "chat.archive"], { station: item.station, session: item.session });
-  const goingTo = useGoing();
-  const here = decodeURIComponent(useLocation().pathname) === decodeURIComponent(to);
+  const going = useGoing(to);
+  const where = useHere();
   // A new chat its station has not made yet, or one on a station offline, is neither renamed nor archived.
   const menu = !item.offline && !item.pending;
   const row = (
@@ -248,9 +247,10 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         chatClicked();
         if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) jumpFromLine(item, e.target);
         move(e, to, "chat");
-        if (!here && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setGoing(to);
+        const from = decodeURIComponent(where());
+        if (from !== decodeURIComponent(to) && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setGoing({ to: decodeURIComponent(to), from });
       }}
-      data-going={goingTo === null ? undefined : goingTo === to ? "here" : "away"}
+      data-going={going}
       // Pressing a chat does not take the focus from the composer: it stays there, focused, into the next chat.
       onMouseDown={(e) => e.preventDefault()}
       // Pointed at or pressed: its chat is read meanwhile, there when the page opens.
@@ -307,7 +307,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
       onConfirm={() => { setAsking(false); void archive(); }} onClose={() => setAsking(false)} />}
     </div>
   );
-}
+});
 
 /**
  * Puts a chat's row in the archive (its session with it when it is that session's own), leaving its page if open. The
@@ -315,13 +315,13 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
  */
 function useArchive(item: ChatItem, to: string) {
   const api = stationApi(useStationCall(item.station));
-  const path = useLocation().pathname;
-  const navigate = useNavigate();
+  const here = useHere();
+  const navigate = useGo();
   const toast = useToast();
   return async () => {
     // Move away now, to the chat beside it in the list (the list page if none); a slow response must not navigate over
     // a chat opened meanwhile.
-    if (decodeURIComponent(path) === decodeURIComponent(to) && !goToNeighbour(1) && !goToNeighbour(-1)) navigate(`${stationBase(item.station)}/chats`);
+    if (decodeURIComponent(here()) === decodeURIComponent(to) && !goToNeighbour(1) && !goToNeighbour(-1)) navigate(`${stationBase(item.station)}/chats`);
     try {
       await api.archive(item, true);
       toast(t("web-main.chat.archived"));
@@ -332,18 +332,30 @@ function useArchive(item: ChatItem, to: string) {
 }
 
 /**
- * The chat a row's click is going to, while its page is on the way (the page before stays until the chat is read,
- * core/react.ts useReady): its row is the one shown selected meanwhile, so the click answers at once.
+ * The chat a row's click is going to (`to`), from the page open then (`from`), while its page is on the way (the page
+ * before stays until the chat is read, core/react.ts useReady): its row is the one shown selected meanwhile, so the click
+ * answers at once. Both paths decoded.
  */
-let going: string | null = null;
+let going: { to: string; from: string } | null = null;
 const goingHeard = new Set<() => void>();
-function setGoing(to: string | null): void {
-  if (going === to) return;
-  going = to;
+function setGoing(next: { to: string; from: string } | null): void {
+  if (going?.to === next?.to && going?.from === next?.from) return;
+  going = next;
   for (const heard of goingHeard) heard();
 }
-function useGoing(): string | null {
-  return useSyncExternalStore((heard) => { goingHeard.add(heard); return () => goingHeard.delete(heard); }, () => going, () => going);
+const hearGoing = (heard: () => void) => { goingHeard.add(heard); return () => { goingHeard.delete(heard); }; };
+/** A row's part in it (its page, `to`): the one gone to, the one left, or neither; only those two rows draw again. */
+function useGoing(to: string): "here" | "away" | undefined {
+  const path = decodeURIComponent(to);
+  const now = () => (going === null ? undefined : going.to === path ? "here" : going.from === path ? "away" : undefined);
+  return useSyncExternalStore(hearGoing, now, now);
+}
+
+/** The page it was going to is there (or another took its place): no row is going anywhere any more. */
+function GoingArrived() {
+  const path = useLocation().pathname;
+  useEffect(() => setGoing(null), [path]);
+  return null;
 }
 
 function primeChat(item: ChatItem): void {

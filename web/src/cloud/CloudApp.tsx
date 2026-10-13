@@ -11,7 +11,7 @@ import { WebUpdate } from "../WebUpdate.tsx";
 import { ToastProvider } from "../toast.tsx";
 import { Button, Select, Splash, useNarrow } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
-import { useAccounts, useSignIn, useSignOut } from "./accounts.ts";
+import { useAccounts, useSignIn, useSignOut, type Account } from "./accounts.ts";
 import { Callback, SignInPage } from "./gate.tsx";
 import { BetaGate } from "./beta.tsx";
 import { WorkspaceShell } from "./workspace.tsx";
@@ -250,11 +250,16 @@ function WorkspaceRoute() {
   // it is waited for, not said to be out of reach.
   if ((!owner || !found) && !workspaces.every((a) => a.loaded || a.error)) return <Splash label={t("web-pages.cloud.opening")}><StatusLine /></Splash>;
   if (!owner || !found) return <div className={shellCss.gate}><h1>{t("web-pages.cloud.cantOpen")}</h1><p>{t("web-pages.cloud.cantOpenBody")}</p><a className={`${controlsCss.btn} btn-secondary`} href="/">{t("web-pages.cloud.backTo", { name: NAME })}</a></div>;
-  const entry = { id: ws, name: found.name, account: owner.account };
   // A narrow screen is the Android app's (../mobile).
+  return <Workspace id={ws} name={found.name} account={owner.account} narrow={narrow} />;
+}
+
+/** The workspace's pages, handed the same entry while what it says is the same (the core's lists change more often). */
+function Workspace({ id, name, account, narrow }: { id: string; name: string; account: Account; narrow: boolean }) {
+  const entry = useMemo(() => ({ id, name, account }), [id, name, account]);
   return narrow
-    ? <MobileWorkspace key={`${owner.account.sub}/${ws}`} entry={entry} />
-    : <WorkspaceShell key={`${owner.account.sub}/${ws}`} entry={entry} />;
+    ? <MobileWorkspace key={`${account.sub}/${id}`} entry={entry} />
+    : <WorkspaceShell key={`${account.sub}/${id}`} entry={entry} />;
 }
 
 type Preview = Awaited<ReturnType<typeof cloud.previewInvitation>>;
