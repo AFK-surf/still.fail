@@ -1925,6 +1925,8 @@ export function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { a
  * its way goes on from where it is and the speed it has. What the pane's width lays out anew is taken at once.
  */
 const GLIDE = { type: "spring", visualDuration: 0.3, bounce: 0 } as const;
+/** How long after the pane's width last changed its rows may still come to stand as they wrap now. */
+const REWRAP_MS = 200;
 
 function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: VirtualList) {
   useEffect(() => {
@@ -1933,13 +1935,16 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: Virtu
     const { model } = virtual;
     const rows = new Map<string, { el: HTMLElement; top: number; y: Follower }>();
     let width = model.paneWidth;
+    let rewrapped = -Infinity;
+    let pending = false;
     // How far the list has moved the pane at once to keep its place (rows above measured, an older page come in): by
     // as much, an activity is elsewhere in the pane's content and nowhere else on screen: not a move to glide.
     let kept = virtual.kept();
     // Judged as the list says anything changed, from where it says each activity stands: nothing of the page is read.
     const check = () => {
-      const rewrapped = model.paneWidth !== width;
-      width = model.paneWidth;
+      // The pane as wide as it was? While it changes (a side panel sliding), and until its rows are measured as they
+      // wrap now, what moves an activity is the page laid out anew: taken at once.
+      if (model.paneWidth !== width) { width = model.paneWidth; rewrapped = performance.now(); pending = true; }
       const shift = virtual.kept() - kept;
       kept += shift;
       if (shift) for (const row of rows.values()) { row.top += shift; if (!row.y.moving) row.y.jump(row.top); }
@@ -1947,6 +1952,8 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: Virtu
       // A row just made stands at a guessed height until the page reports it: where an activity is below it is not
       // known yet, and from the guess to the fact is not a move.
       if (model.guessed) return;
+      const anew = pending || performance.now() - rewrapped < REWRAP_MS;
+      pending = false;
       const seen = new Set<string>();
       for (const { key } of layout.rows) {
         if (!key.startsWith("a:")) continue;
@@ -1965,7 +1972,7 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: Virtu
         if (Math.abs(top - row.top) < 0.01) continue;
         row.top = top;
         // One folded to its avatar, out flying, shows nothing: it is where it is laid out, for the avatar to fly to.
-        if (rewrapped || document.visibilityState !== "visible" || el.hasAttribute("data-away")) row.y.jump(top);
+        if (anew || document.visibilityState !== "visible" || el.hasAttribute("data-away")) row.y.jump(top);
         else {
           row.y.to(top, GLIDE);
           // Laid out elsewhere, it is drawn where it was until the glide takes it.
