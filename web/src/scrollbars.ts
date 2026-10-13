@@ -175,12 +175,22 @@ export function startScrollbars(): void {
     thumb.addEventListener("pointercancel", end);
   }
 
-  // Only when the pointer comes onto another element, never on every move.
+  // Only when the pointer comes onto another element, never on every move. Which pane it is over is read once the
+  // frame is drawn, when what is laid out is up to date: read at once, an element gone from under the pointer (a
+  // panel's switch replaced as it opens) laid the page out in the middle of that change.
+  let over: EventTarget | null = null;
+  let reading = 0;
   document.addEventListener("pointerover", (e) => {
     if (dragging || e.pointerType !== "mouse") return;
     if (e.target instanceof HTMLElement && e.target.classList.contains(css.floatingThumb)) return;
-    hover = scrollerOf(e.target);
-    if (hover) { clearTimeout(hideTimer); show(hover); } else linger();
+    over = e.target;
+    if (reading) return;
+    reading = requestAnimationFrame(() => setTimeout(() => {
+      reading = 0;
+      if (dragging) return;
+      hover = scrollerOf(over);
+      if (hover) { clearTimeout(hideTimer); show(hover); } else linger();
+    }));
   }, { passive: true });
   document.documentElement.addEventListener("pointerleave", () => { hover = null; linger(); });
   // Whatever scrolls (a wheel over a pane, a chat following new messages) shows its bar for a moment.
