@@ -112,3 +112,31 @@ test("files_go_up_by_their_station_and_say_how_far_and_a_failed_one_says_why", a
   assert.equal(v(t.values, 1).uploading, false);
   t.core.close();
 });
+
+test("what_the_core_kept_frozen_is_read_back_and_written_on_copies", async () => {
+  const t = await setup();
+  // Kept on the device as a page before the composer wrote it (`draft.put`): held frozen by the core.
+  call(t.core, t.ui, 50, "draft.put", { key: "ws/st:old", text: "旧的草稿", quotes: [{ author: "agent", text: "那段", comment: "嗯" }], files: [{ name: "a.png", path: "/u/a.png", size: 3 }] });
+  await t.settle();
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  await t.watch(1, "ws/st:old");
+  const v1 = v(t.values, 1);
+  assert.deepEqual([v1.text, v1.rev, v1.quotes.map((q: J) => [q.text, q.comment]), v1.files.map((f: J) => f.done.path), v1.ready], ["旧的草稿", 1, [["那段", "嗯"]], ["/u/a.png"], true]);
+  // Every change on what it read: none throws (frozen), each on copies.
+  const quote = v1.quotes[0].id;
+  const file = v1.files[0].id;
+  await t.ask("comment", { key: "ws/st:old", id: quote, comment: "改了" });
+  await t.ask("text", { key: "ws/st:old", text: "旧的草稿，接着写" });
+  await t.ask("quote", { key: "ws/st:old", id: "q2", quote: { author: "agent", text: "另一段" }, focus: true });
+  await t.ask("unquote", { key: "ws/st:old", id: "q2" });
+  call(t.core, t.ui, 60, "composer.take", { key: "ws/st:old" });
+  await t.settle();
+  await t.ask("restore", { key: "ws/st:old", error: null });
+  await t.ask("carry", { key: "ws/st:old", to: "ws/st:new" });
+  await t.watch(2, "ws/st:new");
+  await t.ask("remove", { key: "ws/st:new", id: file });
+  const v2 = v(t.values, 2);
+  assert.deepEqual([v2.text, v2.quotes.map((q: J) => [q.text, q.comment]), v2.files], ["旧的草稿，接着写", [["那段", "改了"]], []]);
+  t.core.close();
+});
