@@ -42,6 +42,9 @@ export type Options = {
   trail?: number;
 };
 
+/** How many items measured say how far off the estimates are, and how many measured at a width settle it there. */
+const SAMPLE = 5;
+const SETTLED = 8;
 /** Under what covers the pane's top, a followed message stops this far below it. */
 const UNDER = 12;
 
@@ -66,8 +69,10 @@ export class Virtual {
   /** The page takes the pane to where it follows step by step (`place`), not at once. */
   private gliding = false;
   private velocity = 0;
-  /** How much taller the items measured are than they were estimated, in all. */
+  /** How much taller the items measured are than they were estimated, in all; and the width it is settled for. */
   private scale = 1;
+  private settled = -1;
+  private guessing = false;
   /** A scroll of the reader's is under way. */
   private moving = false;
   /** How far the pane is from where it should be by its anchor, held until the scroll rests. */
@@ -234,7 +239,9 @@ export class Virtual {
     }
     const rows: Row[] = [];
     let end = 0;
+    this.guessing = false;
     for (const i of [...made].sort((a, b) => a - b)) {
+      if (this.sizes.get(this.items[i]!.key)?.width !== this.width) this.guessing = true;
       rows.push({ key: this.items[i]!.key, index: i, space: this.tops[i]! - end });
       end = this.tops[i]! + this.heightOf(i);
     }
@@ -255,6 +262,11 @@ export class Virtual {
   /** How tall the pane is, and whether all there is fits in it (nothing to scroll). */
   get paneHeight(): number { return this.height; }
   get paneWidth(): number { return this.width; }
+  /** A row of the last layout stands at a height not measured yet in the pane as wide as it is: where the rows after
+   *  it are is a guess until the page reports it. */
+  get guessed(): boolean { return this.guessing; }
+  /** How much taller than its estimate an item not measured is taken to be. */
+  get scaled(): number { return this.scale; }
   get fits(): boolean { return this.total() <= this.height; }
   /** What covers the pane's top. */
   get covered(): number { return this.cover; }
@@ -284,15 +296,25 @@ export class Virtual {
   private retop(): void {
     const n = this.items.length;
     // The items measured say how far off the estimates are: those not measured yet are taken that much taller or shorter.
-    // From a few of them on: one tall message says nothing of the rest.
-    let measured = 0;
-    let estimated = 0;
-    let count = 0;
-    for (const item of this.items) {
-      const size = this.sizes.get(item.key);
-      if (size && size.height > 0 && item.estimate > 0) { measured += size.height; estimated += item.estimate; count++; }
+    // From a few of them on (one tall message says nothing of the rest), and settled once enough are measured at this
+    // width: taken anew with every message measured, the items above the pane would shift a little each time, and
+    // what stands over the list by where its rows are (an avatar flying to its message) with them.
+    if (this.settled !== this.width) {
+      let measured = 0;
+      let estimated = 0;
+      let count = 0;
+      let here = 0;
+      for (const item of this.items) {
+        const size = this.sizes.get(item.key);
+        if (!size || size.height <= 0 || item.estimate <= 0) continue;
+        measured += size.height;
+        estimated += item.estimate;
+        count++;
+        if (size.width === this.width) here++;
+      }
+      this.scale = count >= SAMPLE ? Math.min(4, Math.max(0.25, measured / estimated)) : 1;
+      if (here >= SETTLED) this.settled = this.width;
     }
-    this.scale = count >= 5 ? Math.min(4, Math.max(0.25, measured / estimated)) : 1;
     const tops = new Array<number>(n + 1);
     let y = 0;
     for (let i = 0; i < n; i++) {
@@ -358,7 +380,7 @@ export class Virtual {
       const i = this.eye ? this.at.get(this.eye.key) : undefined;
       // Where the pane is now that the items above it stand where they do: what shows has not moved.
       const here = i === undefined ? this.top : Math.max(0, this.topOf(i) - this.eye!.offset);
-      if (i !== undefined && a.to === null) this.held = Math.max(0, here - Math.max(0, this.natural() - this.height));
+      if (i !== undefined) this.held = Math.max(0, here - Math.max(0, this.natural() - this.height));
       const to = this.target();
       // On from there to where it follows: by the page's steps while it glides, else at once.
       this.top = !this.gliding || to < here ? to : here;

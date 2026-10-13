@@ -136,6 +136,22 @@ test("virtual_what_leaves_the_end_leaves_its_room_down_to_the_pane_s_bottom_and_
   assert.ok(l.scrollTop + 600 > l.total - 600, "the pane is within a pane of the list's own end");
 });
 
+test("virtual_what_leaves_the_end_as_a_message_comes_leaves_its_room_too", () => {
+  // A message's buttons go as the reader answers, their own message coming after it: nothing drops down meanwhile.
+  let items: Item[] = [...list(0, 30), { key: "a:agent", estimate: 80 }];
+  const v = made(new Virtual({ gap: GAP, overscan: 300 }));
+  v.setItems(items);
+  v.measured(v.layout().rows.map((r) => [r.key, r.key === "a:agent" ? 80 : 100] as const));
+  const before = v.layout();
+  v.glide(true);
+  items = [...list(0, 30), { key: "o:1", estimate: 20 }];
+  v.setItems(items);
+  v.follow("o:1");
+  const l = sound(v, items, 600, (key) => (key === "o:1" ? 20 : 100));
+  assert.equal(l.scrollTop, before.scrollTop);
+  assert.equal(l.after, 60);
+});
+
 test("virtual_the_pane_itself_changing_holds_no_room_following_it_stays_at_its_end", () => {
   const items = list(0, 100);
   const v = made(new Virtual({ gap: GAP, overscan: 300, lead: 24, trail: 260 }));
@@ -254,12 +270,7 @@ test("virtual_anything_done_in_any_order_keeps_the_reader_s_place_and_a_pane_wit
     v.setViewport(height, width, pick(2) * 40);
     v.setItems(items);
     // An item not measured stands as tall as its estimate, by as much as those measured are off theirs.
-    const scale = () => {
-      let measured = 0, estimated = 0, count = 0;
-      for (const item of items) { const h = v.sizes.get(item.key)?.height; if (h !== undefined && h > 0) { measured += h; estimated += item.estimate; count++; } }
-      return count >= 5 ? Math.min(4, Math.max(0.25, measured / estimated)) : 1;
-    };
-    const heightOf = (key: string) => v.sizes.get(key)?.height ?? items.find((item) => item.key === key)!.estimate * scale();
+    const heightOf = (key: string) => v.sizes.get(key)?.height ?? items.find((item) => item.key === key)!.estimate * v.scaled;
     // What the page last measured (`real`), and which of it the pane's width has made stale.
     const stale = new Set<string>();
     const measure = () => {

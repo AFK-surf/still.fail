@@ -7,7 +7,9 @@
 // What is read, and when:
 // - a scroll: the pane's scrollTop, once, in its event;
 // - sizes: an observer's own reports of the pane (its height, its width, its padding) and of each row, after the
-//   browser has laid the page out. Nothing else of the layout is read: no rectangles, no computed style.
+//   browser has laid the page out; with them, the pane's scrollTop again (the page is laid out: nothing is worked
+//   out for it), for where the browser itself put the pane as it laid out a list grown shorter at its end.
+//   Nothing else of the layout is read: no rectangles, no computed style.
 // What is written, and when: the spacers' heights with the rows (React's commit), then the pane's scrollTop where the
 // model puts it, once; it is read back as it is set (the browser may stop short of it, the page laid out by then).
 import { createElement, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type ReactNode, type RefObject } from "react";
@@ -55,13 +57,15 @@ type Made = {
   watchers: Set<() => void>;
   frame: number;
   last: number;
+  /** Where the browser itself put the pane (a list shorter at its end for a moment): its scroll event is not a reader's. */
+  pulled: number | null;
 };
 
 /** A list's model, one for each `key` (a chat): made before its rows are, so where it opens can be said to it first. */
 export function useVirtualModel(key: string, gap: number): Made {
   return useMemo(() => ({
     model: new Virtual({ gap, overscan: OVERSCAN, boost: BOOST }, sizesOf(key)),
-    gap, written: Number.NaN, kept: 0, stepping: false, drawn: "", born: performance.now(), watchers: new Set<() => void>(), frame: 0, last: 0,
+    gap, written: Number.NaN, kept: 0, stepping: false, drawn: "", born: performance.now(), watchers: new Set<() => void>(), frame: 0, last: 0, pulled: null,
   }), [key, gap]);
 }
 
@@ -161,6 +165,9 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       // At rest: the pane put where it should be (what was held under the scroll), fewer rows made ahead.
       rest = window.setTimeout(() => { model.rested(); self.sync(el); }, REST_MS);
       if (Math.abs(top - made.written) < 1) return;
+      // The browser's own, put right already (the observer below): no one scrolled.
+      if (made.pulled !== null && Math.abs(top - made.pulled) < 1) { made.pulled = null; return; }
+      made.pulled = null;
       // The reader's: a glide stops where it is.
       cancelAnimationFrame(made.frame);
       made.frame = 0;
@@ -172,6 +179,10 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     };
     el.addEventListener("scroll", scrolled, { passive: true });
     const sizes = new ResizeObserver((entries) => {
+      // A reader's scroll was heard before this in the frame: the pane anywhere else than it was put is the browser's
+      // doing as it laid the page out (what left the list's end left the pane past its end). The model puts it back.
+      const at = el.scrollTop;
+      if (!Number.isNaN(made.written) && Math.abs(at - made.written) >= 1) { made.pulled = at; made.written = at; }
       const heights: [string, number][] = [];
       for (const entry of entries) {
         const box = entry.borderBoxSize[0];

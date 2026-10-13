@@ -1988,6 +1988,9 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: Virtu
       kept += shift;
       if (shift) for (const row of rows.values()) { row.top += shift; if (!row.y.moving) row.y.jump(row.top); }
       const layout = model.layout();
+      // A row just made stands at a guessed height until the page reports it: where an activity is below it is not
+      // known yet, and from the guess to the fact is not a move.
+      if (model.guessed) return;
       const seen = new Set<string>();
       for (const { key } of layout.rows) {
         if (!key.startsWith("a:")) continue;
