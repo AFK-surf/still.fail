@@ -28,6 +28,7 @@
   "web-mobile.chat.camera": "Camera",
   "web-mobile.chat.failed": "Couldn't load this chat: {error}",
   "web-mobile.chat.files": "Files",
+  "web-mobile.chat.find": "Find in chat",
   "web-mobile.chat.info": "Chat info",
   "web-mobile.chat.job": "Job",
   "web-mobile.chat.jobGone": "This job no longer exists.",

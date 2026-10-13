@@ -13,6 +13,8 @@ export interface ChatPageActions {
   tab?(key: string): void;
   /** The 任务 tab, at a job when given. */
   jobs?(job?: string): void;
+  /** The chat's own find opened (ChatFind.tsx). */
+  find?(): void;
   /** The chat archived, as its bar's 归档 does (asking first while one of its agents keeps watch). */
   archive(): void;
 }
@@ -38,5 +40,6 @@ export const chatPage = {
   },
   tab: (chat: string, key: string) => pages.get(chat)?.current.tab?.(key),
   jobs: (chat: string, job?: string) => pages.get(chat)?.current.jobs?.(job),
+  find: (chat: string) => pages.get(chat)?.current.find?.(),
   archive: (chat: string) => pages.get(chat)?.current.archive(),
 };

@@ -203,3 +203,10 @@ export const mAsks = style({
     "--ask-chip": "var(--m-chip)", "--ask-solid": "var(--m-surface)",
   },
 });
+
+/** The chat's find bar in the page's bar (../ChatFind.tsx): all its width, what it says of how much was looked in on a line under it. */
+globalStyle(`${mChatBar} > [data-chat-find]`, { flex: "1", flexWrap: "wrap", padding: "4px 0 4px 12px" });
+globalStyle(`${mChatBar} > [data-chat-find] > div`, { flex: "1", width: "auto", height: "36px" });
+globalStyle(`${mChatBar} > [data-chat-find] > p`, { order: "2", flex: "none", width: "100%", padding: "0 4px" });
+// (At least 16px: a phone's browser zooms the page in on a smaller field.)
+globalStyle(`${mChatBar} > [data-chat-find] input`, { fontSize: vars.textTitle });

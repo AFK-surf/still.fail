@@ -28,6 +28,7 @@
   "web-mobile.chat.camera": "拍照",
   "web-mobile.chat.failed": "读不到这个对话：{error}",
   "web-mobile.chat.files": "文件",
+  "web-mobile.chat.find": "在对话中查找",
   "web-mobile.chat.info": "对话信息",
   "web-mobile.chat.job": "任务",
   "web-mobile.chat.jobGone": "这个任务已经不在了。",

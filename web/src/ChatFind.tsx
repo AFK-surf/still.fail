@@ -55,9 +55,10 @@ const rowOf = (pane: Element, seq: number) => pane.querySelector<HTMLElement>(`[
 /**
  * The find of the chat on `thread`, whose list is `list` (drawn by `virtual` from `messages`): `show` opens its bar
  * (`bar`: it draws itself in the page's bar, else over the list). `foot` and `head`: how much of the pane's bottom and
- * top something covers (the composer; a bar floating over the list): what is found is put clear of both.
+ * top something covers (the composer; a bar floating over the list): what is found is put clear of both. Null: what
+ * the list's padding leaves for them there (the phone's list runs under its bar and its composer).
  */
-export function useChatFind(list: RefObject<HTMLElement | null>, virtual: VirtualList, thread: number | null, messages: ChatMessage[], foot: number, head = 0): { open: boolean; show(): void; bar: ReactNode } {
+export function useChatFind(list: RefObject<HTMLElement | null>, virtual: VirtualList, thread: number | null, messages: ChatMessage[], foot: number | null, head: number | null = 0): { open: boolean; show(): void; bar: ReactNode } {
   const api = useChatSend();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -152,7 +153,7 @@ export function useChatFind(list: RefObject<HTMLElement | null>, virtual: Virtua
   useLayoutEffect(() => {
     if (!shown || !at || !here) return;
     const pane = list.current;
-    if (pane && !rowOf(pane, at.seq)) latest.current.goto(`m:${at.seq}`, "start", head + LEAD);
+    if (pane && !rowOf(pane, at.seq)) latest.current.goto(`m:${at.seq}`, "start", (head ?? 0) + LEAD);
   }, [shown, at, here, list, head]);
   useEffect(() => {
     if (!shown || !at || thread === null) return;
@@ -170,17 +171,20 @@ export function useChatFind(list: RefObject<HTMLElement | null>, virtual: Virtua
       if (!row) {
         // Asked again: the browser, its content just replaced, may have scrolled the pane meanwhile, which the list
         // takes for the reader's doing.
-        if (tries % 4 === 0) latest.current.goto(key, "start", head + LEAD);
+        if (tries % 4 === 0) latest.current.goto(key, "start", (head ?? 0) + LEAD);
         if (tries++ < 30) frame = requestAnimationFrame(look);
         return;
       }
       const ranges = rangesIn(row, words!);
       const box = pane.getBoundingClientRect();
+      const padding = foot === null || head === null ? getComputedStyle(pane) : null;
+      const foot_ = foot ?? (parseFloat(padding!.paddingBottom) || 0);
+      const head_ = head ?? (parseFloat(padding!.paddingTop) || 0);
       const top = row.getBoundingClientRect().top;
       const hit = ranges[Math.min(at.k, ranges.length - 1)]?.getBoundingClientRect();
       const [from, to] = hit ? [hit.top, hit.bottom] : [top, top + 24];
       // Clear of what covers the pane's ends; where it is not, about two fifths down what is left of the pane.
-      if (from < box.top + head + 24 || to > box.bottom - foot - 24) latest.current.goto(key, "at", Math.max(head + LEAD, head + (box.height - head - foot) * 0.4) - (from - top));
+      if (from < box.top + head_ + 24 || to > box.bottom - foot_ - 24) latest.current.goto(key, "at", Math.max(head_ + LEAD, head_ + (box.height - head_ - foot_) * 0.4) - (from - top));
     });
     return () => cancelAnimationFrame(frame);
   }, [shown, at, here, thread]); // eslint-disable-line react-hooks/exhaustive-deps

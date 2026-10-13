@@ -13,10 +13,11 @@ import { OpenFile } from "../Viz.tsx";
 import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
-import { useChatPageActions } from "../chatPage.ts";
+import { chatPage, useChatPageActions } from "../chatPage.ts";
+import { useChatFind } from "../ChatFind.tsx";
 import { ChatRows, historyLinkClicked, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
-import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Stop, Users, Web } from "../icons.tsx";
+import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Stop, Users, Web } from "../icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
@@ -226,7 +227,7 @@ function StationSheet({ station }: { station: string }) {
 export function BarFrame({ title, more, onMore, trailing, children }: { title: string; more: boolean; onMore?: () => void; trailing?: ReactNode; children?: ReactNode }) {
   const app = useApp();
   return (
-    <header className={`${css.mChatBar} ${pagesCss.mGlass}`}>
+    <header className={`${css.mChatBar} ${pagesCss.mGlass}`} data-find-slot="">
       <button type="button" className={css.mChatBack} onClick={app.pop} aria-label={t("common.back")}><ChevronLeft size={22} /></button>
       <span className={css.mChatBarTitle}><b>{title}</b>{children}</span>
       {trailing}
@@ -248,6 +249,9 @@ function Messages({ view, lives, list, draft, here, stationName }: {
   const app = useApp();
   // The phone's bar floats over the list's top: its messages show from a little above where the list's padding ends.
   const rows = useMessageList(list, view, `${here.station}:${view.thread?.id ?? here.key}`, lives, 20, belowBar);
+  // Its own find ("…" → 在对话中查找): its bar takes the page's bar's place; what is found is put clear of what the
+  // list's padding leaves for the bar and the composer.
+  const find = useChatFind(list, rows.virtual, view.thread?.id ?? null, rows.messages, null, null);
   const asks = useAsksShown(rows.virtual, view);
   const asking = asks.length > 0 && !!view.thread;
   const [turn, setTurn] = useState(0);
@@ -266,6 +270,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
     agent: (key) => agentCard(app, here, key),
     tab: (key) => { if (key.startsWith("service:")) app.push(servicePath(here.station, here.key, key.slice("service:".length))); },
     archive,
+    find: find.show,
   });
   const [stable] = useState(() => ({
     quote: (q: Omit<Quote, "comment">) => latest.current.draft.current.quote(q),
@@ -311,6 +316,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
     <OpenFile.Provider value={stable.file}>
       {quoting.pop}
       {askedFile}
+      {find.bar}
       <Gallery.Provider value={stable.images}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
         <DraftKey.Provider value={chatKey}>
@@ -682,7 +688,7 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
  * within reach: pin it, open it in Slack, archive it.
  */
 function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
-  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + 1) * 41;
+  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + 2) * 41;
   // As tall as what it shows: its name and line, its agents, its rows.
   app.sheet({ height: Math.min(0.9, (25 + 84 + rows + 10 + 34) / window.innerHeight), content: () => <ChatInfo here={here} thread={thread} /> });
 }
@@ -737,7 +743,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
             })}
           </InfoList>
         )}
-        {(open || view.slackUrl || view.xshare) && (
+        {(
           <InfoList>
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
             {open && view.pinned != null && (
@@ -746,6 +752,9 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
                 <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? t("web-mobile.home.unpin") : t("web-mobile.chat.pinTop")}</span>
               </InfoRow>
             )}
+            <InfoRow onClick={() => { app.sheet(null); chatPage.find(draftKeyOf(here.station, here.key)); }}>
+              <Search size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.find")}</span>
+            </InfoRow>
             {view.xshare && <ShareRow here={here} thread={thread} share={view.xshare} />}
             {view.slackUrl && <a className={listsCss.mInfoRow} href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openSlack")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a>}
             {open && <ArchiveRow here={here} view={view} thread={thread} />}
