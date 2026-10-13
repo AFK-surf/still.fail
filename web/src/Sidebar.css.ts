@@ -185,7 +185,8 @@ export const navTime = style({
 export const sessionKind = style({
   display: "inline-grid", flex: "none",
   selectors: {
-    [`${navSessionHead} &`]: { width: 14, placeItems: "center" },
+    // As wide as the agent's mark under it (RowPicture.css.ts asideAgent), so the two are centred on one line.
+    [`${navSessionHead} &`]: { width: 16, placeItems: "center" },
     [`${navSession}[data-offline] &`]: { color: vars.subtle },
   },
 });
