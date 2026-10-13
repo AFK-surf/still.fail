@@ -4,7 +4,7 @@ import { sizesOf, Virtual, type Item, type Layout } from "../web/src/virtual/mod
 
 const GAP = 14;
 const list = (from: number, to: number, estimate = 100): Item[] => Array.from({ length: to - from }, (_, i) => ({ key: `m:${from + i}`, estimate }));
-const made = (v: Virtual, height = 600, width = 400) => { v.setViewport(height, width); return v; };
+const made = (v: Virtual, height = 600, width = 400) => { v.setViewport(height, width); v.widen(); return v; };
 /** A deterministic random source (mulberry32). */
 function random(seed: number): () => number {
   let a = seed;
@@ -35,7 +35,8 @@ function sound(v: Virtual, items: Item[], height: number, heightOf: (key: string
   let top = lead - l.drift;
   items.forEach((item, i) => {
     const h = heightOf(item.key);
-    if (top < l.scrollTop + height && top + h > l.scrollTop) assert.ok(rows.has(i), `item ${i} in the pane is made`);
+    // By more than a rounding's worth: an item that ends where the pane starts is not in it.
+    if (top < l.scrollTop + height - 1e-6 && top + h > l.scrollTop + 1e-6) assert.ok(rows.has(i), `item ${i} in the pane is made`);
     top += h + GAP;
   });
   return l;
@@ -103,6 +104,9 @@ test("virtual_goes_to_an_item_when_it_comes_and_reads_from_there", () => {
   items = [...list(50, 100), ...items];
   v.setItems(items);
   assert.equal(v.offsetOf("m:70"), 48);
+  // Still on its way there until what shows there is measured: then the reader's place.
+  assert.equal(v.mode.kind, "goto");
+  v.measured(v.layout().rows.map((r) => [r.key, 100] as const));
   assert.deepEqual(v.mode, { kind: "read", key: "m:70", offset: 48 });
   // Where it was left: its top that far below the pane's.
   assert.equal(v.goto("m:90", "at", -30), true);
@@ -110,6 +114,24 @@ test("virtual_goes_to_an_item_when_it_comes_and_reads_from_there", () => {
   // Its middle at the pane's middle.
   assert.equal(v.goto("m:120", "center"), true);
   assert.equal(v.offsetOf("m:120"), 250);
+});
+
+test("virtual_gone_to_a_line_near_the_end_the_pane_is_at_the_end_once_what_follows_it_is_measured_short", () => {
+  // The unread line, a reply after it guessed taller than it is: near the top as far as there is to scroll, no further.
+  const items: Item[] = [...list(0, 60), { key: "line", estimate: 20 }, { key: "m:60", estimate: 900 }];
+  const v = made(new Virtual({ gap: GAP, overscan: 300 }));
+  v.goto("line", "start", 92);
+  v.setItems(items);
+  assert.equal(v.offsetOf("line"), 92);
+  v.measured(v.layout().rows.map((r) => [r.key, r.key === "line" ? 20 : 100] as const));
+  v.measured(v.layout().rows.map((r) => [r.key, r.key === "line" ? 20 : 100] as const));
+  const l = v.layout();
+  assert.equal(l.scrollTop, l.total - 600);
+  assert.equal(v.offsetOf("line"), 600 - 100 - GAP - 20);
+  // At the very end: followed from there (the reply's buttons coming under it do not leave the pane short).
+  assert.equal(v.mode.kind, "follow");
+  v.measured([["m:60", 150]]);
+  assert.equal(v.layout().scrollTop, v.layout().total - 600);
 });
 
 test("virtual_what_leaves_the_end_leaves_its_room_down_to_the_pane_s_bottom_and_never_a_blank_pane", () => {
@@ -150,6 +172,45 @@ test("virtual_what_leaves_the_end_as_a_message_comes_leaves_its_room_too", () =>
   const l = sound(v, items, 600, (key) => (key === "o:1" ? 20 : 100));
   assert.equal(l.scrollTop, before.scrollTop);
   assert.equal(l.after, 60);
+});
+
+test("virtual_what_the_reader_opens_at_the_end_is_not_followed_their_place_is_kept", () => {
+  const items = list(0, 40);
+  const v = made(new Virtual({ gap: GAP, overscan: 300 }));
+  v.setItems(items);
+  v.measured(v.layout().rows.map((r) => [r.key, 100] as const));
+  const top = v.layout().scrollTop;
+  v.stay();
+  assert.equal(v.mode.kind, "read");
+  v.measured([["m:39", 900]]);
+  assert.equal(v.layout().scrollTop, top);
+});
+
+test("virtual_a_reader_at_the_very_top_is_at_the_first_message_what_loads_comes_above_it", () => {
+  const head: Item = { key: "older", estimate: 30, place: false };
+  let items = [head, ...list(100, 200)];
+  const v = made(new Virtual({ gap: GAP, overscan: 300 }));
+  v.setItems(items);
+  v.scrolled(0);
+  v.rested();
+  assert.deepEqual(v.mode, { kind: "read", key: "m:100", offset: 30 + GAP });
+  // An older page comes in after the line that said it was loading: the reader's message stays where it is.
+  items = [head, ...list(50, 100), ...list(100, 200)];
+  v.setItems(items);
+  assert.equal(v.offsetOf("m:100"), 30 + GAP);
+  assert.equal(v.layout().scrollTop, 50 * (100 + GAP));
+});
+
+test("virtual_a_list_that_holds_no_room_stays_at_the_end_of_what_there_is", () => {
+  const items = list(0, 40);
+  const v = made(new Virtual({ gap: GAP, overscan: 300, holds: false }));
+  v.setItems(items);
+  v.measured(v.layout().rows.map((r) => [r.key, 300] as const));
+  // Measured again shorter (a text folded): no room after the last, the pane at the end.
+  v.measured(v.layout().rows.map((r) => [r.key, 110] as const));
+  const l = sound(v, items, 600, (key) => v.sizes.get(key)?.height ?? 100 * v.scaled);
+  assert.equal(l.after, 0);
+  assert.equal(l.scrollTop, l.total - 600);
 });
 
 test("virtual_the_pane_itself_changing_holds_no_room_following_it_stays_at_its_end", () => {
@@ -314,7 +375,8 @@ test("virtual_anything_done_in_any_order_keeps_the_reader_s_place_and_a_pane_wit
       else if (op === 6) { scrolled = true; v.goto(items[pick(items.length)]!.key, rnd() < 0.5 ? "start" : "center", pick(30)); }
       else if (op === 7) { scrolled = true; v.follow(); }
       else if (op === 8 && items.length > 3) { items = items.slice(0, -1); last -= 1; v.setItems(items); }
-      const l = sound(v, items, height, heightOf);
+      let l: Layout;
+      try { l = sound(v, items, height, heightOf); } catch (e) { throw new Error(`seed ${seed} step ${step} op ${op}: ${(e as Error).message}`); }
       // The reader's place: the same, unless the pane cannot scroll that far or their item left.
       const after = v.mode;
       if (!scrolled && mode.kind === "read" && after.kind === "read" && after.key === mode.key && place !== undefined) {
@@ -358,6 +420,17 @@ test("virtual_under_a_scroll_the_pane_is_not_moved_what_would_move_it_is_held_un
   v.measured([[v.layout().rows[0]!.key, 300]]);
   v.scrolled(9900);
   assert.equal(v.layout().scrollTop, 9900);
+});
+
+test("virtual_a_list_opening_makes_only_what_shows_the_rows_past_its_edges_once_asked", () => {
+  const items = list(0, 200);
+  const v = new Virtual({ gap: GAP, overscan: 300 });
+  v.setViewport(600, 400);
+  v.setItems(items);
+  const first = v.layout().rows;
+  assert.ok(first.length <= 6, `${first.length} rows as it opens`);
+  v.widen();
+  assert.ok(v.layout().rows.length > first.length);
 });
 
 test("virtual_sizes_are_kept_for_the_lists_lately_shown", () => {

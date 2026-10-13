@@ -10,9 +10,11 @@
 //   browser has laid the page out; with them, the pane's scrollTop again (the page is laid out: nothing is worked
 //   out for it), for where the browser itself put the pane as it laid out a list grown shorter at its end.
 //   Nothing else of the layout is read: no rectangles, no computed style.
+// - the pane's scrollHeight, in a scroll's event, only to tell the browser's own pull from a reader's scroll (list.tsx
+//   `scrolled`).
 // What is written, and when: the spacers' heights with the rows (React's commit), then the pane's scrollTop where the
 // model puts it, once; it is read back as it is set (the browser may stop short of it, the page laid out by then).
-import { createElement, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type ReactNode, type RefObject } from "react";
+import { createContext, createElement, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { sizesOf, Virtual, type Align, type Item, type Layout, type Row } from "./model.ts";
 import * as css from "./list.css.ts";
@@ -41,12 +43,15 @@ const BOOST = 2400;
 const REST_MS = 150;
 /** A pane's first moments: what comes then is where it opens, taken at once. */
 const OPENING_MS = 500;
+/** How long after a list's first rows are drawn the rows past its pane's edges are made. */
+const WIDEN_MS = 450;
 /** The most rows a selection keeps made. */
 const SELECTED = 400;
 
 type Made = {
   model: Virtual;
   gap: number;
+  holds: boolean;
   /** Where the pane was last put, or seen to be. */
   written: number;
   kept: number;
@@ -59,14 +64,34 @@ type Made = {
   last: number;
   /** Where the browser itself put the pane (a list shorter at its end for a moment): its scroll event is not a reader's. */
   pulled: number | null;
+  /** The rows past the pane's edges are made too: from a moment after its first rows are drawn. */
+  wide: boolean;
+  /** The rows of the last commit. */
+  shown: Set<string>;
 };
 
 /** A list's model, one for each `key` (a chat): made before its rows are, so where it opens can be said to it first. */
-export function useVirtualModel(key: string, gap: number): Made {
-  return useMemo(() => ({
-    model: new Virtual({ gap, overscan: OVERSCAN, boost: BOOST }, sizesOf(key)),
-    gap, written: Number.NaN, kept: 0, stepping: false, drawn: "", born: performance.now(), watchers: new Set<() => void>(), frame: 0, last: 0, pulled: null,
-  }), [key, gap]);
+/** How large the last pane of each kind of list was (a chat's, a history's: told apart by their gap): a list just
+ *  made takes it for its own until its pane reports, so its first rows are the ones that show, not none (a pane of
+ *  no height shows nothing) and then, a render later, those. */
+const panes = new Map<string, { height: number; width: number; cover: number; lead: number; trail: number }>();
+const kindOf = (gap: number, holds: boolean) => `${gap} ${holds}`;
+
+export function useVirtualModel(key: string, gap: number, holds = true): Made {
+  return useMemo(() => {
+    const model = new Virtual({ gap, overscan: OVERSCAN, boost: BOOST, holds }, sizesOf(key));
+    const last = panes.get(kindOf(gap, holds));
+    if (last) { model.setEdges(last.lead, last.trail); model.setViewport(last.height, last.width, last.cover); }
+    // The first of its kind: most of the window's height, till its pane reports.
+    else model.setViewport(Math.round(window.innerHeight * 0.75), 0);
+    return fresh(model, gap, holds);
+  }, [key, gap, holds]);
+}
+function fresh(model: Virtual, gap: number, holds: boolean): Made {
+  return {
+    model, holds,
+    gap, written: Number.NaN, kept: 0, stepping: false, drawn: "", born: performance.now(), watchers: new Set<() => void>(), frame: 0, last: 0, pulled: null, wide: false, shown: new Set<string>(),
+  };
 }
 
 export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, items: Item[], options: {
@@ -146,14 +171,37 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     return { tell, put, sync, step };
   }, [made, model]);
 
-  // The rows drawn: the pane where the model has it.
+  // The rows drawn: the pane where the model has it. Not yet while a row just made stands at a guessed height: the
+  // observer reports it in this frame, once the page is laid out, and the pane is put then, where it belongs; put
+  // now, the browser laid the new rows out here, in the middle of the task, and again after they were measured. (A
+  // frame on, it is put all the same: a row that reports nothing would leave it waiting.)
   useLayoutEffect(() => {
     const el = pane.current;
     if (!el) return;
-    self.put(el);
+    let later = 0;
+    // Only for rows made in this very commit (each reports once it is laid out); nor a pane never put yet (its own
+    // size comes with the same report). Any other time the pane is put now: no report may be coming.
+    const fresh = layout.rows.some((r) => !made.shown.has(r.key));
+    made.shown = new Set(layout.rows.map((r) => r.key));
+    // (And not in a glide's own step: each step is where the pane is to be now.)
+    if (!made.stepping && !made.frame && ((fresh && model.guessed) || Number.isNaN(made.written))) later = requestAnimationFrame(() => { self.put(el); self.step(el); self.tell(); });
+    else self.put(el);
     self.step(el);
     self.tell();
+    return () => cancelAnimationFrame(later);
   });
+
+  // Its first rows drawn, the rows past the pane's edges are made, ready for a scroll: not in the frame the list opens
+  // in, nor in the frames of what brings it in (a panel sliding open), but once that is over; at the reader's first
+  // scroll, if that comes sooner.
+  const some = items.length > 0;
+  useEffect(() => {
+    const el = pane.current;
+    if (!el || !some || made.wide) return;
+    let timer = 0;
+    const frame = requestAnimationFrame(() => { timer = window.setTimeout(() => { if (made.wide) return; made.wide = true; model.widen(); self.sync(el, false); }, WIDEN_MS); });
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [pane, made, model, self, some]);
 
   useEffect(() => {
     const el = pane.current;
@@ -168,7 +216,16 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       // The browser's own, put right already (the observer below): no one scrolled.
       if (made.pulled !== null && Math.abs(top - made.pulled) < 1) { made.pulled = null; return; }
       made.pulled = null;
+      // The browser's own, not heard of yet: following its end with no one's hand on it, the pane is further up and at
+      // the very end of what it has now (what was at the end got shorter: a row's own part folding, reported to the
+      // observer a frame later). The pane's height is read for it, here alone.
+      if (model.mode.kind === "follow" && top < made.written && performance.now() - input > 400 && el.scrollHeight - el.clientHeight - top <= 1) {
+        made.written = top;
+        self.sync(el);
+        return;
+      }
       // The reader's: a glide stops where it is.
+      if (!made.wide) { made.wide = true; model.widen(); }
       cancelAnimationFrame(made.frame);
       made.frame = 0;
       model.glide(false);
@@ -178,6 +235,10 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       self.sync(el);
     };
     el.addEventListener("scroll", scrolled, { passive: true });
+    // When the reader last had a hand on the pane (a wheel, a finger, a key, the scrollbar).
+    let input = 0;
+    const touched = () => { input = performance.now(); };
+    for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, touched, { passive: true });
     const sizes = new ResizeObserver((entries) => {
       // A reader's scroll was heard before this in the frame: the pane anywhere else than it was put is the browser's
       // doing as it laid the page out (what left the list's end left the pane past its end). The model puts it back.
@@ -191,8 +252,11 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
           // The pane's padding is where its content box starts and what is left under it.
           const content = entry.contentRect;
           const lead = content.top;
-          model.setEdges(lead, Math.max(0, box.blockSize - content.top - content.height));
-          model.setViewport(box.blockSize, content.width, cover.current?.(lead) ?? 0);
+          const trail = Math.max(0, box.blockSize - content.top - content.height);
+          const over = cover.current?.(lead) ?? 0;
+          model.setEdges(lead, trail);
+          model.setViewport(box.blockSize, content.width, over);
+          panes.set(kindOf(gap, made.holds), { height: box.blockSize, width: content.width, cover: over, lead, trail });
           continue;
         }
         const row = entry.target as HTMLElement;
@@ -200,6 +264,8 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
         // A row held back takes no room, not even the gap before it (its own negative margin).
         if (key !== undefined && row.isConnected) heights.push([key, box.blockSize - (row.hasAttribute("data-held") ? gap : 0)]);
       }
+      // What a click in the pane just grew or shrank is the reader's doing, nothing new: their place is kept from here.
+      if (opening && heights.length) model.stay();
       // What grows at the end as the reader watches (a reply coming, an image loading) is followed gliding; the pane
       // itself resized lays everything out anew, taken at once.
       if (!entries.some((e) => e.target === el) && performance.now() - made.born > OPENING_MS && model.mode.kind === "follow") model.glide(true);
@@ -207,6 +273,10 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       self.sync(el);
     });
     sizes.observe(el);
+    // A click in the pane, until two frames after it.
+    let opening = false;
+    const clicked = () => { opening = true; requestAnimationFrame(() => requestAnimationFrame(() => { opening = false; })); };
+    el.addEventListener("click", clicked, true);
     const watchRow = (n: Node) => { if (n instanceof HTMLElement && n.dataset.vk !== undefined) sizes.observe(n); };
     for (const n of el.children) watchRow(n);
     const rows = new MutationObserver((records) => {
@@ -251,6 +321,8 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       cancelAnimationFrame(made.frame);
       made.frame = 0;
       el.removeEventListener("scroll", scrolled);
+      for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.removeEventListener(type, touched);
+      el.removeEventListener("click", clicked, true);
       el.removeEventListener("focusin", hold);
       el.removeEventListener("focusout", hold);
       document.removeEventListener("selectionchange", hold);
@@ -293,4 +365,23 @@ function spacer(key: string, height: number, where: "first" | "between" | "last"
 /** What of a layout the rows drawn depend on. */
 function signature(layout: Layout): string {
   return `${layout.rows.map((r) => `${r.key}:${r.space}`).join("|")}|${layout.after}`;
+}
+
+/**
+ * A row's own state (a group opened, a text unfolded) goes when the row is unmade: while something in it is open, it
+ * stays made. `KeepRow` is how a row says so to its list (what it answers ends it); `useRowKept` makes it for the row
+ * of `key`, `useKeepRow(open)` is for what opens.
+ */
+export const KeepRow = createContext<() => () => void>(() => () => {});
+export function useKeepRow(open: boolean): void {
+  const hold = useContext(KeepRow);
+  useEffect(() => (open ? hold() : undefined), [open, hold]);
+}
+export function useRowKept(model: Virtual, key: string): () => () => void {
+  // How many things are open in it: none, it is made and unmade as the pane goes by like any other.
+  const open = useRef(0);
+  return useMemo(() => () => {
+    if (open.current++ === 0) model.pin(key);
+    return () => { if (--open.current === 0) model.pin(key, false); };
+  }, [model, key]);
 }

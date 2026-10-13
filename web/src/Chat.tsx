@@ -277,7 +277,7 @@ export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<
 }
 
 /**
- * Over the list away from its end: glides down, and follows new messages again (scroll.ts); from a window short of the
+ * Over the list away from its end: glides down, and follows new messages again (virtual/model.ts); from a window short of the
  * end, goes there at once, turning while the latest page comes (`chat.latest`), not pressed again meanwhile.
  */
 function ToLatest({ station, thread, waiting, onClick }: { station: string; thread: number | null; waiting: number; onClick(): void }) {
@@ -460,16 +460,16 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
 
   // The list's items, in order: each a row of its own.
   const items: Item[] = [];
-  if (chat.more) items.push({ key: "older", estimate: 30 });
+  if (chat.more) items.push({ key: "older", estimate: 30, place: false });
   for (const s of chat.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   for (const m of messages) {
     if (m.seq === divider) items.push({ key: "line", estimate: 20 });
     items.push({ key: `m:${m.seq}`, estimate: tallOf(m) });
     for (const s of m.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   }
-  if (chat.newer) items.push({ key: "newer", estimate: 30 });
+  if (chat.newer) items.push({ key: "newer", estimate: 30, place: false });
   for (const o of chat.outbox) items.push({ key: `o:${o.id}`, estimate: 44 });
-  for (const { agent } of shown) items.push({ key: `a:${agent.key}`, estimate: 24 });
+  for (const { agent } of shown) items.push({ key: `a:${agent.key}`, estimate: 24, place: false });
 
   // What changed since it was last drawn: messages gone from an end as the core's window moved along the chat (their
   // room is not held), and messages come at its end (said as the reader watches: followed gliding, the last from its
@@ -833,68 +833,13 @@ function usePlace(virtual: VirtualList, key: string, messages: ChatMessage[], sh
 const REST_MS = 400;
 
 /**
- * Loads the page before what is shown (`more`: there is one; `first`: what is
- * shown first) when the reader comes within about a screenful of the top (or
- * when what is loaded does not fill the pane). What is on screen stays put: the
- * pane keeps the reader's message in place as content grows above (scroll.ts).
- */
-/**
- * Loads the page after what is shown while the chat shows a window short of its end (`newer`; `last`: what is shown
- * last) when the reader comes within about a screenful of its bottom (or when what is loaded does not fill the pane).
- * What is on screen stays put as it comes in below and as many messages leave above (scroll.ts).
- */
-/**
- * A pane that is its own list (an execution history, History.tsx): older pages load as its reader nears its top, judged
- * by the pane itself.
- */
-export function useOlderOnScroll(ref: RefObject<HTMLElement | null>, more: boolean, first: number | string | undefined, older: () => Promise<unknown>): void {
-  useLoadNearPane(ref, "top", more, first, older);
-}
-function useLoadNearPane(ref: RefObject<HTMLElement | null>, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): void {
-  const latest = useRef({ load, at });
-  latest.current = { load, at };
-  const asked = useRef<number | string | undefined>(undefined);
-  /** Judges the pane now; set while it is up. */
-  const fill = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !can) return;
-    let live = true;
-    let busy = false;
-    const near = () => (edge === "top" ? el.scrollTop : el.scrollHeight - el.scrollTop - el.clientHeight) <= el.clientHeight;
-    const check = () => {
-      const { load, at } = latest.current;
-      if (busy || asked.current === at || !near()) return;
-      asked.current = at;
-      busy = true;
-      // Two frames on, the page is laid out and the reader's place put back (or the page never came: asked again).
-      const settle = () => requestAnimationFrame(() => requestAnimationFrame(() => {
-        busy = false;
-        if (live && el.scrollHeight <= el.clientHeight) check();
-      }));
-      void load().then(settle, () => { asked.current = undefined; settle(); });
-    };
-    fill.current = () => { if (el.scrollHeight <= el.clientHeight) check(); };
-    check();
-    el.addEventListener("scroll", check, { passive: true });
-    return () => {
-      live = false;
-      fill.current = null;
-      el.removeEventListener("scroll", check);
-    };
-  }, [ref, can, edge]);
-  // A page in that does not fill the pane leaves nothing to scroll: the next is asked without waiting for the reader.
-  useEffect(() => fill.current?.(), [at]);
-}
-
-/**
  * One page per approach to an edge of the pane: a page is asked when the reader is within a screenful of `edge`
  * (`can`: there is one; `at`: what is shown at that edge, asked after once). The pane is judged as the reader
- * scrolls, not as the page comes in: until the pane has put the reader's message back (scroll.ts, as it is laid out),
+ * scrolls, not as the page comes in: until the pane has put the reader's message back (virtual/model.ts),
  * it still looks near the edge, and would ask for another page at once. So after a page, nothing is asked until a
  * frame after it is in, and then only as the reader scrolls (or while what is loaded does not fill the pane).
  */
-function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): void {
+export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): void {
   const latest = useRef({ load, at });
   latest.current = { load, at };
   const asked = useRef<number | string | undefined>(undefined);
@@ -2059,7 +2004,7 @@ function layoutSpot(pane: HTMLElement, el: Element) {
  * jumps; where it goes is read anew each frame (the message growing, the activity gliding down), and going home it is
  * on springs, from the speed it has. The message's own avatar is where it lands, the same picture in the same place. Until its turn
  * a message waits folded to nothing. With reduced motion messages just appear, and so do those no one watches come
- * out: arriving while the page is hidden or the reader has scrolled up (scroll.ts), and all still waiting when the page
+ * out: arriving while the page is hidden or the reader has scrolled up (virtual/model.ts), and all still waiting when the page
  * is hidden or the reader scrolls up (the browser barely runs timers for a hidden page, so a queue would otherwise
  * still be playing out long after); an avatar then on its way goes home from where it is.
  */
@@ -2405,7 +2350,7 @@ export function Elapsed({ since, most }: { since: number; most?: number }) {
     return span(most === undefined ? s : Math.min(s, most));
   };
   // Its words changed in place each second, not drawn by React: nothing around it is drawn again, and the lists that
-  // watch what changes in them pass over it (`data-ticking`, scroll.ts).
+  // watch what changes in them pass over it (`data-ticking`).
   const [first] = useState(shown);
   const el = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {

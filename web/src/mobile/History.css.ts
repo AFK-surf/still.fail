@@ -26,7 +26,9 @@ export const mHSummary = style({
 export const mHBody = style({ position: "relative", flex: "1", minHeight: "0" });
 export const mHSteps = style({
   position: "absolute", inset: "0", display: "flex", flexDirection: "column", gap: "10px", overflowY: "auto",
-  overscrollBehavior: "contain", padding: "0 18px 24px",
+  overscrollBehavior: "contain", padding: "0 18px 24px", overflowAnchor: "none",
+  // What the list's spacers take back on the sides they have a neighbour (virtual/list.css.ts).
+  vars: { "--list-gap": "10px" },
 });
 export const mHEdge = style({ padding: "10px 0", fontSize: vars.textCaption, color: "var(--m-subtle)", textAlign: "center" });
 export const mHItem = style({

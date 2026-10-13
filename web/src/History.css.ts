@@ -35,6 +35,8 @@ export const usage = style({
 export const historyBody = style({
   flex: "1", minHeight: "0", overflowY: "auto", padding: "12px 16px 40px", display: "grid",
   gridTemplateColumns: "minmax(0, 1fr)", gap: "14px", alignContent: "start", overflowAnchor: "none",
+  // What the list's spacers take back on the sides they have a neighbour (virtual/list.css.ts).
+  vars: { "--list-gap": "14px" },
 });
 export const hPost = style({ minWidth: "0" });
 export const hSteps = style({
@@ -159,9 +161,6 @@ export const hItem = style({
   position: "relative", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "14px", minWidth: "0",
   borderRadius: `calc(8px * ${vars.cornerScale})`, transition: `background-color 900ms ${vars.easeOut}`,
   cornerShape: vars.cornerShape,
-  // Out of view, an item is not laid out or drawn: a history opens at its end laying out what shows. Its size once seen
-  // is kept; the copy button standing over its corner is not cut.
-  contentVisibility: "auto", containIntrinsicSize: "auto 80px", overflowClipMargin: "8px",
   selectors: {
     "&[data-focus]": { background: `color-mix(in srgb, ${vars.accent} 10%, transparent)`, transition: "none" },
   },

@@ -20,7 +20,9 @@
 // from the room above the first row made, so every row shows where it would; once the scroll rests, the pane is put
 // where it should be and the room given back, with nothing moving on screen.
 
-export type Item = { key: string; estimate: number };
+/** `place: false`: not something a reader is at (a line that says more is loading, the list's first line): what comes
+ *  in after it comes above the reader, whose place is the item after it. */
+export type Item = { key: string; estimate: number; place?: boolean };
 /** An item's height as measured, and the width of the pane it was measured in. */
 export type Size = { height: number; width: number };
 /** Where an item gone to stands: `pad` below what covers the pane's top, its middle at the pane's, or its top `pad` below the pane's. */
@@ -40,6 +42,9 @@ export type Options = {
   boost?: number;
   lead?: number;
   trail?: number;
+  /** Whether what leaves the list's end leaves its room behind while it is followed (a chat's: an activity folding
+   *  away drops nothing above it); without, the pane stays at the end of what there is. */
+  holds?: boolean;
 };
 
 /** How many items measured say how far off the estimates are, and how many measured at a width settle it there. */
@@ -73,6 +78,7 @@ export class Virtual {
   private scale = 1;
   private settled = -1;
   private guessing = false;
+  private wide = false;
   /** A scroll of the reader's is under way. */
   private moving = false;
   /** How far the pane is from where it should be by its anchor, held until the scroll rests. */
@@ -82,6 +88,7 @@ export class Virtual {
   private readonly boost: number;
   private lead: number;
   private trail: number;
+  private readonly holds: boolean;
 
   /** The heights measured, by item: the page may hand in those kept from the last time the list showed (`sizesOf`). */
   readonly sizes: Map<string, Size>;
@@ -93,6 +100,7 @@ export class Virtual {
     this.boost = options.boost ?? options.overscan * 4;
     this.lead = options.lead ?? 0;
     this.trail = options.trail ?? 0;
+    this.holds = options.holds ?? true;
   }
 
   // What the page tells it.
@@ -165,6 +173,9 @@ export class Virtual {
     this.guard();
     this.eye = this.anchor.kind === "follow" ? this.see() : null;
   }
+  /** From now on items are made past the pane's edges too (`overscan`): not as a list opens, when only what shows is
+   *  made, but once that is drawn. */
+  widen(): void { this.wide = true; }
   /** The scroll came to rest: nothing more is made ahead of it, and the pane is put where it should be. */
   rested(): void {
     this.velocity = 0;
@@ -183,6 +194,13 @@ export class Virtual {
   glide(on: boolean): void {
     this.gliding = on;
     if (!on) this.settle();
+  }
+  /** The reader's place is where the pane is, from now on (they opened something in it: what grows or shrinks by it is
+   *  theirs, not something new to follow). */
+  stay(): void {
+    if (this.anchor.kind !== "follow") return;
+    this.release();
+    this.note();
   }
   /** To the end, followed from now on; with `to`, a message just come, to its top when it is taller than the pane. */
   follow(to: string | null = null): void {
@@ -228,11 +246,12 @@ export class Virtual {
   layout(): Layout {
     const n = this.items.length;
     const ahead = Math.min(this.boost, Math.abs(this.velocity) * 4);
-    const from = this.top - this.overscan - (this.velocity < 0 ? ahead : 0);
+    const past = this.wide ? this.overscan : 0;
+    const from = this.top - past - (this.velocity < 0 ? ahead : 0);
     // Following, everything from the pane down to the list's end is made, however far below the pane it reaches for
     // now (a long message just come, the pane still on its way down): what stands after it (the agent's activity,
     // the next message) is there to be seen coming, and for what moves between them (a reply out of its avatar).
-    const to = this.anchor.kind === "follow" ? Number.POSITIVE_INFINITY : this.top + this.height + this.overscan + (this.velocity > 0 ? ahead : 0);
+    const to = this.anchor.kind === "follow" ? Number.POSITIVE_INFINITY : this.top + this.height + past + (this.velocity > 0 ? ahead : 0);
     const made = new Set<number>();
     for (let i = this.firstReaching(from); i < n && this.topOf(i) < to; i++) made.add(i);
     for (const key of this.pins) { const i = this.at.get(key); if (i !== undefined) made.add(i); }
@@ -348,15 +367,23 @@ export class Virtual {
   }
   /** The item at the pane's top (below what covers it), and where its top is. */
   private see(): { key: string; offset: number } | null {
-    const i = this.firstReaching(this.top + this.cover + 1);
+    const i = this.placeFrom(this.firstReaching(this.top + this.cover + 1));
     return i < this.items.length ? { key: this.items[i]!.key, offset: this.topOf(i) - this.top } : null;
   }
   /** The furthest the pane scrolls. */
   private bottom(): number { return Math.max(0, this.total() - this.height); }
   /** The reader's place as the pane stands: the first item reaching below what covers its top. */
   private note(): void {
-    const i = this.firstReaching(this.top + this.cover + 1);
+    const i = this.placeFrom(this.firstReaching(this.top + this.cover + 1));
     this.anchor = i < this.items.length ? { kind: "read", key: this.items[i]!.key, offset: this.topOf(i) - this.top } : { kind: "follow", to: null };
+  }
+  /** The first item from `i` on that a reader can be at (the count of items with none). */
+  private placeFrom(i: number): number {
+    let at = i;
+    while (at < this.items.length && this.items[at]!.place === false) at++;
+    // None after it: the one before it, or itself.
+    if (at >= this.items.length) { at = i; while (at > 0 && this.items[at]?.place === false) at--; }
+    return Math.min(at, this.items.length);
   }
   /** The pane is where it is put from now on: no scroll of the reader's goes on under it. */
   private still(): void {
@@ -383,7 +410,7 @@ export class Virtual {
       const i = this.eye ? this.at.get(this.eye.key) : undefined;
       // Where the pane is now that the items above it stand where they do: what shows has not moved.
       const here = i === undefined ? this.top : Math.max(0, this.topOf(i) - this.eye!.offset);
-      if (i !== undefined) this.held = Math.max(0, here - Math.max(0, this.natural() - this.height));
+      if (i !== undefined && this.holds) this.held = Math.max(0, here - Math.max(0, this.natural() - this.height));
       const to = this.target();
       // On from there to where it follows: by the page's steps while it glides, else at once.
       this.top = !this.gliding || to < here ? to : here;
@@ -391,12 +418,26 @@ export class Virtual {
     } else {
       this.release();
       this.top = this.target();
-      // Gone to: read from there, so it stays as what is above it is measured.
-      if (a.kind === "goto") { const i = this.at.get(a.key); if (i !== undefined) this.anchor = { kind: "read", key: a.key, offset: this.topOf(i) - this.top }; }
+      // Gone to: read from there, so it stays as what is above it is measured. Not before what shows there is
+      // measured: till then where it comes to stand is a guess (short of the list's end, it may be the end).
+      // Come to stand at the list's very end, it is followed from there, like a pane scrolled there.
+      if (a.kind === "goto") {
+        const i = this.at.get(a.key);
+        if (i !== undefined && this.known(i)) {
+          this.anchor = !this.short && this.bottom() - this.top <= 2 ? { kind: "follow", to: null } : { kind: "read", key: a.key, offset: this.topOf(i) - this.top };
+        }
+      }
       // The reader's item gone: their place is where the pane is.
       else if (!this.at.has(a.key)) this.note();
     }
     this.guard();
+  }
+  /** Whether the items from `i` to the pane's bottom are all measured in the pane as wide as it is. */
+  private known(i: number): boolean {
+    for (let k = Math.min(i, this.firstReaching(this.top)); k < this.items.length && this.topOf(k) < this.top + this.height; k++) {
+      if (this.sizes.get(this.items[k]!.key)?.width !== this.width) return false;
+    }
+    return true;
   }
   /** A followed message taller than what is left of the pane, reached: read from its start, its place kept from here. */
   private arrived(): void {

@@ -13,8 +13,9 @@ import { optionOf } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
 import { MdView } from "../Prose.tsx";
 import type { Md } from "../core/md.ts";
-import { useStickToBottom } from "../scroll.ts";
-import { useOlderOnScroll, Waited } from "../Chat.tsx";
+import { useLoadNear, Waited } from "../Chat.tsx";
+import { KeepRow, useKeepRow, useRowKept, useVirtualList, useVirtualModel } from "../virtual/list.tsx";
+import type { Item as ListItem, Virtual } from "../virtual/model.ts";
 import { stationBase, useStation } from "../station.tsx";
 import { useApp, type MobileApp } from "./app.tsx";
 import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, NavButton, ProviderMark, QuotaRings, Seg, SlackMark, Spinner, stateOf, tNodes, type Icon } from "./parts.tsx";
@@ -121,13 +122,27 @@ function Summary({ agent }: { agent: ChatAgent }) {
 
 function Steps({ station, chat, agent, history, entry }: { station: string; chat: string; agent: ChatAgent; history: HistoryView | undefined; entry: number | undefined }) {
   const list = useRef<HTMLDivElement>(null);
-  // It opens at its newest, and follows new steps while the reader stays there.
-  useStickToBottom(list, ".m-h-line");
   const [marked, setMarked] = useState<string | null>(null);
   const items = history?.items ?? [];
+  // Only the lines in and near the pane are made (virtual/list.tsx): it opens at its newest and follows new steps
+  // while the reader stays there; no room is held at its end.
+  const made = useVirtualModel(`history ${station} ${agent.session.key}`, 10, false);
+  const rows: ListItem[] = [];
+  if (history && !history.empty) {
+    rows.push({ key: "edge", estimate: 36, place: false });
+    for (const item of items) rows.push({ key: `h:${item.key}`, estimate: item.body.kind === "group" || item.body.kind === "mark" ? 28 : 64 });
+    for (const step of history.live) rows.push({ key: `l:${step.id}`, estimate: 40, place: false });
+    if (history.phase) rows.push({ key: "phase", estimate: 20, place: false });
+  }
+  // What came at the end since it was last drawn: followed gliding, from its top.
+  const last = items.at(-1)?.key;
+  const was = useRef(last);
+  const came = was.current !== undefined && last !== undefined && last !== was.current;
+  useEffect(() => { was.current = last; });
+  const virtual = useVirtualList(list, made, rows, { smooth: true, arrived: came ? `h:${last}` : null });
   // Only its latest entries come first: the pages before them load as the reader nears the top.
   const older = useHistoryOlder(station, agent.session.key);
-  useOlderOnScroll(list, history?.more ?? false, items[0]?.key, older);
+  useLoadNear(virtual, "top", history?.more ?? false, items[0]?.key, older);
   // The steps' and thoughts' whole words: read only as one is opened (the core has them in brief till then).
   const detail = useHistoryDetail(station, agent.session.key);
   // Opened at an entry (an activity row): that item, near the top, for a moment marked. One before what is loaded: the
@@ -135,50 +150,53 @@ function Steps({ station, chat, agent, history, entry }: { station: string; chat
   const placed = useRef(false);
   useEffect(() => {
     if (placed.current || !history || entry === undefined) return;
-    const at = items.findIndex((it) => it.entries.length === 2 && entry >= it.entries[0]! && entry <= it.entries[1]!);
-    if (at < 0 && history.more && entry < (items[0]?.entries[0] ?? 0)) {
+    const found = items.find((it) => it.entries.length === 2 && entry >= it.entries[0]! && entry <= it.entries[1]!);
+    if (!found && history.more && entry < (items[0]?.entries[0] ?? 0)) {
       void older().catch(() => { placed.current = true; });
       return;
     }
     placed.current = true;
-    if (at < 0) return;
-    const el = list.current?.querySelector<HTMLElement>(`[data-item="${at}"]`);
-    const pane = list.current;
-    if (!el || !pane) return;
-    // Once the pages just loaded are laid out (the pane holds its bottom through them until then).
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      pane.dispatchEvent(new WheelEvent("wheel"));
-      pane.scrollTop += el.getBoundingClientRect().top - pane.getBoundingClientRect().top - 24;
-    }));
-    setMarked(items[at]!.key);
+    if (!found) return;
+    virtual.goto(`h:${found.key}`, "at", 24);
+    setMarked(found.key);
     const timer = setTimeout(() => setMarked(null), 1600);
     return () => clearTimeout(timer);
   }, [history]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!history) return <Edge text={t("web-mobile.history.reading")} />;
   if (history.empty) return <Edge text={history.edge} />;
+  // What each row is: only those the list makes are drawn.
+  const byKey = new Map(items.map((item) => [`h:${item.key}`, item]));
+  const draw = (key: string): ReactNode => {
+    if (key === "edge") return <Edge key="edge" text={history.edge} />;
+    if (key === "phase") return history.phase ? <div key="phase" data-vk="phase" className="m-h-line"><PhaseLine phase={history.phase} /></div> : null;
+    if (key.startsWith("l:")) { const step = history.live.find((s) => `l:${s.id}` === key); return step ? <div key={key} data-vk={key} className={`m-h-line ${css.mHLive}`}>{step.text}</div> : null; }
+    const item = byKey.get(key);
+    return item ? <Line key={item.key} item={item} marked={item.key === marked} station={station} chat={chat} agentText={agent.session.agentText} keep={made.model} /> : null;
+  };
   return (
     <ReadWhole.Provider value={detail}>
       <div className={css.mHSteps} ref={list}>
-        <Edge text={history.edge} />
-        {items.map((item, i) => (
-          <Line key={item.key} item={item} at={i} marked={item.key === marked} station={station} chat={chat} agentText={agent.session.agentText} />
-        ))}
-        {history.live.map((step) => <div key={`live/${step.id}`} className={`m-h-line ${css.mHLive}`}>{step.text}</div>)}
-        {history.phase && <div className="m-h-line"><PhaseLine phase={history.phase} /></div>}
+        {virtual.layout.rows.flatMap((row, i) => [virtual.above(row, i === 0), draw(row.key)])}
+        {virtual.after()}
       </div>
     </ReadWhole.Provider>
   );
 }
 
 function Edge({ text }: { text: string }) {
-  return <p className={css.mHEdge}>{text}</p>;
+  return <p className={css.mHEdge} data-vk="edge">{text}</p>;
 }
 
 /** An item in its line, drawn again only when it changes (or its place, or its mark): not with each one that comes. */
-const Line = memo(function Line({ item, at, marked, station, chat, agentText }: { item: HistoryItem; at: number; marked: boolean; station: string; chat: string; agentText: string }) {
+const Line = memo(function Line({ item, marked, station, chat, agentText, keep }: { item: HistoryItem; marked: boolean; station: string; chat: string; agentText: string;
+  /** The list's model: the line stays made while something opened in it is open. */
+  keep: Virtual;
+}) {
+  const key = `h:${item.key}`;
+  const hold = useRowKept(keep, key);
   return (
-    <div className={`m-h-line ${css.mHItem}`} data-item={at} data-marked={marked || undefined}>
-      <Item item={item} station={station} chat={chat} agentText={agentText} />
+    <div className={`m-h-line ${css.mHItem}`} data-vk={key} data-marked={marked || undefined}>
+      <KeepRow.Provider value={hold}><Item item={item} station={station} chat={chat} agentText={agentText} /></KeepRow.Provider>
     </div>
   );
 });
@@ -268,6 +286,7 @@ function PlaceMark({ station, chat, place }: { station: string; chat: string; pl
 
 function Group({ g }: { g: HistoryGroup }) {
   const [open, setOpen] = useState(false);
+  useKeepRow(open);
   const calls = g.rows.some((row) => row.kind === "step");
   return (
     <div className="m-h-group">
@@ -317,6 +336,7 @@ function Whole({ brief, entries, children }: { brief: boolean; entries: number[]
 /** A line that opens to what is behind it. */
 function Folding({ name, hint, meta, failed, children }: { name: string; hint: string | null; meta: string | null; failed: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  useKeepRow(open);
   return (
     <div className={css.mHFold}>
       <button type="button" className={css.mHFoldHead} onClick={() => setOpen(!open)} data-failed={failed || undefined}>

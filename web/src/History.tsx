@@ -19,8 +19,9 @@ import type { Md } from "./core/md.ts";
 import { mdHead, mdLines, textHead, textLines } from "../../client/core-ts/src/mdHead.ts";
 import { ToolCall, ToolResult } from "./ToolStep.tsx";
 import * as toolCss from "./ToolStep.css.ts";
-import { useStickToBottom } from "./scroll.ts";
-import { useOlderOnScroll, Waited } from "./Chat.tsx";
+import { useLoadNear, Waited } from "./Chat.tsx";
+import { KeepRow, useKeepRow, useRowKept, useVirtualList, useVirtualModel } from "./virtual/list.tsx";
+import type { Item, Virtual } from "./virtual/model.ts";
 import { Mark } from "./brand.tsx";
 import * as css from "./History.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
@@ -33,7 +34,8 @@ import { t } from "./i18n.ts";
 import { ReadWhole, useWhole } from "./brief.ts";
 
 /** How many of a history's latest items are drawn when it opens, and how many more each time the reader nears its top. */
-const DRAWN = 10;
+/** The room between two items of a history (History.css.ts `historyBody`). */
+const GAP_PX = 14;
 
 /**
  * The session as it ran: the main view of a session. `head` says what it runs on and `summary` what needs seeing to
@@ -53,85 +55,74 @@ export function History({ station, sessionKey, head, summary, details, focusEntr
   // The steps' and thoughts' whole words: read only as one is opened (the core has them in brief till then).
   const detail = useHistoryDetail(station, sessionKey);
   const body = useRef<HTMLDivElement>(null);
-  // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
-  useStickToBottom(body, `.${css.hItem}, .live-tail, .${css.hText}`);
   const all = history?.items ?? [];
-  // Only its latest entries come first: the pages before them load as the reader nears the top. Of what is loaded, only
-  // the last few are drawn at first, enough to fill the pane; those before are drawn as the reader nears them, then the
-  // pages before. Drawn whole, the core's latest page (a hundred items, each its words through Markdown) took the
-  // opening frame of the panel or of its tab.
-  const [more, setMore] = useState(0);
-  // How large the pane is, as it is laid out (never read for it): before its history comes, it stands empty; with its
-  // history there already (opened again), as large as the last one was.
-  useLayoutEffect(() => {
-    const watch = new ResizeObserver(([entry]) => { if (entry) pane = { width: entry.contentRect.width, height: entry.contentRect.height }; });
-    watch.observe(body.current!);
-    return () => watch.disconnect();
-  }, []);
-  const opening = useRef(0);
-  if (!opening.current && all.length) opening.current = filling(all, pane);
-  const drawn = opening.current + more;
-  const hidden = Math.max(0, all.length - drawn);
-  const items = hidden ? all.slice(hidden) : all;
+  // Only the items in and near the pane are made (virtual/list.tsx), the latest first: the pane follows new steps
+  // while the reader is at its end and keeps their place when they scrolled up; the pages before load as they near
+  // the top.
+  // No room is held at its end: a text folded once it is measured only makes the history shorter.
+  const made = useVirtualModel(`history ${station} ${sessionKey}`, GAP_PX, false);
+  // About how many Latin letters a line of the pane holds (six pixels a letter or more): for how tall an item stands
+  // before it is measured.
+  const per = (made.model.paneWidth || 420) / 6;
+  const list: Item[] = [];
+  if (history && !history.empty) {
+    list.push({ key: "edge", estimate: 18, place: false });
+    // `tall` is the least an item stands: about that much more is what one stands on the whole, before any is measured.
+    for (const item of all) list.push({ key: `h:${item.key}`, estimate: tall(item, per) * 1.4 });
+    for (const s of history.live) list.push({ key: `l:${s.id}`, estimate: 40, place: false });
+    if (history.phase) list.push({ key: "phase", estimate: 20, place: false });
+  }
+  // What came at the end since it was last drawn (not what it opens with): followed gliding, from its top.
+  const last = all.at(-1)?.key;
+  const was = useRef({ last, sessionKey });
+  const came = was.current.sessionKey === sessionKey && was.current.last !== undefined && last !== undefined && last !== was.current.last;
+  useEffect(() => { was.current = { last, sessionKey }; });
+  const virtual = useVirtualList(body, made, list, { smooth: true, arrived: came ? `h:${last}` : null });
   const older = useHistoryOlder(station, sessionKey);
-  // Whether the reader has moved the pane (a wheel, a finger, a key): until then what is drawn is what it opened with.
-  const moved = useRef(false);
-  useEffect(() => {
-    const el = body.current;
-    if (!el) return;
-    const mark = () => { moved.current = true; };
-    for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, mark, { passive: true });
-    return () => { for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.removeEventListener(type, mark); };
-  }, []);
-  const before = useCallback(() => {
-    if (hidden) {
-      // Not before the reader moves the pane: drawn as it opens, the items before laid it out a second time in the
-      // frame it came in. Declined, it is asked again as the reader scrolls up.
-      if (!moved.current) return Promise.reject(new Error("not read up to yet"));
-      setMore((n) => n + DRAWN);
-      return Promise.resolve();
-    }
-    return older();
-  }, [hidden, older]);
-  // What was drawn to fill the pane is counted from its words, not measured: once it is drawn, a pane it does not
-  // fill after all draws the items before.
-  useEffect(() => {
-    if (!hidden) return;
-    let timer = 0;
-    const frame = requestAnimationFrame(() => {
-      timer = window.setTimeout(() => {
-        const el = body.current;
-        if (el && !moved.current && el.scrollHeight <= el.clientHeight) setMore((n) => n + DRAWN);
-      });
-    });
-    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
-  }, [hidden]);
-  useOlderOnScroll(body, hidden > 0 || (history?.more ?? false), items[0]?.key, before);
-  // Opened at an entry (an activity row): the item that draws it comes into view, and says so for a moment. One before
-  // what is loaded: the pages before come first.
+  useLoadNear(virtual, "top", history?.more ?? false, all[0]?.key, older);
+  // Opened at an entry (an activity row): the item that draws it comes to the pane's middle, and says so for a moment.
+  // One before what is loaded: the pages before come first.
   const focused = useRef<number | null>(null);
   useEffect(() => {
     if (!focus || focused.current === focus.n) return;
-    const found = all.findIndex((item) => (item.entries[0] ?? 0) <= focus.entry && focus.entry <= (item.entries[1] ?? -1));
-    // Loaded but not drawn yet: drawn back to it first.
-    if (found >= 0 && found < hidden) return void setMore(all.length - found + DRAWN - opening.current);
-    const at = found - hidden;
-    const el = found < 0 ? null : body.current?.querySelector<HTMLElement>(`[data-item="${at}"]`);
-    if (!el) {
-      if (history?.more && focus.entry < (items[0]?.entries[0] ?? 0)) void older().catch(() => {});
+    const found = all.find((item) => (item.entries[0] ?? 0) <= focus.entry && focus.entry <= (item.entries[1] ?? -1));
+    if (!found) {
+      if (history?.more && focus.entry < (all[0]?.entries[0] ?? 0)) void older().catch(() => {});
       return;
     }
     focused.current = focus.n;
-    // Once the pages just loaded are laid out (the pane holds its bottom through them until then).
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      el.scrollIntoView({ block: "center" });
+    virtual.goto(`h:${found.key}`, "center");
+    // Its row made by then.
+    const frame = requestAnimationFrame(() => requestAnimationFrame(() => {
+      const el = body.current?.querySelector<HTMLElement>(`:scope > [data-vk="${CSS.escape(`h:${found.key}`)}"]`);
+      if (!el) return;
       el.dataset.focus = "";
       setTimeout(() => delete el.dataset.focus, 1600);
     }));
-  }, [focus?.n, items[0]?.key, items.length > 0, hidden]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => cancelAnimationFrame(frame);
+  }, [focus?.n, all[0]?.key, all.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
   // What was there when the history opened (and older pages loaded later) shows at once; only what comes later animates.
   const seen = useRef(Number.POSITIVE_INFINITY);
   if (seen.current === Number.POSITIVE_INFINITY && history?.loaded) seen.current = all.at(-1)?.entries[1] ?? -1;
+  // An item eases in the first time its row is made only: made again as the reader scrolls back to it, it is there.
+  const gone = useRef(new Set<string>());
+  const rowsMade = useRef(new Set<string>());
+  const nowMade = new Set(virtual.layout.rows.map((r) => r.key));
+  for (const key of rowsMade.current) if (!nowMade.has(key)) gone.current.add(key);
+  useEffect(() => { rowsMade.current = nowMade; });
+  // What each item is: only those the list makes are drawn.
+  const drawn = new Map<string, () => ReactNode>();
+  if (history && !history.empty) {
+    drawn.set("edge", () => <p key="edge" data-vk="edge" className={css.historyEdge}>{history.edge}</p>);
+    for (const item of all) {
+      // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
+      drawn.set(`h:${item.key}`, () => <HistoryRow key={item.key} item={item} enter={(item.entries[0] ?? 0) > seen.current && item.body.kind !== "text" && !gone.current.has(`h:${item.key}`)}
+        station={station} session={sessionKey} title={title} keep={made.model} />);
+    }
+    // Only thinking and the reply stream here; a tool call shows once it is done, from the transcript.
+    for (const live of history.live) drawn.set(`l:${live.id}`, () => <div key={`l:${live.id}`} data-vk={`l:${live.id}`} className={css.hLiveThinking}>{live.text}</div>);
+    if (history.phase) { const phase = history.phase; drawn.set("phase", () => <PhaseLine key="phase" phase={phase} />); }
+  }
   const usage = history?.usage;
 
   return (
@@ -156,15 +147,8 @@ export function History({ station, sessionKey, head, summary, details, focusEntr
       <div className={css.historyBody} ref={body}>
         {!history ? <p className={css.historyEdge}>{t("web-main.history.reading")}</p> : history.empty ? <p className={css.historyEdge}>{history.edge}</p> : (
           <>
-            <p className={css.historyEdge}>{history.edge}</p>
-            {items.map((item, i) => (
-              // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
-              <HistoryRow key={item.key} item={item} at={i} enter={(item.entries[0] ?? 0) > seen.current && item.body.kind !== "text"}
-                station={station} session={sessionKey} title={title} />
-            ))}
-            {/* Only thinking and the reply stream here; a tool call shows once it is done, from the transcript. */}
-            {history.live.map((s) => <div key={s.id} className={css.hLiveThinking}>{s.text}</div>)}
-            {history.phase && <PhaseLine phase={history.phase} />}
+            {virtual.layout.rows.flatMap((row, i) => [virtual.above(row, i === 0), drawn.get(row.key)?.()])}
+            {virtual.after()}
           </>
         )}
       </div>
@@ -174,7 +158,6 @@ export function History({ station, sessionKey, head, summary, details, focusEntr
   );
 }
 
-let pane: { width: number; height: number } | null = null;
 // An item's rows as History.css.ts draws them: a line of its words, the line above a message with its gap, the switch
 // under a folded text, a row of steps, a mark, and the gap between two items.
 const LINE_PX = 21;
@@ -182,7 +165,6 @@ const LABEL_PX = 26;
 const SWITCH_PX = 20;
 const GROUP_PX = 30;
 const MARK_PX = 18;
-const GAP_PX = 14;
 /** The least `item` stands tall where a line holds `per` Latin letters: a text past five lines is folded to them. */
 function tall(item: HistoryItem, per: number): number {
   const words = (lines: number) => (lines > 5 ? 5 * LINE_PX + SWITCH_PX : lines * LINE_PX);
@@ -197,34 +179,21 @@ function tall(item: HistoryItem, per: number): number {
     case "group": return GROUP_PX;
   }
 }
-/**
- * How many of a history's latest items fill its pane: counted from their words, each taken as short as it can stand, so
- * no fewer than fill it. A pane not laid out yet (its history there before it) is taken as tall as the window and as
- * wide as a panel gets.
- */
-function filling(all: HistoryItem[], pane: { width: number; height: number } | null): number {
-  const height = pane ? pane.height + 40 : window.innerHeight;
-  // A Latin letter of the history's text is six pixels wide or more.
-  const per = (pane?.width ?? 960) / 6;
-  let sum = 0;
-  for (let n = 1; n <= all.length; n++) {
-    sum += tall(all[all.length - n]!, per) + GAP_PX;
-    if (sum >= height) return n;
-  }
-  return all.length;
-}
-
 /** An item and its link's button, drawn again only when the item changes (or its place in the list). */
-const HistoryRow = memo(function HistoryRow({ item, at, enter, station, session, title }: {
-  item: HistoryItem; at: number; enter: boolean; station: string; session: string;
+const HistoryRow = memo(function HistoryRow({ item, enter, station, session, title, keep }: {
+  item: HistoryItem; enter: boolean; station: string; session: string;
+  /** The list's model: the row stays made while something the reader opened in it is open (its state is the row's). */
+  keep: Virtual;
   /** Its chat's title: with it, the item offers its link (opening the history there), to paste into another chat. */
   title: string | undefined;
 }) {
   const copyLink = useCopyChatLink(useToast());
   const entry = item.entries[0];
+  const key = `h:${item.key}`;
+  const hold = useRowKept(keep, key);
   return (
-    <div className={css.hItem} data-item={at} data-enter={enter || undefined}>
-      <HistoryItemView item={item} />
+    <div className={css.hItem} data-vk={key} data-enter={enter || undefined}>
+      <KeepRow.Provider value={hold}><HistoryItemView item={item} /></KeepRow.Provider>
       {title !== undefined && entry !== undefined && <IconButton className={css.hItemLink} label={t("web-main.history.copyLink")} icon={Copy}
         onClick={() => copyLink({ station, session, id: session, title }, { key: session, entry })} />}
     </div>
@@ -255,7 +224,7 @@ const HistoryItemView = memo(function HistoryItemView({ item }: { item: HistoryI
         </>
       );
     case "text":
-      return <Fold className={`${css.hText} ${conversationCss.markdown}${body.content.subagent ? ` ${css.hSub}` : ""}`} head={headOf(body.content.md as Md)}><MdView md={body.content.md as Md} /></Fold>;
+      return <Fold className={`${css.hText} ${conversationCss.markdown}${body.content.subagent ? ` ${css.hSub}` : ""}`} of={body.content.md as Md} head={headOf(body.content.md as Md)}><MdView md={body.content.md as Md} /></Fold>;
     case "post":
       return (
         // Drawn like a received message (a line, then the words beside a bar): the two answer each other.
@@ -266,7 +235,7 @@ const HistoryItemView = memo(function HistoryItemView({ item }: { item: HistoryI
             {body.content.block && <Pill tone="blue">Block</Pill>}
             {body.content.failed && <Pill tone="red">{t("web-main.history.sendFailed")}</Pill>}
           </div>
-          <Fold className={`${css.hQuote} ${css.hQuoteMd} ${conversationCss.markdown}`} head={headOf(body.content.md as Md)}><MdView md={body.content.md as Md} /></Fold>
+          <Fold className={`${css.hQuote} ${css.hQuoteMd} ${conversationCss.markdown}`} of={body.content.md as Md} head={headOf(body.content.md as Md)}><MdView md={body.content.md as Md} /></Fold>
         </div>
       );
     case "mark":
@@ -307,13 +276,14 @@ function Received({ from, text, place }: { from: ReactNode; text: string; place?
   return (
     <div className={css.hReceived}>
       <div className={css.hLabel}><ReceivedIcon {...ICON} size={14} />{t(from === "ember" ? "web-main.history.reminder.before" : "web-main.history.message.before")}<strong>{from === "ember" ? NAME : from}</strong>{t(from === "ember" ? "web-main.history.reminder.after" : "web-main.history.message.after")}{place && <> · {place}</>}</div>
-      <Fold className={css.hQuote} head={textHead(text, HEAD_LINES)}>{text}</Fold>
+      <Fold className={css.hQuote} of={text} head={textHead(text, HEAD_LINES)}>{text}</Fold>
     </div>
   );
 }
 
 function Group({ group }: { group: HistoryGroup }) {
   const [open, setOpen] = useState(false);
+  useKeepRow(open);
   const { rows, failures, pending } = group;
   const calls = rows.some((row) => row.kind === "step");
   return (
@@ -367,6 +337,7 @@ function Opened({ className, failed, brief, entries, summary, children }: {
   className: string; failed?: boolean; brief: boolean; entries: number[]; summary: ReactNode; children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  useKeepRow(open);
   return (
     <details className={className} data-failed={failed} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>{summary}</summary>
@@ -397,6 +368,9 @@ function foldWatch(): ResizeObserver {
 // Words that surely fill more than a fold shows have only their beginning drawn while folded: these lines of them, a
 // few past the five shown (mdHead counts no more lines than are drawn, however wide the panel).
 const HEAD_LINES = 8;
+/** Whether what a fold holds turned out longer than it shows, as last measured. */
+const longTrees = new WeakMap<Md, boolean>();
+const longTexts = new Map<string, boolean>();
 const heads = new WeakMap<Md, ReactNode>();
 /** The beginning of `md` a fold draws while folded, the same one for the same tree; null for words that may be short. */
 function headOf(md: Md): ReactNode {
@@ -414,12 +388,25 @@ function headOf(md: Md): ReactNode {
  * beginning) is folded as it comes, unmeasured, and only that beginning is drawn until it is unfolded: a history
  * coming in lays out the lines it shows, not all the words of its long entries.
  */
-function Fold({ children, head = null, className }: { children: ReactNode; head?: ReactNode; className?: string }) {
+function Fold({ children, of, head = null, className }: { children: ReactNode;
+  /** What it folds (an entry's tree, a message's words): whether it turned out long is kept by it, so its row made
+   *  again as the reader scrolls back (or the history opened again) is folded as it comes, not measured anew. */
+  of: Md | string; head?: ReactNode; className?: string;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const cut = head != null;
-  const [measured, setLong] = useState(false);
+  const [measured, setMeasured] = useState(() => (typeof of === "string" ? longTexts.get(of) : longTrees.get(of)) ?? false);
+  const setLong = useCallback((long: boolean) => {
+    if (typeof of !== "string") longTrees.set(of, long);
+    else {
+      if (longTexts.size > 2000) longTexts.clear();
+      longTexts.set(of, long);
+    }
+    setMeasured(long);
+  }, [of]);
   const long = cut || measured;
   const [open, setOpen] = useState(false);
+  useKeepRow(open);
   // All of it drawn: unfolded, or on its way back to folded.
   const [whole, setWhole] = useState(false);
   const run = useRef<AnimationPlaybackControls | null>(null);
@@ -432,7 +419,7 @@ function Fold({ children, head = null, className }: { children: ReactNode; head?
     folds.set(el, setLong);
     foldWatch().observe(el);
     return () => { folds.delete(el); foldWatch().unobserve(el); };
-  }, [cut]);
+  }, [cut, setLong]);
   useEffect(() => () => run.current?.stop(), []);
   // Only a reader's own click moves it (folding on arrival happens before the first paint): from the height it shows
   // (on its way, if clicked again) to the one it has now.
@@ -468,7 +455,7 @@ function PhaseLine({ phase }: { phase: NonNullable<HistoryView["phase"]> }) {
   }, []);
   const seconds = Math.max(0, Math.floor((now - phase.since) / 1000));
   return (
-    <div className={css.hPhase} data-phase={phase.phase}>
+    <div className={css.hPhase} data-vk="phase" data-phase={phase.phase}>
       <span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />
       <span key={phase.phase} className={css.hPhaseText}>{phase.text}</span>
       <span className={css.hPhaseTime}>{seconds}s</span>
