@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { busyRing } from "./styles/busyRing.ts";
-import { leadDotKeyframes, leadRippleKeyframes, spinKeyframes } from "./styles/keyframes.css.ts";
+import { leadBreatheKeyframes, spinKeyframes } from "./styles/keyframes.css.ts";
 
 /**
  * A chat's state on its row's picture (ChatMark.tsx), at the corner, over the picture: a gap of the row's ground
@@ -74,11 +74,9 @@ export const waitingLead = style({ fontWeight: 600 });
 export const leadLine = style({ display: "flex", alignItems: "center", gap: "var(--lead-gap, 8px)", selectors: { "&&": { overflow: "visible" } } });
 export const leadSlot = style({ display: "flex", flex: "none", width: 10, height: 14, alignItems: "center", justifyContent: "center", overflow: "visible" });
 globalStyle(`${leadSlot} svg`, { flex: "none" });
-/** Waiting's dots light one after another; watching's arcs ripple out from its centre (icons wait, watch: one path each). */
-globalStyle(`${leadSlot}[data-motion="wait"] path:not(:first-child)`, { animation: `${leadDotKeyframes} 1.4s ease-in-out infinite` });
-globalStyle(`${leadSlot}[data-motion="wait"] path:nth-child(3)`, { animationDelay: ".2s" });
-globalStyle(`${leadSlot}[data-motion="wait"] path:nth-child(4)`, { animationDelay: ".4s" });
-globalStyle(`${leadSlot}[data-motion="watch"] path`, { animation: `${leadRippleKeyframes} 1.8s ease-out infinite` });
-globalStyle(`${leadSlot}[data-motion="watch"] path:nth-child(3)`, { animationDelay: ".3s" });
+/** Waiting's dots and watching's arcs breathe, slowly, one after another (icons wait, watch: one path each). */
+globalStyle(`${leadSlot}[data-motion="wait"] path:not(:first-child), ${leadSlot}[data-motion="watch"] path`, { animation: `${leadBreatheKeyframes} 3.2s ease-in-out infinite` });
+globalStyle(`${leadSlot}[data-motion="wait"] path:nth-child(3), ${leadSlot}[data-motion="watch"] path:nth-child(3)`, { animationDelay: ".5s" });
+globalStyle(`${leadSlot}[data-motion="wait"] path:nth-child(4)`, { animationDelay: "1s" });
 globalStyle(`${leadSlot}[data-motion] path`, { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } } });
 export const leadRest = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });

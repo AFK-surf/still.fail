@@ -9,9 +9,8 @@ export const toastInKeyframes = keyframes({ "from": { opacity: "0", transform: "
 export const splashFloatKeyframes = keyframes({ "50%": { transform: "translateY(-5px)" } });
 export const appearKeyframes = keyframes({ "from": { opacity: "0" }, "to": { opacity: "1" } });
 export const spinKeyframes = keyframes({ "to": { transform: "rotate(360deg)" } });
-/** A chat row's waiting dots, lit in turn, and its watching radar's arcs, rippling out (ChatMark.css.ts leadSlot). */
-export const leadDotKeyframes = keyframes({ "0%, 60%, 100%": { opacity: ".3" }, "30%": { opacity: "1" } });
-export const leadRippleKeyframes = keyframes({ "0%, 100%": { opacity: ".25" }, "35%": { opacity: "1" } });
+/** A chat row's waiting dots and its watching radar's arcs, breathing slowly, each a little after the one before (ChatMark.css.ts leadSlot). */
+export const leadBreatheKeyframes = keyframes({ "0%, 100%": { opacity: ".35" }, "50%": { opacity: "1" } });
 export const pulseKeyframes = keyframes({ "50%": { opacity: ".45" } });
 export const jobBreatheKeyframes = keyframes({ "50%": { opacity: ".35" } });
 export const jobLiveKeyframes = keyframes({ "0%, 100%": { transform: "scale(.6)", opacity: ".35" }, "50%": { transform: "scale(1.15)", opacity: "0" } });
