@@ -32,10 +32,10 @@ export const menuCheck = style({ width: "14px", flex: "none", display: "flex", a
 /** The key that switches to it, at its end. */
 export const menuKey = style({ flex: "none", alignSelf: "flex-start", lineHeight: "20px", fontSize: vars.textMeta, color: vars.subtle, fontVariantNumeric: "tabular-nums" });
 /**
- * Making a workspace and adding an account: seldom done, so a line of small words apart from the list. The first's icon
+ * Making a workspace and adding an account: seldom done, so a line of small words above the list, away from the trigger. The first's icon
  * stands in the ticks' column and its words start where the names do (a row's padding, the tick's 14px, the gap).
  */
-export const menuRare = style({ display: "flex", flexWrap: "wrap", gap: "2px", marginTop: "8px" });
+export const menuRare = style({ display: "flex", flexWrap: "wrap", gap: "2px", marginBottom: "8px" });
 export const menuRareItem = style({
   display: "flex", alignItems: "center", gap: "8px", height: "24px", padding: "0 10px", border: "0", borderRadius: "999px",
   fontSize: vars.textMeta, color: vars.muted, cursor: "pointer", outline: "none", userSelect: "none",
