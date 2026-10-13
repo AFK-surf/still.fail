@@ -138,6 +138,11 @@ function withHidden(part: Part): Part {
 const MESH_LIB = (t: Target) => (t === "darwin-arm64" ? "libstillfail_mesh.dylib" : t === "win32-x64" ? "stillfail_mesh.dll" : "libstillfail_mesh.so");
 
 const PARTS: Record<string, Part> = {
+  // Windows' native maximize hit target, under the desktop page's self-drawn controls (Snap Layouts).
+  "window-controls": {
+    ...stationCrate("apps/desktop/window-controls", () => "stillfail_window_controls.dll", "window-controls.node"),
+    targets: ["win32-x64"],
+  },
   // The station's iroh and image codecs, a Node addon (docs/station-ts-native.md §3); the desktop's core uses it too.
   mesh: {
     ...stationCrate("station/native/mesh", MESH_LIB, "mesh.node", VENDORED),

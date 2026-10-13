@@ -19,11 +19,22 @@ const desktop = {
   /** The cloud's origin: its links (https://…/o/…) are the app's own. */
   cloudOrigin: ipcRenderer.sendSync("app:cloud-origin") as string,
   /**
-   * The window's frame (main.ts open): `inset` (macOS) and `overlay` (Windows) have no title bar, the window's buttons
-   * in the page's top row (at its left, at its right), which drags it (web/index.html data-desktop); `system` (a page
+   * The window's frame (main.ts open): `inset` (macOS) and `custom` (Windows; `overlay` as a native fallback) have no
+   * title bar, the buttons in the page's top row, which drags it (web/index.html data-desktop); `system` (a page
    * in a window of its own, Linux) has the system's title bar over the page.
    */
-  frame: ipcRenderer.sendSync("app:frame") as "inset" | "overlay" | "system",
+  frame: ipcRenderer.sendSync("app:frame") as "inset" | "overlay" | "custom" | "system",
+  /** Self-drawn Windows controls; only their maximize hit target is native (Snap Layouts). */
+  windowControls: {
+    state: (): Promise<unknown> => ipcRenderer.invoke("window:state"),
+    action: (action: string) => ipcRenderer.send("window:action", action),
+    bounds: (rect: number[] | null) => ipcRenderer.send("window:bounds", rect),
+    watch: (listener: (state: unknown) => void): (() => void) => {
+      const on = (_event: unknown, state: unknown) => listener(state);
+      ipcRenderer.on("window:state", on);
+      return () => ipcRenderer.off("window:state", on);
+    },
+  },
   /** The colours of the window's buttons (`overlay`): the page's top row under them, and their symbols (main.ts). */
   windowColors: (color: string, symbolColor: string) => ipcRenderer.send("window:colors", color, symbolColor),
   /** This build's version (0.1.<commits>). */

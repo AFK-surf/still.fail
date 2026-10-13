@@ -9,7 +9,7 @@ export const pageBar = style({
     // row does too: Sidebar.css.ts).
     "[data-desktop] &": { WebkitAppRegion: "drag" },
     // On Windows the window's buttons are over its right end (global.css.ts): what is there stays clear of them.
-    '[data-desktop="overlay"] &': { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" },
+    ':is([data-desktop="overlay"], [data-desktop="custom"]) &': { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" },
   },
   "@media": {
     "(max-width: 700px)": {

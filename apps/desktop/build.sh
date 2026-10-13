@@ -42,6 +42,7 @@ PATH="$(sh "$root/scripts/node-here.sh"):$PATH"
 target=darwin-arm64
 [ -z "$win" ] || target=win32-x64
 mesh=$(node "$root/scripts/native.ts" file mesh "$target")
+[ -z "$win" ] || controls=$(node "$root/scripts/native.ts" file window-controls win32-x64)
 # The dock (docs/desktop-dock.md), SwiftUI: prebuilt too, built only when its sources changed. macOS's only.
 [ -n "$win" ] || dock=$(node "$root/scripts/native.ts" file dock darwin-arm64)
 (cd "$root/client/core-ts" && pnpm install --frozen-lockfile --silent)
@@ -59,6 +60,7 @@ if [ -z "${SKIP_STATION:-}" ]; then
   else sh "$root/scripts/station-bundle.sh" "$here/build/station" "$target"; fi
 fi
 cp "$mesh" "$here/build/mesh.node"
+[ -z "$win" ] || cp "$controls" "$here/build/window-controls.node"
 mkdir -p "$here/build/dock" && [ -n "$win" ] || cp "$dock" "$here/build/dock/StillfailDock"
 rsync -a "$root/dist/cloud-web/" "$here/build/web/"
 cd "$here"
@@ -99,6 +101,7 @@ node -e '
   // @stillfail/desktop sanitized. Not on macOS, where it names the cache of the updater.
   if (win) {
     delete b.electronDist;
+    b.extraResources.push({ from: "build/window-controls.node", to: "window-controls.node" });
     b.extraMetadata.name = beta ? "stillfail-beta" : "stillfail";
   }
   require("fs").writeFileSync(out, JSON.stringify(b, null, 2));
