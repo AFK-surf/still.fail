@@ -277,19 +277,19 @@ fun QuotaChips(quota: fail.still.android.data.Quota?, small: Boolean = false) {
     val windows = quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
     if (windows.isEmpty()) return
     val lone = windows.size == 1
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         windows.forEach { w -> EdgeChip(w.left, w.level, if (lone) null else w.mark, small) }
     }
 }
 
 /**
- * A machine's CPU, memory and disk as an allowance's boxes are drawn (QuotaChips): each its name and how full, its edge
- * drawn as far as that. `alerts`: only the ones running low, each saying what is left, as the web's station cards do.
+ * A machine's CPU, memory and disk as an allowance's boxes are drawn (QuotaChips): each its name and what is left, its
+ * edge drawn as far as that. `alerts`: only the ones running low, as the web's station cards do.
  */
 @Composable
 fun MeterChips(meters: List<fail.still.android.data.Meter>, modifier: Modifier = Modifier, alerts: Boolean = false) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        meters.filter { !alerts || it.level != "ok" }.forEach { m -> EdgeChip(m.percent, m.level, m.short, text = if (alerts) m.remaining else null) }
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        meters.filter { !alerts || it.level != "ok" }.forEach { m -> EdgeChip(m.left, m.level, m.short, text = m.remaining) }
     }
 }
 
@@ -336,7 +336,7 @@ private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = 
                 drawPath(part, tone, style = Stroke(sw, cap = StrokeCap.Round))
             }
         }
-        Row(Modifier.padding(horizontal = if (small) 5.dp else 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.padding(horizontal = if (small) 5.dp else 8.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             val fs = if (small) 10.sp else 11.sp
             // On one baseline: a mark in Chinese (内存) sits lower in its line than figures do.
             if (mark != null) Text(mark, Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = C.muted)
@@ -354,22 +354,50 @@ private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = 
 fun QuotaDials(quota: fail.still.android.data.Quota?, modifier: Modifier = Modifier) {
     val windows = quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
     if (windows.isEmpty()) return
-    val c = C
     androidx.compose.foundation.layout.FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(36.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        windows.forEach { w ->
-            val tone = levelColor(c, w.level)
-            val low = w.level == "amber" || w.level == "red"
-            Column(Modifier.widthIn(min = 96.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("${w.left}", fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.56).sp, color = if (low) tone else C.ink)
-                    Text("%", fontSize = 15.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium, color = C.muted, modifier = Modifier.padding(start = 1.dp))
-                }
-                Row(Modifier.padding(top = 4.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    val lit = Math.round(w.left / 10.0).toInt()
-                    repeat(10) { i -> Box(Modifier.size(8.dp, 14.dp).clip(RoundedCornerShape(2.dp)).background(if (i < lit) tone else C.chip)) }
-                }
-                Text(w.label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink)
-                Text(w.refills ?: "\u00a0", fontSize = 12.sp, color = C.muted)
+        windows.forEach { w -> Dial("${w.left}", "%", w.left, w.level, w.label, w.refills, Modifier.widthIn(min = 96.dp)) }
+    }
+}
+
+/**
+ * A machine's CPU, memory and disk on its own page, as an allowance's windows on its profile's (QuotaDials): each what is
+ * left large over its cells, what it is and what it is out of. As the web's MeterDials (components.tsx); a row of three
+ * that share the width, a phone being narrow.
+ */
+@Composable
+fun MeterDials(meters: List<fail.still.android.data.Meter>, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        meters.forEach { m -> Dial(m.big, m.unit, m.left, m.level, m.title, m.total, Modifier.weight(1f)) }
+    }
+}
+
+/** A figure large, ten cells lit as far as is left (0–100) in the colour of its level, its name and a quiet note under. */
+@Composable
+private fun Dial(number: String, unit: String, left: Long, level: String, label: String, note: String?, modifier: Modifier = Modifier) {
+    val tone = levelColor(C, level)
+    val low = level == "amber" || level == "red"
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(number, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.56).sp, color = if (low) tone else C.ink, maxLines = 1)
+            Text(unit, fontSize = 15.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium, color = C.muted, modifier = Modifier.padding(start = 1.dp), maxLines = 1)
+        }
+        Row(Modifier.padding(top = 4.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            val lit = Math.round(left / 10.0).toInt()
+            repeat(10) { i -> Box(Modifier.size(7.dp, 14.dp).clip(RoundedCornerShape(2.dp)).background(if (i < lit) tone else C.chip)) }
+        }
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1)
+        Text(note ?: "\u00a0", fontSize = 12.sp, color = C.muted, maxLines = 1)
+    }
+}
+
+/** The rest of a machine, a quiet row each (its hostname, chip, how long it has been up, the process): as the web's HostDetails. */
+@Composable
+fun HostDetails(details: List<fail.still.android.data.HostDetail>, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        details.forEach { d ->
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(d.label, fontSize = 13.sp, lineHeight = 20.sp, color = C.subtle, modifier = Modifier.widthIn(min = 52.dp))
+                Text(d.value, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted, modifier = Modifier.weight(1f))
             }
         }
     }

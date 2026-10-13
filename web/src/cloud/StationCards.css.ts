@@ -37,6 +37,7 @@ export const cardFoot = style({
  * on the left, the rates each way in columns on the right. */
 export const net = style({
   display: "flex", alignItems: "center", gap: "14px", marginLeft: "17px",
+  selectors: { "&[data-flush]": { marginLeft: "0" } },
   fontSize: vars.textUi, color: vars.muted, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
 });
 globalStyle(`${net} b`, { fontWeight: "500", color: vars.text });
@@ -55,6 +56,18 @@ export const way = style({ display: "contents", opacity: 0.75, selectors: { "&[d
 export const netRates = style({ display: "grid", gridTemplateColumns: "auto 9.5ch minmax(7.5ch, auto)", columnGap: "5px", rowGap: "2px", alignItems: "baseline", flex: "none" });
 
 export const details = style({ display: "grid", gap: "24px" });
+/** The machine on its own page: what it is, what is left of it large, the connection, then the rest a quiet row each. */
+export const machine = style({ display: "grid", gap: "16px", justifyItems: "start", minWidth: "0" });
+export const machineNote = style({ fontSize: vars.textUi, color: vars.muted });
+/** The rest of a machine, as a session's details are written (ChatPage.css.ts sessionDetails): small, a label beside
+ * each, the labels quieter. On the phone, a size up. */
+export const hostDetails = style({
+  display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "8px 14px", alignItems: "baseline", margin: "0",
+  fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.muted, overflowWrap: "anywhere",
+  selectors: { "&[data-phone]": { fontSize: vars.textUi, lineHeight: vars.leadingUi, gap: "8px 16px" } },
+});
+globalStyle(`${hostDetails} dt`, { color: vars.subtle });
+globalStyle(`${hostDetails} dd`, { margin: "0" });
 export const detailSection = style({ display: "grid", gap: "10px", fontSize: vars.textUi, color: vars.muted, overflowWrap: "anywhere" });
 export const detailTitle = style({ margin: "0", fontSize: vars.textBody, fontWeight: "600", color: vars.text });
 

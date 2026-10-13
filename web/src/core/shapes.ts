@@ -2454,11 +2454,27 @@ export interface Meter {
 	label: string;
 	short: string;
 	percent: number;
+	/** How much is left, 0–100: what its edge and cells are drawn to, as an allowance's. */
+	left: number;
 	level: Level;
 	value: string;
-	/** Remaining capacity for an alert chip; absent for CPU and older cores. */
-	remaining?: string;
+	/** What is left in words, in its chip: 剩余 6.0 G, 空闲 89%. */
+	remaining: string;
+	/** What is left, large on the machine's own page: 22.8, 89. */
+	big: string;
+	/** Beside `big`, small: GB, %. */
+	unit: string;
+	/** Under `big`: 内存剩, CPU 空闲. */
+	title: string;
+	/** Under `title`, quiet: 共 64 GB, 负载 1.4. */
+	total: string;
 	note?: string;
+}
+
+/** A fact of a machine, a row of its details: 主机名 studio. */
+export interface HostDetail {
+	label: string;
+	value: string;
 }
 
 /** The machine a station runs on, with it in words. */
@@ -2481,6 +2497,10 @@ export interface Host {
 	line: string;
 	facts: string[];
 	meters: Meter[];
+	/** What the machine is, the same line wherever it is named: Apple M2 Max · 64 GB · macOS 26. */
+	identity: string;
+	/** The rest, a row each, where the machine is looked at closely: its hostname, chip, uptime, the process. */
+	details: HostDetail[];
 	/** Memory and disk in a line, what is used and what is left: 内存 12.3 / 32 GB · 磁盘 剩 45.2 / 460 GB. */
 	usage: string;
 	emberText: string;

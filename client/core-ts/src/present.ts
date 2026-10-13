@@ -721,17 +721,23 @@ export function host(h: J): J {
   o.summary = summary;
   o.line = `${os} · ${summary} · ${t("core-views.present.host.up_days", { n: days })}`;
   const arch = str(src.arch) ?? "";
-  const meter = (label: string, short: string, percent: number, value: string, note: string | null) => {
+  // Each as the allowances are drawn: how much is left (`left`, its edge and cells) and that in words; on a machine's
+  // own page, that large (`big` `unit`), what it is (`title`) and what it is out of (`total`).
+  const meter = (label: string, short: string, percent: number, value: string, note: string | null, room: { remaining: string; big: string; unit: string; title: string; total: string }) => {
     const p = format.round(Math.min(Math.max(percent, 0), 100));
-    return { label, short, percent: p, level: p >= 90 ? "red" : p >= 75 ? "amber" : "ok", value, note };
+    return { label, short, percent: p, left: 100 - p, level: p >= 90 ? "red" : p >= 75 ? "amber" : "ok", value, note, ...room };
   };
   const swap = n("memory", "swapUsedBytes");
   const cpuModel = str(src.cpuModel) || null;
   const busy = src.cpuBusy;
+  const cpuPercent = typeof busy === "number" ? busy * 100 : load * 100;
+  const idle = format.round(100 - Math.min(Math.max(cpuPercent, 0), 100));
+  const loadText = t("core-views.present.host.load", { load: format.fixed1(load * cpus) });
+  const cpuRoom = { remaining: t("core-views.present.host.idle", { percent: idle }), big: String(idle), unit: "%", title: t("core-views.present.host.cpu_idle"), total: loadText };
   const cpu =
     typeof busy === "number"
-      ? meter("CPU", "CPU", busy * 100, `${format.round(busy * 100)}%`, [t("core-views.present.host.load", { load: format.fixed1(load * cpus) }), cpuModel].filter((x) => x !== null).join(" · "))
-      : meter(t("core-views.present.host.cpu_load"), "CPU", load * 100, `${format.round(load * 100)}%`, cpuModel);
+      ? meter("CPU", "CPU", cpuPercent, `${format.round(cpuPercent)}%`, [loadText, cpuModel].filter((x) => x !== null).join(" · "), cpuRoom)
+      : meter(t("core-views.present.host.cpu_load"), "CPU", cpuPercent, `${format.round(cpuPercent)}%`, cpuModel, cpuRoom);
   o.facts = [
     str(src.hostname) ?? "",
     os,
@@ -739,14 +745,24 @@ export function host(h: J): J {
     days > 0 ? t("core-views.present.host.up_days_hours", { days, hours }) : t("core-views.present.host.up_hours", { hours }),
   ];
   const remaining = (bytes: number) => t("core-views.present.host.remaining", { size: format.fixed1(Math.max(bytes, 0) / GIB) });
-  const memory = {
-    ...meter(t("core-views.present.host.memory"), t("core-views.present.host.memory_short"), memTotal > 0 ? (memUsed / memTotal) * 100 : 0, `${format.gb1(memUsed)} / ${format.gb1(memTotal)}`, swap > 0 ? `swap ${format.gb1(swap)}` : null),
-    remaining: remaining(memTotal - memUsed),
-  };
-  const disk = {
-    ...meter(t("core-views.present.host.disk"), t("core-views.present.host.disk_short"), diskTotal > 0 ? ((diskTotal - diskFree) / diskTotal) * 100 : 0, t("core-views.present.host.disk_value", { free: format.gb1(diskFree), total: format.gb1(diskTotal) }), null),
-    remaining: remaining(diskFree),
-  };
+  // What is left in gigabytes, large: one decimal below 100.
+  const big = (bytes: number) => format.gb1(Math.max(bytes, 0)).replace(/ GB$/, "");
+  const memory = meter(t("core-views.present.host.memory"), t("core-views.present.host.memory_short"), memTotal > 0 ? (memUsed / memTotal) * 100 : 0, `${format.gb1(memUsed)} / ${format.gb1(memTotal)}`, swap > 0 ? `swap ${format.gb1(swap)}` : null, {
+    remaining: remaining(memTotal - memUsed), big: big(memTotal - memUsed), unit: "GB", title: t("core-views.present.host.memory_left"), total: t("core-views.present.host.out_of", { size: format.gb(memTotal) }),
+  });
+  const disk = meter(t("core-views.present.host.disk"), t("core-views.present.host.disk_short"), diskTotal > 0 ? ((diskTotal - diskFree) / diskTotal) * 100 : 0, t("core-views.present.host.disk_value", { free: format.gb1(diskFree), total: format.gb1(diskTotal) }), null, {
+    remaining: remaining(diskFree), big: big(diskFree), unit: "GB", title: t("core-views.present.host.disk_left"), total: t("core-views.present.host.out_of", { size: format.gb(diskTotal) }),
+  });
+  // What the machine is, the same line wherever it is named: its chip, its memory, its system.
+  o.identity = [cpuModel, memTotal > 0 ? format.gb(memTotal) : null, os || null].filter((x) => x !== null).join(" · ");
+  // The rest, a row each, only where the machine is looked at closely.
+  const uptimeText = days > 0 ? t("core-views.present.host.uptime_days_hours", { days, hours }) : t("core-views.present.host.uptime_hours", { hours });
+  o.details = [
+    { label: t("core-views.present.host.hostname"), value: str(src.hostname) ?? "" },
+    { label: t("core-views.present.host.chip"), value: [cpuModel, cpus > 0 ? cores : null, arch || null].filter((x) => x !== null).join(" · ") },
+    { label: t("core-views.present.host.uptime"), value: uptimeText },
+    { label: brand.name(), value: t("core-views.present.host.process", { size: `${format.round(n("emberRssBytes") / 1024 ** 2)} MB` }) },
+  ].filter((d) => d.value !== "");
   o.meters = [cpu, memory, disk];
   o.usage = [memory, disk].map((m) => `${m.label} ${m.value}`).join(" · ");
   o.emberText = `${brand.name()} ${format.round(n("emberRssBytes") / 1024 ** 2)} MB`;

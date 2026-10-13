@@ -2477,11 +2477,28 @@ data class Meter (
 	val label: String,
 	val short: String,
 	val percent: Long,
+	/// How much is left, 0–100: what its edge and cells are drawn to, as an allowance's.
+	val left: Long,
 	val level: Level,
 	val value: String,
-	/// Remaining capacity for an alert chip; absent for CPU and older cores.
-	val remaining: String? = null,
+	/// What is left in words, in its chip: 剩余 6.0 G, 空闲 89%.
+	val remaining: String,
+	/// What is left, large on the machine's own page: 22.8, 89.
+	val big: String,
+	/// Beside `big`, small: GB, %.
+	val unit: String,
+	/// Under `big`: 内存剩, CPU 空闲.
+	val title: String,
+	/// Under `title`, quiet: 共 64 GB, 负载 1.4.
+	val total: String,
 	val note: String? = null
+)
+
+/// A fact of a machine, a row of its details: 主机名 studio.
+@Serializable
+data class HostDetail (
+	val label: String,
+	val value: String
 )
 
 /// The machine a station runs on, with it in words.
@@ -2505,6 +2522,10 @@ data class Host (
 	val line: String,
 	val facts: List<String>,
 	val meters: List<Meter>,
+	/// What the machine is, the same line wherever it is named: Apple M2 Max · 64 GB · macOS 26.
+	val identity: String,
+	/// The rest, a row each, where the machine is looked at closely: its hostname, chip, uptime, the process.
+	val details: List<HostDetail>,
 	/// Memory and disk in a line, what is used and what is left: 内存 12.3 / 32 GB · 磁盘 剩 45.2 / 460 GB.
 	val usage: String,
 	val emberText: String

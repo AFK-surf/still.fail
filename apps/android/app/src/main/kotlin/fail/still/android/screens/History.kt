@@ -548,9 +548,9 @@ private fun Details(station: String, of: ChatOf, agent: ChatAgent, history: Hist
         GroupLabel("Station")
         Column(Modifier.padding(top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Detail(t("android-chat.history.detail.name"), rememberStationName(station))
-            if (host != null) Detail(t("android-chat.history.detail.machine"), "${host.hostname} · ${host.summary}")
+            if (host != null) Detail(t("android-chat.history.detail.machine"), host.identity)
         }
-        if (host != null) MeterChips(host.meters, Modifier.padding(vertical = 10.dp))
+        if (host != null && host.meters.any { it.level != "ok" }) MeterChips(host.meters, Modifier.padding(vertical = 10.dp), alerts = true)
     }
 }
 

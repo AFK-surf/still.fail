@@ -805,7 +805,7 @@ function SessionHead({ agent }: { agent: ChatAgent }) {
 
 /**
  * Unfolded under the history's head, a row each, quiet: what runs it (and its account's page), what it has used, the
- * station it runs on with how loaded it is.
+ * station it runs on with what runs low on it.
  */
 function SessionDetails({ agent }: { agent: ChatAgent }) {
   const { session } = agent;
@@ -824,10 +824,10 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
       {usage && <><dt>{t("web-pages.chat.detailUsed")}</dt><dd>{usage}</dd></>}
       <dt>{t("web-pages.chat.detailStation")}</dt>
       <dd>
-        {station.name || host?.hostname || t("web-pages.chat.thisMachine")}{host ? ` · ${host.summary}` : ""}
-        {host && (
+        {station.name || host?.hostname || t("web-pages.chat.thisMachine")}{host ? ` · ${host.identity}` : ""}
+        {host && host.meters.some((m) => m.level !== "ok") && (
           <span className={css.resourceRings}>
-            <MeterChips meters={host.meters} />
+            <MeterChips meters={host.meters} alerts />
           </span>
         )}
       </dd>

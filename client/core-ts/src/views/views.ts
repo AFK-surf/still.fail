@@ -1074,7 +1074,7 @@ export class Views implements Owner {
         summary = typeof s.lastSeen === "number" ? t("core-views.station.offline_since", { ago: format.relativeTime(s.lastSeen * 1000, c.now, c.offsetMin) }) : t("core-views.station.offline_short");
       } else if (host !== null) {
         const running = u64(get(get(overview, "counts"), "running")) ?? 0;
-        const what = str(host.cpuModel) || str(host.os) || "";
+        const what = str(host.identity) || str(host.os) || "";
         summary = `${what} · ${running > 0 ? t("core-views.station.running", { n: running }) : t("core-views.station.idle")}`;
       } else summary = t("core-views.station.connecting");
       const net = this.ok({ topic: "net", station: s.address });

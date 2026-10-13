@@ -416,6 +416,11 @@ test("what_the_clients_show_is_put_in_here", () => {
   assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M2 Max"]);
   assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩 50.0 GB / 1000 GB", "still.fail 100 MB"]);
   assert.match(h.usage, /^内存 .+ · 磁盘 剩 50\.0 GB \/ 1000 GB$/);
+  assert.equal(h.identity, "Apple M2 Max · 32 GB · macOS 26");
+  assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 studio", "芯片 Apple M2 Max · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占 100 MB"]);
+  assert.deepEqual([cpu.left, cpu.remaining, cpu.big, cpu.unit, cpu.title, cpu.total], [7, "空闲 7%", "7", "%", "CPU 空闲", "负载 4.0"]);
+  const left = h.meters[2];
+  assert.deepEqual([left.left, left.big, left.unit, left.title, left.total], [5, "50.0", "GB", "磁盘剩", "共 1000 GB"]);
 });
 
 test("a_watching_chat_says_what_it_watches_and_what_archiving_it_means", () => {
@@ -425,11 +430,11 @@ test("a_watching_chat_says_what_it_watches_and_what_archiving_it_means", () => {
   assert.deepEqual(marked, { text: "监控中：盯 CI、relay 延迟", ask: "「盯 CI」、「relay 延迟」还在监控。归档会停掉它。" });
 });
 
-test("alert_capacity_is_remaining_while_its_edge_is_used_percent", () => {
+test("a_meter_is_drawn_as_an_allowance_to_what_is_left", () => {
   let h: J = { memory: { usedBytes: 5.3 * GIB, totalBytes: 6 * GIB }, disk: { freeBytes: 6 * GIB, totalBytes: 60 * GIB } };
   h = p.host(h);
   assert.equal(h.meters[1].remaining, "剩余 0.7 G");
-  assert.equal(h.meters[1].percent, 88);
+  assert.deepEqual([h.meters[1].percent, h.meters[1].left], [88, 12]);
   assert.equal(h.meters[2].remaining, "剩余 6.0 G");
   assert.equal(h.meters[2].percent, 90);
   h.memory.usedBytes = 7 * GIB;

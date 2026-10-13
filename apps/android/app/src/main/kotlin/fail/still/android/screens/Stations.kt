@@ -87,6 +87,8 @@ import fail.still.android.ui.NavBack
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
 import fail.still.android.ui.MeterChips
+import fail.still.android.ui.MeterDials
+import fail.still.android.ui.HostDetails
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.SlackMark
 import fail.still.android.data.t
@@ -188,29 +190,35 @@ private fun StationBody(s: StationView) {
 }
 
 /**
- * An online station's machine on its page: its load, what it is, its memory and disk in figures, its network, its agents' processes, each in its room
- * whether known yet or not (grey bars until it is); reconnecting, as last heard, faded.
+ * An online station's machine on its page, as the web's MachineDetails (web/src/cloud/StationCards.tsx): what it is,
+ * what is left of it large, its network, the rest a row each, its agents' processes; in its room whether known yet or
+ * not (grey bars until it is); reconnecting, as last heard, faded. `peek` (a chat's station card): what it is, what is
+ * left of it in the allowance's boxes and its network, the rest on its page.
  */
 @Composable
-private fun StationFigures(s: StationView, processes: Boolean = true) {
+private fun StationFigures(s: StationView, peek: Boolean = false) {
     val host = s.host
     val net = s.net
     val running = s.overview?.processesText?.takeIf { it.isNotEmpty() }
     Column(Modifier.alpha(if (s.reconnecting == true) 0.45f else 1f)) {
-        Box(Modifier.padding(vertical = 4.dp).height(20.dp)) {
+        if (!peek) Line(host?.identity, 180.dp)
+        if (peek) Box(Modifier.padding(vertical = 4.dp).height(20.dp)) {
             if (host != null) MeterChips(host.meters)
             else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, 6.dp) } }
         }
-        Line(host?.line, 180.dp, Modifier.padding(top = 8.dp))
-        Line(host?.usage, 220.dp, Modifier.padding(top = 4.dp))
-        Box(Modifier.padding(top = 6.dp)) {
+        else if (host != null) MeterDials(host.meters, Modifier.padding(top = 14.dp))
+        else Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) { repeat(3) { Bar(90.dp, 76.dp, 6.dp) } }
+        Box(Modifier.padding(top = if (peek) 6.dp else 14.dp)) {
             NetLine(net ?: noNet, Modifier.alpha(if (net != null) 1f else 0f))
             if (net == null) Row(Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(34.dp); Bar(96.dp) }
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(132.dp); Bar(132.dp) }
             }
         }
-        if (processes) Line(running, 120.dp, Modifier.padding(top = 4.dp))
+        if (!peek) {
+            if (host != null) HostDetails(host.details, Modifier.padding(top = 16.dp))
+            Line(running, 120.dp, Modifier.padding(top = 8.dp))
+        }
     }
 }
 
@@ -244,7 +252,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
         val manager = isManager(current)
         NavBar("Station", app::pop, s?.name ?: stationName(address), sub = s?.let { st ->
             // As tall either way: the title does not move as the station comes and goes.
-            { Box(Modifier.height(16.dp), contentAlignment = Alignment.CenterStart) { if (st.reconnecting == true) Reconnecting() else Text(st.line.orEmpty(), fontSize = 11.sp, color = C.muted, maxLines = 1) } }
+            { Box(Modifier.height(16.dp), contentAlignment = Alignment.CenterStart) { if (st.reconnecting == true) Reconnecting() else Text(st.host?.identity ?: st.line.orEmpty(), fontSize = 11.sp, color = C.muted, maxLines = 1) } }
         }, trailing = if (s != null && manager) ({ NavButton(Icons.More, { openStationMenu(app, current, s) }) }) else null)
         if (s == null) return Loading(stations.error?.message ?: t("android-settings.reading"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
@@ -386,7 +394,7 @@ fun openStationPeek(app: AppState, address: String) {
             if (s != null) Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(s.summary, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
                 // What its agents' processes are is on its page, a tap away.
-                if (s.online) StationFigures(s, processes = false)
+                if (s.online) StationFigures(s, peek = true)
                 else Text(t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
             }
             ListCard { GoRow(t("android-chat.station.details")) { app.sheet = null; app.push(Screen.Station(address)) } }

@@ -390,9 +390,9 @@ function Details({ station, chat, agent, history }: { station: string; chat: str
       <GroupLabel>Station</GroupLabel>
       <div className={css.mHFacts}>
         <Detail label={t("web-mobile.workspaces.name")} value={name} />
-        {host && <Detail label={t("web-mobile.history.machine")} value={`${host.hostname} · ${host.summary}`} />}
+        {host && <Detail label={t("web-mobile.history.machine")} value={host.identity} />}
       </div>
-      {host && <div className={css.mHRings}><MeterChips meters={host.meters} /></div>}
+      {host && host.meters.some((m) => m.level !== "ok") && <div className={css.mHRings}><MeterChips meters={host.meters} alerts /></div>}
     </div>
   );
 }

@@ -1,11 +1,11 @@
 // Station overview: only alerts and available updates. Click its name for the complete device and software details.
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { stamp, type StationView } from "../api.ts";
-import type { Host, Level, NetFigure, NetRelay, StationNet } from "../core/shapes.ts";
+import type { Level, NetFigure, NetRelay, StationNet } from "../core/shapes.ts";
 import { Dialog, StatusDot, Time, Tip } from "../ui.tsx";
 import { UpdateSummary, Versions } from "../Versions.tsx";
 import { RetryPill } from "../Connection.tsx";
-import { MeterChips } from "../components.tsx";
+import { MeterChips, MeterDials } from "../components.tsx";
 import * as css from "./StationCards.css.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { same, type Mark } from "../stationPick.ts";
@@ -26,8 +26,9 @@ export function StationList({ stations, menu, manager = false, onMark, markBusy 
 
 /**
  * A station at a glance, in a card that opens over where it is named (a chat's bar): its emoji and name, whether it is
- * up and what its agents do, what the machine is, its load, this device's connection to it, and its settings (`settings`,
- * a path; the phone's sheet gives its own way there, `footer`).
+ * up and what its agents do, what the machine is (the line it is named by everywhere), what is left of its CPU, memory
+ * and disk, this device's connection to it, and its settings (`settings`, a path; the phone's sheet gives its own way
+ * there, `footer`).
  */
 export function StationPeek({ s, settings, footer }: { s: StationView; settings?: string; footer?: ReactNode }) {
   return (
@@ -38,13 +39,9 @@ export function StationPeek({ s, settings, footer }: { s: StationView; settings?
         <span className={css.peekName}>{s.name}</span>
         <span className={css.state}>{state(s)}</span>
       </div>
-      {s.host && <div className={css.peekLines}>
-        <Parts parts={[s.host.hostname, s.host.cpuModel, s.host.arch]} />
-        <Parts parts={[s.host.line]} />
-      </div>}
+      {s.host && <div className={css.peekLines}><Parts parts={[s.host.identity]} /></div>}
       {s.online && s.host && <div className={css.peekSection}><MeterChips meters={s.host.meters} /></div>}
       {s.online && s.net && <div className={css.peekSection}><PeekNet net={s.net} /></div>}
-      {s.host && <div className={`${css.peekSection} ${css.peekLines}`}><span>{t("web-pages.stations.peekProcess", { text: s.host.emberText })}</span></div>}
       {settings !== undefined && <Link className={css.peekLink} to={settings}><span>{t("web-pages.stations.peekSettings")}</span><ChevronRight size={14} /></Link>}
       {footer}
     </div>
@@ -94,10 +91,30 @@ function problems(s: StationView, silent: boolean): { key: string; level: Level;
   return [];
 }
 
-/** What the machine is, in a line: its chip, system, cores and memory, and how long it has been up. */
-function machine(host: Host | undefined): string {
-  if (!host) return "";
-  return [host.cpuModel, host.line].filter(Boolean).join(" · ");
+/**
+ * The machine as its own page shows it, PC's details and the phone's station page alike: what it is, what is left of
+ * its CPU, memory and disk large over their cells (as an allowance's on its profile's page), this device's connection
+ * to it, then the rest a quiet row each.
+ */
+export function MachineDetails({ s, phone = false }: { s: StationView; phone?: boolean }) {
+  if (!s.host) return <span className={css.machineNote}>{s.online ? t("web-pages.stations.deviceLoading") : t("web-pages.stations.deviceOffline")}</span>;
+  return (
+    <div className={css.machine}>
+      <span className={css.machineNote}>{s.host.identity}</span>
+      {s.online && <MeterDials meters={s.host.meters} />}
+      {s.online && s.net && <Net net={s.net} flush />}
+      <HostDetails details={s.host.details} phone={phone} />
+    </div>
+  );
+}
+
+/** The rest of a machine, a quiet row each: its hostname, chip, how long it has been up, the process. */
+export function HostDetails({ details, phone = false }: { details: { label: string; value: string }[]; phone?: boolean }) {
+  return (
+    <dl className={css.hostDetails} data-phone={phone || undefined}>
+      {details.map((d) => <Fragment key={d.label}><dt>{d.label}</dt><dd>{d.value}</dd></Fragment>)}
+    </dl>
+  );
 }
 
 function Figure({ f }: { f: NetFigure }) {
@@ -107,7 +124,7 @@ function Figure({ f }: { f: NetFigure }) {
 /** This device's connection to it: how it goes (and packets lost, when some were) over its round trip; beside them, ↑
  * over ↓, the speed each way and what went that way since it opened, each in a column of its own. Every line stays one
  * line with room kept for its figures: nothing wraps or moves as they change. */
-export function Net({ net, stacked = false }: { net: StationNet; stacked?: boolean }) {
+export function Net({ net, stacked = false, flush = false }: { net: StationNet; stacked?: boolean; flush?: boolean }) {
   const part = (
     <span className={css.netPart} tabIndex={net.measured?.relays.length ? 0 : undefined}>
       <span className={css.netLine}>
@@ -118,7 +135,7 @@ export function Net({ net, stacked = false }: { net: StationNet; stacked?: boole
     </span>
   );
   return (
-    <div className={stacked ? `${css.net} ${css.netStacked}` : css.net}>
+    <div className={stacked ? `${css.net} ${css.netStacked}` : css.net} data-flush={flush || undefined}>
       {net.measured?.relays.length ? <Tip label={<Ways relays={net.measured.relays} />}>{part}</Tip> : part}
       <span className={css.netRates}>
         <span>↑</span><b>{net.up}</b><span>{net.upTotal && t("web-pages.stations.total", { total: net.upTotal })}</span>
@@ -174,20 +191,14 @@ function StationCard({ s, menu, manager, onMark, markBusy }: { s: StationView; m
         {(!s.online || silent) && <RetryPill />}
         <span className={css.menu}>{menu}</span>
       </div>
+      {s.host && <div className={css.cardFoot}>{s.host.identity}</div>}
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
       {s.online && s.net && <Net net={s.net} />}
       {s.online && <div className={css.cardVersions}><UpdateSummary station={s.station} updates={s.overview?.updates} manager={manager} /></div>}
       <Dialog open={details} title={s.name} onClose={() => setDetails(false)}>
         <div className={css.details}>
           <section className={css.detailSection} aria-label={t("web-pages.stations.device")}>
-            <h3 className={css.detailTitle}>{t("web-pages.stations.device")}</h3>
-            {s.host ? <>
-              <span>{machine(s.host)}</span>
-              <span>{s.host.hostname} · {s.host.arch} · {s.host.emberText}</span>
-              <MeterChips meters={s.host.meters} />
-              {s.host.meters.map((m) => <span key={m.label}>{m.label} · {m.value}{m.note ? ` · ${m.note}` : ""}</span>)}
-            </> : <span>{s.online ? t("web-pages.stations.deviceLoading") : t("web-pages.stations.deviceOffline")}</span>}
-            <span className={css.mono}>{s.id}</span>
+            <MachineDetails s={s} />
           </section>
           <section className={css.detailSection} aria-label={t("web-pages.stations.software")}>
             <h3 className={css.detailTitle}>{t("web-pages.stations.software")}</h3>

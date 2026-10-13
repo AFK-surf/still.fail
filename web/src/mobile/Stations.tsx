@@ -18,7 +18,7 @@ import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { GoRow } from "./Settings.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
-import { Net } from "../cloud/StationCards.tsx";
+import { MachineDetails, Net } from "../cloud/StationCards.tsx";
 import { ColorRow, EmojiGrid, GlyphGrid } from "../cloud/MarkPick.tsx";
 import { glyphColor, isPicture, StationMark, stationGlyph } from "../StationMark.tsx";
 import { emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pictureMark, pictureOf, same, type Kind, type Mark } from "../stationPick.ts";
@@ -84,20 +84,18 @@ export function StationsScreen() {
 const noNet: StationNet = { path: "直连", rtt: { text: "0 ms", level: "ok" }, rttHistory: [], down: " ", up: " ", total: "" };
 
 /**
- * An online station's machine on its page: its load, what it is, its memory and disk in figures, its network, its agents' processes, each in its room
- * whether known yet or not (grey bars until it is); reconnecting, as last heard, faded.
+ * An online station's machine on its page, as the wide screen's details (../cloud/StationCards.tsx MachineDetails): what
+ * it is, what is left of it large, its network, the rest a row each, its agents' processes; in its room whether known
+ * yet or not (grey bars until it is); reconnecting, as last heard, faded.
  */
 function StationFigures({ s }: { s: StationView }) {
   const processes = s.overview?.processesText || null;
   return (
     <span className={css.mStationFaded} data-stale={s.reconnecting || undefined}>
-      <span className={css.mStationRings}>{s.host ? <MeterChips meters={s.host.meters} /> : <span className={css.mBarChips} style={{ marginTop: 0 }}>{[46, 52, 50].map((w) => <i key={w} style={{ width: w }} />)}</span>}</span>
-      <Known text={s.host?.line ?? null} bar={180} />
-      <Known text={s.host?.usage ?? null} bar={220} />
-      <span className={css.mStationBody}>
-        <span className={css.mStationLoad}><span className={css.mStationNet} data-hidden={!s.net || undefined}><Net net={s.net ?? noNet} stacked /></span></span>
-        {!s.net && <span className={css.mStationBars} aria-hidden><span className={css.mBarNet}><span><i style={{ width: 34 }} /><i style={{ width: 96 }} /></span><span><i style={{ width: 132 }} /><i style={{ width: 132 }} /></span></span></span>}
-      </span>
+      {s.host ? <MachineDetails s={s} phone /> : <>
+        <Known text={null} bar={180} />
+        <span className={css.mBarChips} style={{ marginTop: 0 }}>{[46, 52, 50].map((w) => <i key={w} style={{ width: w }} />)}</span>
+      </>}
       <Known text={processes} bar={120} />
     </span>
   );
@@ -192,7 +190,7 @@ export function StationScreen() {
   const manager = useManager();
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{s.host?.cpuModel || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline"))}</span> : undefined}
+      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{s.host?.identity || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline"))}</span> : undefined}
         trailing={s && manager ? <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
       {!s ? <Loading text={stations.error?.message ?? t("web-mobile.reading")} /> : (
         <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>

@@ -116,18 +116,30 @@ export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null
   // The profile's own page: each window's number large, ten cells lit as far as is left, its name and when it refills.
   return (
     <div className={css.quotaDials}>
-      {quota.windows.map((w) => (
-        <div key={w.label} className={css.quotaDial} data-level={w.level}>
-          <span className={css.quotaDialNumber}>{w.left}<small>%</small></span>
-          <span className={css.quotaDialCells} role="img" aria-label={t("web-main.quota.left", { label: w.label, left: w.left })}>
-            {Array.from({ length: 10 }, (_, i) => <i key={i} data-on={i < Math.round(w.left / 10) || undefined} />)}
-          </span>
-          <span className={css.quotaDialLabel}>{w.label}</span>
-          <span className={css.quotaDialReset}>{w.refills ?? "\u00a0"}</span>
-        </div>
-      ))}
+      {quota.windows.map((w) => <Dial key={w.label} number={String(w.left)} unit="%" left={w.left} level={w.level} label={w.label} note={w.refills} aria={t("web-main.quota.left", { label: w.label, left: w.left })} />)}
     </div>
   );
+}
+
+/** A figure large, ten cells lit as far as is left (0–100) in the colour of its level, its name and a quiet note under:
+ * an allowance's window on its profile's page, a machine's CPU, memory or disk on its own. */
+function Dial({ number, unit, left, level, label, note, aria }: { number: string; unit: string; left: number; level: Level | string; label: string; note: string | null | undefined; aria: string }) {
+  return (
+    <div className={css.quotaDial} data-level={level}>
+      <span className={css.quotaDialNumber}>{number}<small>{unit}</small></span>
+      <span className={css.quotaDialCells} role="img" aria-label={aria}>
+        {Array.from({ length: 10 }, (_, i) => <i key={i} data-on={i < Math.round(left / 10) || undefined} />)}
+      </span>
+      <span className={css.quotaDialLabel}>{label}</span>
+      <span className={css.quotaDialReset}>{note ?? "\u00a0"}</span>
+    </div>
+  );
+}
+
+/** A machine's CPU, memory and disk on its own page (a station's details): as an allowance's windows on its profile's,
+ * each what is left large over its cells. */
+export function MeterDials({ meters }: { meters: Meter[] }) {
+  return <div className={css.quotaDials}>{meters.map((m) => <Dial key={m.label} number={m.big} unit={m.unit} left={m.left} level={m.level} label={m.title} note={m.total} aria={`${m.title} ${m.big} ${m.unit}`} />)}</div>;
 }
 
 /** A rounded box with a figure in it (its mark before it, when given) and its edge drawn as far as `fill` (0–100),
@@ -147,14 +159,14 @@ export function EdgeChip({ fill, level, mark, label, text, small, bare, ...rest 
   );
 }
 
-/** A machine's CPU, memory and disk as the allowance's boxes are drawn: each its name and how full, its edge drawn as
- * far as that; what it is in the tip. */
+/** A machine's CPU, memory and disk as the allowance's boxes are drawn: each its name and what is left, its edge drawn as
+ * far as that; what it is in the tip. `alerts`: only those running low. */
 export function MeterChips({ meters, bare, alerts = false }: { meters: Meter[]; bare?: boolean; alerts?: boolean }) {
   return (
     <span className={css.quotaChips}>
       {meters.filter((m) => !alerts || m.level !== "ok").map((m) => (
         <Tip key={m.label} label={`${m.label} ${m.value}${m.note ? ` · ${m.note}` : ""}`}>
-          <EdgeChip fill={m.percent} level={m.level} mark={m.short} text={alerts ? m.remaining : undefined} label={`${m.label} ${m.percent}%${alerts && m.remaining ? ` · ${m.remaining}` : ""}`} bare={bare} />
+          <EdgeChip fill={m.left} level={m.level} mark={m.short} text={m.remaining} label={`${m.label} ${m.remaining}`} bare={bare} />
         </Tip>
       ))}
     </span>

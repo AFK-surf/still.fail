@@ -26,9 +26,9 @@ export const quotaRow = style({
 });
 export const quotaReset = style({ fontSize: vars.textMeta, color: vars.subtle });
 /** A window of an allowance, compact: a rounded box, what is left written in it and its edge drawn as far as is left. */
-export const quotaChips = style({ display: "inline-flex", alignItems: "center", gap: "4px", flex: "none" });
+export const quotaChips = style({ display: "inline-flex", alignItems: "center", gap: "8px", flex: "none" });
 export const quotaChip = style({
-  position: "relative", display: "inline-flex", alignItems: "center", height: "20px", padding: "0 7px",
+  position: "relative", display: "inline-flex", alignItems: "center", height: "20px", padding: "0 8px",
   overflow: "hidden", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   color: vars.green, fontSize: vars.textCaption, fontWeight: "600", lineHeight: "1", fontVariantNumeric: "tabular-nums",
   cursor: "default",
@@ -49,7 +49,7 @@ export const quotaChipLeft = style({
 });
 /** Its number quiet while there is plenty; in its colour once it runs low. */
 export const quotaChipText = style({
-  position: "relative", display: "inline-flex", gap: "4px", color: vars.muted,
+  position: "relative", display: "inline-flex", gap: "5px", color: vars.muted,
   selectors: {
     [`${quotaChip}:is([data-level="amber"], [data-level="red"]) &`]: { color: "currentColor" },
   },
