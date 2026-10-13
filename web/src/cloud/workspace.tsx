@@ -2,11 +2,11 @@
 // place. The core reaches each station and puts the workspace's views
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
-import { ChevronRight, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
+import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
 import { NewChat } from "../NewChat.tsx";
 import { useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { useChats, useStations } from "../api.ts";
 import type { Topic } from "../core/client.ts";
@@ -21,14 +21,14 @@ import { MarkCounts } from "../ChatMark.tsx";
 import { OpenJobsChip } from "../OpenJobs.tsx";
 import { GlobalShortcuts } from "../Switcher.tsx";
 import { ShortcutsPage } from "../Shortcuts.tsx";
-import { CHANGEABLE } from "../keymap.ts";
+import { CHANGEABLE, workspaceIndexOf, workspaceKeyLabel } from "../keymap.ts";
 import { ArchivePage } from "../pages/Archive.tsx";
 import { AppearancePage } from "../pages/Appearance.tsx";
 import { NotificationsPage } from "../pages/Notifications.tsx";
 import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
-import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, ROLE_LABEL, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
+import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
@@ -260,11 +260,23 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
   );
   const pending = byAccount.flatMap((a) => a.invitations.map((i): InvitationEntry => ({ ...i, account: a.account })));
   const isCurrent = (sub: string, id: string) => id === current.id && sub === current.account.sub;
-  const shown = byAccount.find((a) => a.account.sub === current.account.sub)?.workspaces.find((w) => w.id === current.id);
-  const others = byAccount.flatMap(({ account, workspaces: items }) => items.filter((w) => !isCurrent(account.sub, w.id)).map((w) => ({ account, w })));
+  const all = byAccount.flatMap(({ account, workspaces: items }) => items.map((w) => ({ account, w })));
   // What the others have waiting, as the core counts it: one dot on the trigger, one by each in the menu.
   const marks = useWorkspaceMarks(current.id);
   const othersTone = marks?.others;
+  const allRef = useRef(all);
+  allRef.current = all;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const i = workspaceIndexOf(e);
+      const to = i === null ? undefined : allRef.current[i];
+      if (!to) return;
+      e.preventDefault();
+      if (!isCurrent(to.account.sub, to.w.id)) navigate(`/w/${to.w.id}`);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
   return (
     <>
       <DropdownMenu.Root modal={false}>
@@ -283,17 +295,6 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.accountMenu}`} side="top" align="start" sideOffset={6}>
-            {/* The workspace in use first, as what the menu is about (as on the phone): its settings open from it. */}
-            {shown && (
-              <DropdownMenu.Item className={`${controlsCss.menuItem} ${css.menuCurrent}`} onSelect={() => navigate(`/w/${current.id}/settings/workspace`)}>
-                <span className={css.menuCurrentText}>
-                  <b>{shown.name}</b>
-                  <span className={shellCss.muted}>{t("web-pages.workspace.youAre", { role: ROLE_LABEL[shown.role] })} · {t("web-pages.workspace.stations", { n: shown.stations })} · {t("web-pages.workspace.people", { n: shown.members })}</span>
-                  {byAccount.length > 1 && <span className={shellCss.muted}>{current.account.email}</span>}
-                </span>
-                <span className={css.menuCurrentGo}>{t("web-pages.settings.title")}<ChevronRight {...ICON} size={14} /></span>
-              </DropdownMenu.Item>
-            )}
             {pending.length > 0 && (
               <>
                 <DropdownMenu.Label className={controlsCss.menuLabel}>{t("web-pages.workspace.invitations")}</DropdownMenu.Label>
@@ -322,27 +323,30 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
                 <DropdownMenu.Separator className={controlsCss.menuSep} />
               </>
             )}
-            {others.length > 0 && <DropdownMenu.Label className={controlsCss.menuLabel}>{t("web-pages.workspace.switchTo")}</DropdownMenu.Label>}
-            {/* Each workspace says whose it is under its name (a heading per account read as something to pick), what it holds at its end. */}
+            {/* Every workspace, the one in use among them, in an order of their own: switching often, each stays where the hand knows it. */}
+            {/* Each says whose it is under its name when there are accounts to tell apart, and the key that switches to it at its end. */}
             {/* Its page goes back to the chat last open there (WorkspaceHome). */}
-            {others.map(({ account, w }) => {
-              const mark = marks?.workspaces[w.id];
+            {all.map(({ account, w }, i) => {
+              const here = isCurrent(account.sub, w.id);
               return (
-              <DropdownMenu.Item key={w.id} className={controlsCss.menuItem} onSelect={() => navigate(`/w/${w.id}`)}>
+              <DropdownMenu.Item key={`${account.sub}/${w.id}`} className={controlsCss.menuItem} aria-current={here || undefined} onSelect={() => { if (!here) navigate(`/w/${w.id}`); }}>
+                <span className={css.menuCheck}>{here && <Check {...ICON} size={14} />}</span>
                 <span className={css.menuWorkspace}>
                   <span className={css.menuWorkspaceName}>
                     <span className={css.menuWorkspaceText}>{w.name}</span>
-                    <MarkCounts mark={mark} />
+                    {!here && <MarkCounts mark={marks?.workspaces[w.id]} />}
                   </span>
-                  <span className={css.menuStat}>{t("web-pages.workspace.stations", { n: w.stations })}</span>
-                  {byAccount.length > 1 ? <span className={shellCss.muted}>{account.email}</span> : <span />}<span className={css.menuStat}>{t("web-pages.workspace.people", { n: w.members })}</span>
+                  {byAccount.length > 1 && <span className={shellCss.muted}>{account.email}</span>}
                 </span>
+                {i < 9 && <span className={css.menuKey}>{workspaceKeyLabel(i)}</span>}
               </DropdownMenu.Item>
               );
             })}
-            <DropdownMenu.Separator className={controlsCss.menuSep} />
-            <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setCreating(true)}><Plus {...ICON} />{t("web-pages.workspace.create")}</DropdownMenu.Item>
-            <DropdownMenu.Item className={controlsCss.menuItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><UserPlus {...ICON} />{t("web-pages.workspace.addAccount")}</DropdownMenu.Item>
+            {/* Seldom done: a line of small words apart from the list, not rows to land on when reaching for a workspace. */}
+            <div className={css.menuRare}>
+              <DropdownMenu.Item className={css.menuRareItem} onSelect={() => setCreating(true)}><Plus {...ICON} size={13} />{t("web-pages.workspace.create")}</DropdownMenu.Item>
+              <DropdownMenu.Item className={css.menuRareItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><UserPlus {...ICON} size={13} />{t("web-pages.workspace.addAccount")}</DropdownMenu.Item>
+            </div>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>

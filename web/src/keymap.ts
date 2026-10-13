@@ -149,6 +149,21 @@ export function keyLabel(binding: Binding): string {
   return [...parts.map((m) => (m === "Mod" ? "Ctrl" : m)), shown].join("+");
 }
 
+/**
+ * Switching workspace by its place in the sidebar's menu: ⌃1…⌃9 on a Mac, Alt+1…9 elsewhere (Ctrl+digit is the
+ * browser's own tabs). Not changeable: nine actions would be nine rows of one thing.
+ */
+export function workspaceIndexOf(e: KeyboardEvent): number | null {
+  if (e.isComposing || e.shiftKey || e.metaKey || (MAC ? !e.ctrlKey || e.altKey : !e.altKey || e.ctrlKey)) return null;
+  const digit = /^Digit([1-9])$/.exec(e.code);
+  return digit ? Number(digit[1]) - 1 : null;
+}
+
+/** The key that switches to the workspace at this place (from 0) in the menu. */
+export function workspaceKeyLabel(index: number): string {
+  return MAC ? `⌃${index + 1}` : `Alt+${index + 1}`;
+}
+
 /** An action's first key as shown, or null when it has none here. */
 export function shortcutOf(action: Action): string | null {
   const first = keysOf(action)[0];

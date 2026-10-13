@@ -22,24 +22,25 @@ export const accountName = style({
   fontSize: vars.textUi, fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const accountMenu = style({});
-/** A workspace in the menu: its name and account on the left, its stations and people on the right, each by one of those lines. */
-export const menuWorkspace = style({
-  flex: "1", minWidth: "0", display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", columnGap: "12px", rowGap: "1px",
-  alignItems: "baseline",
-});
-export const menuStat = style({ textAlign: "right", fontSize: vars.textMeta, color: vars.muted });
+/** A workspace in the menu: its name, and under it whose it is when there are accounts to tell apart. */
+export const menuWorkspace = style({ flex: "1", minWidth: "0", display: "grid", rowGap: "1px" });
 /** A workspace's name in the menu, and the dot of what it has waiting after it. */
 export const menuWorkspaceName = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
 export const menuWorkspaceText = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-
-/** The workspace in use, a soft card atop the menu: its name and what it holds, and the way into its settings. */
-export const menuCurrent = style({
-  marginBottom: "4px", padding: "10px 10px 10px 12px", background: `color-mix(in srgb, ${vars.text} 5%, transparent)`,
-  // By the menu's top corners, and tall enough to show it: the corner's own shape, less the menu's padding.
-  borderRadius: `calc(${vars.rMenu} - 6px)`,
+/** The tick of the workspace in use, in a column the others keep empty so the names line up. */
+export const menuCheck = style({ width: "14px", flex: "none", display: "flex", alignSelf: "flex-start", marginTop: "3px" });
+/** The key that switches to it, at its end. */
+export const menuKey = style({ flex: "none", fontSize: vars.textMeta, color: vars.subtle, fontVariantNumeric: "tabular-nums" });
+/** Making a workspace and adding an account: seldom done, so a line of small words apart from the list. */
+export const menuRare = style({ display: "flex", flexWrap: "wrap", gap: "2px", marginTop: "8px", padding: "0 2px" });
+export const menuRareItem = style({
+  display: "flex", alignItems: "center", gap: "4px", height: "24px", padding: "0 8px", border: "0", borderRadius: "999px",
+  fontSize: vars.textMeta, color: vars.muted, cursor: "pointer", outline: "none", userSelect: "none",
+  selectors: {
+    "&[data-highlighted]": { background: vars.hover, color: vars.text },
+    "&[data-disabled]": { color: vars.subtle, cursor: "default" },
+  },
 });
-export const menuCurrentText = style({ flex: "1", minWidth: "0", display: "grid", gap: "1px" });
-export const menuCurrentGo = style({ display: "flex", alignItems: "center", gap: "2px", flex: "none", fontSize: vars.textMeta, color: vars.muted });
 export const inviteDot = style({
   width: "8px", height: "8px", borderRadius: "50%", background: vars.accent, flex: "none",
 });
@@ -74,8 +75,9 @@ export const onboardingMain = style({
 });
 export const onboardingTitle = style({ margin: "20px 0 8px", fontSize: vars.textHeading, fontWeight: "600" });
 export const onboardingFoot = style({ marginTop: "20px", fontSize: vars.textUi });
-globalStyle(`${threadItem} ${muted}, ${menuWorkspace} ${muted}, ${menuCurrentText} ${muted}`, { fontSize: vars.textMeta });
-globalStyle(`${menuCurrentText} b`, { fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+globalStyle(`${threadItem} ${muted}, ${menuWorkspace} ${muted}`, { fontSize: vars.textMeta });
+globalStyle(`${menuCheck} svg, ${menuRareItem} svg`, { color: "inherit" });
+globalStyle(`${menuCheck} svg`, { color: vars.accent });
 globalStyle(`${accountTrigger} > svg`, { color: vars.muted, flex: "none", marginLeft: "auto" });
 globalStyle(`${menuInvite} ${threadItem}`, { flex: "1", minWidth: "0" });
 globalStyle(`${onboarding} ${callout}`, { width: "100%", textAlign: "left" });

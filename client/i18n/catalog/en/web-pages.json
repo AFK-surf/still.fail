@@ -954,12 +954,6 @@
     "other": "{n} people"
   },
   "web-pages.workspace.resizeSidebar": "Resize sidebar",
-  "web-pages.workspace.stations": {
-    "one": "1 station",
-    "other": "{n} stations"
-  },
-  "web-pages.workspace.switchTo": "Switch to",
-  "web-pages.workspace.youAre": "{role}",
   "web-pages.settings.profiles.addWhere": "Add to which station",
   "web-pages.settings.profiles.addWhereLead": "A subscription signs in on that station; once added it can be shared",
   "web-pages.settings.profiles.hostAway": "{station} offline",
