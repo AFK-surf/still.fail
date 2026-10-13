@@ -97,6 +97,8 @@ fun BoxScope.WideCorners(current: WorkspaceEntry, top: Screen) {
         is Screen.Annotate -> {}
         // The decisions: one at a time, back to the list; their foot is theirs.
         Screen.Decisions -> {}
+        // The drive's reader and player take the whole screen: their controls are where the button would be.
+        is Screen.DriveRead, is Screen.DrivePlay -> {}
         else -> Recent(current, top, foot)
     }
 }
