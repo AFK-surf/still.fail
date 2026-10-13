@@ -36,6 +36,7 @@ const SPECS: Record<string, Spec> = {
   threads: items("id"),
   sessions: items("key"),
   jobs: items("id"),
+  history: { fields: { items: items("key") } },
 };
 
 export function specOf(topic: Topic): Spec | null {

@@ -217,8 +217,10 @@ export const sideBar = style({
   },
 });
 globalStyle(`[data-desktop] ${sideBar} :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex])`, { WebkitAppRegion: "no-drag" });
-// Beside the open panel the chat's bar ends short of the window's right end: the buttons are over the panel's.
-globalStyle(`${sessionPage}[data-panel="true"] > ${sessionMain}`, {
+// Beside the open panel the chat's bar ends short of the window's right end: the buttons are over the panel's. Only
+// where there are such buttons: set on the chat, the variable is its every element's (inherited), all styled anew as
+// the panel opens and closes.
+globalStyle(`:is([data-desktop="overlay"], [data-desktop="custom"]) ${sessionPage}[data-panel="true"] > ${sessionMain}`, {
   "@media": { "(min-width: 1101px)": { vars: { "--window-buttons": "0px" } } },
 });
 globalStyle(`${jobsPanel} section`, { display: "flex", flexDirection: "column" });

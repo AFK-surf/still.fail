@@ -57,6 +57,18 @@ import { t } from "./i18n.ts";
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
 
+// The composer's height, set on a chat (ChatPanel), as that element's own; the room it leaves the chat's list, a length
+// worked out there and inherited (styles/session.css.ts): the composer growing (a line more, or its width changing as
+// a side panel slides in) restyles the chat's every message only when the room it leaves does (past one line), not
+// at each change of its height. As the phone's (mobile/ChatHost.tsx). A browser without registered properties inherits
+// both as they are.
+for (const property of [
+  { name: "--composer-height", syntax: "<length>", inherits: false, initialValue: "0px" },
+  { name: "--composer-room", syntax: "<length>", inherits: true, initialValue: "0px" },
+]) {
+  try { globalThis.CSS?.registerProperty?.(property); } catch { /* registered already (a module loaded again) */ }
+}
+
 /**
  * From a new chat to the chat it made (madeChat.ts): its scene leaves, the composer moves to the chat's foot
  * (dock.tsx), and the words sent go up to where the chat has its first message.

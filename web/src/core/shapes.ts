@@ -2301,6 +2301,8 @@ export interface HistoryPhase {
 /** A message the agent posted: where to, whether it ended its work blocked, whether it failed. */
 export interface HistoryPost {
 	text: string;
+	/** `text` read as Markdown (markdown.ts): what the clients draw. */
+	md: unknown;
 	place?: Place;
 	block: boolean;
 	failed: boolean;
@@ -2329,6 +2331,8 @@ export interface HistoryStep {
 /** The agent's own words; `subagent`: a sub-agent's. */
 export interface HistoryText {
 	text: string;
+	/** `text` read as Markdown (markdown.ts): what the clients draw. */
+	md: unknown;
 	subagent: boolean;
 }
 

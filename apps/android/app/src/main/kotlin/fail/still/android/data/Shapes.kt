@@ -2319,6 +2319,8 @@ data class HistoryPhase (
 @Serializable
 data class HistoryPost (
 	val text: String,
+	/// `text` read as Markdown (markdown.ts): what the clients draw.
+	val md: JsonElement,
 	val place: Place? = null,
 	val block: Boolean,
 	val failed: Boolean
@@ -2350,6 +2352,8 @@ data class HistoryStep (
 @Serializable
 data class HistoryText (
 	val text: String,
+	/// `text` read as Markdown (markdown.ts): what the clients draw.
+	val md: JsonElement,
 	val subagent: Boolean
 )
 

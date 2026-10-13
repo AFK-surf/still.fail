@@ -2,6 +2,7 @@ import react from "@vitejs/plugin-react";
 import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
@@ -73,7 +74,14 @@ export default defineConfig(({ mode }) => {
     worker: { format: "es" },
     // SQLite's WASM build finds its .wasm beside its module (new URL(…, import.meta.url)): not prebundled in dev.
     optimizeDeps: { exclude: ["@sqlite.org/sqlite-wasm"] },
-    resolve: { alias: [{ find: "@stillfail/core-ts/web", replacement: here("../client/core-ts/src/hosts/web.ts") }] },
+    resolve: {
+      alias: [
+        { find: "@stillfail/core-ts/web", replacement: here("../client/core-ts/src/hosts/web.ts") },
+        // Markdown's character references (client/core-ts/src/markdown.ts, in the core's worker) by their table: the
+        // browser's build of it reads them through `document`, which a worker has not.
+        { find: /^decode-named-character-reference$/, replacement: createRequire(here("../client/core-ts/package.json")).resolve("decode-named-character-reference") },
+      ],
+    },
     build: {
       outDir: here(consoleBuild ? "../dist/cloud-admin" : "../dist/cloud-web"),
       emptyOutDir: true,
