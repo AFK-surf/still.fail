@@ -74,6 +74,8 @@ export function t(key: string, args?: Args): string {
 /** Draws the app again, whole, when the language changes (its words are read as it is drawn). */
 export function I18nRoot({ children }: { children: ReactNode }) {
   const language = useLang();
-  if (typeof document !== "undefined") document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
+  // It redraws on any change of the prefs; writing `lang` again, even the same, has every element styled anew (`:lang`).
+  const tag = language === "zh" ? "zh-CN" : "en";
+  if (typeof document !== "undefined" && document.documentElement.lang !== tag) document.documentElement.lang = tag;
   return createElement(Fragment, { key: language }, children);
 }
