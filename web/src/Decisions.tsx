@@ -90,8 +90,7 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
   const act = useAct();
   const api = useApi();
   const draftKey = `decision:${station}:${thread}:${seq}`;
-  const upload = useRef((file: File, onProgress?: (sent: number) => void) => api.uploadFile(file, onProgress));
-  const shared = useDraft({ key: draftKey, station, upload: (file, onProgress) => upload.current(file, onProgress) });
+  const shared = useDraft({ key: draftKey, station });
   const [focus, setFocus] = useState(0);
   const draft = { ...shared, focus, bumpFocus: () => setFocus((n) => n + 1) };
   const send = (written: Draft) => {
@@ -105,7 +104,7 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
     });
     // Not taken by the core (the card no longer waits, the station gone): back in the field, if nothing was written since.
     act(reply.catch((e: unknown) => {
-      if (e instanceof CoreError && e.code === "invalid_params" && !now.current.text.trim()) written.restore(taken);
+      if (e instanceof CoreError && e.code === "invalid_params" && !now.current.text.trim()) written.restore();
       throw e;
     }), t("web-main.decisions.replyWhat"));
   };
@@ -119,7 +118,7 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
     <div ref={root} className={css.reply} data-mobile={mobile || undefined} onPointerDown={(e) => e.stopPropagation()}>
       <div className={css.replyRoom} aria-hidden="true" />
       {mobile
-        ? <MobileComposer shown={spec} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} inline />
+        ? <MobileComposer shown={spec} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} inline />
         : <ComposerView draft={draft} thread={thread} sessionKey={session} draftKey={draftKey} submitDraft={send}
             placeholder={spec.placeholder} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} />}
     </div>

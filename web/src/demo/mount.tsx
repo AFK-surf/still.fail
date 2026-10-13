@@ -42,6 +42,8 @@ function valueOf(topic: Topic): unknown {
     // Nothing chosen: the defaults (the core's shape leaves them out).
     case "prefs": return {};
     case "doing": return { doing: [] };
+    // What is written stays the page's here (draft.ts shows what it did): no core keeps it.
+    case "composer": return null;
     case "chats": return chatsView(chats);
     case "chat": return chat ? chatView(chat, station.runs()) : null;
     case "slackApp": return station.slackApp();
@@ -120,7 +122,7 @@ function answer(name: string, params: Record<string, unknown>): unknown {
   if (name === "pick.save") return { saved: false };
   // Drafts (draft.ts) are the core's: none kept here, as a core answers for a chat nothing was written in (null, not an
   // object without text, quotes and files).
-  if (name === "draft.get" || name === "draft.put") return null;
+  if (name === "draft.get" || name === "draft.put" || (name.startsWith("composer.") && name !== "composer.add")) return null;
   // Its chats are whole, never a window short of their end: nothing to move along, nowhere to keep a place.
   if (name === "chat.newer" || name === "chat.latest" || name === "chat.place") return name === "chat.newer" ? { more: false } : null;
   const chat = chats.find((c) => c.thread === params.thread || c.key === params.session);
@@ -154,7 +156,7 @@ function answer(name: string, params: Record<string, unknown>): unknown {
   }
   // What reaches past the demo is offered in a real still.fail instance instead, and fails here as not done.
   try {
-    if (name === "station.upload" || name === "station.upload.part" || name.startsWith("auth.")) throw new station.NeedsReal();
+    if (name === "station.upload" || name === "station.upload.part" || name === "composer.add" || name.startsWith("auth.")) throw new station.NeedsReal();
     // still.fail cloud's operations (ops.ts: by the account they go as): every one would reach out.
     if ("account" in params) throw new station.NeedsReal();
     if (typeof params.station === "string") return station.op(name);

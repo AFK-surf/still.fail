@@ -1485,7 +1485,7 @@ export function Composer(props: ComposerProps) {
   const api = useApi();
   const { draftKey, carry } = props;
   // Its quotes are its draft's: a passage selected in the chat is offered to it by its key (useDraftInbox).
-  const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}), upload: (file, onProgress) => api.uploadFile(file, onProgress) });
+  const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}) });
   return <ComposerView {...props} draft={draft} />;
 }
 
@@ -1718,7 +1718,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
   useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added, text: words, quote }) => {
     if (words) setText(text.trim() ? `${text.trimEnd()}\n${words}` : words);
     if (offered.length) add(offered);
-    if (added.length) draft.setQuotes((all) => [...all, ...added]);
+    if (added.length) draft.addQuotes(added);
     // A passage selected in the chat: its comment line takes the focus.
     if (quote) draft.quote(quote);
     else input.current?.focus();
@@ -1835,7 +1835,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
  * image as its picture.
  */
 export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft: Draft; focusQuote: string | null; onFocused(): void; onDone(): void }) {
-  const { quotes, setQuotes, files } = draft;
+  const { quotes, files } = draft;
   const rest = besideQuotes(quotes, files) ?? [];
   const quoteInputs = useRef(new Map<string, HTMLInputElement>());
   useEffect(() => {
@@ -1852,10 +1852,10 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
             return (
             <div key={q.id} className={css.composerQuote} onClick={(e) => e.stopPropagation()}>
               <QuoteCard quote={q} picture={own && <PendingFile file={own} />}
-                onRemove={() => { setQuotes((all) => all.filter((x) => x.id !== q.id)); if (own) draft.remove(own.id); }} comment={
+                onRemove={() => { draft.unquote(q.id); if (own) draft.remove(own.id); }} comment={
                 <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
                   className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder={t("web-main.quote.commentPlaceholder")} aria-label={t("web-main.quote.commentLabel", { author: q.author })}
-                  onChange={(e) => { const v = e.target.value; setQuotes((all) => all.map((x) => (x.id === q.id ? { ...x, comment: v } : x))); }}
+                  onChange={(e) => draft.comment(q.id, e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); onDone(); } }} />
               } />
             </div>
