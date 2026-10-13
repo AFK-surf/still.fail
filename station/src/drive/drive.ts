@@ -159,12 +159,15 @@ export class Drive {
     return rootsOf(this.deps.config()).map(rootView);
   }
 
+  /// What is protected, as named and as found (links followed): asked once a request.
+  private async protectedNow(): Promise<string[]> {
+    const named = this.deps.protect();
+    return [...named, ...(await Promise.all(named.map(real)))];
+  }
+
   /// Whether `path` is (or is under) what is protected, by its own name or through a link.
-  private async isProtected(asked: string, found: string): Promise<boolean> {
-    for (const p of this.deps.protect()) {
-      if (within(asked, p) || within(found, p) || within(found, await real(p))) return true;
-    }
-    return false;
+  private async isProtected(asked: string, found: string, protect?: string[]): Promise<boolean> {
+    return (protect ?? (await this.protectedNow())).some((p) => within(asked, p) || within(found, p));
   }
 
   /// `path` under `root` as a request may use it, or why not.
@@ -192,6 +195,7 @@ export class Drive {
     try {
       const dirents = await readdir(at.found, { withFileTypes: true });
       const entries: Entry[] = [];
+      const protect = await this.protectedNow();
       const visible = dirents.filter((d) => !PART.test(d.name));
       const shown = visible.slice(0, MOST_ENTRIES);
       for (let i = 0; i < shown.length; i += AT_ONCE) {
@@ -199,7 +203,7 @@ export class Drive {
           shown.slice(i, i + AT_ONCE).map(async (d): Promise<Entry | null> => {
             const asked = join(at.found, d.name);
             const found = d.isSymbolicLink() ? await real(asked) : asked;
-            if (!within(found, top) || (await this.isProtected(asked, found))) return null;
+            if (!within(found, top) || (await this.isProtected(asked, found, protect))) return null;
             try {
               const s = await stat(found);
               const dir = s.isDirectory();
@@ -369,12 +373,13 @@ export class Drive {
     if (!platform.paths.rooted(path === "" ? home : path)) throw new DriveError("invalid_request", "an absolute path");
     try {
       const dirents = await readdir(at, { withFileTypes: true });
+      const protect = await this.protectedNow();
       const folders: string[] = [];
       for (const d of dirents) {
         const asked = join(at, d.name);
         let dir = d.isDirectory();
         if (d.isSymbolicLink()) dir = await stat(asked).then((s) => s.isDirectory(), () => false);
-        if (dir && !(await this.isProtected(asked, await real(asked)))) folders.push(d.name);
+        if (dir && !(await this.isProtected(asked, await real(asked), protect))) folders.push(d.name);
       }
       folders.sort((a, b) => collator.compare(a, b));
       const parent = dirname(at);
