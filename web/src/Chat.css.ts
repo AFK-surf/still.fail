@@ -77,12 +77,12 @@ export const msgSystemBox = style({
 export const msgSystemLink = style({ textDecoration: "underline", textUnderlineOffset: "3px" });
 globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit" });
 /**
- * A draft past its three lines scrolls: what is cut above or below fades out over a line's height, not at a hard edge.
+ * A draft past its viewport-aware height scrolls: its cut edges fade over a narrow strip.
  * It wraps plainly, not `pretty` as the page does: that weighs the whole draft again at every letter typed, and the
  * words of lines already written hopped between them.
  */
 export const composerText = style({
-  flex: "1", minHeight: "20px", maxHeight: "160px", padding: "6px 8px 4px", border: "0", outline: "none",
+  flex: "1", minHeight: "20px", maxHeight: "min(480px, 40dvh)", padding: "6px 8px 4px", border: "0", outline: "none",
   resize: "none", background: "transparent", font: "inherit", fontSize: vars.textInput, lineHeight: "1.5",
   color: vars.text, textWrap: "wrap",
   vars: { "--more-above": "0px", "--more-below": "0px" },
@@ -94,12 +94,12 @@ export const composerText = style({
     "&[data-more-above]": {
       WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 var(--more-above), #000 calc(100% - var(--more-below)), transparent)",
       maskImage: "linear-gradient(to bottom, transparent, #000 var(--more-above), #000 calc(100% - var(--more-below)), transparent)",
-      vars: { "--more-above": "18px" },
+      vars: { "--more-above": "4px" },
     },
     "&[data-more-below]": {
       WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 var(--more-above), #000 calc(100% - var(--more-below)), transparent)",
       maskImage: "linear-gradient(to bottom, transparent, #000 var(--more-above), #000 calc(100% - var(--more-below)), transparent)",
-      vars: { "--more-below": "18px" },
+      vars: { "--more-below": "4px" },
     },
   },
 });
@@ -659,3 +659,11 @@ export const activityStop = style({
     "&:hover": { background: vars.hover, color: vars.text },
   },
 });
+
+/** Pasted text uses the regular attachment upload, with a local restore action while composing. */
+export const pasteSnippet = style({ display: "flex", alignItems: "flex-start", width: "300px", maxWidth: "100%", minWidth: 0, flexShrink: 0, border: `1px solid ${vars.line}`, borderRadius: "12px", background: vars.canvas });
+export const pasteSnippetBody = style({ display: "flex", flexDirection: "column", gap: "4px", padding: "10px 12px", flex: 1, minWidth: 0 });
+export const pasteSnippetOpen = style({ textAlign: "left", padding: 0, border: 0, background: "transparent", color: vars.subtle, textDecoration: "underline", cursor: "pointer" });
+export const pasteSnippetTitle = style({ padding: 0, border: 0, background: "transparent", textAlign: "left", cursor: "pointer", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 });
+export const pasteSnippetHint = style({ color: vars.subtle, fontSize: vars.textMeta });
+export const pasteSnippetRemove = style({ flexShrink: 0, padding: "10px", border: 0, background: "transparent", color: vars.subtle, cursor: "pointer" });

@@ -619,5 +619,11 @@
   "web-main.preview.reveal": "在 {app} 中显示",
   "web-main.preview.revealFailed": "没能在 {app} 中显示 {path}",
   "web-main.history.stepReading": "正在读取…",
-  "web-main.history.stepUnread": "没读到：{error}"
+  "web-main.history.stepUnread": "没读到：{error}",
+  "web-main.composer.pastedText": "粘贴的文字",
+  "web-main.composer.expandPaste": "展开到输入框",
+  "web-main.composer.removePaste": "删除粘贴片段",
+  "web-main.composer.pasteUploading": "正在上传粘贴的文字…",
+  "web-main.composer.pasteAttachment": "文字附件 · {count} 字符",
+  "web-main.composer.retryPaste": "重试上传"
 }
