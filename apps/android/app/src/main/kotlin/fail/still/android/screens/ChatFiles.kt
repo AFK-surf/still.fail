@@ -174,7 +174,10 @@ internal object FileData {
         val on: ((Long, Long?) -> Unit)? = if (thumb) null else { loaded, total -> scope.launch { if (id in coming) progress[id] = loaded to total } }
         val got = scope.async {
             try {
-                app.api(station).file(key, file.path.substringAfterLast('/'), thumb, on).second.also { kept.put(id, it) }
+                val root = DriveKey.rootOf(key)
+                // A file of a station's drive (the viewer opened from its page): read from its root, a part at a time.
+                if (root != null) app.api(station).driveBytes(root, file.path) { loaded, total -> on?.invoke(loaded, total) }.also { kept.put(id, it) }
+                else app.api(station).file(key, file.path.substringAfterLast('/'), thumb, on).second.also { kept.put(id, it) }
             } finally {
                 coming.remove(id)
                 progress.remove(id)
@@ -217,7 +220,9 @@ internal object FileData {
                 val part = File(done.parentFile, done.name + ".part")
                 val name = file.path.substringAfterLast('/')
                 try {
-                    app.api(station).fileToDisk(key, name, part) { loaded, total -> scope.launch { if (id in comingToDisk) progress[id] = loaded to total } }
+                    val root = DriveKey.rootOf(key)
+                    if (root != null) app.api(station).driveToDisk(root, file.path, part) { loaded, total -> scope.launch { if (id in comingToDisk) progress[id] = loaded to total } }
+                    else app.api(station).fileToDisk(key, name, part) { loaded, total -> scope.launch { if (id in comingToDisk) progress[id] = loaded to total } }
                 } catch (e: CoreException) {
                     if (e.code != "unsupported" || file.size > WHOLE_FILE_MAX) throw e
                     return@async onDisk(context, id, file.name, app.api(station).file(key, name, false, null).second)
@@ -263,6 +268,17 @@ fun decode(bytes: ByteArray, longest: Int): ImageBitmap? {
     val scaled = Bitmap.createScaledBitmap(got, maxOf(1, got.width * longest / side), maxOf(1, got.height * longest / side), true)
     if (scaled !== got) got.recycle()
     return scaled.asImageBitmap()
+}
+
+/**
+ * A file of a station's drive shown by the viewer (drive/DriveScreen.kt), as the viewer knows files by a session's key:
+ * the key names its root and when it last changed instead (a file changed is fetched anew, not taken from what is kept).
+ */
+internal object DriveKey {
+    private const val TAG = "drive\u0001"
+    fun of(root: String, mtime: Long) = "$TAG$mtime\u0001$root"
+    /** The root a key names; null for a session's key. */
+    fun rootOf(key: String): String? = if (key.startsWith(TAG)) key.removePrefix(TAG).substringAfter('\u0001') else null
 }
 
 // ── in the chat ────────────────────────────────────────────────────────

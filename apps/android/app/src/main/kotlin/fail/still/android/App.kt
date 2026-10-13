@@ -177,6 +177,15 @@ sealed interface Screen {
 
     /** The agents' memory on a station. */
     data class Memory(val station: String) : Screen { override val id = "memory/$station" }
+    /**
+     * A station's drive (drive/DriveScreen.kt), a page per folder: `root` null is the drive itself (its one root's
+     * contents, or its roots), else the folder `path` under `root`.
+     */
+    data class Drive(val station: String, val root: String?, val path: String) : Screen { override val id = "drive/$station/${root ?: ""}/$path" }
+    /** A text or Markdown file of a drive, read (drive/Reader.kt). */
+    data class DriveRead(val station: String, val root: String, val path: String) : Screen { override val id = "drive-read/$station/$root/$path" }
+    /** A video or a song of a drive, played as it streams (drive/Player.kt). */
+    data class DrivePlay(val station: String, val root: String, val path: String) : Screen { override val id = "drive-play/$station/$root/$path" }
     /** How much a station takes of its machine, and cleaning it up; its chats' directories on a page of their own. */
     /** A connect's Slack app: its name, icon, colour and permissions. */
     data class SlackApp(val station: String, val connect: String) : Screen { override val id = "slack-app/$station/$connect" }
@@ -632,6 +641,8 @@ private fun opening(screen: Screen, workspace: String): List<Pair<JsonObject, ko
     )
     is Screen.Preview -> listOf(Topics.job(screen.station, screen.job) to fail.still.android.data.Job.serializer())
     is Screen.Station -> listOf(Topics.stations(workspace) to kotlinx.serialization.builtins.ListSerializer(fail.still.android.data.StationView.serializer()))
+    // A folder as it was last read (held on the device): the page slides in with its rows.
+    is Screen.Drive -> listOfNotNull(screen.root?.let { Topics.drive(screen.station, it, screen.path) to fail.still.android.data.DriveFolder.serializer() })
     Screen.Archive -> listOf(Topics.archive(workspace) to fail.still.android.data.ArchiveView.serializer())
     Screen.Decisions -> listOf(Topics.decisions(workspace) to fail.still.android.data.DecisionsView.serializer())
     else -> emptyList()
@@ -782,13 +793,17 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Decisions -> fail.still.android.screens.DecisionsScreen(current)
                     is Screen.Memory -> fail.still.android.screens.MemoryScreen(current, screen.station)
                     is Screen.SlackApp -> fail.still.android.screens.SlackAppScreen(screen.station, screen.connect)
+                    is Screen.Drive -> fail.still.android.drive.DriveScreen(current, screen.station, screen.root, screen.path)
+                    is Screen.DriveRead -> fail.still.android.drive.ReaderScreen(screen.station, screen.root, screen.path)
+                    is Screen.DrivePlay -> fail.still.android.drive.PlayerScreen(screen.station, screen.root, screen.path)
                     is Screen.Annotate -> CompositionLocalProvider(fail.still.android.screens.LocalPageTransition provides pageScope.transition) {
                         fail.still.android.screens.AnnotateScreen(screen.station, screen.of, screen.ts)
                     }
                 }
                 // The page scrolls under the status bar; it keeps the paper behind its icons, moving with its page (the
                 // list and a chat have frosted bars there instead, which show what runs under them).
-                if (screen !is Screen.Home && screen !is Screen.Chat && screen != Screen.NewChat && screen !is Screen.Annotate)
+                // A book and a film draw their own paper (or black) there.
+                if (screen !is Screen.Home && screen !is Screen.Chat && screen != Screen.NewChat && screen !is Screen.Annotate && screen !is Screen.DriveRead && screen !is Screen.DrivePlay)
                     Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
             }
         } }

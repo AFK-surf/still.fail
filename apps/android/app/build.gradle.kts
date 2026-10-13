@@ -111,6 +111,8 @@ dependencies {
     // Pushes while the app is not in front (Push.kt); set up by hand, without the google-services plugin.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    // A station's drive played as it streams (drive/Player.kt): ranged reads through the core, never the whole file first.
+    implementation(libs.androidx.media3.exoplayer)
     // The motion tests: frame by frame on the test clock (src/androidTest).
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
