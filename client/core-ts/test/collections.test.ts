@@ -77,3 +77,16 @@ test("a_key_twice_goes_the_old_way", () => {
   assert.deepEqual(ops, diff(old, next));
   assert.deepEqual(apply(structuredClone(old), ops as never), next);
 });
+
+test("a_history_going_back_a_page_puts_its_items_before_and_leaves_the_rest_as_they_were", () => {
+  const item = (key: string, text = key) => ({ key, entries: [1, 1], body: { kind: "text", content: { text, md: [["p", [text]]], subagent: false } } });
+  const history = (items: ReturnType<typeof item>[]) => ({ items, live: [], edge: "", empty: false, loaded: true });
+  const shown = Array.from({ length: 30 }, (_, i) => item(`k${i + 10}`));
+  const old = history(shown);
+  const next = history([item("k8"), item("k9"), ...shown.slice(0, 29), item("k39", "改了")]);
+  const ops = diffKeyed(old, next, specOf({ topic: "history", station: "w/s", key: "k" }));
+  assert.deepEqual(ops.map((op) => Object.keys(op).find((k) => ["put", "patch", "drop", "move"].includes(k))).sort(), ["patch", "put", "put"]);
+  const applied = applyKeyed(old, ops) as typeof old;
+  assert.deepEqual(applied, next);
+  assert.equal(applied.items[5], old.items[3]);
+});

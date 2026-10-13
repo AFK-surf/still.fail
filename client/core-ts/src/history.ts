@@ -4,6 +4,7 @@
 import { args, doing, epochMs, kindOf, toolName } from "./activity.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
+import { markdown } from "./markdown.ts";
 import * as present from "./present.ts";
 import { money } from "./views/usage.ts";
 
@@ -252,13 +253,13 @@ export function presentHistory(live: J, cx: Context): J {
         break;
       }
       case "text":
-        v = { kind: "text", text: s(timeline[item.i], "text"), subagent: flag(timeline[item.i], "subagent") };
+        v = { kind: "text", text: s(timeline[item.i], "text"), md: markdown(s(timeline[item.i], "text")), subagent: flag(timeline[item.i], "subagent") };
         break;
       case "post": {
         const a = args(s(timeline[steps[item.step].call], "text")) ?? {};
         const text = (k: string): string | null => (typeof a[k] === "string" ? a[k] : null);
         const kind = text("kind");
-        v = { kind: "post", text: text("text") ?? "", place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: failedOf(steps[item.step]) };
+        v = { kind: "post", text: text("text") ?? "", md: markdown(text("text") ?? ""), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: failedOf(steps[item.step]) };
         break;
       }
       case "mark":

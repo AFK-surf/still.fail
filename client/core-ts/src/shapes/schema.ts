@@ -1724,10 +1724,12 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "What a prompt carried: still.fail's own words around them (`note`), then the messages." }),
   HistoryText: struct([
     ["text", "String"],
+    ["md", "Value", { doc: "`text` read as Markdown (markdown.ts): what the clients draw." }],
     ["subagent", "bool"],
   ], { doc: "The agent's own words; `subagent`: a sub-agent's.", keepNone: true }),
   HistoryPost: struct([
     ["text", "String"],
+    ["md", "Value", { doc: "`text` read as Markdown (markdown.ts): what the clients draw." }],
     ["place", opt("Place")],
     ["block", "bool"],
     ["failed", "bool"],

@@ -5,6 +5,8 @@ import type {
   AgentCardView, ChatAgent, ChatItem, ChatMessage, ChatView, ChatsView, ModelOption, Outgoing, Profile, HistoryGroup, HistoryItem, HistoryStep, HistoryView, Live,
   Maker, Person, RowAgent, RuntimeKind, Session, Stamp,
 } from "../core/shapes.ts";
+// The demo has no core: its agent's words read as the core reads them.
+import { markdown } from "../../../client/core-ts/src/markdown.ts";
 
 const MINUTE = 60_000;
 
@@ -104,9 +106,9 @@ export function received(chat: DemoChat, from: Person, text: string): HistoryIte
   return { kind: "received", content: { messages: [{ key: `m${chat.items.length}`, from: { name: from.name, bound: false }, text, place: placeOf(chat) }] } };
 }
 export function posted(chat: DemoChat, text: string): HistoryItem["body"] {
-  return { kind: "post", content: { text, place: placeOf(chat), block: false, failed: false } };
+  return { kind: "post", content: { text, md: markdown(text), place: placeOf(chat), block: false, failed: false } };
 }
-export const said = (text: string): HistoryItem["body"] => ({ kind: "text", content: { subagent: false, text } });
+export const said = (text: string): HistoryItem["body"] => ({ kind: "text", content: { subagent: false, text, md: markdown(text) } });
 export function outgoing(text: string): Outgoing {
   const at = Date.now();
   return { id: `out-${at}`, text, attachments: [], quotes: [], createdAt: at, state: "sending", time: { createdAt: stamp(at) } };

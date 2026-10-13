@@ -8,6 +8,7 @@ import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { HighlighterCore } from "shiki/core";
 import type { Attachment } from "./core/shapes.ts";
+import type { Md, MdNode } from "./core/md.ts";
 import { inlineFile, inlineFiles } from "./Prose.css.ts";
 import * as css from "./Prose.css.ts";
 import { RefChip } from "./ChatRef.tsx";
@@ -129,13 +130,19 @@ const components: Components = {
   a: ({ node: _, ...props }) => link(props),
   // Inline code that is a file's path: its chip (a block of code is CodeBlock's, never drawn as this).
   code: ({ node: _, className, children, ...props }) => {
-    const text = className ? "" : textOf(children).trim();
-    // A web address alone in code is a link too: the code's ends are the link's, so nothing after it is swallowed.
-    if (/^https?:\/\/(?:localhost|[\w-]+(?:\.[\w-]+)+)(?::\d+)?(?:[/?#]\S*)?$/i.test(text) && !text.includes("…")) return link({ href: text, children: <code {...props}>{children}</code> });
-    const found = className ? null : pathIn(text);
-    return found ? <FileRef path={found.path} line={found.line}>{children}</FileRef> : <code className={className} {...props}>{children}</code>;
+    if (className) return <code className={className} {...props}>{children}</code>;
+    return inlineCode(textOf(children), <code {...props}>{children}</code>, children);
   },
 };
+
+/** Inline code (`code`, drawn as given) by what its words are: a web address alone is a link too, its ends the link's so
+ * nothing after it is swallowed; a file's path, its chip. */
+function inlineCode(words: string, code: ReactNode, children: ReactNode): ReactNode {
+  const text = words.trim();
+  if (/^https?:\/\/(?:localhost|[\w-]+(?:\.[\w-]+)+)(?::\d+)?(?:[/?#]\S*)?$/i.test(text) && !text.includes("…")) return link({ href: text, children: code });
+  const found = pathIn(text);
+  return found ? <FileRef path={found.path} line={found.line}>{children}</FileRef> : code;
+}
 
 /** A link in a message as it is drawn (but one naming the message's own files, which Prose places). A web page opens in
  * a tab of its own, not in place of the app (the desktop app's opens in the browser, as before). */
@@ -229,3 +236,76 @@ export const Prose = memo(function Prose({ children, files, file }: { children: 
   const url = (u: string) => (files?.has(nameOf(u)) ? u : defaultUrlTransform(u));
   return <Markdown remarkPlugins={[remarkGfm, linkBare]} components={withFiles} urlTransform={url}>{children}</Markdown>;
 });
+
+/**
+ * An agent's Markdown as the core read it (`Md`, client/core-ts/src/markdown.ts): drawn here, never parsed. Each of its
+ * blocks is drawn again only when it changes: the core hands the same tree for the same words, and a keyed delta keeps
+ * what it does not change as it was (core/delta.ts), so a history that grows draws only what came.
+ */
+export const MdView = memo(function MdView({ md }: { md: Md }) {
+  return <>{md.map((node, i) => <MdBlock key={i} node={node} />)}</>;
+});
+
+const MdBlock = memo(function MdBlock({ node }: { node: MdNode }) {
+  return drawMd(node, 0);
+});
+
+const attrsOf = (node: Exclude<MdNode, string>): Record<string, unknown> => ((Array.isArray(node[1]) ? node[2] : node[1]) ?? {}) as Record<string, unknown>;
+const kidsOf = (node: Exclude<MdNode, string>): MdNode[] => (Array.isArray(node[1]) ? node[1] : []);
+const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+const ALIGN = new Set(["left", "right", "center"]);
+
+function drawMd(node: MdNode, key: number): ReactNode {
+  if (typeof node === "string") return node;
+  const kind = node[0];
+  const a = attrsOf(node);
+  const kids = () => kidsOf(node).map(drawMd);
+  switch (kind) {
+    case "p": return <p key={key}>{kids()}</p>;
+    case "h": {
+      const H = `h${Math.min(6, Math.max(1, Number(a.depth) || 1))}` as "h1";
+      return <H key={key}>{kids()}</H>;
+    }
+    case "pre": {
+      const code = str(a.code) ?? "";
+      const language = str(a.lang);
+      // A mermaid block is a chart, drawn (Viz.tsx); anything else is code.
+      return language?.toLowerCase() === "mermaid" && code.trim() ? <Mermaid key={key} code={code} /> : <Code key={key} text={code} language={language} />;
+    }
+    case "quote": return <blockquote key={key}>{kids()}</blockquote>;
+    case "list": {
+      const start = typeof a.start === "number" ? a.start : undefined;
+      return a.ordered ? <ol key={key} start={start}>{kids()}</ol> : <ul key={key}>{kids()}</ul>;
+    }
+    case "li":
+      return typeof a.checked === "boolean"
+        ? <li key={key} className="task-list-item"><input type="checkbox" checked={a.checked} disabled readOnly /> {kids()}</li>
+        : <li key={key}>{kids()}</li>;
+    case "table": {
+      const [head, ...rows] = kidsOf(node);
+      const align = Array.isArray(a.align) ? a.align : [];
+      const row = (r: MdNode | undefined, i: number) => {
+        if (!r || typeof r === "string") return null;
+        return <tr key={i}>{kidsOf(r).map((cell, j) => {
+          if (typeof cell === "string") return null;
+          const style = ALIGN.has(String(align[j])) ? { textAlign: align[j] as "left" } : undefined;
+          return cell[0] === "th" ? <th key={j} style={style}>{kidsOf(cell).map(drawMd)}</th> : <td key={j} style={style}>{kidsOf(cell).map(drawMd)}</td>;
+        })}</tr>;
+      };
+      // A table wider than the message scrolls sideways within it, its cells keeping their words whole.
+      return <div key={key} className={css.tableScroll}><table><thead>{row(head, 0)}</thead>{rows.length > 0 && <tbody>{rows.map((r, i) => row(r, i))}</tbody>}</table></div>;
+    }
+    case "hr": return <hr key={key} />;
+    case "b": return <strong key={key}>{kids()}</strong>;
+    case "i": return <em key={key}>{kids()}</em>;
+    case "s": return <del key={key}>{kids()}</del>;
+    case "br": return <br key={key} />;
+    case "code": {
+      const content = str(a.content) ?? "";
+      return <Fragment key={key}>{inlineCode(content, <code>{content}</code>, content)}</Fragment>;
+    }
+    case "a": return <Fragment key={key}>{link({ href: defaultUrlTransform(str(a.href) ?? ""), title: str(a.title), children: kids() })}</Fragment>;
+    case "img": return <Tip key={key} label={str(a.title)}><img src={defaultUrlTransform(str(a.src) ?? "")} alt={str(a.alt) ?? ""} /></Tip>;
+    default: return <Fragment key={key}>{kids()}</Fragment>;
+  }
+}

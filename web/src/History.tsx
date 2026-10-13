@@ -6,7 +6,7 @@ import { failure, useToast } from "./toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { ChevronDown, ChevronRight, Copy, Wait, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
 import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryStep, type HistoryView, type Place } from "./api.ts";
@@ -14,7 +14,8 @@ import { ICON, IconButton, Pill, SlackLogo, Tip } from "./ui.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
 import { useLink, useStation } from "./station.tsx";
 import { Link } from "react-router";
-import { Prose } from "./Prose.tsx";
+import { MdView } from "./Prose.tsx";
+import type { Md } from "./core/md.ts";
 import { ToolCall, ToolResult } from "./ToolStep.tsx";
 import * as toolCss from "./ToolStep.css.ts";
 import { useStickToBottom } from "./scroll.ts";
@@ -29,6 +30,10 @@ import * as additionsCss from "./styles/additions.css.ts";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 import { ReadWhole, useWhole } from "./brief.ts";
+
+/** How many of a history's latest items are drawn when it opens, and how many more each time the reader nears its top. */
+const DRAWN = 24;
+
 /**
  * The session as it ran: the main view of a session. `head` says what it runs on and `summary` what needs seeing to
  * (both in the head); `details` unfold under the head, open to begin with, from its switch there: the history's own,
@@ -65,17 +70,30 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
   const body = useRef<HTMLDivElement>(null);
   // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
   useStickToBottom(body, `.${css.hItem}, .live-tail, .${css.hText}`);
-  const items = history?.items ?? [];
-  // Only its latest entries come first: the pages before them load as the reader nears the top.
+  const all = history?.items ?? [];
+  // Only its latest entries come first: the pages before them load as the reader nears the top. Of what is loaded, only
+  // the last few are drawn at first, enough to fill the pane; those before are drawn as the reader nears them, then the
+  // pages before. Drawn whole, the core's latest page (a hundred items, each its words through Markdown) took the
+  // opening frame of the panel or of its tab.
+  const [drawn, setDrawn] = useState(DRAWN);
+  const hidden = Math.max(0, all.length - drawn);
+  const items = hidden ? all.slice(hidden) : all;
   const older = useHistoryOlder(station, sessionKey);
-  useOlderOnScroll(body, history?.more ?? false, items[0]?.key, older);
+  const before = useCallback(() => {
+    if (hidden) { setDrawn((n) => n + DRAWN); return Promise.resolve(); }
+    return older();
+  }, [hidden, older]);
+  useOlderOnScroll(body, hidden > 0 || (history?.more ?? false), items[0]?.key, before);
   // Opened at an entry (an activity row): the item that draws it comes into view, and says so for a moment. One before
   // what is loaded: the pages before come first.
   const focused = useRef<number | null>(null);
   useEffect(() => {
     if (!focus || focused.current === focus.n) return;
-    const at = items.findIndex((item) => (item.entries[0] ?? 0) <= focus.entry && focus.entry <= (item.entries[1] ?? -1));
-    const el = at < 0 ? null : body.current?.querySelector<HTMLElement>(`[data-item="${at}"]`);
+    const found = all.findIndex((item) => (item.entries[0] ?? 0) <= focus.entry && focus.entry <= (item.entries[1] ?? -1));
+    // Loaded but not drawn yet: drawn back to it first.
+    if (found >= 0 && found < hidden) return void setDrawn(all.length - found + DRAWN);
+    const at = found - hidden;
+    const el = found < 0 ? null : body.current?.querySelector<HTMLElement>(`[data-item="${at}"]`);
     if (!el) {
       if (history?.more && focus.entry < (items[0]?.entries[0] ?? 0)) void older().catch(() => {});
       return;
@@ -87,10 +105,10 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
       el.dataset.focus = "";
       setTimeout(() => delete el.dataset.focus, 1600);
     }));
-  }, [focus?.n, items[0]?.key, items.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [focus?.n, items[0]?.key, items.length > 0, hidden]); // eslint-disable-line react-hooks/exhaustive-deps
   // What was there when the history opened (and older pages loaded later) shows at once; only what comes later animates.
   const seen = useRef(Number.POSITIVE_INFINITY);
-  if (seen.current === Number.POSITIVE_INFINITY && history?.loaded) seen.current = items.at(-1)?.entries[1] ?? -1;
+  if (seen.current === Number.POSITIVE_INFINITY && history?.loaded) seen.current = all.at(-1)?.entries[1] ?? -1;
   const usage = history?.usage;
 
   return (
@@ -152,7 +170,7 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
         </>
       );
     case "text":
-      return <Fold className={`${css.hText} ${conversationCss.markdown}${body.content.subagent ? ` ${css.hSub}` : ""}`}><Prose>{body.content.text}</Prose></Fold>;
+      return <Fold className={`${css.hText} ${conversationCss.markdown}${body.content.subagent ? ` ${css.hSub}` : ""}`}><MdView md={body.content.md as Md} /></Fold>;
     case "post":
       return (
         // Drawn like a received message (a line, then the words beside a bar): the two answer each other.
@@ -163,7 +181,7 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
             {body.content.block && <Pill tone="blue">Block</Pill>}
             {body.content.failed && <Pill tone="red">{t("web-main.history.sendFailed")}</Pill>}
           </div>
-          <Fold className={`${css.hQuote} ${css.hQuoteMd} ${conversationCss.markdown}`}><Prose>{body.content.text}</Prose></Fold>
+          <Fold className={`${css.hQuote} ${css.hQuoteMd} ${conversationCss.markdown}`}><MdView md={body.content.md as Md} /></Fold>
         </div>
       );
     case "mark":
