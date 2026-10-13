@@ -126,7 +126,8 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     };
     let lastFrame = 0;
     /** Where this last put the pane: a scroll to anywhere else is someone else's. */
-    let placed = el.scrollTop;
+    // A pane this starts on is one just made: at its top. Read, it laid the page out mid-commit.
+    let placed = 0;
     const place = (top: number) => { el.scrollTop = top; placed = el.scrollTop; };
     const stop = () => { cancelAnimationFrame(frame); frame = 0; };
     const distance = () => el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -241,8 +242,11 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, input, { passive: true });
     // The pane's width changing re-wraps every message: that is taken at once, not glided after (it would lag behind
     // the bottom while the width is dragged).
-    let laidWidth = contentWidth();
+    // The first report (the pane laid out, before it is first drawn) places it: placed here, a pane just made laid the
+    // page out in the middle of the commit and again for the frame.
+    let laidWidth = -1;
     const resize = new ResizeObserver((entries) => {
+      if (!settled) { laidWidth = contentWidth(); hold(); settled = true; return; }
       const rewrapped = contentWidth() !== laidWidth;
       laidWidth = contentWidth();
       smooth = !rewrapped && grown() && entries.some((e) => e.target !== el && isMessage(e.target));
@@ -273,8 +277,6 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     const onLoad = (event: Event) => { smooth = grown() && messageOf(event.target as Node) !== null; hold(); };
     el.addEventListener("load", onLoad, true);
     el.toggleAttribute("data-reading-up", !following);
-    hold();
-    settled = true;
     return () => {
       stop();
       el.removeEventListener("to-bottom", toBottom);

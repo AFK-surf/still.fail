@@ -32,7 +32,7 @@ import { t } from "./i18n.ts";
 import { ReadWhole, useWhole } from "./brief.ts";
 
 /** How many of a history's latest items are drawn when it opens, and how many more each time the reader nears its top. */
-const DRAWN = 24;
+const DRAWN = 10;
 
 /**
  * The session as it ran: the main view of a session. `head` says what it runs on and `summary` what needs seeing to
