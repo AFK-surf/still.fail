@@ -1,13 +1,19 @@
-// Switching workspace from the switcher (Workspaces.kt): the list goes from one workspace's rows to the other's, never
-// through the loading look (its placeholders, with no rows) while the core reads the new one from the device.
+// Switching workspace (Home.kt, Workspaces.kt): the lists slide from one workspace's rows to the other's, never through
+// the loading look (its placeholders, with no rows) while the core reads the new one from the device. Switched by the
+// app (a notification's link), from the panel the workspace's capsule opens, and by a swipe on the capsule.
 package fail.still.android.motion
 
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import fail.still.android.Screen
 import fail.still.android.data.AccountWorkspaces
 import fail.still.android.data.ChatDay
@@ -42,7 +48,8 @@ class WorkspaceSwitchTest {
         return listOf("a", "b").filter { p -> texts.any { it.startsWith("$p-row-") } }.joinToString("+").ifEmpty { "none" }
     }
 
-    @Test fun switched() {
+    /** Home on "Dev" (its rows "a-…"), with "Other" (rows "b-…") after it, read as slowly as the real core reads a list. */
+    private fun twoWorkspaces(): Harness {
         val h = Harness(rule)
         for (mine in listOf(false, true)) {
             h.fake.put(Topics.chats(Fixtures.WS, mine), view(Fixtures.WS, "a"))
@@ -59,14 +66,68 @@ class WorkspaceSwitchTest {
         ), loaded = true)))
         h.settle()
         check(rows() == "a") { "start: ${rows()}" }
+        return h
+    }
+
+    /** Steps `n` frames, noting whose rows each shows; checks they end on the other's, never through the loading look. */
+    private fun follow(h: Harness, r: Recording, what: String, seen: ArrayList<String>, n: Int = 30) {
+        repeat(n) { r.frame(); seen += rows() }
+        r.end()
+        Log.i("wsswitch", "$what: rows by frame: $seen")
+        check(seen.last() == "b") { "$what: never switched: $seen" }
+        check("none" !in seen) { "$what: the list went through its loading look: $seen" }
+        check(h.app.workspace == other) { "$what: the workspace kept is ${h.app.workspace}" }
+    }
+
+    @Test fun switched() {
+        val h = twoWorkspaces()
         val r = h.record("workspace-switch")
         val seen = ArrayList<String>()
         r.frame { rule.runOnUiThread { h.app.pickWorkspace(other); h.app.home() } }
         seen += rows()
-        repeat(30) { r.frame(); seen += rows() }
-        r.end()
-        Log.i("wsswitch", "rows by frame: $seen")
-        check(seen.last() == "b") { "never switched: $seen" }
-        check("none" !in seen) { "the list went through its loading look: $seen" }
+        follow(h, r, "switched", seen)
+    }
+
+    /** The capsule opens the panel; a tap on the other workspace there closes it and slides over to it. */
+    @Test fun fromThePanel() {
+        val h = twoWorkspaces()
+        rule.onNodeWithText("Dev").performClick()
+        h.settle()
+        rule.onNodeWithText("Other").assertExists("the panel lists the other workspace")
+        val r = h.record("workspace-panel-switch")
+        val seen = ArrayList<String>()
+        r.frame { rule.onNodeWithText("Other").performClick() }
+        seen += rows()
+        follow(h, r, "from the panel", seen)
+        rule.onNodeWithText("新建 workspace").assertDoesNotExist()
+    }
+
+    /** Dragged left on the capsule past the threshold, it lets go onto the next workspace and the lists slide with it. */
+    @Test fun swiped() {
+        val h = twoWorkspaces()
+        val title = rule.onNodeWithText("Dev").fetchSemanticsNode().boundsInRoot
+        val r = h.record("workspace-swipe")
+        val seen = ArrayList<String>()
+        r.frame { rule.onRoot().performTouchInput { down(Offset(title.left + title.width * 0.6f, title.center.y)) } }
+        repeat(10) { r.frame { rule.onRoot().performTouchInput { moveBy(Offset(-30f, 0f)) } }; seen += rows() }
+        // Not switched while the finger is down: only the capsule's names move.
+        check(seen.all { it == "a" }) { "switched before letting go: $seen" }
+        check(h.app.workspace == Fixtures.WS) { "switched before letting go" }
+        r.frame { rule.onRoot().performTouchInput { up() } }
+        seen += rows()
+        follow(h, r, "swiped", seen)
+    }
+
+    /** At the last workspace a drag on toward the next one gives a little and springs back: nothing is switched. */
+    @Test fun swipedPastTheEnd() {
+        val h = twoWorkspaces()
+        rule.runOnUiThread { h.app.pickWorkspace(other); h.app.home() }
+        h.settle()
+        check(rows() == "b") { "start: ${rows()}" }
+        val title = rule.onNodeWithText("Other").fetchSemanticsNode().boundsInRoot
+        rule.onRoot().performTouchInput { down(Offset(title.left + title.width * 0.6f, title.center.y)); repeat(10) { moveBy(Offset(-30f, 0f)) }; up() }
+        h.settle()
+        check(h.app.workspace == other) { "switched past the end, to ${h.app.workspace}" }
+        check(rows() == "b") { "after: ${rows()}" }
     }
 }

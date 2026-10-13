@@ -123,6 +123,10 @@ export const mMenu = style({
   transform: "scale(.9)", transition: "opacity 150ms, transform 150ms",
   selectors: {
     "&[data-open]": { opacity: "1", transform: "none", transition: "opacity 200ms, transform 200ms" },
+    // A panel of its own (MenuSpec.content: the workspace switcher): rounder, its rows inset.
+    "&[data-panel]": { boxSizing: "border-box", padding: "6px", borderRadius: `calc(20px * ${vars.cornerScale})`, overflowY: "auto" },
+    // Over what opened it (at the bottom): it grows from its bottom left.
+    "&[data-above]": { transformOrigin: "0 100%" },
   },
   "@media": {
     "(prefers-reduced-motion: reduce)": {
@@ -157,7 +161,7 @@ export const mReaderBody = style({
 });
 export const mReaderLabel = style({ display: "flex", alignItems: "center", fontSize: vars.textMeta, color: "var(--m-muted)" });
 globalStyle(`${mGrab} span`, { width: "38px", height: "5px", borderRadius: "3px", background: "var(--m-line)" });
-globalStyle(`${mMenu} button`, {
+globalStyle(`${mMenu}:not([data-panel]) button`, {
   display: "flex", alignItems: "center", justifyContent: "space-between", boxSizing: "border-box", width: "100%",
   minHeight: "46px", padding: "12px 16px", border: "0", background: "none", color: "var(--m-ink)", fontSize: `${vars.textBody} !important`,
   cursor: "pointer",

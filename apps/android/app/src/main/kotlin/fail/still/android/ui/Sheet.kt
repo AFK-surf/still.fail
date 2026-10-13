@@ -238,8 +238,8 @@ class MenuItem(val label: String, val icon: ImageVector?, val action: () -> Unit
 class MenuSpec(val anchor: Rect, val items: List<MenuItem>, val onDismiss: () -> Unit = {})
 
 // A short, nearly critically damped spring: quick off the mark, soft at its
-// destination, and continuous in speed when the user reverses it.
-private val MenuSpring = motionSpring<Float>(0.24f, bounce = 0.08f, visibilityThreshold = 0.001f)
+// destination, and continuous in speed when the user reverses it. The workspace panel (Workspaces.kt) opens with it too.
+internal val MenuSpring = motionSpring<Float>(0.24f, bounce = 0.08f, visibilityThreshold = 0.001f)
 
 @Composable
 fun MenuHost(spec: MenuSpec?, closed: () -> Unit) {
