@@ -190,7 +190,7 @@
   "core-views.present.host.load": "负载 {load}",
   "core-views.present.host.memory": "内存",
   "core-views.present.host.memory_short": "内存",
-  "core-views.present.host.remaining": "剩余 {size} G",
+  "core-views.present.host.remaining": "剩 {size} G",
   "core-views.present.host.up_days": "已运行 {n} 天",
   "core-views.present.host.up_days_hours": "已运行 {days} 天 {hours} 小时",
   "core-views.present.host.up_hours": "已运行 {hours} 小时",

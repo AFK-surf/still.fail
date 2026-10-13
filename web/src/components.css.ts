@@ -26,9 +26,10 @@ export const quotaRow = style({
 });
 export const quotaReset = style({ fontSize: vars.textMeta, color: vars.subtle });
 /** A window of an allowance, compact: a rounded box, what is left written in it and its edge drawn as far as is left. */
-export const quotaChips = style({ display: "inline-flex", alignItems: "center", gap: "8px", flex: "none" });
+/** The boxes side by side, onto a second line rather than squeezed where the room is narrow (a hover card). */
+export const quotaChips = style({ display: "inline-flex", flexWrap: "wrap", alignItems: "center", gap: "6px 8px", flex: "none", minWidth: "0" });
 export const quotaChip = style({
-  position: "relative", display: "inline-flex", alignItems: "center", height: "20px", padding: "0 8px",
+  position: "relative", display: "inline-flex", alignItems: "center", flex: "none", whiteSpace: "nowrap", height: "20px", padding: "0 8px",
   overflow: "hidden", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   color: vars.green, fontSize: vars.textCaption, fontWeight: "600", lineHeight: "1", fontVariantNumeric: "tabular-nums",
   cursor: "default",

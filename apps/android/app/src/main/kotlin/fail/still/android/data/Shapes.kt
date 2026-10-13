@@ -2481,7 +2481,7 @@ data class Meter (
 	val left: Long,
 	val level: Level,
 	val value: String,
-	/// What is left in words, in its chip: 剩余 6.0 G, 空闲 89%.
+	/// What is left in words, in its chip: 剩 6.0 G, 空闲 89%.
 	val remaining: String,
 	/// What is left, large on the machine's own page: 22.8, 89.
 	val big: String,

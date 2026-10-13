@@ -673,7 +673,7 @@ export const SHAPES: Record<string, Shape> = {
     ["left", "i64", { client: "I54", doc: "How much is left, 0–100: what its edge and cells are drawn to, as an allowance's." }],
     ["level", "Level"],
     ["value", "String"],
-    ["remaining", "String", { doc: "What is left in words, in its chip: 剩余 6.0 G, 空闲 89%." }],
+    ["remaining", "String", { doc: "What is left in words, in its chip: 剩 6.0 G, 空闲 89%." }],
     ["big", "String", { doc: "What is left, large on the machine's own page: 22.8, 89." }],
     ["unit", "String", { doc: "Beside `big`, small: GB, %." }],
     ["title", "String", { doc: "Under `big`: 内存剩, CPU 空闲." }],

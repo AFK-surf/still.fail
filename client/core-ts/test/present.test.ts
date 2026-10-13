@@ -433,11 +433,11 @@ test("a_watching_chat_says_what_it_watches_and_what_archiving_it_means", () => {
 test("a_meter_is_drawn_as_an_allowance_to_what_is_left", () => {
   let h: J = { memory: { usedBytes: 5.3 * GIB, totalBytes: 6 * GIB }, disk: { freeBytes: 6 * GIB, totalBytes: 60 * GIB } };
   h = p.host(h);
-  assert.equal(h.meters[1].remaining, "剩余 0.7 G");
+  assert.equal(h.meters[1].remaining, "剩 0.7 G");
   assert.deepEqual([h.meters[1].percent, h.meters[1].left], [88, 12]);
-  assert.equal(h.meters[2].remaining, "剩余 6.0 G");
+  assert.equal(h.meters[2].remaining, "剩 6.0 G");
   assert.equal(h.meters[2].percent, 90);
   h.memory.usedBytes = 7 * GIB;
   h = p.host(h);
-  assert.equal(h.meters[1].remaining, "剩余 0.0 G");
+  assert.equal(h.meters[1].remaining, "剩 0.0 G");
 });

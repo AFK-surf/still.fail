@@ -2458,7 +2458,7 @@ export interface Meter {
 	left: number;
 	level: Level;
 	value: string;
-	/** What is left in words, in its chip: 剩余 6.0 G, 空闲 89%. */
+	/** What is left in words, in its chip: 剩 6.0 G, 空闲 89%. */
 	remaining: string;
 	/** What is left, large on the machine's own page: 22.8, 89. */
 	big: string;
