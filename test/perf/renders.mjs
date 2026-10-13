@@ -48,7 +48,7 @@ const { values: opt } = parseArgs({
 });
 
 if (opt.compare) {
-  const [a, b] = process.argv.slice(2).filter((x) => x.endsWith(".json")).map((f) => JSON.parse(readFileSync(f, "utf8")));
+  const [a, b] = process.argv.slice(2).filter((x) => x.endsWith(".json")).map((f) => JSON.parse(readFileSync(f, "utf8"))).map((r) => ({ ...r, summary: summarize(r) }));
   if (!a || !b) throw new Error("--compare needs two result files");
   compare(a, b);
   process.exit(0);
@@ -278,6 +278,7 @@ try {
   await browser.close();
   server.close();
 }
+if (opt.out) writeFileSync(opt.out, JSON.stringify(results, null, 2));
 const summary = summarize(results);
 print(summary);
 if (opt.out) writeFileSync(opt.out, JSON.stringify({ ...results, summary }, null, 2));
@@ -298,10 +299,12 @@ function appNames() {
   walk(src);
   return names;
 }
-const APP = appNames();
-/** A name as the bundle has it, its clash's suffix let go (ChatPane$1). */
-const bare = (n) => n.replace(/\$\d+$/, "");
-const isApp = (n) => APP.has(bare(n));
+let app;
+/** Whether a name (as the bundle has it, a clash's suffix let go: ChatPane$1) is one of the app's components. */
+function isApp(n) {
+  app ??= appNames();
+  return app.has(n.replace(/\$\d+$/, ""));
+}
 
 function median(xs) {
   const s = xs.filter((x) => typeof x === "number").sort((a, b) => a - b);
