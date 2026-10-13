@@ -295,7 +295,8 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
 }
 
 /**
- * The chat's bar: its title from the left, then its people, then its agents' marks (each opens its card); its
+ * The chat's bar: its title from the left, then its people, then its agents' marks (each opens its card, the first's
+ * tile carrying the station it runs on); its
  * services and jobs (with a dot when one died lately or a service restarts), and "…", the chat's own page.
  */
 // A quick start and a soft landing, shared by both archive actions.
@@ -327,12 +328,14 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
             if (alarm != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(11.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(if (alarm == Tone.Fail) C.red else C.warn))
         }
     }) {
-        ChatStationChip(station)
+        // The station on its own while the chat has no agent; else on the first agent's tile.
+        if (agents.isEmpty()) ChatStationChip(station)
         StationUpdateControl(station, view.stationUpdate)
         if (view.people.isNotEmpty()) PeopleStack(view.people.take(5), 16.dp)
-        agents.forEach { a ->
+        agents.forEachIndexed { i, a ->
+            if (i == 0) AgentStationMark(station, a.maker, a.runtime, a.state) { openAgent(app, station, of, a.view) }
             // Not clipped: the state's dot sits over the mark's corner, partly outside it.
-            Box(Modifier.clickable { openAgent(app, station, of, a.view) }) { ModelMark(a.maker, a.runtime, 22.dp, a.state, listMark = true) }
+            else Box(Modifier.clickable { openAgent(app, station, of, a.view) }) { ModelMark(a.maker, a.runtime, 22.dp, a.state, listMark = true) }
         }
     }
 }

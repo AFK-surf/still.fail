@@ -6,13 +6,16 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import fail.still.android.Screen
+import fail.still.android.data.ChatAgent
 import fail.still.android.data.ChatOf
+import fail.still.android.data.Session
 import fail.still.android.data.Disk
 import fail.still.android.data.Host
 import fail.still.android.data.Memory
@@ -28,8 +31,9 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * A chat's bar names the station it runs on once its workspace has more than one (its icon and name), and a tap on it
- * opens the station's card; with one station it says nothing. `shots` pictures them (light and dark) into files/shots.
+ * A chat's bar names the station it runs on: on its first agent's tile (the station's icon, or its name where it has
+ * none), or as a tag of its own while the chat has no agent; a tap on it opens the station's card. `shots` pictures them
+ * (light and dark) into files/shots.
  */
 class StationChipTest {
     @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
@@ -46,10 +50,18 @@ class StationChipTest {
 
     private val talk = listOf(Fixtures.mine(1, "README 里的安装命令过时了，帮我改一下"), Fixtures.agent(2, "改好了，已推到 main。").copy(ending = "all_done"))
 
-    private fun open(stations: List<fail.still.android.data.StationView>, dark: Boolean = false): Harness {
+    private val agent = ChatAgent(
+        session = Session(
+            key = "ember:c-1", runtime = "claude", process = "running", pending = 0, statusText = "进行中", tone = "accent", mark = "run",
+            titleText = "修一下登录", agentText = "Claude", maker = Fixtures.anthropic, runtimeText = "Claude Code", efforts = listOf("high"),
+        ),
+        status = "running", badge = "run", profiles = emptyList(), choices = emptyList(), attention = emptyList(), turns = emptyList(), threads = emptyList(), jobs = emptyList(),
+    )
+
+    private fun open(stations: List<fail.still.android.data.StationView>, dark: Boolean = false, agents: Boolean = true): Harness {
         val h = Harness(rule)
         val of = ChatOf.Thread(Fixtures.THREAD)
-        h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk))
+        h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk).let { if (agents) it.copy(agents = listOf(agent)) else it })
         h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, of)), dark = dark)
         // After launching, which puts the one station of the fixtures.
         rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), stations) }
@@ -57,9 +69,23 @@ class StationChipTest {
         return h
     }
 
-    @Test fun oneStationSaysNothing() {
+    @Test fun theAgentsTileCarriesIt() {
         open(listOf(studio))
-        assertTrue(rule.onAllNodesWithContentDescription("Studio").fetchSemanticsNodes().isEmpty())
+        assertEquals(1, rule.onAllNodesWithContentDescription("Studio").fetchSemanticsNodes().size)
+        // Its icon only: the name is not written out beside it.
+        assertTrue(rule.onAllNodesWithText("Studio").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test fun withoutAnIconItsName() {
+        open(listOf(studio.copy(emoji = null, icon = null)))
+        rule.onNodeWithText("Studio").assertExists()
+    }
+
+    @Test fun noAgentATagOfItsOwn() {
+        val h = open(listOf(studio), agents = false)
+        rule.onNodeWithContentDescription("Studio").performClick()
+        h.settle()
+        rule.onNodeWithText("1 个 agent 在跑").assertExists()
     }
 
     @Test fun tapOpensTheCard() {
@@ -78,10 +104,16 @@ class StationChipTest {
     private fun shots(dark: Boolean) {
         val h = open(listOf(studio, mini), dark)
         val tag = if (dark) "dark" else "light"
-        shot("station-chip-$tag")
+        shot("station-tile-$tag")
         rule.onNodeWithContentDescription("Studio").performClick()
         h.settle()
         shot("station-peek-$tag")
+        rule.runOnUiThread { h.app.sheet = null; h.fake.put(Topics.stations(Fixtures.WS), listOf(studio.copy(emoji = null, icon = null), mini)) }
+        h.settle()
+        shot("station-tile-name-$tag")
+        rule.runOnUiThread { h.fake.put(Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD)), Fixtures.chat(talk)) }
+        h.settle()
+        shot("station-chip-name-$tag")
     }
 
     private fun shot(name: String) {

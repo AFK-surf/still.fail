@@ -71,6 +71,13 @@ import fail.still.android.ui.Card
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.StationMark
 import fail.still.android.ui.hasStationMark
+import fail.still.android.ui.AgentStateMark
+import fail.still.android.ui.MakerIcon
+import fail.still.android.ui.ModelMark
+import fail.still.android.ui.Smooth
+import fail.still.android.data.ChatState
+import fail.still.android.data.Maker
+import androidx.compose.foundation.layout.offset
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.LargeTitle
@@ -319,6 +326,40 @@ internal fun ChatStationChip(address: String) {
     val list = stations.value ?: return
     val s = list.firstOrNull { it.station == address } ?: return
     StationTag(s.name, s.emoji, s.icon, Modifier.clickable { openStationPeek(app, address) })
+}
+
+/**
+ * A chat's first agent in its bar with the station it runs on, one tile (web ui.tsx AgentMark with children, as the phone
+ * web's bar): the maker's square, then the station's icon, or its name where it has none. A tap on the maker opens the
+ * agent's card, on the station's part the station's. Until the station is known, the agent's mark alone.
+ */
+@Composable
+internal fun AgentStationMark(address: String, maker: Maker?, runtime: String, state: ChatState?, onAgent: () -> Unit) {
+    val app = LocalApp.current
+    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(address.substringBefore('/')))
+    val s = stations.value?.firstOrNull { it.station == address }
+    // Not clipped: the state's dot sits over the tile's corner, partly outside it.
+    if (s == null) {
+        Box(Modifier.clickable(onClick = onAgent)) { ModelMark(maker, runtime, 22.dp, state, listMark = true) }
+        return
+    }
+    val shape = Smooth(6.dp)
+    Box {
+        // The border drawn over both parts, so a press tints a part up to it.
+        Row(Modifier.height(22.dp).clip(shape).background(C.surface).border(1.dp, C.line, shape), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(22.dp).clickable(onClick = onAgent), contentAlignment = Alignment.Center) { MakerIcon(maker, runtime, 13.2.dp) }
+            Box(
+                Modifier.fillMaxHeight().widthIn(max = 96.dp).clickable { openStationPeek(app, address) }.padding(horizontal = 5.dp)
+                    .semantics { contentDescription = s.name },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (hasStationMark(s.emoji, s.icon)) StationMark(s.emoji, s.icon, 13.dp, C.muted)
+                else Text(s.name, fontSize = 12.sp, lineHeight = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        // Further out on the corner than on a mark alone, clear of the station's part.
+        if (state != null) AgentStateMark(state, C.bg, Modifier.align(Alignment.BottomEnd).offset(7.dp, 3.dp))
+    }
 }
 
 /** A station named in a small outlined tag, its icon before its name: in a chat's bar (ChatStationChip) and on a chat's row in the lists. */
