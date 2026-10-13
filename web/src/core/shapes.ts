@@ -297,6 +297,11 @@ export interface Attachment {
 	height?: number;
 	/** An image's ThumbHash (base64): a blurred likeness of it, shown until it loads. */
 	thumbhash?: string;
+	/**
+	 * In a chat's page: the session whose workspace keeps it (its agent's, else the chat's first agent's), which
+	 * its preview and download go through. Absent elsewhere.
+	 */
+	owner?: string;
 }
 
 /** A window of a session's account running out, as its ring draws it. */
@@ -1409,6 +1414,8 @@ export interface MessageBy {
 	picture?: string;
 	/** Another chat's agent (session_send): that chat's link, its name opens it. */
 	from?: string;
+	/** In a chat's page: its agent is one of the chat's, its name opens its execution history. Absent otherwise. */
+	here?: boolean;
 }
 
 /**
@@ -1428,6 +1435,38 @@ export interface MessageDecision {
 	chosen?: string;
 	/** Resolved, in words: 林晓 选了「先不改」, 林晓 回复了, 已换成新的问题. */
 	text?: string;
+}
+
+/** A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread. */
+export interface Place {
+	/** A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
+	name: string;
+	/** ember | slack */
+	surface: string;
+	session?: string;
+	/** A Slack thread's link in Slack, while a connect is signed in to its workspace. */
+	url?: string;
+}
+
+/**
+ * A message in Slack an agent of a chat sent (chat_post to a Slack thread, slack_api chat.postMessage) or was given,
+ * read from its transcript: the chat shows it after the message it followed, without it being one of the chat's.
+ */
+export interface ChatSentElsewhere {
+	key: string;
+	/** The message it comes after (its seq); 0 before the first of the chat. */
+	after: number;
+	createdAt: number;
+	/** As sent (Slack's mrkdwn). */
+	text: string;
+	/** Where it went; none when the core cannot name it. */
+	place?: Place;
+	failed?: boolean;
+	/** A person's message in Slack its agent was given (`by`: who said it); absent for what the agent sent there. */
+	received?: boolean;
+	by: MessageBy;
+	/** Its times in words, by field (`createdAt`). */
+	time?: Record<string, Stamp>;
 }
 
 /**
@@ -1480,6 +1519,18 @@ export interface ChatMessage {
 	 * or an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise.
 	 */
 	asked?: boolean;
+	/**
+	 * In a chat's page: the agent's last post, at the chat's end, saying it is all done, with nothing left in the chat
+	 * (`archivable`): 归档 is offered under it. Absent otherwise.
+	 */
+	archive?: boolean;
+	/** Under the same last all-done post: what the archive check made of the chat (the chat's `archiveCheck`). */
+	archiveCheck?: ArchiveCheck;
+	/**
+	 * In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent
+	 * when nothing.
+	 */
+	elsewhere?: ChatSentElsewhere[];
 }
 
 /** A range of a text, `from` to `to` (UTF-16 units). */
@@ -1519,38 +1570,6 @@ export interface ChatSearchView {
 	 * listed. Empty when not asked for.
 	 */
 	messages?: FoundMessage[];
-}
-
-/** A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread. */
-export interface Place {
-	/** A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
-	name: string;
-	/** ember | slack */
-	surface: string;
-	session?: string;
-	/** A Slack thread's link in Slack, while a connect is signed in to its workspace. */
-	url?: string;
-}
-
-/**
- * A message in Slack an agent of a chat sent (chat_post to a Slack thread, slack_api chat.postMessage) or was given,
- * read from its transcript: the chat shows it after the message it followed, without it being one of the chat's.
- */
-export interface ChatSentElsewhere {
-	key: string;
-	/** The message it comes after (its seq); 0 before the first of the chat. */
-	after: number;
-	createdAt: number;
-	/** As sent (Slack's mrkdwn). */
-	text: string;
-	/** Where it went; none when the core cannot name it. */
-	place?: Place;
-	failed?: boolean;
-	/** A person's message in Slack its agent was given (`by`: who said it); absent for what the agent sent there. */
-	received?: boolean;
-	by: MessageBy;
-	/** Its times in words, by field (`createdAt`). */
-	time?: Record<string, Stamp>;
 }
 
 /** A workspace a chat is shared with. */
@@ -1660,8 +1679,8 @@ export interface ChatView {
 	agents: ChatAgent[];
 	messages: ChatMessage[];
 	/**
-	 * What its agents said in Slack and were given from it meanwhile (not in this chat), shown among its messages;
-	 * not kept in it. Empty from a core before it.
+	 * What its agents said in Slack and were given from it before its first message (not in this chat): what came
+	 * after a message is that message's `elsewhere`. Not kept in it.
 	 */
 	elsewhere?: ChatSentElsewhere[];
 	more: boolean;

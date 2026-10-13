@@ -311,7 +311,10 @@ data class Attachment (
 	val width: Long? = null,
 	val height: Long? = null,
 	/// An image's ThumbHash (base64): a blurred likeness of it, shown until it loads.
-	val thumbhash: String? = null
+	val thumbhash: String? = null,
+	/// In a chat's page: the session whose workspace keeps it (its agent's, else the chat's first agent's), which
+	/// its preview and download go through. Absent elsewhere.
+	val owner: String? = null
 )
 
 /// A window of a session's account running out, as its ring draws it.
@@ -1415,7 +1418,9 @@ data class MessageBy (
 	val runtime: RuntimeKind? = null,
 	val picture: String? = null,
 	/// Another chat's agent (session_send): that chat's link, its name opens it.
-	val from: String? = null
+	val from: String? = null,
+	/// In a chat's page: its agent is one of the chat's, its name opens its execution history. Absent otherwise.
+	val here: Boolean? = null
 )
 
 /// Where a decision in a chat's messages stands (core, decisions.ts): still waiting (no person has written since it was
@@ -1432,6 +1437,38 @@ data class MessageDecision (
 	val chosen: String? = null,
 	/// Resolved, in words: 林晓 选了「先不改」, 林晓 回复了, 已换成新的问题.
 	val text: String? = null
+)
+
+/// A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread.
+@Serializable
+data class Place (
+	/// A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
+	val name: String,
+	/// ember | slack
+	val surface: String,
+	val session: String? = null,
+	/// A Slack thread's link in Slack, while a connect is signed in to its workspace.
+	val url: String? = null
+)
+
+/// A message in Slack an agent of a chat sent (chat_post to a Slack thread, slack_api chat.postMessage) or was given,
+/// read from its transcript: the chat shows it after the message it followed, without it being one of the chat's.
+@Serializable
+data class ChatSentElsewhere (
+	val key: String,
+	/// The message it comes after (its seq); 0 before the first of the chat.
+	val after: Long,
+	val createdAt: Long,
+	/// As sent (Slack's mrkdwn).
+	val text: String,
+	/// Where it went; none when the core cannot name it.
+	val place: Place? = null,
+	val failed: Boolean? = null,
+	/// A person's message in Slack its agent was given (`by`: who said it); absent for what the agent sent there.
+	val received: Boolean? = null,
+	val by: MessageBy,
+	/// Its times in words, by field (`createdAt`).
+	val time: Map<String, Stamp>? = null
 )
 
 /// A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said
@@ -1476,7 +1513,15 @@ data class ChatMessage (
 	val decision: MessageDecision? = null,
 	/// In a chat's page: it asks what no one has decided and the viewer has not let go (one of the chat's `asks`, a card
 	/// or an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise.
-	val asked: Boolean? = null
+	val asked: Boolean? = null,
+	/// In a chat's page: the agent's last post, at the chat's end, saying it is all done, with nothing left in the chat
+	/// (`archivable`): 归档 is offered under it. Absent otherwise.
+	val archive: Boolean? = null,
+	/// Under the same last all-done post: what the archive check made of the chat (the chat's `archiveCheck`).
+	val archiveCheck: ArchiveCheck? = null,
+	/// In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent
+	/// when nothing.
+	val elsewhere: List<ChatSentElsewhere>? = null
 )
 
 /// A range of a text, `from` to `to` (UTF-16 units).
@@ -1515,38 +1560,6 @@ data class ChatSearchView (
 	/// The messages that have the words (asked for by `messages`, at most that many), newest first: only in the chats
 	/// listed. Empty when not asked for.
 	val messages: List<FoundMessage>? = null
-)
-
-/// A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread.
-@Serializable
-data class Place (
-	/// A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
-	val name: String,
-	/// ember | slack
-	val surface: String,
-	val session: String? = null,
-	/// A Slack thread's link in Slack, while a connect is signed in to its workspace.
-	val url: String? = null
-)
-
-/// A message in Slack an agent of a chat sent (chat_post to a Slack thread, slack_api chat.postMessage) or was given,
-/// read from its transcript: the chat shows it after the message it followed, without it being one of the chat's.
-@Serializable
-data class ChatSentElsewhere (
-	val key: String,
-	/// The message it comes after (its seq); 0 before the first of the chat.
-	val after: Long,
-	val createdAt: Long,
-	/// As sent (Slack's mrkdwn).
-	val text: String,
-	/// Where it went; none when the core cannot name it.
-	val place: Place? = null,
-	val failed: Boolean? = null,
-	/// A person's message in Slack its agent was given (`by`: who said it); absent for what the agent sent there.
-	val received: Boolean? = null,
-	val by: MessageBy,
-	/// Its times in words, by field (`createdAt`).
-	val time: Map<String, Stamp>? = null
 )
 
 /// A workspace a chat is shared with.
@@ -1660,8 +1673,8 @@ data class ChatView (
 	val people: List<Person>,
 	val agents: List<ChatAgent>,
 	val messages: List<ChatMessage>,
-	/// What its agents said in Slack and were given from it meanwhile (not in this chat), shown among its messages;
-	/// not kept in it. Empty from a core before it.
+	/// What its agents said in Slack and were given from it before its first message (not in this chat): what came
+	/// after a message is that message's `elsewhere`. Not kept in it.
 	val elsewhere: List<ChatSentElsewhere>? = null,
 	val more: Boolean,
 	/// Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,

@@ -133,6 +133,7 @@ export const SHAPES: Record<string, Shape> = {
     ["width", opt("i64"), { client: opt("I54") }],
     ["height", opt("i64"), { client: opt("I54") }],
     ["thumbhash", opt("String"), { doc: "An image's ThumbHash (base64): a blurred likeness of it, shown until it loads." }],
+    ["owner", opt("String"), { doc: "In a chat's page: the session whose workspace keeps it (its agent's, else the chat's first agent's), which\nits preview and download go through. Absent elsewhere." }],
   ]),
   Quote: struct([
     ["author", "String"],
@@ -149,6 +150,7 @@ export const SHAPES: Record<string, Shape> = {
     ["runtime", opt("RuntimeKind")],
     ["picture", opt("String")],
     ["from", opt("String"), { doc: "Another chat's agent (session_send): that chat's link, its name opens it." }],
+    ["here", opt("bool"), { doc: "In a chat's page: its agent is one of the chat's, its name opens its execution history. Absent otherwise." }],
   ], { doc: "Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture." }),
   Message: struct([
     ["seq", "i64", { client: "I54" }],
@@ -192,6 +194,9 @@ export const SHAPES: Record<string, Shape> = {
     ["card", opt("MessageCard"), { doc: "The card it carries (options to pick, or a text field), as shown. Absent for a message with none." }],
     ["decision", opt("MessageDecision"), { doc: "With a card: whether it still waits for an answer, and who answered it how." }],
     ["asked", opt("bool"), { doc: "In a chat's page: it asks what no one has decided and the viewer has not let go (one of the chat's `asks`, a card\nor an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise." }],
+    ["archive", opt("bool"), { doc: "In a chat's page: the agent's last post, at the chat's end, saying it is all done, with nothing left in the chat\n(`archivable`): 归档 is offered under it. Absent otherwise." }],
+    ["archiveCheck", opt("ArchiveCheck"), { doc: "Under the same last all-done post: what the archive check made of the chat (the chat's `archiveCheck`)." }],
+    ["elsewhere", opt(vec("ChatSentElsewhere")), { doc: "In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent\nwhen nothing." }],
   ], { doc: "A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said\nit, and whether its agents have yet to take it." }),
   MessageCard: struct([
     ["assignee", opt("String"), { doc: "The person the agent asks to decide, by email. Absent on legacy cards." }],
@@ -1561,7 +1566,7 @@ export const SHAPES: Record<string, Shape> = {
     ["people", vec("Person")],
     ["agents", vec("ChatAgent")],
     ["messages", vec("ChatMessage")],
-    ["elsewhere", vec("ChatSentElsewhere"), { default: true, doc: "What its agents said in Slack and were given from it meanwhile (not in this chat), shown among its messages;\nnot kept in it. Empty from a core before it." }],
+    ["elsewhere", vec("ChatSentElsewhere"), { default: true, doc: "What its agents said in Slack and were given from it before its first message (not in this chat): what came\nafter a message is that message's `elsewhere`. Not kept in it." }],
     ["more", "bool"],
     ["newer", "bool", { default: true, doc: "Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,\n`chat.latest` goes to the end). What is said meanwhile waits there, counted in its thread's `unread`." }],
     ["at", opt("i64"), { client: opt("I54"), doc: "The entry the chat opened at when not at its end (its first unread, or where it was left): the list shows it\nat its top. Absent when it opened at its end." }],

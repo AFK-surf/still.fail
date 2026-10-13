@@ -1430,12 +1430,19 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
   ]);
   await t.read(u, 1);
   let v = u.value;
-  assert.deepEqual(v.elsewhere.map((s: J) => [s.after, s.text, s.place.name, s.failed, s.received ?? false, s.by.name]), [
-    [1, "**部署** 好了 [看这里](https://x.y)", "#C0OPS", false, false, v.elsewhere[0].by.name],
-    [1, "**收到**，@U9 看一下", "#C0OPS", false, true, "Mia"],
-    [2, "新话题", "#C0DEV", false, false, v.elsewhere[0].by.name],
+  // Each under the message it followed (the chat's own `elsewhere`: what came before its first).
+  const sent = (v: J): J[] => [...v.elsewhere, ...v.messages.flatMap((m: J) => m.elsewhere ?? [])];
+  assert.deepEqual(v.elsewhere, []);
+  assert.deepEqual(v.messages.map((m: J) => (m.elsewhere ?? []).length), [2, 1]);
+  const agent = sent(v)[0].by.name;
+  assert.deepEqual(sent(v).map((s: J) => [s.after, s.text, s.place.name, s.failed, s.received ?? false, s.by.name, s.by.here ?? false]), [
+    [1, "**部署** 好了 [看这里](https://x.y)", "#C0OPS", false, false, agent, true],
+    [1, "**收到**，@U9 看一下", "#C0OPS", false, true, "Mia", false],
+    [2, "新话题", "#C0DEV", false, false, agent, true],
   ]);
   assert.equal(v.messages.length, 2);
+  // The agent's own message: its name opens its history (one of the chat's).
+  assert.equal(v.messages[1].by.here, true);
   // Slack's answer gives the new message its thread; one Slack refused failed.
   t.data.putItems("transcript", "ws/a", "k", [
     [5, { at: "1970-01-01T00:00:04Z", kind: "tool_result", text: JSON.stringify({ ok: true, ts: "1727.0002" }), callId: "c3" }],
@@ -1444,12 +1451,34 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
   ]);
   await t.read(u, 1);
   v = u.value;
-  assert.deepEqual(v.elsewhere.map((s: J) => [s.after, s.text, s.failed]), [
+  assert.deepEqual(sent(v).map((s: J) => [s.after, s.text, s.failed]), [
     [1, "**部署** 好了 [看这里](https://x.y)", false],
     [1, "**收到**，@U9 看一下", false],
     [2, "新话题", false],
     [2, "补一句", true],
   ]);
+});
+
+test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archiving_is_offered", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  const file = (path: string) => ({ name: path.split("/").pop(), path, size: 1 });
+  const done = { ...entry(3, "好了"), authorKind: "agent", author: "k", declared: "final", ending: "all_done", attachments: [file("elsewhere/b.png")] };
+  t.set(pageOf("ws/a", 7), { first: 1, last: 3, entries: [{ ...entry(1, "看看"), attachments: [file("a.png")] }, { ...entry(2, "在看"), authorKind: "agent", author: "k" }, done], thread: null });
+  const settled = { ...row("k", now), thread: 7 };
+  settled.agents[0].lastTurn = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: 1, endedAt: 1 };
+  t.set(rows("ws/a"), [settled]);
+  await t.read(u, 1);
+  const v = u.value;
+  // Kept by the chat's agent: the only one, its workspace's or not.
+  assert.deepEqual(v.messages.map((m: J) => m.attachments.map((a: J) => a.owner)), [["k"], [], ["k"]]);
+  assert.equal(v.archivable, true);
+  // 归档 only under its last all-done post.
+  assert.deepEqual(v.messages.map((m: J) => m.archive ?? false), [false, false, true]);
 });
 
 test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () => {
