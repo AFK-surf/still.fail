@@ -18,7 +18,7 @@
 //     --say "sh say.sh" --step "sh step.sh" --out main.json
 //   node test/perf/renders.mjs --compare main.json branch.json
 //
-// Options: --user <dev account> (alice), --runs <n> (3; medians), --slow <n> (4, the CPU's slowdown; 1 for none),
+// Options: --user <dev account> (alice), --account <file> (where its sign-in is kept between runs), --runs <n> (3; medians), --slow <n> (4, the CPU's slowdown; 1 for none),
 // --phone, --only <op,…>, --top <n> (components listed per thing done, 12), --headless.
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -30,6 +30,7 @@ const { values: opt } = parseArgs({
   options: {
     url: { type: "string", default: "http://127.0.0.1:8787" },
     user: { type: "string", default: "alice" },
+    account: { type: "string" },
     dist: { type: "string" },
     chat: { type: "string" },
     other: { type: "string" },
@@ -163,10 +164,13 @@ let account;
 async function fresh() {
   const context = await browser.newContext(view);
   await context.addInitScript(hook);
+  // Asked once, and kept in --account's file when given: the dev cloud lets few sign-ins through.
+  if (account === undefined && opt.account && existsSync(opt.account)) account = JSON.parse(readFileSync(opt.account, "utf8"));
   if (account === undefined) {
     const r = await fetch(`${origin}/__dev/account?user=${encodeURIComponent(opt.user)}`);
     if (!r.ok) throw new Error(`${origin}/__dev/account answered ${r.status}`);
     account = await r.json();
+    if (opt.account) writeFileSync(opt.account, JSON.stringify(account));
   }
   await context.addInitScript((a) => {
     if (!localStorage.getItem("stillfail.accounts")) localStorage.setItem("stillfail.accounts", JSON.stringify([a]));
