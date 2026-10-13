@@ -60,7 +60,7 @@ Object.assign(window, { ready: true });
   madeHtml = true;
   win = new BrowserWindow({ width: 1000, height: 660, show: false,
     title: 'Window controls verification', titleBarStyle: 'hidden', frame: false,
-    titleBarOverlay: { color: '#ffffff', symbolColor: '#3b3e43', height: 44 },
+    titleBarOverlay: { color: '#ffffff', symbolColor: '#3b3e43', height: 32 },
     webPreferences: { nodeIntegration: true, contextIsolation: false, backgroundThrottling: false } });
   win.webContents.on('console-message', (event) => console.log('renderer:', event.message));
   const url = new URL('/window-colors-check.html', process.env.WEB_URL || 'http://127.0.0.1:5198');
