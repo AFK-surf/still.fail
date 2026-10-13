@@ -41,11 +41,12 @@ const DRAWN = 10;
  * not its tab's (a chat's agents each have a tab).
  * With its chat's `title`, each item offers its link (opening the history there), to paste into another chat.
  */
-export function History({ station, sessionKey, head, summary, details, focus, title }: {
+export function History({ station, sessionKey, head, summary, details, focusEntry = null, focusN = 0, title }: {
   station: string; sessionKey: string; head?: ReactNode; summary?: ReactNode; details?: ReactNode; title?: string | undefined;
-  /** An entry to bring into view (n changes each time it is asked for). */
-  focus?: { entry: number; n: number } | null;
+  /** An entry to bring into view (`focusN` changes each time it is asked for); null: none. */
+  focusEntry?: number | null; focusN?: number;
 }) {
+  const focus = focusEntry === null ? null : { entry: focusEntry, n: focusN };
   const history = useHistory(station, sessionKey).value;
   const paths = useMemo(() => ({ key: sessionKey, station }), [sessionKey, station]);
   const [usageOpen, setUsageOpen] = useState(true);

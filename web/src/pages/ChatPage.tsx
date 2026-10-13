@@ -8,11 +8,12 @@ import { CreatorText, EdgeChip, MeterChips, PeopleStack } from "../components.ts
 import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { PENDING } from "../lastChat.ts";
 import { ownOrigin } from "../stillfailLink.ts";
-import { keepTabs, keptTabs } from "../chatTabs.ts";
+import { keepTabs } from "../chatTabs.ts";
+import { usePrefs } from "../prefs.ts";
 import type { ChatJobsView, ChatShare, Host, StationView } from "../core/shapes.ts";
 import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
@@ -125,12 +126,13 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   // except an agent with no chat yet, here or in Slack (the core's `noChat`): its page shows its history. Where the
   // panel would lie over the chat (the styles' `max-width: 1100px`), none opens by itself: the chat comes first.
   const chatKey = `${station.address}:${"thread" in of ? of.thread : of.session}`;
-  const [kept] = useState(() => keptTabs(chatKey));
-  const [chosen, setTabs] = useState<string[] | null>(() => kept?.tabs ?? null);
+  // Kept by the core for each chat (its prefs' `chatTabs`): read from there, written there (keepTabs).
+  const kept = usePrefs((p) => p.chatTabs[chatKey]);
+  const chosen = kept?.tabs ?? null;
   const [folded] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const view = chatView.value;
   const tabs = chosen ?? (view?.noChat && !folded && "session" in of ? [of.session] : []);
-  const [active, setActiveState] = useState<string | null>(kept?.active ?? null);
+  const active = kept?.active ?? null;
   // The tabs as last left while the agents are not known yet: the panel holds its place instead of coming in later.
   // Its agents' background jobs; a service's tab (`service:<job>`) is the chat's own while one of them has it.
   const jobs = agents.flatMap((a) => a.jobs ?? []);
@@ -156,8 +158,6 @@ function ChatScreen({ session: chatSession }: { session: string }) {
       setOpening(false);
       if (open.length && shown && panelRef.current && !reducedMotion()) setLeaving({ tabs: open, shown, width: panelRef.current.getBoundingClientRect().width });
     }
-    setTabs(next);
-    setActiveState(front);
     keepTabs(chatKey, { tabs: next, active: front });
   };
   const saveTabs = (next: string[]) => commit(next, active);
@@ -556,10 +556,9 @@ const AgentHistory = memo(function AgentHistory({ station, session, agent: key, 
 }) {
   const agent = useChatAgent(station, session, key);
   const title = useTopicSelect<ChatView, string | undefined>({ topic: "chat", station, session }, (s) => s.value?.title);
-  const focus = useMemo(() => (focusEntry === null ? null : { entry: focusEntry, n: focusN }), [focusEntry, focusN]);
   if (!agent) return null;
   return (
-    <History station={station} sessionKey={key} title={title} focus={focus}
+    <History station={station} sessionKey={key} title={title} focusEntry={focusEntry} focusN={focusN}
       head={<SessionHead agent={agent} />}
       summary={agent.attention.length > 0 ? <HistorySummary agent={agent} /> : null}
       details={<SessionDetails agent={agent} />} />
