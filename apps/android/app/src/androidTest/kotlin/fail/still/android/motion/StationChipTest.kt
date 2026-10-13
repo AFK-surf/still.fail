@@ -43,11 +43,11 @@ class StationChipTest {
         hostname = "studio", os = "macOS", arch = "arm64", cpus = 16, cpuModel = "Apple M4 Max", load = 0.2, uptimeSec = 1e5,
         memory = Memory(64L shl 30, 20L shl 30), disk = Disk("/", 2000L shl 30, 700L shl 30), emberRssBytes = 1, checkedAt = 1,
         summary = "16 核 · 64 GB", line = "macOS 26.6 · 16 核 · 64 GB · 已开机 1 天", facts = emptyList(), usage = "内存 20 / 64 GB · 磁盘 700 GB / 2 TB", emberText = "still.fail 38 MB",
-        meters = listOf(Meter(label = "CPU", short = "CPU", percent = 19, left = 81, level = "ok", value = "19%", remaining = "剩 81", big = "81", unit = "%", title = "CPU 空闲", total = "负载 3.0"), Meter(label = "内存", short = "内存", percent = 69, left = 31, level = "ok", value = "69%", remaining = "剩 20", big = "20", unit = "GB", title = "内存剩", total = "共 64 GB"), Meter(label = "磁盘", short = "磁盘", percent = 65, left = 35, level = "ok", value = "65%", remaining = "剩 700", big = "700", unit = "GB", title = "磁盘剩", total = "共 2000 GB")),
+        meters = listOf(Meter(label = "CPU", short = "CPU", percent = 19, left = 81, level = "ok", value = "19%", remaining = "剩 81", big = "81", unit = "%", title = "CPU 空闲", total = "负载 3.0"), Meter(label = "内存", short = "内存", percent = 69, left = 31, level = "ok", value = "69%", remaining = "剩 20", big = "20", unit = "GB", title = "内存剩", total = "共 64 GB"), Meter(label = "磁盘", short = "磁盘", percent = 85, left = 15, level = "amber", value = "85%", remaining = "剩 300", big = "300", unit = "GB", title = "磁盘剩", total = "共 2000 GB")),
         identity = "Apple M4 Max · 64 GB · macOS 26.6", details = listOf(HostDetail("主机名", "studio")),
     )
     private val net = StationNet(path = "直连", rtt = NetFigure("12 ms", "ok"), rttHistory = emptyList(), down = "1.2 MB/s", up = "30 KB/s", total = "", downTotal = "212 MB", upTotal = "9.6 MB")
-    private val studio = Fixtures.station.copy(name = "Studio", emoji = "🍎", summary = "1 个 agent 在跑", host = host, net = net)
+    private val studio = Fixtures.station.copy(name = "Studio", emoji = "🍎", summary = "1 个 agent 在跑 · Apple M4 Max · 64 GB · macOS 26.6", host = host, net = net)
     private val mini = Fixtures.station.copy(station = "${Fixtures.WS}/mini", id = "mini", name = "Mac mini", emoji = "🐧")
 
     private val talk = listOf(Fixtures.mine(1, "README 里的安装命令过时了，帮我改一下"), Fixtures.agent(2, "改好了，已推到 main。").copy(ending = "all_done"))
@@ -99,7 +99,7 @@ class StationChipTest {
         rule.onNodeWithText("Station").assertExists()
         rule.onNodeWithText("Studio").performClick()
         h.settle()
-        rule.onNodeWithText("1 个 agent 在跑").assertExists()
+        rule.onNodeWithText("1 个 agent 在跑 · Apple M4 Max · 64 GB · macOS 26.6").assertExists()
         rule.onNodeWithText("机器详情").performClick()
         h.settle()
         assertEquals(Screen.Station(Fixtures.STATION), h.app.stack.last())

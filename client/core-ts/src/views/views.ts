@@ -1075,7 +1075,8 @@ export class Views implements Owner {
       } else if (host !== null) {
         const running = u64(get(get(overview, "counts"), "running")) ?? 0;
         const what = str(host.identity) || str(host.os) || "";
-        summary = `${what} · ${running > 0 ? t("core-views.station.running", { n: running }) : t("core-views.station.idle")}`;
+        // What its agents do first: a narrow card cuts the line short at its end.
+        summary = `${running > 0 ? t("core-views.station.running", { n: running }) : t("core-views.station.idle")} · ${what}`;
       } else summary = t("core-views.station.connecting");
       const net = this.ok({ topic: "net", station: s.address });
       const state = str(this.link(s.address).state);
