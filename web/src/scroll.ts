@@ -84,7 +84,8 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       const style = getComputedStyle(el);
       return el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     };
-    let width = contentWidth();
+    // Read first where the pane is laid out anyway (keepHeight): read here, a pane just made laid the page out mid-commit.
+    let width = -1;
     const keepHeight = () => {
       const f = floor?.current;
       if (!f) return;

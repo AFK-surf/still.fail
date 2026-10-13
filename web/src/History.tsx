@@ -79,8 +79,24 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
   const hidden = Math.max(0, all.length - drawn);
   const items = hidden ? all.slice(hidden) : all;
   const older = useHistoryOlder(station, sessionKey);
+  // Whether the reader has moved the pane (a wheel, a finger, a key): until then what is drawn is what it opened with.
+  const moved = useRef(false);
+  useEffect(() => {
+    const el = body.current;
+    if (!el) return;
+    const mark = () => { moved.current = true; };
+    for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, mark, { passive: true });
+    return () => { for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.removeEventListener(type, mark); };
+  }, []);
   const before = useCallback(() => {
-    if (hidden) { setDrawn((n) => n + DRAWN); return Promise.resolve(); }
+    if (hidden) {
+      // Not before the reader moves the pane, while what is drawn fills it: drawn as it opens, the items before laid it
+      // out a second time in the frame it came in. Declined, it is asked again as the reader scrolls up.
+      const el = body.current;
+      if (el && !moved.current && el.scrollHeight > el.clientHeight) return Promise.reject(new Error("not read up to yet"));
+      setDrawn((n) => n + DRAWN);
+      return Promise.resolve();
+    }
     return older();
   }, [hidden, older]);
   useOlderOnScroll(body, hidden > 0 || (history?.more ?? false), items[0]?.key, before);
@@ -297,6 +313,18 @@ function Whole({ brief, entries, children }: { brief: boolean; entries: number[]
   return <div className={`${css.hStepBody} ${shellCss.muted}`}>{reading.error === null ? t("web-main.history.stepReading") : t("web-main.history.stepUnread", { error: reading.error })}</div>;
 }
 
+const folds = new Map<Element, (long: boolean) => void>();
+let watching: ResizeObserver | null = null;
+function foldWatch(): ResizeObserver {
+  return watching ??= new ResizeObserver((entries) => {
+    const read = entries.flatMap(({ target }) => {
+      const set = folds.get(target);
+      return set ? [[set, target.scrollHeight > (parseFloat(getComputedStyle(target).lineHeight) || 21) * 5 + 4] as const] : [];
+    });
+    if (read.length) flushSync(() => { for (const [set, long] of read) set(long); });
+  });
+}
+
 /**
  * Long text in the history folds to five lines; a button unfolds it. Height
  * is measured, so markdown (lists, code) folds the same way as plain text.
@@ -306,18 +334,15 @@ function Fold({ children, className }: { children: ReactNode; className?: string
   const [long, setLong] = useState(false);
   const [open, setOpen] = useState(false);
   const run = useRef<AnimationPlaybackControls | null>(null);
-  // Measured before paint, so a long entry never shows at full height first.
+  // Measured before paint, so a long entry never shows at full height first: by the one observer all folds share, which
+  // reads them once the page is laid out (its first report comes before the first paint) and folds the long ones
+  // together. Read as each one mounted, a history coming in laid the whole page out in the middle of its commit.
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
-    const check = () => {
-      const line = parseFloat(getComputedStyle(el).lineHeight) || 21;
-      setLong(el.scrollHeight > line * 5 + 4);
-    };
-    check();
-    const observer = new ResizeObserver(check);
-    observer.observe(el);
-    return () => { observer.disconnect(); run.current?.stop(); };
+    folds.set(el, setLong);
+    foldWatch().observe(el);
+    return () => { folds.delete(el); foldWatch().unobserve(el); run.current?.stop(); };
   }, []);
   // Only a reader's own click moves it (folding on arrival happens before the first paint): from the height it shows
   // (on its way, if clicked again) to the one it has now.

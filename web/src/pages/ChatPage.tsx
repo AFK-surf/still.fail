@@ -54,6 +54,17 @@ import { tx } from "../cloud/words.tsx";
  * agents' execution histories beside them. The address is the item's: its chat's thread, or its agent's session key
  * until the first message makes the chat, and the page moves there.
  */
+/**
+ * The side panel's width beside a page `page` wide, as its styles lay it out (session.css.ts: the width dragged, else
+ * 38% and at least 360, leaving the chat 360; ChatPage.css.ts: over the chat where the page is narrow).
+ */
+function panelWidth(page: number, narrow: boolean): number {
+  if (narrow) return Math.min(460, window.innerWidth);
+  const dragged = parseFloat(document.documentElement.style.getPropertyValue("--panel-w"));
+  const wanted = Number.isFinite(dragged) && dragged > 0 ? dragged : Math.max(360, Math.floor(page * 0.38));
+  return Math.max(0, Math.min(wanted, page - 360));
+}
+
 export function ChatPage() {
   const { chat } = useParams();
   const station = useStation();
@@ -155,6 +166,17 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const sliding = leaving && !(open.length && shown) ? "out" : opening ? "in" : null;
   const pageRef = useRef<HTMLDivElement>(null);
   const slide = useRef<{ run: AnimationPlaybackControls; value: number } | null>(null);
+  // The page's width as last laid out, told by an observer: the panel's width is worked out from it (as its styles
+  // have it) rather than read off the panel just made, which laid the whole page out in the middle of the commit and
+  // again for the frame.
+  const pageWidth = useRef(0);
+  useLayoutEffect(() => {
+    const page = pageRef.current;
+    if (!page) return;
+    const seen = new ResizeObserver(([entry]) => { if (entry) pageWidth.current = entry.borderBoxSize[0]?.inlineSize ?? entry.contentRect.width; });
+    seen.observe(page);
+    return () => seen.disconnect();
+  }, []);
   useLayoutEffect(() => {
     const page = pageRef.current;
     const el = panelRef.current;
@@ -168,7 +190,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     page.style.removeProperty("grid-template-columns");
     el.style.removeProperty("width");
     el.style.removeProperty("transform");
-    const whole = sliding === "out" && leaving ? leaving.width : el.getBoundingClientRect().width;
+    const whole = sliding === "out" && leaving ? leaving.width : panelWidth(pageWidth.current || page.getBoundingClientRect().width, narrow);
     const start = was ? was.value : sliding === "in" ? 0 : whole;
     const goal = sliding === "in" ? whole : 0;
     const draw = (v: number) => {

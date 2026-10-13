@@ -78,7 +78,8 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
       trigger.dataset.drop = DROPS[level]!;
       setDrop(level);
     };
-    measure();
+    // Measured as the observer reports, the page laid out by then (its first report comes before the first paint):
+    // measured here, a panel coming in (a history's head has one) laid the whole page out in the middle of its commit.
     const observer = new ResizeObserver(measure);
     observer.observe(room);
     return () => observer.disconnect();
