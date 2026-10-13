@@ -2158,6 +2158,66 @@ export interface DraftView {
 	files: Attachment[];
 }
 
+/** What opens an entry of the drive. */
+export type DriveKind = "folder" | "video" | "audio" | "image" | "markdown" | "text" | "code" | "csv" | "html" | "pdf" | "subtitle" | "other";
+
+export interface DriveEntry {
+	name: string;
+	dir: boolean;
+	size: number;
+	/** When it last changed (ms). */
+	mtime: number;
+	/** A file's media type, by its name (empty for a folder). */
+	type: string;
+	kind: DriveKind;
+	/** Its size in words (empty for a folder). */
+	sizeText: string;
+	/** Its time in words: 14:05 today, 9/27 this year, 2024/9/27 before. */
+	timeText: string;
+}
+
+/** A folder of a station's drive (the `drive` topic). */
+export interface DriveFolder {
+	/** Relative to its root, `/` between its components; empty for the root itself. */
+	path: string;
+	/** Folders first, then files, each by name (numbers by their value). */
+	entries: DriveEntry[];
+	/** More than a listing gives (50 000). */
+	truncated?: boolean;
+	folders: number;
+	files: number;
+	/** 3 个文件夹 · 12 个文件. */
+	countText: string;
+}
+
+/** Where a file of a drive was left on this device (the `drivePlace` topic; none before it was opened). */
+export interface DrivePlace {
+	/** Where: a text's offset (UTF-16 units), a video's or a song's time (ms). */
+	at: number;
+	/** Of how much, when told (its length, its duration): for a fraction read. */
+	of?: number;
+	changed: number;
+}
+
+/** Whether a folder of the drive can be browsed now. */
+export type DriveRootState = "ok" | "missing" | "not_a_directory" | "unreadable";
+
+export interface DriveRoot {
+	/** Where it is on the station; what the drive's calls name it by. */
+	path: string;
+	name: string;
+	/**
+	 * Whether it can be browsed now (`unreadable`: there, but the station may not list it, as macOS keeps some folders from a
+	 * station it did not ask).
+	 */
+	state: DriveRootState;
+}
+
+/** A station's drive (docs/drive.md): the folders its workspace's owners and admins named. */
+export interface DriveRoots {
+	roots: DriveRoot[];
+}
+
 export interface FlowChoice {
 	id: string;
 	title: string;
@@ -2802,6 +2862,8 @@ export interface Overview {
 	processesText: string;
 	/** How much of the disk it takes (none from a station older than the footprint page, which then is not offered). */
 	footprint?: FootprintBrief;
+	/** The folders it lends its members (none from a station older than the drive, which then is not offered). */
+	drive?: DriveRoots;
 }
 
 /**

@@ -500,5 +500,14 @@
   "core-logic.status.what.threads": "Loading chat list",
   "core-logic.status.what.upload": "Uploading",
   "core-logic.status.what.workspace": "Loading workspace",
-  "core-logic.status.what.write": "Saving"
+  "core-logic.status.what.write": "Saving",
+  "core-logic.drive.folders": {
+    "one": "{n} folder",
+    "other": "{n} folders"
+  },
+  "core-logic.drive.files": {
+    "one": "{n} file",
+    "other": "{n} files"
+  },
+  "core-logic.drive.empty": "Empty folder"
 }

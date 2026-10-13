@@ -16,6 +16,9 @@ import { routes as slack } from "./routes/slack.ts";
 import { routes as hub } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
 import { routes as links } from "./routes/links.ts";
+import { routes as drive } from "./routes/drive.ts";
+import { Drive } from "../drive/drive.ts";
+import { ownPaths } from "../ops/own.ts";
 import type { AgentsParts } from "../sessions/agents.ts";
 import type { Store } from "../store/store.ts";
 import type { Events } from "./events.ts";
@@ -111,6 +114,16 @@ export class Admin {
           })
         : []),
       ...(deps.agents?.config ? deviceTools({ config: deps.agents.config, changed: () => deps.events?.overviewChanged() }) : []),
+      ...(deps.agents?.config
+        ? drive({
+            config: deps.agents.config,
+            drive: new Drive({
+              config: () => deps.agents!.config.raw(),
+              protect: () => ownPaths(deps.agents!.config.data, deps.agents!.config.path, deps.agents!.hub.config().profiles.map((p) => p.home)),
+            }),
+            changed: () => deps.events?.overviewChanged(),
+          })
+        : []),
       ...(deps.agents?.xshare ? xshare({ xshare: deps.agents.xshare, store: deps.store }) : []),
       ...(deps.agents?.accounts ? accounts({ accounts: deps.agents.accounts, sharing: deps.agents.sharing, overview: (r) => deps.agents!.overview(r.viewer, r.lang) }) : []),
       // The station as its settings pages show it.

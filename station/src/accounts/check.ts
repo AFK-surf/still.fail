@@ -44,6 +44,12 @@ export function checkConfig(raw: any, _data: string): void {
     if (!isObject(raw.tools)) throw new Error(`invalid type: ${describe(raw.tools)}, expected struct RawTools`);
     if (raw.tools.access !== undefined && !["off", "read", "full"].includes(raw.tools.access)) throw new Error("tools.access: one of off, read, full");
   }
+  // The drive's folders (src/drive/drive.ts).
+  if (raw.drive !== undefined && raw.drive !== null) {
+    if (!isObject(raw.drive)) throw new Error(`invalid type: ${describe(raw.drive)}, expected struct RawDrive`);
+    const roots = raw.drive.roots;
+    if (roots !== undefined && roots !== null && (!Array.isArray(roots) || roots.some((r: unknown) => typeof r !== "string"))) throw new Error("drive.roots: a list of paths");
+  }
   const profiles = raw.profiles ?? [];
   if (!Array.isArray(profiles)) throw new Error(`invalid type: ${describe(profiles)}, expected a sequence`);
   const profileIds: string[] = [];

@@ -457,6 +457,10 @@ export class AccountDb {
     this.#putDoc(K("st", station, kind), value, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind], "INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, kind, json, confirmed], topic);
   }
 
+  dropStationDoc(station: string, kind: string, topic: Topic): void {
+    this.#dropDoc(K("st", station, kind), "DELETE FROM station WHERE address = ? AND kind = ?", [station, kind], topic);
+  }
+
   slackApp(station: string, connect: string): J {
     return this.#doc(K("slack", station, connect), "SELECT json FROM slack_app WHERE station = ? AND connect = ?", [station, connect]);
   }

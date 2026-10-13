@@ -6,6 +6,7 @@ import { t } from "./i18n.ts";
 import type { Topic } from "./protocol.ts";
 import * as brand from "./brand.ts";
 import * as decisions from "./decisions.ts";
+import * as drive from "./drive.ts";
 import * as footprint from "./footprint.ts";
 import * as jobsMod from "./jobs.ts";
 import * as model from "./shapes/model.ts";
@@ -155,6 +156,8 @@ const SHAPED: Record<string, Ty> = {
   profiles: "ProfilesView",
   usage: "UsageView",
   job: "Job",
+  drive: "DriveFolder",
+  drivePlace: { opt: "DrivePlace" },
   jobLog: "JobLogView",
   prefs: "PrefsView",
   changelog: "ChangelogView",
@@ -864,6 +867,8 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
       return host(value);
     case "footprint":
       return footprint.shown(value, c);
+    case "drive":
+      return drive.shown(value, c);
   }
   if (!ticks(topic)) return value;
   const v = value as J;

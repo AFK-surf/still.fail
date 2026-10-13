@@ -80,6 +80,8 @@ export const TOPICS: Record<string, Spec> = {
   stationUsage: { station: S },
   usage: { scope: S, days: ["u32", "skip"] },
   job: { station: S, id: S },
+  drive: { station: S, root: S, path: ["string", "def"] },
+  drivePlace: { station: S, root: S, path: S },
   prefs: {},
   doing: {},
   adbShare: {},
@@ -139,7 +141,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
   return topicKey(a) === topicKey(b);
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "drive"]);
 const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "chatSearch", "archive", "chatJobs", "longJobs", "workspaceMarks", "decisions", "usage", "adminList", "adminItem", "adminOverview"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.

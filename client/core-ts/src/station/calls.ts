@@ -7,6 +7,7 @@ import type { Call } from "../core/calls.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { base64 } from "../util.ts";
+import { folderOf } from "../ops.ts";
 import * as looks from "../looks.ts";
 import { machineMeta } from "../views/models.ts";
 import { StationAddr } from "./addr.ts";
@@ -121,6 +122,32 @@ export function install(): void {
         return poster;
       }),
     );
+  };
+  handlers.driveRead = (inner, call, _p, _a, ctx) => {
+    const c = call as Extract<Call, { kind: "driveRead" }>;
+    return Effect.flatMap(parse(c.station), (addr) =>
+      Effect.map(inner.stations.requests.driveRead(addr, c.root, c.path, c.offset, c.length, ctx), (got) => ({ type: got.type, total: got.total, mtime: got.mtime, bytes: base64(got.bytes) })),
+    );
+  };
+  handlers.driveUploadPart = (inner, call, _p, _a, ctx) => {
+    const c = call as Extract<Call, { kind: "driveUploadPart" }>;
+    return Effect.flatMap(parse(c.station), (addr) =>
+      Effect.tap(inner.stations.requests.driveUploadPart(addr, c, c.bytes, ctx), (got) =>
+        // Whole: the folder it went into, as it is now, before the call answers.
+        got.entry !== null ? inner.stations.afterWrite(c.station, { kind: "drive", root: c.root, paths: [folderOf(c.path)] }, got) : Effect.void,
+      ),
+    );
+  };
+  handlers.driveRefresh = (inner, call) => {
+    const c = call as Extract<Call, { kind: "driveRefresh" }>;
+    return Effect.andThen(parse(c.station), Effect.as(inner.stations.driveRefresh(c.station, c.root, c.path), null));
+  };
+  handlers.drivePlace = (inner, call) => {
+    const c = call as Extract<Call, { kind: "drivePlace" }>;
+    return Effect.sync(() => {
+      inner.data.set({ topic: "drivePlace", station: c.station, root: c.root, path: c.path }, { at: c.at, of: c.of, changed: inner.host.nowMs() }, false);
+      return null;
+    });
   };
   handlers.cacheUsage = (inner) => Effect.sync(() => ({ chats: inner.data.cacheUsage() }));
   handlers.cacheClear = (inner, call) => {

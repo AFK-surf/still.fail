@@ -20,7 +20,9 @@ export type Effect =
   | { kind: "footprint" }
   | { kind: "slack" }
   | { kind: "job" }
-  | { kind: "identity" };
+  | { kind: "identity" }
+  /// Folders of the station's drive under `root` (paths relative to it): read again where held or shown.
+  | { kind: "drive"; root: string; paths: string[] };
 
 /// The request an operation makes.
 export type Request = {
@@ -124,6 +126,11 @@ export const PARAMS: Record<string, string> = {
   "software.updateAll": "",
   "software.check": "",
   "software.channel": "channel?:string",
+  "drive.setRoots": "roots:strings",
+  "drive.folders": "path?:string",
+  "drive.mkdir": "root:string path:string",
+  "drive.rename": "root:string from:string to:string",
+  "drive.remove": "root:string path:string",
   "software.auto": "on?:boolean",
   "workspace.create": "name?:string invite_code?:string",
   "workspace.rename": "workspace:string name?:string",
@@ -213,6 +220,11 @@ const NONE: Effect = { kind: "none" };
 const OVERVIEW: Effect = { kind: "overview" };
 const SLACK: Effect = { kind: "slack" };
 const FOOTPRINT: Effect = { kind: "footprint" };
+/// The folders `paths` (under `root`) are in.
+const drive = (root: string, paths: string[]): Effect => ({ kind: "drive", root, paths: paths.map(folderOf) });
+
+/// The folder a path of the drive is in (`a/b/c` → `a/b`; the root's own entries → ``).
+export const folderOf = (path: string) => path.split("/").filter((p) => p !== "" && p !== ".").slice(0, -1).join("/");
 
 function stationOp(name: string, params: unknown): Request | null {
   const p = new P(params);
@@ -404,6 +416,18 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => "/updates/channel", p.pick(["channel"]), OVERVIEW);
     case "software.auto":
       return op("POST", () => "/updates/auto", { on: p.bool("on") }, OVERVIEW);
+    // The station's drive (docs/drive.md): the folders it lends its members, named by the workspace's owners and admins
+    // (their folders to pick from: `drive.folders`), and changes of what is in them.
+    case "drive.setRoots":
+      return op("PUT", () => "/drive/roots", p.pick(["roots"]), OVERVIEW);
+    case "drive.folders":
+      return op("GET", () => `/drive/folders?path=${encode(p.word("path") ?? "")}`, null, NONE);
+    case "drive.mkdir":
+      return op("POST", () => "/drive/mkdir", p.pick(["root", "path"]), drive(p.str("root"), [p.str("path")]));
+    case "drive.rename":
+      return op("POST", () => "/drive/rename", p.pick(["root", "from", "to"]), drive(p.str("root"), [p.str("from"), p.str("to")]));
+    case "drive.remove":
+      return op("POST", () => "/drive/remove", p.pick(["root", "path"]), drive(p.str("root"), [p.str("path")]));
     default:
       return null;
   }

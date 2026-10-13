@@ -321,5 +321,19 @@
   "station.usage.priceNote": "USD per 1M tokens · each kind of token × its price, added up; Claude fast ×2. GPT is estimated at standard short-context prices, recording only input, cache reads and output. GPT prices checked on 2026-10-02; Claude uses the 2026-09 prices",
   "station.share.borrowedEdit": "This profile is shared by another station; change it on the station it is on",
   "station.share.hostOffline": "{host}, the station signed in to it, is not answering; it can't be used now",
-  "station.share.managersOnly": "Only workspace admins can share"
+  "station.share.managersOnly": "Only workspace admins can share",
+  "station.core.driveOldStation": "This station is too old to have files; update it first",
+  "station.drive.invalid_request": "Invalid request",
+  "station.drive.not_a_root": "That folder isn't one this station shares",
+  "station.drive.not_found": "No such file or folder",
+  "station.drive.path_escape": "A path can't lead out of a shared folder",
+  "station.drive.protected": "The station's own data can't be opened",
+  "station.drive.permission": "The station isn't allowed to do that",
+  "station.drive.manage": "Only the workspace's owners and admins choose the shared folders",
+  "station.drive.is_a_directory": "That is a folder",
+  "station.drive.not_a_directory": "That isn't a folder",
+  "station.drive.exists": "There's already one with that name",
+  "station.drive.upload_lost": "The upload was interrupted and has to start over",
+  "station.drive.too_large": "The station's disk is full",
+  "station.drive.io": "Couldn't read or write that"
 }

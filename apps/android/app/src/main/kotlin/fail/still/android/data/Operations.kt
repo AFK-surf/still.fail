@@ -6,7 +6,7 @@ import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
 /** A field is absent until assigned; assigning null sends JSON null (reset to default). */
-val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "file.open", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state")
+val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "drive.folders", "file.open", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state")
 
 open class OperationFields {
     internal val fields = mutableMapOf<String, JsonElement>()
@@ -486,6 +486,37 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
     suspend fun softwareChannel(fill: SoftwareChannelFields.() -> Unit = {}): JsonElement {
         val values = SoftwareChannelFields().apply(fill).fields
         return call("software.channel", JsonObject(values))
+    }
+    suspend fun driveSetRoots(roots: List<String>): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["roots"] = JsonArray(roots.map(::JsonPrimitive))
+        return call("drive.setRoots", JsonObject(values))
+    }
+    class DriveFoldersFields : OperationFields() {
+        var path: String? by field<String>("path") { JsonPrimitive(it) }
+    }
+    suspend fun driveFolders(fill: DriveFoldersFields.() -> Unit = {}): JsonElement {
+        val values = DriveFoldersFields().apply(fill).fields
+        return call("drive.folders", JsonObject(values))
+    }
+    suspend fun driveMkdir(root: String, path: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["root"] = JsonPrimitive(root)
+        values["path"] = JsonPrimitive(path)
+        return call("drive.mkdir", JsonObject(values))
+    }
+    suspend fun driveRename(root: String, from: String, to: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["root"] = JsonPrimitive(root)
+        values["from"] = JsonPrimitive(from)
+        values["to"] = JsonPrimitive(to)
+        return call("drive.rename", JsonObject(values))
+    }
+    suspend fun driveRemove(root: String, path: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["root"] = JsonPrimitive(root)
+        values["path"] = JsonPrimitive(path)
+        return call("drive.remove", JsonObject(values))
     }
     class SoftwareAutoFields : OperationFields() {
         var on: Boolean? by field<Boolean>("on") { JsonPrimitive(it) }

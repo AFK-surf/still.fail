@@ -337,6 +337,38 @@ export class StationsSync {
   }
 
   /// A page shows the station's usage: read, unless what is held is as the station has it.
+  /// A folder of the station's drive shown: read again, ahead of what is kept current around it.
+  driveShown(address: string, root: string, path: string): void {
+    if (this.#links.has(address)) this.#enqueue(address, `drive/${root}/${path}`, Priority.shown, this.#drive(address, root, path));
+  }
+
+  /// A folder of the drive read: held as the station has it now. Refused (gone, out of its root, not a root any more):
+  /// said so even where it was held before, which stays to be seen meanwhile.
+  #drive(address: string, root: string, path: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const topic: Topic = { topic: "drive", station: address, root, path };
+      const key = topicKey(topic);
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", `/drive/list?root=${encode(root)}&path=${encode(path)}`, null, { quiet: true, ctx }));
+      if (answer._tag === "Success") {
+        const had = link.errors.delete(key);
+        this.#core.data.set(topic, answer.success);
+        if (had) this.onChange(address, "errors", key);
+      } else if (answer.failure.status !== undefined && answer.failure.status >= 400 && answer.failure.status < 500) {
+        // Not there now: what was held of it is let go, for the refusal to be what is shown.
+        link.errors.set(key, answer.failure);
+        this.#core.data.forgetTopic(topic);
+        this.onChange(address, "errors", key);
+      }
+    });
+  }
+
+  /// A folder read again for a person who asked (`drive.refresh`), answering once it is.
+  driveRefresh(address: string, root: string, path: string): Effect.Effect<void, CoreError> {
+    return this.ask(address, `drive/${root}/${path}`, this.#drive(address, root, path));
+  }
+
   usageShown(address: string): void {
     const link = this.#links.get(address);
     if (link && !link.usageCurrent) this.#enqueue(address, "usage", Priority.shown, this.#usage(address));
@@ -853,6 +885,13 @@ export class StationsSync {
         case "identity":
           read("overview", { topic: "overview", station: address }, "/overview");
           rows();
+          break;
+        // The folders a change of the drive was in: read again where they are held or shown.
+        case "drive":
+          for (const path of new Set(effect.paths)) {
+            const topic = { topic: "drive", station: address, root: effect.root, path };
+            if (this.#core.store.inUse(topic) || this.#core.data.shared(topic) !== undefined) reads.push([`drive/${effect.root}/${path}`, this.#drive(address, effect.root, path)]);
+          }
           break;
       }
       // Profile and connect edits answer the overview as it is now.

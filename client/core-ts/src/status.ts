@@ -277,6 +277,8 @@ export function stationWhat(method: string, path: string): string {
   if (get && parts.length === 1 && a === "overview") return said("core-logic.status.what.overview");
   if (a === "preview") return said("core-logic.status.what.preview");
   if (!get && parts.length === 1 && a === "uploads") return said("core-logic.status.what.upload");
+  if (a === "drive" && b === "upload") return said("core-logic.status.what.upload");
+  if (get && a === "drive" && (b === "read" || b === "list")) return said("core-logic.status.what.files");
   void b;
   return get ? said("core-logic.status.what.read") : said("core-logic.status.what.write");
 }

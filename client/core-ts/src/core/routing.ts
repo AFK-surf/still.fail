@@ -84,6 +84,8 @@ export class Router implements Source {
         return { ok: core.workspaces.ofStation(topic.station as string).part("previewLoad", () => new Loads()).value(topic) };
       case "prefs":
         return { ok: {} };
+      case "drivePlace":
+        return { ok: null };
     }
     return this.after(topic, this.owners.find((o) => o.owns(topic))?.compute?.(topic));
   }

@@ -2137,6 +2137,69 @@ data class DraftView (
 	val files: List<Attachment>
 )
 
+/// What opens an entry of the drive.
+typealias DriveKind = String
+
+@Serializable
+data class DriveEntry (
+	val name: String,
+	val dir: Boolean,
+	val size: Long,
+	/// When it last changed (ms).
+	val mtime: Long,
+	/// A file's media type, by its name (empty for a folder).
+	val type: String,
+	val kind: DriveKind,
+	/// Its size in words (empty for a folder).
+	val sizeText: String,
+	/// Its time in words: 14:05 today, 9/27 this year, 2024/9/27 before.
+	val timeText: String
+)
+
+/// A folder of a station's drive (the `drive` topic).
+@Serializable
+data class DriveFolder (
+	/// Relative to its root, `/` between its components; empty for the root itself.
+	val path: String,
+	/// Folders first, then files, each by name (numbers by their value).
+	val entries: List<DriveEntry>,
+	/// More than a listing gives (50 000).
+	val truncated: Boolean? = null,
+	val folders: Long,
+	val files: Long,
+	/// 3 个文件夹 · 12 个文件.
+	val countText: String
+)
+
+/// Where a file of a drive was left on this device (the `drivePlace` topic; none before it was opened).
+@Serializable
+data class DrivePlace (
+	/// Where: a text's offset (UTF-16 units), a video's or a song's time (ms).
+	val at: Double,
+	/// Of how much, when told (its length, its duration): for a fraction read.
+	val of: Double? = null,
+	val changed: Long
+)
+
+/// Whether a folder of the drive can be browsed now.
+typealias DriveRootState = String
+
+@Serializable
+data class DriveRoot (
+	/// Where it is on the station; what the drive's calls name it by.
+	val path: String,
+	val name: String,
+	/// Whether it can be browsed now (`unreadable`: there, but the station may not list it, as macOS keeps some folders from a
+	/// station it did not ask).
+	val state: DriveRootState
+)
+
+/// A station's drive (docs/drive.md): the folders its workspace's owners and admins named.
+@Serializable
+data class DriveRoots (
+	val roots: List<DriveRoot>
+)
+
 @Serializable
 data class FlowChoice (
 	val id: String,
@@ -2826,7 +2889,9 @@ data class Overview (
 	/// Its agents' processes, in a line.
 	val processesText: String,
 	/// How much of the disk it takes (none from a station older than the footprint page, which then is not offered).
-	val footprint: FootprintBrief? = null
+	val footprint: FootprintBrief? = null,
+	/// The folders it lends its members (none from a station older than the drive, which then is not offered).
+	val drive: DriveRoots? = null
 )
 
 /// This device's connection to a station, in words (its card's network line): how it goes, its round trip now and

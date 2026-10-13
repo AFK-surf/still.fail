@@ -25,7 +25,7 @@ const AROUND = 10;
 export const NET_EVERY_MS = 2_000;
 const NET_KEPT = 30;
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -147,6 +147,9 @@ export class StationTopics implements Owner {
     // What the agents spent, and the archive: read as a page shows them, not with each change while none does.
     if (topic.topic === "stationUsage") this.#sync.usageShown(station);
     if (topic.topic === "archivedRows") this.#sync.archivedShown(station);
+    // A folder of the drive: read again each time it is shown (what is held is shown meanwhile), the station saying
+    // nothing of what changes on its disk.
+    if (topic.topic === "drive") this.#sync.driveShown(station, topic.root as string, topic.path as string);
   }
 
   stop(topic: Topic): void {

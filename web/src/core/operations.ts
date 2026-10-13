@@ -73,6 +73,11 @@ export interface OperationParams {
   "software.updateAll": {  };
   "software.check": {  };
   "software.channel": { channel?: string | null | undefined };
+  "drive.setRoots": { roots: string[] };
+  "drive.folders": { path?: string | null | undefined };
+  "drive.mkdir": { root: string; path: string };
+  "drive.rename": { root: string; from: string; to: string };
+  "drive.remove": { root: string; path: string };
   "software.auto": { on?: boolean | null | undefined };
   "workspace.create": { name?: string | null | undefined; invite_code?: string | null | undefined };
   "workspace.rename": { workspace: string; name?: string | null | undefined };
@@ -101,7 +106,7 @@ export interface OperationParams {
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
-export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "file.open", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
+export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "drive.folders", "file.open", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
 
 type Call = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -180,6 +185,11 @@ export function bindStationOperations(call: Call) {
     softwareUpdateAll: <T = unknown>(params: OperationParams["software.updateAll"] = {}) => call("software.updateAll", params) as Promise<T>,
     softwareCheck: <T = unknown>(params: OperationParams["software.check"] = {}) => call("software.check", params) as Promise<T>,
     softwareChannel: <T = unknown>(params: OperationParams["software.channel"] = {}) => call("software.channel", params) as Promise<T>,
+    driveSetRoots: <T = unknown>(params: OperationParams["drive.setRoots"]) => call("drive.setRoots", params) as Promise<T>,
+    driveFolders: <T = unknown>(params: OperationParams["drive.folders"] = {}) => call("drive.folders", params) as Promise<T>,
+    driveMkdir: <T = unknown>(params: OperationParams["drive.mkdir"]) => call("drive.mkdir", params) as Promise<T>,
+    driveRename: <T = unknown>(params: OperationParams["drive.rename"]) => call("drive.rename", params) as Promise<T>,
+    driveRemove: <T = unknown>(params: OperationParams["drive.remove"]) => call("drive.remove", params) as Promise<T>,
     softwareAuto: <T = unknown>(params: OperationParams["software.auto"] = {}) => call("software.auto", params) as Promise<T>,
   };
 }

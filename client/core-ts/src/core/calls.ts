@@ -59,6 +59,10 @@ export type Call =
   | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean }
   | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number }
   | { kind: "stationPoster"; station: string; key: string; name: string }
+  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number }
+  | { kind: "driveUploadPart"; station: string; root: string; path: string; id: string; offset: number; total: number; replace: boolean; bytes: Uint8Array }
+  | { kind: "driveRefresh"; station: string; root: string; path: string }
+  | { kind: "drivePlace"; station: string; root: string; path: string; at: number; of: number | null }
   | { kind: "cacheUsage" }
   | { kind: "cacheClear"; station: string; thread: number }
   | { kind: "stationPreview"; station: string; port: number; method: string; path: string; headers: [string, string][]; body: Uint8Array; stream: boolean }
@@ -565,6 +569,52 @@ export function parseCall(name: string, params: unknown): Call {
         ["length", "u64", "req"],
       ]);
       return { kind: "stationFilePart", station: p.station as string, key: p.key as string, name: p.name as string, offset: p.offset as number, length: p.length as number };
+    }
+    // The station's drive (docs/drive.md): a part of a file read, a part of one written, a folder read again.
+    case "drive.read": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["root", S, "req"],
+        ["path", S, "req"],
+        ["offset", "u64", "req"],
+        ["length", "u64", "req"],
+      ]);
+      return { kind: "driveRead", station: p.station as string, root: p.root as string, path: p.path as string, offset: p.offset as number, length: p.length as number };
+    }
+    case "drive.upload.part": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["root", S, "req"],
+        ["path", S, "req"],
+        ["id", S, "req"],
+        ["offset", "u64", "req"],
+        ["total", "u64", "req"],
+        ["replace", "bool", "default"],
+        ["bytes", S, "req"],
+      ]);
+      return {
+        kind: "driveUploadPart", station: p.station as string, root: p.root as string, path: p.path as string, id: p.id as string, offset: p.offset as number, total: p.total as number,
+        replace: p.replace as boolean, bytes: b64(p.bytes as string, "core-misc.call.base64.file"),
+      };
+    }
+    // Where a file of a drive was left (a book's place, a video's time): kept on this device, its `drivePlace`.
+    case "drive.place": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["root", S, "req"],
+        ["path", S, "req"],
+        ["at", "f64", "req"],
+        ["of", "f64", "opt"],
+      ]);
+      return { kind: "drivePlace", station: p.station as string, root: p.root as string, path: p.path as string, at: p.at as number, of: (p.of as number | null) ?? null };
+    }
+    case "drive.refresh": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["root", S, "req"],
+        ["path", S, "default"],
+      ]);
+      return { kind: "driveRefresh", station: p.station as string, root: p.root as string, path: p.path as string };
     }
     case "station.poster": {
       const p = read(params, [

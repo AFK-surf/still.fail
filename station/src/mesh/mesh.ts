@@ -5,7 +5,7 @@ import { Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { log } from "../ops/log.ts";
 import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
-import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
+import { ownPaths } from "../ops/own.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { Agents } from "../sessions/agents.ts";
 import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
@@ -62,13 +62,7 @@ export const MeshLive = Layer.effectDiscard(
           new DeviceTools({
             // Never reachable: the station's data (its key, cloud.json, the profiles' homes), its config, the machine's
             // runtime logins.
-            protect: () => [
-              cloud.state.data,
-              agents.config.path,
-              ...agents.hub.config().profiles.map((p) => p.home),
-              claudeCredentialsFile(process.env),
-              codexAuthFile(process.env),
-            ],
+            protect: () => ownPaths(cloud.state.data, agents.config.path, agents.hub.config().profiles.map((p) => p.home)),
             sessions: adminSessions(
               () => admin,
               () => store,

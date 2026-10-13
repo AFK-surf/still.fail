@@ -11,6 +11,7 @@ import type { Lang } from "../ops/i18n.ts";
 import type { Hub } from "../sessions/hub.ts";
 import type { Store } from "../store/store.ts";
 import type { Updates } from "../updates/updates.ts";
+import { rootView, rootsOf } from "../drive/drive.ts";
 
 
 /// What the Slack side adds (src/slack): a connect's connection, the viewer's Slack workspaces and apps.
@@ -114,5 +115,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     sharing: d.accounts !== undefined,
     updates: d.updates?.get(lang) ?? [],
     slackApps: d.slack?.apps(viewer) ?? [],
+    // The folders its members browse (drive/drive.ts), each with whether it can be browsed now.
+    drive: { roots: rootsOf(raw).map(rootView) },
   };
 }

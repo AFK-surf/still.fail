@@ -309,6 +309,41 @@ export class Requests {
     });
   }
 
+  /// GET /drive/read?root=&path=&offset=&length=: a part of a file of the station's drive, its whole size and time.
+  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
+    const asked = `/drive/read?root=${encode(root)}&path=${encode(path)}&offset=${offset}&length=${length}`;
+    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, false, ctx), (r) => {
+      if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.driveOldStation"), 404));
+      if (r.status !== 200) {
+        const data = parseJson(r.body);
+        return Effect.fail(httpError(r.status, data === undefined ? {} : data));
+      }
+      const header = (name: string) => r.headers.find(([k]) => k.toLowerCase() === name)?.[1];
+      const total = Number(header("stillfail-total"));
+      const mtime = Number(header("stillfail-mtime"));
+      return Effect.succeed({ type: header("content-type") ?? "", total: Number.isSafeInteger(total) ? total : offset + r.body.length, mtime: Number.isSafeInteger(mtime) ? mtime : null, bytes: r.body });
+    });
+  }
+
+  /// PUT /drive/upload?root=&path=&id=&offset=&total=(&replace=1) with a part's bytes: `{ have, entry }`, how much of
+  /// the file the station has and, once it is whole and in its place, its entry. A part that left a gap is refused
+  /// with how much the station has (`have` on the error's answer: the next part starts there).
+  driveUploadPart(station: StationAddr, q: { root: string; path: string; id: string; offset: number; total: number; replace: boolean }, bytes: Uint8Array, ctx: SpanContext | null): Effect.Effect<{ have: number; entry: unknown | null }, CoreError> {
+    const asked = `/drive/upload?root=${encode(q.root)}&path=${encode(q.path)}&id=${encode(q.id)}&offset=${q.offset}&total=${q.total}${q.replace ? "&replace=1" : ""}`;
+    return Effect.flatMap(this.exchange(station, "PUT", asked, [["content-type", "application/octet-stream"]], bytes, false, ctx), (r) => {
+      const parsed = parseJson(r.body);
+      const data = parsed === undefined ? {} : parsed;
+      if (r.status === 409 && get(data, "code") === "upload_lost") {
+        const have = get(data, "have");
+        return Effect.succeed({ have: typeof have === "number" ? have : 0, entry: null });
+      }
+      if (r.status < 200 || r.status >= 300) return Effect.fail(httpError(r.status, data));
+      const have = get(data, "have");
+      const entry = get(data, "entry");
+      return Effect.succeed({ have: typeof have === "number" ? have : q.offset + bytes.length, entry: entry === undefined ? null : entry });
+    });
+  }
+
   /// GET /sessions/:key/poster?name=: a video's poster (a JPEG), or null when the station has none (it cannot make one,
   /// or is from before posters).
   poster(station: StationAddr, key: string, name: string, ctx: SpanContext | null): Effect.Effect<Uint8Array | null, CoreError> {

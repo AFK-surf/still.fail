@@ -315,5 +315,19 @@
   "station.usage.priceNote": "美元 / 100 万 token · 各类 token × 单价后相加；Claude fast ×2。GPT 按标准短上下文估算，仅记录输入、缓存读取和输出。GPT 价目核对于 2026-10-02，Claude 沿用 2026-09 价目",
   "station.share.borrowedEdit": "这个 Profile 是别的 station 分享来的，要在它所在的 station 上改",
   "station.share.hostOffline": "登录它的 station {host} 没有响应，现在用不了",
-  "station.share.managersOnly": "只有 workspace 管理员能分享"
+  "station.share.managersOnly": "只有 workspace 管理员能分享",
+  "station.core.driveOldStation": "这台 station 版本太旧，还没有文件功能，先更新它",
+  "station.drive.invalid_request": "请求不对",
+  "station.drive.not_a_root": "这个文件夹不在这台 station 开放的目录里",
+  "station.drive.not_found": "没有这个文件或文件夹",
+  "station.drive.path_escape": "路径不能跑出开放的目录",
+  "station.drive.protected": "station 自己的数据不能打开",
+  "station.drive.permission": "station 没有权限做这件事",
+  "station.drive.manage": "只有 workspace 的所有者和管理员能设置开放的目录",
+  "station.drive.is_a_directory": "这是一个文件夹",
+  "station.drive.not_a_directory": "这不是文件夹",
+  "station.drive.exists": "已经有同名的了",
+  "station.drive.upload_lost": "上传断了，要从头传",
+  "station.drive.too_large": "station 的磁盘满了",
+  "station.drive.io": "读写出错了"
 }

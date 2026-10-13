@@ -404,5 +404,14 @@
   "core-logic.status.what.threads": "读取对话列表",
   "core-logic.status.what.upload": "上传文件",
   "core-logic.status.what.workspace": "读取 workspace",
-  "core-logic.status.what.write": "提交修改"
+  "core-logic.status.what.write": "提交修改",
+  "core-logic.drive.folders": {
+    "one": "{n} 个文件夹",
+    "other": "{n} 个文件夹"
+  },
+  "core-logic.drive.files": {
+    "one": "{n} 个文件",
+    "other": "{n} 个文件"
+  },
+  "core-logic.drive.empty": "空文件夹"
 }
