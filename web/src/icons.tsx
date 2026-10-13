@@ -410,7 +410,11 @@ export function Users(props: IconProps) {
 }
 
 export function Wait(props: IconProps) {
-  return <Svg {...props}><path d="M18 7.5A7.5 7.5 0 1 0 18 16.5" /><path d="M11.5 12h.01 M15.5 12h.01 M19.5 12h.01" /></Svg>;
+  return <Svg {...props}><path d="M18 7.5A7.5 7.5 0 1 0 18 16.5" /><path d="M11.5 12h.01" /><path d="M15.5 12h.01" /><path d="M19.5 12h.01" /></Svg>;
+}
+
+export function Watch(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none" /><path d="M7.8 7.8A6 6 0 0 0 7.8 16.2 M16.2 7.8A6 6 0 0 1 16.2 16.2" /><path d="M4.6 4.6A10.5 10.5 0 0 0 4.6 19.4 M19.4 4.6A10.5 10.5 0 0 1 19.4 19.4" /></Svg>;
 }
 
 export function Web(props: IconProps) {
@@ -523,6 +527,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "user": User,
   "users": Users,
   "wait": Wait,
+  "watch": Watch,
   "web": Web,
   "zou": Zou,
 };
