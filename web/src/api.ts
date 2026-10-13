@@ -468,6 +468,10 @@ export type Api = ReturnType<typeof stationApi>;
  * where the reader left it; `read` records how far the viewer has read.
  * The station is the one in context, or `address` (a page outside its StationContext, the phone's ChatHost).
  */
+/** What `chat.find` answers: the words looked for, the messages that have them (how many times each), and whether
+ *  all the chat was looked in (`held` of its `of` entries are on the device). */
+export interface ChatFound { words: string[]; hits: { seq: number; count: number }[]; held: number; of: number; whole: boolean }
+
 export function useChatSend(address?: string) {
   const call = useCall();
   const inContext = useStation().address;
@@ -486,6 +490,11 @@ export function useChatSend(address?: string) {
     /** Where the reader leaves the chat: the message at the top of what shows (`seq`) and how far below the list's top
      *  its top is (`offset`, px), or none at its end. */
     place: (thread: number, seq: number | null, offset: number | null = null) => call("chat.place", { station, thread, seq, offset }),
+    /** The chat's window about one of its messages (`chat.around`): a page on either side, read where not held. */
+    around: (thread: number, seq: number) => call("chat.around", { station, thread, seq }),
+    /** The chat's messages that have every word of `query` (`chat.find`), oldest first; `bring`: what is not on the
+     *  device is read first. */
+    find: (thread: number, query: string, bring = false) => call("chat.find", { station, thread, query, bring }) as Promise<ChatFound>,
     /** Only for a core from before `client.focus` (an older desktop app's), which does not read chats itself. */
     read: (thread: number, seq: number) => call("chat.read", { station, thread, seq }),
   }), [call, station]);

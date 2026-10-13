@@ -713,7 +713,7 @@ function frontState(): MenuState {
 /** The page's actions in the menu bar; the others (Space to the composer, Escape) are keys in a chat, not commands. */
 const MENU_ACTIONS = [
   "chat.new", "chat.switch", "settings", "shortcuts", "sidebar.toggle", "nav.back", "nav.forward", "chat.prev", "chat.next",
-  "chat.latest", "chat.history", "chat.jobs", "composer.file", "chat.stop", "chat.rename", "chat.archive",
+  "chat.latest", "chat.find", "chat.history", "chat.jobs", "composer.file", "chat.stop", "chat.rename", "chat.archive",
 ] as const;
 
 /** A page's binding (Mod+Shift+H) as the menu shows it; none for a key a text field types (one with no ⌘, ⌥ or ⌃). */
@@ -823,6 +823,7 @@ function setMenu(): void {
         item("chat.prev"),
         item("chat.next"),
         item("chat.latest"),
+        item("chat.find"),
       ],
     },
     {

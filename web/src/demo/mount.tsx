@@ -124,7 +124,8 @@ function answer(name: string, params: Record<string, unknown>): unknown {
   // object without text, quotes and files).
   if (name === "draft.get" || name === "draft.put" || (name.startsWith("composer.") && name !== "composer.add")) return null;
   // Its chats are whole, never a window short of their end: nothing to move along, nowhere to keep a place.
-  if (name === "chat.newer" || name === "chat.latest" || name === "chat.place") return name === "chat.newer" ? { more: false } : null;
+  if (name === "chat.newer" || name === "chat.latest" || name === "chat.place" || name === "chat.around") return name === "chat.newer" ? { more: false } : null;
+  if (name === "chat.find") return { words: [], hits: [], held: 0, of: 0, whole: true };
   const chat = chats.find((c) => c.thread === params.thread || c.key === params.session);
   if (name === "chat.send" && chat && typeof params.text === "string" && params.text.trim()) {
     const text = params.text;

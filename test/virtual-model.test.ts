@@ -441,3 +441,40 @@ test("virtual_sizes_are_kept_for_the_lists_lately_shown", () => {
   for (let i = 0; i < 20; i++) sizesOf(`more ${i}`);
   assert.notEqual(sizesOf("a"), a);
 });
+
+test("virtual_a_reader_looking_for_something_is_not_moved_by_what_comes_at_the_end", () => {
+  let items = list(0, 50);
+  const v = made(new Virtual({ gap: GAP, overscan: 300 }));
+  v.setItems(items);
+  v.measured(v.layout().rows.map((r) => [r.key, 180] as const));
+  const at = v.layout().scrollTop;
+  const kind = (): string => v.mode.kind;
+  assert.equal(kind(), "follow");
+  // Looking (a find bar open): at the end, yet what comes there is not followed.
+  v.reads(true);
+  assert.equal(kind(), "read");
+  items = [...items, ...list(50, 53)];
+  v.setItems(items);
+  assert.equal(v.layout().scrollTop, at);
+  // Nor is it by scrolling to the end, or going to its last item.
+  v.measured(v.layout().rows.map((r) => [r.key, 180] as const));
+  let l = v.layout();
+  v.scrolled(l.total - 600);
+  v.rested();
+  assert.equal(kind(), "read");
+  items = [...items, ...list(53, 54)];
+  v.setItems(items);
+  assert.equal(v.layout().scrollTop, l.total - 600);
+  // Done looking at the end, it is followed again; short of it, the place is kept.
+  v.measured(v.layout().rows.map((r) => [r.key, 180] as const));
+  l = v.layout();
+  v.scrolled(l.total - 600);
+  v.rested();
+  v.reads(false);
+  assert.equal(kind(), "follow");
+  v.reads(true);
+  v.scrolled(1000);
+  v.rested();
+  v.reads(false);
+  assert.equal(kind(), "read");
+});

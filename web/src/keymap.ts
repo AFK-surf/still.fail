@@ -8,7 +8,7 @@ import { t } from "./i18n.ts";
 
 export type Action =
   | "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings"
-  | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.archive" | "chat.rename"
+  | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.find" | "chat.archive" | "chat.rename"
   | "panel.close" | "shortcuts";
 
 /**
@@ -47,6 +47,7 @@ export const ACTIONS: Record<Action, Spec> = {
   "chat.history": { group: "chat", keys: ["Mod+Shift+H"], typing: "yes" },
   "chat.jobs": { group: "chat", keys: ["Mod+Shift+J"], typing: "yes" },
   "chat.latest": { group: "chat", keys: ["Mod+Down"], typing: "empty" },
+  "chat.find": { group: "chat", keys: ["Mod+F"], typing: "yes" },
   "chat.archive": { group: "chat", keys: ["Mod+Shift+E"], typing: "yes" },
   "chat.rename": { group: "chat", keys: ["F2"], typing: "yes" },
   "panel.close": { group: "chat", keys: ["Escape"], typing: "yes" },

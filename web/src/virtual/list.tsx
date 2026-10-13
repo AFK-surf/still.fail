@@ -31,6 +31,8 @@ export type VirtualList = {
   toEnd(atOnce?: boolean): void;
   /** To an item (model.ts `goto`); false while it is not among the items. */
   goto(key: string, align?: Align, pad?: number): boolean;
+  /** The reader looks for something in it (model.ts `reads`): what comes at its end does not move it meanwhile. */
+  reads(on: boolean): void;
   /** How far the pane was moved at once to keep its place (not by the reader, not gliding), in all: what stands
    *  below is where it was on screen, though elsewhere in the pane's content. */
   kept(): number;
@@ -353,6 +355,11 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       const there = model.goto(key, align, pad);
       if (el) self.sync(el);
       return there;
+    },
+    reads: (on) => {
+      model.reads(on);
+      const el = pane.current;
+      if (el) self.sync(el);
     },
     kept: () => made.kept,
   }), [model, layout, made, self, pane, gap]);

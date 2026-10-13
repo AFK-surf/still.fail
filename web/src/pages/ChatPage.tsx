@@ -396,7 +396,8 @@ function ChatScreen({ session: chatSession }: { session: string }) {
             <AgentButton key={a.session.key} station={station.address} chat={chatKey} session={chatSession} agent={a.session.key} marked={agents.length > 1 && shown === a.session.key} first={i === 0} />
           ))}
         </div>
-        <div className={css.pageBarActions}>
+        {/* The chat's find bar takes this place while it is open (ChatFind.tsx): it covers none of the chat. */}
+        <div className={css.pageBarActions} data-find-slot="">
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
           {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
           <JobsPanel station={station.address} session={chatSession} chat={chatKey} />

@@ -64,6 +64,8 @@ export class Virtual {
   private cover = 0;
   private top = 0;
   private anchor: Anchor = { kind: "follow", to: null };
+  /** Being at its end is not following it (`reads`). */
+  private fixed = false;
   /** While following: the item at the pane's top and how far below it its top is, and the room held after the last
    *  item so that it stays there as what is below it gets shorter. */
   private eye: { key: string; offset: number } | null = null;
@@ -168,7 +170,7 @@ export class Virtual {
     // Scrolled up, what was held is let go: it is not held again.
     if (top < this.top) this.release();
     this.top = top;
-    if (!this.short && this.bottom() - top <= 2) this.anchor = { kind: "follow", to: null };
+    if (!this.fixed && !this.short && this.bottom() - top <= 2) this.anchor = { kind: "follow", to: null };
     else this.note();
     this.guard();
     this.eye = this.anchor.kind === "follow" ? this.see() : null;
@@ -201,6 +203,14 @@ export class Virtual {
     if (this.anchor.kind !== "follow") return;
     this.release();
     this.note();
+  }
+  /** While on, the pane does not take up following its end by being there (the reader is looking for something in
+   *  the list: what comes meanwhile does not move it); `follow` still does. Off again at its end, it follows. */
+  reads(on: boolean): void {
+    if (this.fixed === on) return;
+    this.fixed = on;
+    if (on) this.stay();
+    else if (this.anchor.kind === "read" && !this.short && this.bottom() - this.top <= 2) this.follow();
   }
   /** To the end, followed from now on; with `to`, a message just come, to its top when it is taller than the pane. */
   follow(to: string | null = null): void {
@@ -424,7 +434,7 @@ export class Virtual {
       if (a.kind === "goto") {
         const i = this.at.get(a.key);
         if (i !== undefined && this.known(i)) {
-          this.anchor = !this.short && this.bottom() - this.top <= 2 ? { kind: "follow", to: null } : { kind: "read", key: a.key, offset: this.topOf(i) - this.top };
+          this.anchor = !this.fixed && !this.short && this.bottom() - this.top <= 2 ? { kind: "follow", to: null } : { kind: "read", key: a.key, offset: this.topOf(i) - this.top };
         }
       }
       // The reader's item gone: their place is where the pane is.

@@ -53,6 +53,8 @@ import { MessageDecision } from "./Decisions.tsx";
 import { AgentHover, ChatAgentKeys, ChatAgents } from "./AgentCard.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
+import { useChatFind } from "./ChatFind.tsx";
+import { placeStrokes, strokeLayer } from "./strokes.ts";
 import { jumped, jumpTo, jumpWords, useJump } from "./jumpTo.ts";
 import { t } from "./i18n.ts";
 
@@ -117,6 +119,9 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
   latest.current = images;
   const [gallery] = useState(() => () => latest.current());
   useShortcut("chat.latest", rows.toEnd);
+  // Its own find, in place of the browser's (ChatFind.tsx).
+  const find = useChatFind(list, rows.virtual, id, rows.messages, composerHeight);
+  useShortcut("chat.find", find.show);
   const askedFile = useAskedFile(list, rows.messages);
   // What waits to be decided here and does not show: a button over the list leads to it.
   const asks = useAsksShown(rows.virtual, chat);
@@ -127,6 +132,7 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
     <section className={sessionCss.chat} aria-label={t("web-main.chat.label")} data-under-composer="" data-avoid-previews="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
       <div className={sessionCss.chatPane}>
+      {find.bar}
       {rows.away && <ToLatest station={station.address} thread={id} waiting={rows.waiting} onClick={rows.toEnd} />}
       {asks.length > 0 && id !== null && <ToAsk station={station.address} thread={id} asks={asks} above={rows.away} />}
       <Gallery.Provider value={gallery}>
@@ -656,33 +662,9 @@ let searchStrokes: { layer: HTMLElement; observer: ResizeObserver } | null = nul
 
 /** The strokes under `ranges`, in a layer over `root` (its box, so they move with it); laid out again as it resizes. */
 function drawStrokes(root: HTMLElement, ranges: Range[]): void {
-  const layer = document.createElement("span");
-  layer.dataset.searchMarks = "";
-  layer.setAttribute("aria-hidden", "true");
-  if (getComputedStyle(root).position === "static") root.style.position = "relative";
-  const svgNs = "http://www.w3.org/2000/svg";
-  const place = () => {
-    const box = root.getBoundingClientRect();
-    const strokes: Element[] = [];
-    for (const range of ranges) {
-      for (const rect of range.getClientRects()) {
-        if (rect.width < 1) continue;
-        const svg = document.createElementNS(svgNs, "svg");
-        svg.setAttribute("viewBox", "0 0 100 9");
-        svg.setAttribute("preserveAspectRatio", "none");
-        Object.assign(svg.style, { left: `${rect.left - box.left - 2}px`, top: `${rect.bottom - box.top - 4}px`, width: `${rect.width + 4}px`, height: "9px" });
-        const path = document.createElementNS(svgNs, "path");
-        path.setAttribute("d", "M1 6 C 25 3, 55 8, 99 4");
-        path.setAttribute("pathLength", "1");
-        path.style.animationDelay = `${strokes.length * 180}ms`;
-        svg.append(path);
-        strokes.push(svg);
-      }
-    }
-    layer.replaceChildren(...strokes);
-  };
+  const layer = strokeLayer(root);
+  const place = () => placeStrokes(layer, root, ranges);
   place();
-  root.append(layer);
   // Laid out again (the pane resized): drawn where the words are now, not drawn in again.
   let first = true;
   const observer = new ResizeObserver(() => {
