@@ -17,7 +17,13 @@ export const sidebar = style({
   WebkitUserSelect: "none", userSelect: "none",
   "@media": {
     [wide]: {
-      selectors: { '[data-sidebar="closed"] &': { overflow: "hidden" } },
+      selectors: {
+        '[data-sidebar="closed"] &': { overflow: "hidden" },
+        // Opening, it is open at once but its column grows (moveState holds the column's width on the shell): cut, or
+        // its top and foot, already at full width, are drawn over the page beside it. Open and at rest it is not cut:
+        // the resize handle stands over its edge.
+        [`${shell}[style*="grid-template-columns"] &`]: { overflow: "hidden" },
+      },
     },
     // On a narrow screen the sidebar is the page's list: it gives way to the page opened from it.
     [narrow]: { selectors: { [`${shell}[data-detail="true"] &`]: { display: "none" } } },
