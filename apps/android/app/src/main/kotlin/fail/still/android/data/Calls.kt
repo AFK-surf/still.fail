@@ -27,6 +27,15 @@ import kotlinx.serialization.json.putJsonArray
 private const val UPLOAD_PART = 4 * 1024 * 1024
 /** The bytes of a file in one `station.file.part`. */
 private const val FILE_PART = 4 * 1024 * 1024
+/** The most of a file of the drive one `drive.read` asks for (the station gives at most 8 MB). */
+const val DRIVE_PART = 4 * 1024 * 1024
+
+/** A part of a file of the drive (`drive.read`): its type, the whole file's size, the bytes. */
+class DriveRead(val type: String, val total: Long, val bytes: ByteArray)
+
+/** The folders in one on the station (`drive.folders`), to pick one to lend: where, its parent (none at the top), the home. */
+@kotlinx.serialization.Serializable
+data class DriveFolders(val path: String, val parent: String? = null, val home: String = "", val folders: List<String> = emptyList())
 
 class StationApi(private val core: StillFailCore, val station: String) {
     private val ops = StationOperations { name, params -> core.call(name, JsonObject(params + ("station" to JsonPrimitive(station)))) }
@@ -403,6 +412,107 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Hands Slack's install code to the station that made the app; answers the workspace it went into. */
     suspend fun slackInstalled(code: String, state: String): String? =
         ops.slackInstalled() { this.code = code; this.state = state }.jsonObject["team"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+
+    // ── the station's drive (docs/drive.md) ──
+
+    /** The folders the station lends its members, the whole list (the workspace's owners and admins). */
+    suspend fun driveSetRoots(roots: List<String>) { ops.driveSetRoots(roots) }
+    /** The folders in `path` on the station (its home when null), to pick one to lend (owners and admins). */
+    suspend fun driveFolders(path: String?): DriveFolders = decode(DriveFolders.serializer(), ops.driveFolders { if (path != null) this.path = path })
+    suspend fun driveMkdir(root: String, path: String) { ops.driveMkdir(root, path) }
+    suspend fun driveRename(root: String, from: String, to: String) { ops.driveRename(root, from, to) }
+    suspend fun driveRemove(root: String, path: String) { ops.driveRemove(root, path) }
+    /** A folder read again, answering once it is (its page's refresh). */
+    suspend fun driveRefresh(root: String, path: String) { core.call("drive.refresh", buildJsonObject { put("station", station); put("root", root); put("path", path) }) }
+    /** Where a file was left on this device (a text's offset, a video's time in ms), of how much when known. */
+    suspend fun drivePlace(root: String, path: String, at: Double, of: Double?) {
+        core.call("drive.place", buildJsonObject { put("station", station); put("root", root); put("path", path); put("at", at); if (of != null) put("of", of) })
+    }
+
+    /** A part of a file of the drive (at most DRIVE_PART), with the file's whole size as the station has it now. */
+    suspend fun driveRead(root: String, path: String, offset: Long, length: Int): DriveRead {
+        val got = core.call("drive.read", buildJsonObject {
+            put("station", station); put("root", root); put("path", path); put("offset", offset); put("length", length.coerceAtMost(DRIVE_PART))
+        }).jsonObject
+        val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.decode(got["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT) }
+        val total = got["total"]?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong() ?: (offset + bytes.size)
+        return DriveRead((got["type"] as? JsonPrimitive)?.content ?: "", total, bytes)
+    }
+
+    /** The first `limit` bytes of a file of the drive (the whole of it when shorter), a part at a time; `onProgress` hears bytes so far and its size. */
+    suspend fun driveBytes(root: String, path: String, limit: Long = Long.MAX_VALUE, onProgress: (Long, Long) -> Unit = { _, _ -> }): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        var at = 0L
+        var total = Long.MAX_VALUE
+        while (at < minOf(total, limit)) {
+            val got = driveRead(root, path, at, minOf(DRIVE_PART.toLong(), minOf(total, limit) - at).toInt())
+            total = got.total
+            if (got.bytes.isEmpty()) break
+            out.write(got.bytes)
+            at += got.bytes.size
+            onProgress(at, total)
+        }
+        return out.toByteArray()
+    }
+
+    /** A file of the drive onto the phone's disk at `into`, a part at a time, never all in memory; what is in `into` already is gone on from. */
+    suspend fun driveToDisk(root: String, path: String, into: java.io.File, onProgress: (Long, Long) -> Unit = { _, _ -> }) {
+        java.io.FileOutputStream(into, true).use { out ->
+            var at = into.length()
+            var total = Long.MAX_VALUE
+            while (at < total) {
+                val got = driveRead(root, path, at, DRIVE_PART)
+                total = got.total
+                if (got.bytes.isEmpty()) break
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { out.write(got.bytes) }
+                at += got.bytes.size
+                onProgress(at, total)
+            }
+        }
+    }
+
+    /**
+     * Puts a file into a folder of the drive (`path`: where it goes, under `root`), a part at a time (`drive.upload.part`,
+     * as [upload] does for a chat), read from `open` as it goes; `onProgress` hears how much of it the station has. A
+     * station that has a file of that name already refuses the first part with `exists`, unless `replace`. Once whole, the
+     * core has read its folder again.
+     */
+    suspend fun driveUpload(root: String, path: String, size: Long, open: () -> java.io.InputStream, replace: Boolean = false, onProgress: (Long) -> Unit = {}) {
+        val id = java.util.UUID.randomUUID().toString().replace("-", "")
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            var input = open()
+            var at = 0L
+            try {
+                var have = 0L
+                var done = false
+                while (!done) {
+                    // The station goes on from what it has: elsewhere than where the file was read to, read again from there.
+                    if (at != have) { input.close(); input = open(); var left = have; while (left > 0) { val n = input.skip(left); if (n <= 0) throw java.io.IOException("short file"); left -= n }; at = have }
+                    val part = ByteArray(minOf(UPLOAD_PART.toLong(), size - have).toInt())
+                    var got = 0
+                    while (got < part.size) { val n = input.read(part, got, part.size - got); if (n < 0) throw java.io.IOException("short file"); got += n }
+                    at += got
+                    val told = core.call("drive.upload.part", buildJsonObject {
+                        put("station", station); put("root", root); put("path", path); put("id", id); put("offset", have); put("total", size)
+                        if (replace) put("replace", true)
+                        put("bytes", Base64.encodeToString(part, Base64.NO_WRAP))
+                    }).jsonObject
+                    val entry = told["entry"]?.takeIf { it !is JsonNull }
+                    val next = told["have"]?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong() ?: (have + got)
+                    when {
+                        // Whole and in its place.
+                        entry != null -> done = true
+                        // All of it there with no entry said (an empty file): the folder is read again all the same.
+                        next >= size -> done = true
+                        // Nothing more taken: a part the station could not take.
+                        next == have -> throw CoreException("upload", t("android-chat.file.uploadFailed"), null)
+                    }
+                    have = next
+                    onProgress(if (done) size else have)
+                }
+            } finally { input.close() }
+        }
+    }
 
     // ── a chat itself (web/src/api.ts → rename; chats made here, by their key) ──
 

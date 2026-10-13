@@ -290,6 +290,8 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 GoRow(t("android-settings.memory")) { app.push(Screen.Memory(address)) }
                 // This phone's adb, lent to its agents (AdbShare.kt).
                 GoRow(t("android-misc.adb.title"), if (shared.value?.let { it.sharing && it.station == address } == true) t("android-misc.adb.sharing") else null) { app.push(Screen.AdbShare(address)) }
+                // The folders it lends its members (docs/drive.md); none offered by a station from before the drive.
+                overview?.drive?.let { drive -> GoRow(t("android-misc.drive.title"), fail.still.android.drive.driveValue(drive.roots)) { app.push(Screen.Drive(address, null, "")) } }
             }
             if (s.online && overview != null) Versions(address, overview.updates, manager, beta = s.betaOffered == true)
             Spacer(Modifier.height(30.dp))

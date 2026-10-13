@@ -283,6 +283,14 @@ object Topics {
     /** A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new). */
     fun pick(station: String, of: String) = buildJsonObject { put("topic", "pick"); put("station", station); put("of", of) }
 
+    /**
+     * A folder of a station's drive (docs/drive.md): `root` as the station names it, `path` under it (empty: the root
+     * itself). What is held shows first; the core reads it again each time it is shown, a refusal as the topic's error.
+     */
+    fun drive(station: String, root: String, path: String) = buildJsonObject { put("topic", "drive"); put("station", station); put("root", root); put("path", path) }
+    /** Where a file of a drive was left on this device: a text's offset, a video's time (ms); null before it was opened. */
+    fun drivePlace(station: String, root: String, path: String) = buildJsonObject { put("topic", "drivePlace"); put("station", station); put("root", root); put("path", path) }
+
     /** A connect's Slack app as Slack has it (read through the station; again after a write to the connect). */
     fun slackApp(station: String, connect: String) = buildJsonObject { put("topic", "slackApp"); put("station", station); put("connect", connect) }
 }

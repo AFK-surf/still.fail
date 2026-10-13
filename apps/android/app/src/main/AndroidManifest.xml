@@ -86,6 +86,14 @@
             </intent-filter>
         </service>
         <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+        <!-- A file of a station's drive handed to another app to open or share (drive/DriveScreen.kt), from the cache. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/drive_files" />
+        </provider>
         <provider
             android:name="com.google.firebase.provider.FirebaseInitProvider"
             android:authorities="${applicationId}.firebaseinitprovider"

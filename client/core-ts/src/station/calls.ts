@@ -145,7 +145,8 @@ export function install(): void {
   handlers.drivePlace = (inner, call) => {
     const c = call as Extract<Call, { kind: "drivePlace" }>;
     return Effect.sync(() => {
-      inner.data.set({ topic: "drivePlace", station: c.station, root: c.root, path: c.path }, { at: c.at, of: c.of, changed: inner.host.nowMs() }, false);
+      // Whole ms (DrivePlace.changed is an integer): a host's clock can have a fraction (Android's does).
+      inner.data.set({ topic: "drivePlace", station: c.station, root: c.root, path: c.path }, { at: c.at, of: c.of, changed: Math.floor(inner.host.nowMs()) }, false);
       return null;
     });
   };
