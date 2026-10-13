@@ -9,11 +9,20 @@ export const emoji = style({
   display: "inline-grid", placeItems: "center", flex: "none", lineHeight: "1", overflow: "visible",
   fontFamily: "\"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\", sans-serif",
 });
+// Windows glyphs can be wider than this icon's box; centre the overflowing grid track as well as the item.
+export const windowsEmoji = style({ placeContent: "center" });
 /**
  * The emoji itself, as wide as it is drawn: some fonts give one more room than it takes (Apple's, at small sizes, draws a
  * 16px emoji at the left of 20px), which centring the room would leave off centre.
  */
 export const glyph = style({ display: "inline-block", width: "1em", whiteSpace: "nowrap", textAlign: "left", overflow: "visible" });
+// Segoe UI Emoji paints within its advance (about 1.37em), unlike Apple's small bitmap glyphs. Centre that whole
+// advance on Windows: centring a left-aligned 1em box shifts the drawing to the right.
+export const windowsGlyph = style({
+  width: "max-content", textAlign: "center", fontFamily: "\"Segoe UI Emoji\", \"Noto Color Emoji\", sans-serif",
+  // Centre the font's cap-to-baseline box, without the extra leading that puts Segoe's pictures below SVG icons.
+  textBoxTrim: "trim-both", textBoxEdge: "cap alphabetic",
+});
 /** A picture put up: a rounded square as large as the icon it stands for. */
 export const picture = style({ display: "inline-block", flex: "none", objectFit: "cover", borderRadius: "24%", cornerShape: vars.cornerShape });
 

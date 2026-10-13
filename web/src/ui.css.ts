@@ -56,9 +56,11 @@ export const agentMarkJoined = style({
     "&[data-badge=\"run\"]::before": { right: "-5px" },
   },
 });
-// Each part rounded all round as the tile is, so a tint on one (pointed at) is a tile of its own within it.
+// Hover tints meet at straight edges inside the tile; only its two outside ends are rounded.
 const joinedCorner = `calc(var(--mark) * .3 * ${vars.cornerScale})`;
-globalStyle(`${agentMarkJoined} > *`, { borderRadius: joinedCorner, cornerShape: vars.cornerShape });
+globalStyle(`${agentMarkJoined} > *`, { borderRadius: "0", cornerShape: vars.cornerShape });
+globalStyle(`${agentMarkJoined} > :first-child`, { borderStartStartRadius: joinedCorner, borderEndStartRadius: joinedCorner });
+globalStyle(`${agentMarkJoined} > :last-child`, { borderStartEndRadius: joinedCorner, borderEndEndRadius: joinedCorner });
 globalStyle(`${agentMarkJoined} > :last-child`, { paddingInline: "calc(var(--mark) * .19 + 1px)" });
 export const empty = style({
   flex: "1", display: "grid", placeContent: "center", justifyItems: "center", gap: "6px", padding: "40px",
