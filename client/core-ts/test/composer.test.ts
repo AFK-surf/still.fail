@@ -38,8 +38,9 @@ test("what_is_written_shows_with_what_it_can_do_and_is_kept_as_the_chats_draft",
   await t.watch(1, "ws/st:k");
   assert.deepEqual([v(t.values, 1).text, v(t.values, 1).ready, v(t.values, 1).quotes], ["", false, []]);
   await t.ask("text", { key: "ws/st:k", text: "修一下" });
-  // The words are the page's: not sent back (the core's own `text` stays), but it can be sent now.
-  assert.deepEqual([v(t.values, 1).text, v(t.values, 1).ready], ["", true]);
+  // The words are the page's: they come back as written, with no new `rev` (the page has them already), and it can be
+  // sent now.
+  assert.deepEqual([v(t.values, 1).text, v(t.values, 1).rev, v(t.values, 1).ready], ["修一下", 0, true]);
   await t.ask("quote", { key: "ws/st:k", id: "q1", quote: { author: "agent", text: "这段", ts: "1.0", role: "agent" }, focus: true });
   assert.deepEqual(v(t.values, 1).quotes.map((q: J) => [q.id, q.text, q.comment]), [["q1", "这段", ""]]);
   assert.equal(v(t.values, 1).focus, "q1");
