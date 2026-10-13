@@ -58,7 +58,11 @@ export interface Draft {
  * What another part of the page puts into a chat's draft: a preview's marks (its screenshot and a quote each), or the
  * words an inline visualization asks to send (Viz.tsx), there for the person to send or not.
  */
-export interface Offer { files: File[]; quotes: DraftQuote[]; text?: string }
+export interface Offer {
+  files: File[]; quotes: DraftQuote[]; text?: string;
+  /** A passage selected in the chat, quoted with its comment line taking the focus. */
+  quote?: Omit<Quote, "comment">;
+}
 
 /** The key of the draft of the chat a part of the page sits in, for what offers to it from within a message. */
 export const DraftKey = createContext<string | undefined>(undefined);
@@ -107,7 +111,7 @@ function readKept(key: string): Promise<DraftView | null> {
   return core().call("draft.get", { key }).then((value) => value as DraftView, () => null);
 }
 
-export function useDraft({ key, station, carry, upload, quotes: held }: {
+export function useDraft({ key, station, carry, upload }: {
   /** Whose draft it is. With none (a new chat, before it is made), what is written goes on into the first key it gets. */
   key: string | undefined;
   /** The address of the station its chat is on, when the draft lives outside that station's context (the phone's host). */
@@ -116,16 +120,13 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
   carry?: MutableRefObject<string | null>;
   /** Sends a file to the station; `onProgress`, how much of it the station has. */
   upload(file: File, onProgress: (sent: number) => void): Promise<Attachment>;
-  /** The quotes, where the page holds them (it offers them from its messages): otherwise the draft does. */
-  quotes?: [DraftQuote[], Update<DraftQuote[]>];
 }): Draft {
   const chat = useChatSend(station);
   const contextStation = useStation().address;
   const toast = useToast();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Pending[]>([]);
-  const [ownQuotes, setOwnQuotes] = useState<DraftQuote[]>([]);
-  const [quotes, setQuotes] = held ?? [ownQuotes, setOwnQuotes];
+  const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,8 +134,8 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
   sender.current = upload;
 
   // Another chat: what is written is put away for the one before, and the next one's comes back.
-  const now = useRef({ text, files, quotes: held ? [] : quotes });
-  now.current = { text, files, quotes: held ? [] : quotes };
+  const now = useRef({ text, files, quotes });
+  now.current = { text, files, quotes };
   const put = (at: string | undefined) => {
     const { text, files, quotes } = now.current;
     if (at !== undefined && (text || files.length || quotes.length)) kept.set(at, { text, files, quotes });
@@ -155,7 +156,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
       if (view && !text && !files.length && !quotes.length) {
         if (view.text) setText(view.text);
         if (view.files.length) setFiles(view.files.map((done) => ({ id: nextId++, name: done.name, size: done.size, done, error: null })));
-        if (view.quotes.length && !held) setOwnQuotes(view.quotes.map((q, i) => ({ ...q, id: `${Date.now()}-${i}` })));
+        if (view.quotes.length) setQuotes(view.quotes.map((q, i) => ({ ...q, id: `${Date.now()}-${i}` })));
       }
       loaded.current = at;
       // Written meanwhile: that is what is kept now.
@@ -180,7 +181,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
       const { text, files, quotes } = now.current;
       if (next && !text && !files.length && !quotes.length) {
         kept.delete(key!);
-        setText(next.text); setFiles(next.files); if (!held) setOwnQuotes(next.quotes);
+        setText(next.text); setFiles(next.files); setQuotes(next.quotes);
       }
       if (key !== undefined) {
         if (next || text || files.length || quotes.length) loaded.current = key;
@@ -204,7 +205,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
     leave(before);
     const next = key === undefined ? undefined : kept.get(key);
     if (key !== undefined) kept.delete(key);
-    setText(next?.text ?? ""); setFiles(next?.files ?? []); if (!held) setOwnQuotes(next?.quotes ?? []); setError(null);
+    setText(next?.text ?? ""); setFiles(next?.files ?? []); setQuotes(next?.quotes ?? []); setError(null);
     if (key !== undefined) {
       if (next) loaded.current = key;
       else fromCore(key);
@@ -216,7 +217,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
     const next = at === undefined ? undefined : kept.get(at);
     if (at !== undefined && next) {
       kept.delete(at);
-      setText(next.text); setFiles(next.files); if (!held) setOwnQuotes(next.quotes);
+      setText(next.text); setFiles(next.files); setQuotes(next.quotes);
       loaded.current = at;
     } else if (at !== undefined) fromCore(at);
     return () => {
@@ -230,7 +231,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
   useEffect(() => {
     const at = shown.current;
     if (at === undefined || loaded.current !== at) return;
-    persist(at, { text, files, quotes: held ? [] : quotes });
+    persist(at, { text, files, quotes });
   }, [text, keptFiles, quotes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const add = (picked: FileList | File[], pasted?: PastedInfo) => {

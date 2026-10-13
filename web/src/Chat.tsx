@@ -26,7 +26,7 @@ import { firstReaching, ticking, useStickToBottom, watchChildren } from "./scrol
 import { animate, arrive, EASE_OUT, follower, moveState, type AnimationPlaybackControls, type Follower } from "./motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
-import { DraftKey, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
+import { DraftKey, offerToDraft, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
@@ -107,9 +107,6 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
   const { thread, outbox } = chat;
   const id = thread?.id ?? null;
   const to: ChatTo | null = id ?? made ?? null;
-  const [quotes, setQuotes] = useState<DraftQuote[]>([]);
-  const [focusQuote, setFocusQuote] = useState<string | null>(null);
-  const quoteFocused = useCallback(() => setFocusQuote(null), []);
   const lives = useLives(station.address, chat.agents.map((a) => a.session.key));
   const rows = useMessageList(list, floor, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives);
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
@@ -124,12 +121,8 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
   useLaidOutOnce(list);
   // What waits to be decided here and does not show: a button over the list leads to it.
   const asks = useAsksShown(list, chat);
-  // Selecting text inside one message offers to quote it.
-  const quoting = useSelectionQuote(list, (q) => {
-    const quote = { ...q, comment: "", id: `${Date.now()}` };
-    setQuotes((all) => [...all, quote]);
-    setFocusQuote(quote.id);
-  });
+  // Selecting text inside one message offers to quote it: into the chat's draft, its composer's (by its key).
+  const quoting = useSelectionQuote(list, (quote) => offerToDraft(draftKey, { files: [], quotes: [], quote }));
 
   return (
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
@@ -156,7 +149,7 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
-      <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused}
+      <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper}
         locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} />
     </section>
   );
@@ -1489,8 +1482,7 @@ export interface ComposerProps {
    */
   thread: ChatTo | null;
   sessionKey: string | null;
-  quotes?: DraftQuote[]; setQuotes?(update: (all: DraftQuote[]) => DraftQuote[]): void;
-  /** A quote just added: its comment line takes the focus. */
+  /** A quote just added: its comment line takes the focus (the draft's own, where not given). */
   focusQuote?: string | null; onFocused?(): void;
   ensureChat?: () => Promise<{ key: string; thread: ChatTo }>;
   onSent?: (to: ChatTo) => void;
@@ -1511,19 +1503,16 @@ export interface ComposerProps {
   carry?: MutableRefObject<string | null>;
 }
 
-/** The quotes of a composer whose page holds none (a new chat's): the same array each time, or its draft would go to the
- * core again (`draft.put`) at every render. */
-const NO_QUOTES: DraftQuote[] = [];
-
 export function Composer(props: ComposerProps) {
   const api = useApi();
-  const { draftKey, carry, quotes = NO_QUOTES, setQuotes = () => {} } = props;
-  const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}), upload: (file, onProgress) => api.uploadFile(file, onProgress), quotes: [quotes, setQuotes] });
+  const { draftKey, carry } = props;
+  // Its quotes are its draft's: a passage selected in the chat is offered to it by its key (useDraftInbox).
+  const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}), upload: (file, onProgress) => api.uploadFile(file, onProgress) });
   return <ComposerView {...props} draft={draft} />;
 }
 
 /** The chat's composer, also used where a page sends its draft as a reply to a decision. */
-export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
+export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = draft.focusQuote, onFocused = draft.quoteFocused, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
   draft: Draft; submitDraft?: (draft: Draft) => void;
 }) {
   const api = useApi();
@@ -1748,11 +1737,13 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     el.setSelectionRange(at, at);
   }, [text]);
   // A preview's marks beside the chat: their screenshot and a quote each, to say more about before sending.
-  useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added, text: words }) => {
+  useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added, text: words, quote }) => {
     if (words) setText(text.trim() ? `${text.trimEnd()}\n${words}` : words);
     if (offered.length) add(offered);
     if (added.length) draft.setQuotes((all) => [...all, ...added]);
-    input.current?.focus();
+    // A passage selected in the chat: its comment line takes the focus.
+    if (quote) draft.quote(quote);
+    else input.current?.focus();
   });
   // Grow with the text up to its lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
   // the text (or the placeholder), so it is measured again then; below the limit it never scrolls. Sized before it is
