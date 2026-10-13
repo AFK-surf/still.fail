@@ -955,8 +955,8 @@ function wholeImage(page: WebContents, src: string): Promise<Uint8Array<ArrayBuf
 type Frame = "inset" | "overlay" | "system";
 /** Each window's frame, by its page (webContents id): what preload.ts tells the page. */
 const frames = new Map<number, Frame>();
-/** The top row of the page the window's buttons sit in (web/src/styles): 44 px. */
-const TOP_ROW = 44;
+/** Compact Windows controls at the top of the page's 44 px row, with less vertical padding. */
+const WINDOWS_CONTROLS_HEIGHT = 32;
 
 /**
  * A window of the app at `path`. The app's own window has no title bar: the page's top row (44 px, web/src/styles)
@@ -976,7 +976,7 @@ function open(path = "/", titled = false): BrowserWindow {
     ...(frame === "inset" ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 15 } } as const : {}),
     ...(frame === "overlay" ? {
       titleBarStyle: "hidden",
-      titleBarOverlay: { color: dark ? "#1f2023" : "#ffffff", symbolColor: dark ? "#e9e9ea" : "#3b3e43", height: TOP_ROW },
+      titleBarOverlay: { color: dark ? "#1f2023" : "#ffffff", symbolColor: dark ? "#e9e9ea" : "#3b3e43", height: WINDOWS_CONTROLS_HEIGHT },
       backgroundColor: dark ? "#1f2023" : "#ffffff",
     } as const : {}),
     webPreferences: { preload: join(__dirname, "preload.js"), sandbox: true, contextIsolation: true },
