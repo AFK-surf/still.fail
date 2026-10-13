@@ -123,37 +123,37 @@ export function shown(input: J, c: Clock): J {
   const ended = endedAt !== null ? ago(endedAt, now) : null;
   const saidWord = () => ({ text: w, kind: "word" });
   const plain = (text: string) => ({ text });
-  const then = (parts: J[], text: string | null) => {
-    if (text !== null) parts.push(plain(` · ${text}`));
-  };
   const meta: J[] = [];
+  const then = (text: string | null) => {
+    if (text !== null) meta.push(plain(` · ${text}`));
+  };
   const notices = arr(get(job, "notices"));
   if (service) {
     meta.push(saidWord());
-    if (tn === "up") then(meta, span(now - started));
+    if (tn === "up") then(span(now - started));
     else if (tn === "restart") {
       const r = intOf(get(job, "restarts"));
-      then(meta, r !== null && r > 0 ? t("core-logic.jobs.restart_count", { n: r }) : null);
-    } else then(meta, ended);
+      then(r !== null && r > 0 ? t("core-logic.jobs.restart_count", { n: r }) : null);
+    } else then(ended);
   } else if (tn === "live") {
     const last = notices[0];
     const outputAt = msOf(job, "outputAt");
     if (last !== undefined) {
       meta.push({ text: strOf(last, "text"), kind: "notice" });
-      then(meta, ago(typeof get(last, "at") === "number" ? last.at : now, now));
+      then(ago(typeof get(last, "at") === "number" ? last.at : now, now));
     } else if (outputAt !== null) meta.push(plain(t("core-logic.jobs.no_notice", { ago: ago(outputAt, now) })));
     else {
       meta.push(saidWord());
-      then(meta, span(now - started));
+      then(span(now - started));
     }
   } else if (tn === "fail" && state !== "failed") {
     meta.push(saidWord());
     const code = intOf(get(job, "exitCode"));
-    then(meta, code !== null ? t("core-logic.jobs.exit_code", { code }) : t("core-logic.jobs.signalled"));
-    then(meta, ended);
+    then(code !== null ? t("core-logic.jobs.exit_code", { code }) : t("core-logic.jobs.signalled"));
+    then(ended);
   } else {
     meta.push(saidWord());
-    then(meta, ended);
+    then(ended);
   }
   const when = state === "running" ? span(now - started) : (ended ?? "");
   const told = notices.length === 0 ? "" : ` · ${t("core-logic.jobs.notices", { n: notices.length })}`;
@@ -249,10 +249,13 @@ export function longJobs(stations: [string, string | null, J[]][], c: Clock): J 
 }
 
 /// A job's output as read, with its last line and when it grew in words put in (`JobLogView`).
-export function log(value: J, c: Clock): void {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return;
+export function log(value: J, c: Clock): J {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
   const last = strOf(value, "text").trim();
   const at = msOf(value, "outputAt");
-  if (last !== "") value.last = last;
-  if (at !== null || last !== "") value.said = at === null ? t("core-logic.jobs.output") : t("core-logic.jobs.output_at", { ago: ago(at, c.now) });
+  return {
+    ...value,
+    ...(last !== "" ? { last } : {}),
+    ...(at !== null || last !== "" ? { said: at === null ? t("core-logic.jobs.output") : t("core-logic.jobs.output_at", { ago: ago(at, c.now) }) } : {}),
+  };
 }

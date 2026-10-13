@@ -180,11 +180,12 @@ export class Attend {
     return [...this.#focus.values()].filter((f) => f.chat !== null && is(f.chat, station, thread, session));
   }
 
-  /// A chat's value as computed: its unread line goes in, and what it asks of the core comes back.
-  chat(station: string, session: string | null, value: J): Due[] {
+  /// A chat's value as computed, with its unread line (and what was said and started while it showed) put in, and
+  /// what it asks of the core.
+  chat(station: string, session: string | null, value: J): { due: Due[]; value: J } {
     const due: Due[] = [];
     const thread = value?.thread?.id;
-    if (typeof thread !== "number") return due;
+    if (typeof thread !== "number") return { due, value };
     const shown = this.#showing(station, thread, session);
     const known = typeof value.thread.read === "number" ? value.thread.read : 0;
     const messages: J[] = Array.isArray(value.messages) ? value.messages : [];
@@ -196,10 +197,10 @@ export class Attend {
       const m = messages.find((x) => seq(x) > read && typeof x.createdAt === "number" && x.createdAt <= opened && x.mine !== true);
       return m === undefined ? null : seq(m);
     };
-    value.unreadAbove = false;
+    const out: J = { ...value, unreadAbove: false };
     if (shown.length === 0) {
-      value.unreadLine = unreadLine(known, now);
-      return due;
+      out.unreadLine = unreadLine(known, now);
+      return { due, value: out };
     }
     const key = `${station}\u0001${thread}`;
     const newest = messages.length > 0 ? seq(messages[messages.length - 1]) : 0;
@@ -214,8 +215,10 @@ export class Attend {
       if (visit.visible && n > visit.top && n > caught && (visit.resumedAt === null || (typeof m.createdAt === "number" && m.createdAt >= visit.resumedAt))) visit.said.add(n);
     }
     visit.top = Math.max(visit.top, newest);
-    for (const m of messages) if (visit.said.has(seq(m))) m.said = true;
-    for (const a of Array.isArray(value.agents) ? value.agents : []) {
+    if (messages.some((m) => visit.said.has(seq(m)))) out.messages = messages.map((m) => (visit.said.has(seq(m)) ? { ...m, said: true } : m));
+    const agents: J[] = Array.isArray(value.agents) ? value.agents : [];
+    const started: J[] = [];
+    for (const a of agents) {
       const k = a?.session?.key;
       if (typeof k !== "string") continue;
       const status = typeof a.status === "string" ? a.status : "";
@@ -224,9 +227,10 @@ export class Attend {
       visit.statuses.set(k, status);
       if (!running) visit.started.delete(k);
       else if (was !== undefined && visit.visible && was !== "running" && (visit.resumedAt === null || (typeof a.since === "number" && a.since >= visit.resumedAt))) visit.started.add(k);
-      if (visit.started.has(k)) a.started = true;
+      if (visit.started.has(k)) started.push(a);
     }
-    value.unreadLine = unreadLine(visit.read, visit.at);
+    if (started.length > 0) out.agents = agents.map((a) => (started.includes(a) ? { ...a, started: true } : a));
+    out.unreadLine = unreadLine(visit.read, visit.at);
     const short = value.newer === true;
     if (!short && shown.some((f) => f.visible && f.chat?.end === true) && newest > known) {
       const sent = this.#reads.get(key) ?? 0;
@@ -235,7 +239,7 @@ export class Attend {
         due.push({ read: { thread, seq: newest } });
       }
     }
-    return due;
+    return { due, value: out };
   }
 
   /// What was due could not be done: asked again the next time.

@@ -83,11 +83,11 @@ test("those_up_long_are_grouped_oldest_first_with_where_they_are", () => {
 });
 
 test("a_logs_last_line_and_when", () => {
-  const v: J = { text: "a\nbuilt ok\n", outputAt: NOW - 3_000, state: "running" };
-  log(v, c());
+  let v: J = { text: "a\nbuilt ok\n", outputAt: NOW - 3_000, state: "running" };
+  v = log(v, c());
   assert.deepEqual([v.last, v.said], ["a\nbuilt ok", "最后输出 · 刚刚"]);
-  const empty: J = { text: "" };
-  log(empty, c());
+  let empty: J = { text: "" };
+  empty = log(empty, c());
   assert.deepEqual([empty.last, empty.said], [undefined, undefined]);
 });
 
@@ -146,7 +146,7 @@ test("members_look_and_a_first_scan_is_waited_for", () => {
   const first = fp.shown({ scanning: true, manage: true, disk: {}, parts: [], chats: [], processes: [] }, fc());
   shape(first);
   assert.deepEqual([first.measured, first.totalText], [false, "—"]);
-  const b: J = { bytes: null, scanning: true };
-  fp.brief(b);
+  let b: J = { bytes: null, scanning: true };
+  b = fp.brief(b);
   assert.equal(b.text, "正在统计…");
 });

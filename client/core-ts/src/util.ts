@@ -195,7 +195,7 @@ export function compareKeys(a: string, b: string): number {
 /// What went out of the store as it is (output.ts): never changed after, so it is shared and not shaped again.
 export const shaped = new WeakSet<object>();
 
-/// Whether what is shared is frozen where it is shared (docs/core-ts.md, "Who may change what"): what the store keeps,
+/// Whether what is shared is frozen where it is shared (docs/core-ts.md「谁能改什么」): what the store keeps,
 /// what a view makes and what goes out. On in the core's tests (node --test, or STILLFAIL_CHECK_SHARED=1) and in the
 /// web's development build (`checkShared`); off in what people run, where only what the core freezes anyway is (the
 /// databases' rows, the device's values, a list's rows made).

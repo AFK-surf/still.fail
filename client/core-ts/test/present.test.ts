@@ -54,37 +54,37 @@ test("a_connection_is_said_in_words_and_only_what_is_off_is_coloured", () => {
 test("a_rows_people_are_said_in_words_who_started_it_first", () => {
   const me = { id: "me@x.com", email: "me@x.com" };
   let row: J = { creator: { id: "wang@x.com", name: "小王" }, people: [{ id: "lina@x.com", name: "Lina" }, { id: "me@x.com", name: "Me" }] };
-  p.rowPeople(row, me, [], []);
+  row = p.rowPeople(row, me, [], []);
   assert.equal(row.peopleText, "小王 发起 · Lina、你");
   row = { people: [{ id: "lina@x.com", name: "Lina" }] };
-  p.rowPeople(row, me, [], []);
+  row = p.rowPeople(row, me, [], []);
   assert.equal(row.peopleText, "Lina");
 });
 
 test("profile_recovery_follows_states_and_clears_after_success", () => {
-  const q: J = { access: { kind: "subscription" }, check: { state: "login" }, quota: { state: "unavailable" } };
-  p.profile(q);
+  let q: J = { access: { kind: "subscription" }, check: { state: "login" }, quota: { state: "unavailable" } };
+  q = p.profile(q);
   assert.equal(q.trouble.action, "login");
   q.machine = true;
-  p.profile(q);
+  q = p.profile(q);
   assert.equal(q.trouble.action, "command");
   q.check.state = "ok";
-  p.profile(q);
+  q = p.profile(q);
   assert.equal(q.trouble.action, "quota");
   assert.equal(q.checkText, "可用");
   assert.equal(q.trouble.detail, "暂时查不到额度");
   q.quota.state = "ok";
-  p.profile(q);
+  q = p.profile(q);
   assert.equal(q.trouble, null);
   q.quota.state = "blocked";
-  p.profile(q);
+  q = p.profile(q);
   assert.equal(q.trouble.title, "账号被停用");
   assert.equal(q.checkTone, "red");
 });
 
 test("a_profile_says_what_it_can_do_from_where_its_provider_speaks", () => {
   const text = (q: J) => {
-    p.profile(q);
+    q = p.profile(q);
     return [q.access?.kind ?? "", q.usesText ?? ""];
   };
   assert.deepEqual(text({ runtimes: [], access: { kind: "env", provider: "deepseek" } }), ["api-provider", "自动决策"]);
@@ -95,23 +95,23 @@ test("a_profile_says_what_it_can_do_from_where_its_provider_speaks", () => {
   assert.deepEqual(text({ runtimes: ["codex"], access: { kind: "env" } }), ["env", ""]);
   assert.equal(text({ runtimes: ["codex"], access: { kind: "env" }, check: { decision: { state: "ready" } } })[1], "Codex · 自动决策");
   const canName = (provider: string) => {
-    const q: J = { runtimes: [], access: { kind: "env", provider } };
-    p.profile(q);
+    let q: J = { runtimes: [], access: { kind: "env", provider } };
+    q = p.profile(q);
     return q.canAddModel === true;
   };
   assert.ok(!canName("jev") && canName("minimax") && canName("deepseek"));
-  const jev: J = { runtimes: [], access: { kind: "env", provider: "jev" }, check: { state: "ok", decision: { state: "ready", detail: "已识别 1 个决策模型", models: ["jev-latest"] } } };
-  p.profile(jev);
+  let jev: J = { runtimes: [], access: { kind: "env", provider: "jev" }, check: { state: "ok", decision: { state: "ready", detail: "已识别 1 个决策模型", models: ["jev-latest"] } } };
+  jev = p.profile(jev);
   assert.deepEqual([jev.decisionOnly, jev.decisionModels, jev.decisionText], [true, ["jev-latest"], "已识别 1 个决策模型"]);
   // Said from the station's reason, not its Chinese detail.
-  const found: J = { runtimes: [], access: { kind: "env", provider: "jev" }, check: { state: "ok", decision: { state: "ready", detail: "x", reason: "found", models: ["jev-latest", "jev-mini"] } } };
-  p.profile(found);
+  let found: J = { runtimes: [], access: { kind: "env", provider: "jev" }, check: { state: "ok", decision: { state: "ready", detail: "x", reason: "found", models: ["jev-latest", "jev-mini"] } } };
+  found = p.profile(found);
   assert.equal(found.decisionText, "已识别 2 个决策模型");
-  const waiting: J = { runtimes: [], access: { kind: "env", provider: "jev" }, check: { state: "ok" } };
-  p.profile(waiting);
+  let waiting: J = { runtimes: [], access: { kind: "env", provider: "jev" }, check: { state: "ok" } };
+  waiting = p.profile(waiting);
   assert.deepEqual([waiting.decisionModels, waiting.decisionText], [[], "正在识别决策模型…"]);
-  const x: J = { runtimes: [], access: { kind: "env", provider: "xiaomi" }, check: { state: "failed" } };
-  p.profile(x);
+  let x: J = { runtimes: [], access: { kind: "env", provider: "xiaomi" }, check: { state: "failed" } };
+  x = p.profile(x);
   assert.deepEqual([x.providerName, x.trouble.action], ["Xiaomi MiMo", "key"]);
 });
 
@@ -142,14 +142,14 @@ test("a_session_stands_where_its_process_and_last_turn_say", () => {
   assert.deepEqual(p.waiting(waits), { since: 5, seconds: 600, text: "等待中" });
   assert.deepEqual(p.waiting({ process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5 } }), { since: 5, seconds: null, text: "等待中" });
   assert.equal(p.waiting({ process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitFor: "CI 跑完" } }).text, "在等：CI 跑完");
-  const watching: J = { process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitSeconds: 600 }, watch: { names: ["盯 CI"], since: 1, at: 5 } };
-  p.session(watching);
+  let watching: J = { process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitSeconds: 600 }, watch: { names: ["盯 CI"], since: 1, at: 5 } };
+  watching = p.session(watching);
   assert.deepEqual([watching.statusText, watching.mark], ["监控中", null]);
-  const plain: J = structuredClone(waits);
-  p.session(plain);
+  let plain: J = structuredClone(waits);
+  plain = p.session(plain);
   assert.equal(plain.statusText, "等待中");
-  const said: J = { process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitSeconds: 600, waitFor: "CI 跑完" } };
-  p.session(said);
+  let said: J = { process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitSeconds: 600, waitFor: "CI 跑完" } };
+  said = p.session(said);
   assert.equal(said.statusText, "在等：CI 跑完");
   assert.equal(p.waiting({ process: "running", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5 } }), null);
   assert.equal(p.waiting({ process: "warm", pending: 1, lastTurn: { declared: "waiting", endedAt: 5 } }), null);
@@ -157,11 +157,11 @@ test("a_session_stands_where_its_process_and_last_turn_say", () => {
 });
 
 test("an_account_its_provider_refuses_says_so_whatever_its_check_found", () => {
-  const q: J = { check: { state: "ok" }, quota: { state: "blocked", windows: [] } };
-  p.profile(q);
+  let q: J = { check: { state: "ok" }, quota: { state: "blocked", windows: [] } };
+  q = p.profile(q);
   assert.deepEqual([q.checkText, q.checkTone], ["被停用", "red"]);
-  const ok: J = { check: { state: "ok" }, quota: { state: "unavailable", windows: [] } };
-  p.profile(ok);
+  let ok: J = { check: { state: "ok" }, quota: { state: "unavailable", windows: [] } };
+  ok = p.profile(ok);
   assert.equal(ok.checkText, "可用");
 });
 
@@ -191,8 +191,8 @@ test("the_last_speaker_is_named_and_an_agents_state_rides_on_it", () => {
 });
 
 test("a_profiles_models_come_by_series", () => {
-  const q: J = { models: ["claude-opus-5-5"], check: { models: ["claude-sonnet-5", "claude-opus-4-8", "claude-opus-5-5", "my-model", "claude-fable-5-1"] } };
-  p.profile(q);
+  let q: J = { models: ["claude-opus-5-5"], check: { models: ["claude-sonnet-5", "claude-opus-4-8", "claude-opus-5-5", "my-model", "claude-fable-5-1"] } };
+  q = p.profile(q);
   assert.deepEqual(q.series, [
     { name: "Fable", models: ["claude-fable-5-1"] },
     { name: "Opus", models: ["claude-opus-5-5", "claude-opus-4-8"] },
@@ -203,8 +203,8 @@ test("a_profiles_models_come_by_series", () => {
 
 test("how_a_turn_ended_says_itself_in_words", () => {
   const words = (turn: J) => {
-    const s: J = { process: "warm", lastTurn: turn };
-    p.session(s);
+    let s: J = { process: "warm", lastTurn: turn };
+    s = p.session(s);
     return s.statusText;
   };
   assert.equal(words({ declared: "final", ending: "all_done", outcome: "completed" }), "做完了");
@@ -215,14 +215,14 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出问题：登录失效");
   assert.equal(words({ outcome: "aborted" }), "出问题：被停止");
   assert.equal(words({ outcome: "completed" }), "出问题：没说一声就停了");
-  const decided: J = { process: "warm", lastTurn: { declared: "block", ending: "need_decision", outcome: "completed" } };
-  p.session(decided);
+  let decided: J = { process: "warm", lastTurn: { declared: "block", ending: "need_decision", outcome: "completed" } };
+  decided = p.session(decided);
   assert.equal(decided.mark, "block");
 });
 
 test("a_decision_agent_passes_the_chat_shape", () => {
-  const s: J = { key: "ember:c-decision", runtime: "codex", process: "warm", pending: 0, lastTurn: { kind: "message", startedAt: 1, declared: "block", ending: "need_decision", outcome: "completed" } };
-  p.session(s);
+  let s: J = { key: "ember:c-decision", runtime: "codex", process: "warm", pending: 0, lastTurn: { kind: "message", startedAt: 1, declared: "block", ending: "need_decision", outcome: "completed" } };
+  s = p.session(s);
   const agent = { status: p.shownStatus(s), badge: p.markOf(s), session: s, profiles: [], choices: [], attention: [], turns: [], threads: [], jobs: [] };
   const checked = conform("ChatAgent", agent) as J;
   assert.ok("ok" in checked, JSON.stringify(checked));
@@ -235,8 +235,8 @@ test("a_decision_agent_passes_the_chat_shape", () => {
 
 test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const agent = (turn: J, process: string): J => {
-    const a: J = { key: "k", process, pending: 0, lastTurn: turn };
-    p.session(a);
+    let a: J = { key: "k", process, pending: 0, lastTurn: turn };
+    a = p.session(a);
     return a;
   };
   const done = agent({ declared: "final", ending: "all_done", outcome: "completed" }, "warm");
@@ -308,11 +308,11 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
 });
 
 test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {
-  const q: J = { models: ["mine", "b"], check: { models: ["a", "b"] } };
-  p.profile(q);
+  let q: J = { models: ["mine", "b"], check: { models: ["a", "b"] } };
+  q = p.profile(q);
   assert.deepEqual(q.available, ["a", "b", "mine"]);
   const c = { now: 0, offsetMin: 0 };
-  const o: J = {
+  let o: J = {
     profiles: [{ runtime: "claude", machine: true, models: [] }],
     machineLogins: [
       { runtime: "claude", loggedIn: true, plan: "max" },
@@ -321,13 +321,13 @@ test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {
       { runtime: "codex", loggedIn: false, plan: "plus" },
     ],
   };
-  p.decorate({ topic: "overview", station: "w/s" }, o, c);
+  o = p.decorate({ topic: "overview", station: "w/s" }, o, c);
   assert.deepEqual(o.machineLogins.map((l: J) => l.offered === true), [false, true, false, false]);
 });
 
 test("a_stations_profiles_come_by_kind_of_account_those_in_trouble_first_in_each", () => {
   const sub = (id: string, runtime: string, extra: J = {}) => ({ id, runtime, access: { kind: "subscription" }, ...extra });
-  const o: J = {
+  let o: J = {
     profiles: [
       { id: "key", runtime: "claude", access: { kind: "anthropic-api" } },
       sub("gpt", "codex"),
@@ -336,7 +336,7 @@ test("a_stations_profiles_come_by_kind_of_account_those_in_trouble_first_in_each
       sub("claude-failed", "claude", { check: { state: "failed", detail: "timeout" } }),
     ],
   };
-  p.decorate({ topic: "overview", station: "w/s" }, o, { now: 0, offsetMin: 0 });
+  o = p.decorate({ topic: "overview", station: "w/s" }, o, { now: 0, offsetMin: 0 });
   assert.deepEqual(o.profiles.map((q: J) => [q.group, q.groupTitle, q.id]), [
     ["claude", "Claude 订阅", "claude-failed"],
     ["claude", "Claude 订阅", "claude-ok"],
@@ -347,7 +347,7 @@ test("a_stations_profiles_come_by_kind_of_account_those_in_trouble_first_in_each
 });
 
 test("bound_subscriptions_hide_only_the_same_machine_account", () => {
-  const o: J = {
+  let o: J = {
     profiles: [
       { name: "Renamed", runtime: "claude", access: { kind: "subscription" }, email: " A@x.com " },
       { runtime: "codex", access: { kind: "env" }, email: "b@x.com" },
@@ -367,22 +367,22 @@ test("bound_subscriptions_hide_only_the_same_machine_account", () => {
   for (const l of o.machineLogins) Object.assign(l, { loggedIn: true, plan: "pro" });
   const topic = { topic: "overview", station: "w/s" };
   const clock = { now: 0, offsetMin: 0 };
-  p.decorate(topic, o, clock);
+  o = p.decorate(topic, o, clock);
   assert.deepEqual(o.machineLogins.map((l: J) => l.offered === true), [false, true, true, false, true, true, true]);
   o.profiles = [];
-  p.decorate(topic, o, clock);
+  o = p.decorate(topic, o, clock);
   assert.ok(o.machineLogins.every((l: J) => l.offered === true));
 });
 
 test("what_the_clients_show_is_put_in_here", () => {
   const c = { now: 1_790_467_200_000, offsetMin: 480 };
-  const s: J = { runtime: "codex", model: "gpt-6-astra", effort: "medium", process: "warm", lastTurn: { declared: "block" }, firstText: "<@U1> 看看 CI" };
-  p.session(s);
+  let s: J = { runtime: "codex", model: "gpt-6-astra", effort: "medium", process: "warm", lastTurn: { declared: "block" }, firstText: "<@U1> 看看 CI" };
+  s = p.session(s);
   assert.deepEqual([s.statusText, s.tone, s.badgeText], ["要你帮忙", "blue", "agent 停下来等人处理"]);
   assert.deepEqual([s.titleText, s.agentText, s.maker.id], ["看看 CI", "GPT-6 Astra · medium", "openai"]);
   assert.equal(s.modelName, "GPT-6 Astra");
   assert.deepEqual([s.processText, s.efforts[0]], ["保温中", "minimal"]);
-  const v: J = {
+  let v: J = {
     createdAt: c.now - 180_000,
     quota: {
       windows: [
@@ -391,27 +391,27 @@ test("what_the_clients_show_is_put_in_here", () => {
       ],
     },
   };
-  p.times(v, c);
+  v = p.times(v, c);
   assert.equal(v.time.createdAt.ago, "3 分钟前");
   const w = v.quota.windows;
   assert.deepEqual([w[0].mark, w[1].mark, w[1].level, w[1].refills], ["5H", "W", "red", "1 小时 5 分钟后刷新"]);
   const members = [{ email: "a@x.com", name: "阿一", picture: "https://p/a" }];
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"]], members), "@ds-ember 和 @U9 看下");
-  const me: J = { id: "a@x.com", email: "a@x.com", name: "A" };
-  p.person(me, { id: "a@x.com", email: "a@x.com" }, members);
+  let me: J = { id: "a@x.com", email: "a@x.com", name: "A" };
+  me = p.person(me, { id: "a@x.com", email: "a@x.com" }, members);
   assert.deepEqual(me.shown, { name: "阿一", display: "你", picture: "https://p/a", mine: true });
-  const h: J = {
+  let h: J = {
     hostname: "studio", os: "macOS 26", arch: "arm64", cpus: 8, load: 0.5, uptimeSec: 90_000,
     memory: { usedBytes: 8 * GIB, totalBytes: 32 * GIB, swapUsedBytes: null },
     disk: { totalBytes: 1000 * GIB, freeBytes: 50 * GIB }, emberRssBytes: 100 * 1024 ** 2,
   };
-  p.host(h);
+  h = p.host(h);
   assert.ok(Number.isInteger(h.meters[0].percent) && Number.isInteger(v.quota.windows[0].left));
   assert.deepEqual([h.summary, h.facts[3]], ["8 核 · 32 GB", "已运行 1 天 1 小时"]);
   assert.deepEqual([h.meters[0].label, h.meters[0].value], ["CPU 负载", "50%"]);
   h.cpuBusy = 0.93;
   h.cpuModel = "Apple M2 Max";
-  p.host(h);
+  h = p.host(h);
   const cpu = h.meters[0];
   assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M2 Max"]);
   assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩 50.0 GB / 1000 GB", "still.fail 100 MB"]);
@@ -426,13 +426,13 @@ test("a_watching_chat_says_what_it_watches_and_what_archiving_it_means", () => {
 });
 
 test("alert_capacity_is_remaining_while_its_edge_is_used_percent", () => {
-  const h: J = { memory: { usedBytes: 5.3 * GIB, totalBytes: 6 * GIB }, disk: { freeBytes: 6 * GIB, totalBytes: 60 * GIB } };
-  p.host(h);
+  let h: J = { memory: { usedBytes: 5.3 * GIB, totalBytes: 6 * GIB }, disk: { freeBytes: 6 * GIB, totalBytes: 60 * GIB } };
+  h = p.host(h);
   assert.equal(h.meters[1].remaining, "剩余 0.7 G");
   assert.equal(h.meters[1].percent, 88);
   assert.equal(h.meters[2].remaining, "剩余 6.0 G");
   assert.equal(h.meters[2].percent, 90);
   h.memory.usedBytes = 7 * GIB;
-  p.host(h);
+  h = p.host(h);
   assert.equal(h.meters[1].remaining, "剩余 0.0 G");
 });

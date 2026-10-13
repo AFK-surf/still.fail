@@ -42,33 +42,33 @@ export function leftLevel(used: number): [number, string] {
   return [format.round(Math.max(100 - used, 0)), used >= 90 ? "red" : used >= 70 ? "amber" : "ok"];
 }
 
-function windows(list: Record<string, unknown>[], c: Clock): void {
-  for (const w of list) {
+function windows(list: Record<string, unknown>[], c: Clock): Record<string, unknown>[] {
+  const out = list.map((w) => {
     const label = str(w.label) ?? "";
     const used = typeof w.usedPercent === "number" ? w.usedPercent : 0;
     const [mark, order] = format.windowMark(label);
-    w.label = format.windowName(label);
-    w.mark = mark;
-    w.order = order;
     const [left, level] = leftLevel(used);
-    w.left = left;
-    w.level = level;
-    w.refills = typeof w.resetsAt === "number" ? format.refillsIn(w.resetsAt, c.now) : null;
-  }
+    return { ...w, label: format.windowName(label), mark, order, left, level, refills: typeof w.resetsAt === "number" ? format.refillsIn(w.resetsAt, c.now) : null };
+  });
   // A stable sort, as Rust's sort_by_key.
-  list.sort((a, b) => (u64(a.order) ?? 1) - (u64(b.order) ?? 1));
+  return out.sort((a, b) => (u64(a.order) ?? 1) - (u64(b.order) ?? 1));
 }
 
 /// Every time in a value, in words beside it: an object with some gets `time: { <field>: stamp }`; a quota's windows
-/// are put as they are drawn.
-export function times(value: unknown, c: Clock): void {
-  if (value !== null && typeof value === "object" && shaped.has(value)) return;
+/// are put as they are drawn. A new value where anything is put; a part with nothing put is the part as it was.
+export function times(value: unknown, c: Clock): unknown {
+  if (value !== null && typeof value === "object" && shaped.has(value)) return value;
   if (Array.isArray(value)) {
-    for (const v of value) times(v, c);
-    return;
+    let out: unknown[] | null = null;
+    for (let i = 0; i < value.length; i++) {
+      const v = times(value[i], c);
+      if (v !== value[i]) (out ??= [...value])[i] = v;
+    }
+    return out ?? value;
   }
-  if (!isObject(value)) return;
-  const map = value as Record<string, unknown>;
+  if (!isObject(value)) return value;
+  const map: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+  let changed = false;
   const stamps: Record<string, unknown> = {};
   let any = false;
   for (const key of Object.keys(map)) {
@@ -82,9 +82,14 @@ export function times(value: unknown, c: Clock): void {
         any = true;
       }
     } else if (key === "windows" && Array.isArray(v) && v.some((w) => get(w, "usedPercent") !== undefined)) {
-      windows(v as Record<string, unknown>[], c);
+      map[key] = windows(v as Record<string, unknown>[], c);
+      changed = true;
     } else if (key !== "time") {
-      times(v, c);
+      const shown = times(v, c);
+      if (shown !== v) {
+        map[key] = shown;
+        changed = true;
+      }
     }
   }
   if ("windows" in map && "state" in map) {
@@ -99,11 +104,19 @@ export function times(value: unknown, c: Clock): void {
               ? t("core-views.present.credits.none")
               : t("core-views.present.credits.unknown");
       map.creditsText = text;
+      changed = true;
     }
     const count = u64(map.resetCount);
-    if (count !== undefined) map.resetText = t("core-views.present.resets_left", { n: count });
+    if (count !== undefined) {
+      map.resetText = t("core-views.present.resets_left", { n: count });
+      changed = true;
+    }
   }
-  if (any) map.time = stamps;
+  if (any) {
+    map.time = stamps;
+    changed = true;
+  }
+  return changed ? map : value;
 }
 
 const NO_TICK = new Set(["live", "thread", "history", "host", "net", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "adbShare", "slackTokens"]);
@@ -177,9 +190,7 @@ export function fieldOf(ty: Ty, field: string): Ty | undefined {
 /// An item of a keyed list as `decorate` would make it inside its whole (output.ts).
 export function decorateItem(topic: Topic, item: unknown, c: Clock): unknown {
   if (!ticks(topic)) return item;
-  if (topic.topic === "sessions") session(item as J);
-  times(item, c);
-  return item;
+  return times(topic.topic === "sessions" ? session(item as J) : item, c);
 }
 
 export function conformTopic(topic: Topic, value: unknown): { ok: unknown } | { error: string } {
@@ -417,8 +428,8 @@ export function botOf(connect: J): [string, string] | null {
 }
 
 /// A person as the clients show them (`shown`).
-export function person(p: J, me: J, members: J[]): void {
-  if (!isObject(p)) return;
+export function person(p: J, me: J, members: J[]): J {
+  if (!isObject(p)) return p;
   const strOf = (k: string): string | null => {
     const v = (p as J)[k];
     return typeof v === "string" && v !== "" ? v : null;
@@ -431,21 +442,16 @@ export function person(p: J, me: J, members: J[]): void {
   const name = id === "local" ? t("core-views.present.local_page") : (mName ?? strOf("name") ?? email ?? id);
   const mine = isViewer(me, id, []) || (email !== null && isViewer(me, email, []));
   const picture = str(get(member, "picture")) || null;
-  (p as J).shown = { name, display: mine ? t("core-views.present.you") : name, picture, mine };
+  return { ...p, shown: { name, display: mine ? t("core-views.present.you") : name, picture, mine } };
 }
 
 /// A row's people as the clients show them.
-export function rowPeople(row: J, me: J, slackUsers: string[], members: J[]): void {
-  if (row.people === undefined && row.creator === undefined) return;
+export function rowPeople(row: J, me: J, slackUsers: string[], members: J[]): J {
+  if (row.people === undefined && row.creator === undefined) return row;
   const shown = (p: J): J => {
-    const q = structuredClone(p);
-    person(q, me, members);
+    const q = person(p, me, members);
     const id = str(get(q, "id"));
-    if (id !== undefined && isViewer(me, id, slackUsers)) {
-      q.shown.mine = true;
-      q.shown.display = t("core-views.present.you");
-    }
-    return q;
+    return id !== undefined && isViewer(me, id, slackUsers) ? { ...q, shown: { ...q.shown, mine: true, display: t("core-views.present.you") } } : q;
   };
   const creator = isObject(row.creator) ? shown(row.creator) : null;
   const keyOf = (p: J) => (str(get(p, "email")) ?? str(get(p, "id")) ?? "").toLowerCase();
@@ -457,9 +463,7 @@ export function rowPeople(row: J, me: J, slackUsers: string[], members: J[]): vo
   const text: string[] = [];
   if (starter >= 0) text.push(t("core-views.present.started_by", { name: display(people[starter]) }));
   if (rest.length > 0) text.push(rest.join(t("core-views.list_separator")));
-  row.peopleText = text.join(" · ");
-  if (creator) row.creator = creator;
-  row.people = people;
+  return { ...row, peopleText: text.join(" · "), ...(creator ? { creator } : {}), people };
 }
 
 /// Who said a row's last thing, as its line shows them.
@@ -490,8 +494,8 @@ export function lastBy(row: J, me: J, slackUsers: string[], members: J[]): J {
 }
 
 /// A session's summary with what the clients show of it.
-export function session(s: J): void {
-  if (!isObject(s)) return;
+export function session(s: J): J {
+  if (!isObject(s)) return s;
   const status = shownStatus(s);
   let [text, tone] = format.statusText(status);
   const turn = get(s, "lastTurn");
@@ -516,19 +520,22 @@ export function session(s: J): void {
   const first = strOf("firstText");
   const title = strOf("title") || (first !== null ? format.cleanText(first) : "") || t("core-views.no_messages");
   const b = markOf(s);
-  o.statusText = text;
-  o.tone = tone;
-  o.mark = b;
-  o.badgeText = b !== null ? badgeText(b) : null;
-  o.titleText = title;
   const effort = strOf("effort");
   const process = strOf("process");
-  o.agentText = format.agentLabel(m, effort);
-  o.modelName = m ? model.name(m) : null;
-  o.maker = maker(m);
-  o.runtimeText = format.runtimeLabel(runtime);
-  o.processText = process !== null ? format.processText(process) : null;
-  o.efforts = format.efforts(runtime);
+  return {
+    ...o,
+    statusText: text,
+    tone,
+    mark: b,
+    badgeText: b !== null ? badgeText(b) : null,
+    titleText: title,
+    agentText: format.agentLabel(m, effort),
+    modelName: m ? model.name(m) : null,
+    maker: maker(m),
+    runtimeText: format.runtimeLabel(runtime),
+    processText: process !== null ? format.processText(process) : null,
+    efforts: format.efforts(runtime),
+  };
 }
 
 export function badgeText(b: string): string {
@@ -541,8 +548,8 @@ export function maker(m: string | null | undefined): J {
 }
 
 /// A connect with its state and how it runs in words.
-export function connect(c: J): void {
-  if (!isObject(c)) return;
+export function connect(c: J): J {
+  if (!isObject(c)) return c;
   const o = c as J;
   const [text, presence] = format.connection(o.connection ?? null);
   const mode = str(o.mode) ?? "multi-session";
@@ -550,21 +557,24 @@ export function connect(c: J): void {
   const bind = o.bind ?? null;
   const runtime = str(get(bind, "runtime")) ?? "claude";
   const label = format.agentLabel(str(get(bind, "model")), str(get(bind, "effort")));
-  o.statusText = text;
-  o.presence = presence;
-  o.modeText = modeText;
-  o.modeShort = modeShort;
-  o.runtimeText = format.runtimeLabel(runtime);
-  o.runText = `${format.runtimeLabel(runtime)} · ${label}`;
   const bm = str(get(bind, "model"));
-  o.modelName = bm ? model.name(bm) : null;
+  return {
+    ...o,
+    statusText: text,
+    presence,
+    modeText,
+    modeShort,
+    runtimeText: format.runtimeLabel(runtime),
+    runText: `${format.runtimeLabel(runtime)} · ${label}`,
+    modelName: bm ? model.name(bm) : null,
+  };
 }
 
 /// A profile with its last check in words, its models' makers and series, what it can do, and its trouble.
-export function profile(p: J): void {
-  if (!isObject(p)) return;
-  const o = p as J;
-  if (get(o.access, "kind") === "env" && typeof get(o.access, "provider") === "string") o.access.kind = "api-provider";
+export function profile(p: J): J {
+  if (!isObject(p)) return p;
+  const o: J = { ...p };
+  if (get(o.access, "kind") === "env" && typeof get(o.access, "provider") === "string") o.access = { ...o.access, kind: "api-provider" };
   const blocked = get(o.quota, "state") === "blocked";
   const [text, tone] = blocked ? [t("core-views.present.profile.blocked"), "red"] : format.checkText(o.check ?? null);
   o.checkText = text;
@@ -614,6 +624,7 @@ export function profile(p: J): void {
   o.series = bySeries;
   o.modelsText = modelsText;
   o.available = available;
+  return o;
 }
 
 const KINDS = new Set(["subscription", "anthropic-api", "opencode-go", "api-provider", "env"]);
@@ -686,10 +697,10 @@ export function series(models: string[]): J {
 const GIB = 1024 ** 3;
 
 /// A machine as the clients show it.
-export function host(h: J): void {
-  if (!isObject(h)) return;
-  const o = h as J;
-  const src = structuredClone(o);
+export function host(h: J): J {
+  if (!isObject(h)) return h;
+  const src = h as J;
+  const o: J = { ...src };
   const n = (...path: string[]): number => {
     let v: J = src;
     for (const k of path) v = get(v, k);
@@ -739,6 +750,7 @@ export function host(h: J): void {
   o.meters = [cpu, memory, disk];
   o.usage = [memory, disk].map((m) => `${m.label} ${m.value}`).join(" · ");
   o.emberText = `${brand.name()} ${format.round(n("emberRssBytes") / 1024 ** 2)} MB`;
+  return o;
 }
 
 /// A station's connection as its card shows it (`StationNet`).
@@ -833,8 +845,7 @@ export function decorateWith(topic: string, decorator: Decorator): void {
 export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
   switch (topic.topic) {
     case "host":
-      host(value);
-      return value;
+      return host(value);
     case "footprint":
       return footprint.shown(value, c);
   }
@@ -842,42 +853,44 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
   const v = value as J;
   switch (topic.topic) {
     case "sessions":
-      for (const s of arr(v) ?? []) if (!shaped.has(s)) session(s);
+      if (Array.isArray(v)) value = v.map((s) => (shaped.has(s) ? s : session(s)));
       break;
     case "session":
-      if (isObject(v) && v.session !== undefined) session(v.session);
+      if (isObject(v) && v.session !== undefined) value = { ...v, session: session(v.session) };
       break;
     case "overview":
-      if (isObject(v)) overview(v as J, c);
+      if (isObject(v)) value = overview(v as J, c);
       break;
-    case "chat":
-      for (const a of arr(get(v, "agents")) ?? []) {
-        const jobs = arr(get(a, "jobs"));
-        if (jobs) for (let i = 0; i < jobs.length; i++) jobs[i] = jobsMod.shown(jobs[i], c);
-      }
+    case "chat": {
+      const agents = arr(get(v, "agents"));
+      if (agents) value = { ...v, agents: agents.map((a) => (Array.isArray(get(a, "jobs")) ? { ...a, jobs: a.jobs.map((j: J) => jobsMod.shown(j, c)) } : a)) };
       break;
+    }
     case "decisions":
-      decisions.today(v, c);
+      value = decisions.today(v, c);
       break;
     case "job":
       value = jobsMod.shown(v, c);
       break;
     case "jobLog":
-      jobsMod.log(v, c);
+      value = jobsMod.log(v, c);
       break;
   }
   const own = DECORATORS[topic.topic];
   if (own) value = own(value, c);
-  times(value, c);
-  return value;
+  return times(value, c);
 }
 
-function overview(v: J, c: Clock): void {
-  for (const row of arr(get(v.automaticDecisions, "recent")) ?? []) {
-    if (typeof get(row, "at") === "number") row.stamp = stamp(row.at, c);
+function overview(value: J, c: Clock): J {
+  const v: J = { ...value };
+  const decided = v.automaticDecisions;
+  if (isObject(decided)) {
+    const shown: J = { ...decided };
+    const recent = arr(decided.recent);
+    if (recent) shown.recent = recent.map((row) => (typeof get(row, "at") === "number" ? { ...row, stamp: stamp(row.at, c) } : row));
+    if (isObject(decided.policy)) shown.policy = archivePolicy(decided.policy as J, c);
+    v.automaticDecisions = shown;
   }
-  const policy = get(v.automaticDecisions, "policy");
-  if (isObject(policy)) archivePolicy(policy as J, c);
   const processes = arr(v.processes);
   if (processes) {
     let mb = 0;
@@ -887,18 +900,16 @@ function overview(v: J, c: Clock): void {
         ? t("core-views.present.processes.none")
         : t("core-views.present.processes.running", { n: processes.length, size: mb >= 1024 ? `${format.fixed1(mb / 1024)} GB` : `${mb} MB` });
   }
-  if (isObject(v.footprint)) footprint.brief(v.footprint);
-  for (const c of arr(v.connects) ?? []) connect(c);
-  const station = (arr(v.updates) ?? []).find((u) => get(u, "id") === "station");
-  if (station) station.name = "Station";
-  const profiles = arr(v.profiles);
-  if (profiles) {
-    for (const p of profiles) profile(p);
-    // A stable sort: by kind of account (a station's list is a section each), those in trouble first in each.
-    const kindOf = (p: J) => PROFILE_GROUPS.indexOf(get(p, "group"));
-    const sortedProfiles = [...profiles].sort((a, b) => kindOf(a) - kindOf(b) || Number(get(a, "trouble") === null) - Number(get(b, "trouble") === null));
-    profiles.splice(0, profiles.length, ...sortedProfiles);
-  }
+  if (isObject(v.footprint)) v.footprint = footprint.brief(v.footprint);
+  const connects = arr(v.connects);
+  if (connects) v.connects = connects.map(connect);
+  const updates = arr(v.updates);
+  if (updates) v.updates = updates.map((u) => (get(u, "id") === "station" ? { ...u, name: "Station" } : u));
+  const listed = arr(v.profiles);
+  // A stable sort: by kind of account (a station's list is a section each), those in trouble first in each.
+  const kindOf = (p: J) => PROFILE_GROUPS.indexOf(get(p, "group"));
+  const profiles = listed?.map(profile).sort((a, b) => kindOf(a) - kindOf(b) || Number(get(a, "trouble") === null) - Number(get(b, "trouble") === null));
+  if (profiles) v.profiles = profiles;
   const subscriptions: [J, string][] = [];
   const taken: J[] = [];
   for (const p of profiles ?? []) {
@@ -909,25 +920,31 @@ function overview(v: J, c: Clock): void {
     }
     if (get(p, "machine") === true && get(p, "runtime") !== undefined) taken.push(get(p, "runtime"));
   }
-  for (const l of arr(v.machineLogins) ?? []) {
-    const plan = get(l, "plan");
-    const email = str(get(l, "email"));
-    l.offered =
-      get(l, "loggedIn") === true &&
-      typeof plan === "string" &&
-      plan !== "" &&
-      !(get(l, "runtime") !== undefined && taken.some((r) => equal(r, get(l, "runtime")))) &&
-      !(email !== undefined && subscriptions.some(([runtime, bound]) => equal(get(l, "runtime"), runtime) && email.trim().toLowerCase() === bound));
+  const logins = arr(v.machineLogins);
+  if (logins) {
+    v.machineLogins = logins.map((l) => {
+      const plan = get(l, "plan");
+      const email = str(get(l, "email"));
+      const offered =
+        get(l, "loggedIn") === true &&
+        typeof plan === "string" &&
+        plan !== "" &&
+        !(get(l, "runtime") !== undefined && taken.some((r) => equal(r, get(l, "runtime")))) &&
+        !(email !== undefined && subscriptions.some(([runtime, bound]) => equal(get(l, "runtime"), runtime) && email.trim().toLowerCase() === bound));
+      return isObject(l) ? { ...l, offered } : l;
+    });
   }
+  return v;
 }
 
 /// The archive policy's lines: the checks it counted, and who changed it last, where, when and what.
-function archivePolicy(p: J, c: Clock): void {
+function archivePolicy(policy: J, c: Clock): J {
+  const p: J = { ...policy };
   const failed = u64(p.failed) ?? 0;
   const counted = t("core-views.policy.checked", { n: u64(p.checked) ?? 0, days: u64(p.days) ?? 7 });
   p.summaryText = failed > 0 ? `${counted} · ${t("core-views.policy.failed", { n: failed })}` : counted;
   const change = p.change;
-  if (!isObject(change)) return;
+  if (!isObject(change)) return p;
   const by: J = change.by ?? {};
   const who =
     by.kind === "agent"
@@ -935,6 +952,7 @@ function archivePolicy(p: J, c: Clock): void {
       : str(by.name) || str(by.email) || t("core-views.policy.someone");
   const when = typeof change.at === "number" ? format.relativeTime(change.at, c.now, c.offsetMin) : "";
   p.changeText = [t("core-views.policy.changedBy", { who }), when, str(change.summary)].filter((x) => x !== "").join(" · ");
+  return p;
 }
 
 /// The station's reasons for what a profile can decide with (station/src/sessions/decision.ts), each said in words.

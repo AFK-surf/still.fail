@@ -149,6 +149,41 @@ core 这边怎么做到「一行变只算一行」：
 
 （同样的改动下老式订阅者的 core 耗时也降到 17–19 ms：行和输出的复用对两种订阅都有效，差的是按下标 diff 和整值称重。）
 
+## 谁能改什么（2026-10-14）
+
+规则 7 靠「没变的东西是同一个对象」：库里读出的行、做好的列表行、发出去的项都按对象复用，`output.ts` 遇到同一个冻结对象
+直接用上次的输出，`digest.ts` 按对象记 digest。所以共享出去的值一旦被原地改，要么抛错（它被冻结了：#265 在附件上写
+`owner`，带文件的 chat 让整个 core 退出），要么悄悄错（没冻结：diff 看不出变化，界面停在旧值）。规则：
+
+1. **共享的值只读。** 共享的值：`Data.shared()` 读出的（库里的行、文档、日志条目、设备的值）、store 存的和 view 算出的
+   值（`Store.set`、`update`、`compute`）、发出去的（`output.ts`）、各种按对象记的缓存（`#rowsMade`、`#cache`）。
+   从产生起就不再变；要可变的副本用 `Data.get()` 或 `structuredClone`。
+2. **函数只改自己这次新做的对象。** 参数和从参数读到的东西（`p.x`、`arr(p.items)`、`p.list.find(…)`）一律不改，要改就在
+   需要的那一层复制：`{ ...m, by: { ...m.by, here: true } }`；数组用 `map`、`filter`、`[...a, x]`，排序用 `[...a].sort()`
+   （Hermes 0.81 没有 `toSorted`）。没变的部分原样放回，引用保持稳定。浅复制出的新对象只能改它自己的字段
+   （`c.x = 1`），不能改里面的（`c.x.y = 1`、`c[0].z = 1`）。
+3. **派生的字段在做 view 的函数里用新对象产出**：装饰函数（`present.session`、`connect`、`profile`、`host`、`person`、
+   `times`…）、`shownMessage`、`decisions.presentRow`、`attend.chat` 都返回新值，调用方用返回值。
+4. **模块的私有状态不原地改已经交出去的部分**：放进 topic 值的数组和对象，之后只整体替换（例：`applyStep` 结束一个
+   step 是换成新 step）。
+
+谁来保证：
+
+- **运行时**（`util.ts` 的 `sharedValue` / `checkShared`）：core 的测试（`node --test`，或 `STILLFAIL_CHECK_SHARED=1`）和
+  web 的开发构建里，store 存的、算出的、发出去的值在共享处整个深冻结，谁写谁当场抛错，不管测试数据本身冻没冻。
+  生产里不开（只冻结本来就冻结的：库里的行、设备的值、列表行）。一个 view 算的时候抛错，只让它自己的 topic 显示
+  `internal` 错误，core 和别的 topic 照常（`store.ts` 的 `#compute`）。
+- **检查**（`client/core-ts/scripts/writes.ts`，`check.sh` 改到 core 时跑）：做 view 和装饰的文件里，不许对参数和从参数
+  读到的值赋值、`delete`、`++`、调用原地改数组的方法或 `Object.assign`。它按文件内的数据来源推断，不跨函数：别的
+  函数返回的值它当作新做的，那部分由运行时的冻结兜底。
+- **测试**（`test/views.test.ts` 的 `what_the_core_keeps_and_shares_is_never_written_on_whatever_a_chat_holds`）：按种子
+  随机生成一个 chat 和它周围的东西（附件、quotes、card、选项、编辑、outbox、置顶、决策、多个 agent、额度窗口……，60 个
+  种子，`SIM_SEED=<种子>` 重放一个），交给 core 存（冻结），订阅 chat、列表、决策、station、connect、overview 等 topic，
+  断言每个都有值、没有一个报错。检查脚本自己的测试在 `test/writes.test.ts`。
+
+量过的开销（2026-10-14）：深冻结每个对象 V8 约 0.06–0.08 µs、Hermes 0.81.4（Mac）约 0.4–0.7 µs，已冻结的部分约为 0；
+冻结后读属性不变慢。immer 的 produce 比手写展开复制慢 10–14 倍，不用。
+
 ## 刻意和 Rust core 不同的地方
 
 （随做随补；每条写明违反了哪条规则。）

@@ -127,8 +127,8 @@ class Sum {
 
 type Item = { key: string; title: string; sub: string | null; extra: Record<string, J>; sum: Sum };
 
-function itemsShown(items: Item[], total: Sum): J[] {
-  items.sort((a, b) => b.sum.cost - a.sum.cost || b.sum.calls - a.sum.calls || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
+function itemsShown(listed: Item[], total: Sum): J[] {
+  const items = [...listed].sort((a, b) => b.sum.cost - a.sum.cost || b.sum.calls - a.sum.calls || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
   const byCost = total.cost > 0;
   return items.map((i) => {
     const share = byCost ? i.sum.cost / total.cost : total.calls > 0 ? i.sum.calls / total.calls : 0;
@@ -248,8 +248,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
       const text = (k: string): string | null => (typeof get(row, k) === "string" ? row[k] : null);
       const reference = text("person");
       const knownPerson = reference !== null && isObject(get(stationPeople, reference)) ? stationPeople[reference] : undefined;
-      const person = knownPerson !== undefined ? structuredClone(knownPerson) : { id: reference ?? "", name: t("core-views.usage.unknown_person"), email: null };
-      present.person(person, me, members);
+      const person = present.person(knownPerson !== undefined ? knownPerson : { id: reference ?? "", name: t("core-views.usage.unknown_person"), email: null }, me, members);
       const personKey = (typeof person.email === "string" ? person.email : typeof person.id === "string" ? person.id : "").toLowerCase();
       const name = typeof person.shown?.display === "string" ? person.shown.display : "";
       const cost = typeof get(row, "cost") === "number" ? row.cost : 0;

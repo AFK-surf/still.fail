@@ -28,8 +28,8 @@ export function install(): void {
         if (op.method === "GET" && op.path.startsWith("/machine-sessions") && answer !== null && typeof answer === "object") {
           const now = inner.host.nowMs();
           const a = answer as { sessions?: unknown; session?: unknown };
-          if (Array.isArray(a.sessions)) for (const s of a.sessions) machineMeta(s, now);
-          if (a.session !== undefined) machineMeta(a.session, now);
+          if (Array.isArray(a.sessions)) a.sessions = a.sessions.map((s) => machineMeta(s, now));
+          if (a.session !== undefined) a.session = machineMeta(a.session, now);
         }
         // What the clients show of it, put in here.
         looks.answer(op.method, op.path, answer);

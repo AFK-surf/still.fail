@@ -239,8 +239,8 @@ export function quotaLine(quota: J): J {
 }
 
 /// A session the station's machine kept, in a line: its runtime, where it ran (the home directory as ~), how long ago.
-export function machineMeta(session: J, now: number): void {
-  if (session === null || typeof session !== "object" || Array.isArray(session)) return;
+export function machineMeta(session: J, now: number): J {
+  if (session === null || typeof session !== "object" || Array.isArray(session)) return session;
   const runtime = format.runtimeLabel(str(session.runtime) ?? "");
   const cwd = str(session.cwd) ?? "";
   const rest = cwd.startsWith("/Users/") ? cwd.slice(7) : cwd.startsWith("/home/") ? cwd.slice(6) : null;
@@ -255,5 +255,5 @@ export function machineMeta(session: J, now: number): void {
     const secs = Math.max(format.round((now - session.updatedAt) / 1000), 0);
     ago = secs < 5 ? t("core-logic.jobs.ago.now") : secs >= 86_400 && secs < 2 * 86_400 ? t("core-logic.jobs.ago.yesterday") : t("core-logic.jobs.ago", { span: jobs.span(secs * 1000) });
   }
-  session.meta = [runtime, short, ago].filter((x) => x !== null).join(" · ");
+  return { ...session, meta: [runtime, short, ago].filter((x) => x !== null).join(" · ") };
 }

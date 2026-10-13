@@ -78,14 +78,14 @@ export class Attention implements Owner {
   attended(topic: Topic, value: Value | undefined): Value | undefined {
     if (topic.topic !== "chat" || value === undefined || !("ok" in value)) return value;
     const station = topic.station as string;
-    const due = this.attend.chat(station, typeof topic.session === "string" ? topic.session : null, value.ok);
+    const { due, value: attended } = this.attend.chat(station, typeof topic.session === "string" ? topic.session : null, value.ok);
     const core = this.#core;
     for (const d of due) {
       core.runner.fork(
         Effect.catch(core.stations.read(station, d.read.thread, d.read.seq, null), () => Effect.sync(() => this.attend.failed(station, d))),
       );
     }
-    return value;
+    return { ok: attended };
   }
 
   /// This device's push registration, given to the accounts that do not have it yet.

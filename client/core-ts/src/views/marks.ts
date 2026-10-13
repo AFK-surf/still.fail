@@ -42,8 +42,7 @@ function startedBy(row: J, me: J): boolean {
 
 /// A row's state line as its list says it (its agents presented as the chats view has them).
 function stateText(row: J): string {
-  const shown = structuredClone(row);
-  for (const a of arr(shown.agents)) present.session(a);
+  const shown = isObject(row) && Array.isArray(row.agents) ? { ...row, agents: row.agents.map((a: J) => present.session(a)) } : row;
   return present.rowStateText(shown) ?? "";
 }
 

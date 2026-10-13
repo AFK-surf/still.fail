@@ -219,8 +219,8 @@ function plain(v: J): J {
 test("canonical_and_legacy_station_notices_have_the_same_presentation", () => {
   const shown: J[] = [];
   for (const kind of ["ember", "stillfail"]) {
-    const message: J = { authorKind: kind, author: kind, text: "notice" };
-    shownMessage(message, [], null, [], [], [], undefined);
+    let message: J = { authorKind: kind, author: kind, text: "notice" };
+    message = shownMessage(message, [], null, [], [], [], undefined);
     assert.equal(message.system, true);
     assert.equal(message.mine, false);
     shown.push(message.by);
@@ -237,23 +237,23 @@ test("another_chats_agent_goes_by_that_chats_name_without_the_header_line", () =
     ["由 [发版 0.1.1780](https://x/o/w/s/a) 开的 chat：\n\n回归过了吗？", "发版 0.1.1780"],
     ["Opened by [Release](https://x/o/w/s/a):\n\n回归过了吗？", "Release"],
   ]) {
-    const message: J = { authorKind: "agent", author: "far/a", text, agentIdentity: { model: "claude-opus-5-5" } };
-    shownMessage(message, agents, null, [], [], [], undefined);
+    let message: J = { authorKind: "agent", author: "far/a", text, agentIdentity: { model: "claude-opus-5-5" } };
+    message = shownMessage(message, agents, null, [], [], [], undefined);
     assert.deepEqual([message.text, message.by.name, message.by.from], ["回归过了吗？", title, "https://x/o/w/s/a"]);
   }
-  const own: J = { authorKind: "agent", author: "k", text: "来自 [a](https://x/o/w/s/a)：\n\nhi" };
-  shownMessage(own, agents, null, [], [], [], undefined);
+  let own: J = { authorKind: "agent", author: "k", text: "来自 [a](https://x/o/w/s/a)：\n\nhi" };
+  own = shownMessage(own, agents, null, [], [], [], undefined);
   assert.deepEqual([own.text, own.by.name], ["来自 [a](https://x/o/w/s/a)：\n\nhi", "Opus"]);
 });
 
 test("historical_messages_do_not_follow_the_current_model", () => {
-  const message: J = { authorKind: "agent", author: "k", agentIdentity: { model: "gpt-6-sol", effort: "high" } };
+  let message: J = { authorKind: "agent", author: "k", agentIdentity: { model: "gpt-6-sol", effort: "high" } };
   const agents = [{ session: { key: "k", agentText: "GPT-6 Astra", model: "gpt-6-astra", runtime: "claude", maker: { id: "openai", name: "OpenAI" } } }];
-  shownMessage(message, agents, null, [], [], [], undefined);
+  message = shownMessage(message, agents, null, [], [], [], undefined);
   assert.equal(message.by.name, format.agentLabel("gpt-6-sol", "high"));
   assert.equal(message.by.runtime, "claude");
   delete message.agentIdentity;
-  shownMessage(message, agents, null, [], [], [], undefined);
+  message = shownMessage(message, agents, null, [], [], [], undefined);
   assert.equal(message.by.name, "GPT-6 Astra");
   assert.equal(message.by.maker.id, "openai");
 });
@@ -1480,4 +1480,107 @@ test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () =>
     [0, "看看项目", "#C0OPS", true, "Mia"],
     [0, "**看了**", "#C0OPS", false, v.elsewhere[1].by.name],
   ]);
+});
+
+// ── What is shared is never written on (docs/core-ts.md「谁能改什么」) ──
+
+/// mulberry32: the same draws for the same seed.
+function draws(seed: number) {
+  let a = seed >>> 0;
+  const next = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let x = a;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+  const int = (n: number) => Math.floor(next() * n);
+  return { int, chance: (p: number) => next() < p, pick: <T,>(list: T[]): T => list[int(list.length)] };
+}
+
+/// A chat and what is around it, of every kind there is, drawn from a seed: the views make their values from all of
+/// it, kept frozen as the core keeps it (and every value the store keeps frozen too, in tests), so a write on any of
+/// it anywhere throws, and the topic it is made for says so.
+function drawnChat(seed: number, now: number) {
+  const d = draws(seed);
+  const keys = ["k", "j", "q"].slice(0, 1 + d.int(3));
+  const file = (i: number) => ({ name: `f${i}.png`, path: d.chance(0.5) ? `/w/f${i}.png` : `elsewhere/f${i}.png`, size: i + 1 });
+  const files = () => Array.from({ length: d.int(3) }, (_, i) => file(i));
+  const quotes = () => (d.chance(0.3) ? [{ author: "agent", text: "那段", comment: d.chance(0.5) ? "嗯" : "", ts: "1.0", role: "agent" }] : []);
+  const options = () => [{ label: "A", recommended: true }, { label: "B", detail: "再说" }];
+  const entries: J[] = [];
+  const n = 1 + d.int(12);
+  for (let i = 1; i <= n; i++) {
+    const kind = d.pick(["person", "agent", "agent", "stillfail", "edit"]);
+    if (kind === "edit" && entries.length > 0) {
+      entries.push({ thread: 7, n: i, kind: "edit", target: d.pick(entries).n, text: `改过的 ${i}`, attachments: files(), quotes: quotes(), at: i });
+      continue;
+    }
+    const e: J = { ...entry(i, `第 ${i} 条 @Mia`), attachments: files(), quotes: quotes() };
+    if (kind === "agent") {
+      Object.assign(e, { authorKind: "agent", author: d.pick(keys), agentIdentity: d.chance(0.5) ? { model: "claude-opus-5-5", effort: "high" } : null });
+      if (d.chance(0.3)) Object.assign(e, { declared: "final", ending: "all_done" });
+      else if (d.chance(0.3)) Object.assign(e, { declared: "block", ending: "need_decision", options: options() });
+      if (d.chance(0.2)) e.card = { type: d.pick(["options", "text"]), options: options(), assignee: d.pick(["me@x.com", "other@x.com"]) };
+      if (d.chance(0.2)) e.text = "[来自 Slack](https://x.slack.com/a) 那边说的";
+    } else if (kind === "stillfail") Object.assign(e, { authorKind: "stillfail", author: "stillfail" });
+    else if (d.chance(0.5)) e.author = "me@x.com";
+    entries.push(e);
+  }
+  const people = [{ id: "me@x.com", email: "me@x.com", name: "我", via: "web" }, { id: "local", name: "本机管理页", email: null, via: "local" }].slice(0, d.int(3));
+  const th = { ...thread(7, keys, now), people, creator: d.chance(0.5) ? { id: "other@x.com", email: "other@x.com", name: "Other", via: "web" } : null };
+  const turnOf = () => d.pick([null, { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: 1, endedAt: 1, need: "好了" }, { kind: "message", declared: "block", need: "选哪个", startedAt: 1, endedAt: null }]);
+  const sessionsOf = keys.map((k) => fullSession(k, { connect: d.pick(["ember", "c1"]), profile: d.pick(["p1", "p2"]), model: d.pick([null, "claude-opus-5-5"]), process: d.pick(["cold", "running"]), lastTurn: turnOf(), lastActiveAt: now - d.int(100_000) }));
+  const r: J = { ...row("k", now), thread: 7, title: "排查", agents: keys.map((k) => ({ ...session(k), lastTurn: turnOf(), process: d.pick(["cold", "running"]) })), unread: d.chance(0.5), mine: d.chance(0.5) };
+  if (d.chance(0.5)) r.pinned = now - d.int(1000);
+  if (d.chance(0.4)) r.decision = { seq: n, options: options(), message: { seq: n, text: "选哪个？", attachments: files() }, before: [], card: { type: "options", options: options() } };
+  if (d.chance(0.4)) r.last = { seq: n, thread: 7, ts: `${n}.0`, authorKind: d.pick(["agent", "person"]), author: d.pick([...keys, "me@x.com"]), authorName: null, text: "最后一句", attachments: files(), quotes: [], declared: null, createdAt: now, editedAt: null };
+  const quota = { state: "ok", windows: [{ label: "5h", usedPercent: d.int(100), resetsAt: now / 1000 + 3600 }, { label: "7d", usedPercent: d.int(100) }], credits: { hasCredits: d.chance(0.5), unlimited: false }, resetCount: d.int(3), checkedAt: 1 };
+  const ov = {
+    ...overviewOf([connect("c1", "Slack")], [profile("p1", { quota }), profile("p2", { name: "主力", access: { kind: "env", provider: "openrouter", key: "" }, check: { state: d.pick(["ok", "login", "failed"]), detail: "", models: ["claude-opus-5-5"], checkedAt: 1 } })]),
+    footprint: d.chance(0.5) ? { bytes: d.int(1e9) } : {},
+    machineLogins: [{ runtime: "claude", installed: true, loggedIn: true, plan: "max", email: "me@x.com", text: "me@x.com · max" }],
+  };
+  const outbox = Array.from({ length: d.int(3) }, (_, i) => ({ text: `还没发出的 ${i}`, attachments: files(), quotes: quotes() }));
+  return { page: { first: 1, last: n, entries, thread: null }, thread: th, sessions: sessionsOf, row: r, overview: ov, outbox };
+}
+
+test("what_the_core_keeps_and_shares_is_never_written_on_whatever_a_chat_holds", async () => {
+  const seeds = process.env.SIM_SEED ? [Number(process.env.SIM_SEED)] : Array.from({ length: 60 }, (_, i) => i + 1);
+  for (const seed of seeds) {
+    const t = setup();
+    const now = t.host.nowMs();
+    const drawn = drawnChat(seed, now);
+    const topics: Topic[] = [
+      chatTopic("ws/st", 7),
+      { topic: "chats", scope: "ws" },
+      { topic: "decisions", workspace: "ws" },
+      { topic: "stations", scope: "ws" },
+      { topic: "connects", scope: "ws" },
+      overview("ws/st"),
+      sessions("ws/st"),
+      hostOf("ws/st"),
+    ];
+    const uis = topics.map((topic, i) => {
+      t.subscribe(i + 1, topic);
+      return [ui(), i + 1] as [Ui, number];
+    });
+    t.set(workspace(), oneStation());
+    t.set(prefs(), {});
+    t.set(link("ws/st"), { state: "online" });
+    t.set(overview("ws/st"), drawn.overview);
+    t.set(hostOf("ws/st"), hostInfo("studio"));
+    t.set(sessions("ws/st"), drawn.sessions);
+    t.set(threads("ws/st"), [drawn.thread]);
+    t.set(rows("ws/st"), [drawn.row]);
+    t.set(pageOf("ws/st", 7), drawn.page);
+    for (const o of drawn.outbox) t.views.outboxAdd("ws/st", 7, o);
+    await t.readAll(uis);
+    const said = `seed ${seed} (SIM_SEED=${seed} runs it again)`;
+    uis.forEach(([u], i) => {
+      assert.equal(u.error, undefined, `${topicKey(topics[i])}: ${JSON.stringify(u.error)}; ${said}`);
+      assert.notEqual(u.value, undefined, `${topicKey(topics[i])} has no value; ${said}`);
+    });
+    assert.equal(uis[0][0].value.messages.length, drawn.page.entries.filter((e: J) => e.kind === "message").length, said);
+  }
 });

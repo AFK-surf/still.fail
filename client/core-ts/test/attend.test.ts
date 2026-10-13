@@ -19,29 +19,37 @@ test("the_unread_line_holds_for_the_visit_and_is_there_from_the_first_value", as
   const host = new FakeHost();
   const attend = await run(Attend.load(host));
   let v = chat(2, false, [[1, 0, false], [2, 0, false], [3, 0, true], [4, 0, false]]);
-  assert.deepEqual(attend.chat("ws/st", null, v), []);
+  {
+    const r = attend.chat("ws/st", null, v);
+    v = r.value;
+    assert.deepEqual(r.due, []);
+  }
   assert.equal(v.unreadLine, 4);
   attend.focus(1, focus({ visible: true, focused: true, chat: { station: "ws/st", thread: 7 } }));
-  attend.chat("ws/st", null, v);
+  v = attend.chat("ws/st", null, v).value;
   assert.equal(v.unreadLine, 4);
   const later = host.nowMs() + 1;
   v = chat(4, false, [[1, 0, false], [2, 0, false], [3, 0, true], [4, 0, false], [5, later, false]]);
-  attend.chat("ws/st", null, v);
+  v = attend.chat("ws/st", null, v).value;
   assert.equal(v.unreadLine, 4);
   attend.focus(1, focus({ left: { station: "ws/st", thread: 7 } }));
   attend.focus(1, focus({ chat: { station: "ws/st", session: "k1", thread: 7 } }));
   await host.time.pass(5);
-  attend.chat("ws/st", "k1", v);
+  v = attend.chat("ws/st", "k1", v).value;
   assert.equal(v.unreadLine, 5);
   attend.focus(1, focus({ left: { station: "ws/st", thread: 8 } }));
   assert.equal(attend.visits.size, 1);
   attend.focus(1, focus({ chat: null }));
   attend.focus(2, focus({ chat: { station: "ws/st", thread: 7 } }));
   v = chat(1, true, [[10, 0, false], [11, 0, false]]);
-  assert.deepEqual(attend.chat("ws/st", null, v), []);
+  {
+    const r = attend.chat("ws/st", null, v);
+    v = r.value;
+    assert.deepEqual(r.due, []);
+  }
   assert.deepEqual([v.unreadLine, v.unreadAbove], [null, false]);
   v = chat(1, true, [[1, 0, false], [2, 0, false]]);
-  attend.chat("ws/st", null, v);
+  v = attend.chat("ws/st", null, v).value;
   assert.equal(v.unreadLine, 2);
 });
 
@@ -59,28 +67,28 @@ test("only_what_is_said_while_a_chat_shows_comes_in", async () => {
   const agents = (a: string, b: string) => [{ session: { key: "a" }, status: a }, { session: { key: "b" }, status: b }];
   attend.focus(1, focus({ visible: true, chat: { station: "ws/st", thread: 7 } }));
   let v = at(2, 2, agents("running", "idle"));
-  attend.chat("ws/st", null, v);
+  v = attend.chat("ws/st", null, v).value;
   assert.ok(said(v).length === 0 && started(v).length === 0);
   v = at(4, 4, agents("running", "idle"));
-  attend.chat("ws/st", null, v);
+  v = attend.chat("ws/st", null, v).value;
   assert.deepEqual(said(v), []);
   v = at(6, 4, agents("running", "running"));
-  attend.chat("ws/st", null, v);
+  v = attend.chat("ws/st", null, v).value;
   assert.deepEqual([said(v), started(v)], [[5, 6], ["b"]]);
   v = at(7, 7, agents("running", "running"));
-  attend.chat("ws/st", null, v);
+  v = attend.chat("ws/st", null, v).value;
   assert.deepEqual(said(v), [5, 6]);
   v = at(7, 7, agents("running", "idle"));
-  attend.chat("ws/st", null, v);
+  v = attend.chat("ws/st", null, v).value;
   assert.deepEqual(started(v), []);
   attend.focus(1, focus({ chat: null }));
   attend.focus(1, focus({ chat: { station: "ws/st", thread: 7 } }));
   v = at(7, 7, agents("running", "idle"));
-  attend.chat("ws/st", null, v);
+  v = attend.chat("ws/st", null, v).value;
   assert.deepEqual(said(v), []);
   attend.focus(1, focus({ chat: null }));
   v = at(9, 7, agents("running", "idle"));
-  attend.chat("ws/st", null, v);
+  v = attend.chat("ws/st", null, v).value;
   assert.deepEqual(said(v), []);
 });
 
@@ -99,20 +107,20 @@ test("background_and_delayed_messages_are_history_but_new_live_messages_still_an
   };
   attend.focus(1, focus({ visible: true, chat: { station: "ws/st", thread: 7 } }));
   attend.chat("ws/st", null, value(1, 0, "idle"));
-  const live = value(2, 0, "running");
-  attend.chat("ws/st", null, live);
+  let live = value(2, 0, "running");
+  live = attend.chat("ws/st", null, live).value;
   assert.equal(live.messages[1].said, true);
   attend.focus(1, focus({ visible: false }));
-  const background = value(1000, 0, "running");
-  attend.chat("ws/st", null, background);
+  let background = value(1000, 0, "running");
+  background = attend.chat("ws/st", null, background).value;
   quiet(background);
   attend.focus(1, focus({ visible: true }));
-  const delayed = value(2000, 0, "running");
-  attend.chat("ws/st", null, delayed);
+  let delayed = value(2000, 0, "running");
+  delayed = attend.chat("ws/st", null, delayed).value;
   quiet(delayed);
   attend.chat("ws/st", null, value(2000, 0, "idle"));
-  const fresh = value(2001, host.nowMs() + 1, "running");
-  attend.chat("ws/st", null, fresh);
+  let fresh = value(2001, host.nowMs() + 1, "running");
+  fresh = attend.chat("ws/st", null, fresh).value;
   assert.equal(fresh.messages.filter((m: J) => m.said === true).length, 1);
   assert.equal(fresh.agents[0].started, true);
 });
@@ -123,8 +131,8 @@ test("a_hidden_tab_does_not_stop_animation_in_another_visible_tab", async () => 
   for (const client of [1, 2]) attend.focus(client, focus({ visible: true, chat: { station: "ws/st", thread: 7 } }));
   attend.chat("ws/st", null, chat(0, false, [[1, 0, false]]));
   attend.focus(1, focus({ visible: false }));
-  const v = chat(0, false, [[1, 0, false], [2, 0, false]]);
-  attend.chat("ws/st", null, v);
+  let v = chat(0, false, [[1, 0, false], [2, 0, false]]);
+  v = attend.chat("ws/st", null, v).value;
   assert.equal(v.messages[1].said, true);
 });
 
@@ -133,19 +141,47 @@ test("a_chat_is_read_while_its_end_shows_on_a_page_in_view", async () => {
   const attend = await run(Attend.load(host));
   let v = chat(1, false, [[1, 0, false], [2, 0, false]]);
   attend.focus(1, focus({ visible: false, chat: { station: "ws/st", thread: 7, end: true } }));
-  assert.deepEqual(attend.chat("ws/st", null, v), []);
+  {
+    const r = attend.chat("ws/st", null, v);
+    v = r.value;
+    assert.deepEqual(r.due, []);
+  }
   attend.focus(1, focus({ visible: true, chat: { station: "ws/st", thread: 7, end: false } }));
-  assert.deepEqual(attend.chat("ws/st", null, v), []);
+  {
+    const r = attend.chat("ws/st", null, v);
+    v = r.value;
+    assert.deepEqual(r.due, []);
+  }
   attend.focus(1, focus({ chat: { station: "ws/st", thread: 7, end: true } }));
-  assert.deepEqual(attend.chat("ws/st", null, v), [{ read: { thread: 7, seq: 2 } }]);
-  assert.deepEqual(attend.chat("ws/st", null, v), []);
+  {
+    const r = attend.chat("ws/st", null, v);
+    v = r.value;
+    assert.deepEqual(r.due, [{ read: { thread: 7, seq: 2 } }]);
+  }
+  {
+    const r = attend.chat("ws/st", null, v);
+    v = r.value;
+    assert.deepEqual(r.due, []);
+  }
   attend.failed("ws/st", { read: { thread: 7, seq: 2 } });
-  assert.deepEqual(attend.chat("ws/st", null, v), [{ read: { thread: 7, seq: 2 } }]);
+  {
+    const r = attend.chat("ws/st", null, v);
+    v = r.value;
+    assert.deepEqual(r.due, [{ read: { thread: 7, seq: 2 } }]);
+  }
   v = chat(2, false, [[1, 0, false], [2, 0, false]]);
-  assert.deepEqual(attend.chat("ws/st", null, v), []);
+  {
+    const r = attend.chat("ws/st", null, v);
+    v = r.value;
+    assert.deepEqual(r.due, []);
+  }
   v = chat(2, false, [[1, 0, false], [2, 0, false], [3, 0, false]]);
   v.newer = true;
-  assert.deepEqual(attend.chat("ws/st", null, v), []);
+  {
+    const r = attend.chat("ws/st", null, v);
+    v = r.value;
+    assert.deepEqual(r.due, []);
+  }
 });
 
 test("notices_show_unless_off_looked_at_or_left_to_a_push_and_each_once", async () => {

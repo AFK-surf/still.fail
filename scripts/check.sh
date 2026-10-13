@@ -230,6 +230,8 @@ if part ts; then
   if touches "$ts_desktop"; then prep desktop deps apps/desktop; step "typecheck: desktop" after desktop sh -c 'cd apps/desktop && pnpm run typecheck'; fi
   # The TypeScript core (docs/core-ts.md): its own tsconfig.
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
+  # What makes the views writes only on what it made, never on what it was given (docs/core-ts.md「谁能改什么」).
+  if touches '^client/core-ts/(src|scripts)/'; then prep core deps client/core-ts; step "core writes on its own" after core node client/core-ts/scripts/writes.ts --check; fi
 
 fi
 

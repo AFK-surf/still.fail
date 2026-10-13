@@ -71,8 +71,8 @@ test("model_efforts_follow_the_account_and_survive_resolving_saved_choices", () 
 
 test("a_machines_session_is_a_line_its_home_as_tilde", () => {
   const meta = (cwd: string, ago: number) => {
-    const s: J = { runtime: "claude", cwd, updatedAt: 1_000_000_000 };
-    machineMeta(s, 1_000_000_000 + ago);
+    let s: J = { runtime: "claude", cwd, updatedAt: 1_000_000_000 };
+    s = machineMeta(s, 1_000_000_000 + ago);
     return s.meta;
   };
   assert.equal(meta("/Users/bob/src/x", 3_000), "Claude Code · ~/src/x · 刚刚");

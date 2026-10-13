@@ -163,12 +163,10 @@ export function sentFrom(text: string): [string, string, string] | null {
 }
 
 /// A message as a chat shows it: whether it is the viewer's, still.fail's own notice, who said it, mentions named.
-export function shownMessage(m: J, agents: J[], viewer: J, slackUsers: string[], members_: J[], bots: [string, string][], creator: J): void {
-  const card = decisions.ofMessage(m);
-  if (card !== null) {
-    decisions.labelAssignee(card, viewer, members_, creator);
-    m.card = card;
-  }
+export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: string[], members_: J[], bots: [string, string][], creator: J): J {
+  const m: J = { ...message };
+  const card = decisions.ofMessage(message);
+  if (card !== null) m.card = decisions.labelAssignee(card, viewer, members_, creator);
   const kind = str(m.authorKind) ?? "";
   const author = str(m.author) ?? "";
   const saidName = str(m.authorName) || null;
@@ -200,6 +198,7 @@ export function shownMessage(m: J, agents: J[], viewer: J, slackUsers: string[],
     m.by = { name, picture: typeof picture === "string" && picture !== "" ? picture : null };
   }
   if (kind === "person") m.text = present.mentions(str(m.text) ?? "", bots, members_);
+  return m;
 }
 
 import * as brand from "../brand.ts";
@@ -232,7 +231,7 @@ function isMine(me: J, creator: J): boolean {
 }
 
 /// A connect's sessions as its page shows them.
-function connectSessions(item: J, connect: J, connects: J[], sessions: J[], threads: J[], clock: present.Clock): void {
+function connectSessions(connect: J, connects: J[], sessions: J[], threads: J[], clock: present.Clock): J {
   const id = str(get(connect, "id")) ?? "";
   const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
   const at = (v: J) => (typeof get(v, "lastActiveAt") === "number" ? v.lastActiveAt : 0);
@@ -241,8 +240,7 @@ function connectSessions(item: J, connect: J, connects: J[], sessions: J[], thre
     return n !== "" ? n : c;
   };
   const shown = (s: J) => {
-    const c = structuredClone(s);
-    present.session(c);
+    const c = present.session(s);
     const key = strOf(c, "key");
     const thread = threads.find((th) => arr(get(th, "sessions")).some((m) => get(m, "session") === key));
     c.chat = thread !== undefined ? (get(thread, "id") ?? null) : null;
@@ -272,11 +270,8 @@ function connectSessions(item: J, connect: J, connects: J[], sessions: J[], thre
       c.current = strOf(s, "key") === current;
       return c;
     });
-  item.sessions = own;
   const bound = sessions.find((s) => current !== null && strOf(s, "key") === current);
-  item.bound = bound !== undefined ? shown(bound) : null;
-  item.candidates = candidates;
-  item.running = running;
+  return { sessions: own, bound: bound !== undefined ? shown(bound) : null, candidates, running };
 }
 
 /// What the views are put together with: the core's store and data, and what the accounts say of a workspace.
@@ -954,9 +949,8 @@ export class Views implements Owner {
       const by = isObject(entry) ? present.lastBy({ last: entry, agents: chat.agents }, me, slackUsers, members_) : null;
       const message: J = { station: hit.station, thread: hit.thread, seq: hit.seq, by: str(get(by, "name")) ?? "", ...refs.excerpt(hit.text, words) };
       if (hit.at !== null) message.createdAt = hit.at;
-      present.times(message, clock);
       // Its chat's row as the list made it (frozen, its times in words already).
-      out.push({ chat, ...message });
+      out.push({ chat, ...(present.times(message, clock) as J) });
       if (out.length >= wanted) break;
     }
     return out;
@@ -984,9 +978,9 @@ export class Views implements Owner {
 
   /// A station's row as the list shows it (null: not in this list).
   #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean, mark: { emoji: string | null; icon: string | null } | null): J {
-    const row = structuredClone(raw);
-    // Pinned rows are pinned (true) in the list, in the order they were pinned in; one unpinned says false.
-    if (typeof row.pinned === "number") pinnedAt.set(row, row.pinned);
+    let row = structuredClone(raw);
+    // Pinned rows are pinned (true) in the list, in the order they were pinned in (pinnedAt, below); one unpinned says
+    // false.
     if (row.pinned !== undefined) row.pinned = typeof row.pinned === "number";
     row.station = s.address;
     row.stationName = s.name;
@@ -1003,7 +997,7 @@ export class Views implements Owner {
     if (watch !== null) row.watch = watch;
     else if (watching) return null;
     row.state = present.rowState(agents);
-    for (const agent of arr(row.agents)) present.session(agent);
+    if (Array.isArray(row.agents)) row.agents = row.agents.map((agent: J) => present.session(agent));
     if (row.connect !== undefined && row.connect !== null) {
       const o = row.origin ?? null;
       const text = (k: string) => (typeof get(o, k) === "string" && o[k] !== "" ? (o[k] as string) : null);
@@ -1015,7 +1009,7 @@ export class Views implements Owner {
       const text = format.cleanText(format.plainText(str(row.last.text) ?? ""));
       row.last.preview = text === "" ? t("core-views.file") : text;
     }
-    present.rowPeople(row, me, slackUsers, members_);
+    Object.assign(row, present.rowPeople(row, me, slackUsers, members_));
     const by = present.lastBy(row, me, slackUsers, members_);
     if (by !== null) {
       row.last.by = by;
@@ -1023,7 +1017,7 @@ export class Views implements Owner {
       by.label = typeof by.state === "string" ? t("core-views.by_label", { name, state: present.badgeText(by.state) }) : name;
       by.maker = present.maker(str(by.model));
     }
-    decisions.presentRow(row);
+    row = decisions.presentRow(row);
     if (present.archivable(row)) {
       row.settled = true;
       row.archivable = true;
@@ -1033,6 +1027,7 @@ export class Views implements Owner {
       row.stateText = line[0];
       if (line[1] !== null) row.stateAbout = line[1];
     }
+    if (typeof raw.pinned === "number") pinnedAt.set(row, raw.pinned);
     return row;
   }
 
@@ -1072,8 +1067,7 @@ export class Views implements Owner {
     const items = stations.map((s) => {
       const overview = this.ok({ topic: "overview", station: s.address });
       const hostRaw = this.ok({ topic: "host", station: s.address });
-      const host = hostRaw === undefined ? null : structuredClone(hostRaw);
-      if (host !== null) present.host(host);
+      const host = hostRaw === undefined ? null : present.host(hostRaw);
       const shown = overview === undefined ? null : present.decorate({ topic: "overview", station: s.address }, structuredClone(overview), c);
       let summary: string;
       if (!s.online) {
@@ -1131,12 +1125,9 @@ export class Views implements Owner {
         const id = get(get(connect, "createdBy"), "id");
         const creator = id !== undefined ? { id, email: id } : null;
         if (mine && !isMine(me, creator)) continue;
-        const shown = structuredClone(connect);
-        present.connect(shown);
-        if (shown.createdBy !== undefined) present.person(shown.createdBy, me, members_);
-        const item: J = { station: s.address, stationName: s.name, connect: shown };
-        connectSessions(item, connect, connects, sessions, threads, this.#clock());
-        items.push(item);
+        const shown = present.connect(connect);
+        if (shown.createdBy !== undefined) shown.createdBy = present.person(shown.createdBy, me, members_);
+        items.push({ station: s.address, stationName: s.name, connect: shown, ...connectSessions(connect, connects, sessions, threads, this.#clock()) });
       }
     }
     return { ok: { me, items, loading } };
@@ -1178,9 +1169,9 @@ export class Views implements Owner {
     const peopleSeqs = messages.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [m.seq as number] : []));
     const waits = peopleSeqs.slice(Math.max(peopleSeqs.length - waiting, 0));
     const written = messages.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [[m.seq as number, str(m.text) ?? ""] as [number, string]] : []));
-    for (const m of messages) {
-      shownMessage(m, agents, viewer, slackUsers, members_, bots, thread.creator);
-      m.waiting = u64(m.seq) !== null && waits.includes(m.seq);
+    for (let i = 0; i < messages.length; i++) {
+      const m = shownMessage(messages[i], agents, viewer, slackUsers, members_, bots, thread.creator);
+      messages[i] = { ...m, waiting: u64(m.seq) !== null && waits.includes(m.seq) };
     }
     // A sent message leaves the outbox as its own entry (or anything later) arrives; before the station answered
     // with its seq, it is the viewer's first message since it was sent with the same words.
@@ -1215,9 +1206,9 @@ export class Views implements Owner {
       const outgoing = this.local.outgoing(station, id, seq);
       if (outgoing !== undefined) m.outgoing = outgoing;
     }
-    const people = Array.isArray(thread.people) ? thread.people : [];
-    for (const p of people) present.person(p, viewer, members_);
-    if (thread.creator !== undefined) present.person(thread.creator, viewer, members_);
+    const people = (Array.isArray(thread.people) ? thread.people : []).map((p: J) => present.person(p, viewer, members_));
+    if (Array.isArray(thread.people)) thread.people = people;
+    if (thread.creator !== undefined) thread.creator = present.person(thread.creator, viewer, members_);
     const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
     const surface = strOf(thread, "surface");
     const slack = !(surface === "ember" || surface === "stillfail");
@@ -1243,7 +1234,7 @@ export class Views implements Owner {
       const d = row !== undefined ? decisions.ofRow(row) : null;
       pendingCard = d !== null && open(d) ? [u64(d.seq) ?? 0, decisions.dismissed(d)] : null;
     }
-    decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed"));
+    messages.splice(0, messages.length, ...decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed")));
     const elsewhere = this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots });
     const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : chatTitle(thread);
     const view: J = {
@@ -1389,12 +1380,9 @@ export class Views implements Owner {
     }
     const overview = this.ok({ topic: "overview", station });
     const now = this.#core.host.nowMs();
-    const session = structuredClone(get(detail, "session") ?? null);
-    present.session(session);
-    const connect = find(get(overview, "connects"), get(session, "connect"));
-    present.connect(connect);
-    const profile = find(get(overview, "profiles"), get(session, "profile"));
-    present.profile(profile);
+    const session = present.session(get(detail, "session") ?? null);
+    const connect = present.connect(find(get(overview, "connects"), get(session, "connect")));
+    const profile = present.profile(find(get(overview, "profiles"), get(session, "profile")));
     const runnable = runnableOn(overview, session, now);
     let account: J = runnable.find((p) => p.current === true) ?? null;
     if (account === null && isObject(profile)) {
@@ -1553,19 +1541,9 @@ export class Views implements Owner {
         const seq = u64(d.seq);
         if (thread === null || seq === null) continue;
         if (this.local.answered(s.address, thread, seq)) continue;
-        const agents = arr(row.agents).map((a) => {
-          const c = structuredClone(a);
-          present.session(c);
-          return { session: c };
-        });
-        const shown = (m: J) => {
-          const c = structuredClone(m);
-          shownMessage(c, agents, me, slackUsers, members_, [], row.creator);
-          c.waiting = false;
-          return c;
-        };
-        const card = decisions.cardShown(d.card);
-        decisions.labelAssignee(card, me, members_, row.creator);
+        const agents = arr(row.agents).map((a) => ({ session: present.session(a) }));
+        const shown = (m: J): J => ({ ...shownMessage(m, agents, me, slackUsers, members_, [], row.creator), waiting: false });
+        const card = decisions.labelAssignee(decisions.cardShown(d.card), me, members_, row.creator);
         const options = card.options ?? [];
         const message = shown(d.message);
         if (decisions.kind(d.card) === "options") message.options = structuredClone(options);
@@ -1599,11 +1577,11 @@ export class Views implements Owner {
         ]);
       }
     }
-    decisions.order(items);
+    const ordered = decisions.order(items);
     const at = (v: J, k: string) => (typeof v[k] === "number" ? v[k] : 0);
     answered.sort((a, b) => at(b, "answeredAt") - at(a, "answeredAt"));
     working.sort((a, b) => at(b, "lastActiveAt") - at(a, "lastActiveAt"));
-    return { ok: { items: items.map((i) => i[0]), count: items.length, loading, answered, working } };
+    return { ok: { items: ordered.map((i) => i[0]), count: ordered.length, loading, answered, working } };
   }
 
   // ── workspace marks ──
@@ -1655,13 +1633,15 @@ function drawn<V extends Value | undefined>(out: V): V {
   view.messages = messages;
   if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? { ...o, attachments: own(o.attachments) } : o));
   // Under the agent's last post, at the chat's end (not a window short of it), once it said it is all done.
-  let last: J;
+  let lastAt = -1;
   for (let i = messages.length - 1; i >= 0 && view.newer !== true; i--) {
-    if (messages[i].authorKind === "agent" && messages[i].system !== true) { last = messages[i]; break; }
+    if (messages[i].authorKind === "agent" && messages[i].system !== true) { lastAt = i; break; }
   }
-  if (last !== undefined && last.ending === "all_done") {
+  if (lastAt >= 0 && messages[lastAt].ending === "all_done") {
+    const last: J = { ...messages[lastAt] };
     if (view.archivable === true && view.offline !== true && isObject(view.thread)) last.archive = true;
     if (isObject(view.archiveCheck)) last.archiveCheck = view.archiveCheck;
+    messages[lastAt] = last;
   }
   const elsewhere = arr(view.elsewhere);
   if (elsewhere.length > 0) {
