@@ -9,15 +9,13 @@ import { stationApi, useChats, useChatSearch, useStationCall, useStations, useSt
 import type { FoundMessage } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
 import { Marked } from "../Marked.tsx";
-import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Check, Copy, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Refresh, Search, Settings, Unplug, Zou } from "../icons.tsx";
+import { Archive, Check, Copy, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Refresh, Search, Settings, Unplug, Zou } from "../icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { FailedMark, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark, chatTone, jumpFromLine, stateLine, WaitingText } from "../ChatMark.tsx";
-import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
@@ -26,7 +24,8 @@ import { ChangelogNews } from "./Changelog.tsx";
 import { LoadingPill, PlaceholderRows } from "./Loading.tsx";
 import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
 import * as barsCss from "./styles/bars.css.ts";
-import { openWorkspaces } from "./Workspaces.tsx";
+import { WorkspaceTitle } from "./Workspaces.tsx";
+import { arrival, slideIn } from "./switch.ts";
 import { usePullToReload } from "./pull.ts";
 import * as css from "./Home.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -43,8 +42,6 @@ export function Home() {
   const mine = useChats(scope, true);
   const watching = useChats(scope, false, true);
   const [filter, setFilter] = useChatFilter();
-  const invited = useWorkspaces().value?.some((a) => a.invitations.length > 0) ?? false;
-  // The other workspaces have something waiting: its dot by the name, before an invitation's.
   const marks = useWorkspaceMarks(scope);
   const decisions = marks?.workspaces[scope]?.decisions ?? 0;
   // No station yet: nothing of the workspace's lists works, so adding the first station is the page.
@@ -56,12 +53,22 @@ export function Home() {
   const search = useCallback((at: DOMRect) => { setSearching(at); setAway(true); }, []);
   // Pulled down from its top, a list loads the page again (./pull.ts).
   const pull = usePullToReload(css.mHomePane);
+  // Come from another workspace (./switch.ts): its lists, as they were, slide out as these slide in, once these are read.
+  const [come] = useState(arrival);
+  const [started, setStarted] = useState(false);
+  const panes = useRef<HTMLDivElement>(null);
+  const read = useRef(false);
+  read.current = all.value !== undefined;
+  useLayoutEffect(() => {
+    if (!come || !panes.current) return;
+    return slideIn(come, panes.current, () => read.current, () => setStarted(true));
+  }, [come]);
   return (
     <div className={css.mHome} data-searching={searching ? "" : undefined} data-away={away ? "" : undefined}>
       {none ? (
-        <div className={css.mHomePanes} {...pull.handlers}><div className={css.mHomePane} style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
+        <div ref={panes} className={css.mHomePanes} {...pull.handlers}><div className={css.mHomePane} style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
       ) : (
-        <div className={css.mHomePanes} data-filter={filter} {...pull.handlers}>
+        <div ref={panes} className={css.mHomePanes} data-filter={filter} {...pull.handlers}>
           <ChatPane chats={all} filter="all" onSearch={search} />
           <ChatPane chats={mine} filter="mine" onSearch={search} />
           <ChatPane chats={watching} filter="watching" onSearch={search} />
@@ -73,13 +80,7 @@ export function Home() {
         <button type="button" className={`${barsCss.mNavButton} ${css.mHomeMe}`} onClick={() => app.push(app.at("/settings"))} aria-label={t("web-mobile.settings.title")}>
           <Settings size={22} />
         </button>
-        <button type="button" className={css.mHomeWorkspace} onClick={() => openWorkspaces(app)}>
-          <b>{app.entry.name}</b>
-          {marks?.others
-            ? <span className={chatMarkCss.chatMarkInline} data-tone={marks.others} role="img" aria-label={marks.othersLabel ?? ""} />
-            : invited && <span className={css.mDot} aria-label={t("web-mobile.home.invited")} />}
-          <ChevronDown size={16} />
-        </button>
+        <WorkspaceTitle come={come} started={started} />
         {/* The filter, and the archive in its menu, as on the wide screen: nothing to narrow or look back on with no station. */}
         {(all.value?.stations.length ?? 0) > 0 && <FilterButton filter={filter} setFilter={setFilter} />}
         {/* The stations at a glance (../StationGlyph.tsx); its page says which is which. */}

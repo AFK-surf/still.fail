@@ -1,10 +1,26 @@
 // Home is the `chats` view as the web's sidebar lists it: one kind of item (an
 // agent with its chat, or an agent with no chat yet), newest first and grouped
 // by day. A fixed head (settings · workspace · the filter · stations) and
-// the new-chat button floating at the bottom.
+// the new-chat button floating at the bottom. The workspace's name opens the
+// panel of workspaces, and swiped across goes to the one beside it.
 package fail.still.android.screens
 
 import fail.still.android.data.t
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animate
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Offset
+import fail.still.android.data.AccountWorkspaces
+import fail.still.android.data.entries
+import kotlinx.coroutines.Job
+import kotlin.math.sign
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -143,19 +159,14 @@ import fail.still.android.ui.Smooth
 fun HomeScreen(current: WorkspaceEntry) {
     val app = LocalApp.current
     val scope = current.workspace.id
-    // The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with
-    // nothing to wait for.
+    // The bar's own reading of the list in view: whether there is a station to filter by, and the stations' glyph.
     val all by rememberTopic<ChatsView>(app.core, Topics.chats(scope, false))
-    val mine by rememberTopic<ChatsView>(app.core, Topics.chats(scope, true))
-    val watching by rememberTopic<ChatsView>(app.core, Topics.chats(scope, false, watching = true))
-    // Each workspace's lists start at their top, not where the one switched from was scrolled to: their first row, with
-    // the search above it there once scrolled to (as the list first read, which the search comes in over).
-    fun top(chats: Topic<ChatsView>) = LazyListState(if (chats.value != null && chats.value?.note?.empty != true) 1 else 0)
-    val allList = rememberSaveable(scope, saver = LazyListState.Saver) { top(all) }
-    val mineList = rememberSaveable(scope, saver = LazyListState.Saver) { top(mine) }
-    val watchingList = rememberSaveable(scope, saver = LazyListState.Saver) { top(watching) }
     val filter = app.chatFilter(scope)
-    val shift by animateFloatAsState(when (filter) { "mine" -> 1f; "watching" -> 2f; else -> 0f }, tween(240, easing = FastOutSlowInEasing), label = "filter")
+    // Every workspace in the order the panel lists them (account by account): what a swipe on the name goes through,
+    // and which way a switch slides.
+    val workspaces by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
+    val order = workspaces.value?.entries().orEmpty()
+    val still = reducedMotion()
     // The lists run under both bars, which are frosted glass over them.
     val haze = remember { HazeState() }
     val density = LocalDensity.current
@@ -176,14 +187,29 @@ fun HomeScreen(current: WorkspaceEntry) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     val away by animateFloatAsState(if (searchOpen) 1f else 0f, tween(if (searchOpen) 280 else 240, easing = if (searchOpen) Ease.Arrive else Ease.Standard), label = "search")
     val awayBy = with(density) { 56.dp.toPx() }
-    Box(Modifier.fillMaxSize()) {
-        BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze).graphicsLayer { translationY = -awayBy * away; alpha = 1f - away }) {
-            val width = constraints.maxWidth
+    // The workspace panel (Workspaces.kt), hung from the name: where the page and the name are (in the root).
+    var panel by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf(Offset.Zero) }
+    var name by remember { mutableStateOf(Rect.Zero) }
+    Box(Modifier.fillMaxSize().onGloballyPositioned { page = it.boundsInRoot().topLeft }) {
+        Box(Modifier.fillMaxSize().clipToBounds().hazeSource(haze).graphicsLayer { translationY = -awayBy * away; alpha = 1f - away }) {
             val onSearch = { at: Float, wide: Float -> searchFrom = at; searchWidth = wide; searchOpen = true }
             val searching = searchFrom != null
-            ChatPane(current, all, "all", allList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
-            ChatPane(current, mine, "mine", mineList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
-            ChatPane(current, watching, "watching", watchingList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset(((2 - shift) * width).roundToInt(), 0) })
+            // Another workspace switched to: its lists come in from the side it is on (after this one in the order, from
+            // the right), this one's going out the other way with its rows still on them, as pages of one strip.
+            AnimatedContent(
+                current,
+                transitionSpec = {
+                    val from = order.indexOfFirst { it.workspace.id == initialState.workspace.id }
+                    val to = order.indexOfFirst { it.workspace.id == targetState.workspace.id }
+                    val on = if (to >= from) 1 else -1
+                    val slide = tween<IntOffset>(SWITCH_MS, easing = Ease.Arrive)
+                    if (still) EnterTransition.None togetherWith ExitTransition.None
+                    else (slideInHorizontally(slide) { on * it } togetherWith slideOutHorizontally(slide) { -on * it }).using(null)
+                },
+                contentKey = { it.workspace.id },
+                label = "workspace",
+            ) { entry -> Lists(entry, padding, onSearch, searching) }
         }
         Row(
             Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.graphicsLayer { alpha = 1f - away }.glass(haze)
@@ -192,14 +218,13 @@ fun HomeScreen(current: WorkspaceEntry) {
         ) {
             // Settings, at the top left (SettingsHome.kt): the account, the workspace's things, this device's.
             Box(Modifier.semantics { contentDescription = t("android-chat.home.settings") }) { NavButton(Icons.Settings, { app.push(Screen.Settings) }, 22.dp) }
-            Row(Modifier.weight(1f).clip(Smooth(8.dp)).clickable { openWorkspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(current.workspace.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                // The other workspaces have something waiting: its dot by the name, before an invitation's.
-                val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current.workspace.id))
-                val others = marks.value?.others
-                if (others != null) WorkspaceMark(others, marks.value?.othersLabel.orEmpty())
-                else if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = t("android-chat.home.invited") })
-                IconIn(Icons.ChevronDown, 16.dp, C.muted)
+            Box(Modifier.weight(1f).onGloballyPositioned { name = it.boundsInRoot() }) {
+                WorkspaceTitle(current, order, invitationsWaiting(app), still) { panel = true }
+                // With two or more, the workspaces as dots under the name, in the bar's padding below it (the bar as tall).
+                if (order.size >= 2) {
+                    val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(scope))
+                    WorkspaceDots(order, scope, marks.value, Modifier.align(Alignment.BottomStart).offset(y = 7.dp))
+                }
             }
             // A newer build of the app that brings something the changelog says (one that does not waits in the settings
             // until one does): tapped, it is downloaded and handed to the installer (Updates.kt).
@@ -246,6 +271,215 @@ fun HomeScreen(current: WorkspaceEntry) {
         // Wide (Wide.kt), the new-chat button is at the screen's corner instead, not the column's.
         if (!LocalWide.current) Toolbar(app, decisionsWaiting(current), haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.graphicsLayer { alpha = 1f - away })
         searchFrom?.let { from -> SearchPage(scope, from, searchWidth, onLeave = { searchOpen = false }) { searchFrom = null } }
+        WorkspacePanel(panel, scope, left = name.left - page.x, top = topBar.toFloat()) { panel = false }
+    }
+}
+
+/** A workspace's slide when switched to: its lists and its name, in the app's arrive easing. */
+private const val SWITCH_MS = 280
+
+/** A workspace's three lists (all, mine, watching), followed at once side by side: switching slides from one to another with nothing to wait for. */
+@Composable
+private fun Lists(current: WorkspaceEntry, padding: PaddingValues, onSearch: (Float, Float) -> Unit, searching: Boolean) {
+    val app = LocalApp.current
+    val scope = current.workspace.id
+    val all by rememberTopic<ChatsView>(app.core, Topics.chats(scope, false))
+    val mine by rememberTopic<ChatsView>(app.core, Topics.chats(scope, true))
+    val watching by rememberTopic<ChatsView>(app.core, Topics.chats(scope, false, watching = true))
+    // Each workspace's lists start at their top, not where the one switched from was scrolled to: their first row, with
+    // the search above it there once scrolled to (as the list first read, which the search comes in over).
+    fun top(chats: Topic<ChatsView>) = LazyListState(if (chats.value != null && chats.value?.note?.empty != true) 1 else 0)
+    val allList = rememberSaveable(scope, saver = LazyListState.Saver) { top(all) }
+    val mineList = rememberSaveable(scope, saver = LazyListState.Saver) { top(mine) }
+    val watchingList = rememberSaveable(scope, saver = LazyListState.Saver) { top(watching) }
+    val filter = app.chatFilter(scope)
+    val shift by animateFloatAsState(when (filter) { "mine" -> 1f; "watching" -> 2f; else -> 0f }, tween(240, easing = FastOutSlowInEasing), label = "filter")
+    // Clipped to its own width: the lists beside the one shown (mine, watching) do not come into view with it as it slides.
+    BoxWithConstraints(Modifier.fillMaxSize().clipToBounds()) {
+        val width = constraints.maxWidth
+        ChatPane(current, all, "all", allList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
+        ChatPane(current, mine, "mine", mineList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
+        ChatPane(current, watching, "watching", watchingList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset(((2 - shift) * width).roundToInt(), 0) })
+    }
+}
+
+/** Dragged this far across (or flung), the name lets go onto the workspace next to it. */
+private val SWIPE_AT = 64.dp
+
+/**
+ * The name in the bar as a strip of the workspaces' names, clipped to its place. `x`: how far the strip is moved (px);
+ * the one shown is drawn there and the one coming in (`to`) a whole width beside it, on `side` (1 the right).
+ */
+private class TitleStrip(at: String) {
+    var from by mutableStateOf(at)
+    var to by mutableStateOf<String?>(null)
+    var side by mutableIntStateOf(1)
+    var x by mutableFloatStateOf(0f)
+    var dragging by mutableStateOf(false)
+    var motion: Job? = null
+
+    /** Taken by a finger mid-motion: the one more than half in becomes the one shown, where it is. Where the finger starts from. */
+    fun grab(width: Float): Float {
+        motion?.cancel()
+        val coming = to
+        if (coming != null && abs(x) > width / 2) { from = coming; x += side * width }
+        to = null
+        return x
+    }
+
+    /** `to` the rest of the way in, from where it is; then it is the one shown. */
+    suspend fun arrive(width: Float, still: Boolean) {
+        if (!still) animate(x, -side * width, animationSpec = tween(SWITCH_MS, easing = Ease.Arrive)) { v, _ -> x = v }
+        from = to ?: from; to = null; x = 0f
+    }
+
+    /** Back to the one shown, at the finger's speed. */
+    suspend fun back(velocity: Float, still: Boolean) {
+        if (!still) animate(x, 0f, velocity, MoveSpring) { v, _ -> x = v }
+        to = null; x = 0f
+    }
+}
+
+/**
+ * The workspace's name in the bar (web mobile/Home.tsx): a tap opens the panel (`onTap`). Dragged across, the name
+ * follows the finger and the next workspace's (dragging left) or the one before's (right) comes in from that side; let
+ * go past [SWIPE_AT] or flung that way, that one is switched to (the lists slide with it), else it springs back. Past
+ * the first or the last it gives a little (0.3 of the way) and springs back. Up or down is not taken. Switched any other
+ * way (the panel, a notification), the name slides the same way as the lists, the old one out as the new comes in.
+ */
+@Composable
+private fun WorkspaceTitle(current: WorkspaceEntry, order: List<WorkspaceEntry>, invited: Boolean, still: Boolean, onTap: () -> Unit) {
+    val app = LocalApp.current
+    val strip = remember { TitleStrip(current.workspace.id) }
+    val scope = rememberCoroutineScope()
+    var width by remember { mutableIntStateOf(1) }
+    val ids = order.map { it.workspace.id }
+    val idsNow by rememberUpdatedState(ids)
+    val shown = current.workspace.id
+    fun nameOf(id: String) = order.firstOrNull { it.workspace.id == id }?.workspace?.name ?: if (id == shown) current.workspace.name else ""
+    // Switched elsewhere (or a swipe's switch refused): from the one shown to the one in view, the way the lists go. Not
+    // while the app is on its way to the one a swipe let go on (the name is there already).
+    val resting = strip.to == null && !strip.dragging
+    LaunchedEffect(shown, resting, app.workspace) {
+        if (!resting || strip.from == shown || app.workspace == strip.from) return@LaunchedEffect
+        strip.side = if (ids.indexOf(shown) >= ids.indexOf(strip.from)) 1 else -1
+        strip.to = shown
+        // In the title's own scope: this effect starts again as the strip leaves rest, which would call it off.
+        strip.motion = scope.launch { strip.arrive(width.toFloat(), still) }
+    }
+    Box(
+        Modifier.fillMaxWidth().heightIn(min = 34.dp).clip(Smooth(8.dp)).onSizeChanged { width = it.width.coerceAtLeast(1) }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val tracker = VelocityTracker()
+                    var across = 0f
+                    var upDown = 0f
+                    var swiping = false
+                    var let = false
+                    // Where the finger has the strip, before an end's give.
+                    var pulled = 0f
+                    val w = width.toFloat()
+                    try {
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) {
+                                if (swiping) {
+                                    change.consume()
+                                    let = true
+                                    val v = tracker.calculateVelocity().x
+                                    val to = strip.to
+                                    val flung = to != null && abs(v) > 400.dp.toPx() && sign(v) == -strip.side.toFloat()
+                                    strip.dragging = false
+                                    if (to != null && (abs(strip.x) > SWIPE_AT.toPx() || flung)) {
+                                        app.pickWorkspace(to); app.home()
+                                        strip.motion = scope.launch { strip.arrive(w, still) }
+                                    } else strip.motion = scope.launch { strip.back(v, still) }
+                                }
+                                break
+                            }
+                            val dx = change.position.x - change.previousPosition.x
+                            if (!swiping) {
+                                across += dx
+                                upDown += change.position.y - change.previousPosition.y
+                                // Up or down first: not this.
+                                if (abs(upDown) > viewConfiguration.touchSlop && abs(upDown) > abs(across)) break
+                                if (abs(across) <= viewConfiguration.touchSlop) continue
+                                swiping = true
+                                strip.dragging = true
+                                pulled = strip.grab(w)
+                                tracker.resetTracking()
+                            }
+                            change.consume()
+                            tracker.addPosition(change.uptimeMillis, change.position)
+                            pulled += dx
+                            val at = idsNow.indexOf(strip.from)
+                            val next = idsNow.getOrNull(at + 1).takeIf { at >= 0 }
+                            val before = idsNow.getOrNull(at - 1).takeIf { at >= 0 }
+                            when {
+                                pulled < 0 && next != null -> { strip.to = next; strip.side = 1; strip.x = pulled.coerceAtLeast(-w) }
+                                pulled > 0 && before != null -> { strip.to = before; strip.side = -1; strip.x = pulled.coerceAtMost(w) }
+                                else -> { strip.to = null; strip.x = pulled * 0.3f }
+                            }
+                        }
+                    } finally {
+                        // The gesture taken away mid-drag: back to the one shown.
+                        if (swiping && !let) { strip.dragging = false; strip.motion = scope.launch { strip.back(0f, still) } }
+                    }
+                }
+            }
+            .clickable(onClick = onTap),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        // Each name where the strip has it, read as it is drawn: in the frame the one come in becomes the one shown (its
+        // place back at 0 before the names are composed again), the one gone is hidden, not drawn in its place.
+        for (id in listOfNotNull(strip.from, strip.to)) key(id) {
+            TitleName(nameOf(id), invited, Modifier.graphicsLayer {
+                when (id) {
+                    strip.from -> translationX = strip.x
+                    strip.to -> translationX = strip.x + strip.side * width
+                    else -> alpha = 0f
+                }
+            })
+        }
+    }
+}
+
+/** A workspace's name as the bar has it, with the invitations' dot and the panel's chevron after it. */
+@Composable
+private fun TitleName(name: String, invited: Boolean, modifier: Modifier) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        // Invitations waiting for an account (the panel has them first).
+        if (invited) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = t("android-chat.home.invited") })
+        IconIn(Icons.ChevronDown, 16.dp, C.muted)
+    }
+}
+
+/**
+ * The workspaces as dots under the name, in the order a swipe goes through them (6dp, 6dp apart): the one in view in
+ * ink, the others faint, or in the tone of what they hold, as a chat's mark (ChatMark, MarkCounts): red wanting them, a
+ * blue ring (8dp, on the dots' line) waiting on them, blue unread. Said in words as the core's label of the others.
+ */
+@Composable
+private fun WorkspaceDots(order: List<WorkspaceEntry>, current: String, marks: WorkspaceMarksView?, modifier: Modifier) {
+    val ink = C.ink
+    val faint = C.line
+    val label = marks?.othersLabel
+    Row(modifier.then(if (label != null) Modifier.semantics { contentDescription = label } else Modifier), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (e in order) {
+            val id = e.workspace.id
+            val tone = if (id == current) null else marks?.workspaces?.get(id)?.tone
+            Canvas(Modifier.size(6.dp)) {
+                when {
+                    id == current -> drawCircle(ink)
+                    tone == "alert" -> drawCircle(MarkRed)
+                    tone == "wait" -> drawCircle(MarkBlue, 3.dp.toPx(), style = Stroke(2.dp.toPx()))
+                    tone == "done" -> drawCircle(MarkBlue)
+                    else -> drawCircle(faint)
+                }
+            }
+        }
     }
 }
 

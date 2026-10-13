@@ -125,7 +125,6 @@
   "android-misc.invite.joinAs": "Join as {email}",
   "android-misc.invite.joinNamed": "Join “{name}”",
   "android-misc.invite.joined": "Joined “{name}”",
-  "android-misc.invite.label": "Invites",
   "android-misc.invite.loading": "Loading invite…",
   "android-misc.invite.onlyInvited": "You've used your free workspace",
   "android-misc.invite.otherLink": "Use another link",
@@ -286,11 +285,9 @@
   "android-misc.wide.recent": "Recent chats",
   "android-misc.workspace.account": "Account",
   "android-misc.workspace.addAccount": "Add account",
-  "android-misc.workspace.addAccount.sub": "Keep this one, add another Google account",
   "android-misc.workspace.create": "Create workspace",
   "android-misc.workspace.createButton": "Create",
   "android-misc.workspace.createOne": "Create a workspace",
-  "android-misc.workspace.current": "Current",
   "android-misc.workspace.defaultName": "{name}'s workspace",
   "android-misc.workspace.members": {
     "one": "1 person",
@@ -303,8 +300,6 @@
   "android-misc.workspace.newRow": "＋ New workspace",
   "android-misc.workspace.none": "You're not in any workspace yet",
   "android-misc.workspace.none.lead": "Ask someone already using {app} to invite {email} to their workspace, or create one yourself.",
-  "android-misc.workspace.others": "Other workspaces",
-  "android-misc.workspace.sheet.title": "Switch workspace",
   "android-misc.workspace.stations": {
     "one": "1 station",
     "other": "{n} stations"

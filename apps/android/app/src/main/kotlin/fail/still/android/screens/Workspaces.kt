@@ -1,12 +1,36 @@
 // Workspaces, as still.fail cloud's pages have them (web/src/cloud/CloudApp.tsx,
 // workspace.tsx): straight into one; for an account with none, its invitations
 // or a new workspace of its own (with an invite code when still.fail cloud asks for
-// one); the switcher with the invitations waiting, every account's workspaces
-// and a new one.
+// one); the panel dropped from the name on Home, with the invitations waiting,
+// every account's workspaces and a new one.
 package fail.still.android.screens
 
 import fail.still.android.data.t
 import fail.still.android.BuildConfig
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
+import fail.still.android.ui.Ease
+import fail.still.android.ui.MenuSpring
+import fail.still.android.ui.initial
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -186,15 +210,16 @@ private fun Lead(text: String) = Text(text, fontSize = 14.sp, color = C.muted, t
 private fun Error(text: String) = Text(text, fontSize = 13.sp, color = C.red)
 
 @Composable
-internal fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
+internal fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, small: Boolean = false, onClick: () -> Unit) {
     val on = enabled && !busy
+    // `small`: in a row of a panel (an invitation's 加入 and 忽略), 30dp tall.
     Row(
-        Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)
-            .clickable(enabled = on, onClick = onClick).padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.height(if (small) 30.dp else 38.dp).clip(RoundedCornerShape(if (small) 15.dp else 19.dp)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)
+            .clickable(enabled = on, onClick = onClick).padding(horizontal = if (small) 12.dp else 16.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (small) 6.dp else 8.dp),
     ) {
-        if (busy) CircularProgressIndicator(Modifier.size(14.dp), color = if (primary) C.bg else C.muted, strokeWidth = 1.5.dp)
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (primary && danger && enabled) Color.White else if (primary) C.bg else C.ink)
+        if (busy) CircularProgressIndicator(Modifier.size(if (small) 12.dp else 14.dp), color = if (primary) C.bg else C.muted, strokeWidth = 1.5.dp)
+        Text(label, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, color = if (primary && danger && enabled) Color.White else if (primary) C.bg else C.ink)
     }
 }
 
@@ -229,82 +254,130 @@ private fun InviteCodeForm(create: Write, make: (String) -> Unit) {
 
 // ── the switcher ───────────────────────────────────────────────────────
 
-fun openWorkspaces(app: AppState) {
-    app.sheet = SheetSpec(0.7f, draggable = true) { WorkspacesSheet(app) }
-}
-
 /**
- * The workspace sheet, opened from its name on Home (web/src/mobile/Workspaces.tsx): the invitations waiting, the one in
- * use (checked) and the others to switch to (with more than one account signed in, whose each is under its name; what it
- * holds at the row's end), a new one, and joining by an invitation's link. The workspace's settings are in 设置
- * (SettingsHome.kt).
+ * The workspace panel, dropped from the name on Home (web/src/mobile/Workspaces.tsx): the invitations waiting, then
+ * every account's workspaces (under its email with more than one account signed in), the one in view checked and the
+ * others with what they hold; a new one and another account at its foot. A tap on one switches to it (Home slides its
+ * lists over). It is the long-press menu's kind (Sheet.kt MenuHost): its ground and shadow, the scrim, the scale from
+ * the corner it hangs from. `left`, `top` (px, in what holds it): the name's left edge and the bar's bottom; it hangs
+ * 8dp left of the one and 4dp under the other. The workspace's settings are in 设置 (SettingsHome.kt).
  */
 @Composable
-private fun ColumnScope.WorkspacesSheet(app: AppState) {
+internal fun WorkspacePanel(open: Boolean, current: String, left: Float, top: Float, close: () -> Unit) {
+    val app = LocalApp.current
+    val visible = remember { MutableTransitionState(false) }
+    visible.targetState = open
+    val scrim by animateFloatAsState(if (open) 1f else 0f, tween(200), label = "panel-scrim")
+    // Drawn from the tap that opens it until it and its scrim have gone.
+    if (!open && visible.isIdle && !visible.currentState && scrim == 0f) return
+    BackHandler(enabled = open) { close() }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val width = minOf(320.dp, maxWidth - 32.dp)
+        val x = (with(density) { left.toDp() } - 8.dp).coerceAtMost(maxWidth - width - 12.dp).coerceAtLeast(12.dp)
+        val y = with(density) { top.toDp() } + 4.dp
+        val foot = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f * scrim)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { close() })
+        val corner = TransformOrigin(0f, 0f)
+        AnimatedVisibility(
+            visible,
+            Modifier.offset(x, y),
+            enter = fadeIn(tween(160, easing = Ease.Out)) + scaleIn(MenuSpring, 0.9f, corner),
+            exit = fadeOut(tween(120, easing = Ease.CssOut)) + scaleOut(MenuSpring, 0.9f, corner),
+        ) {
+            Column(
+                Modifier.width(width).heightIn(max = (maxHeight - y - foot - 24.dp).coerceAtLeast(120.dp))
+                    .shadow(18.dp, Smooth(20.dp)).clip(Smooth(20.dp)).background(C.surface).padding(6.dp),
+            ) { PanelContent(app, current, close) }
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.PanelContent(app: AppState, current: String, close: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val all by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
     val byAccount = all.value.orEmpty()
     val respond = remember { Write(app) }
     val pending = byAccount.flatMap { a -> a.invitations.map { a.account to it } }
-    val currentOf = byAccount.firstOrNull { a -> a.workspaces.any { it.id == app.workspace } }
-    val current = currentOf?.workspaces?.firstOrNull { it.id == app.workspace }
-    val others = byAccount.flatMap { a -> a.workspaces.filter { it.id != app.workspace }.map { a.account to it } }
     // What each of the others has waiting, as the core counts it.
-    val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(app.workspace.orEmpty()))
-    SheetGrab()
-    SheetHead(t("android-misc.workspace.sheet.title"))
-    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-        if (current != null) {
-            Label(t("android-misc.workspace.current"))
-            Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp).clip(Smooth(16.dp)).background(C.bg)) {
-                PickRow(current.name, sub = currentOf.account.email, checked = true) { app.sheet = null }
-            }
-        }
-        if (pending.isNotEmpty()) {
-            Label(t("android-misc.invite.label"))
-            pending.forEach { (account, invite) ->
-                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Column(Modifier.weight(1f)) {
-                        Text(t("android-misc.invite.invitedYou", "inviter" to invite.inviter.ifEmpty { t("android-misc.invite.someone") }, "name" to invite.name), fontSize = 15.sp, color = C.ink)
-                        Text(account.email, fontSize = 12.sp, color = C.muted)
-                    }
-                    Button(t("android-misc.invite.join"), primary = true, busy = respond.busy && respond.arg == "+${invite.id}") {
-                        app.run(respond, "+${invite.id}") { app.join(account, invite); app.toast = t("android-misc.invite.joined", "name" to invite.name) }
-                    }
-                    Button(t("android-misc.invite.ignore"), primary = false, busy = respond.busy && respond.arg == "-${invite.id}") {
-                        app.run(respond, "-${invite.id}") { Cloud(app.core, account.sub).declineInvitation(invite.id); app.toast = t("android-misc.invite.ignored") }
-                    }
+    val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current))
+    // One reached through two accounts is listed once, under the first (as `entries`).
+    val listed = HashSet<String>()
+    Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+        pending.forEach { (account, invite) ->
+            Row(
+                Modifier.padding(bottom = 4.dp).fillMaxWidth().clip(Smooth(14.dp)).background(C.accentBg).padding(horizontal = 10.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(t("android-misc.invite.invitedYou", "inviter" to invite.inviter.ifEmpty { t("android-misc.invite.someone") }, "name" to invite.name), fontSize = 14.sp, color = C.ink)
+                    Text(account.email, fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Button(t("android-misc.invite.join"), primary = true, small = true, busy = respond.busy && respond.arg == "+${invite.id}") {
+                    app.run(respond, "+${invite.id}") { app.join(account, invite); close(); app.toast = t("android-misc.invite.joined", "name" to invite.name) }
+                }
+                Button(t("android-misc.invite.ignore"), primary = false, small = true, busy = respond.busy && respond.arg == "-${invite.id}") {
+                    app.run(respond, "-${invite.id}") { Cloud(app.core, account.sub).declineInvitation(invite.id); app.toast = t("android-misc.invite.ignored") }
                 }
             }
-            respond.error?.let { Box(Modifier.padding(horizontal = 20.dp)) { Error(it.message) } }
         }
-        if (others.isNotEmpty()) Label(t("android-misc.workspace.others"))
-        others.forEach { (account, w) ->
-            WorkspaceRow(w.name, account.email, marks.value?.workspaces?.get(w.id)) { app.pickWorkspace(w.id); app.home() }
+        respond.error?.let { Box(Modifier.padding(horizontal = 10.dp, vertical = 4.dp)) { Error(it.message) } }
+        byAccount.forEach { a ->
+            val workspaces = a.workspaces.filter { listed.add(it.id) }
+            if (workspaces.isEmpty()) return@forEach
+            // Whose they are, only when more than one account is signed in.
+            if (byAccount.size > 1) Text(
+                a.account.email, fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 4.dp),
+            )
+            workspaces.forEach { w ->
+                PanelRow(w.name, w.id == current, marks.value?.workspaces?.get(w.id)) {
+                    close()
+                    if (w.id != current) { app.pickWorkspace(w.id); app.home() }
+                }
+            }
         }
     }
-    Column(Modifier.padding(top = 8.dp, bottom = 16.dp)) {
-        PickRow(t("android-misc.workspace.addAccount"), sub = t("android-misc.workspace.addAccount.sub"), busy = app.isDoing("auth.begin"), leading = { IconIn(Icons.LogIn, 20.dp) }) { scope.launch { signIn(app, context) } }
-        PickRow(t("android-misc.workspace.new"), leading = { IconIn(Icons.Plus, 20.dp) }) { openNewWorkspace(app) }
+    // Apart from the workspaces by a little room, not a line (as the web's panel).
+    Row(Modifier.padding(top = 6.dp).fillMaxWidth()) {
+        FootButton(Icons.Plus, t("android-misc.workspace.new"), Modifier.weight(1f)) { close(); openNewWorkspace(app) }
+        // Signing in goes on past the panel (the browser comes up over it): in the app's scope, not the panel's.
+        FootButton(Icons.LogIn, t("android-misc.workspace.addAccount"), Modifier.weight(1f), busy = app.isDoing("auth.begin")) { close(); app.scope.launch { signIn(app, context) } }
     }
 }
 
-/** Workspace identity and its waiting work; membership counts belong in settings. */
+/**
+ * A workspace in the panel: its first letter on a tile, its name, and what it holds (the core's counts); the one in view
+ * on the chip's ground with its tile inverted and a check.
+ */
 @Composable
-private fun WorkspaceRow(label: String, email: String, mark: WorkspaceMark?, onClick: () -> Unit) {
-    Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(email, fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun PanelRow(name: String, current: Boolean, mark: WorkspaceMark?, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(Smooth(14.dp)).background(if (current) C.chip else Color.Transparent).clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.size(32.dp).clip(Smooth(10.dp)).background(if (current) C.ink else C.chip), contentAlignment = Alignment.Center) {
+            Text(initial(name), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (current) C.bg else C.ink, modifier = Modifier.semantics { hideFromAccessibility() })
         }
-        if (mark != null) MarkCounts(mark)
+        Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (current) IconIn(Icons.Check, 16.dp, C.ink)
+        else if (mark != null) MarkCounts(mark)
     }
 }
 
+/** One of the two at the panel's foot: an icon and its words, no ground of its own. */
 @Composable
-private fun Label(text: String) = Text(text, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 2.dp))
+private fun FootButton(icon: ImageVector, label: String, modifier: Modifier, busy: Boolean = false, onClick: () -> Unit) {
+    Row(
+        modifier.height(40.dp).clip(Smooth(14.dp)).clickable(enabled = !busy, onClick = onClick).padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+    ) {
+        if (busy) CircularProgressIndicator(Modifier.size(14.dp), color = C.muted, strokeWidth = 1.5.dp) else IconIn(icon, 16.dp, C.ink)
+        Text(label, fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
 
 // ── a new workspace ────────────────────────────────────────────────────
 
@@ -359,7 +432,7 @@ private fun ColumnScope.NewWorkspaceSheet(app: AppState) {
 @Composable
 private fun Label0(text: String) = Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
 
-/** Whether invitations wait for any signed-in account: the switcher says so with a dot. */
+/** Whether invitations wait for any signed-in account: the name on Home says so with a dot. */
 @Composable
 fun invitationsWaiting(app: AppState): Boolean {
     val all by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)

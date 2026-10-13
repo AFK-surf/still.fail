@@ -30,7 +30,8 @@ export interface Entry { id: string; name: string; account: Account }
 /** A sheet: how much of the screen it takes at first, and whether its grabber drags it. */
 export interface SheetSpec { height: number; draggable?: boolean; content: () => ReactNode }
 export interface MenuItem { label: string; icon: ReactNode; action: () => void }
-export interface MenuSpec { anchor: DOMRect; items: MenuItem[]; onDismiss?: () => void }
+/** `content` in place of `items`: a panel of its own under the anchor's left (the workspace switcher), `width` wide. */
+export interface MenuSpec { anchor: DOMRect; items: MenuItem[]; content?: (close: () => void) => ReactNode; width?: number; onDismiss?: () => void }
 /** One thing in full over everything: what it is (a line, as the history labels it), then all of it. */
 export interface ReaderSpec { label: ReactNode; content: ReactNode }
 
@@ -44,8 +45,11 @@ export interface MobileApp {
   /** The page in view's path (`/w/<id>…`, as the address has it): the latest chats mark its row. */
   current: string;
   pop: () => void;
-  /** The top page gives way to another (a new chat becomes the chat it made); `state`, the history's for it. */
-  replace: (path: string, state?: unknown) => void;
+  /**
+   * The top page gives way to another (a new chat becomes the chat it made); `state`, the history's for it. `still`: no
+   * crossfade, the page moves itself (another workspace's slides in, ./switch.ts).
+   */
+  replace: (path: string, state?: unknown, still?: boolean) => void;
   home: () => void;
   sheet: (spec: SheetSpec | null) => void;
   menu: (spec: MenuSpec | null) => void;
@@ -195,7 +199,10 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
     // The wait for a closing sheet's back is inside the crossfade, which starts a frame later: a sheet closed in the same
     // tap (another workspace from the workspace sheet) starts its back in between, and replacing before that back lands
     // would put the new page on the sheet's entry, which the back then leaves for the old page.
-    replace: (path, state) => void transitionTo(() => afterBack(() => now.current.navigate(path, { replace: true, state }))),
+    replace: (path, state, still) => {
+      const go = () => afterBack(() => now.current.navigate(path, { replace: true, state }));
+      if (still) go(); else void transitionTo(go);
+    },
     home: () => afterBack(() => now.current.navigate(home)),
     sheet: setSheet,
     menu: setMenu,
@@ -538,19 +545,21 @@ function MenuHost({ spec, close }: { spec: MenuSpec | null; close: () => void })
     return () => clearTimeout(timer);
   }, [spec]);
   if (!shown) return null;
-  const width = 180;
+  const width = shown.width ?? 180;
   const x = Math.max(12, Math.min(shown.anchor.left, window.innerWidth - width - 12));
-  // Under the message, or over it when there is no room below.
+  // Under the message, or over it when there is no room below; a panel always under its anchor.
   const height = 45 * shown.items.length;
-  const below = shown.anchor.bottom + 6;
-  const y = below + height < window.innerHeight - 24 ? below : Math.max(24, shown.anchor.top - height - 6);
+  const below = shown.anchor.bottom + (shown.content ? 4 : 6);
+  const y = shown.content || below + height < window.innerHeight - 24 ? below : Math.max(24, shown.anchor.top - height - 6);
   return (
     <div className={`${css.mOverlay} ${css.mMenuLayer}`} data-open={open || undefined}>
       <div className={css.mScrim} onPointerDown={() => { pressed.current = true; }} onClick={() => { if (pressed.current) close(); pressed.current = false; }} />
-      <div className={css.mMenu} data-open={open || undefined} style={{ left: x, top: y, width }}>
-        {shown.items.map((item) => (
-          <button key={item.label} type="button" onClick={() => { close(); item.action(); }}>{item.label}{item.icon}</button>
-        ))}
+      <div className={css.mMenu} data-open={open || undefined} data-panel={shown.content ? "" : undefined} style={{ left: x, top: y, width }}>
+        {shown.content
+          ? shown.content(close)
+          : shown.items.map((item) => (
+            <button key={item.label} type="button" onClick={() => { close(); item.action(); }}>{item.label}{item.icon}</button>
+          ))}
       </div>
     </div>
   );
