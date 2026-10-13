@@ -6,7 +6,7 @@ import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 import { sentImage, sentImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "./icons.tsx";
-import { createContext, Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
@@ -22,7 +22,8 @@ import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, 
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
-import { firstReaching, ticking, useStickToBottom, watchChildren } from "./scroll.ts";
+import { useVirtualList, useVirtualModel, type VirtualList } from "./virtual/list.tsx";
+import type { Align, Item } from "./virtual/model.ts";
 import { animate, arrive, EASE_OUT, follower, moveState, type AnimationPlaybackControls, type Follower } from "./motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
@@ -102,13 +103,12 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
   const station = useStation();
   const list = useRef<HTMLDivElement>(null);
   const composerHeight = useComposerHeight();
-  const floor = useRef<HTMLDivElement>(null);
   const api = useApi();
   const { thread, outbox } = chat;
   const id = thread?.id ?? null;
   const to: ChatTo | null = id ?? made ?? null;
   const lives = useLives(station.address, chat.agents.map((a) => a.session.key));
-  const rows = useMessageList(list, floor, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives);
+  const rows = useMessageList(list, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives, 28);
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
   const keeper = chat.agents[0]?.session.key ?? null;
   // The images a preview steps through: the same function (the context's value), the latest messages behind it.
@@ -119,7 +119,7 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
   useShortcut("chat.latest", rows.toEnd);
   const askedFile = useAskedFile(list, rows.messages);
   // What waits to be decided here and does not show: a button over the list leads to it.
-  const asks = useAsksShown(list, chat);
+  const asks = useAsksShown(rows.virtual, chat);
   // Selecting text inside one message offers to quote it: into the chat's draft, its composer's (by its key).
   const quoting = useSelectionQuote(list, (quote) => offerToDraft(draftKey, { files: [], quotes: [], quote }));
 
@@ -139,7 +139,6 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
         <DraftKey.Provider value={draftKey}>
           <ChatRows chat={chat} rows={rows} to={to} />
         </DraftKey.Provider>
-        <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
       </Gallery.Provider>
       </div>
@@ -199,31 +198,25 @@ const NO_ASKS: ChatAsk[] = [];
  * shows in the pane. The pane says which posts do not show (out of it, or under the composer); one outside the window
  * of messages does not.
  */
-export function useAsksShown(list: RefObject<HTMLElement | null>, chat: ChatView): ChatAsk[] {
+export function useAsksShown(virtual: VirtualList, chat: ChatView): ChatAsk[] {
   const asks = chat.archived || !chat.thread ? NO_ASKS : chat.asks ?? NO_ASKS;
-  const tsOf = (a: ChatAsk) => chat.messages.find((m) => m.seq === a.seq)?.ts;
-  const posts = asks.flatMap((a) => tsOf(a) ?? []).join(" ");
-  const [away, setAway] = useState<ReadonlySet<string>>(() => new Set());
+  const posts = asks.map((a) => a.seq).join(" ");
+  const [shown, setShown] = useState(true);
   useEffect(() => {
-    const pane = list.current;
-    if (!pane || posts === "") return;
-    const out = new Set<string>();
-    const seen = new IntersectionObserver((entries) => {
-      for (const e of entries) {
-        const ts = (e.target as HTMLElement).dataset.ts ?? "";
-        if (e.isIntersecting) out.delete(ts);
-        else out.add(ts);
-      }
-      setAway(new Set(out));
-    }, { root: pane, rootMargin: `0px 0px -${parseFloat(getComputedStyle(pane).scrollPaddingBottom) || 0}px 0px` });
-    for (const ts of posts.split(" ")) {
-      const post = pane.querySelector(`.${conversationCss.msg}[data-ts="${CSS.escape(ts)}"]`);
-      if (post) seen.observe(post);
-    }
-    return () => { seen.disconnect(); setAway(new Set()); };
-  }, [list, posts, chat.messages.length]);
-  const shows = (a: ChatAsk) => { const ts = tsOf(a); return ts !== undefined && !away.has(ts); };
-  return asks.length > 0 && asks.every(shows) ? NO_ASKS : asks;
+    if (posts === "") return;
+    const { model } = virtual;
+    // Each one's post in the pane: among its items, and reaching into it (below what covers its top).
+    const check = () => {
+      const all = posts.split(" ").every((seq) => {
+        const top = model.offsetOf(`m:${seq}`);
+        return top !== undefined && top < model.paneHeight && top + (model.sizes.get(`m:${seq}`)?.height ?? 1) > model.covered;
+      });
+      setShown(all);
+    };
+    check();
+    return virtual.watch(check);
+  }, [virtual.model, posts, chat.messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  return asks.length > 0 && shown ? NO_ASKS : asks;
 }
 
 /** The session that keeps a file shown out of its chat (the decisions page), where the core does not say (`owner`). */
@@ -243,40 +236,41 @@ function useKeeper(): (file: Attachment) => string | null {
  * it) the core says on the message.
  */
 export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null }) {
-  const { messages, divider, shown, rowOf, caughtAgent, poseOf } = rows;
+  const { messages, shown, rowOf, caughtAgent, poseOf, virtual } = rows;
   // Where a decision's options answer: none while nothing can be sent.
   const thread = chat.offline || chat.archived ? null : chat.thread?.id ?? null;
-  const sent = (list: ChatSentElsewhere[] | undefined) => list?.map((s) => <SentElsewhere key={s.key} sent={s} />);
+  const locked = chat.offline || !!chat.archived;
+  // What each item is: only those the list makes (virtual/list.tsx) are drawn.
+  const drawn = new Map<string, () => ReactNode>();
+  const sent = (list: ChatSentElsewhere[] | undefined) => { for (const s of list ?? []) drawn.set(`e:${s.key}`, () => <SentElsewhere key={`e:${s.key}`} sent={s} />); };
+  drawn.set("older", () => <div key="older" data-vk="older" className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>);
+  drawn.set("line", () => <div key="line" data-vk="line" className={css.chatUnreadLine} data-unread-line role="separator"><span>{t("web-main.chat.unreadLine")}</span></div>);
+  sent(chat.elsewhere);
+  for (const m of messages) {
+    drawn.set(`m:${m.seq}`, () => {
+      const { enter, emitted, caught } = rowOf(m);
+      return <MessageRow key={`m:${m.seq}`} message={m} enter={enter} emitted={emitted} caught={caught} thread={thread} />;
+    });
+    sent(m.elsewhere);
+  }
+  // The page after the window shown, while it is short of the chat's end (`chat.newer`), loading as the reader nears it.
+  drawn.set("newer", () => <div key="newer" data-vk="newer" className={css.chatNewer} aria-hidden="true"><span className={waitingCss.spinner} /></div>);
+  for (const o of chat.outbox) drawn.set(`o:${o.id}`, () => <OutboxRow key={`o:${o.id}`} o={o} to={to} locked={locked} />);
+  // A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does.
+  for (const { agent, leaving } of shown) {
+    drawn.set(`a:${agent.key}`, () => <Activity key={`a:${agent.key}`} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} stoppable={chat.agents.length > 1} />);
+  }
+  const empty = messages.length === 0 && chat.outbox.length === 0 && !chat.elsewhere?.length;
   return (
     <ChatAgents.Provider value={chat.agents}>
     <ChatAgentKeys.Provider value={chat.agents.map((a) => a.session.key).join("\n")}>
-      {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
-      {messages.length === 0 && chat.outbox.length === 0 && !chat.elsewhere?.length && (
+      {empty && (
         <div className={css.chatEmpty}>
           <p>{t("web-main.chat.empty")}</p>
         </div>
       )}
-      {sent(chat.elsewhere)}
-      {messages.map((m) => {
-        const line = m.seq === divider ? <div className={css.chatUnreadLine} data-unread-line role="separator"><span>{t("web-main.chat.unreadLine")}</span></div> : null;
-        const { enter, emitted, caught } = rowOf(m);
-        // Keyed as a whole: a bare [line, row] pair is placed by its index, and an older page coming in above would
-        // shift every index and draw every message anew.
-        return (
-          <Fragment key={m.seq}>
-            {line}
-            <MessageRow message={m} enter={enter} emitted={emitted} caught={caught} thread={thread} />
-            {sent(m.elsewhere)}
-          </Fragment>
-        );
-      })}
-      {/* The page after the window shown, while it is short of the chat's end (`chat.newer`), loading as the reader nears it. */}
-      {chat.newer && <div className={css.chatNewer} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
-      {chat.outbox.map((o) => <OutboxRow key={o.id} o={o} to={to} locked={chat.offline || !!chat.archived} />)}
-      {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
-      {shown.map(({ agent, leaving }) => (
-        <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} stoppable={chat.agents.length > 1} />
-      ))}
+      {virtual.layout.rows.flatMap((row, i) => [virtual.above(row, i === 0), drawn.get(row.key)?.()])}
+      {virtual.after()}
     </ChatAgentKeys.Provider>
     </ChatAgents.Provider>
   );
@@ -320,7 +314,7 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
   const showsAt = o.createdAt + SENDING_SHOWS_MS;
   const [delay] = useState(() => `${Math.max(0, showsAt - Date.now())}ms`);
   return (
-    <MineMessage data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
+    <MineMessage data-vk={`o:${o.id}`} data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
       <MineWords message={o} />
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
@@ -401,7 +395,7 @@ export interface RowState { enter: true | undefined; emitted: "held" | "emitting
  * messages, where the unread line goes, whether to offer the way to the end (`away`, with what waits there:
  * `waiting`; `toEnd` takes it), the agents at work, and how each message comes in.
  */
-export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: RefObject<HTMLDivElement | null>, chat: ChatView, place: string, lives: ReadonlyMap<string, Live>) {
+export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: ChatView, place: string, lives: ReadonlyMap<string, Live>, gap: number, cover?: (lead: number) => number) {
   const sending = useChatSend();
   const station = useStation().address;
   const id = chat.thread?.id ?? null;
@@ -410,9 +404,9 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   const short = !!chat.newer;
   // Whose a message is, the core says.
   const mineOf = (m: ChatMessage) => m.mine;
-  useStickToBottom(list, `.${conversationCss.msg}`, floor, short);
-  useWindowMoves(list, messages);
-  useHistoryFade(list, messages);
+  // Where the list is and which of its rows are made (virtual/model.ts): told where it opens before its rows are drawn.
+  const made = useVirtualModel(place, gap);
+  const { model } = made;
   // Where the reader leaves it, the core keeps too, on the device (it opens there next, while nothing is unread, also
   // after a reload): the message at the top of the pane and where its top is, or none at its end. A core from before
   // `chat.place` does not know it.
@@ -422,25 +416,32 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
     const seq = ts === null ? null : seqOf.current.get(ts);
     if (id !== null && seq !== undefined) void sending.place(id, seq, seq === null ? null : offset).catch(() => undefined);
   };
-  // Taken to where it was left or to the unread line before anything loads by where the pane is.
-  // With nothing unread, the core may open it short of its end where it was left (`at`): that message goes at the top,
-  // or where its top was (`atOffset`) when it is the very entry left there.
-  const opened = chat.unreadLine == null && chat.at != null ? messages.find((m) => m.seq >= chat.at!) ?? null : null;
-  const at = opened ? { ts: opened.ts, offset: opened.seq === chat.at ? chat.atOffset ?? null : null } : null;
-  useRememberPlace(list, place, messages.length > 0, short, leave, at);
   // A message asked to be shown (jumpTo.ts) is where it opens this time, rather than the unread line.
   const asked = useRef(false);
   if (useJump(station, id) !== null) asked.current = true;
-  const divider = useUnreadLine(list, chat, asked);
-  // Without a chat there is nothing older (or newer) to load.
-  const older = () => (id === null ? Promise.resolve() : sending.older(id));
-  useOlderOnScroll(list, chat.more, chat.messages[0]?.seq, older);
-  useJumpTo(list, station, id, messages, chat.more, older);
-  const newer = () => (id === null ? Promise.resolve() : sending.newer(id));
-  useNewerOnScroll(list, short, chat.messages.at(-1)?.seq, newer);
-  useShowing(floor, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
-  const away = useAwayFromBottom(list);
-  const toEnd = useToEnd(list, chat, () => (id === null ? Promise.resolve() : sending.latest(id)));
+  const divider = chat.unreadLine ?? null;
+  // Where it opens, said once its messages are there: where it was left here (`leftAt`), else where the core says it
+  // was left (`at`: that message at the top, or where its top was, `atOffset`, when it is the very entry left there);
+  // left at its end with nothing new since, at its end, followed. Not for a message asked to be shown.
+  const opened = useRef<string | null>(null);
+  if (opened.current !== place && messages.length > 0) {
+    opened.current = place;
+    const saved = leftAt.get(place);
+    const core = chat.unreadLine == null && chat.at != null ? messages.find((m) => m.seq >= chat.at!) ?? null : null;
+    if (asked.current) { /* useJumpTo takes it there */ }
+    else if (saved) {
+      const seq = seqOf.current.get(saved.ts);
+      if (!(saved.bottom !== null && messages.at(-1)?.ts === saved.bottom) && seq !== undefined) model.goto(`m:${seq}`, "at", saved.offset);
+    } else if (core) model.goto(`m:${core.seq}`, core.seq === chat.at && chat.atOffset != null ? "at" : "start", core.seq === chat.at ? chat.atOffset ?? 0 : 0);
+  }
+  // Something unread, the first time it shows (it may come from the station a moment after opening): the line near the
+  // top, with about four lines of what came before it still in view; over where it was left. Opened at a message asked
+  // to be shown, the line is drawn and the pane not moved to it.
+  const lined = useRef<string | null>(null);
+  if (lined.current !== place && divider !== null) {
+    lined.current = place;
+    if (!asked.current) model.goto("line", "start", 4 * 23);
+  }
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
   for (const o of chat.outbox) sentHere.current.add(o.text);
@@ -453,20 +454,88 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
     { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, activity: lives.get(session.key)?.activity ?? null, since, wait }
   ));
   const started = new Set(chat.agents.filter((a) => a.started).map((a) => a.session.key));
-  const emissions = useEmissions(list);
-  useActivityGlide(list);
+  const emissions = useEmissions(list, () => model.mode.kind === "follow");
   const shown = useLinger(atWork, emissions.keeps);
   emissions.take(messages, saidHere, new Set(shown.map((s) => s.agent.key)));
+
+  // The list's items, in order: each a row of its own.
+  const items: Item[] = [];
+  if (chat.more) items.push({ key: "older", estimate: 30 });
+  for (const s of chat.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
+  for (const m of messages) {
+    if (m.seq === divider) items.push({ key: "line", estimate: 20 });
+    items.push({ key: `m:${m.seq}`, estimate: tallOf(m) });
+    for (const s of m.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
+  }
+  if (chat.newer) items.push({ key: "newer", estimate: 30 });
+  for (const o of chat.outbox) items.push({ key: `o:${o.id}`, estimate: 44 });
+  for (const { agent } of shown) items.push({ key: `a:${agent.key}`, estimate: 24 });
+
+  // What changed since it was last drawn: messages gone from an end as the core's window moved along the chat (their
+  // room is not held), and messages come at its end (said as the reader watches: followed gliding, the last from its
+  // top; caught up on, history read in or missed while the link was down: taken at once).
+  const first = messages[0]?.seq;
+  const last = messages.at(-1)?.seq;
+  const outgoing = chat.outbox.at(-1)?.id;
+  const was = useRef({ first, last, outgoing, place });
+  const before = was.current.place === place ? was.current : { first: undefined, last: undefined, outgoing };
+  useEffect(() => { was.current = { first, last, outgoing, place }; });
+  const trimmed = (before.first !== undefined && first !== undefined && first > before.first) || (before.last !== undefined && last !== undefined && last < before.last);
+  const came = before.last !== undefined && last !== undefined && last > before.last ? messages.filter((m) => m.seq > before.last!) : [];
+  const sent = outgoing !== undefined && outgoing !== before.outgoing;
+  const smooth = came.length === 0 || came.some((m) => saidHere(m.seq));
+  const arrived = sent ? `o:${outgoing}` : came.length > 0 && smooth ? `m:${last}` : null;
+  const virtual = useVirtualList(list, made, items, { short, trimmed, smooth, arrived, ...(cover ? { cover } : {}) });
+
+  usePlace(virtual, place, messages, short, leave);
+  useHistoryFade(list, messages);
+  // Without a chat there is nothing older (or newer) to load.
+  const older = () => (id === null ? Promise.resolve() : sending.older(id));
+  useLoadNear(virtual, "top", !!chat.more, chat.messages[0]?.seq, older);
+  useJumpTo(list, virtual, station, id, messages, chat.more, older);
+  const newer = () => (id === null ? Promise.resolve() : sending.newer(id));
+  useLoadNear(virtual, "bottom", short, chat.messages.at(-1)?.seq, newer);
+  useShowing(virtual, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
+  const away = useAwayFromBottom(virtual);
+  const toEnd = useToEnd(list, virtual, chat, () => (id === null ? Promise.resolve() : sending.latest(id)));
+  useActivityGlide(list, virtual);
+  // The list's own way to one of its messages, for what is drawn in it (a quote's card, a file asked for).
+  useEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    lists.set(el, { goto: (ts, align, pad) => { const seq = seqOf.current.get(ts); return seq !== undefined && virtual.goto(`m:${seq}`, align, pad); } });
+    return () => { lists.delete(el); };
+  }, [list, virtual]);
+
+  // A message comes in (`enter`) only the first time its row is made: made again as the reader scrolls back to it, it
+  // is there.
+  const gone = useRef(new Set<number>());
+  const rowsMade = useRef(new Set<number>());
+  const nowMade = new Set(virtual.layout.rows.flatMap((r) => (r.key.startsWith("m:") ? [Number(r.key.slice(2))] : [])));
+  for (const seq of rowsMade.current) if (!nowMade.has(seq)) gone.current.add(seq);
+  useEffect(() => { rowsMade.current = nowMade; });
   const rowOf = (m: ChatMessage): RowState => {
     const mine = mineOf(m);
     const told = !mine && !m.system;
-    const enter = saidHere(m.seq) && !(mine && sentHere.current.has(m.text)) && !(told && emissions.emits(m.seq)) ? true : undefined;
-    return { enter, emitted: told ? emissions.stateOf(m.seq) : null, caught: saidHere(m.seq) ? undefined : true };
+    const fresh = saidHere(m.seq) && !gone.current.has(m.seq);
+    const enter = fresh && !(mine && sentHere.current.has(m.text)) && !(told && emissions.emits(m.seq)) ? true : undefined;
+    return { enter, emitted: told ? emissions.stateOf(m.seq) : null, caught: fresh ? undefined : true };
   };
   const caughtAgent = (key: string) => (started.has(key) ? undefined : true);
   // Short of the end, the way there shows wherever the reader is, with how many wait there.
   const waiting = short ? chat.thread?.unread ?? 0 : 0;
-  return { messages, divider, away: away || short, waiting, toEnd, shown, rowOf, caughtAgent, poseOf: emissions.poseOf };
+  return { messages, away: away || short, waiting, toEnd, shown, rowOf, caughtAgent, poseOf: emissions.poseOf, virtual };
+}
+
+/** A list's way to one of its messages (by `ts`), by its pane: what is drawn in it finds it there. */
+const lists = new WeakMap<HTMLElement, { goto(ts: string, align: Align, pad?: number): boolean }>();
+
+/** About how tall a message stands before it is measured: its lines of words, and what it carries. */
+function tallOf(m: ChatMessage): number {
+  let breaks = 0;
+  for (let i = m.text.indexOf("\n"); i >= 0 && breaks < 60; i = m.text.indexOf("\n", i + 1)) breaks++;
+  const lines = Math.min(60, Math.ceil(m.text.length / 48) + breaks);
+  return (m.mine ? 44 : 30) + lines * 23 + (m.attachments?.length ?? 0) * 72 + (m.quotes?.length ?? 0) * 56;
 }
 
 /**
@@ -475,7 +544,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
  * with nothing gliding or coming in. A message sent from such a window takes the reader there the same way (the core
  * puts the latest page in place as it sends); sent from up the list, straight to its bottom.
  */
-function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: () => Promise<unknown>): () => void {
+function useToEnd(list: RefObject<HTMLElement | null>, virtual: VirtualList, chat: ChatView, latest: () => Promise<unknown>): () => void {
   const toast = useToast();
   const short = !!chat.newer;
   // Going to the end: once the latest page is in, the list goes to its bottom.
@@ -485,7 +554,7 @@ function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: (
   useLayoutEffect(() => {
     if (short || !going.current) return;
     going.current = false;
-    list.current?.dispatchEvent(new CustomEvent("to-bottom", { detail: "at-once" }));
+    virtual.toEnd(true);
   });
   // A message sent (the composer says so as it sends, `sent`, rather than the outbox growing: on a quick link the
   // station has it before the outbox ever shows it): from up the list, to its bottom at once, following again.
@@ -494,14 +563,14 @@ function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: (
     if (!el) return;
     const sent = () => {
       if (isShort.current) going.current = true;
-      else if (el.hasAttribute("data-reading-up")) el.dispatchEvent(new CustomEvent("to-bottom", { detail: "at-once" }));
+      else if (virtual.model.mode.kind !== "follow") virtual.toEnd(true);
     };
     el.addEventListener("sent", sent);
     return () => el.removeEventListener("sent", sent);
-  }, [list]);
+  }, [list, virtual]);
   return () => {
     if (!short) {
-      list.current?.dispatchEvent(new Event("to-bottom"));
+      virtual.toEnd();
       return;
     }
     going.current = true;
@@ -511,32 +580,16 @@ function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: (
 
 /** New historical rows share one short opacity fade; existing rows never replay when their status changes. */
 function useHistoryFade(list: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
-  const seen = useRef(new WeakSet<HTMLElement>());
+  // By message, not by row: a row made again as the reader scrolls back to it does not fade in again.
+  const seen = useRef(new Set<string>());
   useLayoutEffect(() => {
     for (const row of list.current?.querySelectorAll<HTMLElement>(":scope > [data-ts]") ?? []) {
-      if (seen.current.has(row)) continue;
-      seen.current.add(row);
+      const ts = row.dataset.ts!;
+      if (seen.current.has(ts)) continue;
+      seen.current.add(ts);
       if (row.hasAttribute("data-caught") && document.visibilityState === "visible") row.dataset.historyFade = "";
     }
-  }, [list, messages]);
-}
-
-/**
- * Tells the list (scroll.ts) when messages leave its ends as the core's window moves along the chat (a page in at one
- * end, as many out at the other): it lets go of the room it held at its foot. Told as the change is laid out, before
- * the list puts the reader's message back in place.
- */
-function useWindowMoves(list: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
-  const first = messages[0]?.seq;
-  const last = messages.at(-1)?.seq;
-  const was = useRef({ first, last });
-  useLayoutEffect(() => {
-    const before = was.current;
-    was.current = { first, last };
-    const moved = (before.first !== undefined && first !== undefined && first > before.first)
-      || (before.last !== undefined && last !== undefined && last < before.last);
-    if (moved) list.current?.dispatchEvent(new Event("trimmed"));
-  }, [list, first, last]);
+  });
 }
 
 /**
@@ -544,7 +597,7 @@ function useWindowMoves(list: RefObject<HTMLElement | null>, messages: ChatMessa
  * (below what floats there, as the unread line) and flashed, after the list has been put where it opens (the unread
  * line, where it was left). Older than the window: older pages load until it is in; not there at all, nothing.
  */
-function useJumpTo(list: RefObject<HTMLDivElement | null>, station: string, thread: number | null, messages: ChatMessage[], more: boolean | undefined, older: () => Promise<unknown>) {
+function useJumpTo(list: RefObject<HTMLDivElement | null>, virtual: VirtualList, station: string, thread: number | null, messages: ChatMessage[], more: boolean | undefined, older: () => Promise<unknown>) {
   const seq = useJump(station, thread);
   const loading = useRef(false);
   useEffect(() => {
@@ -557,34 +610,27 @@ function useJumpTo(list: RefObject<HTMLDivElement | null>, station: string, thre
       } else jumped();
       return;
     }
-    // A frame later: after the list has been put where it opens.
-    const frame = requestAnimationFrame(() => {
+    // Its top near the pane's, below what floats over it there (the phone's bar), as the unread line; then, its row
+    // made, flashed (or the words a search found in it marked).
+    let frame = requestAnimationFrame(() => {
       const words = jumpWords();
       jumped();
-      const pane = list.current;
-      const target = pane?.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${CSS.escape(message.ts)}"]`);
-      if (!pane || !target) return;
-      // A reader's move: the pane keeps it rather than holding its bottom.
-      pane.dispatchEvent(new WheelEvent("wheel"));
-      // Its top near the pane's, below what floats over it there (the phone's bar: its scroll padding), as the unread line.
-      const covered = parseFloat(getComputedStyle(pane).scrollPaddingTop) || 0;
-      pane.scrollTop += target.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered - 12;
-      // Said at once (the browser says it a frame later): the pane keeps this place, not the one it held as the list
-      // re-renders for the jump being taken (scroll.ts).
-      pane.dispatchEvent(new Event("scroll"));
-      // Opened from a search: the words found marked in it (kept until the chat is left), the first in view.
-      if (words?.length && markWords(target, words)) {
-        const first = searchHits[0]!.getBoundingClientRect();
-        const bottom = pane.getBoundingClientRect().bottom;
-        if (first.bottom > bottom) {
-          pane.scrollTop += first.top + first.height / 2 - (pane.getBoundingClientRect().top + pane.clientHeight / 2);
-          pane.dispatchEvent(new Event("scroll"));
+      virtual.goto(`m:${seq}`, "start", 12);
+      frame = requestAnimationFrame(() => {
+        const pane = list.current;
+        const target = pane?.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${CSS.escape(message.ts)}"]`);
+        if (!pane || !target) return;
+        // Opened from a search: the words found marked in it (kept until the chat is left), the first in view.
+        if (words?.length && markWords(target, words)) {
+          const first = searchHits[0]!.getBoundingClientRect();
+          const box = pane.getBoundingClientRect();
+          if (first.bottom > box.bottom) virtual.goto(`m:${seq}`, "at", box.height / 2 - (first.top + first.height / 2 - target.getBoundingClientRect().top));
+          return;
         }
-        return;
-      }
-      target.classList.remove(css.msgFlash);
-      void target.offsetWidth;
-      target.classList.add(css.msgFlash);
+        target.classList.remove(css.msgFlash);
+        void target.offsetWidth;
+        target.classList.add(css.msgFlash);
+      });
     });
     return () => cancelAnimationFrame(frame);
   }, [seq, messages, more]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -686,50 +732,14 @@ export function sameMessage(a: ChatMessage, b: ChatMessage): boolean {
  * them). Nothing unread: no line, and the chat opens at its bottom or where it was left; something unread takes it to
  * the line even so. Answers the seq of the message the line goes over.
  */
-export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, elsewhere?: RefObject<boolean>): number | null {
-  const target = chat.unreadLine ?? null;
-  // Until something unread shows (it may come from the station a moment after opening), there is nothing to jump to.
-  // Coming back to a chat with something unread goes to the line too, over where it was left (useRememberPlace).
-  const jumped = useRef(false);
-  useEffect(() => {
-    if (jumped.current || target === null) return;
-    jumped.current = true;
-    // Opened at a message asked to be shown (`elsewhere`, jumpTo.ts): the line is drawn, the pane not moved to it.
-    if (elsewhere?.current) return;
-    const pane = ref.current;
-    const line = pane?.querySelector<HTMLElement>("[data-unread-line]");
-    if (!pane || !line) return;
-    // A reader's move: the pane lets it take the position instead of holding its bottom.
-    pane.dispatchEvent(new WheelEvent("wheel"));
-    // The line near the top, below what floats over the pane there (the phone's bar: its scroll padding), with about
-    // four lines of what came before it still in view.
-    const style = getComputedStyle(pane);
-    const covered = parseFloat(style.scrollPaddingTop) || 0;
-    const text = parseFloat(style.lineHeight) || 22;
-    pane.scrollTop += line.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered - 4 * text;
-    // Said at once (the browser says it a frame later): until then the pane, still following its bottom, would take
-    // itself back there as the list re-renders (scroll.ts).
-    pane.dispatchEvent(new Event("scroll"));
-  }, [ref, target]);
-  return target;
-}
-
 /** Whether the reader is scrolled up, away from the newest messages (more than a screenful's corner). */
-export function useAwayFromBottom(ref: RefObject<HTMLElement | null>): boolean {
+export function useAwayFromBottom(virtual: VirtualList): boolean {
   const [away, setAway] = useState(false);
   useEffect(() => {
-    const pane = ref.current;
-    if (!pane) return;
-    const check = () => setAway(pane.scrollHeight - pane.scrollTop - pane.clientHeight > 120);
+    const check = () => setAway(virtual.model.toEnd > 120);
     check();
-    pane.addEventListener("scroll", check, { passive: true });
-    const resize = new ResizeObserver(check);
-    resize.observe(pane);
-    return () => {
-      pane.removeEventListener("scroll", check);
-      resize.disconnect();
-    };
-  }, [ref]);
+    return virtual.watch(check);
+  }, [virtual.model]); // eslint-disable-line react-hooks/exhaustive-deps
   return away;
 }
 
@@ -754,18 +764,25 @@ const leftAt = new Map<string, { ts: string; offset: number; bottom: string | nu
  * goes, and as the reader comes to rest too: a page that is reloaded or closed
  * is not left that way.
  */
-export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean, short = false, onLeave?: (ts: string | null, offset: number | null) => void, opensAt: { ts: string; offset: number | null } | null = null): void {
-  const [saved] = useState(() => leftAt.get(key));
-  const restored = useRef(false);
-  const latest = useRef({ short, onLeave });
-  latest.current = { short, onLeave };
-  /** Where the reader is: the message at the pane's top and its offset, and the last message if at the end. */
-  const where = useCallback((pane: HTMLElement) => {
-    const top = pane.getBoundingClientRect().top;
-    const first = firstReaching([...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)], top);
-    const end = !latest.current.short && pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2;
-    return first ? { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top, bottom: end ? lastTs(pane) : null } : null;
-  }, []);
+function usePlace(virtual: VirtualList, key: string, messages: ChatMessage[], short: boolean, onLeave: (ts: string | null, offset: number | null) => void): void {
+  const latest = useRef({ short, onLeave, messages });
+  latest.current = { short, onLeave, messages };
+  const { model } = virtual;
+  /** Where the reader is: the first message showing and where its top is, and the last message if at the end. */
+  const where = useCallback(() => {
+    const { messages, short } = latest.current;
+    const showing = model.showing();
+    if (!showing) return null;
+    const tsOf = new Map(messages.map((m) => [`m:${m.seq}`, m.ts]));
+    for (let i = showing.first; i <= showing.last; i++) {
+      const item = model.keyAt(i);
+      const ts = item === undefined ? undefined : tsOf.get(item);
+      if (ts === undefined) continue;
+      const end = !short && model.mode.kind === "follow";
+      return { ts, offset: model.offsetOf(item!)!, bottom: end ? messages.at(-1)?.ts ?? null : null };
+    }
+    return null;
+  }, [model]);
   /** What was last told (`onLeave`), so the same is not told again. */
   const told = useRef<string | null>(null);
   const tell = useCallback((at: { ts: string; offset: number; bottom: string | null }) => {
@@ -774,78 +791,35 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     const said = JSON.stringify([ts, offset]);
     if (said === told.current) return;
     told.current = said;
-    latest.current.onLeave?.(ts, offset);
+    latest.current.onLeave(ts, offset);
   }, []);
   useEffect(() => {
-    const pane = ref.current;
-    if (!pane) return;
-    // Told once the pane comes to rest, after it has been put where it was left (before that, it is not the reader's).
+    // Told once the pane comes to rest, where the reader put it (not where it opened).
     let rest: ReturnType<typeof setTimeout> | undefined;
-    // Measured once it rests, not at every step of a scroll (the page going away meanwhile measures it then, below).
-    const record = () => {
+    let at = model.layout().scrollTop;
+    const stop = virtual.watch(() => {
+      const now = model.layout().scrollTop;
+      if (now === at) return;
+      at = now;
       clearTimeout(rest);
       rest = setTimeout(() => {
-        const now = pane.isConnected ? where(pane) : null;
-        if (now) leftAt.set(key, now);
-        if (now && restored.current) tell(now);
+        const here = where();
+        if (here) { leftAt.set(key, here); tell(here); }
       }, REST_MS);
-    };
-    pane.addEventListener("scroll", record, { passive: true });
+    });
+    // Told as the page goes: the model says where it was.
     return () => {
+      stop();
       clearTimeout(rest);
-      pane.removeEventListener("scroll", record);
+      const here = where();
+      if (here) { leftAt.set(key, here); tell(here); }
+      else if (!latest.current.short) latest.current.onLeave(null, null);
     };
-  }, [ref, key, where, tell]);
-  // Told as the page goes, while the pane is still laid out (a layout effect's cleanup runs before it is taken away).
-  useLayoutEffect(() => {
-    const pane = ref.current;
-    if (!pane) return;
-    return () => {
-      if (!pane.isConnected) return;
-      const at = where(pane);
-      if (at) leftAt.set(key, at);
-      if (at) tell(at);
-      else if (!latest.current.short) latest.current.onLeave?.(null, null);
-    };
-  }, [ref, key, where, tell]);
-  const opensTs = opensAt?.ts ?? null;
-  const opensOffset = opensAt?.offset ?? null;
-  useEffect(() => {
-    if (!ready || restored.current) return;
-    restored.current = true;
-    const pane = ref.current;
-    if (!pane) return;
-    if (!saved) {
-      // Opened where it was left (the core keeps it: the page since reloaded, or this page's place long let go): that
-      // message where its top was, when the core says, else at the top, below what floats over the pane there (the
-      // phone's bar: its scroll padding).
-      const at = opensTs === null ? null : pane.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${opensTs}"]`);
-      if (!at) return;
-      pane.dispatchEvent(new WheelEvent("wheel"));
-      const offset = opensOffset ?? (parseFloat(getComputedStyle(pane).scrollPaddingTop) || 0);
-      pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - offset;
-      pane.dispatchEvent(new Event("scroll"));
-      return;
-    }
-    // Left at the bottom with nothing new since: it opens at the bottom, following it (the top message's offset would
-    // not land there once what is below it is laid out otherwise: images still loading, an activity come or gone).
-    if (saved.bottom !== null && lastTs(pane) === saved.bottom) return;
-    const at = pane.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${saved.ts}"]`);
-    if (!at) return;
-    // A reader's move: the pane keeps it rather than holding its bottom.
-    pane.dispatchEvent(new WheelEvent("wheel"));
-    pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - saved.offset;
-    pane.dispatchEvent(new Event("scroll"));
-  }, [ref, saved, ready, opensTs, opensOffset]);
+  }, [model, key, where, tell]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** How long the pane stays still before where the reader is gets told (`useRememberPlace`). */
 const REST_MS = 400;
-
-/** The last message's `ts` in a pane. */
-function lastTs(pane: HTMLElement): string | null {
-  return [...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)].at(-1)?.dataset.ts ?? null;
-}
 
 /**
  * Loads the page before what is shown (`more`: there is one; `first`: what is
@@ -853,27 +827,19 @@ function lastTs(pane: HTMLElement): string | null {
  * when what is loaded does not fill the pane). What is on screen stays put: the
  * pane keeps the reader's message in place as content grows above (scroll.ts).
  */
-export function useOlderOnScroll(ref: RefObject<HTMLElement | null>, more: boolean, first: number | string | undefined, older: () => Promise<unknown>): void {
-  useLoadNear(ref, "top", more, first, older);
-}
-
 /**
  * Loads the page after what is shown while the chat shows a window short of its end (`newer`; `last`: what is shown
  * last) when the reader comes within about a screenful of its bottom (or when what is loaded does not fill the pane).
  * What is on screen stays put as it comes in below and as many messages leave above (scroll.ts).
  */
-export function useNewerOnScroll(ref: RefObject<HTMLElement | null>, newer: boolean, last: number | string | undefined, load: () => Promise<unknown>): void {
-  useLoadNear(ref, "bottom", newer, last, load);
-}
-
 /**
- * One page per approach to an edge of the pane: a page is asked when the reader is within a screenful of `edge`
- * (`can`: there is one; `at`: what is shown at that edge, asked after once). The pane is judged as the reader
- * scrolls, not as the page comes in: until the pane has put the reader's message back (scroll.ts, as it is laid out),
- * it still looks near the edge, and would ask for another page at once. So after a page, nothing is asked until a
- * frame after it is in, and then only as the reader scrolls (or while what is loaded does not fill the pane).
+ * A pane that is its own list (an execution history, History.tsx): older pages load as its reader nears its top, judged
+ * by the pane itself.
  */
-function useLoadNear(ref: RefObject<HTMLElement | null>, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): void {
+export function useOlderOnScroll(ref: RefObject<HTMLElement | null>, more: boolean, first: number | string | undefined, older: () => Promise<unknown>): void {
+  useLoadNearPane(ref, "top", more, first, older);
+}
+function useLoadNearPane(ref: RefObject<HTMLElement | null>, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): void {
   const latest = useRef({ load, at });
   latest.current = { load, at };
   const asked = useRef<number | string | undefined>(undefined);
@@ -911,10 +877,56 @@ function useLoadNear(ref: RefObject<HTMLElement | null>, edge: "top" | "bottom",
 }
 
 /**
+ * One page per approach to an edge of the pane: a page is asked when the reader is within a screenful of `edge`
+ * (`can`: there is one; `at`: what is shown at that edge, asked after once). The pane is judged as the reader
+ * scrolls, not as the page comes in: until the pane has put the reader's message back (scroll.ts, as it is laid out),
+ * it still looks near the edge, and would ask for another page at once. So after a page, nothing is asked until a
+ * frame after it is in, and then only as the reader scrolls (or while what is loaded does not fill the pane).
+ */
+function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): void {
+  const latest = useRef({ load, at });
+  latest.current = { load, at };
+  const asked = useRef<number | string | undefined>(undefined);
+  /** Judges the pane now; set while it is up. */
+  const fill = useRef<(() => void) | null>(null);
+  const { model } = virtual;
+  useEffect(() => {
+    if (!can) return;
+    let live = true;
+    let busy = false;
+    const near = () => model.paneHeight > 0 && (edge === "top" ? model.toStart : model.toEnd) <= model.paneHeight;
+    const check = () => {
+      const { load, at } = latest.current;
+      if (busy || asked.current === at || !near()) return;
+      asked.current = at;
+      busy = true;
+      // Two frames on, the page is in and the reader's place kept (or the page never came: asked again).
+      const settle = () => requestAnimationFrame(() => requestAnimationFrame(() => {
+        busy = false;
+        if (live && model.fits) check();
+      }));
+      void load().then(settle, () => { asked.current = undefined; settle(); });
+    };
+    fill.current = () => { if (model.fits) check(); };
+    check();
+    // As the reader scrolls: where the pane is, not what came into it.
+    let top = model.layout().scrollTop;
+    const stop = virtual.watch(() => { const now = model.layout().scrollTop; if (now !== top) { top = now; check(); } });
+    return () => {
+      live = false;
+      fill.current = null;
+      stop();
+    };
+  }, [model, can, edge]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A page in that does not fill the pane leaves nothing to scroll: the next is asked without waiting for the reader.
+  useEffect(() => fill.current?.(), [at]);
+}
+
+/**
  * Tells the core this page shows the chat, and whether its end (`floor`) is in view: what is read, where the unread
  * line goes and which notices are not shown follow from it there (client/core-ts/src/attend.ts).
  */
-export function useShowing(floor: RefObject<HTMLElement | null>, station: string, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
+export function useShowing(virtual: VirtualList, station: string, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
   const thread = chat.thread?.id ?? null;
   const session = chat.key ?? chat.agents[0]?.session.key ?? null;
   // A core from before `client.focus` (an older desktop app's) reads nothing itself: the page records what is read, as
@@ -936,24 +948,26 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
   }, []);
   useEffect(readHere, [readHere, newest, known]);
   useEffect(() => {
-    const el = floor.current;
+    const { model } = virtual;
     const of = { station, thread, session };
     const tell = () => void core().focus({ chat: { ...of, end: old.current.end && !short.current } }).catch((e: unknown) => {
       if ((e as { code?: string }).code === "unknown_call") { old.current.on = true; readHere(); }
     });
     tell();
-    const observer = el && new IntersectionObserver((entries) => {
-      old.current.end = entries.some((e) => e.isIntersecting);
+    // Its end in view: the pane within a few pixels of the last of what it scrolls.
+    const stop = virtual.watch(() => {
+      const end = model.paneHeight > 0 && model.toEnd <= 4;
+      if (end === old.current.end) return;
+      old.current.end = end;
       if (old.current.on) readHere(); else tell();
     });
-    if (el) observer?.observe(el);
     document.addEventListener("visibilitychange", readHere);
     return () => {
-      observer?.disconnect();
+      stop();
       document.removeEventListener("visibilitychange", readHere);
       void core().focus({ left: of }).catch(() => undefined);
     };
-  }, [floor, station, thread, session, readHere]);
+  }, [virtual.model, station, thread, session, readHere]); // eslint-disable-line react-hooks/exhaustive-deps
   // The window reaching the chat's end with its end in view, or leaving it: said again.
   const isShort = chat.newer === true;
   const told = useRef(isShort);
@@ -979,7 +993,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   const chat = useContext(DraftKey);
   if (m.mine) {
     return (
-      <MineMessage data-author={t("web-main.chat.you")} data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
+      <MineMessage data-vk={`m:${m.seq}`} data-author={t("web-main.chat.you")} data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
         <MineWords message={m} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
         {m.waiting
@@ -989,11 +1003,11 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     );
   }
   // What still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-  if (m.system) return <SystemNotice text={m.text} profile={m.profile} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
+  if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = m.by.here ? m.by.agent : undefined;
   return (
-    <OthersMessage data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
+    <OthersMessage data-vk={`m:${m.seq}`} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
       data-enter={enter} data-caught={caught} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
       avatar={<MessageAvatar message={m} name={who} agent={agent} />} time={m.time?.createdAt}
       name={agent
@@ -1028,7 +1042,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
     ? <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
     : <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>Slack</span></>;
   return (
-    <OthersMessage data-role={received ? "person" : "agent"} data-author={s.by.name} data-elsewhere="" time={s.time?.createdAt}
+    <OthersMessage data-vk={`e:${s.key}`} data-role={received ? "person" : "agent"} data-author={s.by.name} data-elsewhere="" time={s.time?.createdAt}
       avatar={received
         ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><SlackLogo size={9} /></span></span>
         : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack agent={agent} />}
@@ -1123,7 +1137,7 @@ export function PersonWords({ text }: { text: string }) {
  * and its time under it. The station begins its failures with ⚠️ (Slack shows it so); here a failure is the pill in
  * red instead. In one about a profile (its sign-in failed), what went wrong (after its ：) links to that profile's page.
  */
-function SystemNotice({ text, profile, time, ts, enter, caught }: { text: string; profile: string | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined }) {
+function SystemNotice({ text, profile, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
   const station = useStation();
   const failed = /^⚠️\s*/u.exec(text);
   const words = failed ? text.slice(failed[0].length) : text;
@@ -1133,7 +1147,7 @@ function SystemNotice({ text, profile, time, ts, enter, caught }: { text: string
   const [open, setOpen] = useState(false);
   const toggle = () => setOpen((o) => !o);
   return (
-    <div className={`${conversationCss.msg} ${css.msgSystem}`} data-ts={ts} data-role="system" data-enter={enter} data-caught={caught} role="note">
+    <div className={`${conversationCss.msg} ${css.msgSystem}`} data-vk={vk} data-ts={ts} data-role="system" data-enter={enter} data-caught={caught} role="note">
       <div className={css.msgSystemBox} data-failed={failed ? "" : undefined} data-open={open || undefined}
         role="button" tabIndex={0} aria-expanded={open}
         onClick={(e) => { if (!(e.target as Element).closest("a")) toggle(); }}
@@ -1211,21 +1225,25 @@ function Quotes({ quotes, files }: { quotes: Quote[] | undefined; files: Attachm
   // In the list the card is in: each screen's (and the phone's pages under the one on top) has its own.
   const jump = (from: Element, ts: string, text: string) => {
     const pane = from.closest<HTMLElement>(`.${css.chatMessages}`);
-    const target = pane?.querySelector<HTMLElement>(`[data-ts="${CSS.escape(ts)}"]`);
-    if (!pane || !target) return;
-    // A reader's move: the pane lets it take the position.
-    pane.dispatchEvent(new WheelEvent("wheel"));
-    const range = findText(target, text);
-    if (range && "highlights" in CSS) {
-      const rect = range.getBoundingClientRect();
-      pane.scrollTop += rect.top + rect.height / 2 - (pane.getBoundingClientRect().top + pane.clientHeight / 2);
-      flashRange(range);
-      return;
-    }
-    target.scrollIntoView({ block: "center" });
-    target.classList.remove(css.msgFlash);
-    void target.offsetWidth;
-    target.classList.add(css.msgFlash);
+    const way = pane ? lists.get(pane) : undefined;
+    // Its message's middle at the pane's, by the list (its row made if it was not); then, its row there, the quoted
+    // words at the middle and flashed, or the whole message.
+    if (!pane || !way?.goto(ts, "center")) return;
+    requestAnimationFrame(() => {
+      const target = pane.querySelector<HTMLElement>(`[data-ts="${CSS.escape(ts)}"]`);
+      if (!target) return;
+      const range = findText(target, text);
+      if (range && "highlights" in CSS) {
+        const rect = range.getBoundingClientRect();
+        const box = pane.getBoundingClientRect();
+        way.goto(ts, "at", box.height / 2 - (rect.top + rect.height / 2 - target.getBoundingClientRect().top));
+        flashRange(range);
+        return;
+      }
+      target.classList.remove(css.msgFlash);
+      void target.offsetWidth;
+      target.classList.add(css.msgFlash);
+    });
   };
   return (
     <div className={css.quoteCards}>
@@ -1333,7 +1351,7 @@ export function useAskedFile(list: RefObject<HTMLDivElement | null>, messages: C
   useEffect(() => {
     if (!found || !drawn) return;
     open!(found.key, found.file);
-    list.current?.querySelector(`[data-ts="${CSS.escape(found.ts)}"]`)?.scrollIntoView({ block: "center" });
+    if (list.current) lists.get(list.current)?.goto(found.ts, "center");
     done();
   }, [found, drawn]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!found || drawn) return null;
@@ -1952,31 +1970,40 @@ export function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { a
  */
 const GLIDE = { type: "spring", visualDuration: 0.3, bounce: 0 } as const;
 
-function useActivityGlide(list: RefObject<HTMLDivElement | null>) {
+function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: VirtualList) {
   useEffect(() => {
     const pane = list.current;
     if (!pane) return;
-    const rows = new Map<HTMLElement, { top: number; y: Follower }>();
-    const contentWidth = () => {
-      const style = getComputedStyle(pane);
-      return pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-    };
-    let width = contentWidth();
+    const { model } = virtual;
+    const rows = new Map<string, { el: HTMLElement; top: number; y: Follower }>();
+    let width = model.paneWidth;
+    // How far the list has moved the pane at once to keep its place (rows above measured, an older page come in): by
+    // as much, an activity is elsewhere in the pane's content and nowhere else on screen: not a move to glide.
+    let kept = virtual.kept();
+    // Judged as the list says anything changed, from where it says each activity stands: nothing of the page is read.
     const check = () => {
-      const now = contentWidth();
-      const rewrapped = now !== width;
-      width = now;
-      const seen = new Set<HTMLElement>();
-      for (const el of pane.querySelectorAll<HTMLElement>(`:scope > .${css.agentActivity}`)) {
-        seen.add(el);
-        const top = layoutSpot(pane, el).y;
-        const row = rows.get(el);
+      const rewrapped = model.paneWidth !== width;
+      width = model.paneWidth;
+      const shift = virtual.kept() - kept;
+      kept += shift;
+      if (shift) for (const row of rows.values()) { row.top += shift; if (!row.y.moving) row.y.jump(row.top); }
+      const layout = model.layout();
+      const seen = new Set<string>();
+      for (const { key } of layout.rows) {
+        if (!key.startsWith("a:")) continue;
+        const el = pane.querySelector<HTMLElement>(`:scope > [data-vk="${CSS.escape(key)}"]`);
+        if (!el) continue;
+        seen.add(key);
+        // Where it stands in the pane's content.
+        const top = model.offsetOf(key)! + layout.scrollTop;
+        let row = rows.get(key);
+        if (row && row.el !== el) { row.y.stop(); rows.delete(key); row = undefined; }
         if (!row) {
-          const made = { top, y: follower(top, (v) => { el.style.transform = Math.abs(v - made.top) < 0.01 ? "" : `translateY(${v - made.top}px)`; }) };
-          rows.set(el, made);
+          const made = { el, top, y: follower(top, (v) => { el.style.transform = Math.abs(v - made.top) < 0.01 ? "" : `translateY(${v - made.top}px)`; }) };
+          rows.set(key, made);
           continue;
         }
-        if (top === row.top) continue;
+        if (Math.abs(top - row.top) < 0.01) continue;
         row.top = top;
         // One folded to its avatar, out flying, shows nothing: it is where it is laid out, for the avatar to fly to.
         if (rewrapped || document.visibilityState !== "visible" || el.hasAttribute("data-away")) row.y.jump(top);
@@ -1986,25 +2013,15 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>) {
           el.style.transform = `translateY(${row.y.value - top}px)`;
         }
       }
-      for (const [el, row] of rows) if (!seen.has(el)) { row.y.stop(); rows.delete(el); }
+      for (const [key, row] of rows) if (!seen.has(key)) { row.y.stop(); rows.delete(key); }
     };
-    const resize = new ResizeObserver(check);
-    const watched = watchChildren(pane, resize);
-    const mutations = new MutationObserver((all) => {
-      const records = all.filter((r) => !ticking(r.target));
-      if (!records.length) return;
-      watched.update(records);
-      check();
-    });
-    mutations.observe(pane, { childList: true, subtree: true, characterData: true });
-    watched.all();
     check();
+    const stop = virtual.watch(check);
     return () => {
-      resize.disconnect();
-      mutations.disconnect();
+      stop();
       for (const row of rows.values()) row.y.stop();
     };
-  }, [list]);
+  }, [list, virtual.model]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** Where an element sits in the pane's content, by layout: scrolling does not move it, nor does a transform. */
@@ -2043,7 +2060,7 @@ const RISE = 0.42;
 const DROP_MS = 280;
 const FLY = { type: "spring", visualDuration: 0.26, bounce: 0 } as const;
 
-export function useEmissions(list: RefObject<HTMLDivElement | null>) {
+export function useEmissions(list: RefObject<HTMLDivElement | null>, following: () => boolean = () => true) {
   const decided = useRef(new Map<number, boolean>());
   const done = useRef(new Set<number>());
   // `at`: when it began waiting; its agent's activity folds to its avatar from then.
@@ -2123,7 +2140,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     }
     rerender((n) => n + 1);
   };
-  const watched = () => document.visibilityState === "visible" && !list.current?.hasAttribute("data-reading-up");
+  const watched = () => document.visibilityState === "visible" && following();
   useLayoutEffect(() => {
     if (!watched()) release();
     else if (!current && queue.current.length) nextAfter(null);
@@ -2304,7 +2321,7 @@ function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtW
     was.current = { leaving, folded: pose.folded };
   });
   return (
-    <div ref={row} className={`${conversationCss.msg} ${css.agentActivity}`} data-transient="" data-agent={agent.key} data-caught={caught} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
+    <div ref={row} className={`${conversationCss.msg} ${css.agentActivity}`} data-vk={`a:${agent.key}`} data-transient="" data-agent={agent.key} data-caught={caught} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
       <div className={css.activityRow}>
       <button ref={line} type="button" className={css.activityLine} onClick={() => { if (chat) chatPage.history(chat, agent.key); }} aria-label={`${agent.who}：${now.current.text}`}>
         <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span></span>

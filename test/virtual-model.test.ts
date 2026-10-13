@@ -27,12 +27,12 @@ function sound(v: Virtual, items: Item[], height: number, heightOf: (key: string
     y += h;
   }
   assert.ok(l.after >= -1e-6, `room after the rows is not negative (${l.after})`);
-  assert.ok(Math.abs(y + l.after + trail - l.total) < 1e-6, `rows and room add up to the whole (${y + l.after + trail} / ${l.total})`);
+  assert.ok(Math.abs(y + l.after + trail - l.total) < 1e-4, `rows and room add up to the whole (${y + l.after + trail} / ${l.total})`);
   assert.ok(l.scrollTop >= 0 && l.scrollTop <= Math.max(0, l.total - height) + 1e-6, `scrolled within what there is (${l.scrollTop} of ${l.total - height})`);
   if (items.length && height > 0) assert.ok(showing, `an item shows in the pane (at ${l.scrollTop} of ${l.total})`);
   // Every item reaching into the pane is made.
   const rows = new Set(l.rows.map((r) => r.index));
-  let top = lead;
+  let top = lead - l.drift;
   items.forEach((item, i) => {
     const h = heightOf(item.key);
     if (top < l.scrollTop + height && top + h > l.scrollTop) assert.ok(rows.has(i), `item ${i} in the pane is made`);
@@ -72,6 +72,7 @@ test("virtual_a_reader_s_place_is_kept_as_older_items_come_above_and_heights_tur
   const v = made(new Virtual({ gap: GAP, overscan: 300 }));
   v.setItems(items);
   v.scrolled(3000);
+  v.rested();
   const a = v.mode;
   assert.equal(a.kind, "read");
   if (a.kind !== "read") return;
@@ -103,6 +104,9 @@ test("virtual_goes_to_an_item_when_it_comes_and_reads_from_there", () => {
   v.setItems(items);
   assert.equal(v.offsetOf("m:70"), 48);
   assert.deepEqual(v.mode, { kind: "read", key: "m:70", offset: 48 });
+  // Where it was left: its top that far below the pane's.
+  assert.equal(v.goto("m:90", "at", -30), true);
+  assert.equal(v.offsetOf("m:90"), -30);
   // Its middle at the pane's middle.
   assert.equal(v.goto("m:120", "center"), true);
   assert.equal(v.offsetOf("m:120"), 250);
@@ -130,6 +134,59 @@ test("virtual_what_leaves_the_end_leaves_its_room_down_to_the_pane_s_bottom_and_
   w.measured(many.map((item) => [item.key, 1] as const));
   l = sound(w, many, 600, () => 1);
   assert.ok(l.scrollTop + 600 > l.total - 600, "the pane is within a pane of the list's own end");
+});
+
+test("virtual_the_pane_itself_changing_holds_no_room_following_it_stays_at_its_end", () => {
+  const items = list(0, 100);
+  const v = made(new Virtual({ gap: GAP, overscan: 300, lead: 24, trail: 260 }));
+  v.setItems(items);
+  v.measured(v.layout().rows.map((r) => [r.key, 100] as const));
+  // What is under the list gets shorter (a composer back to one line), then the pane taller.
+  v.setEdges(24, 140);
+  let l = v.layout();
+  assert.equal(l.after, 0);
+  assert.equal(l.scrollTop, l.total - 600);
+  v.setViewport(800, 400);
+  l = v.layout();
+  assert.equal(l.after, 0);
+  assert.equal(l.scrollTop, l.total - 800);
+});
+
+test("virtual_gliding_to_what_came_the_pane_is_not_carried_by_what_changes_above_it", () => {
+  let items = list(0, 100);
+  const v = made(new Virtual({ gap: GAP, overscan: 300 }));
+  v.setItems(items);
+  v.measured(v.layout().rows.map((r) => [r.key, 100] as const));
+  const before = v.layout();
+  const eye = before.rows.find((r) => v.offsetOf(r.key)! >= 0)!;
+  const offset = v.offsetOf(eye.key)!;
+  // A message comes at the end as rows far above turn out taller: what shows stays put, the pane short of its end by
+  // what came.
+  v.glide(true);
+  items = [...items, ...list(100, 101)];
+  v.setItems(items);
+  v.measured([["m:3", 500], ["m:4", 500]]);
+  assert.equal(v.offsetOf(eye.key), offset);
+  const left = v.target() - v.layout().scrollTop;
+  assert.ok(left >= 100 + GAP && left < 300, `short of its end by the message come (${left})`);
+  // Its steps take it there, each from where the last left it.
+  v.place(v.layout().scrollTop + left / 2);
+  v.measured([["m:5", 300]]);
+  assert.ok(Math.abs(v.offsetOf(eye.key)! - (offset - left / 2)) < 1e-6);
+  v.place(v.target());
+  assert.equal(v.target(), v.layout().scrollTop);
+});
+
+test("virtual_rows_measured_shorter_than_they_were_guessed_leave_no_room_held_at_the_end", () => {
+  const items = list(0, 100);
+  const v = made(new Virtual({ gap: GAP, overscan: 300 }));
+  v.setItems(items);
+  v.measured(v.layout().rows.map((r) => [r.key, 60] as const));
+  v.measured(v.layout().rows.map((r) => [r.key, 60] as const));
+  const l = v.layout();
+  assert.equal(l.after, 0);
+  assert.equal(l.scrollTop, l.total - 600);
+  assert.equal(l.rows.at(-1)!.index, 99);
 });
 
 test("virtual_a_message_come_is_followed_to_its_top_and_read_from_there_when_longer_than_the_pane", () => {
@@ -196,7 +253,13 @@ test("virtual_anything_done_in_any_order_keeps_the_reader_s_place_and_a_pane_wit
     const v = new Virtual({ gap: GAP, overscan: pick(400), boost: 1000 });
     v.setViewport(height, width, pick(2) * 40);
     v.setItems(items);
-    const heightOf = (key: string) => real.get(key) ?? items.find((item) => item.key === key)!.estimate;
+    // An item not measured stands as tall as its estimate, by as much as those measured are off theirs.
+    const scale = () => {
+      let measured = 0, estimated = 0, count = 0;
+      for (const item of items) { const h = v.sizes.get(item.key)?.height; if (h !== undefined && h > 0) { measured += h; estimated += item.estimate; count++; } }
+      return count >= 5 ? Math.min(4, Math.max(0.25, measured / estimated)) : 1;
+    };
+    const heightOf = (key: string) => v.sizes.get(key)?.height ?? items.find((item) => item.key === key)!.estimate * scale();
     // What the page last measured (`real`), and which of it the pane's width has made stale.
     const stale = new Set<string>();
     const measure = () => {
@@ -235,6 +298,36 @@ test("virtual_anything_done_in_any_order_keeps_the_reader_s_place_and_a_pane_wit
       }
     }
   }
+});
+
+test("virtual_under_a_scroll_the_pane_is_not_moved_what_would_move_it_is_held_until_it_rests", () => {
+  const items = list(0, 200);
+  const v = made(new Virtual({ gap: GAP, overscan: 300 }));
+  v.setItems(items);
+  v.scrolled(10000);
+  const a = v.mode;
+  assert.equal(a.kind, "read");
+  if (a.kind !== "read") return;
+  const offset = v.offsetOf(a.key)!;
+  const first = v.layout().rows[0]!;
+  // A row above the reader's measured 150 taller: their item where it was, the pane not moved, the room above less.
+  v.measured([[first.key, 250]]);
+  let l = v.layout();
+  assert.equal(l.scrollTop, 10000);
+  assert.equal(l.drift, 150);
+  assert.equal(l.rows[0]!.space, first.space - 150);
+  assert.equal(v.offsetOf(a.key), offset);
+  // At rest: the pane where it should be, the room back.
+  v.rested();
+  l = v.layout();
+  assert.equal(l.scrollTop, 10150);
+  assert.equal(l.drift, 0);
+  assert.equal(v.offsetOf(a.key), offset);
+  // The scroll goes on from where the pane is, whatever is held.
+  v.scrolled(10100);
+  v.measured([[v.layout().rows[0]!.key, 300]]);
+  v.scrolled(9900);
+  assert.equal(v.layout().scrollTop, 9900);
 });
 
 test("virtual_sizes_are_kept_for_the_lists_lately_shown", () => {

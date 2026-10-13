@@ -111,14 +111,13 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   const station = useStation();
   const app = useApp();
   const list = useRef<HTMLDivElement>(null);
-  const floor = useRef<HTMLDivElement>(null);
   // The page's composer is its host's (ChatHost.tsx): kept as a new chat becomes this chat.
   const { now: draft, use } = useHost();
   const here: Here = { station: station.address, key: sessionKey, view };
   useComposer(view, here, use, list);
   return (
     <div className={chatCss.mChat}>
-      <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} stationName={station.name} />
+      <Messages view={view} lives={lives} list={list} draft={draft} here={here} stationName={station.name} />
       <ChatBar station={station.address} session={sessionKey} />
     </div>
   );
@@ -238,14 +237,18 @@ export function BarFrame({ title, more, onMore, trailing, children }: { title: s
 
 // ── the list ───────────────────────────────────────────────────────────
 
+/** What the bar covers of the list's top: its padding (`lead`) less the room it leaves under the bar (styles/chat.css.ts). */
+const belowBar = (lead: number) => Math.max(0, lead - 8);
+
 /** The wide screen's list (../Chat.tsx's ChatRows), in the page: over it, the bar; under it, the composer. */
-function Messages({ view, lives, list, floor, draft, here, stationName }: {
-  view: ChatView; lives: ReturnType<typeof useLives>; list: RefObject<HTMLDivElement | null>; floor: RefObject<HTMLDivElement | null>; draft: RefObject<Draft>; here: Here;
+function Messages({ view, lives, list, draft, here, stationName }: {
+  view: ChatView; lives: ReturnType<typeof useLives>; list: RefObject<HTMLDivElement | null>; draft: RefObject<Draft>; here: Here;
   stationName?: string | undefined;
 }) {
   const app = useApp();
-  const rows = useMessageList(list, floor, view, `${here.station}:${view.thread?.id ?? here.key}`, lives);
-  const asks = useAsksShown(list, view);
+  // The phone's bar floats over the list's top: its messages show from a little above where the list's padding ends.
+  const rows = useMessageList(list, view, `${here.station}:${view.thread?.id ?? here.key}`, lives, 20, belowBar);
+  const asks = useAsksShown(rows.virtual, view);
   const asking = asks.length > 0 && !!view.thread;
   const [turn, setTurn] = useState(0);
   // Sent to by the page's key until its thread is known (a chat made here, or the agent's: useComposer).
@@ -313,7 +316,6 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
         <DraftKey.Provider value={chatKey}>
           <ChatRows chat={view} rows={rows} to={to} />
         </DraftKey.Provider>
-        <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
       </Gallery.Provider>
       {/* Over the send button, in line with it; it comes up growing and goes the way it came. */}
