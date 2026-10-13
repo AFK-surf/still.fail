@@ -187,6 +187,11 @@ function waitFor(key: string, topic: Topic, ms: number): Promise<void> | null {
   return ready;
 }
 
+/** A topic's value as the page has it now, read when asked (a tap), not followed; undefined while none. */
+export function topicNow<T>(topic: Topic): T | undefined {
+  return entries.get(topicKey(topic))?.state.value as T | undefined;
+}
+
 /** Starts reading a topic ahead of a page that will show it (a row hovered), kept a while for it. */
 export function prime(topic: Topic): void {
   const key = topicKey(topic);

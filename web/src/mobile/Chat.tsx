@@ -3,10 +3,10 @@ import { StationUpdate } from "../StationUpdate.tsx";
 // agent's execution history as a page opened from its mark or name. The messages are the wide screen's own (../Chat.tsx:
 // the same rows, avatars, names, quotes, files, activity and list behaviour), with the avatar and name in line with the
 // words rather than out in a margin. Long-press opens a message on its own page (Annotate.tsx); ＋ adds files.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { useReady } from "../core/react.ts";
-import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
+import { topicNow, useReady, useTopicSelect } from "../core/react.ts";
+import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
@@ -119,52 +119,76 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   return (
     <div className={chatCss.mChat}>
       <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} stationName={station.name} />
-      <ChatBar view={view} here={here} />
+      <ChatBar station={station.address} session={sessionKey} />
     </div>
   );
 }
 
-/** The chat's bar: back, its title, then its people, then its agents' marks (each opens its card), as the wide screen's title has them; "…" is the chat's own sheet. */
-function ChatBar({ view, here }: { view: ChatView; here: Here }) {
+/** What the chat's bar shows of it: the same while that is, whatever else of the chat changes (a message, its times). */
+interface Bar {
+  title: string; thread: ChatThread | null; archivable: boolean; people: ChatView["people"]; stationUpdate: ChatView["stationUpdate"];
+  agents: { key: string; maker: ChatAgent["session"]["maker"]; runtime: ChatAgent["session"]["runtime"]; badge: ChatAgent["badge"]; badgeText: ChatAgent["session"]["badgeText"]; agentText: string }[];
+}
+const barOf = (view: ChatView): Bar => ({
+  title: view.title, thread: view.thread ?? null, archivable: !!view.archivable, people: view.people, stationUpdate: view.stationUpdate,
+  agents: view.agents.map((a) => ({ key: a.session.key, maker: a.session.maker, runtime: a.session.runtime, badge: a.badge, badgeText: a.session.badgeText, agentText: a.session.agentText })),
+});
+// Its thread compared by what the bar does with it (its id): the thread's own times change with every message.
+const sameBar = (a: Bar | undefined, b: Bar | undefined) => a === b || (!!a && !!b && a.thread?.id === b.thread?.id
+  && JSON.stringify({ ...a, thread: null }) === JSON.stringify({ ...b, thread: null }));
+
+/**
+ * The chat's bar: back, its title, then its people, then its agents' marks (each opens its card), as the wide screen's
+ * title has them; "…" is the chat's own sheet. Given the chat's keys, it reads only what it shows; what a tap opens reads
+ * the chat as it is then.
+ */
+const ChatBar = memo(function ChatBar({ station: address, session }: { station: string; session: string }) {
   const app = useApp();
-  const thread = view.thread;
-  const jobs = useChatJobs(here.station, { session: here.key }).value;
-  const station = useChatStation(here.station);
+  const topic = { topic: "chat", station: address, session } as const;
+  const bar = useTopicSelect<ChatView, Bar | undefined>(topic, (s) => (s.value ? barOf(s.value) : undefined), sameBar);
+  const jobs = useChatJobs(address, { session }).value;
+  const station = useChatStation(address);
+  const here = (): Here | null => {
+    const view = topicNow<ChatView>(topic);
+    return view ? { station: address, key: session, view } : null;
+  };
+  if (!bar) return null;
+  const thread = bar.thread;
   return (
-    <BarFrame title={view.title} more={!!thread} onMore={() => thread && openChatInfo(app, here, thread)}
+    <BarFrame title={bar.title} more={!!thread} onMore={() => { const h = here(); if (h && thread) openChatInfo(app, h, thread); }}
       trailing={<>
         {/* Nothing left in it (the core's `archivable`): archived with one tap. */}
-        {view.archivable && thread && <ArchiveButton here={here} view={view} thread={thread} />}
-        {jobs && jobs.jobs.length > 0 && <JobsButton here={here} alarm={jobs.alarm} />}
+        {bar.archivable && thread && <ArchiveButton station={address} session={session} />}
+        {jobs && jobs.jobs.length > 0 && <JobsButton station={address} session={session} alarm={jobs.alarm} />}
       </>}>
-      {view.agents.length === 0 && <StationChip station={here.station} />}
-      <StationUpdate station={here.station} notice={view.stationUpdate} />
-      <PeopleStack people={view.people} max={5} />
-      {view.agents.map((a, i) => {
-        const history = () => agentCard(app, here, a.session.key);
-        const label = t("web-mobile.agent.card", { agent: a.session.agentText });
+      {bar.agents.length === 0 && <StationChip station={address} />}
+      <StationUpdate station={address} notice={bar.stationUpdate} />
+      <PeopleStack people={bar.people} max={5} />
+      {bar.agents.map((a, i) => {
+        const history = () => { const h = here(); if (h) agentCard(app, h, a.key); };
+        const label = t("web-mobile.agent.card", { agent: a.agentText });
         // The first shares its tile with the station it runs on: its icon, or its
         // name where it has none; tapped, the station's card.
         if (i === 0 && station) {
           return (
-            <AgentMark key={a.session.key} maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={22}
+            <AgentMark key={a.key} maker={a.maker} runtime={a.runtime} badge={a.badge} badgeText={a.badgeText} size={22}
               wrap={(logo) => <button type="button" className={css.mBarJoinedAgent} onClick={history} aria-label={label}>{logo}</button>}>
               <button type="button" className={css.mBarJoinedStation} data-name={station.emoji || station.icon ? undefined : true} aria-label={station.name}
-                onClick={() => app.sheet({ height: 0.55, content: () => <StationSheet station={here.station} /> })}>
+                onClick={() => app.sheet({ height: 0.55, content: () => <StationSheet station={address} /> })}>
                 {station.emoji || station.icon ? <StationMark emoji={station.emoji} icon={station.icon} size={13} /> : station.name}
               </button>
             </AgentMark>
           );
         }
         return (
-          <button key={a.session.key} type="button" className={css.mBarAgent} onClick={history} aria-label={label}>
-            <AgentMark maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={22} />
+          <button key={a.key} type="button" className={css.mBarAgent} onClick={history} aria-label={label}>
+            <AgentMark maker={a.maker} runtime={a.runtime} badge={a.badge} badgeText={a.badgeText} size={22} />
           </button>
         );
       })}
     </BarFrame>
   );
-}
+});
 
 /**
  * The station the chat runs on, after its title: its icon and name; a tap opens its
@@ -229,7 +253,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
   const images = () => chatImages([...rows.messages, ...view.outbox.map((o) => ({ authorKind: "person", ...o }))]);
   // The messages are kept as they are while nothing they show changes: what they are handed stays the same function,
   // the latest one behind it.
-  const archive = useArchiveChat(here, view, view.thread ?? null);
+  const archive = useArchiveChat(here.station, here.key);
   const latest = useRef({ here, draft, images, app });
   latest.current = { here, draft, images, app };
   // What is in the list (an agent's name, its activity, 归档) does these by the chat's key (../chatPage.ts).
@@ -480,10 +504,14 @@ function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => vo
 // As the core puts them (the `chatJobs` view): those that matter now first, what is over faded and last.
 
 /** The bar's button for the chat's services and jobs, with a dot when one died lately (red) or a service restarts (amber). */
-function JobsButton({ here, alarm }: { here: Here; alarm: string | undefined }) {
+function JobsButton({ station, session, alarm }: { station: string; session: string; alarm: string | undefined }) {
   const app = useApp();
+  const open = () => {
+    const view = topicNow<ChatView>({ topic: "chat", station, session });
+    if (view) openJobs(app, { station, key: session, view });
+  };
   return (
-    <button type="button" className={`${barsCss.mNavButton} ${css.mJobsTrigger}`} aria-label={t("web-mobile.chat.jobs")} onClick={() => openJobs(app, here)}>
+    <button type="button" className={`${barsCss.mNavButton} ${css.mJobsTrigger}`} aria-label={t("web-mobile.chat.jobs")} onClick={open}>
       <Web size={18} />
       {alarm && <span className={css.mJobsAlarm} data-alarm={alarm} aria-hidden="true" />}
     </button>
@@ -835,18 +863,21 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
 }
 
 /** In the bar while nothing is left in the chat: archives it with one tap, back to the list at once (as ArchiveRow). */
-function ArchiveButton({ here, view, thread }: { here: Here; view: ChatView; thread: ChatThread }) {
-  const archive = useArchiveChat(here, view, thread);
+function ArchiveButton({ station, session }: { station: string; session: string }) {
+  const archive = useArchiveChat(station, session);
   return <NavButton icon={Archive} label={t("web-mobile.home.archive")} onClick={archive} />;
 }
 
 /** Archives the chat and leaves its page (a chat keeping watch once asked): the bar's 归档, and the one in the list. */
-function useArchiveChat(here: Here, view: ChatView, thread: ChatThread | null) {
+function useArchiveChat(station: string, session: string) {
   const app = useApp();
-  const call = useStationCall(here.station);
+  const call = useStationCall(station);
   const api = useMemo(() => stationApi(call), [call]);
-  const of = { thread: thread?.id ?? null, session: view.agents[0]?.session.key ?? here.key };
+  // The chat as it is when tapped.
   return () => {
+    const view = topicNow<ChatView>({ topic: "chat", station, session });
+    if (!view) return;
+    const of = { thread: view.thread?.id ?? null, session: view.agents[0]?.session.key ?? session };
     if (view.watch) {
       confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed",
         run: () => { app.pop(); return api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived"))); } });
