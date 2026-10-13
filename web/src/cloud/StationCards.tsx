@@ -92,7 +92,8 @@ function problems(s: StationView, silent: boolean): { key: string; level: Level;
 }
 
 /**
- * The machine as its own page shows it, PC's details and the phone's station page alike: what it is, what is left of
+ * The machine as its own page shows it, PC's details and the phone's station page alike: what it is (on the phone, its
+ * page's title says it), what is left of
  * its CPU, memory and disk large over their cells (as an allowance's on its profile's page), this device's connection
  * to it, then the rest a quiet row each.
  */
@@ -100,8 +101,9 @@ export function MachineDetails({ s, phone = false }: { s: StationView; phone?: b
   if (!s.host) return <span className={css.machineNote}>{s.online ? t("web-pages.stations.deviceLoading") : t("web-pages.stations.deviceOffline")}</span>;
   return (
     <div className={css.machine}>
-      <span className={css.machineNote}>{s.host.identity}</span>
-      {s.online && <MeterDials meters={s.host.meters} />}
+      {/* The phone's page says what it is under its title. */}
+      {!phone && <span className={css.machineNote}>{s.host.identity}</span>}
+      {s.online && <MeterDials meters={s.host.meters} row={phone} />}
       {s.online && s.net && <Net net={s.net} flush />}
       <HostDetails details={s.host.details} phone={phone} />
     </div>

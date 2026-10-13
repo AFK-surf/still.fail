@@ -56,7 +56,10 @@ export const quotaChipText = style({
 });
 export const quotaChipMark = style({ color: vars.muted });
 /** A profile's own page: per window its number large, ten cells lit as far as is left, its name and when it refills. */
-export const quotaDials = style({ display: "flex", flexWrap: "wrap", gap: "12px 36px" });
+export const quotaDials = style({
+  display: "flex", flexWrap: "wrap", gap: "12px 36px",
+  selectors: { "&[data-row]": { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px 16px" } },
+});
 export const quotaDial = style({
   display: "grid", justifyItems: "start", gap: "2px", minWidth: "96px", color: vars.green,
   selectors: {
@@ -89,6 +92,10 @@ globalStyle(`${quotaChip}[data-small] ${quotaChipEdge} rect`, {
 });
 globalStyle(`${quotaDialNumber} small`, { fontSize: "0.55em", fontWeight: "500", marginLeft: "1px", color: vars.muted });
 globalStyle(`${quotaDialCells} i`, { width: "8px", height: "14px", borderRadius: "2px", background: vars.neutralBg });
+// Three across a phone: the cells a little narrower, so ten of them fit a third of it.
+globalStyle(`${quotaDials}[data-row] ${quotaDial}`, { minWidth: "0" });
+globalStyle(`${quotaDials}[data-row] ${quotaDialCells}`, { gap: "2px" });
+globalStyle(`${quotaDials}[data-row] ${quotaDialCells} i`, { width: "7px" });
 globalStyle(`${quotaDialCells} i[data-on]`, { background: "currentColor" });
 globalStyle(`${peopleStack} > :first-child`, { marginLeft: "0" });
 globalStyle(`${peopleStack} ${personLetter}`, { width: "16px", height: "16px", fontSize: vars.textCaption });

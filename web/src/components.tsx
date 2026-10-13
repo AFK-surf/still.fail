@@ -137,9 +137,9 @@ function Dial({ number, unit, left, level, label, note, aria }: { number: string
 }
 
 /** A machine's CPU, memory and disk on its own page (a station's details): as an allowance's windows on its profile's,
- * each what is left large over its cells. */
-export function MeterDials({ meters }: { meters: Meter[] }) {
-  return <div className={css.quotaDials}>{meters.map((m) => <Dial key={m.label} number={m.big} unit={m.unit} left={m.left} level={m.level} label={m.title} note={m.total} aria={`${m.title} ${m.big} ${m.unit}`} />)}</div>;
+ * each what is left large over its cells. `row`: the three across the width however narrow (the phone's page). */
+export function MeterDials({ meters, row = false }: { meters: Meter[]; row?: boolean }) {
+  return <div className={css.quotaDials} data-row={row || undefined}>{meters.map((m) => <Dial key={m.label} number={m.big} unit={m.unit} left={m.left} level={m.level} label={m.title} note={m.total} aria={`${m.title} ${m.big} ${m.unit}`} />)}</div>;
 }
 
 /** A rounded box with a figure in it (its mark before it, when given) and its edge drawn as far as `fill` (0–100),

@@ -7,7 +7,11 @@ export const mPad20 = style({ padding: "20px" });
 export const mBuddy = style({ display: "block", flex: "none" });
 export const mStationHead = style({ display: "flex", alignItems: "center", gap: "12px" });
 export const mStationName = style({ fontSize: vars.textTitle, fontWeight: "600" });
-export const mStationSummary = style({ fontSize: vars.textMeta, color: "var(--m-muted)" });
+/** What the machine is and what its agents do: one line however long, so no card grows as it changes. */
+export const mStationSummary = style({
+  display: "block", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: vars.textMeta, color: "var(--m-muted)",
+});
 export const mStationRings = style({ display: "flex", gap: "14px", paddingTop: "10px", minHeight: "30px" });
 /** A station's load and network in the list, always in their room: what is not there is laid out unseen. */
 export const mStationBody = style({ display: "grid", position: "relative" });
