@@ -1858,8 +1858,8 @@ export interface ComposerQuote {
 /** What is being written in a chat (the `composer` topic, by the draft's key), as the core keeps it (composer.ts). */
 export interface ComposerView {
 	/**
-	 * The core's own words for it (read back, taken, put back, carried on): the page shows them when `rev` changes; what
-	 * is typed is the page's until then (`composer.text`).
+	 * The words as written: what the page typed (`composer.text`), or the core's own (read back, taken, put back,
+	 * carried on), which come with a new `rev` for the page to show.
 	 */
 	text: string;
 	rev: number;
