@@ -35,7 +35,7 @@ import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { failure, useAct, useToast } from "../toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
-import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, SwitchRow, Time, Tip } from "../ui.tsx";
+import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, keptWidth, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, SwitchRow, Time, Tip } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
 import { TitleInput, useRenaming } from "../Rename.tsx";
 import * as renameCss from "../Rename.css.ts";
@@ -66,10 +66,15 @@ const keepFocus = (e: { preventDefault(): void }) => e.preventDefault();
  */
 function panelWidth(page: number, narrow: boolean): number {
   if (narrow) return Math.min(460, window.innerWidth);
-  const dragged = parseFloat(document.documentElement.style.getPropertyValue("--panel-w"));
-  const wanted = Number.isFinite(dragged) && dragged > 0 ? dragged : Math.max(360, Math.floor(page * 0.38));
+  // The width dragged, as it is kept (and on the root from here on): read off the root alone, it was not there at the
+  // first opening after a load (its handle puts it there, once the panel is made), and the panel slid in at the width
+  // of none dragged, then jumped to the one kept.
+  const wanted = keptWidth("--panel-w", PANEL_MIN, PANEL_MAX) ?? Math.max(360, Math.floor(page * 0.38));
   return Math.max(0, Math.min(wanted, page - 360));
 }
+/** How narrow and how wide the side panel is dragged. */
+const PANEL_MIN = 320;
+const PANEL_MAX = 960;
 
 export function ChatPage() {
   const { chat } = useParams();
@@ -176,6 +181,9 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   // again for the frame.
   const pageWidth = useRef(0);
   useLayoutEffect(() => {
+    // The width dragged for the panel is on the root from the page's first frame, not from the panel's first opening:
+    // put there then, the whole page was styled anew in the frame of the click.
+    keptWidth("--panel-w", PANEL_MIN, PANEL_MAX);
     const page = pageRef.current;
     if (!page) return;
     const seen = new ResizeObserver(([entry]) => { if (entry) pageWidth.current = entry.borderBoxSize[0]?.inlineSize ?? entry.contentRect.width; });
@@ -409,7 +417,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
       </div>
         {side && (
           <Tabs.Root ref={panelRef} className={css.sidePanel} data-over-composer value={side.shown} onValueChange={setActive} inert={side === leaving}>
-            <ResizeHandle variable="--panel-w" edge="left" min={320} max={960} label={t("web-pages.chat.resizePanel")} />
+            <ResizeHandle variable="--panel-w" edge="left" min={PANEL_MIN} max={PANEL_MAX} label={t("web-pages.chat.resizePanel")} />
             <div className={css.sideBar}>
               <Tabs.List className={css.sideTabList} aria-label={t("web-pages.chat.history")}>
                 {side.tabs.map((key) => {

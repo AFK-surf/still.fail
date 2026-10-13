@@ -542,6 +542,21 @@ export function RuntimeLogo({ runtime, size = 16 }: { runtime: "claude" | "codex
  * variable on the document (so every layout using it follows) and in
  * localStorage; a double click goes back to the default.
  */
+/**
+ * The width dragged for a column (`variable`, ResizeHandle), as it is kept: put on the root if it is not there yet (a
+ * page just loaded), and answered in pixels; null with none kept. What lays the column out by its own reckoning asks
+ * here first, so the styles and it go by the same width from the column's first frame.
+ */
+export function keptWidth(variable: string, min: number, max: number): number | null {
+  const saved = Number(localStorage.getItem(`stillfail.width.${variable}`));
+  if (!saved) return null;
+  const px = Math.min(max, Math.max(min, saved));
+  // Only when it differs: set, even the same, the page's every element is styled anew (the variable is on the root
+  // and inherited).
+  if (document.documentElement.style.getPropertyValue(variable) !== `${px}px`) document.documentElement.style.setProperty(variable, `${px}px`);
+  return px;
+}
+
 export function ResizeHandle({ variable, edge, min, max, label }: { variable: string; edge: "left" | "right"; min: number; max: number; label: string }) {
   const storage = `stillfail.width.${variable}`;
   const set = (px: number | null) => {
@@ -553,13 +568,8 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
       localStorage.setItem(storage, String(px));
     }
   };
-  useEffect(() => {
-    const saved = Number(localStorage.getItem(storage));
-    // Each time its column comes (a chat's side panel opening): set again, even the same, the page's every element is
-    // styled anew, the variable being on the root and inherited.
-    const width = `${Math.min(max, Math.max(min, saved))}px`;
-    if (saved && document.documentElement.style.getPropertyValue(variable) !== width) document.documentElement.style.setProperty(variable, width);
-  }, [storage]);
+  // Each time its column comes (a chat's side panel opening).
+  useEffect(() => { keptWidth(variable, min, max); }, [variable, min, max]);
   return (
     <div className={css.resizeHandle} data-edge={edge} role="separator" aria-orientation="vertical" aria-label={label}
       onDoubleClick={() => set(null)}
