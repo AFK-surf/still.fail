@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -131,7 +132,7 @@ private class Reading(val novel: Novel, start: Pair<Int, Int>) {
     var chunk by mutableIntStateOf(start.first)
     /** How far down its block the top of the screen is (0–1). */
     var within by mutableFloatStateOf(0f)
-    var jump by mutableStateOf<ReaderJump?>(if (start.second > 0) ReaderJump(start.first, start.second, 1) else null)
+    var jump by mutableStateOf<ReaderJump?>(if (start.second > 0) ReaderJump(start.first, start.second, 1, lead = false) else null)
     private var serial = 1L
     var query by mutableStateOf("")
     var matches by mutableStateOf<List<TextMatch>>(emptyList())
@@ -179,6 +180,7 @@ fun ReaderScreen(station: String, root: String, path: String) {
             // Where it was left on this device (held here: no wait for a station).
             val held = withTimeoutOrNull(1000) { app.core.topic(Topics.drivePlace(station, root, path)).first { !it.loading } }?.value
             val at = (held as? JsonObject)?.get("at")?.jsonPrimitive?.doubleOrNull?.toInt()
+            android.util.Log.i("drive-reader", "open $path: ${novel.encoding}, ${novel.chapters.size} chapters, ${novel.length} chars; left at $at ($held)")
             Opening.Ready(novel, at)
         } catch (e: CoreException) {
             Opening.Failed(e.message)
@@ -237,7 +239,7 @@ private fun Book(
 
     // Where it was left, written as the reader stops (not on every pixel), and as the page goes.
     val api = remember(station) { app.api(station) }
-    fun keep() { val at2 = novel.offsetOf(r.chunk, r.within); app.scope.launch { try { api.drivePlace(root, path, at2.toDouble(), novel.length.toDouble()) } catch (_: CoreException) {} } }
+    fun keep() { val at2 = novel.offsetOf(r.chunk, r.within); app.scope.launch { try { api.drivePlace(root, path, at2.toDouble(), novel.length.toDouble()) } catch (e: CoreException) { android.util.Log.w("drive-reader", "place not kept: ${e.code} ${e.message}") } } }
     LaunchedEffect(r) { snapshotFlow { r.chunk to (r.within * 50).toInt() }.debounce(800).collect { keep() } }
     DisposableEffect(r) { onDispose { keep() } }
 
@@ -254,6 +256,8 @@ private fun Book(
         Box(Modifier.fillMaxSize().hazeSource(haze)) {
             TextColumn(r, typography, p) { chrome = !chrome }
         }
+        // The clock and the icons stay on the paper, not over the text running under them.
+        Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(p.ground))
         val percent = "${(r.fraction * 100).roundToInt()}%"
         val chapter = r.chapter
         val sub = listOfNotNull(
@@ -297,7 +301,7 @@ private fun TextColumn(r: Reading, typography: ReaderTypography, p: PaperInk, on
         if (height <= 0) return@LaunchedEffect
         val at = drawn.at(target.offset).coerceIn(0, drawn.text.length)
         // A little of what is before it in view, under the top bar.
-        list.scrollToItem(index, ((height * (at.toFloat() / drawn.text.length)).roundToInt() - 120).coerceAtLeast(0))
+        list.scrollToItem(index, ((height * (at.toFloat() / drawn.text.length)).roundToInt() - if (target.lead) 120 else 0).coerceAtLeast(0))
     }
     LaunchedEffect(list) {
         snapshotFlow { list.firstVisibleItemIndex to list.firstVisibleItemScrollOffset }.collect { (index, _) ->
@@ -503,7 +507,8 @@ private fun openChapters(app: AppState, r: Reading) {
 
 /** Search in the whole text: as it is typed the hits are marked and the first after here is gone to; ‹ › step through them. */
 private fun openSearch(app: AppState, r: Reading) {
-    app.sheet = SheetSpec(0.3f, fit = 168.dp) {
+    // Tall enough that what it says stays above the keyboard (the sheet keeps its height and makes room for it inside).
+    app.sheet = SheetSpec(0.62f) {
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { delay(50); runCatching { focus.requestFocus() } }
         SheetGrab()

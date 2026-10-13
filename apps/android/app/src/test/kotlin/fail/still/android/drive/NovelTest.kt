@@ -23,6 +23,8 @@ class NovelTest {
         // The lines broken at 30 are one paragraph again.
         assertTrue(text.contains("灯火一盏一盏地亮起来，风从谷底吹上来"))
         assertEquals(text.length, n.length)
+        // Each indented paragraph stays one: 5 headings and 20 paragraphs, lines.
+        assertEquals(25, text.split('\n').count { it.isNotBlank() })
     }
 
     @Test

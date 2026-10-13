@@ -234,7 +234,8 @@ fun reflow(text: String, wrapWidth: Int, keepLineStarts: Set<Int>): String {
         val end = if (newline < 0) text.length else newline
         val length = end - index
         val blank = length == 0
-        val keep = keepLineStarts.contains(index)
+        // An indented line starts a paragraph: a wrapped line never begins with the paragraph's indent.
+        val keep = keepLineStarts.contains(index) || (length > 0 && (text[index] == '\u3000' || text.startsWith("  ", index)))
         val continuation = !blank && !keep && previousFull && out.isNotEmpty() && joined < MAX_JOINED
         if (continuation) {
             // The break replaced a space in Latin text; Chinese needs no space.

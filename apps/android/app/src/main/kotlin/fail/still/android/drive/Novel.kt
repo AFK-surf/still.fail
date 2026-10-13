@@ -155,5 +155,8 @@ data class ReaderTypography(
     }
 }
 
-/** Where a jump lands: a block and an offset in it; `serial` makes the same place asked twice two jumps. */
-data class ReaderJump(val chunk: Int, val offset: Int, val serial: Long = 0)
+/**
+ * Where a jump lands: a block and an offset in it; `serial` makes the same place asked twice two jumps; `lead`: a little of
+ * what is before it shown too (not when going back to where the reader was).
+ */
+data class ReaderJump(val chunk: Int, val offset: Int, val serial: Long = 0, val lead: Boolean = true)

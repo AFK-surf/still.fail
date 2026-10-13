@@ -280,7 +280,9 @@ fun PlayerScreen(station: String, root: String, path: String) {
             .setSelectUndeterminedTextLanguage(true).setTrackTypeDisabled(Media.TRACK_TYPE_TEXT, !subtitlesOn).build()
     }
     LaunchedEffect(note) { if (note != null) { delay(800); note = null } }
-    LaunchedEffect(awake, phase, poke) { if (awake && phase == Phase.Playing) { delay(REST_MS); awake = false } }
+    // A song has no picture to clear the way for: its controls stay.
+    val audio = entries.firstOrNull { it.name == name }?.kind == "audio" || (started && video == null)
+    LaunchedEffect(awake, phase, poke, audio) { if (awake && phase == Phase.Playing && !audio) { delay(REST_MS); awake = false } }
 
     // Sideways: landscape asked for (a phone with rotation locked turns too) and the system bars away; back, upright.
     val view = LocalView.current
@@ -312,8 +314,7 @@ fun PlayerScreen(station: String, root: String, path: String) {
     }
     fun open(other: String) { player.pause(); app.replace(Screen.DrivePlay(station, root, join(dir, other))) }
 
-    val shown by animateFloatAsState(if (awake || phase != Phase.Playing) 1f else 0f, tween(200), label = "controls")
-    val audio = entries.firstOrNull { it.name == name }?.kind == "audio" || (started && video == null)
+    val shown by animateFloatAsState(if (awake || phase != Phase.Playing || audio) 1f else 0f, tween(200), label = "controls")
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Box(Modifier.fillMaxSize().hazeSource(haze)) {
             Picture(player, video, fill)
@@ -399,7 +400,7 @@ fun PlayerScreen(station: String, root: String, path: String) {
 
 /** Where it was left, kept on this device: its time and its length (ms). */
 private fun keepPlace(app: AppState, station: String, root: String, path: String, at: Long, of: Long) {
-    app.scope.launch { try { app.api(station).drivePlace(root, path, at.toDouble(), of.toDouble()) } catch (_: CoreException) {} }
+    app.scope.launch { try { app.api(station).drivePlace(root, path, at.toDouble(), of.toDouble()) } catch (e: CoreException) { Log.w(TAG, "place not kept: ${e.code} ${e.message}") } }
 }
 
 /** A player that reads side-loaded subtitles (SubRip and the rest arrive as raw samples, which media3 decodes only so). */

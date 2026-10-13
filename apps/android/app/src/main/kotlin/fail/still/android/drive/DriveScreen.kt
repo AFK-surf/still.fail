@@ -489,11 +489,11 @@ private fun FolderPage(
     val uploads = DriveUploads.list.filter { it.station == station && it.root == root && it.dir == path }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
         item(key = "where") {
-            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 10.dp)) {
+            Column(Modifier.padding(start = 17.dp, end = 20.dp, top = 2.dp, bottom = 10.dp)) {
                 Crumbs(station, stationName, root, path, severalRoots)
                 Text(
                     folder?.countText ?: if (error == null) t("android-misc.drive.reading") else "",
-                    fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.padding(top = 2.dp),
+                    fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.padding(start = 3.dp, top = 2.dp),
                 )
             }
         }
