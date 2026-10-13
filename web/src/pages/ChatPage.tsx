@@ -131,14 +131,24 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const [jobPicked, pickJob] = useState<string | null>(null);
   const shown = active && open.includes(active) ? active : open[0] ?? null;
   // The panel as it was when its last tab closed, kept while it slides out over the chat (which takes the room at once).
+  // Slid out, its histories stay, at rest out of sight (`rest`): opened again, they are not made again (their entries,
+  // their words drawn from Markdown), only shown. A web service's or a file's tab is not kept: its frame goes to the
+  // corner as before (Previews.tsx).
   const panelRef = useRef<HTMLDivElement>(null);
-  const [leaving, setLeaving] = useState<{ tabs: string[]; shown: string; width: number } | null>(null);
+  const [leaving, setLeaving] = useState<{ tabs: string[]; shown: string; width: number; rest?: true } | null>(null);
+  const rest = (left: typeof leaving) => {
+    const tabs = left?.tabs.filter((key) => key === JOBS || (fileOf(key) === null && serviceOf(key) === null)) ?? [];
+    return left && tabs.length ? { ...left, tabs, shown: tabs.includes(left.shown) ? left.shown : tabs[0]!, rest: true as const } : null;
+  };
   // Tabs and the one in front change together, and are kept for this chat in one write.
   const commit = (next: string[], front: string | null) => {
     if (next.length) setLeaving(null);
     else {
       setOpening(false);
-      if (open.length && shown && panelRef.current && !reducedMotion()) setLeaving({ tabs: open, shown, width: panelRef.current.getBoundingClientRect().width });
+      if (open.length && shown && panelRef.current) {
+        const left = { tabs: open, shown, width: panelRef.current.getBoundingClientRect().width };
+        setLeaving(reducedMotion() ? rest(left) : left);
+      }
     }
     setTabs(next);
     setActiveState(front);
@@ -152,14 +162,22 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   // The panel keeps its whole width all along and shows through its column as it grows, so it comes in from the right
   // edge without its content re-laying out. Turned back on its way, it goes on from the width it has. Where the panel
   // lies over the chat (`max-width: 1100px`) it slides instead.
-  const sliding = leaving && !(open.length && shown) ? "out" : opening ? "in" : null;
+  const sliding = leaving && !leaving.rest && !(open.length && shown) ? "out" : opening ? "in" : null;
   const pageRef = useRef<HTMLDivElement>(null);
   const slide = useRef<{ run: AnimationPlaybackControls; value: number } | null>(null);
   useLayoutEffect(() => {
     const page = pageRef.current;
     const el = panelRef.current;
-    // Slid out: the page has laid itself out without the panel now, so the column it held is let go of in the same frame.
-    if (!sliding) return void page?.style.removeProperty("grid-template-columns");
+    // Slid out: the page has laid itself out without the panel now, so the column it held is let go of in the same frame;
+    // at rest, it keeps the column at nothing and its width, as the motion left them (laid out as it was, to come back).
+    if (!sliding) {
+      if (leaving?.rest && el && page) {
+        el.style.width = `${leaving.width}px`;
+        if (matchMedia("(max-width: 1100px)").matches) el.style.transform = `translateX(${leaving.width}px)`;
+        else page.style.gridTemplateColumns = "minmax(0, 1fr) 0px";
+      } else page?.style.removeProperty("grid-template-columns");
+      return;
+    }
     if (!page || !el) return;
     const was = slide.current;
     was?.run.stop();
@@ -183,7 +201,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       onComplete: () => {
         if (slide.current !== now) return;
         slide.current = null;
-        if (sliding === "out") return setLeaving(null);
+        if (sliding === "out") return setLeaving(rest);
         page.style.removeProperty("grid-template-columns");
         el.style.removeProperty("width");
         el.style.removeProperty("transform");
@@ -339,7 +357,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   // station make the chat behind it; the page stays (the core shows the chat at the same address once it is there).
   const sendTo = made ?? ("session" in of && !chat.thread ? of.session : undefined);
   return (
-    <div ref={pageRef} className={sessionCss.sessionPage} data-panel={panel || leaving !== null}>
+    <div ref={pageRef} className={sessionCss.sessionPage} data-panel={panel || leaving !== null} data-rest={!panel && leaving?.rest ? "" : undefined}>
       {chat.watch && <Confirm open={askArchive} title={t("web-pages.chat.archiveConfirm", { title: chat.title })} description={chat.watch.ask} action={t("web-pages.chat.archive")}
         onConfirm={() => { setAskArchive(false); void archive(); }} onClose={() => setAskArchive(false)} />}
       <div className={jobsCss.sessionMain}>
@@ -377,7 +395,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       </OpenFile.Provider>
       </div>
         {side && (
-          <Tabs.Root ref={panelRef} className={css.sidePanel} data-over-composer value={side.shown} onValueChange={setActive} inert={side === leaving}>
+          <Tabs.Root ref={panelRef} className={css.sidePanel} data-over-composer data-rest={side === leaving && leaving.rest ? "" : undefined}
+            value={side.shown} onValueChange={setActive} inert={side === leaving}>
             <ResizeHandle variable="--panel-w" edge="left" min={320} max={960} label={t("web-pages.chat.resizePanel")} />
             <div className={css.sideBar}>
               <Tabs.List className={css.sideTabList} aria-label={t("web-pages.chat.history")}>

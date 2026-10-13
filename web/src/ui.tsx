@@ -555,7 +555,10 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
   };
   useEffect(() => {
     const saved = Number(localStorage.getItem(storage));
-    if (saved) document.documentElement.style.setProperty(variable, `${Math.min(max, Math.max(min, saved))}px`);
+    // Each time its column comes (a chat's side panel opening): set again, even the same, the page's every element is
+    // styled anew, the variable being on the root and inherited.
+    const width = `${Math.min(max, Math.max(min, saved))}px`;
+    if (saved && document.documentElement.style.getPropertyValue(variable) !== width) document.documentElement.style.setProperty(variable, width);
   }, [storage]);
   return (
     <div className={css.resizeHandle} data-edge={edge} role="separator" aria-orientation="vertical" aria-label={label}
