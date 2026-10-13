@@ -6,7 +6,7 @@ import { StatusText, Tip } from "./ui.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
 import { t } from "./i18n.ts";
-import { Bell, Check, Eye, Wait } from "./icons.tsx";
+import { Bell, Check, Wait, Watch } from "./icons.tsx";
 
 export type ChatTone = "busy" | "done" | "alert" | "wait" | "other";
 
@@ -68,7 +68,8 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
 /**
  * A row's second line from where its chat stands (the core's `stateText`; a core before it: its decision's `decision.text`):
  * 奏 · … (Decision · …) in ink, its lead bold; 要你帮忙：… (Needs you: …) in ink too (it wants the viewer); 出问题：…, 在等：…, 做完了 as quiet as the
- * last message would be. `slot` (every chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check; 监控中 an eye before its words)
+ * last message would be. `slot` (every chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check; 监控中 a radar before its words;
+ * the two still going, waiting and watching, move: their dots light in turn, the radar's arcs ripple out)
  * stands in the title's mark's column, centred under it, and what follows starts where the title does.
  */
 export function WaitingText({ text, className, slot = false }: { text: string; className: string; slot?: boolean }) {
@@ -79,12 +80,12 @@ export function WaitingText({ text, className, slot = false }: { text: string; c
   const icon = slot ? need ?? DONE.exec(text) ?? WAIT.exec(text) ?? watch : null;
   if (icon) {
     const label = watch ? text : t(need ? "web-main.chatMark.alert" : DONE.test(text) ? "web-main.status.done" : "web-main.status.waiting");
-    // Watching keeps its words after its eye.
+    // Watching keeps its words after its radar.
     const rest = watch ? text : text.slice(icon[0].length);
     return (
       <span className={`${className} ${css.leadLine}`} data-turn={turn || undefined} data-state-line="" aria-label={text}>
-        <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label}>
-          {need ? <Bell size={14} /> : DONE.test(text) ? <Check size={14} strokeWidth={1.7} /> : watch ? <Eye size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}
+        <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label} data-motion={need || DONE.test(text) ? undefined : watch ? "watch" : "wait"}>
+          {need ? <Bell size={14} /> : DONE.test(text) ? <Check size={14} strokeWidth={1.7} /> : watch ? <Watch size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}
         </span></Tip>
         {rest && <span className={css.leadRest}>{rest}</span>}
       </span>

@@ -9,6 +9,11 @@ export const toastInKeyframes = keyframes({ "from": { opacity: "0", transform: "
 export const splashFloatKeyframes = keyframes({ "50%": { transform: "translateY(-5px)" } });
 export const appearKeyframes = keyframes({ "from": { opacity: "0" }, "to": { opacity: "1" } });
 export const spinKeyframes = keyframes({ "to": { transform: "rotate(360deg)" } });
+/**
+ * A chat row's waiting dots and its watching radar's arcs (ChatMark.css.ts leadSlot): one breath, in and out in the first
+ * half of the loop, then still until the next, so it rests between breaths rather than going on and on.
+ */
+export const leadBreatheKeyframes = keyframes({ "0%, 52%, 100%": { opacity: ".35" }, "23%": { opacity: "1" } });
 export const pulseKeyframes = keyframes({ "50%": { opacity: ".45" } });
 export const jobBreatheKeyframes = keyframes({ "50%": { opacity: ".35" } });
 export const jobLiveKeyframes = keyframes({ "0%, 100%": { transform: "scale(.6)", opacity: ".35" }, "50%": { transform: "scale(1.15)", opacity: "0" } });
