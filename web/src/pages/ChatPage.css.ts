@@ -215,7 +215,7 @@ export const sideBar = style({
     // The desktop app has no title bar: the panel's bar drags the window as the page's does (styles/sidebar.css.ts),
     // and on Windows keeps clear of the window's buttons over its right end (styles/global.css.ts).
     "[data-desktop] &": { WebkitAppRegion: "drag" },
-    '[data-desktop="overlay"] &': { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" },
+    ':is([data-desktop="overlay"], [data-desktop="custom"]) &': { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" },
   },
 });
 globalStyle(`[data-desktop] ${sideBar} :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex])`, { WebkitAppRegion: "no-drag" });

@@ -73,6 +73,7 @@ export const m = style({
     // where a phone's status bar is, and the bars at the top move the window.
     ':root[data-desktop="inset"] &': { vars: { "--m-top": "30px" } },
     ':root[data-desktop="overlay"] &': { vars: { "--m-top": "env(titlebar-area-height, 44px)" } },
+    ':root[data-desktop="custom"]:not([data-fullscreen]) &': { vars: { "--m-top": "44px" } },
   },
   "@media": {
     "(prefers-color-scheme: dark)": {
