@@ -299,7 +299,7 @@ function appNames() {
   walk(src);
   return names;
 }
-let app;
+var app; // var: --compare sums up before the module gets here
 /** Whether a name (as the bundle has it, a clash's suffix let go: ChatPane$1) is one of the app's components. */
 function isApp(n) {
   app ??= appNames();
