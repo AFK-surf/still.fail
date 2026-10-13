@@ -435,7 +435,7 @@ export function DriveReadScreen() {
   const o = useOpened();
   return (
     <div className={`${pagesCss.mScreen} ${css.mReaderPage}`}>
-      {o.entry ? <Reader at={o.at} name={o.entry.name} size={o.entry.size} mtime={o.entry.mtime} markdown={o.entry.kind === "markdown"} backLabel={o.back} onBack={app.pop} />
+      {o.entry ? <Reader key={o.path} at={o.at} name={o.entry.name} size={o.entry.size} mtime={o.entry.mtime} markdown={o.entry.kind === "markdown"} backLabel={o.back} onBack={app.pop} />
         : <Missing back={o.back} error={o.folder.error?.message ?? (o.folder.value ? t("web-pages.drive.gone") : null)} />}
     </div>
   );
@@ -446,7 +446,7 @@ export function DrivePlayScreen() {
   const o = useOpened();
   return (
     <div className={`${pagesCss.mScreen} ${css.mPlayerPage}`}>
-      {o.entry ? <Player at={o.at} entry={o.entry} siblings={o.folder.value?.entries ?? []} backLabel={o.back} onBack={app.pop}
+      {o.entry ? <Player key={o.path} at={o.at} entry={o.entry} siblings={o.folder.value?.entries ?? []} backLabel={o.back} onBack={app.pop}
         onGo={(name) => app.replace(drivePath(o.station.base, o.root, joinPath(parentOf(o.path), name), "play"))} />
         : <Missing back={o.back} error={o.folder.error?.message ?? (o.folder.value ? t("web-pages.drive.gone") : null)} />}
     </div>

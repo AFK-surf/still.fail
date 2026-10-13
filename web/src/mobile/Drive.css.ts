@@ -61,7 +61,7 @@ export const mEmpty = style({ display: "grid", justifyItems: "center", gap: "14p
 export const mSheetNote = style({ padding: "0 20px 10px" });
 /** Where the picker is on the station: one line, its end in view. */
 export const mPickerPath = style({
-  padding: "0 20px 8px", fontFamily: vars.fontMono, fontSize: vars.textCaption, color: "var(--m-muted)", direction: "rtl", textAlign: "left",
+  padding: "0 20px 8px", fontFamily: vars.fontMono, fontSize: vars.textCaption, color: "var(--m-muted)",
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const mUp = style({ transform: "rotate(-90deg)" });

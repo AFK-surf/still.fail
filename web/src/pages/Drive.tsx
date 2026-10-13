@@ -389,7 +389,7 @@ export function DriveReadPage() {
   const back = useBack(o.station.base, o.root, o.folderPath);
   return (
     <div className={css.opened}>
-      {o.entry ? <Reader at={o.at} name={o.entry.name} size={o.entry.size} mtime={o.entry.mtime} markdown={o.entry.kind === "markdown"} backLabel={o.back} onBack={back} />
+      {o.entry ? <Reader key={o.path} at={o.at} name={o.entry.name} size={o.entry.size} mtime={o.entry.mtime} markdown={o.entry.kind === "markdown"} backLabel={o.back} onBack={back} />
         : <p className={`${css.openedNote} ${o.folder.error || o.folder.value ? controlsCss.fieldError : shellCss.muted}`}>{o.folder.error?.message ?? (o.folder.value ? t("web-pages.drive.gone") : t("web-pages.drive.reading"))}</p>}
     </div>
   );
@@ -401,7 +401,7 @@ export function DrivePlayPage() {
   const back = useBack(o.station.base, o.root, o.folderPath);
   return (
     <div className={`${css.opened} ${css.dark}`}>
-      {o.entry ? <Player at={o.at} entry={o.entry} siblings={o.folder.value?.entries ?? []} backLabel={o.back} onBack={back}
+      {o.entry ? <Player key={o.path} at={o.at} entry={o.entry} siblings={o.folder.value?.entries ?? []} backLabel={o.back} onBack={back}
         onGo={(name) => go(drivePath(o.station.base, o.root, joinPath(o.folderPath, name), "play"), { replace: true })} />
         : <p className={`${css.openedNote} ${o.folder.error || o.folder.value ? controlsCss.fieldError : shellCss.muted}`}>{o.folder.error?.message ?? (o.folder.value ? t("web-pages.drive.gone") : t("web-pages.drive.reading"))}</p>}
     </div>

@@ -88,7 +88,7 @@ export const drop = style({
 export const rootsList = style({ display: "grid", gap: "4px", maxHeight: "50vh", overflowY: "auto" });
 export const rootLine = style({ display: "grid", gridTemplateColumns: "16px minmax(0, 1fr) auto", alignItems: "center", gap: "12px", padding: "8px 4px" });
 export const pickerPath = style({ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", minWidth: "0" });
-globalStyle(`${pickerPath} code`, { minWidth: "0", fontFamily: vars.fontMono, fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", direction: "rtl", textAlign: "left" });
+globalStyle(`${pickerPath} code`, { minWidth: "0", fontFamily: vars.fontMono, fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const pickerList = style({ display: "grid", gap: "2px", height: "min(52vh, 420px)", overflowY: "auto", margin: "0 -8px" });
 
 /** A file opened: the reader or the player fills the pane. */

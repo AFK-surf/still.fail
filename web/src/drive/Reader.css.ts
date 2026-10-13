@@ -206,3 +206,10 @@ globalStyle(`${paperSwatch}[data-paper="auto"] > span`, { background: "linear-gr
 globalStyle(`${paperSwatch}[data-paper="paper"] > span`, { background: "#F5F3EF", color: "#24272B" });
 globalStyle(`${paperSwatch}[data-paper="white"] > span`, { background: "#FFFFFF", color: "#24272B" });
 globalStyle(`${paperSwatch}[data-paper="night"] > span`, { background: "#1B1C1F", color: "#ECECED" });
+
+/** The panel open beside the text: the bars over the text, not under the panel. */
+globalStyle(`${reader}:has(> ${panel}) ${top}, ${reader}:has(> ${panel}) ${bottom}, ${reader}:has(> ${panel}) ${findStrip}`, {
+  left: "calc((100% - 360px) / 2)", maxWidth: "calc(100% - 384px)",
+});
+/** What was found, in the paper's ink (the app's own may be the other way round, white on a white page). */
+globalStyle(`${column} ::highlight(find-hit), ${column} ::highlight(find-current)`, { color: "var(--r-ink)" });
