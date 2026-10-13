@@ -7,7 +7,7 @@ import { Illustration } from "../brand.tsx";
 import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
-import { ArrowLeft, Bell, Brain, Chart, Check, ChevronRight, Info, Key, LogOut, Monitor, Plug, Plus, Refresh, Server, Settings, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "../icons.tsx";
+import { ArrowLeft, Bell, Brain, Chart, Check, ChevronRight, Folder, Info, Key, LogOut, Monitor, Plug, Plus, Refresh, Server, Settings, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "../icons.tsx";
 import { useCommands } from "../commands.ts";
 import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from "react-router";
@@ -19,6 +19,7 @@ import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
 import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
+import { useGo } from "../go.ts";
 import { ProfileCard } from "../ProfileCard.tsx";
 import { StationList } from "./StationCards.tsx";
 import { MemoryView } from "../Memory.tsx";
@@ -90,12 +91,21 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
 /** ⌘K finds each settings page by its name (or typing 设置 for them all): mounted once under a workspace's pages. */
 export function useSettingsCommands(entry: WorkspaceEntry): void {
   const navigate = useNavigate();
-  const some = (useStations(entry.id).value?.length ?? 0) > 0;
+  const stations = useStations(entry.id).value;
+  const some = (stations?.length ?? 0) > 0;
   const settings = t("web-pages.settings.title");
-  useCommands(settingsPages(entry, some).map((p) => ({
-    id: `settings/${p.path}`, group: "settings" as const, label: p.label, icon: p.icon, words: `${settings} settings ${p.words}`, typed: true,
-    run: () => navigate(`/w/${entry.id}/settings/${p.path}`),
-  })));
+  const files = t("web-pages.drive.title");
+  useCommands([
+    ...settingsPages(entry, some).map((p) => ({
+      id: `settings/${p.path}`, group: "settings" as const, label: p.label, icon: p.icon, words: `${settings} settings ${p.words}`, typed: true,
+      run: () => navigate(`/w/${entry.id}/settings/${p.path}`),
+    })),
+    // Each station's drive, where it has one (docs/drive.md).
+    ...(stations ?? []).filter((s) => s.overview?.drive).map((s) => ({
+      id: `drive/${s.id}`, group: "settings" as const, label: `${files} · ${s.name}`, icon: Folder, words: `${files} files drive ${s.name}`, typed: true,
+      run: () => navigate(`${stationBase(s.station)}/files`),
+    })),
+  ]);
 }
 
 /** The sidebar while in settings. */
@@ -481,6 +491,7 @@ function shownAs(s: StationView, mark: Mark | undefined): StationView {
 }
 
 function Stations({ view, account, manager, stations }: { view: WorkspaceView; account: Account; manager: boolean; stations: StationView[] }) {
+  const navigate = useGo();
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<StationView | null>(null);
   // Asked in a dialog of ours: window.prompt does nothing in the desktop app (Electron has none).
@@ -494,12 +505,16 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
     <Section title={t("web-pages.settings.stations.count", { n: stations.length })} actions={manager && <><JoinThisMac account={account} workspace={view.id} /><Button icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.settings.stations.add")}</Button></>}>
       {/* A name or a removal on its way shows at once, a ring beside its menu until the cloud has it (a red mark a moment if not). */}
       <StationList stations={stations.map((s) => shownAs(renaming(s) ? { ...s, name: rename.arg!.name } : s, picking(s) ? mark.arg!.mark : undefined))} manager={manager}
-        onMark={manager ? (s, m) => void mark.run({ id: s.id, mark: m }) : undefined} markBusy={picking} menu={(s) => manager && <>
-        <DoingMark calls={["workspace.renameStation", "workspace.removeStation"]} on={{ account: account.sub, workspace: view.id, station: s.id }} className={controlsCss.iconSpinner} size={14}
-          label={renaming(s) ? t("web-pages.settings.stations.renaming") : t("web-main.activity.busy")} />
+        onMark={manager ? (s, m) => void mark.run({ id: s.id, mark: m }) : undefined} markBusy={picking} menu={(s) => (manager || s.overview?.drive) && <>
+        {manager && <DoingMark calls={["workspace.renameStation", "workspace.removeStation"]} on={{ account: account.sub, workspace: view.id, station: s.id }} className={controlsCss.iconSpinner} size={14}
+          label={renaming(s) ? t("web-pages.settings.stations.renaming") : t("web-main.activity.busy")} />}
         <Menu items={[
-          { label: t("web-pages.settings.stations.rename"), disabled: renaming(s), onSelect: () => setNaming(s) },
-          { label: t("web-pages.settings.stations.remove"), icon: Trash, danger: true, onSelect: () => setRemoving(s) },
+          // Its drive (docs/drive.md), for every member, where the station has one.
+          ...(s.overview?.drive ? [{ label: t("web-pages.drive.title"), icon: Folder, onSelect: () => navigate(`${stationBase(s.station)}/files`) }] : []),
+          ...(manager ? [
+            { label: t("web-pages.settings.stations.rename"), disabled: renaming(s), onSelect: () => setNaming(s) },
+            { label: t("web-pages.settings.stations.remove"), icon: Trash, danger: true, onSelect: () => setRemoving(s) },
+          ] : []),
         ]} />
       </>} />
       {mark.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.stations.emoji.failed", { name: stations.find((s) => s.id === mark.arg?.id)?.name ?? "station", error: mark.error.message })}</p>}

@@ -10,6 +10,7 @@ import * as css from "./StationCards.css.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { same, type Mark } from "../stationPick.ts";
 import { StationMark } from "../StationMark.tsx";
+import { stationBase } from "../station.tsx";
 import { Link } from "react-router";
 import { ChevronRight } from "../icons.tsx";
 
@@ -42,6 +43,8 @@ export function StationPeek({ s, settings, footer }: { s: StationView; settings?
       {s.host && <div className={css.peekLines}><Parts parts={[s.host.identity]} /></div>}
       {s.online && s.host && <div className={css.peekSection}><MeterChips meters={s.host.meters} /></div>}
       {s.online && s.net && <div className={css.peekSection}><PeekNet net={s.net} /></div>}
+      {/* Its drive (docs/drive.md), where it has one: beside its settings, a way there from where it is named. */}
+      {settings !== undefined && s.overview?.drive && <Link className={css.peekLink} to={`${stationBase(s.station)}/files`}><span>{t("web-pages.drive.title")}</span><ChevronRight size={14} /></Link>}
       {settings !== undefined && <Link className={css.peekLink} to={settings}><span>{t("web-pages.stations.peekSettings")}</span><ChevronRight size={14} /></Link>}
       {footer}
     </div>

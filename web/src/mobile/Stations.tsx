@@ -216,6 +216,9 @@ export function StationScreen() {
             <GoRow title={t("web-mobile.settings.connects")} value={s.overview ? t("web-mobile.settings.connectsCount", { n: s.overview.connects.length }) : undefined} onClick={() => app.push(app.at(`/settings/connects?station=${s.id}`))} />
             <GoRow title="Profile" value={s.overview ? t("web-mobile.settings.profilesCount", { n: s.overview.profiles.length }) : undefined} onClick={() => app.push(app.at(`/settings/profiles?station=${s.id}`))} />
             <GoRow title={t("web-mobile.settings.memory")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
+            {/* Its drive, where the station has one (one from before it has none: nothing offered). */}
+            {s.overview?.drive && <GoRow title={t("web-pages.drive.title")} value={s.overview.drive.roots.length ? t("web-pages.drive.rootsCount", { n: s.overview.drive.roots.length }) : t("web-pages.drive.notShared")}
+              onClick={() => app.push(app.at(`/s/${s.id}/files`))} />}
           </ListCard>
           {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
           <div style={{ height: 30 }} />

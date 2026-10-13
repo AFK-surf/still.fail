@@ -96,7 +96,14 @@ const coming = new Map<string, { got: FileProgress | null; watchers: Set<(got: F
 
 const fileId = (station: string, sessionKey: string, file: Attachment, thumb: boolean) => `${station}/${sessionKey}/${file.path}${thumb ? "#thumb" : ""}`;
 
-function fetchFile(api: Api, station: string, sessionKey: string, file: Attachment, thumb = false): Promise<Blob> {
+/**
+ * Where the files a preview shows come from when they are not a chat's (a station's drive, drive/): `file` reads one
+ * whole (`thumb`: as a list would show it; the same is fine), saying how far it has come.
+ */
+export interface FileSourceOf { file(sessionKey: string, file: Attachment, thumb: boolean, onProgress?: (got: FileProgress) => void): Promise<Blob> }
+export const FileSource = createContext<FileSourceOf | null>(null);
+
+function fetchFile(api: Api, station: string, sessionKey: string, file: Attachment, thumb = false, source: FileSourceOf | null = null): Promise<Blob> {
   const id = fileId(station, sessionKey, file, thumb);
   let blob = blobs.get(id);
   if (!blob) {
@@ -106,7 +113,8 @@ function fetchFile(api: Api, station: string, sessionKey: string, file: Attachme
     // A whole file may be big: how far it has come is kept for whoever shows it (thumbnails are small).
     const on = thumb ? null : { got: null as FileProgress | null, watchers: new Set<(got: FileProgress) => void>() };
     if (on) coming.set(id, on);
-    blob = api.file(sessionKey, storedName(file), thumb, on ? (got) => { on.got = got; on.watchers.forEach((w) => w(got)); } : undefined, file.size)
+    const progress = on ? (got: FileProgress) => { on.got = got; on.watchers.forEach((w) => w(got)); } : undefined;
+    blob = (source ? source.file(sessionKey, file, thumb, progress) : api.file(sessionKey, storedName(file), thumb, progress, file.size))
       .then((b) => (!thumb && type !== "application/octet-stream" && b.type !== type ? b.slice(0, b.size, type) : b));
     if (on) void blob.finally(() => coming.delete(id)).catch(() => {});
     // A failure is not kept: the next look tries again.
@@ -123,6 +131,7 @@ type Loaded = { state: "loading"; got?: FileProgress | null } | { state: "error"
 function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb = false): Loaded {
   const api = useApi();
   const station = useStation();
+  const source = useContext(FileSource);
   const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
   useEffect(() => {
     if (!enabled) return;
@@ -130,7 +139,7 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
     let unstand: (() => void) | null = null;
     let current = true;
     setLoaded({ state: "loading" });
-    const promise = fetchFile(api, station.address, sessionKey, file, thumb);
+    const promise = fetchFile(api, station.address, sessionKey, file, thumb, source);
     const on = coming.get(fileId(station.address, sessionKey, file, thumb));
     const watch = (got: FileProgress) => { if (current) setLoaded((l) => (l.state === "loading" ? { state: "loading", got } : l)); };
     if (on) {
@@ -141,7 +150,7 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
       if (!current) return;
       u = URL.createObjectURL(blob);
       // A thumbnail stands in for the image: copied in the desktop app, the image itself is (wholeImages.ts).
-      if (thumb) unstand = standIn(u, () => fetchFile(api, station.address, sessionKey, file));
+      if (thumb) unstand = standIn(u, () => fetchFile(api, station.address, sessionKey, file, false, source));
       setLoaded({ state: "ready", blob, url: u });
     }, (error: unknown) => {
       if (current) setLoaded({ state: "error", message: error instanceof Error ? error.message : String(error) });
@@ -152,7 +161,7 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
       unstand?.();
       if (u) URL.revokeObjectURL(u);
     };
-  }, [api, station.address, sessionKey, file.path, enabled, thumb]);
+  }, [api, station.address, sessionKey, file.path, enabled, thumb, source]);
   return loaded;
 }
 
@@ -383,9 +392,10 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   // An image being marked: its bar stays, and it stays the one shown.
   const [marking, setMarking] = useState(false);
   // The neighbours are fetched ahead, so a step shows the next one at once.
+  const source = useContext(FileSource);
   useEffect(() => {
-    for (const n of [before, after]) if (n) fetchFile(api, station.address, n.sessionKey, n.file).catch(() => {});
-  }, [api, station.address, before?.file.path, after?.file.path]);
+    for (const n of [before, after]) if (n) fetchFile(api, station.address, n.sessionKey, n.file, false, source).catch(() => {});
+  }, [api, station.address, before?.file.path, after?.file.path, source]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || marking) return;
