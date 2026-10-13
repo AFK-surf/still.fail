@@ -45,12 +45,10 @@ createRoot(root).render(<DemoApp phone />);
     await page.screenshot({ path: `${out}/${name}.png` });
     await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   };
-  const name = page.locator('[data-role="agent"] button').first();
-  await name.waitFor({ timeout: 30000 });
-  await rest();
-
   // The bar's tile of the agent and its station: one control, the agent's card; its station row, the station's card.
   const tile = page.locator('header').getByRole('button', { name: /的名片/ }).first();
+  await tile.waitFor({ timeout: 30000 });
+  await rest();
   assert.ok(await tile.getByText('Studio', { exact: true }).isVisible(), 'the tile names its station');
   if (out) await page.locator('header').first().screenshot({ path: `${out}/bar.png` });
   await tile.tap();
@@ -65,6 +63,10 @@ createRoot(root).render(<DemoApp phone />);
   await page.touchscreen.tap(195, 120);
   await rest();
   assert.equal(await page.getByText('机器详情', { exact: true }).count(), 0, 'the station card went');
+
+  const name = page.locator('[data-role="agent"] button').first();
+  await name.waitFor({ timeout: 30000 });
+  await rest();
 
   // Its name: its card over the chat, not its history.
   await name.tap();
