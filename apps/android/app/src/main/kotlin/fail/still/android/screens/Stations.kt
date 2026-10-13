@@ -206,8 +206,11 @@ private fun StationFigures(s: StationView, peek: Boolean = false) {
             if (host != null) MeterChips(host.meters)
             else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, 6.dp) } }
         }
-        else if (host != null) MeterDials(host.meters, Modifier.padding(top = 4.dp))
-        else Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) { repeat(3) { Bar(90.dp, 76.dp, 6.dp) } }
+        // Not read yet: laid out unseen as when it is, grey bars over it, so nothing below moves as it comes.
+        else Box(Modifier.padding(top = 4.dp)) {
+            MeterDials((host ?: unreadHost).meters, Modifier.alpha(if (host != null) 1f else 0f))
+            if (host == null) Row(Modifier.matchParentSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) { repeat(3) { Bar(90.dp, 76.dp, 6.dp) } }
+        }
         Box(Modifier.padding(top = if (peek) 6.dp else 14.dp)) {
             NetLine(net ?: noNet, Modifier.alpha(if (net != null) 1f else 0f))
             if (net == null) Row(Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically) {
@@ -216,11 +219,23 @@ private fun StationFigures(s: StationView, peek: Boolean = false) {
             }
         }
         if (!peek) {
-            if (host != null) HostDetails(host.details, Modifier.padding(top = 16.dp))
+            Box(Modifier.padding(top = 16.dp)) {
+                HostDetails((host ?: unreadHost).details, Modifier.alpha(if (host != null) 1f else 0f))
+                if (host == null) Column(Modifier.matchParentSize(), verticalArrangement = Arrangement.SpaceEvenly) { repeat(4) { Bar(180.dp) } }
+            }
             Line(running, 120.dp, Modifier.padding(top = 8.dp))
         }
     }
 }
+
+/** What a machine not read yet is laid out as, unseen: its figures and rows as tall as a real one's (their words in Chinese). */
+private val unreadHost = fail.still.android.data.Host(
+    hostname = "", os = "", arch = "", cpus = 0, cpuModel = "", load = 0.0, uptimeSec = 0.0,
+    memory = fail.still.android.data.Memory(0, 0), disk = fail.still.android.data.Disk("", 0, 0), emberRssBytes = 0, checkedAt = 0,
+    summary = "", line = "", facts = emptyList(), usage = "", emberText = "", identity = "",
+    meters = List(3) { fail.still.android.data.Meter(label = "$it", short = "", percent = 0, left = 0, level = "ok", value = "", remaining = "", big = "0", unit = "%", title = "内存剩", total = "共 0 GB") },
+    details = List(4) { fail.still.android.data.HostDetail("主机名", "直连") },
+)
 
 /** A grey line of text, one line however long; a grey bar `bar` wide in its room while it is not known. */
 @Composable

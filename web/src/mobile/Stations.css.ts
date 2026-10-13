@@ -63,3 +63,9 @@ globalStyle(`${mMarkColors} > button::before`, { inset: "7px" });
 export const mMarkEmoji = style({});
 globalStyle(`${mMarkEmoji}${mMarkEmoji}`, { fontSize: `calc(${vars.textTitle} * 1.6)` });
 export const mMarkPicture = style({ width: "20px", height: "20px", objectFit: "cover", borderRadius: "24%", cornerShape: vars.cornerShape });
+
+/** A station's machine not read yet: what it will be laid out unseen, grey bars over it. */
+export const mUnread = style({ display: "grid" });
+export const mUnreadLaid = style({ gridArea: "1 / 1", visibility: "hidden" });
+export const mUnreadBars = style({ gridArea: "1 / 1", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "10px" });
+globalStyle(`${mUnreadBars} > i`, { display: "block", height: "10px", borderRadius: "5px", background: "color-mix(in srgb, var(--m-line) 70%, transparent)" });

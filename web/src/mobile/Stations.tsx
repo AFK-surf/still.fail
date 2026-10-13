@@ -8,7 +8,7 @@ import { LOCAL_MS } from "../motion.ts";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { useStations, type StationView } from "../api.ts";
-import type { StationNet } from "../core/shapes.ts";
+import type { Host, StationNet } from "../core/shapes.ts";
 import { illustrationUrl } from "../brand.tsx";
 import { ChevronRight, Close, ImageUpload, More, Plus } from "../icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
@@ -92,14 +92,25 @@ function StationFigures({ s }: { s: StationView }) {
   const processes = s.overview?.processesText || null;
   return (
     <span className={css.mStationFaded} data-stale={s.reconnecting || undefined}>
-      {s.host ? <MachineDetails s={s} phone /> : <>
-        <Known text={null} bar={180} />
-        <span className={css.mBarChips} style={{ marginTop: 0 }}>{[46, 52, 50].map((w) => <i key={w} style={{ width: w }} />)}</span>
-      </>}
+      {s.host ? <MachineDetails s={s} phone /> : (
+        // Not read yet: laid out unseen as when it is, grey bars over it, so nothing below moves as it comes.
+        <span className={css.mUnread}>
+          <span className={css.mUnreadLaid}><MachineDetails s={{ ...s, host: unreadHost, online: true }} phone /></span>
+          <span className={css.mUnreadBars} aria-hidden><i style={{ width: "80%", height: 76 }} /><i style={{ width: 132 }} /><i style={{ width: 180 }} /><i style={{ width: 180 }} /><i style={{ width: 120 }} /></span>
+        </span>
+      )}
       <Known text={processes} bar={120} />
     </span>
   );
 }
+
+/** What a machine not read yet is laid out as, unseen: its figures and rows as tall as a real one's (their words in Chinese). */
+const unreadHost: Host = {
+  hostname: "", os: "", arch: "", cpus: 0, cpuModel: "", load: 0, uptimeSec: 0, memory: { totalBytes: 0, usedBytes: 0 }, disk: { path: "", totalBytes: 0, freeBytes: 0 },
+  emberRssBytes: 0, checkedAt: 0, summary: "", line: "", facts: [], usage: "", emberText: "", identity: "",
+  meters: [0, 1, 2].map((i) => ({ label: String(i), short: "", percent: 0, left: 0, level: "ok", value: "", remaining: "", big: "0", unit: "%", title: "内存剩", total: "共 0 GB" })),
+  details: ["主机名", "芯片", "已运行", "进程"].map((label) => ({ label, value: "直连" })),
+};
 
 /** A grey line of text, one line however long; a grey bar `bar` wide in its room while it is not known. */
 function Known({ text, bar }: { text: string | null; bar: number }) {
