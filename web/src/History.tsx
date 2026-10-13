@@ -80,7 +80,14 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
   const items = hidden ? all.slice(hidden) : all;
   const older = useHistoryOlder(station, sessionKey);
   const before = useCallback(() => {
-    if (hidden) { setDrawn((n) => n + DRAWN); return Promise.resolve(); }
+    if (hidden) {
+      // Not while the reader is still at its end and what is drawn fills the pane: drawn as it opens, the items before
+      // laid it out a second time in the frame it came in. Declined, it is asked again as the reader scrolls up.
+      const el = body.current;
+      if (el && el.scrollHeight > el.clientHeight && el.scrollTop + el.clientHeight >= el.scrollHeight - 2) return Promise.reject(new Error("at the end"));
+      setDrawn((n) => n + DRAWN);
+      return Promise.resolve();
+    }
     return older();
   }, [hidden, older]);
   useOlderOnScroll(body, hidden > 0 || (history?.more ?? false), items[0]?.key, before);
