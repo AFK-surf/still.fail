@@ -15,7 +15,7 @@ import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
 import { useShortcut } from "./keymap.ts";
 import { ChatMark, jumpFromLine, stateLine, WaitingText } from "./ChatMark.tsx";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename, useRenaming } from "./Rename.tsx";
 import { useDoing } from "./doing.ts";
@@ -150,8 +150,13 @@ export function DecisionsEntry({ scope, to }: { scope: string; to: string }) {
   );
 }
 
-/** One of the lists, all, the viewer's or the watching ones: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
-function ChatPane({ chats, scope, filter, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; filter: ChatFilter; stationsPage: string; hidden: boolean }) {
+/**
+ * One of the lists, all, the viewer's or the watching ones: its states (connecting, failing, empty) and its days; an
+ * offline station's chats say so row by row. Drawn again only when what it is given changes (its topic's value, the
+ * filter shown): the sidebar around it drawing again (a page's change elsewhere, a side panel opening) left its every
+ * row drawn and measured again (listMotion), all three lists of them.
+ */
+const ChatPane = memo(function ChatPane({ chats, scope, filter, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; filter: ChatFilter; stationsPage: string; hidden: boolean }) {
   const view = chats.value;
   const stations = view?.stations ?? [];
   const [over, pointer] = usePointerOver();
@@ -185,7 +190,7 @@ function ChatPane({ chats, scope, filter, stationsPage, hidden }: { chats: Retur
       ))}
     </div>
   );
-}
+});
 
 /** A row pinned or let go moves at once, even while the list is held still under the pointer. */
 const pinMoved = (was: ChatItem, now: ChatItem): boolean => Boolean(was.pinned) !== Boolean(now.pinned);

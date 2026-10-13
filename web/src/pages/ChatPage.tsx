@@ -54,6 +54,10 @@ import { tx } from "../cloud/words.tsx";
  * agents' execution histories beside them. The address is the item's: its chat's thread, or its agent's session key
  * until the first message makes the chat, and the page moves there.
  */
+/** Pressed, the panel's switch leaves the focus where it was: the composer, typed in, keeps it (and its shape; taking
+ * it away folded the composer to a capsule in the same frames the panel slid in). */
+const keepFocus = (e: { preventDefault(): void }) => e.preventDefault();
+
 /**
  * The side panel's width beside a page `page` wide, as its styles lay it out (session.css.ts: the width dragged, else
  * 38% and at least 360, leaving the chat 360; ChatPage.css.ts: over the chat where the page is narrow).
@@ -389,7 +393,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               <a className={pagesCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
             </Tip>
           )}
-          {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onClick={() => openTab(agents[0]!.session.key)} />}
+          {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onMouseDown={keepFocus} onClick={() => openTab(agents[0]!.session.key)} />}
         </div>
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
@@ -451,7 +455,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                 })}
               </Tabs.List>
               {/* The panel's switch stays in the top-right corner, open or closed. */}
-              <IconButton label={t("web-pages.chat.closePanel")} icon={PanelClose} shortcut="panel.close" onClick={() => saveTabs([])} />
+              <IconButton label={t("web-pages.chat.closePanel")} icon={PanelClose} shortcut="panel.close" onMouseDown={keepFocus} onClick={() => saveTabs([])} />
             </div>
             {side.tabs.map((key) => {
               if (key === JOBS) {
