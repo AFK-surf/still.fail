@@ -229,7 +229,10 @@ export class Virtual {
     const n = this.items.length;
     const ahead = Math.min(this.boost, Math.abs(this.velocity) * 4);
     const from = this.top - this.overscan - (this.velocity < 0 ? ahead : 0);
-    const to = this.top + this.height + this.overscan + (this.velocity > 0 ? ahead : 0);
+    // Following, everything from the pane down to the list's end is made, however far below the pane it reaches for
+    // now (a long message just come, the pane still on its way down): what stands after it (the agent's activity,
+    // the next message) is there to be seen coming, and for what moves between them (a reply out of its avatar).
+    const to = this.anchor.kind === "follow" ? Number.POSITIVE_INFINITY : this.top + this.height + this.overscan + (this.velocity > 0 ? ahead : 0);
     const made = new Set<number>();
     for (let i = this.firstReaching(from); i < n && this.topOf(i) < to; i++) made.add(i);
     for (const key of this.pins) { const i = this.at.get(key); if (i !== undefined) made.add(i); }

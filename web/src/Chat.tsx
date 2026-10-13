@@ -476,15 +476,26 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   // top; caught up on, history read in or missed while the link was down: taken at once).
   const first = messages[0]?.seq;
   const last = messages.at(-1)?.seq;
-  const outgoing = chat.outbox.at(-1)?.id;
-  const was = useRef({ first, last, outgoing, place });
-  const before = was.current.place === place ? was.current : { first: undefined, last: undefined, outgoing };
-  useEffect(() => { was.current = { first, last, outgoing, place }; });
+  const was = useRef({ first, last, place, keys: new Set<string>() });
+  const before = was.current.place === place ? was.current : { first: undefined, last: undefined };
+  useEffect(() => { was.current = { first, last, place, keys: new Set(items.map((item) => item.key)) }; });
   const trimmed = (before.first !== undefined && first !== undefined && first > before.first) || (before.last !== undefined && last !== undefined && last < before.last);
   const came = before.last !== undefined && last !== undefined && last > before.last ? messages.filter((m) => m.seq > before.last!) : [];
-  const sent = outgoing !== undefined && outgoing !== before.outgoing;
   const smooth = came.length === 0 || came.some((m) => saidHere(m.seq));
-  const arrived = sent ? `o:${outgoing}` : came.length > 0 && smooth ? `m:${last}` : null;
+  // What came at the list's end is followed from the top of the last of it: a row is come at the end when all that
+  // stands after it came with it or is an agent's activity (always the last thing in the chat). A long message come
+  // alone is so read from its start; come with its agent's activity after it (a message sent, the agent starting on
+  // it), the pane goes on to the end, where the activity is. Not what a chat opens with.
+  const had = before === was.current ? was.current.keys : null;
+  let arrived: string | null = null;
+  if (had && smooth) {
+    for (let i = items.length - 1; i >= 0; i--) {
+      const key = items[i]!.key;
+      const added = !had.has(key);
+      if (added) { arrived = key; break; }
+      if (!key.startsWith("a:")) break;
+    }
+  }
   const virtual = useVirtualList(list, made, items, { short, trimmed, smooth, arrived, ...(cover ? { cover } : {}) });
 
   usePlace(virtual, place, messages, short, leave);

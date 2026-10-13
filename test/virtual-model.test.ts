@@ -219,6 +219,25 @@ test("virtual_a_message_come_is_followed_to_its_top_and_read_from_there_when_lon
   assert.equal(v.offsetOf("m:30"), 12);
 });
 
+test("virtual_following_what_came_below_the_pane_is_made_down_to_the_list_s_end", () => {
+  let items = list(0, 30);
+  const v = made(new Virtual({ gap: GAP, overscan: 100 }));
+  v.setItems(items);
+  v.measured(v.layout().rows.map((r) => [r.key, 100] as const));
+  // A long message of the reader's own, its agent's activity after it: the pane not there yet (it glides), both made.
+  v.glide(true);
+  items = [...items, { key: "o:1", estimate: 2000 }, { key: "a:agent", estimate: 24 }];
+  v.setItems(items);
+  v.follow("a:agent");
+  const rows = v.layout().rows.map((r) => r.key);
+  assert.ok(rows.includes("o:1") && rows.includes("a:agent"), rows.join(" "));
+  // To the end, where the activity is: not held at the long message's top.
+  assert.equal(v.target(), v.layout().total - 600);
+  // The reader gone up, only what is near the pane.
+  v.scrolled(500);
+  assert.ok(!v.layout().rows.some((r) => r.key === "a:agent"));
+});
+
 test("virtual_a_window_short_of_the_end_is_never_followed", () => {
   const items = list(0, 100);
   const v = made(new Virtual({ gap: GAP, overscan: 300 }));
