@@ -21,7 +21,7 @@
 // Options: --user <dev account> (alice), --runs <n> (3; medians), --slow <n> (4, the CPU's slowdown; 1 for none),
 // --phone, --only <op,…>, --top <n> (components listed per thing done, 12), --headless.
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium, playwright, proxy } from "./rig.mjs";
@@ -83,8 +83,9 @@ function hook() {
       if (!b || a.memoizedValue !== b.memoizedValue) return "context";
     }
     if (next.tag === 1) return "state";
-    for (let a = next.memoizedState, b = prev.memoizedState; a && b; a = a.next, b = b.next) {
-      if (a.memoizedState !== b.memoizedState && a.queue) return a.queue.getSnapshot ? "store" : "state";
+    let i = 0;
+    for (let a = next.memoizedState, b = prev.memoizedState; a && b; a = a.next, b = b.next, i++) {
+      if (a.memoizedState !== b.memoizedState && a.queue) return a.queue.getSnapshot ? `store#${i}` : `state#${i}`;
     }
     return "state";
   };
@@ -108,10 +109,13 @@ function hook() {
     start() { Object.assign(rc, { on: true, commits: 0, ms: 0, at: [], by: {} }); },
     stop() { rc.on = false; return { commits: rc.commits, ms: Math.round(rc.ms * 10) / 10, by: rc.by }; },
   });
+  // `why` of a component drawn by itself names the hook whose state changed (store#3: its fourth hook, a store's).
   const count = (name, why) => {
     const row = (rc.by[name] ??= { renders: 0 });
     if (why !== "mount") row.renders++;
-    row[why] = (row[why] ?? 0) + 1;
+    const [kind, hook] = why.split("#");
+    row[kind] = (row[kind] ?? 0) + 1;
+    if (hook !== undefined) (row.hooks ??= {})[why] = (row.hooks[why] ?? 0) + 1;
   };
   // Compares the tree just committed with the one before it, as React's DevTools do: a subtree whose child list is the
   // one it had was not visited at all.
@@ -281,6 +285,24 @@ process.exit(0);
 
 // ——— the numbers ———
 
+/** The app's own components, by name, as web/src declares them: the rest drawn are libraries' (Radix's, the router's). */
+function appNames() {
+  const src = new URL("../../web/src/", import.meta.url).pathname;
+  const names = new Set();
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) walk(join(dir, e.name));
+      else if (e.name.endsWith(".tsx")) for (const m of readFileSync(join(dir, e.name), "utf8").matchAll(/function ([A-Z]\w*)\s*[(<]/g)) names.add(m[1]);
+    }
+  };
+  walk(src);
+  return names;
+}
+const APP = appNames();
+/** A name as the bundle has it, its clash's suffix let go (ChatPane$1). */
+const bare = (n) => n.replace(/\$\d+$/, "");
+const isApp = (n) => APP.has(bare(n));
+
 function median(xs) {
   const s = xs.filter((x) => typeof x === "number").sort((a, b) => a - b);
   return s.length ? s[Math.floor((s.length - 1) / 2)] : 0;
@@ -295,13 +317,18 @@ function summarize(r) {
     for (const n of names) {
       const row = {};
       for (const k of ["renders", "mount", "store", "state", "context", "same", "fn", "children", "data"]) row[k] = median(list.map((x) => x.by[n]?.[k] ?? 0));
+      const hooks = [...new Set(list.flatMap((x) => Object.keys(x.by[n]?.hooks ?? {})))];
+      if (hooks.length) row.hooks = hooks.join(" ");
+      row.app = isApp(n);
       if (row.renders || row.mount) by[n] = row;
     }
-    const total = (k) => median(list.map((x) => Object.values(x.by).reduce((s, c) => s + (c[k] ?? 0), 0)));
+    const total = (k, only = () => true) => median(list.map((x) => Object.entries(x.by).filter(([n]) => only(n)).reduce((s, [, c]) => s + (c[k] ?? 0), 0)));
     out[name] = {
-      commits: median(list.map((x) => x.commits)), renders: total("renders"), mounts: total("mount"),
-      // Drawn with its parent though given the same props, or props different only in functions made anew.
-      needless: median(list.map((x) => Object.values(x.by).reduce((s, c) => s + (c.same ?? 0) + (c.fn ?? 0), 0))),
+      commits: median(list.map((x) => x.commits)),
+      // Every component drawn (the libraries' within them too), and of the app's own.
+      renders: total("renders"), appRenders: total("renders", isApp), mounts: total("mount"),
+      // The app's components drawn with their parent though given the same props, or props different only in functions made anew.
+      needless: median(list.map((x) => Object.entries(x.by).filter(([n]) => isApp(n)).reduce((s, [, c]) => s + (c.same ?? 0) + (c.fn ?? 0), 0))),
       reactMs: median(list.map((x) => x.ms)), busyMs: median(list.map((x) => x.busy)), longestMs: median(list.map((x) => x.longest)),
       by,
     };
@@ -311,25 +338,25 @@ function summarize(r) {
 
 function print(summary) {
   for (const [name, s] of Object.entries(summary)) {
-    console.log(`\n${name}: ${s.commits} commits, ${s.renders} renders (${s.needless} needless), ${s.mounts} mounts, react ${s.reactMs}ms, busy ${s.busyMs}ms, longest task ${s.longestMs}ms`);
-    const rows = Object.entries(s.by).sort((a, b) => b[1].renders - a[1].renders).slice(0, top);
+    console.log(`\n${name}: ${s.commits} commits, ${s.renders} renders (app ${s.appRenders}, of them ${s.needless} needless), ${s.mounts} mounts, react ${s.reactMs}ms, busy ${s.busyMs}ms, longest task ${s.longestMs}ms`);
+    const rows = Object.entries(s.by).filter(([, c]) => c.app).sort((a, b) => b[1].renders - a[1].renders).slice(0, top);
     for (const [n, c] of rows) {
       const why = ["store", "state", "context", "same", "fn", "children", "data"].filter((k) => c[k]).map((k) => `${k} ${c[k]}`).join(", ");
       console.log(`  ${String(c.renders).padStart(5)}  ${n.padEnd(28)} ${why}${c.mount ? `  (+${c.mount} mounted)` : ""}`);
     }
     // Who set it going: what drew with its parent not drawing.
-    const origins = Object.entries(s.by).filter(([, c]) => c.store || c.state || c.context).map(([n, c]) => `${n} (${["store", "state", "context"].filter((k) => c[k]).map((k) => `${k} ${c[k]}`).join(", ")})`);
+    const origins = Object.entries(s.by).filter(([, c]) => c.app && (c.store || c.state || c.context)).map(([n, c]) => `${n} (${["store", "state", "context"].filter((k) => c[k]).map((k) => `${k} ${c[k]}`).join(", ")}${c.hooks ? `: ${c.hooks}` : ""})`);
     if (origins.length) console.log(`  set off by: ${origins.join(" · ")}`);
   }
 }
 
 function compare(a, b) {
   console.log(`A ${a.dist} (${a.at})\nB ${b.dist} (${b.at})\n`);
-  console.log("op            renders        needless       commits    react ms       busy ms        longest ms");
+  console.log("op            renders        app renders    needless       commits    react ms       busy ms        longest ms");
   for (const [name, x] of Object.entries(a.summary)) {
     const y = b.summary[name];
     if (!y) continue;
     const cell = (k) => `${x[k]} → ${y[k]}`.padEnd(15);
-    console.log(`${name.padEnd(14)}${cell("renders")}${cell("needless")}${`${x.commits} → ${y.commits}`.padEnd(11)}${cell("reactMs")}${cell("busyMs")}${cell("longestMs")}`);
+    console.log(`${name.padEnd(14)}${cell("renders")}${cell("appRenders")}${cell("needless")}${`${x.commits} → ${y.commits}`.padEnd(11)}${cell("reactMs")}${cell("busyMs")}${cell("longestMs")}`);
   }
 }
