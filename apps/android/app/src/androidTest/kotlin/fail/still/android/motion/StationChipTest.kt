@@ -89,7 +89,7 @@ class StationChipTest {
         val h = open(listOf(studio), agents = false)
         rule.onNodeWithContentDescription("Studio").performClick()
         h.settle()
-        rule.onNodeWithText("1 个 agent 在跑").assertExists()
+        rule.onNodeWithText("1 个 agent 在跑 · Apple M4 Max · 64 GB · macOS 26.6").assertExists()
     }
 
     @Test fun tapOpensTheCard() {
