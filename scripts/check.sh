@@ -217,7 +217,9 @@ if part ts; then
   if touches '^docs/releases/|^scripts/changelog\.ts$'; then step "release notes" sh -c 'node scripts/changelog.ts --stable > /dev/null'; fi
   if touches "$ts_root"; then step "typecheck: scripts and tests" after root pnpm exec tsgo -p tsconfig.json; fi
   if touches "$ts_web"; then
-    step "typecheck: web" after root pnpm exec tsgo -p web/tsconfig.json
+    # The web reads the core's own files (its Markdown, client/core-ts/src/markdown.ts), which read the core's packages.
+    prep core deps client/core-ts
+    step "typecheck: web" after root after core pnpm exec tsgo -p web/tsconfig.json
     [ -f web/src/core/iroh-pkg/.stand-in ] && later "web against the real iroh wasm"
   fi
   if touches "$ts_cloud"; then
