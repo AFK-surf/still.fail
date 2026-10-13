@@ -4,6 +4,9 @@
 // back to small on a jump, so a seek answers in one small read. Bytes already in the window are served from it (the
 // extractor hops between tracks and reopens around seeks). ExoPlayer calls it on its loading thread: the core's call is
 // waited for there.
+// media3's DataSource and source classes are marked unstable (UnstableApi): their API may change between releases.
+@file:androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
+
 package fail.still.android.drive
 
 import android.net.Uri

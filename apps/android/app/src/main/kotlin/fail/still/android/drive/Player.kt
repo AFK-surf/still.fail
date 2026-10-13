@@ -4,6 +4,9 @@
 // buffered, play, the next in the folder, the speed, the subtitle beside it (E01.srt for E01.mp4), fit or fill, and
 // sideways (landscape, the system bars away). A double tap on the left or right third jumps 15 s, in the middle it
 // pauses or plays. Where it was left is kept on this device (drivePlace) and played on from next time.
+// media3's DataSource and source classes are marked unstable (UnstableApi): their API may change between releases.
+@file:androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
+
 package fail.still.android.drive
 
 import android.content.Context
