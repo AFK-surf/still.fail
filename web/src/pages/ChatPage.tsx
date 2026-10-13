@@ -411,7 +411,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   if (key === JOBS) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
-                        <Tabs.Trigger className={css.sideTab} value={key}>
+                        <Tabs.Trigger className={css.sideTab} value={key} id={tabId(key)} aria-controls={paneId(key)}>
                           <span className={css.sideTabAgent}><Boxes size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={t("web-pages.chat.jobs")}>{t("web-pages.chat.jobs")}</span></span>
                         </Tabs.Trigger>
                         <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.closeJobs")} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
@@ -422,7 +422,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   if (file) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
-                        <Tip label={file.name} cut><Tabs.Trigger className={css.sideTab} value={key}>
+                        <Tip label={file.name} cut><Tabs.Trigger className={css.sideTab} value={key} id={tabId(key)} aria-controls={paneId(key)}>
                           <span className={css.sideTabAgent}><File size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={file.name}>{file.name}</span></span>
                         </Tabs.Trigger></Tip>
                         <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.close", { name: file.name })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
@@ -433,7 +433,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   if (service) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
-                        <Tip label={service.name} cut><Tabs.Trigger className={css.sideTab} value={key}>
+                        <Tip label={service.name} cut><Tabs.Trigger className={css.sideTab} value={key} id={tabId(key)} aria-controls={paneId(key)}>
                           <span className={css.sideTabAgent}><JobDot tone={service.tone} /><span className={css.sideTabText} data-text={service.name}>{service.name}</span></span>
                         </Tabs.Trigger></Tip>
                         <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.close", { name: service.name })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
@@ -446,7 +446,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   const label = a.session.agentText;
                   return (
                     <span key={key} className={css.sideTabWrap}>
-                      <Tip label={label} cut><Tabs.Trigger className={css.sideTab} value={key}>
+                      <Tip label={label} cut><Tabs.Trigger className={css.sideTab} value={key} id={tabId(key)} aria-controls={paneId(key)}>
                         <span className={css.sideTabAgent}><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={14} /><span className={css.sideTabText} data-text={label}>{label}</span></span>
                       </Tabs.Trigger></Tip>
                       <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.close", { name: label })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
@@ -460,41 +460,41 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             {side.tabs.map((key) => {
               if (key === JOBS) {
                 return (
-                  <Tabs.Content key={key} className={css.sideContent} value={key}>
+                  <SidePane key={key} of={key} shown={side.shown}>
                     <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} onService={(job) => openTab(`service:${job}`)} />
-                  </Tabs.Content>
+                  </SidePane>
                 );
               }
               const file = fileOf(key);
               if (file) {
                 // Kept as a web service is (Previews.tsx): small in the corner while another chat or page shows.
                 return (
-                  <Tabs.Content key={key} className={css.sideContent} value={key} forceMount>
+                  <SidePane key={key} of={key} shown={side.shown} kept>
                     <PreviewSlot station={station.address} file={file} name={file.name} restarting={null} draftKey={chatKey} />
-                  </Tabs.Content>
+                  </SidePane>
                 );
               }
               const service = jobs.find((j) => j.id === serviceOf(key));
               // Kept loaded while another tab, chat or page shows (Previews.tsx): only closing its tab ends it.
               if (service) {
                 return (
-                  <Tabs.Content key={key} className={css.sideContent} value={key} forceMount>
+                  <SidePane key={key} of={key} shown={side.shown} kept>
                     {service.port != null && (service.state === "running" || service.state === "exited")
                       ? <PreviewSlot station={station.address} port={service.port} name={service.name} service={service.id} restarting={service.state === "exited" ? { restarts: service.restarts ?? 0 } : null} draftKey={chatKey} />
                       : <Empty><p>{service.state === "failed" ? t("web-pages.chat.serviceFailed", { name: service.name }) : t("web-pages.chat.serviceStopped", { name: service.name })}</p></Empty>}
-                  </Tabs.Content>
+                  </SidePane>
                 );
               }
               const a = agents.find((x) => x.session.key === key);
-              if (!a) return <Tabs.Content key={key} className={css.sideContent} value={key} />;
+              if (!a) return <SidePane key={key} of={key} shown={side.shown} />;
               return (
-                <Tabs.Content key={key} className={css.sideContent} value={key}>
+                <SidePane key={key} of={key} shown={side.shown}>
                   <History station={station.address} sessionKey={key} title={view?.title}
                     focus={focus?.key === key ? focus : null}
                     head={<SessionHead agent={a} />}
                     summary={a.attention.length > 0 ? <HistorySummary agent={a} /> : null}
                     details={<SessionDetails agent={a} />} />
-                </Tabs.Content>
+                </SidePane>
               );
             })}
           </Tabs.Root>
@@ -535,6 +535,17 @@ function AgentButton({ agent, marked, onHistory, station = false }: { agent: Cha
 
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";
+/** A side tab's and its pane's ids, each naming the other (a tab's key can hold a space; an id cannot). */
+function tabId(key: string): string { return `side-tab-${encodeURIComponent(key)}`; }
+function paneId(key: string): string { return `side-pane-${encodeURIComponent(key)}`; }
+/** A side tab's pane: there while its tab is the one shown, `kept` there (not shown) under another too. Not Radix's
+ * Tabs.Content, which reads its animation's name as it comes in: the style of the page worked out in the middle of
+ * the panel opening. */
+function SidePane({ of, shown, kept = false, children }: { of: string; shown: string; kept?: boolean; children?: ReactNode }) {
+  const active = of === shown;
+  if (!active && !kept) return null;
+  return <div className={css.sideContent} role="tabpanel" id={paneId(of)} aria-labelledby={tabId(of)} data-state={active ? "active" : "inactive"} tabIndex={0}>{children}</div>;
+}
 
 /** A visualization's tab: its place among the previews (Preview.tsx's fileService), opened from its message. */
 function fileTab(session: string, path: string, name: string): string {
