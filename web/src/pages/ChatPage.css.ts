@@ -111,8 +111,6 @@ export const sidePanel = style({
   minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column",
   background: vars.canvas,
   selectors: {
-    // Slid out and kept (ChatPage.tsx `rest`): neither drawn nor laid out again until it comes back.
-    "&[data-rest]": { visibility: "hidden", contentVisibility: "hidden" },
   },
   "@media": {
     "(max-width: 1100px)": {
@@ -220,7 +218,7 @@ export const sideBar = style({
 });
 globalStyle(`[data-desktop] ${sideBar} :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex])`, { WebkitAppRegion: "no-drag" });
 // Beside the open panel the chat's bar ends short of the window's right end: the buttons are over the panel's.
-globalStyle(`${sessionPage}[data-panel="true"]:not([data-rest]) > ${sessionMain}`, {
+globalStyle(`${sessionPage}[data-panel="true"] > ${sessionMain}`, {
   "@media": { "(min-width: 1101px)": { vars: { "--window-buttons": "0px" } } },
 });
 globalStyle(`${jobsPanel} section`, { display: "flex", flexDirection: "column" });
