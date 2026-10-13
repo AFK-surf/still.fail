@@ -11,7 +11,8 @@ import { stationApi, useAgentCard, useChat, useHistory, useHistoryDetail, useHis
 import { ArrowRight, Check, ChevronDown, Copy, ChevronRight, Wait, Received, Send, Stop, Unplug } from "../icons.tsx";
 import { optionOf } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
-import { Prose } from "../Prose.tsx";
+import { MdView } from "../Prose.tsx";
+import type { Md } from "../core/md.ts";
 import { useStickToBottom } from "../scroll.ts";
 import { useOlderOnScroll, Waited } from "../Chat.tsx";
 import { stationBase, useStation } from "../station.tsx";
@@ -195,7 +196,7 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
         <Message icon={Send}
           label={<>{tNodes("web-mobile.history.sentTo", { place: body.content.place ? <PlaceMark station={station} chat={chat} place={body.content.place} /> : <span className={css.mHPlace}><SlackMark size={12} /><b> Slack</b></span> })}
             {body.content.block && <Pill text="Block" tone="blue" />}{body.content.failed && <Pill text={t("web-mobile.history.sendFailed")} tone="red" />}</>}
-          text={body.content.text} full={<div className={`${rootCss.wide} ${conversationCss.markdown}`}><Prose>{body.content.text}</Prose></div>} />
+          text={body.content.text} full={<div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={body.content.md as Md} /></div>} />
       );
     case "mark":
       return (
@@ -207,7 +208,7 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
     case "text":
       return (
         <div className={body.content.subagent ? css.mHSub : undefined}>
-          <Brief text={body.content.text} open={() => app.reader({ label: <span className={partsCss.mMuted}>{t("web-mobile.history.wrote", { agent: agent.session.agentText })}</span>, content: <div className={`${rootCss.wide} ${conversationCss.markdown}`}><Prose>{body.content.text}</Prose></div> })} />
+          <Brief text={body.content.text} open={() => app.reader({ label: <span className={partsCss.mMuted}>{t("web-mobile.history.wrote", { agent: agent.session.agentText })}</span>, content: <div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={body.content.md as Md} /></div> })} />
         </div>
       );
     case "group":
