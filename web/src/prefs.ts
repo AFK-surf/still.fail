@@ -101,7 +101,11 @@ const watch = (f: () => void) => { watchers.add(f); listen(); return () => { wat
 /** Calls `f` whenever the prefs change; returns how to stop. */
 export const onPrefs = watch;
 
-/** The prefs, redrawn when they change. */
-export function usePrefs(): Prefs {
-  return useSyncExternalStore(watch, prefs, () => DEFAULTS);
+/**
+ * What `pick` reads of the prefs, redrawn only when that changes: any change of them (a chat's tabs kept as its panel
+ * opens, the chat last open, the core's echo of each) would otherwise redraw everything that reads one of them, the app
+ * whole from its root. `pick` returns a value or one of the prefs' own fields, not a new object or array.
+ */
+export function usePrefs<T>(pick: (p: Prefs) => T): T {
+  return useSyncExternalStore(watch, () => pick(prefs()), () => pick(DEFAULTS));
 }

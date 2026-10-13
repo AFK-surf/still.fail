@@ -90,9 +90,10 @@ const keyframes = (frames: Record<string, [string, string]>) =>
 /**
  * Does `change` (a class or an attribute that lays things out anew) and moves each of `moves`' properties from where
  * it shows now to where the change puts it; cut off by the next one, that goes on from wherever this had got to. The
- * rules stay the truth: the values it holds while moving are let go of when it ends.
+ * rules stay the truth: the values it holds while moving are let go of when it ends. Resolves once all have got there
+ * (not if a later one cuts them off).
  */
-export function moveState(moves: [HTMLElement, string[]][], change: () => void, transition: object = { duration: 0.38, ease: EASE_OUT }): void {
+export function moveState(moves: [HTMLElement, string[]][], change: () => void, transition: object = { duration: 0.38, ease: EASE_OUT }): Promise<void> {
   const from = moves.map(([el, props]) => { const style = getComputedStyle(el); return props.map((p) => style.getPropertyValue(p)); });
   // Where the panes they are in are scrolled. Its end is read laid out, and a pane that its end makes shorter (a row
   // folding away at the bottom of a list) is pulled up at once, before they are held where they were: put back below.
@@ -106,8 +107,9 @@ export function moveState(moves: [HTMLElement, string[]][], change: () => void, 
   change();
   if (reducedMotion()) {
     for (const [el, props] of moves) letGo(el, props);
-    return;
+    return Promise.resolve();
   }
+  const runs: Promise<unknown>[] = [];
   moves.forEach(([el, props], i) => {
     const style = getComputedStyle(el);
     const frames: Record<string, [string, string]> = {};
@@ -117,6 +119,7 @@ export function moveState(moves: [HTMLElement, string[]][], change: () => void, 
     for (const [p, [start]] of Object.entries(frames)) el.style.setProperty(p, start);
     const run = animate(el, keyframes(frames), transition);
     changing.set(el, run);
+    runs.push(run.finished);
     void run.finished.then(() => {
       if (changing.get(el) !== run) return;
       changing.delete(el);
@@ -124,6 +127,7 @@ export function moveState(moves: [HTMLElement, string[]][], change: () => void, 
     }, () => {});
   });
   for (const [pane, top] of panes) if (pane.scrollTop !== top) pane.scrollTop = top;
+  return Promise.all(runs).then(() => undefined, () => undefined);
 }
 
 /**

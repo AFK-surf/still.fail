@@ -45,7 +45,7 @@ export function lang(): Lang {
 
 /** The language, redrawn when it changes. */
 export function useLang(): Lang {
-  return langFrom(usePrefs());
+  return usePrefs(langFrom);
 }
 
 /** The browser's language, for the core to follow when none is chosen (`client.device`'s `locale`). */

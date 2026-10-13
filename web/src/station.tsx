@@ -97,9 +97,8 @@ export type SidebarMode = ChatFilter | "decisions";
  * the one filter devices kept for all before.
  */
 export function useSidebarMode(): [SidebarMode, (value: SidebarMode) => void] {
-  const prefs = usePrefs();
   const workspace = useWorkspaceId();
-  const mode: SidebarMode = prefs.listFilter[workspace] ?? (prefs.onlyDecisions ? "decisions" : prefs.onlyWatching ? "watching" : prefs.onlyMine ? "mine" : "all");
+  const mode: SidebarMode = usePrefs((p) => p.listFilter[workspace] ?? (p.onlyDecisions ? "decisions" : p.onlyWatching ? "watching" : p.onlyMine ? "mine" : "all"));
   return [mode, (value) => setPrefs({ listFilter: { [workspace]: value } })];
 }
 

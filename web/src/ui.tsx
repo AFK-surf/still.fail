@@ -643,7 +643,7 @@ export function AgentMark({ maker, runtime, badge, badgeText, size = 20, wrap, c
 
 /** Every relative time on the page follows one switch, kept on this device (prefs.ts): a click on any of them flips all between "3 分钟前" and the date. */
 function useAbsoluteTime(): [boolean, () => void] {
-  const absolute = usePrefs().absoluteTime;
+  const absolute = usePrefs((p) => p.absoluteTime);
   return [absolute, () => setPrefs({ absoluteTime: !absolute })];
 }
 

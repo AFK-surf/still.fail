@@ -17,7 +17,7 @@ export const sidebar = style({
   WebkitUserSelect: "none", userSelect: "none",
   "@media": {
     [wide]: {
-      selectors: { '[data-sidebar="closed"] &': { overflow: "hidden" } },
+      selectors: { '[data-sidebar="closed"] &, [data-sidebar-moving] &': { overflow: "hidden" } },
     },
     // On a narrow screen the sidebar is the page's list: it gives way to the page opened from it.
     [narrow]: { selectors: { [`${shell}[data-detail="true"] &`]: { display: "none" } } },

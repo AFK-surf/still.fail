@@ -37,7 +37,7 @@ export function announceAppearance(): void {
 
 /** The choice kept on this device, and how to change it. */
 export function useAppearance(): [Appearance, (value: Appearance) => void] {
-  return [usePrefs().appearance, (appearance) => setPrefs({ appearance })];
+  return [usePrefs((p) => p.appearance), (appearance) => setPrefs({ appearance })];
 }
 
 /** Whether the page shows dark now: its choice, or the system's when following it. */

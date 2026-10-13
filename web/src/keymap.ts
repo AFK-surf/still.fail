@@ -89,8 +89,8 @@ export function changed(action: Action): boolean {
   return overrides()[action] !== undefined;
 }
 
-/** The keys changed as last read: another object whenever they change. */
-const changedKeys = () => (CHANGEABLE ? prefs().keys : null);
+/** The keys changed as last read, as words: other words only when they change (not on each change of the other prefs). */
+const changedKeys = () => (CHANGEABLE ? JSON.stringify(prefs().keys) : null);
 
 /** Redrawn when any action's keys change: what shows them reads them anew. */
 export function useKeymap(): unknown {

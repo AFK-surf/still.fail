@@ -59,7 +59,7 @@ export function SettingsScreen() {
   const failing = connects?.items.filter((i) => i.connect.presence === "error").length ?? 0;
   const profiles = stations?.flatMap((s) => s.overview?.profiles ?? []) ?? [];
   const short = profiles.filter((p) => p.trouble != null).length;
-  const language = usePrefs().language ?? null;
+  const language = usePrefs((p) => p.language) ?? null;
   const at = (path: string) => () => app.push(app.at(path));
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
@@ -149,7 +149,7 @@ export function AppearanceScreen() {
 /** Which language still.fail speaks on this device: as the device does, or one chosen (prefs `language`). */
 export function LanguageScreen() {
   const app = useApp();
-  const language = usePrefs().language ?? null;
+  const language = usePrefs((p) => p.language) ?? null;
   const options = languages();
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>

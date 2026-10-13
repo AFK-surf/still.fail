@@ -23,7 +23,7 @@ export function AppearancePage({ back }: { back: string }) {
 
 /** 语言: follow the system, or always Chinese, or always English (kept by the core with the other prefs). */
 function LanguageSetting() {
-  const language = usePrefs().language;
+  const language = usePrefs((p) => p.language);
   const value = language === "zh" || language === "en" ? language : "system";
   return (
     <Segmented label={t("common.language")} value={value}

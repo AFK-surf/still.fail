@@ -131,7 +131,7 @@ function Landing() {
   // The accounts staying; all of them when none is (the sign-in page comes once the last is out: Home).
   const staying = signedIn?.filter((a) => a.account.sub !== going?.signingOut);
   const workspaces = staying?.length ? staying : signedIn;
-  const last = usePrefs().workspace;
+  const last = usePrefs((p) => p.workspace);
   const list = useAccounts() ?? [];
   const navigate = useNavigate();
   const signIn = useSignIn();
@@ -320,7 +320,7 @@ function OpenItem() {
   const { search } = useLocation();
   const target = `/w/${ws}/s/${station}/chats/${encodeURIComponent(session)}${search}`;
   // Offered to the desktop app first only from a computer's browser, as the core says (prefs.ts `device`).
-  const [here, setHere] = useState(!usePrefs().device.handoff);
+  const [here, setHere] = useState(!usePrefs((p) => p.device.handoff));
   useEffect(() => {
     if (here) return;
     const timer = setTimeout(() => setHere(true), 1200);

@@ -89,6 +89,9 @@ function onPage(node: ReactNode): ReactNode {
   return page ? createPortal(node, page) : node;
 }
 
+/** The sidebar's latest opening or closing: only its end lets the sidebar overflow again. */
+let moving = 0;
+
 function SidebarBuddy() {
   const [closed, setClosed] = useState(() => document.documentElement.dataset.sidebar === "closed");
   const [pose, setPose] = useState<Pose>(closed ? "rest" : "push");
@@ -99,12 +102,16 @@ function SidebarBuddy() {
     // It moves (and the sidebar with it, the page bars' room for it, 更新 by it) only now: resizing the sidebar follows
     // the pointer at once.
     const moves = (selector: string, props: string[]) => [...document.querySelectorAll<HTMLElement>(selector)].map((el) => [el, props] as [HTMLElement, string[]]);
-    moveState([
+    // Cut to its column while it moves, opening too (open, it is not: its resize handle stands over its edge). Else what
+    // is drawn over the list (its frosted top and foot) shows at its whole width over the page from the first frame.
+    const turn = ++moving;
+    document.documentElement.dataset.sidebarMoving = "";
+    void moveState([
       ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
       ...moves(`.${css.sidebarBuddy}`, ["left"]),
       ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
       ...moves(`.${sidebarCss.pageBar}`, ["padding-left"]),
-    ], () => closeSidebar(next));
+    ], () => closeSidebar(next)).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
     setClosed(next);
     // It hops on the way, and lands in the pose of where it goes.
     setPose("hop");

@@ -106,7 +106,7 @@ function NotifyKindsSection() {
 
 /** What the badge counts (the prefs' `badge`; the Dock's, and the sidebar's 需要你). */
 function BadgeSection() {
-  const badge = usePrefs().badge ?? "attention";
+  const badge = usePrefs((p) => p.badge) ?? "attention";
   return (
     <Section title={t("web-pages.notifications.badge.title")} description={t("web-pages.notifications.badge.note")}>
       <Choices label={t("web-pages.notifications.badge.title")} value={badge as "decisions" | "attention" | "all"} onChange={(v) => setPrefs({ badge: v === "attention" ? null : v })}
