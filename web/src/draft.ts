@@ -1,3 +1,4 @@
+import { type PastedInfo } from "./pastedText.ts";
 // What is being written to a chat, the same on a wide screen (Chat.tsx's Composer) and a phone (mobile/ChatHost.tsx):
 // its text, the passages it quotes, and files on their way to the station. Each chat has its own (a `key`): moving to
 // another chat, or leaving the page, puts it away, and coming back brings it back. Sending empties it at once (the
@@ -18,7 +19,7 @@ export const MAX_FILE = 1024 * 1024 * 1024;
 
 /** A file on its way to the station: uploading (`sent`: how much of it the station has), uploaded, or failed.
  * `preview`: an image's local picture, until it leaves the draft. */
-export interface Pending { id: number; name: string; size: number; sent?: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob }
+export interface Pending { id: number; name: string; size: number; sent?: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob; pasted?: PastedInfo; pastedFile?: File }
 
 /** A passage quoted in the message being written, with what is said about it. */
 export interface DraftQuote extends Quote { id: string }
@@ -29,7 +30,7 @@ export interface Draft {
   text: string; setText(text: string): void;
   files: Pending[];
   /** Files picked, pasted or dropped: each goes to the station at once (and waits there in no chat, until a message takes it). */
-  add(files: FileList | File[]): void;
+  add(files: FileList | File[], pasted?: PastedInfo): void;
   remove(id: number): void;
   quotes: DraftQuote[]; setQuotes: Update<DraftQuote[]>;
   /** Quotes a passage; its comment line then asks for the focus (`focusQuote`, until `quoteFocused`). */
@@ -232,13 +233,13 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
     persist(at, { text, files, quotes: held ? [] : quotes });
   }, [text, keptFiles, quotes]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const add = (picked: FileList | File[]) => {
+  const add = (picked: FileList | File[], pasted?: PastedInfo) => {
     for (const file of Array.from(picked)) {
       const id = nextId++;
       const tooBig = file.size > MAX_FILE;
       // Images show at once from the local file; the picture lives until the file leaves the draft.
-      const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
-      setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? t("web-main.draft.tooBig") : null, ...(preview ? { preview, image: file } : {}) }]);
+      const preview = file.type.startsWith("image/") || pasted !== undefined ? URL.createObjectURL(file) : undefined;
+      setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? t("web-main.draft.tooBig") : null, ...(preview ? { preview, ...(pasted === undefined ? { image: file } : {}) } : {}), ...(pasted === undefined ? {} : { pasted, pastedFile: file }) }]);
       if (tooBig) continue;
       sender.current(file, (sent) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, sent } : f)))).then(
         (done) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, done } : f))),
@@ -257,7 +258,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
   };
 
   const uploading = files.some((f) => !f.done && !f.error);
-  const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !starting;
+  const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !starting && !files.some(f => f.pasted && f.error);
   const take = () => {
     const taken = { text: text.trim(), files, quotes };
     setText(""); setFiles([]); setQuotes(() => []); setError(null);

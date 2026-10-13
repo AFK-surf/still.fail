@@ -1,3 +1,4 @@
+import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 // still.fail's own chat with a session, after Zork's: your messages sit right in a
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
@@ -1634,7 +1635,7 @@ export function sendDraft(draft: Draft, to: ChatTo | null, ensureChat: (() => Pr
  * starts a line); with nothing typed, ↑ / ↓ go to the chat above or below. What a preview's marks offer the draft
  * `draftKey` comes in. Answers the box and the menu of chats (put over the composer), for the composer to place.
  */
-export function useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className, lines = 3, layout, enterSends = true, onType, onSubmit }: {
+export function useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className, lines, layout, enterSends = true, onType, onSubmit }: {
   draft: Draft; input: RefObject<HTMLTextAreaElement | null>; draftKey: string | undefined; sessionKey: string | null; locked: boolean;
   placeholder: string; className: string; lines?: number; layout?: unknown; enterSends?: boolean; onType(): void; onSubmit(): void;
 }): { menu: ReactNode; field: ReactNode } {
@@ -1745,7 +1746,9 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     el.after(probe);
     const fit = () => {
       const style = getComputedStyle(el);
-      const limit = lines * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      const limit = lines === undefined
+        ? Math.max(parseFloat(style.lineHeight), Math.min(480, window.innerHeight * 0.4))
+        : lines * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
       probe.style.width = `${el.clientWidth}px`;
       probe.placeholder = el.placeholder;
       probe.value = el.value;
@@ -1780,7 +1783,8 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     resize.observe(el);
     const scrolled = () => { edges(); over(); };
     el.addEventListener("scroll", scrolled);
-    return () => { resize.disconnect(); el.removeEventListener("scroll", scrolled); probe.remove(); };
+    window.addEventListener("resize", fit);
+    return () => { resize.disconnect(); window.removeEventListener("resize", fit); el.removeEventListener("scroll", scrolled); probe.remove(); };
   }, [text, lines, layout]); // eslint-disable-line react-hooks/exhaustive-deps
   const menu = reference && !locked && (
     <div className={refCss.refAnchor}>
@@ -1794,7 +1798,16 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
         onChange={(e) => { setText(e.target.value); onType(); lookForReference(e.target); }}
         onSelect={(e) => lookForReference(e.currentTarget)}
         onBlur={() => setReference(null)}
-        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); } else pasteReferences(e); }}
+        onPaste={(e) => {
+          if (draft.starting) return;
+          if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); return; }
+          const pasted = e.clipboardData.getData("text/plain");
+          if (!locked && pasted.length >= PASTE_THRESHOLD) {
+            e.preventDefault();
+            add([makePastedFile(pasted)], pastedInfo(pasted));
+            onType();
+          } else pasteReferences(e);
+        }}
         onKeyDown={(e) => {
           if (reference && !e.nativeEvent.isComposing) {
             const n = refItems.current.length;
@@ -1858,7 +1871,13 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
       )}
       {rest.length > 0 && (
         <div className={css.composerFiles}>
-          {rest.map((f) => <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)} />)}
+          {rest.map((f) => <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
+            onRetry={f.pastedFile && f.error ? () => { draft.remove(f.id); draft.add([f.pastedFile!], f.pasted); } : undefined}
+            onRestore={f.pasted?.text === undefined || draft.starting ? undefined : () => {
+              draft.setText(draft.text ? `${draft.text}\n${f.pasted!.text}` : f.pasted!.text!);
+              draft.remove(f.id);
+              onDone();
+            }} />)}
         </div>
       )}
     </>
@@ -1866,11 +1885,20 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
 }
 
 /** A file waiting to go with the message: an image as its picture (clicked, shown whole), anything else a card. */
-function PendingFile({ file: f, onRemove }: { file: Pending; onRemove?: () => void }) {
+function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending; onRemove?: () => void; onRestore?: (() => void) | undefined; onRetry?: (() => void) | undefined }) {
   const station = useStation();
   const [open, setOpen] = useState(false);
   // Not sent yet: no session keeps it, it is shown from this device.
   const shown: Attachment = { name: f.name, path: `draft:${f.id}`, size: f.size };
+  if (f.pasted) return <><div className={css.pasteSnippet}>
+    <div className={css.pasteSnippetBody}>
+      <button type="button" className={css.pasteSnippetTitle} onClick={(e) => { e.stopPropagation(); setOpen(true); }}>{f.pasted.preview || t("web-main.composer.pastedText")}</button>
+      <span className={css.pasteSnippetHint}>{f.error ?? (!f.done ? t("web-main.composer.pasteUploading") : t("web-main.composer.pasteAttachment", { count: f.pasted.characters }))}</span>
+      {onRetry && <button type="button" className={css.pasteSnippetOpen} onClick={(e) => { e.stopPropagation(); onRetry(); }}>{t("web-main.composer.retryPaste")}</button>}
+      {onRestore && <button type="button" className={css.pasteSnippetOpen} onClick={(e) => { e.stopPropagation(); onRestore(); }}>{t("web-main.composer.expandPaste")}</button>}
+    </div>
+    {onRemove && <button type="button" className={css.pasteSnippetRemove} aria-label={t("web-main.composer.removePaste")} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
+  </div>{f.pastedFile && f.preview && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.pastedFile, url: f.preview }} />}</>;
   return f.preview ? (
     <Tip label={f.error ?? f.name}><span className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : undefined} data-error={f.error ? true : undefined}>
       <button type="button" className={css.composerThumbOpen} aria-label={t("web-main.file.view", { name: f.name })} data-viewer-thumb={thumbId(station.address, "", shown.path)}

@@ -153,6 +153,8 @@ export function messageForAgent(m: MessageRow): string {
     return `[Quote] From ${which}:\n${passage.join("\n")}${comment}`;
   });
   parts.push(m.text);
+  const pasted = m.attachments.filter(a => /^pasted-text-[0-9a-f-]{36}\.txt$/.test(a.name));
+  if (pasted.length) parts.push(`The user pasted text into the composer; its full contents are in these text attachments. Read them as part of the user's message:\n${pasted.map(a => `- ${a.path}`).join("\n")}`);
   if (m.attachments.length > 0) parts.push(`Attached files:\n${m.attachments.map((a) => `- ${a.path} (${a.name}, ${a.size} bytes)`).join("\n")}`);
   return parts.filter((p) => p !== "").join("\n\n");
 }
