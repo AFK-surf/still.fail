@@ -186,7 +186,10 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     const fresh = layout.rows.some((r) => !made.shown.has(r.key));
     made.shown = new Set(layout.rows.map((r) => r.key));
     // (And not in a glide's own step: each step is where the pane is to be now.)
-    if (!made.stepping && !made.frame && ((fresh && model.guessed) || Number.isNaN(made.written))) later = requestAnimationFrame(() => { self.put(el); self.step(el); self.tell(); });
+    // (Nor a pane gone to an item: its rows are made there, and it is put there with them, by what is guessed of the
+    // way, then where they turn out to stand. Left where it was a frame, it would show none of them, and the browser,
+    // its content replaced, would scroll it: the reader's doing, as far as the list can tell.)
+    if (!made.stepping && !made.frame && ((fresh && model.guessed && model.mode.kind !== "goto") || Number.isNaN(made.written))) later = requestAnimationFrame(() => { self.put(el); self.step(el); self.tell(); });
     else self.put(el);
     self.step(el);
     self.tell();
