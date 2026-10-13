@@ -344,8 +344,8 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
             })}
             {/* Seldom done: a line of small words apart from the list, not rows to land on when reaching for a workspace. */}
             <div className={css.menuRare}>
-              <DropdownMenu.Item className={css.menuRareItem} onSelect={() => setCreating(true)}><Plus {...ICON} size={13} />{t("web-pages.workspace.create")}</DropdownMenu.Item>
-              <DropdownMenu.Item className={css.menuRareItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><UserPlus {...ICON} size={13} />{t("web-pages.workspace.addAccount")}</DropdownMenu.Item>
+              <DropdownMenu.Item className={css.menuRareItem} onSelect={() => setCreating(true)}><span className={css.menuRareIcon}><Plus {...ICON} size={13} /></span>{t("web-pages.workspace.create")}</DropdownMenu.Item>
+              <DropdownMenu.Item className={css.menuRareItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><span className={css.menuRareIcon}><UserPlus {...ICON} size={13} /></span>{t("web-pages.workspace.addAccount")}</DropdownMenu.Item>
             </div>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>

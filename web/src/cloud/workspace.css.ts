@@ -30,17 +30,21 @@ export const menuWorkspaceText = style({ overflow: "hidden", textOverflow: "elli
 /** The tick of the workspace in use, in a column the others keep empty so the names line up. */
 export const menuCheck = style({ width: "14px", flex: "none", display: "flex", alignSelf: "flex-start", marginTop: "3px" });
 /** The key that switches to it, at its end. */
-export const menuKey = style({ flex: "none", fontSize: vars.textMeta, color: vars.subtle, fontVariantNumeric: "tabular-nums" });
-/** Making a workspace and adding an account: seldom done, so a line of small words apart from the list. */
-export const menuRare = style({ display: "flex", flexWrap: "wrap", gap: "2px", marginTop: "8px", padding: "0 2px" });
+export const menuKey = style({ flex: "none", alignSelf: "flex-start", lineHeight: "20px", fontSize: vars.textMeta, color: vars.subtle, fontVariantNumeric: "tabular-nums" });
+/**
+ * Making a workspace and adding an account: seldom done, so a line of small words apart from the list. The first's icon
+ * stands in the ticks' column and its words start where the names do (a row's padding, the tick's 14px, the gap).
+ */
+export const menuRare = style({ display: "flex", flexWrap: "wrap", gap: "2px", marginTop: "8px" });
 export const menuRareItem = style({
-  display: "flex", alignItems: "center", gap: "4px", height: "24px", padding: "0 8px", border: "0", borderRadius: "999px",
+  display: "flex", alignItems: "center", gap: "8px", height: "24px", padding: "0 10px", border: "0", borderRadius: "999px",
   fontSize: vars.textMeta, color: vars.muted, cursor: "pointer", outline: "none", userSelect: "none",
   selectors: {
     "&[data-highlighted]": { background: vars.hover, color: vars.text },
     "&[data-disabled]": { color: vars.subtle, cursor: "default" },
   },
 });
+export const menuRareIcon = style({ width: "14px", flex: "none", display: "flex", justifyContent: "center" });
 export const inviteDot = style({
   width: "8px", height: "8px", borderRadius: "50%", background: vars.accent, flex: "none",
 });
