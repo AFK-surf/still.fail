@@ -51,14 +51,9 @@ export const mHomeBar = style({
 export const mHomeMe = style({
   display: "grid", flex: "none", padding: "0", border: "0", borderRadius: "50%", background: "none", cursor: "pointer",
 });
-export const mHomeWorkspace = style({
-  flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "6px", padding: "0", border: "0",
-  borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", textAlign: "left",
-  cursor: "pointer",
-});
 export const mHomeToolbar = style({
   position: "absolute", left: "0", right: "0", bottom: "0", zIndex: "3",
-  display: "flex", justifyContent: "flex-end", padding: "10px 16px calc(10px + var(--m-foot))", pointerEvents: "none",
+  display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "10px 16px calc(10px + var(--m-foot))", pointerEvents: "none",
   "@media": {
     // Wider (app.tsx WIDE): at the screen's corner, not the column's.
     "(min-width: 680px)": { position: "fixed", left: "auto", right: "10px", padding: "0 0 calc(10px + var(--m-foot))" },
@@ -66,7 +61,7 @@ export const mHomeToolbar = style({
 });
 /** 奏 N: a frosted capsule as tall as the new-chat one, left of it. */
 export const mDecisions = style({
-  display: "flex", alignItems: "center", gap: "6px", height: "56px", padding: "0 22px 0 10px", marginRight: "10px",
+  display: "flex", alignItems: "center", gap: "6px", height: "56px", padding: "0 22px 0 10px", margin: "0 10px 0 12px",
   borderRadius: "999px", color: "var(--m-ink)", cursor: "pointer", pointerEvents: "auto",
   // 奏 alone (none waiting): as much room on its right as on its left.
   selectors: { "&[data-alone]": { paddingRight: "10px" } },
@@ -165,7 +160,6 @@ export const mLastText = style({
   // Its turn (something waits on the viewer, ../ChatMark.tsx WaitingText): in ink.
   selectors: { "&[data-turn]": { color: "var(--m-ink)" } },
 });
-globalStyle(`${mHomeWorkspace} svg`, { flex: "none", color: "var(--m-muted)" });
 globalStyle(`${mEmpty} p`, { fontSize: vars.textMeta, color: "var(--m-muted)" });
 
 /** The latest chats (Home.tsx Recent): a head, a few rows, the way to them all. */

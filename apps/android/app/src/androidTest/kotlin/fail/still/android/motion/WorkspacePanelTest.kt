@@ -1,6 +1,7 @@
-// The workspace panel and the name's swipe (Home.kt, Workspaces.kt) with four workspaces over two accounts and an
-// invitation waiting: Home with its dots, the panel open, a swipe on the name half way, and a switch half way. Each
-// picture is written as a PNG beside the recordings (files/motion/workspace-shots/), the frames as the recordings'.
+// The workspace capsule, its panel and its swipe (Home.kt, Workspaces.kt) with four workspaces over two accounts and an
+// invitation waiting, light and dark: Home with the capsule, the panel open, a swipe on the capsule half way, and a
+// switch half way; and the capsule with one workspace, and with a long name. Each picture is written as a PNG beside the
+// recordings (files/motion/workspace-shots/), the frames as the recordings'.
 package fail.still.android.motion
 
 import android.graphics.Bitmap
@@ -10,6 +11,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -92,8 +94,11 @@ class WorkspacePanelTest {
         others = "alert", othersLabel = "其他 workspace：1 个出错了 · 2 个在等你 · 3 个有新消息",
     )
 
-    /** Home on AFK, with still.fail, Cue 客户 after it and 个人 under the other account, and 林一's invitation to 设计组. */
-    private fun home(): Harness {
+    /**
+     * Home on AFK, with still.fail, `cueName` after it and 个人 under the other account, and 林一's invitation to 设计组;
+     * `one`: AFK alone, nothing waiting.
+     */
+    private fun home(dark: Boolean = false, one: Boolean = false, cueName: String = "Cue 客户"): Harness {
         val h = Harness(rule)
         for ((ws, list) in lists) {
             h.fake.put(Topics.chats(ws, false), list)
@@ -101,14 +106,19 @@ class WorkspacePanelTest {
             h.fake.put(Topics.chats(ws, false, watching = true), list.copy(days = emptyList()))
             h.fake.put(Topics.workspaceMarks(ws), marks)
         }
-        h.launch(listOf(Screen.Home))
-        h.fake.put(Topics.accounts, listOf(work, gmail))
-        h.fake.put(Topics.workspaces, listOf(
-            AccountWorkspaces(work, listOf(
-                WorkspaceSummary(afk, "AFK", "owner", 1, 6), WorkspaceSummary(still, "still.fail", "owner", 3, 4), WorkspaceSummary(cue, "Cue 客户", "member", 1, 3),
-            ), invitations = listOf(PendingInvitation("inv-1", "ws-design", "设计组", "member", "林一")), loaded = true),
-            AccountWorkspaces(gmail, listOf(WorkspaceSummary(own, "个人", "owner", 1, 1)), loaded = true),
-        ))
+        h.launch(listOf(Screen.Home), dark = dark)
+        if (one) {
+            h.fake.put(Topics.accounts, listOf(work))
+            h.fake.put(Topics.workspaces, listOf(AccountWorkspaces(work, listOf(WorkspaceSummary(afk, "AFK", "owner", 1, 6)), loaded = true)))
+        } else {
+            h.fake.put(Topics.accounts, listOf(work, gmail))
+            h.fake.put(Topics.workspaces, listOf(
+                AccountWorkspaces(work, listOf(
+                    WorkspaceSummary(afk, "AFK", "owner", 1, 6), WorkspaceSummary(still, "still.fail", "owner", 3, 4), WorkspaceSummary(cue, cueName, "member", 1, 3),
+                ), invitations = listOf(PendingInvitation("inv-1", "ws-design", "设计组", "member", "林一")), loaded = true),
+                AccountWorkspaces(gmail, listOf(WorkspaceSummary(own, "个人", "owner", 1, 1)), loaded = true),
+            ))
+        }
         h.settle()
         return h
     }
@@ -122,45 +132,78 @@ class WorkspacePanelTest {
         FileOutputStream(File(shots, "$name.png")).use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    @Test fun panel() {
-        val h = home()
-        png("a-home-dots")
+    private fun theme(dark: Boolean) = if (dark) "dark" else "light"
+
+    private fun panel(dark: Boolean) {
+        val h = home(dark)
+        png("a-home-${theme(dark)}")
         rule.onNodeWithText("AFK").performClick()
         h.settle()
         // The tap's ripple is the platform's (RippleDrawable), on the system's clock rather than the test's: let it fade.
         Thread.sleep(1000)
-        png("b-panel")
+        png("b-panel-${theme(dark)}")
         rule.onNodeWithText("林一邀请你加入「设计组」").assertExists()
         rule.onNodeWithText("zuo@gmail.com").assertExists("two accounts: each one's workspaces under its email")
         for (name in listOf("still.fail", "Cue 客户", "个人", "新建 workspace", "登录其它账号")) rule.onNodeWithText(name).assertExists(name)
+        // Over the capsule, not over the bar: the panel ends above the capsule's top.
+        val capsule = rule.onAllNodesWithText("AFK").fetchSemanticsNodes().maxBy { it.boundsInRoot.bottom }.boundsInRoot
+        val foot = rule.onNodeWithText("登录其它账号").fetchSemanticsNode().boundsInRoot
+        check(foot.bottom < capsule.top) { "the panel's foot ($foot) is not above the capsule ($capsule)" }
     }
 
-    @Test fun swipe() {
-        val h = home()
-        val title = rule.onNodeWithText("AFK").fetchSemanticsNode().boundsInRoot
-        val r = h.record("workspace-swipe-real")
-        r.frame { rule.onRoot().performTouchInput { down(Offset(title.left + title.width * 0.7f, title.center.y)) } }
-        repeat(8) { r.frame { rule.onRoot().performTouchInput { moveBy(Offset(-28f, 0f)) } } }
-        png("c-mid-swipe")
-        repeat(3) { r.frame { rule.onRoot().performTouchInput { moveBy(Offset(-28f, 0f)) } } }
+    @Test fun panelLight() = panel(false)
+    @Test fun panelDark() = panel(true)
+
+    /** Half way through a drag on the capsule, then let go: on to still.fail, the frames recorded (the videos). */
+    private fun swipe(dark: Boolean) {
+        val h = home(dark)
+        val name = rule.onNodeWithText("AFK").fetchSemanticsNode().boundsInRoot
+        val r = h.record("workspace-swipe-${theme(dark)}")
+        r.frame { rule.onRoot().performTouchInput { down(Offset(name.left + name.width * 0.6f, name.center.y)) } }
+        repeat(8) { r.frame { rule.onRoot().performTouchInput { moveBy(Offset(-10f, 0f)) } } }
+        png("c-mid-swipe-${theme(dark)}")
+        repeat(6) { r.frame { rule.onRoot().performTouchInput { moveBy(Offset(-10f, 0f)) } } }
         r.frame { rule.onRoot().performTouchInput { up() } }
         repeat(6) { r.frame() }
-        png("d-mid-switch-swipe")
+        png("d-mid-switch-swipe-${theme(dark)}")
         r.frames(24)
         r.end()
         check(h.app.workspace == still) { "swiped to ${h.app.workspace}" }
     }
 
-    @Test fun panelSwitch() {
-        val h = home()
+    @Test fun swipeLight() = swipe(false)
+    @Test fun swipeDark() = swipe(true)
+
+    private fun panelSwitch(dark: Boolean) {
+        val h = home(dark)
         rule.onNodeWithText("AFK").performClick()
         h.settle()
-        val r = h.record("workspace-panel-switch-real")
+        val r = h.record("workspace-panel-switch-${theme(dark)}")
         r.frame { rule.onNodeWithText("Cue 客户").performClick() }
         repeat(8) { r.frame() }
-        png("d-mid-switch-panel")
+        png("d-mid-switch-panel-${theme(dark)}")
         r.frames(24)
         r.end()
         check(h.app.workspace == cue) { "switched to ${h.app.workspace}" }
+    }
+
+    @Test fun panelSwitchLight() = panelSwitch(false)
+    @Test fun panelSwitchDark() = panelSwitch(true)
+
+    /** One workspace: its name alone in the capsule, no dots. */
+    @Test fun single() {
+        home(one = true)
+        png("g-single-light")
+        rule.onNodeWithText("AFK").assertExists()
+    }
+
+    /** A long name: the capsule goes up to 12dp short of 奏, the name cut short with an ellipsis. */
+    @Test fun longName() {
+        val long = "Cue 客户的长名字工作区测试"
+        val h = home(cueName = long)
+        rule.runOnUiThread { h.app.pickWorkspace(cue); h.app.home() }
+        h.settle()
+        png("h-long-name-light")
+        rule.onNodeWithText(long).assertExists()
     }
 }

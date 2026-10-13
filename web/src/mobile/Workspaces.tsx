@@ -1,5 +1,5 @@
-// The workspace switcher, on Home's bar (apps/android/…/screens/Workspaces.kt the same): the workspace's name, swiped
-// sideways to the next or the one before, tapped to a panel under it with every workspace (and the invitations
+// The workspace switcher, at Home's bottom left (apps/android/…/screens/Workspaces.kt the same): the workspace's name,
+// swiped sideways to the next or the one before, tapped to a panel over it with every workspace (and the invitations
 // waiting, a new one, another account); a new workspace in a sheet of its own. The workspace's settings are in 设置
 // (./Settings.tsx).
 import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -10,15 +10,15 @@ import type { WorkspaceMarksView } from "../core/shapes.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { MarkCounts } from "../ChatMark.tsx";
-import * as chatMarkCss from "../ChatMark.css.ts";
 import { Button, Field, PickRow } from "./parts.tsx";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as css from "./Workspaces.css.ts";
 import * as homeCss from "./Home.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import { leave, SWITCH_EASE, SWITCH_MS, type Arrival } from "./switch.ts";
 
-import { Check, ChevronDown, LogIn, Plus } from "../icons.tsx";
+import { Check, LogIn, Plus } from "../icons.tsx";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 
@@ -31,11 +31,14 @@ function order(byAccount: AccountWorkspaces[]): Place[] {
     .filter((p) => !seen.has(p.workspace.id) && seen.add(p.workspace.id));
 }
 
-/** To `to`, from the workspace in view: what is on screen (Home's lists, `lists`) slides away to the side it is on. */
-function switchTo(app: MobileApp, places: Place[], to: string, lists: HTMLElement | null, from = 0) {
+/**
+ * To `to`, from the workspace in view: what is on screen (Home's lists, `lists`) slides away to the side it is on;
+ * `dock`, how wide the capsule at the bottom is, which goes to the new name's width.
+ */
+function switchTo(app: MobileApp, places: Place[], to: string, lists: HTMLElement | null, dock: number, from = 0) {
   const here = places.findIndex((p) => p.workspace.id === app.entry.id);
   const there = places.findIndex((p) => p.workspace.id === to);
-  leave(lists, app.entry.name, there < here ? -1 : 1, from);
+  leave(lists, app.entry.name, there < here ? -1 : 1, dock, from);
   app.replace(`/w/${to}`, undefined, true);
 }
 
@@ -43,12 +46,13 @@ function switchTo(app: MobileApp, places: Place[], to: string, lists: HTMLElemen
 const SWIPE_AT = 64;
 
 /**
- * The workspace's name on Home's bar, its way to the others: swiped sideways the next (or the one before) comes in
- * after the finger and is gone to; tapped, the panel of them all opens under it. Dots under it with more than one:
- * where it is among them, and those with something waiting in their mark's colour (in place of the mark by the name).
- * `come`: the one left, its name going out as this one's comes in (`started`: from then).
+ * The workspace at the bottom left of Home, in reach of a thumb (a frosted capsule beside 奏 and 令): its name, and
+ * dots under it with more than one: where it is among them, those with something waiting in their mark's colour.
+ * Swiped sideways, the next (or the one before) comes in after the finger and is gone to; tapped, the panel of them
+ * all opens over it. `come`: the one left, its name going out as this one's comes in (`started`: from then), the
+ * capsule going from its width to this one's.
  */
-export function WorkspaceTitle({ come, started }: { come: Arrival | null; started: boolean }) {
+export function WorkspaceDock({ come, started }: { come: Arrival | null; started: boolean }) {
   const app = useApp();
   const byAccount = useWorkspaces().value ?? [];
   const places = order(byAccount);
@@ -63,7 +67,8 @@ export function WorkspaceTitle({ come, started }: { come: Arrival | null; starte
   const before = at > 0 ? places[at - 1] : undefined;
   const after = at >= 0 ? places[at + 1] : undefined;
   const lists = () => button.current?.closest(`.${homeCss.mHome}`)?.querySelector<HTMLElement>(`.${homeCss.mHomePanes}`) ?? null;
-  // The pages of the strip (the one before, this, the next; the one left while it goes) where `dx` puts them.
+  const go = (to: string, from = 0) => switchTo(app, places, to, lists(), button.current?.offsetWidth ?? 0, from);
+  // The names (the one before, this, the next) where `dx` puts them.
   const settled = useRef(0);
   const put = (dx: number, animate = false) => {
     const el = strip.current;
@@ -75,22 +80,25 @@ export function WorkspaceTitle({ come, started }: { come: Arrival | null; starte
     if (animate) settled.current = window.setTimeout(() => { el.removeAttribute("data-peek"); el.removeAttribute("data-settling"); }, 240);
   };
   // Come from another: the name left where the finger left it (or in place) and this one a gap beside it, on the side
-  // it came from; once the lists start (`started`), both go along together to where this one is in place.
-  const ends = useRef<{ left: HTMLElement | null; here: HTMLElement | null; from: number; off: number; gone: number } | null>(null);
+  // it came from, in a capsule as wide as the one left; once the lists start (`started`), all go along together to
+  // where this one is in place.
+  const ends = useRef<{ left: HTMLElement | null; here: HTMLElement | null; from: number; off: number; gone: number; width: number } | null>(null);
   useLayoutEffect(() => {
-    const el = strip.current;
-    if (!come || !el) return;
+    const el = strip.current, dock = button.current;
+    if (!come || !el || !dock) return;
     const left = el.querySelector<HTMLElement>("[data-page=left]"), here = el.querySelector<HTMLElement>("[data-page=here]");
     const off = come.way > 0 ? (left?.offsetWidth ?? 0) + 24 : -((here?.offsetWidth ?? 0) + 24);
-    // The one left goes out of the strip: to the left by as far as this one comes, or to the right past its end.
-    const gone = come.way > 0 ? -off : el.clientWidth;
-    ends.current = { left, here, from: come.from, off, gone };
+    // The one left goes out of the capsule: to the left by as far as this one comes, or to the right past its end.
+    const gone = come.way > 0 ? -off : Math.max(come.dock, dock.offsetWidth);
+    ends.current = { left, here, from: come.from, off, gone, width: dock.offsetWidth };
     if (left) Object.assign(left.style, { visibility: "visible", transform: `translateX(${come.from}px)` });
-    if (here) here.style.transform = `translateX(${come.from + off}px)`;
+    // As wide as it is once in place while the capsule is not yet (cut by the capsule, not shortened to "…").
+    if (here) Object.assign(here.style, { transform: `translateX(${come.from + off}px)`, width: `${here.offsetWidth}px`, maxWidth: "none", flex: "none" });
+    if (come.dock) dock.style.width = `${come.dock}px`;
   }, [come]);
   useLayoutEffect(() => {
-    const e = ends.current;
-    if (!started || !e) return;
+    const e = ends.current, dock = button.current;
+    if (!started || !e || !dock) return;
     const timing = { duration: SWITCH_MS, easing: SWITCH_EASE };
     if (e.left) {
       e.left.style.transform = `translateX(${e.gone}px)`;
@@ -98,10 +106,16 @@ export function WorkspaceTitle({ come, started }: { come: Arrival | null; starte
     }
     // In place: its own place again (the strip's, a swipe's from there).
     if (e.here) {
-      e.here.style.transform = "";
-      e.here.animate([{ transform: `translateX(${e.from + e.off}px)` }, { transform: "translateX(0)" }], timing);
+      const here = e.here;
+      here.style.transform = "";
+      void here.animate([{ transform: `translateX(${e.from + e.off}px)` }, { transform: "translateX(0)" }], timing).finished
+        .finally(() => Object.assign(here.style, { width: "", maxWidth: "", flex: "" }));
     }
-  }, [started]);
+    if (come?.dock && come.dock !== e.width) {
+      dock.style.width = "";
+      dock.animate([{ width: `${come.dock}px` }, { width: `${e.width}px` }], timing);
+    } else dock.style.width = "";
+  }, [started]); // eslint-disable-line react-hooks/exhaustive-deps
   const down = (e: ReactPointerEvent<HTMLButtonElement>) => {
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
     drag.current = { x: e.clientX, y: e.clientY, t: e.timeStamp, dx: 0, on: false };
@@ -132,7 +146,7 @@ export function WorkspaceTitle({ come, started }: { come: Arrival | null; starte
     if (!d?.on) return;
     const quick = Math.abs(d.dx) > 24 && e.timeStamp - d.t < 60;
     const to = d.dx < 0 ? after : before;
-    if (to && (Math.abs(d.dx) > SWIPE_AT || quick)) switchTo(app, places, to.workspace.id, lists(), d.dx);
+    if (to && (Math.abs(d.dx) > SWIPE_AT || quick)) go(to.workspace.id, d.dx);
     else put(0, true);
   };
   const cancel = () => { if (drag.current?.on) put(0, true); drag.current = null; };
@@ -140,19 +154,16 @@ export function WorkspaceTitle({ come, started }: { come: Arrival | null; starte
     if (moved.current) { moved.current = false; return; }
     const r = button.current!.getBoundingClientRect();
     const width = Math.min(320, window.innerWidth - 32);
-    app.menu({ anchor: new DOMRect(r.left - 8, r.top, 0, r.height + 8), items: [], width, content: (close) => <WorkspacePanel close={close} lists={lists()} /> });
+    app.menu({ anchor: r, items: [], width, above: true, content: (close) => <WorkspacePanel close={close} go={go} /> });
   };
   const name = (text: string, mark: boolean) => (
     <>
       <b>{text}</b>
-      {mark && (marks?.others && !dots
-        ? <span className={chatMarkCss.chatMarkInline} data-tone={marks.others} role="img" aria-label={marks.othersLabel ?? ""} />
-        : invited && <span className={homeCss.mDot} aria-label={t("web-mobile.home.invited")} />)}
-      <ChevronDown size={16} />
+      {mark && invited && <span className={homeCss.mDot} aria-label={t("web-mobile.home.invited")} />}
     </>
   );
   return (
-    <button ref={button} type="button" className={`${homeCss.mHomeWorkspace} ${css.mTitle}`} onClick={open}
+    <button ref={button} type="button" className={`${pagesCss.mFloating} ${css.mDock}`} onClick={open}
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
       <span ref={strip} className={css.mStrip}>
         {before && <span className={css.mPage} data-page="before" aria-hidden="true">{name(before.workspace.name, false)}</span>}
@@ -170,15 +181,14 @@ export function WorkspaceTitle({ come, started }: { come: Arrival | null; starte
 }
 
 /**
- * Under the name, every workspace to go to: the invitations waiting first (joined or declined here), then each
+ * Over the capsule, every workspace to go to: the invitations waiting first (joined or declined here), then each
  * account's workspaces (under its address when more than one is signed in), the one in view checked, the others with
  * what they have waiting; a new workspace and another account at its foot.
  */
-function WorkspacePanel({ close, lists }: { close: () => void; lists: HTMLElement | null }) {
+function WorkspacePanel({ close, go }: { close: () => void; go: (to: string) => void }) {
   const app = useApp();
   const login = useSignIn();
   const byAccount: AccountWorkspaces[] = useWorkspaces().value ?? [];
-  const places = order(byAccount);
   const pending = byAccount.flatMap((a) => a.invitations.map((invite) => ({ account: a.account, invite })));
   const accounts = byAccount.filter((a) => a.workspaces.length > 0);
   const marks: WorkspaceMarksView | undefined = useWorkspaceMarks(app.entry.id);
@@ -214,7 +224,7 @@ function WorkspacePanel({ close, lists }: { close: () => void; lists: HTMLElemen
             const here = w.id === app.entry.id;
             return (
               <button key={w.id} type="button" className={css.mRow} data-here={here || undefined} aria-current={here || undefined}
-                onClick={() => { close(); if (!here) switchTo(app, places, w.id, lists); }}>
+                onClick={() => { close(); if (!here) go(w.id); }}>
                 <span className={css.mTile} aria-hidden="true">{initial(w.name)}</span>
                 <span className={css.mRowName}>{w.name}</span>
                 {here ? <Check size={18} /> : <MarkCounts mark={marks?.workspaces[w.id]} />}

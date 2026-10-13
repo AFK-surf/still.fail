@@ -4,15 +4,23 @@ import { mHPhase, mSettingText } from "./History.css.ts";
 
 const corner = (px: number) => ({ borderRadius: `calc(${px}px * ${vars.cornerScale})`, cornerShape: vars.cornerShape });
 
-/** The name on Home's bar (Workspaces.tsx WorkspaceTitle): swiped sideways, its strip of names follows the finger. */
-export const mTitle = style({ position: "relative", alignSelf: "stretch", touchAction: "none", userSelect: "none", WebkitUserSelect: "none" });
-/** The names side by side, the bar's width between its buttons: the one in view, the one before and the next. */
-export const mStrip = style({ position: "relative", flex: "1", minWidth: "0", height: "34px", overflow: "hidden", "--dx": "0px", "--here": "100%" } as Record<string, string>);
-/** A name (with its marks and chevron), as wide as it is: the ones beside it a gap after its end or before its start. */
+/**
+ * The workspace at Home's bottom left (Workspaces.tsx WorkspaceDock): a frosted capsule as tall as 令, as wide as its
+ * name (up to 奏), the name over the dots; swiped sideways, its names follow the finger, the capsule clipping them.
+ */
+export const mDock = style({
+  position: "relative", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-start", gap: "4px",
+  boxSizing: "border-box", flex: "0 1 auto", minWidth: "96px", height: "56px", marginRight: "auto", padding: "0 18px",
+  borderRadius: "999px", overflow: "hidden", color: "var(--m-ink)", cursor: "pointer", pointerEvents: "auto",
+  touchAction: "none", userSelect: "none", WebkitUserSelect: "none",
+});
+/** The names side by side: the one in view laid out (the capsule's width), the one before and the next beside it. */
+export const mStrip = style({ position: "relative", display: "flex", maxWidth: "100%", "--dx": "0px", "--here": "100%" } as Record<string, string>);
+/** A name (with the invitations' dot), a gap after the one before's end, or before the next's start. */
 export const mPage = style({
-  position: "absolute", top: "0", bottom: "0", left: "0", maxWidth: "100%", display: "flex", alignItems: "center", gap: "6px",
-  transform: "translateX(var(--dx))",
+  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", maxWidth: "100%", height: "22px", transform: "translateX(var(--dx))",
   selectors: {
+    '&:not([data-page="here"])': { position: "absolute", top: "0", left: "0", maxWidth: "none" },
     '&[data-page="before"]': { transform: "translateX(calc(var(--dx) - 100% - 24px))" },
     '&[data-page="after"]': { transform: "translateX(calc(var(--dx) + var(--here) + 24px))" },
     // The ones beside it only while a finger has the name (and it settles back): at rest it stands alone.
@@ -21,8 +29,8 @@ export const mPage = style({
     [`${mStrip}[data-settling] &`]: { transition: "transform 240ms var(--m-standard)" },
   },
 });
-/** Where it is among the workspaces, under its name (in the bar's padding: the bar is no taller). */
-export const mDots = style({ position: "absolute", left: "0", top: "calc(50% + 16px)", display: "flex", alignItems: "center", gap: "6px", height: "8px" });
+/** Where it is among the workspaces, under its name. */
+export const mDots = style({ display: "flex", alignItems: "center", gap: "6px", height: "8px" });
 export const mPageDot = style({
   width: "6px", height: "6px", borderRadius: "50%", background: "var(--m-line)", flex: "none", boxSizing: "border-box",
   selectors: {
@@ -65,3 +73,6 @@ globalStyle(`${mPanel} ${mInvite} button`, { flex: "none", height: "32px", paddi
 globalStyle(`${mHPhase} small`, { fontSize: vars.textCaption, color: "var(--m-subtle)" });
 /** Here rather than with its class: it comes after .m-invite small, and wins over it. */
 globalStyle(`${mSettingText} small`, { fontSize: vars.textCaption });
+globalStyle(`${mDock} b`, {
+  minWidth: "0", fontSize: vars.textTitle, lineHeight: "22px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});

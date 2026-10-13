@@ -7,7 +7,7 @@ import { mRunLabel } from "./styles/history.css.ts";
 import { mReaderBar, mSheetHead } from "./app.css.ts";
 import { mAttach, mChatBar, mChatBarTitle, mInfoAgent, mInfoStatus, mJobHead } from "./Chat.css.ts";
 import { mSteps } from "./styles/settings.css.ts";
-import { mHomeBar, mHomeWorkspace } from "./Home.css.ts";
+import { mHomeBar } from "./Home.css.ts";
 
 export const mMaker = style({
   display: "block", flex: "none",
@@ -179,11 +179,6 @@ globalStyle(`${mInfoAgent} > span`, {
 });
 /** Words in a line (a clock runs in them), cut short at its end. */
 globalStyle(`${mInfoAgent} > span${mInfoStatus}`, { display: "block" });
-/** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */
-globalStyle(`${mHomeWorkspace} b`, {
-  minWidth: "0", fontSize: vars.textDisplay, lineHeight: "34px", fontWeight: "600", letterSpacing: "-0.4px", overflow: "hidden",
-  textOverflow: "ellipsis", whiteSpace: "nowrap",
-});
 /** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */
 globalStyle(`${mSheetHead} b`, { flex: "1", fontSize: vars.textTitle, fontWeight: "600" });
 /** Here rather than with its class: it comes after .m-section b, and wins over it. */

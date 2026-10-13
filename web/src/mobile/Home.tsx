@@ -24,7 +24,7 @@ import { ChangelogNews } from "./Changelog.tsx";
 import { LoadingPill, PlaceholderRows } from "./Loading.tsx";
 import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
 import * as barsCss from "./styles/bars.css.ts";
-import { WorkspaceTitle } from "./Workspaces.tsx";
+import { WorkspaceDock } from "./Workspaces.tsx";
 import { arrival, slideIn } from "./switch.ts";
 import { usePullToReload } from "./pull.ts";
 import * as css from "./Home.css.ts";
@@ -80,14 +80,17 @@ export function Home() {
         <button type="button" className={`${barsCss.mNavButton} ${css.mHomeMe}`} onClick={() => app.push(app.at("/settings"))} aria-label={t("web-mobile.settings.title")}>
           <Settings size={22} />
         </button>
-        <WorkspaceTitle come={come} started={started} />
+        <span className={partsCss.mGrow} />
         {/* The filter, and the archive in its menu, as on the wide screen: nothing to narrow or look back on with no station. */}
         {(all.value?.stations.length ?? 0) > 0 && <FilterButton filter={filter} setFilter={setFilter} />}
         {/* The stations at a glance (../StationGlyph.tsx); its page says which is which. */}
         <StationButton view={all.value} />
       </header>
-      {/* The new-chat button alone, floating over the list at the bottom right: a disc in the accent. */}
-      {!none && <div className={css.mHomeToolbar}>
+      {/* At the bottom, in reach of a thumb: the workspace at the left (./Workspaces.tsx), there with no station too; at the
+          right the decisions and the new-chat button, a disc in the accent. */}
+      <div className={css.mHomeToolbar}>
+        <WorkspaceDock come={come} started={started} />
+        {!none && <>
         {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, there at 0 too (奏 alone). */}
         <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} data-alone={decisions > 0 ? undefined : ""} onClick={() => app.push(app.at("/decisions"))} aria-label={t("web-mobile.home.decisions", { n: decisions })}>
           <Zou size={40} />{decisions > 0 && <Count n={decisions} />}
@@ -95,7 +98,8 @@ export function Home() {
         <div className={css.mHomeCapsule}>
           <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={44} /></button>
         </div>
-      </div>}
+        </>}
+      </div>
       {searching && <SearchPage from={searching} onLeave={() => setAway(false)} onClose={() => setSearching(null)} />}
     </div>
   );

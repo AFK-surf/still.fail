@@ -1,6 +1,6 @@
 // Switching workspace (Home.kt, Workspaces.kt): the lists slide from one workspace's rows to the other's, never through
 // the loading look (its placeholders, with no rows) while the core reads the new one from the device. Switched by the
-// app (a notification's link), from the panel the name opens, and by a swipe on the name.
+// app (a notification's link), from the panel the workspace's capsule opens, and by a swipe on the capsule.
 package fail.still.android.motion
 
 import android.util.Log
@@ -88,7 +88,7 @@ class WorkspaceSwitchTest {
         follow(h, r, "switched", seen)
     }
 
-    /** The name opens the panel; a tap on the other workspace there closes it and slides over to it. */
+    /** The capsule opens the panel; a tap on the other workspace there closes it and slides over to it. */
     @Test fun fromThePanel() {
         val h = twoWorkspaces()
         rule.onNodeWithText("Dev").performClick()
@@ -102,7 +102,7 @@ class WorkspaceSwitchTest {
         rule.onNodeWithText("新建 workspace").assertDoesNotExist()
     }
 
-    /** Dragged left past the threshold, the name lets go onto the next workspace and the lists slide with it. */
+    /** Dragged left on the capsule past the threshold, it lets go onto the next workspace and the lists slide with it. */
     @Test fun swiped() {
         val h = twoWorkspaces()
         val title = rule.onNodeWithText("Dev").fetchSemanticsNode().boundsInRoot
@@ -110,7 +110,7 @@ class WorkspaceSwitchTest {
         val seen = ArrayList<String>()
         r.frame { rule.onRoot().performTouchInput { down(Offset(title.left + title.width * 0.6f, title.center.y)) } }
         repeat(10) { r.frame { rule.onRoot().performTouchInput { moveBy(Offset(-30f, 0f)) } }; seen += rows() }
-        // Not switched while the finger is down: only the name moves.
+        // Not switched while the finger is down: only the capsule's names move.
         check(seen.all { it == "a" }) { "switched before letting go: $seen" }
         check(h.app.workspace == Fixtures.WS) { "switched before letting go" }
         r.frame { rule.onRoot().performTouchInput { up() } }

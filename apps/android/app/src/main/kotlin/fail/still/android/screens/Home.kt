@@ -1,11 +1,15 @@
 // Home is the `chats` view as the web's sidebar lists it: one kind of item (an
 // agent with its chat, or an agent with no chat yet), newest first and grouped
 // by day. A fixed head (settings · workspace · the filter · stations) and
-// the new-chat button floating at the bottom. The workspace's name opens the
-// panel of workspaces, and swiped across goes to the one beside it.
+// the new-chat button floating at the bottom, the workspace's capsule at its
+// left: tapped it opens the panel of workspaces, swiped across it goes to the
+// one beside it.
 package fail.still.android.screens
 
 import fail.still.android.data.t
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -13,7 +17,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animate
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.geometry.Offset
@@ -187,10 +190,15 @@ fun HomeScreen(current: WorkspaceEntry) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     val away by animateFloatAsState(if (searchOpen) 1f else 0f, tween(if (searchOpen) 280 else 240, easing = if (searchOpen) Ease.Arrive else Ease.Standard), label = "search")
     val awayBy = with(density) { 56.dp.toPx() }
-    // The workspace panel (Workspaces.kt), hung from the name: where the page and the name are (in the root).
+    // The workspace panel (Workspaces.kt), standing on the workspace's capsule: where the page and the capsule are (in the root).
     var panel by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf(Offset.Zero) }
-    var name by remember { mutableStateOf(Rect.Zero) }
+    var capsule by remember { mutableStateOf(Rect.Zero) }
+    val wide = LocalWide.current
+    val switcher = @Composable { modifier: Modifier ->
+        val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(scope))
+        WorkspaceCapsule(current, order, invitationsWaiting(app), marks.value, still, haze, modifier.onGloballyPositioned { capsule = it.boundsInRoot() }) { panel = true }
+    }
     Box(Modifier.fillMaxSize().onGloballyPositioned { page = it.boundsInRoot().topLeft }) {
         Box(Modifier.fillMaxSize().clipToBounds().hazeSource(haze).graphicsLayer { translationY = -awayBy * away; alpha = 1f - away }) {
             val onSearch = { at: Float, wide: Float -> searchFrom = at; searchWidth = wide; searchOpen = true }
@@ -218,14 +226,7 @@ fun HomeScreen(current: WorkspaceEntry) {
         ) {
             // Settings, at the top left (SettingsHome.kt): the account, the workspace's things, this device's.
             Box(Modifier.semantics { contentDescription = t("android-chat.home.settings") }) { NavButton(Icons.Settings, { app.push(Screen.Settings) }, 22.dp) }
-            Box(Modifier.weight(1f).onGloballyPositioned { name = it.boundsInRoot() }) {
-                WorkspaceTitle(current, order, invitationsWaiting(app), still) { panel = true }
-                // With two or more, the workspaces as dots under the name, in the bar's padding below it (the bar as tall).
-                if (order.size >= 2) {
-                    val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(scope))
-                    WorkspaceDots(order, scope, marks.value, Modifier.align(Alignment.BottomStart).offset(y = 7.dp))
-                }
-            }
+            Spacer(Modifier.weight(1f))
             // A newer build of the app that brings something the changelog says (one that does not waits in the settings
             // until one does): tapped, it is downloaded and handed to the installer (Updates.kt).
             val updates = app.updates
@@ -269,9 +270,11 @@ fun HomeScreen(current: WorkspaceEntry) {
             }
         }
         // Wide (Wide.kt), the new-chat button is at the screen's corner instead, not the column's.
-        if (!LocalWide.current) Toolbar(app, decisionsWaiting(current), haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.graphicsLayer { alpha = 1f - away })
+        // The workspace's capsule at the bottom left, on its own there (as high as the corner's buttons, Wide.kt).
+        if (!wide) Toolbar(app, decisionsWaiting(current), haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.graphicsLayer { alpha = 1f - away }, switcher)
+        else Box(Modifier.align(Alignment.BottomStart).windowInsetsPadding(WindowInsets.navigationBars).padding(start = 16.dp, bottom = 10.dp).widthIn(max = 360.dp).graphicsLayer { alpha = 1f - away }) { switcher(Modifier) }
         searchFrom?.let { from -> SearchPage(scope, from, searchWidth, onLeave = { searchOpen = false }) { searchFrom = null } }
-        WorkspacePanel(panel, scope, left = name.left - page.x, top = topBar.toFloat()) { panel = false }
+        WorkspacePanel(panel, scope, capsule.translate(-page)) { panel = false }
     }
 }
 
@@ -303,12 +306,13 @@ private fun Lists(current: WorkspaceEntry, padding: PaddingValues, onSearch: (Fl
     }
 }
 
-/** Dragged this far across (or flung), the name lets go onto the workspace next to it. */
+/** Dragged this far across (or half the way, for a short name) or flung, the capsule lets go onto the workspace next to it. */
 private val SWIPE_AT = 64.dp
 
 /**
- * The name in the bar as a strip of the workspaces' names, clipped to its place. `x`: how far the strip is moved (px);
- * the one shown is drawn there and the one coming in (`to`) a whole width beside it, on `side` (1 the right).
+ * The capsule's names as a strip, clipped by the capsule. `x`: how far the strip is moved (px); the one shown is drawn
+ * there and the one coming in (`to`) 24dp after its end (`side` 1, the next) or before its start (-1, the one before):
+ * `distance` away, as the strip was last laid out.
  */
 private class TitleStrip(at: String) {
     var from by mutableStateOf(at)
@@ -316,20 +320,22 @@ private class TitleStrip(at: String) {
     var side by mutableIntStateOf(1)
     var x by mutableFloatStateOf(0f)
     var dragging by mutableStateOf(false)
+    var distance = 1f
     var motion: Job? = null
 
     /** Taken by a finger mid-motion: the one more than half in becomes the one shown, where it is. Where the finger starts from. */
-    fun grab(width: Float): Float {
+    fun grab(): Float {
         motion?.cancel()
         val coming = to
-        if (coming != null && abs(x) > width / 2) { from = coming; x += side * width }
+        if (coming != null && abs(x) > distance / 2) { from = coming; x += side * distance }
         to = null
         return x
     }
 
-    /** `to` the rest of the way in, from where it is; then it is the one shown. */
-    suspend fun arrive(width: Float, still: Boolean) {
-        if (!still) animate(x, -side * width, animationSpec = tween(SWITCH_MS, easing = Ease.Arrive)) { v, _ -> x = v }
+    /** `to` the rest of the way in, from where it is (as a share of the way, the way read as it is laid out); then it is the one shown. */
+    suspend fun arrive(still: Boolean) {
+        val at = (abs(x) / distance.coerceAtLeast(1f)).coerceIn(0f, 1f)
+        if (!still) animate(at, 1f, animationSpec = tween(SWITCH_MS, easing = Ease.Arrive)) { v, _ -> x = -side * v * distance }
         from = to ?: from; to = null; x = 0f
     }
 
@@ -341,18 +347,19 @@ private class TitleStrip(at: String) {
 }
 
 /**
- * The workspace's name in the bar (web mobile/Home.tsx): a tap opens the panel (`onTap`). Dragged across, the name
- * follows the finger and the next workspace's (dragging left) or the one before's (right) comes in from that side; let
- * go past [SWIPE_AT] or flung that way, that one is switched to (the lists slide with it), else it springs back. Past
- * the first or the last it gives a little (0.3 of the way) and springs back. Up or down is not taken. Switched any other
- * way (the panel, a notification), the name slides the same way as the lists, the old one out as the new comes in.
+ * The workspace in view, a capsule of the 奏 capsule's glass at the toolbar's left (web mobile/Home.tsx): its name, and
+ * with two or more workspaces their dots under it (WorkspaceDots). As wide as the name, 96dp at least, at most what
+ * its place leaves (`modifier`). A tap opens the panel (`onTap`). Dragged across, the names follow the finger inside it,
+ * the next workspace's (dragging left) or the one before's (right) coming in 24dp beside; let go past [SWIPE_AT] or flung
+ * that way, that one is switched to (the lists slide with it), else they spring back. Past the first or the last it
+ * gives a little (0.3 of the way) and springs back. Up or down is not taken. Switched any other way (the panel, a
+ * notification), the names slide the same way as the lists. Its width goes from one name's to the other's with them.
  */
 @Composable
-private fun WorkspaceTitle(current: WorkspaceEntry, order: List<WorkspaceEntry>, invited: Boolean, still: Boolean, onTap: () -> Unit) {
+private fun WorkspaceCapsule(current: WorkspaceEntry, order: List<WorkspaceEntry>, invited: Boolean, marks: WorkspaceMarksView?, still: Boolean, haze: HazeState, modifier: Modifier, onTap: () -> Unit) {
     val app = LocalApp.current
     val strip = remember { TitleStrip(current.workspace.id) }
     val scope = rememberCoroutineScope()
-    var width by remember { mutableIntStateOf(1) }
     val ids = order.map { it.workspace.id }
     val idsNow by rememberUpdatedState(ids)
     val shown = current.workspace.id
@@ -364,11 +371,11 @@ private fun WorkspaceTitle(current: WorkspaceEntry, order: List<WorkspaceEntry>,
         if (!resting || strip.from == shown || app.workspace == strip.from) return@LaunchedEffect
         strip.side = if (ids.indexOf(shown) >= ids.indexOf(strip.from)) 1 else -1
         strip.to = shown
-        // In the title's own scope: this effect starts again as the strip leaves rest, which would call it off.
-        strip.motion = scope.launch { strip.arrive(width.toFloat(), still) }
+        // In the capsule's own scope: this effect starts again as the strip leaves rest, which would call it off.
+        strip.motion = scope.launch { strip.arrive(still) }
     }
     Box(
-        Modifier.fillMaxWidth().heightIn(min = 34.dp).clip(Smooth(8.dp)).onSizeChanged { width = it.width.coerceAtLeast(1) }
+        modifier.floating(haze, CircleShape).height(56.dp).widthIn(min = 96.dp)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -379,7 +386,6 @@ private fun WorkspaceTitle(current: WorkspaceEntry, order: List<WorkspaceEntry>,
                     var let = false
                     // Where the finger has the strip, before an end's give.
                     var pulled = 0f
-                    val w = width.toFloat()
                     try {
                         while (true) {
                             val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
@@ -391,9 +397,9 @@ private fun WorkspaceTitle(current: WorkspaceEntry, order: List<WorkspaceEntry>,
                                     val to = strip.to
                                     val flung = to != null && abs(v) > 400.dp.toPx() && sign(v) == -strip.side.toFloat()
                                     strip.dragging = false
-                                    if (to != null && (abs(strip.x) > SWIPE_AT.toPx() || flung)) {
+                                    if (to != null && (abs(strip.x) > minOf(SWIPE_AT.toPx(), strip.distance / 2) || flung)) {
                                         app.pickWorkspace(to); app.home()
-                                        strip.motion = scope.launch { strip.arrive(w, still) }
+                                        strip.motion = scope.launch { strip.arrive(still) }
                                     } else strip.motion = scope.launch { strip.back(v, still) }
                                 }
                                 break
@@ -407,7 +413,7 @@ private fun WorkspaceTitle(current: WorkspaceEntry, order: List<WorkspaceEntry>,
                                 if (abs(across) <= viewConfiguration.touchSlop) continue
                                 swiping = true
                                 strip.dragging = true
-                                pulled = strip.grab(w)
+                                pulled = strip.grab()
                                 tracker.resetTracking()
                             }
                             change.consume()
@@ -417,8 +423,9 @@ private fun WorkspaceTitle(current: WorkspaceEntry, order: List<WorkspaceEntry>,
                             val next = idsNow.getOrNull(at + 1).takeIf { at >= 0 }
                             val before = idsNow.getOrNull(at - 1).takeIf { at >= 0 }
                             when {
-                                pulled < 0 && next != null -> { strip.to = next; strip.side = 1; strip.x = pulled.coerceAtLeast(-w) }
-                                pulled > 0 && before != null -> { strip.to = before; strip.side = -1; strip.x = pulled.coerceAtMost(w) }
+                                // No further than the whole way (as last laid out): letting go springs back from where it shows.
+                                pulled < 0 && next != null -> { strip.to = next; strip.side = 1; strip.x = pulled.coerceAtLeast(-strip.distance) }
+                                pulled > 0 && before != null -> { strip.to = before; strip.side = -1; strip.x = pulled.coerceAtMost(strip.distance) }
                                 else -> { strip.to = null; strip.x = pulled * 0.3f }
                             }
                         }
@@ -428,36 +435,54 @@ private fun WorkspaceTitle(current: WorkspaceEntry, order: List<WorkspaceEntry>,
                     }
                 }
             }
-            .clickable(onClick = onTap),
+            .clickable(onClick = onTap)
+            .padding(horizontal = 18.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        // Each name where the strip has it, read as it is drawn: in the frame the one come in becomes the one shown (its
-        // place back at 0 before the names are composed again), the one gone is hidden, not drawn in its place.
-        for (id in listOfNotNull(strip.from, strip.to)) key(id) {
-            TitleName(nameOf(id), invited, Modifier.graphicsLayer {
-                when (id) {
-                    strip.from -> translationX = strip.x
-                    strip.to -> translationX = strip.x + strip.side * width
-                    else -> alpha = 0f
-                }
-            })
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            NameStrip(strip) { id -> CapsuleName(nameOf(id), invited) }
+            // With two or more, where this one is among them, and which have something waiting.
+            if (order.size >= 2) WorkspaceDots(order, shown, marks, Modifier)
         }
     }
 }
 
-/** A workspace's name as the bar has it, with the invitations' dot and the panel's chevron after it. */
+/**
+ * The strip's names laid out where it has them, read as it is laid out (with the names it is composed with, so in the
+ * frame the one come in becomes the one shown, the one gone is not drawn in its place): the one shown at `x`, the one
+ * coming in `distance` beside it. As wide as the one shown, going to the one coming in's width as it comes in.
+ */
 @Composable
-private fun TitleName(name: String, invited: Boolean, modifier: Modifier) {
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        // Invitations waiting for an account (the panel has them first).
+private fun NameStrip(strip: TitleStrip, name: @Composable (String) -> Unit) {
+    val gap = 24.dp
+    Layout(content = { for (id in listOfNotNull(strip.from, strip.to)) key(id) { Box(Modifier.layoutId(id)) { name(id) } } }) { measurables, c ->
+        val free = Constraints(maxWidth = c.maxWidth, maxHeight = c.maxHeight)
+        val from = measurables.firstOrNull { it.layoutId == strip.from }?.measure(free)
+        val to = strip.to?.let { id -> measurables.firstOrNull { it.layoutId == id } }?.measure(free)
+        val wFrom = from?.width ?: 0
+        val d = if (to == null) wFrom + gap.roundToPx() else if (strip.side == 1) wFrom + gap.roundToPx() else to.width + gap.roundToPx()
+        strip.distance = d.toFloat()
+        val x = if (to == null) strip.x else strip.x.coerceIn(-d.toFloat(), d.toFloat())
+        val p = if (to == null) 0f else abs(x) / d
+        val w = if (to == null) wFrom else (wFrom + (to.width - wFrom) * p).roundToInt()
+        layout(w, maxOf(from?.height ?: 0, to?.height ?: 0)) {
+            from?.place(x.roundToInt(), 0)
+            to?.place((x + strip.side * d).roundToInt(), 0)
+        }
+    }
+}
+
+/** A workspace's name in its capsule, with the invitations' dot after it when some wait for an account (the panel has them first). */
+@Composable
+private fun CapsuleName(name: String, invited: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         if (invited) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = t("android-chat.home.invited") })
-        IconIn(Icons.ChevronDown, 16.dp, C.muted)
     }
 }
 
 /**
- * The workspaces as dots under the name, in the order a swipe goes through them (6dp, 6dp apart): the one in view in
+ * The workspaces as dots under the capsule's name, in the order a swipe goes through them (6dp, 6dp apart): the one in view in
  * ink, the others faint, or in the tone of what they hold, as a chat's mark (ChatMark, MarkCounts): red wanting them, a
  * blue ring (8dp, on the dots' line) waiting on them, blue unread. Said in words as the core's label of the others.
  */
@@ -1027,14 +1052,15 @@ internal fun DecisionsCapsule(n: Int, ground: Modifier) {
 }
 
 @Composable
-private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Modifier) {
-    // Floating over the list at the bottom right: 奏 N (奏 alone at 0, a disc), and the new-chat button, a disc of
-    // the same glass in the accent, 令 white.
+private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Modifier, switcher: @Composable (Modifier) -> Unit) {
+    // Floating over the list at the bottom: the workspace's capsule at the left (up to 12dp short of 奏), and at the
+    // right 奏 N (奏 alone at 0, a disc) and the new-chat button, a disc of the same glass in the accent, 令 white.
     Row(
         modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(Modifier.weight(1f).padding(end = 2.dp)) { switcher(Modifier) }
         DecisionsCapsule(decisions, Modifier.floating(haze, CircleShape))
         Box(
             Modifier.floating(haze, CircleShape, C.accent).size(56.dp)

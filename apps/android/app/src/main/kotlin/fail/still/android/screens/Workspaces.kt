@@ -1,7 +1,7 @@
 // Workspaces, as still.fail cloud's pages have them (web/src/cloud/CloudApp.tsx,
 // workspace.tsx): straight into one; for an account with none, its invitations
 // or a new workspace of its own (with an invite code when still.fail cloud asks for
-// one); the panel dropped from the name on Home, with the invitations waiting,
+// one); the panel over the workspace capsule on Home, with the invitations waiting,
 // every account's workspaces and a new one.
 package fail.still.android.screens
 
@@ -19,7 +19,8 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.draw.shadow
@@ -255,15 +256,16 @@ private fun InviteCodeForm(create: Write, make: (String) -> Unit) {
 // ── the switcher ───────────────────────────────────────────────────────
 
 /**
- * The workspace panel, dropped from the name on Home (web/src/mobile/Workspaces.tsx): the invitations waiting, then
- * every account's workspaces (under its email with more than one account signed in), the one in view checked and the
- * others with what they hold; a new one and another account at its foot. A tap on one switches to it (Home slides its
- * lists over). It is the long-press menu's kind (Sheet.kt MenuHost): its ground and shadow, the scrim, the scale from
- * the corner it hangs from. `left`, `top` (px, in what holds it): the name's left edge and the bar's bottom; it hangs
- * 8dp left of the one and 4dp under the other. The workspace's settings are in 设置 (SettingsHome.kt).
+ * The workspace panel, standing on the workspace's capsule on Home (web/src/mobile/Workspaces.tsx): the invitations
+ * waiting, then every account's workspaces (under its email with more than one account signed in), the one in view
+ * checked and the others with what they hold; a new one and another account at its foot. A tap on one switches to it
+ * (Home slides its lists over). It is the long-press menu's kind (Sheet.kt MenuHost): its ground and shadow, the scrim,
+ * the scale from the corner it stands on. `capsule` (px, in what holds it): it starts at its left and ends 8dp over it;
+ * taller than the room above (to 24dp under the status bar), its list scrolls. The workspace's settings are in 设置
+ * (SettingsHome.kt).
  */
 @Composable
-internal fun WorkspacePanel(open: Boolean, current: String, left: Float, top: Float, close: () -> Unit) {
+internal fun WorkspacePanel(open: Boolean, current: String, capsule: Rect, close: () -> Unit) {
     val app = LocalApp.current
     val visible = remember { MutableTransitionState(false) }
     visible.targetState = open
@@ -274,21 +276,23 @@ internal fun WorkspacePanel(open: Boolean, current: String, left: Float, top: Fl
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val density = LocalDensity.current
         val width = minOf(320.dp, maxWidth - 32.dp)
-        val x = (with(density) { left.toDp() } - 8.dp).coerceAtMost(maxWidth - width - 12.dp).coerceAtLeast(12.dp)
-        val y = with(density) { top.toDp() } + 4.dp
-        val foot = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
+        val x = with(density) { capsule.left.toDp() }.coerceAtMost(maxWidth - width - 12.dp).coerceAtLeast(12.dp)
+        val top = with(density) { capsule.top.toDp() }
+        val head = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f * scrim)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { close() })
-        val corner = TransformOrigin(0f, 0f)
-        AnimatedVisibility(
-            visible,
-            Modifier.offset(x, y),
-            enter = fadeIn(tween(160, easing = Ease.Out)) + scaleIn(MenuSpring, 0.9f, corner),
-            exit = fadeOut(tween(120, easing = Ease.CssOut)) + scaleOut(MenuSpring, 0.9f, corner),
-        ) {
-            Column(
-                Modifier.width(width).heightIn(max = (maxHeight - y - foot - 24.dp).coerceAtLeast(120.dp))
-                    .shadow(18.dp, Smooth(20.dp)).clip(Smooth(20.dp)).background(C.surface).padding(6.dp),
-            ) { PanelContent(app, current, close) }
+        Box(Modifier.fillMaxSize().padding(bottom = (maxHeight - top + 8.dp).coerceAtLeast(0.dp))) {
+            val corner = TransformOrigin(0f, 1f)
+            AnimatedVisibility(
+                visible,
+                Modifier.align(Alignment.BottomStart).offset(x = x),
+                enter = fadeIn(tween(160, easing = Ease.Out)) + scaleIn(MenuSpring, 0.9f, corner),
+                exit = fadeOut(tween(120, easing = Ease.CssOut)) + scaleOut(MenuSpring, 0.9f, corner),
+            ) {
+                Column(
+                    Modifier.width(width).heightIn(max = (top - 8.dp - head - 24.dp).coerceAtLeast(120.dp))
+                        .shadow(18.dp, Smooth(20.dp)).clip(Smooth(20.dp)).background(C.surface).padding(6.dp),
+                ) { PanelContent(app, current, close) }
+            }
         }
     }
 }

@@ -124,7 +124,9 @@ export const mMenu = style({
   selectors: {
     "&[data-open]": { opacity: "1", transform: "none", transition: "opacity 200ms, transform 200ms" },
     // A panel of its own (MenuSpec.content: the workspace switcher): rounder, its rows inset.
-    "&[data-panel]": { boxSizing: "border-box", padding: "6px", borderRadius: `calc(20px * ${vars.cornerScale})` },
+    "&[data-panel]": { boxSizing: "border-box", padding: "6px", borderRadius: `calc(20px * ${vars.cornerScale})`, overflowY: "auto" },
+    // Over what opened it (at the bottom): it grows from its bottom left.
+    "&[data-above]": { transformOrigin: "0 100%" },
   },
   "@media": {
     "(prefers-reduced-motion: reduce)": {

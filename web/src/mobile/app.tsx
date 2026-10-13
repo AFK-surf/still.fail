@@ -30,8 +30,11 @@ export interface Entry { id: string; name: string; account: Account }
 /** A sheet: how much of the screen it takes at first, and whether its grabber drags it. */
 export interface SheetSpec { height: number; draggable?: boolean; content: () => ReactNode }
 export interface MenuItem { label: string; icon: ReactNode; action: () => void }
-/** `content` in place of `items`: a panel of its own under the anchor's left (the workspace switcher), `width` wide. */
-export interface MenuSpec { anchor: DOMRect; items: MenuItem[]; content?: (close: () => void) => ReactNode; width?: number; onDismiss?: () => void }
+/**
+ * `content` in place of `items`: a panel of its own at the anchor's left (the workspace switcher), `width` wide, under
+ * it or (`above`) over it.
+ */
+export interface MenuSpec { anchor: DOMRect; items: MenuItem[]; content?: (close: () => void) => ReactNode; width?: number; above?: boolean; onDismiss?: () => void }
 /** One thing in full over everything: what it is (a line, as the history labels it), then all of it. */
 export interface ReaderSpec { label: ReactNode; content: ReactNode }
 
@@ -554,7 +557,8 @@ function MenuHost({ spec, close }: { spec: MenuSpec | null; close: () => void })
   return (
     <div className={`${css.mOverlay} ${css.mMenuLayer}`} data-open={open || undefined}>
       <div className={css.mScrim} onPointerDown={() => { pressed.current = true; }} onClick={() => { if (pressed.current) close(); pressed.current = false; }} />
-      <div className={css.mMenu} data-open={open || undefined} data-panel={shown.content ? "" : undefined} style={{ left: x, top: y, width }}>
+      <div className={css.mMenu} data-open={open || undefined} data-panel={shown.content ? "" : undefined} data-above={shown.above || undefined}
+        style={shown.above ? { left: x, bottom: window.innerHeight - shown.anchor.top + 8, width, maxHeight: shown.anchor.top - 8 - 24 } : { left: x, top: y, width }}>
         {shown.content
           ? shown.content(close)
           : shown.items.map((item) => (

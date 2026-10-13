@@ -1,5 +1,5 @@
 // Another workspace coming in (./Workspaces.tsx): its lists slide in from the side as the ones left slide out, and its
-// name in the bar the same way, as a pager's pages (apps/android/…/screens/Home.kt the same). Each workspace is a page
+// name in its capsule the same way, as a pager's pages (apps/android/…/screens/Home.kt the same). Each workspace is a page
 // of its own (mounted anew), so what was on screen goes as a copy, drawn in the new page under its bar (the one real
 // bar, its glass over both) until it has gone.
 import { LOCAL_MS } from "../motion.ts";
@@ -9,12 +9,14 @@ export interface Arrival {
   /** A copy of the lists, as they were (scrolled as they were). */
   lists: HTMLElement | null;
   scrolls: number[];
-  /** The name that was in the bar. */
+  /** The name that was in the capsule. */
   name: string;
   /** 1: the next one (in from the right); -1: the one before. */
   way: 1 | -1;
   /** Where the finger left the name (px), swiped. */
   from: number;
+  /** How wide the capsule with the name was (px). */
+  dock: number;
 }
 
 export const SWITCH_MS = 280;
@@ -24,12 +26,12 @@ let leaving: Arrival | null = null;
 
 const still = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/** Before going to another workspace: what `lists` shows and the bar's `name`, for the one coming in to slide over. */
-export function leave(lists: HTMLElement | null, name: string, way: 1 | -1, from = 0): void {
+/** Before going to another workspace: what `lists` shows and its `name` (in a capsule `dock` wide), for the one coming in to slide over. */
+export function leave(lists: HTMLElement | null, name: string, way: 1 | -1, dock: number, from = 0): void {
   if (still()) { leaving = null; return; }
   const copy = lists?.cloneNode(true) as HTMLElement | undefined;
   const scrolls = lists ? [...lists.children].map((pane) => (pane as HTMLElement).scrollTop) : [];
-  leaving = { lists: copy ?? null, scrolls, name, way, from };
+  leaving = { lists: copy ?? null, scrolls, name, way, from, dock };
 }
 
 /** For the workspace coming in, once: what was left (null when it came in any other way). */
