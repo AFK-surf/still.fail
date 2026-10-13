@@ -100,6 +100,8 @@ function kotlin(): string {
   const unions = items.some(([, s]) => s.kind === "tagged");
   let out = `/**\n * ${SAID}\n */\n\npackage fail.still.android.data\n\nimport kotlinx.serialization.Serializable\nimport kotlinx.serialization.SerialName\n`;
   if (unions) out += "import kotlinx.serialization.ExperimentalSerializationApi\nimport kotlinx.serialization.json.JsonClassDiscriminator\n";
+  // Any JSON (`Value`): a field such as a history item's Markdown tree (markdown.ts).
+  if (items.some(([, s]) => s.kind === "struct" && s.fields.some((f) => JSON.stringify(f.client ?? f.ty).includes('"Value"')))) out += "import kotlinx.serialization.json.JsonElement\n";
   out += "\n";
   for (const [name, s] of items) {
     out += ktDoc(s.doc, "");
