@@ -572,8 +572,20 @@ function ImageViewer({ url, file, setControls, swipe, waiting = false, onMarking
   useEffect(() => () => onMarking(false), [onMarking]);
   useEffect(() => { setControls(marks.on ? marks.bar : <>{zoomControls}{marks.bar}</>); }, [marks.on, marks.bar, zoomControls, setControls]);
   useEffect(() => () => setControls(null), [setControls]);
+  // A click with the mouse around the image (not a drag, not while marking) closes the preview; a finger's tap there
+  // shows or hides the bars instead (Viewer).
+  const pressed = useRef<{ x: number; y: number } | null>(null);
+  const onPointerDown = (e: React.PointerEvent) => {
+    pressed.current = e.pointerType === "mouse" && e.button === 0 && e.target === e.currentTarget ? { x: e.clientX, y: e.clientY } : null;
+    zoom.stageProps.onPointerDown(e);
+  };
+  const onClick = (e: React.MouseEvent) => {
+    const p = pressed.current;
+    pressed.current = null;
+    if (p && !marks.on && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 4) onClose();
+  };
   return (
-    <div ref={zoom.stage} className={css2.fpStage} {...zoom.stageProps}>
+    <div ref={zoom.stage} className={css2.fpStage} {...zoom.stageProps} data-closes={marks.on ? undefined : ""} onPointerDown={onPointerDown} onClick={onClick}>
       <img className={css2.fpImage} src={url} alt={file.name} draggable={false} data-waiting={waiting || undefined} data-viewer-picture=""
         // A thumbnail's own size is not the image's: it only stands in the image's place.
         onLoad={(e) => { const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight && (!waiting || !natural)) setNatural({ w: img.naturalWidth, h: img.naturalHeight }); }}
