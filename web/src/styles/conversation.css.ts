@@ -9,14 +9,7 @@ export const pageBarTitle = style({
     },
   },
 });
-export const msg = style({
-  display: "grid", gap: "6px", fontSize: vars.textBody, lineHeight: "1.65", minWidth: "0",
-  selectors: {
-    // Laid out once (Chat.tsx useLaidOutOnce), out of view it is not laid out or drawn again: its size as last laid out
-    // is kept. Its avatar, out past its left edge, is not cut.
-    "&[data-laid]": { contentVisibility: "auto", containIntrinsicSize: "auto 120px", overflowClipMargin: "48px" },
-  },
-});
+export const msg = style({ display: "grid", gap: "6px", fontSize: vars.textBody, lineHeight: "1.65", minWidth: "0" });
 export const msgBubble = style({
   maxWidth: "min(78%, 640px)", padding: "10px 16px", borderRadius: `calc(20px * ${vars.cornerScale})`,
   background: vars.neutralBg, whiteSpace: "pre-wrap", overflowWrap: "anywhere", cornerShape: vars.cornerShape,

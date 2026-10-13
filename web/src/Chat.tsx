@@ -118,7 +118,6 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
   const [gallery] = useState(() => () => latest.current());
   useShortcut("chat.latest", rows.toEnd);
   const askedFile = useAskedFile(list, rows.messages);
-  useLaidOutOnce(list);
   // What waits to be decided here and does not show: a button over the list leads to it.
   const asks = useAsksShown(list, chat);
   // Selecting text inside one message offers to quote it: into the chat's draft, its composer's (by its key).
@@ -159,27 +158,6 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
  * 忽略 under a post that asks what no one has decided: the viewer lets it go (`decision.dismiss`: their lists and
  * the bell say nothing of it any more), gone at once and back if that fails.
  */
-/**
- * Marks each message of a list `data-laid` once it has been laid out (its first report to an observer): from then its
- * styles let the browser skip it while out of view (content-visibility, its size as last laid out kept), so the list
- * changing width (a side panel sliding in) lays out the messages on screen only. Only once laid out: a message never
- * laid out would stand at a guessed size, and the chat open at the wrong place.
- */
-function useLaidOutOnce(list: RefObject<HTMLElement | null>): void {
-  useEffect(() => {
-    const el = list.current;
-    if (!el) return;
-    const laid = new ResizeObserver((entries) => {
-      for (const { target } of entries) { target.setAttribute("data-laid", ""); laid.unobserve(target); }
-    });
-    const watch = (n: Node) => { if (n instanceof HTMLElement && n.parentElement === el && n.classList.contains(conversationCss.msg) && !n.hasAttribute("data-laid")) laid.observe(n); };
-    for (const n of el.children) watch(n);
-    const added = new MutationObserver((records) => { for (const r of records) r.addedNodes.forEach(watch); });
-    added.observe(el, { childList: true });
-    return () => { laid.disconnect(); added.disconnect(); };
-  }, [list]);
-}
-
 function AskDismiss({ thread, seq }: { thread: number; seq: number }) {
   const station = useStation().address;
   const call = useCall();
