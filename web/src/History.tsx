@@ -16,6 +16,7 @@ import { useLink, useStation } from "./station.tsx";
 import { Link } from "react-router";
 import { MdView } from "./Prose.tsx";
 import type { Md } from "./core/md.ts";
+import { mdHead, mdLines, textHead, textLines } from "../../client/core-ts/src/mdHead.ts";
 import { ToolCall, ToolResult } from "./ToolStep.tsx";
 import * as toolCss from "./ToolStep.css.ts";
 import { useStickToBottom } from "./scroll.ts";
@@ -75,7 +76,17 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
   // the last few are drawn at first, enough to fill the pane; those before are drawn as the reader nears them, then the
   // pages before. Drawn whole, the core's latest page (a hundred items, each its words through Markdown) took the
   // opening frame of the panel or of its tab.
-  const [drawn, setDrawn] = useState(DRAWN);
+  const [more, setMore] = useState(0);
+  // How large the pane is, as it is laid out (never read for it): before its history comes, it stands empty; with its
+  // history there already (opened again), as large as the last one was.
+  useLayoutEffect(() => {
+    const watch = new ResizeObserver(([entry]) => { if (entry) pane = { width: entry.contentRect.width, height: entry.contentRect.height }; });
+    watch.observe(body.current!);
+    return () => watch.disconnect();
+  }, []);
+  const opening = useRef(0);
+  if (!opening.current && all.length) opening.current = filling(all, pane);
+  const drawn = opening.current + more;
   const hidden = Math.max(0, all.length - drawn);
   const items = hidden ? all.slice(hidden) : all;
   const older = useHistoryOlder(station, sessionKey);
@@ -90,15 +101,27 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
   }, []);
   const before = useCallback(() => {
     if (hidden) {
-      // Not before the reader moves the pane, while what is drawn fills it: drawn as it opens, the items before laid it
-      // out a second time in the frame it came in. Declined, it is asked again as the reader scrolls up.
-      const el = body.current;
-      if (el && !moved.current && el.scrollHeight > el.clientHeight) return Promise.reject(new Error("not read up to yet"));
-      setDrawn((n) => n + DRAWN);
+      // Not before the reader moves the pane: drawn as it opens, the items before laid it out a second time in the
+      // frame it came in. Declined, it is asked again as the reader scrolls up.
+      if (!moved.current) return Promise.reject(new Error("not read up to yet"));
+      setMore((n) => n + DRAWN);
       return Promise.resolve();
     }
     return older();
   }, [hidden, older]);
+  // What was drawn to fill the pane is counted from its words, not measured: once it is drawn, a pane it does not
+  // fill after all draws the items before.
+  useEffect(() => {
+    if (!hidden) return;
+    let timer = 0;
+    const frame = requestAnimationFrame(() => {
+      timer = window.setTimeout(() => {
+        const el = body.current;
+        if (el && !moved.current && el.scrollHeight <= el.clientHeight) setMore((n) => n + DRAWN);
+      });
+    });
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [hidden]);
   useOlderOnScroll(body, hidden > 0 || (history?.more ?? false), items[0]?.key, before);
   // Opened at an entry (an activity row): the item that draws it comes into view, and says so for a moment. One before
   // what is loaded: the pages before come first.
@@ -107,7 +130,7 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
     if (!focus || focused.current === focus.n) return;
     const found = all.findIndex((item) => (item.entries[0] ?? 0) <= focus.entry && focus.entry <= (item.entries[1] ?? -1));
     // Loaded but not drawn yet: drawn back to it first.
-    if (found >= 0 && found < hidden) return void setDrawn(all.length - found + DRAWN);
+    if (found >= 0 && found < hidden) return void setMore(all.length - found + DRAWN - opening.current);
     const at = found - hidden;
     const el = found < 0 ? null : body.current?.querySelector<HTMLElement>(`[data-item="${at}"]`);
     if (!el) {
@@ -172,6 +195,46 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
   );
 }
 
+let pane: { width: number; height: number } | null = null;
+// An item's rows as History.css.ts draws them: a line of its words, the line above a message with its gap, the switch
+// under a folded text, a row of steps, a mark, and the gap between two items.
+const LINE_PX = 21;
+const LABEL_PX = 26;
+const SWITCH_PX = 20;
+const GROUP_PX = 30;
+const MARK_PX = 18;
+const GAP_PX = 14;
+/** The least `item` stands tall where a line holds `per` Latin letters: a text past five lines is folded to them. */
+function tall(item: HistoryItem, per: number): number {
+  const words = (lines: number) => (lines > 5 ? 5 * LINE_PX + SWITCH_PX : lines * LINE_PX);
+  const body = item.body;
+  switch (body.kind) {
+    case "text": return words(mdLines(body.content.md as Md, per, 6));
+    case "post": return LABEL_PX + words(mdLines(body.content.md as Md, per, 6));
+    case "received":
+      return [body.content.note, ...body.content.messages.map((m) => m.text)]
+        .reduce<number>((sum, text) => (text ? sum + (sum ? GAP_PX : 0) + LABEL_PX + words(textLines(text, per, 6)) : sum), 0);
+    case "mark": return MARK_PX;
+    case "group": return GROUP_PX;
+  }
+}
+/**
+ * How many of a history's latest items fill its pane: counted from their words, each taken as short as it can stand, so
+ * no fewer than fill it. A pane not laid out yet (its history there before it) is taken as tall as the window and as
+ * wide as a panel gets.
+ */
+function filling(all: HistoryItem[], pane: { width: number; height: number } | null): number {
+  const height = pane ? pane.height + 40 : window.innerHeight;
+  // A Latin letter of the history's text is six pixels wide or more.
+  const per = (pane?.width ?? 960) / 6;
+  let sum = 0;
+  for (let n = 1; n <= all.length; n++) {
+    sum += tall(all[all.length - n]!, per) + GAP_PX;
+    if (sum >= height) return n;
+  }
+  return all.length;
+}
+
 const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: HistoryItem; where(place: Place | null): ReactNode }) {
   const body = item.body;
   switch (body.kind) {
@@ -186,7 +249,7 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
         </>
       );
     case "text":
-      return <Fold className={`${css.hText} ${conversationCss.markdown}${body.content.subagent ? ` ${css.hSub}` : ""}`}><MdView md={body.content.md as Md} /></Fold>;
+      return <Fold className={`${css.hText} ${conversationCss.markdown}${body.content.subagent ? ` ${css.hSub}` : ""}`} head={headOf(body.content.md as Md)}><MdView md={body.content.md as Md} /></Fold>;
     case "post":
       return (
         // Drawn like a received message (a line, then the words beside a bar): the two answer each other.
@@ -197,7 +260,7 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
             {body.content.block && <Pill tone="blue">Block</Pill>}
             {body.content.failed && <Pill tone="red">{t("web-main.history.sendFailed")}</Pill>}
           </div>
-          <Fold className={`${css.hQuote} ${css.hQuoteMd} ${conversationCss.markdown}`}><MdView md={body.content.md as Md} /></Fold>
+          <Fold className={`${css.hQuote} ${css.hQuoteMd} ${conversationCss.markdown}`} head={headOf(body.content.md as Md)}><MdView md={body.content.md as Md} /></Fold>
         </div>
       );
     case "mark":
@@ -238,7 +301,7 @@ function Received({ from, text, place }: { from: ReactNode; text: string; place?
   return (
     <div className={css.hReceived}>
       <div className={css.hLabel}><ReceivedIcon {...ICON} size={14} />{t(from === "ember" ? "web-main.history.reminder.before" : "web-main.history.message.before")}<strong>{from === "ember" ? NAME : from}</strong>{t(from === "ember" ? "web-main.history.reminder.after" : "web-main.history.message.after")}{place && <> · {place}</>}</div>
-      <Fold className={css.hQuote}>{text}</Fold>
+      <Fold className={css.hQuote} head={textHead(text, HEAD_LINES)}>{text}</Fold>
     </div>
   );
 }
@@ -325,25 +388,46 @@ function foldWatch(): ResizeObserver {
   });
 }
 
+// Words that surely fill more than a fold shows have only their beginning drawn while folded: these lines of them, a
+// few past the five shown (mdHead counts no more lines than are drawn, however wide the panel).
+const HEAD_LINES = 8;
+const heads = new WeakMap<Md, ReactNode>();
+/** The beginning of `md` a fold draws while folded, the same one for the same tree; null for words that may be short. */
+function headOf(md: Md): ReactNode {
+  let head = heads.get(md);
+  if (head === undefined) {
+    const cut = mdHead(md, HEAD_LINES);
+    heads.set(md, head = cut ? <MdView md={cut} /> : null);
+  }
+  return head;
+}
+
 /**
  * Long text in the history folds to five lines; a button unfolds it. Height
- * is measured, so markdown (lists, code) folds the same way as plain text.
+ * is measured, so markdown (lists, code) folds the same way as plain text. Text known to be long (`head`, its
+ * beginning) is folded as it comes, unmeasured, and only that beginning is drawn until it is unfolded: a history
+ * coming in lays out the lines it shows, not all the words of its long entries.
  */
-function Fold({ children, className }: { children: ReactNode; className?: string }) {
+function Fold({ children, head = null, className }: { children: ReactNode; head?: ReactNode; className?: string }) {
   const box = useRef<HTMLDivElement>(null);
-  const [long, setLong] = useState(false);
+  const cut = head != null;
+  const [measured, setLong] = useState(false);
+  const long = cut || measured;
   const [open, setOpen] = useState(false);
+  // All of it drawn: unfolded, or on its way back to folded.
+  const [whole, setWhole] = useState(false);
   const run = useRef<AnimationPlaybackControls | null>(null);
   // Measured before paint, so a long entry never shows at full height first: by the one observer all folds share, which
   // reads them once the page is laid out (its first report comes before the first paint) and folds the long ones
   // together. Read as each one mounted, a history coming in laid the whole page out in the middle of its commit.
   useLayoutEffect(() => {
     const el = box.current;
-    if (!el) return;
+    if (!el || cut) return;
     folds.set(el, setLong);
     foldWatch().observe(el);
-    return () => { folds.delete(el); foldWatch().unobserve(el); run.current?.stop(); };
-  }, []);
+    return () => { folds.delete(el); foldWatch().unobserve(el); };
+  }, [cut]);
+  useEffect(() => () => run.current?.stop(), []);
   // Only a reader's own click moves it (folding on arrival happens before the first paint): from the height it shows
   // (on its way, if clicked again) to the one it has now.
   const toggle = () => {
@@ -351,19 +435,19 @@ function Fold({ children, className }: { children: ReactNode; className?: string
     const from = el.getBoundingClientRect().height;
     run.current?.stop();
     Object.assign(el.style, { height: "", maxHeight: "", overflow: "" });
-    flushSync(() => setOpen(!open));
+    flushSync(() => { setOpen(!open); setWhole(true); });
     const to = el.getBoundingClientRect().height;
-    if (reducedMotion() || Math.abs(to - from) < 1) return;
+    if (reducedMotion() || Math.abs(to - from) < 1) return void (open && setWhole(false));
     // Its fold's height limit held off while it moves, what is past its height hidden.
     // Held at where it was until the motion takes it (from the next frame): the new height is never seen at once.
     Object.assign(el.style, { maxHeight: "none", overflow: "hidden", height: `${from}px` });
     const now = animate(el, { height: [`${from}px`, `${to}px`] }, { duration: 0.24, ease: EASE_OUT });
     run.current = now;
-    void now.finished.then(() => { if (run.current === now) { Object.assign(el.style, { height: "", maxHeight: "", overflow: "" }); run.current = null; } }, () => {});
+    void now.finished.then(() => { if (run.current === now) { Object.assign(el.style, { height: "", maxHeight: "", overflow: "" }); run.current = null; if (open) setWhole(false); } }, () => {});
   };
   return (
     <div className={css.fold}>
-      <div ref={box} className={`${css.foldBody}${className ? ` ${className}` : ""}`} data-folded={long && !open ? true : undefined}>{children}</div>
+      <div ref={box} className={`${css.foldBody}${className ? ` ${className}` : ""}`} data-folded={long && !open ? true : undefined}>{cut && !whole ? head : children}</div>
       {long && <button type="button" className={`${controlsCss.textToggle} ${css.foldToggle}`} onClick={toggle}>{open ? t("web-main.fold") : t("web-main.unfold")}</button>}
     </div>
   );
