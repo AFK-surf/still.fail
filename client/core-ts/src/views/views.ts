@@ -1623,7 +1623,6 @@ export class Views implements Owner {
 /// When each pinned list row was pinned (the rows say only `pinned: true`).
 const pinnedAt = new WeakMap<object, number>();
 
-/// Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
 /// What a chat's page draws by each message, decided here so the page only draws it (docs/client-core.md): whether the
 /// agent who said it is one of the chat's (its name opens its history), whose workspace keeps each of its files (and the
 /// outbox's), the 归档 offer and what the archive check made of the chat under its last all-done post, and what its
@@ -1631,26 +1630,29 @@ const pinnedAt = new WeakMap<object, number>();
 /// its first message).
 function drawn<V extends Value | undefined>(out: V): V {
   if (out === undefined || !("ok" in out) || !isObject(out.ok)) return out;
-  const view = out.ok as J;
+  // Everything said here goes on copies: what the view is made of may be the core's kept values, frozen (a message's
+  // files, the outbox's), and writing on one of them threw and took the core down.
+  const view = { ...(out.ok as J) };
   const agents = arr(view.agents);
   const keys = new Set(agents.map((a) => str(get(a.session, "key"))).filter((k): k is string => k !== null));
   const owner = (path: unknown) => {
     const by = typeof path === "string" ? agents.find((a) => path.startsWith(`${str(get(a.session, "workspace")) ?? "\0"}/`)) : undefined;
     return str(get((by ?? agents[0])?.session, "key"));
   };
-  const own = (files: unknown) => {
-    for (const f of arr(files)) {
-      const key = owner(get(f, "path"));
-      if (key !== null) f.owner = key;
-    }
+  const own = (files: unknown): J => {
+    if (!Array.isArray(files)) return files;
+    return files.map((f) => {
+      const key = isObject(f) ? owner(get(f, "path")) : null;
+      return key !== null ? { ...f, owner: key } : f;
+    });
   };
-  const messages = arr(view.messages);
-  for (const m of messages) {
-    const agent = str(get(m.by, "agent"));
-    if (agent !== null && keys.has(agent)) m.by.here = true;
-    own(m.attachments);
-  }
-  for (const o of arr(view.outbox)) own(o.attachments);
+  const here = (by: J): J => {
+    const agent = str(get(by, "agent"));
+    return agent !== null && keys.has(agent) ? { ...by, here: true } : by;
+  };
+  const messages: J[] = arr(view.messages).map((m) => (isObject(m) ? { ...m, by: here(m.by), attachments: own(m.attachments) } : m));
+  view.messages = messages;
+  if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? { ...o, attachments: own(o.attachments) } : o));
   // Under the agent's last post, at the chat's end (not a window short of it), once it said it is all done.
   let last: J;
   for (let i = messages.length - 1; i >= 0 && view.newer !== true; i--) {
@@ -1664,19 +1666,19 @@ function drawn<V extends Value | undefined>(out: V): V {
   if (elsewhere.length > 0) {
     const bySeq = new Map(messages.map((m) => [u64(m.seq), m]));
     const first: J[] = [];
-    for (const s of elsewhere) {
-      const agent = str(get(s.by, "agent"));
-      if (agent !== null && keys.has(agent)) s.by.here = true;
+    for (const item of elsewhere) {
+      const s = isObject(item) ? { ...item, by: here(item.by) } : item;
       // Before the first message (0), or after one shown; after one outside the window, not shown with it.
       const after = bySeq.get(u64(s.after));
       if (u64(s.after) === 0) first.push(s);
-      else if (after !== undefined) (after.elsewhere ??= []).push(s);
+      else if (after !== undefined) after.elsewhere = [...(after.elsewhere ?? []), s];
     }
     view.elsewhere = first;
   }
-  return out;
+  return { ...out, ok: view } as V;
 }
 
+/// Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
 function deepFreeze(v: unknown): void {
   if (v === null || typeof v !== "object" || Object.isFrozen(v)) return;
   for (const k of Object.keys(v)) deepFreeze((v as Record<string, unknown>)[k]);

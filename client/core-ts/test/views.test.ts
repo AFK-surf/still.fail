@@ -1468,7 +1468,10 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archivi
   t.set(threads("ws/a"), [thread(7, ["k"], now)]);
   const file = (path: string) => ({ name: path.split("/").pop(), path, size: 1 });
   const done = { ...entry(3, "好了"), authorKind: "agent", author: "k", declared: "final", ending: "all_done", attachments: [file("elsewhere/b.png")] };
-  t.set(pageOf("ws/a", 7), { first: 1, last: 3, entries: [{ ...entry(1, "看看"), attachments: [file("a.png")] }, { ...entry(2, "在看"), authorKind: "agent", author: "k" }, done], thread: null });
+  // Kept frozen, as the core keeps what it has read: what the page is told goes on copies (written on these, it threw
+  // and took the core down).
+  const frozen = <T,>(v: T): T => { if (v && typeof v === "object") { for (const x of Object.values(v)) frozen(x); Object.freeze(v); } return v; };
+  t.set(pageOf("ws/a", 7), frozen({ first: 1, last: 3, entries: [{ ...entry(1, "看看"), attachments: [file("a.png")] }, { ...entry(2, "在看"), authorKind: "agent", author: "k" }, done], thread: null }));
   const settled = { ...row("k", now), thread: 7 };
   settled.agents[0].lastTurn = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: 1, endedAt: 1 };
   t.set(rows("ws/a"), [settled]);
