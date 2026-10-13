@@ -6,6 +6,7 @@ import { Server, STATION_ICONS } from "./icons.tsx";
 import * as css from "./StationMark.css.ts";
 
 const BY_NAME = new Map(STATION_ICONS.map((s) => [s.name, s]));
+const WINDOWS = typeof navigator !== "undefined" && /Win/.test(navigator.platform);
 
 /** The colours a glyph can be given, in the picker's order (StationMark.css.ts has each one's, per theme). */
 export const MARK_COLORS = ["red", "orange", "amber", "green", "teal", "blue", "purple", "pink"] as const;
@@ -43,5 +44,5 @@ export function StationMark({ emoji, icon, size = 14, className }: { emoji?: str
 
 /** An emoji centred where it is put, whatever room its font gives it. */
 export function Glyph({ emoji }: { emoji: string }) {
-  return <span className={css.glyph}>{emoji}</span>;
+  return <span className={`${css.glyph}${WINDOWS ? ` ${css.windowsGlyph}` : ""}`}>{emoji}</span>;
 }

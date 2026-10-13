@@ -14,6 +14,9 @@ export const emoji = style({
  * 16px emoji at the left of 20px), which centring the room would leave off centre.
  */
 export const glyph = style({ display: "inline-block", width: "1em", whiteSpace: "nowrap", textAlign: "left", overflow: "visible" });
+// Segoe UI Emoji paints within its advance (about 1.37em), unlike Apple's small bitmap glyphs. Centre that whole
+// advance on Windows: centring a left-aligned 1em box shifts the drawing to the right.
+export const windowsGlyph = style({ width: "max-content", textAlign: "center" });
 /** A picture put up: a rounded square as large as the icon it stands for. */
 export const picture = style({ display: "inline-block", flex: "none", objectFit: "cover", borderRadius: "24%", cornerShape: vars.cornerShape });
 
