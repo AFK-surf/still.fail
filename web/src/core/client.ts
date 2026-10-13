@@ -84,6 +84,11 @@ export type Topic =
   | { topic: "usage"; scope: string; days?: number }
   // A job as it is now (kept current by its events).
   | { topic: "job"; station: string; id: string }
+  // A folder of a station's drive (docs/drive.md): `root` one of its roots' paths, `path` under it ("" the root itself).
+  // Read again each time it is shown; what is held shows meanwhile, a refusal is the topic's error.
+  | { topic: "drive"; station: string; root: string; path: string }
+  // Where a file of a drive was left on this device (a text's offset, a video's time in ms): null before.
+  | { topic: "drivePlace"; station: string; root: string; path: string }
   // How its person likes it on this device, and what the device is (prefs.ts).
   | { topic: "prefs" }
   // What people set going on this device and the core has not finished: each call that changes something, until it

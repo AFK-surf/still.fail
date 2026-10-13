@@ -41,6 +41,10 @@ export function ArrowUp(props: IconProps) {
   return <Svg {...props}><path d="M12 20V4 M6 10L12 4L18 10" /></Svg>;
 }
 
+export function Back15(props: IconProps) {
+  return <Svg {...props}><path d="M14.2 2.8L12 5L14.2 7.2 M12 5A7.5 7.5 0 1 1 5.5 8.75" /></Svg>;
+}
+
 export function Bell(props: IconProps) {
   return <Svg {...props}><path d="M12 3V5 M6.5 17V11Q6.5 5 12 5Q17.5 5 17.5 11V17 M4.5 17H19.5 M10 20.5H14" /></Svg>;
 }
@@ -59,6 +63,10 @@ export function Brain(props: IconProps) {
 
 export function Camera(props: IconProps) {
   return <Svg {...props}><path d="M8 6.5L9 3.5H15L16 6.5H17Q20.5 6.5 20.5 10V16.5Q20.5 20 17 20H7Q3.5 20 3.5 16.5V10Q3.5 6.5 7 6.5Z" /><circle cx="12" cy="13" r="3.5" /></Svg>;
+}
+
+export function Captions(props: IconProps) {
+  return <Svg {...props}><path d="M7 5H17Q20.5 5 20.5 8.5V15.5Q20.5 19 17 19H7Q3.5 19 3.5 15.5V8.5Q3.5 5 7 5Z M7.5 12.5H10.5 M13 12.5H16.5 M7.5 15.5H14" /></Svg>;
 }
 
 export function Chart(props: IconProps) {
@@ -145,6 +153,26 @@ export function Eye(props: IconProps) {
   return <Svg {...props}><path d="M2.5 12Q12 3 21.5 12Q12 21 2.5 12Z" /><circle cx="12" cy="12" r="2.6" /></Svg>;
 }
 
+export function FileAudio(props: IconProps) {
+  return <Svg {...props}><path d="M13.5 3.5H8Q4.5 3.5 4.5 7V17Q4.5 20.5 8 20.5H16Q19.5 20.5 19.5 17V9L13.5 3.5Z M13 4V7.5Q13 10 15.5 10H19 M11 17V12.6L15 11.8V16" /><circle cx="9.8" cy="17" r="1.2" /><circle cx="13.8" cy="16" r="1.2" /></Svg>;
+}
+
+export function FileCode(props: IconProps) {
+  return <Svg {...props}><path d="M13.5 3.5H8Q4.5 3.5 4.5 7V17Q4.5 20.5 8 20.5H16Q19.5 20.5 19.5 17V9L13.5 3.5Z M13 4V7.5Q13 10 15.5 10H19 M10 12.5L8 14.75L10 17 M14 12.5L16 14.75L14 17" /></Svg>;
+}
+
+export function FilePdf(props: IconProps) {
+  return <Svg {...props}><path d="M13.5 3.5H8Q4.5 3.5 4.5 7V17Q4.5 20.5 8 20.5H16Q19.5 20.5 19.5 17V9L13.5 3.5Z M13 4V7.5Q13 10 15.5 10H19 M8.5 17.5H15.5" /><rect x="8.5" y="12.5" width="7" height="2.5" rx="1" /></Svg>;
+}
+
+export function FileText(props: IconProps) {
+  return <Svg {...props}><path d="M13.5 3.5H8Q4.5 3.5 4.5 7V17Q4.5 20.5 8 20.5H16Q19.5 20.5 19.5 17V9L13.5 3.5Z M13 4V7.5Q13 10 15.5 10H19 M8.5 13.5H15.5 M8.5 17H13" /></Svg>;
+}
+
+export function FileVideo(props: IconProps) {
+  return <Svg {...props}><path d="M13.5 3.5H8Q4.5 3.5 4.5 7V17Q4.5 20.5 8 20.5H16Q19.5 20.5 19.5 17V9L13.5 3.5Z M13 4V7.5Q13 10 15.5 10H19 M10.2 13Q10.2 12.2 10.9 12.6L14.4 14.7Q15.1 15.2 14.4 15.7L10.9 17.8Q10.2 18.2 10.2 17.4Z" /></Svg>;
+}
+
 export function File(props: IconProps) {
   return <Svg {...props}><path d="M13.5 3.5H8Q4.5 3.5 4.5 7V17Q4.5 20.5 8 20.5H16Q19.5 20.5 19.5 17V9L13.5 3.5Z M13 4V7.5Q13 10 15.5 10H19" /></Svg>;
 }
@@ -153,8 +181,16 @@ export function Filter(props: IconProps) {
   return <Svg {...props}><path d="M4 6H20 M7 12H17 M10 18H14" /></Svg>;
 }
 
+export function FolderPlus(props: IconProps) {
+  return <Svg {...props}><path d="M3.5 7.5Q3.5 4.5 6.5 4.5H9.5L12 7H17.5Q20.5 7 20.5 10V16.5Q20.5 19.5 17.5 19.5H6.5Q3.5 19.5 3.5 16.5Z M12 10.5V16 M9.25 13.25H14.75" /></Svg>;
+}
+
 export function Folder(props: IconProps) {
   return <Svg {...props}><path d="M3.5 7.5Q3.5 4.5 6.5 4.5H9.5L12 7H17.5Q20.5 7 20.5 10V16.5Q20.5 19.5 17.5 19.5H6.5Q3.5 19.5 3.5 16.5Z" /></Svg>;
+}
+
+export function Forward15(props: IconProps) {
+  return <Svg {...props}><path d="M9.8 2.8L12 5L9.8 7.2 M12 5A7.5 7.5 0 1 0 18.5 8.75" /></Svg>;
 }
 
 export function ImageUpload(props: IconProps) {
@@ -175,6 +211,10 @@ export function Landscape(props: IconProps) {
 
 export function Ling(props: IconProps) {
   return <Svg {...props}><path d="M12.021 1.693L11.468 2.149L10.914 2.621L10.365 3.116L9.825 3.638L9.298 4.190L8.771 4.761L8.236 5.342L7.692 5.933L7.139 6.535L6.596 7.163L6.088 7.841L5.607 8.563L5.145 9.319L4.689 10.099L4.911 10.301L5.646 9.777L6.358 9.250L7.034 8.708L7.665 8.143L8.244 7.549L8.796 6.948L9.339 6.358L9.874 5.778L10.400 5.208L10.908 4.640L11.386 4.062L11.837 3.477L12.266 2.890L12.679 2.307Z" fill="currentColor" stroke="none" /><path d="M11.321 2.307L11.734 2.890L12.163 3.477L12.614 4.062L13.092 4.640L13.600 5.208L14.126 5.778L14.661 6.358L15.204 6.948L15.756 7.549L16.335 8.143L16.966 8.708L17.642 9.250L18.354 9.777L19.089 10.301L19.311 10.099L18.855 9.319L18.393 8.563L17.912 7.841L17.404 7.163L16.861 6.535L16.308 5.933L15.764 5.342L15.229 4.761L14.702 4.190L14.175 3.638L13.635 3.116L13.086 2.621L12.532 2.149L11.979 1.693Z" fill="currentColor" stroke="none" /><path d="M11.267 10.800L11.545 11.228L11.779 11.661L11.989 12.091L12.199 12.521L12.425 12.959L12.646 13.432L12.841 13.953L13.009 14.523L13.150 15.143L13.264 15.812L13.356 16.529L13.425 17.295L13.467 18.112L13.480 18.978L14.920 19.022L14.957 18.105L14.959 17.227L14.921 16.390L14.842 15.592L14.720 14.836L14.558 14.122L14.359 13.447L14.121 12.813L13.844 12.221L13.507 11.683L13.088 11.227L12.605 10.861L12.079 10.588L11.533 10.400Z" fill="currentColor" stroke="none" /><path d="M13.906 13.131L13.448 13.256L12.994 13.406L12.548 13.587L12.115 13.803L11.697 14.054L11.290 14.329L10.888 14.621L10.493 14.930L10.104 15.256L9.737 15.615L9.417 16.030L9.141 16.492L8.903 16.988L8.690 17.506L8.910 17.694L9.388 17.428L9.851 17.174L10.286 16.917L10.687 16.646L11.052 16.353L11.405 16.058L11.762 15.779L12.123 15.516L12.488 15.269L12.853 15.030L13.212 14.788L13.569 14.545L13.928 14.303L14.294 14.069Z" fill="currentColor" stroke="none" /><path d="M14.369 18.229L13.939 18.166L13.506 18.116L13.069 18.081L12.630 18.063L12.189 18.063L11.745 18.077L11.300 18.102L10.853 18.137L10.404 18.182L9.956 18.251L9.510 18.358L9.069 18.501L8.633 18.672L8.201 18.861L8.399 19.739L8.851 19.739L9.294 19.740L9.729 19.733L10.155 19.712L10.573 19.673L10.988 19.631L11.400 19.598L11.810 19.576L12.217 19.563L12.623 19.557L13.027 19.554L13.429 19.554L13.830 19.559L14.231 19.571Z" fill="currentColor" stroke="none" /><path d="M8.031 19.401L8.159 19.785L8.328 20.158L8.545 20.512L8.810 20.836L9.123 21.124L9.468 21.384L9.838 21.624L10.231 21.845L10.647 22.047L11.094 22.209L11.579 22.300L12.092 22.327L12.625 22.300L13.173 22.237L13.227 21.963L12.770 21.684L12.349 21.412L11.956 21.162L11.583 20.946L11.222 20.770L10.879 20.604L10.562 20.426L10.270 20.236L10.004 20.036L9.753 19.833L9.504 19.636L9.256 19.438L9.009 19.228L8.769 18.999Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function List(props: IconProps) {
+  return <Svg {...props}><path d="M9 6.5H20 M9 12H20 M9 17.5H20" /><circle cx="4.75" cy="6.5" r="1.2" fill="currentColor" stroke="none" /><circle cx="4.75" cy="12" r="1.2" fill="currentColor" stroke="none" /><circle cx="4.75" cy="17.5" r="1.2" fill="currentColor" stroke="none" /></Svg>;
 }
 
 export function LogIn(props: IconProps) {
@@ -357,6 +397,18 @@ export function ShieldCheck(props: IconProps) {
   return <Svg {...props}><path d="M12 3.5Q16 6 20 6V12C20 16.5 16.5 19 12 20.5C7.5 19 4 16.5 4 12V6Q8 6 12 3.5Z M8 12L10.5 14.5L16 9" /></Svg>;
 }
 
+export function Shrink(props: IconProps) {
+  return <Svg {...props}><path d="M18.5 10H14V5.5 M14.5 9.5L19.5 4.5 M5.5 14H10V18.5 M9.5 14.5L4.5 19.5" /></Svg>;
+}
+
+export function SkipBack(props: IconProps) {
+  return <Svg {...props}><path d="M6 5V19 M18 5.8Q18 4.3 16.7 5L8.6 11Q7.4 12 8.6 13L16.7 19Q18 19.7 18 18.2Z" /></Svg>;
+}
+
+export function SkipForward(props: IconProps) {
+  return <Svg {...props}><path d="M18 5V19 M6 5.8Q6 4.3 7.3 5L15.4 11Q16.6 12 15.4 13L7.3 19Q6 19.7 6 18.2Z" /></Svg>;
+}
+
 export function Sliders(props: IconProps) {
   return <Svg {...props}><path d="M6 3.5V7 M6 12V20.5 M18 3.5V12 M18 17V20.5" /><rect x="4" y="7" width="4" height="5" rx="1.5" /><rect x="16" y="12" width="4" height="5" rx="1.5" /></Svg>;
 }
@@ -397,6 +449,10 @@ export function Unplug(props: IconProps) {
   return <Svg {...props}><path d="M8.5 3.5V8 M15.5 3.5V6 M6 8H12 M18 11V12Q18 17 12 17Q6 17 6 12V8 M12 17V20.5 M3.5 20.5L20.5 3.5" /></Svg>;
 }
 
+export function Upload(props: IconProps) {
+  return <Svg {...props}><path d="M12 15V3.5 M7.5 8L12 3.5L16.5 8 M4.5 20H19.5" /></Svg>;
+}
+
 export function UserPlus(props: IconProps) {
   return <Svg {...props}><path d="M13 7.5Q13 11.5 9 11.5Q5 11.5 5 7.5Q5 3.5 9 3.5Q13 3.5 13 7.5Z M3.5 20.5V19Q3.5 15 9 15Q11.5 15 13 16 M18 11.5V18.5 M14.5 15H21" /></Svg>;
 }
@@ -434,11 +490,13 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "arrow-right": ArrowRight,
   "arrow-up-right": ArrowUpRight,
   "arrow-up": ArrowUp,
+  "back-15": Back15,
   "bell": Bell,
   "bot": Bot,
   "boxes": Boxes,
   "brain": Brain,
   "camera": Camera,
+  "captions": Captions,
   "chart": Chart,
   "chat": Chat,
   "chats": Chats,
@@ -460,14 +518,22 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "expand": Expand,
   "external": External,
   "eye": Eye,
+  "file-audio": FileAudio,
+  "file-code": FileCode,
+  "file-pdf": FilePdf,
+  "file-text": FileText,
+  "file-video": FileVideo,
   "file": File,
   "filter": Filter,
+  "folder-plus": FolderPlus,
   "folder": Folder,
+  "forward-15": Forward15,
   "image-upload": ImageUpload,
   "info": Info,
   "key": Key,
   "landscape": Landscape,
   "ling": Ling,
+  "list": List,
   "log-in": LogIn,
   "log-out": LogOut,
   "minus": Minus,
@@ -513,6 +579,9 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "server": Server,
   "settings": Settings,
   "shield-check": ShieldCheck,
+  "shrink": Shrink,
+  "skip-back": SkipBack,
+  "skip-forward": SkipForward,
   "sliders": Sliders,
   "sparks": Sparks,
   "square": Square,
@@ -523,6 +592,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "ticket": Ticket,
   "trash": Trash,
   "unplug": Unplug,
+  "upload": Upload,
   "user-plus": UserPlus,
   "user": User,
   "users": Users,

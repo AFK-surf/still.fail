@@ -14,6 +14,7 @@ import type { Topic } from "../core/client.ts";
 import { useTopics } from "../core/react.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
+import { DrivePage, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
 import { AttentionEntry } from "../Attention.tsx";
@@ -178,6 +179,10 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
       <Routes>
         <Route path="chats/:chat?" element={<ChatPage />} />
         <Route path="connects/:id" element={<ConnectPage />} />
+        {/* Its drive (docs/drive.md): a folder (?root=&path=), a file read or played on a page of its own. */}
+        <Route path="files" element={<DrivePage />} />
+        <Route path="files/read" element={<DriveReadPage />} />
+        <Route path="files/play" element={<DrivePlayPage />} />
         {/* A station's 共享调试 is the Android app's (its agent links here: the Rust station's adb.rs). */}
         <Route path="adb" element={<Empty><p>{t("web-pages.workspace.adbOnPhone")}</p></Empty>} />
         {/* One Profile page for the workspace: a station's own list is it. */}

@@ -236,7 +236,7 @@ const WHOLE_FILE_MAX = 50 * 1024 * 1024;
 /** How much of a file has come. */
 export interface FileProgress { loaded: number; total: number | null }
 
-function fromBase64(text: string): Uint8Array<ArrayBuffer> {
+export function fromBase64(text: string): Uint8Array<ArrayBuffer> {
   const native = (Uint8Array as unknown as { fromBase64?: (s: string) => Uint8Array<ArrayBuffer> }).fromBase64;
   return native ? native(text) : Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
 }
@@ -244,7 +244,7 @@ function fromBase64(text: string): Uint8Array<ArrayBuffer> {
 /** The bytes of a file in one `station.upload.part`. */
 const UPLOAD_PART = 4 * 1024 * 1024;
 
-function toBase64(file: Blob): Promise<string> {
+export function toBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve((reader.result as string).slice((reader.result as string).indexOf(",") + 1));
