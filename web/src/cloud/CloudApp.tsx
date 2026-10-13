@@ -3,6 +3,7 @@
 // stations. (The admin's console is an app of its own, src/admin/.) Everything goes through the
 // client core: accounts, still.fail cloud and the links to stations live there,
 // not on the page.
+import { GoKeeper } from "../go.ts";
 import { Tooltip } from "radix-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ServicePage } from "../Preview.tsx";
@@ -40,6 +41,7 @@ export function CloudApp() {
       {narrow && <WebUpdate floating />}
       <Tooltip.Provider delayDuration={400}>
         <BrowserRouter>
+          <GoKeeper />
           <PageViews />
           <Routes>
             <Route path="/auth/callback" element={<Callback />} />

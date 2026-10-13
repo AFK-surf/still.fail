@@ -12,7 +12,7 @@ import { transitionTo } from "../ui.tsx";
 import { said, ToastTo } from "../toast.tsx";
 import { afterBack, useBackClose } from "../backClose.ts";
 import { backPage } from "../backPage.ts";
-import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
@@ -41,8 +41,6 @@ export interface MobileApp {
   push: (path: string) => void;
   /** From the list: pushed; from the latest chats (WIDE), in place of the page open. */
   open: (path: string) => void;
-  /** The page in view's path (`/w/<id>…`, as the address has it): the latest chats mark its row. */
-  current: string;
   pop: () => void;
   /** The top page gives way to another (a new chat becomes the chat it made); `state`, the history's for it. */
   replace: (path: string, state?: unknown) => void;
@@ -68,6 +66,21 @@ if (typeof window !== "undefined") {
 /** Whether this is drawn in the narrow app (a phone's way of doing things: ../annotate/ImageMarks.tsx). */
 export function useNarrow(): boolean {
   return useContext(Context) !== null;
+}
+
+/** The page in view's path (`/w/<id>…`, as the address has it), for the rows that mark theirs (useOpenPage). */
+let shown = "";
+const shownHeard = new Set<() => void>();
+function showPage(path: string): void {
+  if (path === shown) return;
+  shown = path;
+  for (const heard of shownHeard) heard();
+}
+const hearShown = (heard: () => void) => { shownHeard.add(heard); return () => { shownHeard.delete(heard); }; };
+
+/** Whether `path` is the page in view (the latest chats mark its row): redrawn only when that changes. */
+export function useOpenPage(path: string): boolean {
+  return useSyncExternalStore(hearShown, () => shown === path, () => false);
 }
 
 export function useApp(): MobileApp {
@@ -188,7 +201,6 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
       const go = () => afterBack(() => (isHome(top) ? navigate(path) : navigate(path, { replace: true, state: { fresh: true } })));
       setTimeout(() => setTimeout(go));
     },
-    current,
     // Back through the pages opened here; from the first one (opened by a link), to the list.
     pop: () => afterBack(() => (now.current.pages.length > 1 ? backPage(() => now.current.navigate(-1)) : now.current.navigate(home, { replace: true }))),
     // One page becoming another (a new chat its chat): crossfaded, what both have (the composer) moving between them.
@@ -201,7 +213,9 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
     menu: setMenu,
     toast: showToast,
     reader: setReader,
-  }), [entry, home, current, showToast]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [entry, home, showToast]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Said apart from the app (which everything reads): only the rows it is, or was, draw again as the page changes.
+  useLayoutEffect(() => showPage(current), [current]);
 
   // With a finger, the page is swiped back from the screen's left edge: it follows the finger, the page under it shows,
   // and past a third of the way (or flung) it goes, from where the finger left it.

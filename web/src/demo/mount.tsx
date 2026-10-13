@@ -1,5 +1,6 @@
 // The official site's demo: the real app (a workspace's pages), in a part of the page (site/Site.tsx's demo box), on a made-up core — no
 // worker, no station. story.ts plays a few chats in it; the visitor can click around and send messages too.
+import { GoKeeper } from "../go.ts";
 import "./demo.css.ts";
 import { startScrollbars } from "../scrollbars.ts";
 import { StrictMode, useEffect, useState } from "react";
@@ -251,6 +252,7 @@ export function DemoApp({ phone }: { phone: boolean }) {
       <Tooltip.Provider delayDuration={400}>
         <MemoryRouter key={phone ? "phone" : "wide"} initialEntries={[`/w/${ENTRY.id}`, chatPath(key)]} initialIndex={1}>
           <Director />
+          <GoKeeper />
           <Routes><Route path="/w/:ws/*" element={phone ? <MobileWorkspace entry={ENTRY} /> : <WorkspaceShell entry={ENTRY} />} /></Routes>
           <RealStillFail />
         </MemoryRouter>

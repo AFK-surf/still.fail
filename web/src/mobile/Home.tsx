@@ -14,7 +14,7 @@ import { Archive, Check, Copy, ChevronDown, ChevronRight, Edit, Filter, Ling, Nu
 import { ask, confirm } from "./sheets.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
 import { setSidebarMode, stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
-import { useApp } from "./app.tsx";
+import { useApp, useOpenPage } from "./app.tsx";
 import { FailedMark, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark, chatTone, jumpFromLine, stateLine, WaitingText } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
@@ -387,11 +387,12 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
     menu(new DOMRect(x - 90, r.top, 0, r.height), () => { holding.current = false; setHeld(false); });
   };
   const path = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
+  const open = useOpenPage(path);
   // Nothing left in it (the core's `archivable`): archived with one tap, at the row's end.
   const archivable = !!item.archivable && !item.offline && !item.pending;
   const row = (
     <button type="button" className={css.mChatRow} data-held={held || undefined} data-offline={item.offline ? true : undefined}
-      data-settled={item.settled || undefined} data-open={app.current === path || undefined} data-archivable={archivable || undefined}
+      data-settled={item.settled || undefined} data-open={open || undefined} data-archivable={archivable || undefined}
       aria-label={item.offline ? `${item.title}（${item.offline}）` : undefined}
       onPointerDown={(e) => {
         longPressed.current = false;
