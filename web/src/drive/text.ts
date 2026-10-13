@@ -88,7 +88,7 @@ const isCjk = (c: string) => {
 };
 
 /** The line breaks the source put in joined (a space between Latin words), those that end a paragraph kept, and the
- *  lines at `keep` (headings) always starting one. A join stops at 4000 characters. */
+ *  lines at `keep` (headings) and those that start indented always starting one. A join stops at 4000 characters. */
 export function reflow(text: string, width: number, keep: ReadonlySet<number>): string {
   if (width <= 0) return text;
   const band = Math.floor((width * 4) / 5);
@@ -98,7 +98,8 @@ export function reflow(text: string, width: number, keep: ReadonlySet<number>): 
     const nl = text.indexOf("\n", i);
     const end = nl < 0 ? text.length : nl;
     const length = end - i;
-    const continuation = length > 0 && !keep.has(i) && previousFull && size > 0 && joined < 4000;
+    // A line that starts indented starts a paragraph: a line the source broke never is.
+    const continuation = length > 0 && !keep.has(i) && !isBlank(text[i]!) && previousFull && size > 0 && joined < 4000;
     if (continuation) {
       if (last !== " " && last !== "\n" && last !== "-" && !isCjk(last) && !isCjk(text[i]!)) { out.push(" "); size++; last = " "; }
     } else {

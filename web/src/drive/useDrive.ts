@@ -2,10 +2,9 @@
 // station from before the drive, which then is not offered), who may name them (the workspace's owners and admins) and
 // who may change what is in them (anyone but a read-only member). The changes are the core's operations by name.
 import { useMemo } from "react";
-import { core } from "../core/react.ts";
-import { useOverview } from "../api.ts";
+import { core, useTopicSelect } from "../core/react.ts";
 import { useWorkspace } from "../cloud/api.ts";
-import type { DriveEntry, DriveRoot } from "../core/shapes.ts";
+import type { DriveEntry, DriveRoot, DriveRoots, StationView } from "../core/shapes.ts";
 import { joinPath, type At } from "./model.ts";
 import { t } from "../i18n.ts";
 
@@ -23,17 +22,22 @@ export interface DriveState {
 }
 
 export function useDrive(station: string): DriveState {
-  const overview = useOverview(station);
-  const role = useWorkspace(station.split("/")[0] ?? "").value?.role;
-  const view = overview.value;
+  // From the workspace's stations as the pages already have them (each with its overview), only what this needs: the
+  // same while its roots and the viewer's role are.
+  const scope = station.split("/")[0] ?? "";
+  const picked = useTopicSelect<StationView[], { listed: boolean; drive: DriveRoots | undefined; viewer: string | undefined; error: string | null }>({ topic: "stations", scope }, (s) => {
+    const v = s.value?.find((x) => x.station === station);
+    return { listed: !!v?.overview, drive: v?.overview?.drive, viewer: v?.overview?.viewer?.role, error: s.error?.message ?? null };
+  }, (a, b) => a.listed === b.listed && a.viewer === b.viewer && a.error === b.error && JSON.stringify(a.drive) === JSON.stringify(b.drive));
+  const role = useWorkspace(scope).value?.role;
   return useMemo(() => ({
-    loading: !view && !overview.error,
-    offered: !!view?.drive,
-    roots: view?.drive?.roots ?? [],
+    loading: !picked.listed && !picked.error,
+    offered: !!picked.drive,
+    roots: picked.drive?.roots ?? [],
     manage: role === "owner" || role === "admin",
-    write: view?.viewer?.role !== "viewer",
-    error: overview.error?.message ?? null,
-  }), [view, overview.error, role]);
+    write: picked.viewer !== "viewer",
+    error: picked.error,
+  }), [picked, role]);
 }
 
 /** A root's state as a line under its name (null while it can be browsed); in red where it shows. */

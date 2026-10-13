@@ -10,7 +10,6 @@ export const mRow = style({
   display: "flex", alignItems: "center", gap: "14px", boxSizing: "border-box", width: "100%", minHeight: "60px", padding: "10px 16px",
   border: "0", background: "none", color: "var(--m-ink)", textAlign: "left", cursor: "pointer",
   WebkitTouchCallout: "none", userSelect: "none", WebkitUserSelect: "none",
-  contentVisibility: "auto", containIntrinsicSize: "auto 60px",
   transition: "background 120ms",
   selectors: {
     "&[data-held], &:active:not(:disabled):not([data-upload])": { background: "color-mix(in srgb, var(--m-ink) 6%, transparent)" },

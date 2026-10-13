@@ -183,10 +183,17 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
     return () => document.removeEventListener("fullscreenchange", on);
   }, []);
   useEffect(() => { if (media.current) media.current.playbackRate = rate; }, [rate, source]);
+  // The subtitle's lines drawn here, not by the browser: above the controls while they show, lower when they fade.
+  const [cue, setCue] = useState<string | null>(null);
   useEffect(() => {
     const track = media.current?.textTracks[0];
-    if (track) track.mode = captions ? "showing" : "hidden";
-  }, [captions, subtitle]);
+    if (!track) { setCue(null); return; }
+    track.mode = "hidden";
+    const change = () => setCue([...(track.activeCues ?? [])].map((c) => (c as VTTCue).text).join("\n") || null);
+    track.addEventListener("cuechange", change);
+    change();
+    return () => track.removeEventListener("cuechange", change);
+  }, [subtitle, source]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -264,11 +271,14 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
         {body}
         {waiting && source.state === "ready" && !failed && <span className={css.spinner} aria-hidden="true" />}
       </div>
+      {captions && cue && <div className={css.cue} data-awake={awake || undefined}><span>{cue.replace(/<[^>]+>/g, "")}</span></div>}
       <header className={css.head} data-awake={awake || undefined} {...keep}>
         <Tip label={backLabel}><button type="button" className={`${pagesCss.iconBtn} ${css.bright}`} aria-label={backLabel} onClick={onBack}><ChevronLeft size={20} /></button></Tip>
         <span className={css.name}><b>{entry.name}</b>{list.length > 1 && index >= 0 && <small>{index + 1} / {list.length}</small>}</span>
       </header>
       <div className={vvCss.vvBar} data-floats data-awake={awake || source.state !== "ready" || undefined} {...keep}>
+        {/* On a phone the time goes over the timeline: the buttons take the row. */}
+        <span className={css.timeTop}><b>{clock(time)}</b> / {clock(duration)}</span>
         <Timeline duration={duration} now={time} buffered={buffered} onSeek={seek} />
         <div className={vvCss.vvRow}>
           <span className={vvCss.vvGroup}>
@@ -280,7 +290,7 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
             <Tip label={t("web-pages.drive.player.forward15")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.drive.player.forward15")} onClick={() => by(STEP)}><Forward15 size={20} /></button></Tip>
             {list.length > 1 && <Tip label={t("web-pages.drive.player.next")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.drive.player.next")} disabled={!next} onClick={() => next && onGo(next.name)}><SkipForward size={18} /></button></Tip>}
           </span>
-          <span className={vvCss.vvInfo}><span className={vvCss.vvFact}><b className={vvCss.vvNow}>{clock(time)}</b><span className={vvCss.vvDim}> / {clock(duration)}</span></span></span>
+          <span className={`${vvCss.vvInfo} ${css.timeRow}`}><span className={vvCss.vvFact}><b className={vvCss.vvNow}>{clock(time)}</b><span className={vvCss.vvDim}> / {clock(duration)}</span></span></span>
           <span className={vvCss.vvGroup}>
             <Tip label={t("web-pages.drive.player.rate")}><button type="button" className={vvCss.vvRate} onClick={() => setRate((r) => RATES[(RATES.indexOf(r) + 1) % RATES.length]!)}>{rate}×</button></Tip>
             {subtitle && <Tip label={captions ? t("web-pages.drive.player.captionsOff") : t("web-pages.drive.player.captionsOn")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.drive.player.captions")} aria-pressed={captions} onClick={() => setCaptions((c) => !c)}><Captions size={18} /></button></Tip>}

@@ -10,7 +10,6 @@ export const media = style({
   display: "block", width: "100%", height: "100%", objectFit: "contain", background: "#000",
   selectors: { "&[data-audio]": { position: "absolute", inset: "0", opacity: "0" } },
 });
-globalStyle(`${media}::cue`, { background: "rgba(0, 0, 0, .55)", color: "#fff", fontFamily: vars.fontBody });
 
 /** A song has no picture: its mark and its name. */
 export const cover = style({
@@ -42,3 +41,21 @@ export const noteButton = style({
 export const spinner = style([turning, { position: "absolute", width: "28px", height: "28px", pointerEvents: "none" }]);
 /** What of it has come: a lighter band under the played part. */
 export const buffered = style({ position: "absolute", top: "0", bottom: "0", background: "rgba(255, 255, 255, .22)" });
+/** A subtitle's lines over the picture: above the controls while they show, lower once they fade. */
+export const cue = style({
+  position: "absolute", zIndex: "2", left: "50%", transform: "translateX(-50%)", bottom: "calc(var(--m-foot, 0px) + 28px)",
+  width: "min(100% - 32px, 900px)", textAlign: "center", pointerEvents: "none", transition: `bottom 240ms ${vars.easeOut}`,
+  selectors: { "&[data-awake]": { bottom: "calc(var(--m-foot, 0px) + 112px)" } },
+  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
+});
+globalStyle(`${cue} span`, {
+  display: "inline", padding: "2px 8px", borderRadius: "6px", background: "rgba(0, 0, 0, .6)", color: "#fff",
+  fontSize: vars.textTitle, lineHeight: "1.6", whiteSpace: "pre-line", WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone",
+});
+/** The time: in the controls' row, or over the timeline on a phone. */
+export const timeTop = style({
+  display: "none", padding: "6px 8px 0", fontFamily: vars.fontMono, fontSize: vars.textCaption, color: vars.muted, fontVariantNumeric: "tabular-nums",
+  "@media": { "(max-width: 640px)": { display: "block" } },
+});
+globalStyle(`${timeTop} b`, { color: vars.text, fontWeight: "600" });
+export const timeRow = style({ "@media": { "(max-width: 640px)": { visibility: "hidden" } } });

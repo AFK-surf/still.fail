@@ -27,6 +27,9 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as css from "./Drive.css.ts";
 import { t } from "../i18n.ts";
 
+/** A sheet's share of the screen for a title and `rows` rows (a sheet is as tall as what it holds). */
+const fit = (rows: number) => Math.min(0.9, (96 + rows * 48 + 24) / window.innerHeight);
+
 /** The drive's page at `files`: its folders, or the one folder's contents, or (`root`, `path`) a folder of one. */
 export function DriveScreen() {
   const station = useStation();
@@ -76,7 +79,7 @@ function RootRow({ root, manage, roots, onOpen }: { root: DriveRoot; manage: boo
   const trouble = rootTrouble(root);
   const press = useLongPress(() => {
     if (!manage) return;
-    app.sheet({ height: 0.3, content: () => (
+    app.sheet({ height: fit(1), content: () => (
       <>
         <SheetGrab />
         <SheetHead title={root.name} />
@@ -124,7 +127,7 @@ function FolderPage({ d, root, path, top }: { d: DriveState; root: string; path:
     setRefreshing(true);
     act(refresh(at).finally(() => setRefreshing(false)), t("web-pages.drive.refreshWhat"));
   };
-  const plus = () => app.sheet({ height: d.manage && top ? 0.4 : 0.3, content: () => (
+  const plus = () => app.sheet({ height: fit(d.manage && top ? 3 : 2), content: () => (
     <>
       <SheetGrab />
       <SheetHead title={name} />
@@ -222,6 +225,8 @@ function useLongPress(onHold: () => void) {
       },
       onPointerMove: (e: React.PointerEvent) => { const f = from.current; if (f && Math.hypot(e.clientX - f.x, e.clientY - f.y) > 8) stop(); },
       onPointerUp: stop, onPointerCancel: stop, onPointerLeave: stop,
+      // The click a finger lifting after a hold makes would land on the sheet's scrim just opened under it, and close it.
+      onTouchEnd: (e: React.TouchEvent) => { if (held.current && e.cancelable) e.preventDefault(); },
       onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); if (!held.current) { held.current = true; onHold(); } },
     },
   };
@@ -234,7 +239,7 @@ function EntryRow({ at, entry, write, onOpen }: { at: At; entry: DriveEntry; wri
   const removing = useDoing("drive.remove", { station: at.station, root: at.root, path: full });
   const renaming = useDoing("drive.rename", { station: at.station, root: at.root, from: full });
   const busy = removing || renaming;
-  const press = useLongPress(() => app.sheet({ height: write ? (entry.dir ? 0.32 : 0.4) : 0.26, content: () => <EntrySheet at={at} entry={entry} write={write} act={act} /> }));
+  const press = useLongPress(() => app.sheet({ height: fit((write ? 2 : 0) + (entry.dir ? 0 : 1)), content: () => <EntrySheet at={at} entry={entry} write={write} act={act} /> }));
   return (
     <button type="button" className={css.mRow} {...press.props} disabled={busy} onClick={() => { if (!press.held()) onOpen(); }}>
       <KindIcon kind={entry.kind} className={css.mIcon} />
