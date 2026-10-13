@@ -31,7 +31,6 @@ import * as additionsCss from "./styles/additions.css.ts";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 import { ReadWhole, useWhole } from "./brief.ts";
-import { useEvent } from "./event.ts";
 
 /** How many of a history's latest items are drawn when it opens, and how many more each time the reader nears its top. */
 const DRAWN = 10;
@@ -49,28 +48,7 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
 }) {
   const history = useHistory(station, sessionKey).value;
   const paths = useMemo(() => ({ key: sessionKey, station }), [sessionKey, station]);
-  const link = useLink();
-  // A place as its platform's mark and its name; a still.fail chat opens its agent's page.
-  const where = (place: Place | null): ReactNode => {
-    if (!place) return null;
-    const inner = <>{(place.surface === "ember" || place.surface === "stillfail") ? <Mark size={12} /> : <SlackLogo size={12} />}<span className={css.hPlaceName}>{place.name}</span></>;
-    // A Slack thread opens in Slack; a still.fail chat, its agent's page.
-    if (place.url) return <a className={css.hPlace} href={place.url} target="_blank" rel="noopener">{inner}</a>;
-    return place.session
-      ? <Link className={css.hPlace} to={link(`/chats/${encodeURIComponent(place.session)}`)}>{inner}</Link>
-      : <span className={css.hPlace}>{inner}</span>;
-  };
-  // The items are drawn again only when they change (HistoryItemView): what they are handed stays the same function,
-  // the latest one behind it.
-  const latest = useRef(where);
-  latest.current = where;
-  const [stableWhere] = useState(() => (place: Place | null) => latest.current(place));
   const [usageOpen, setUsageOpen] = useState(true);
-  const copyLink = useCopyChatLink(useToast());
-  // Its link, opening the history at it: the same function for every item, as long as the history shows.
-  const copyItem = useEvent((item: HistoryItem) => {
-    if (title !== undefined) copyLink({ station, session: sessionKey, id: sessionKey, title }, { key: sessionKey, entry: item.entries[0] ?? 0 });
-  });
   // The steps' and thoughts' whole words: read only as one is opened (the core has them in brief till then).
   const detail = useHistoryDetail(station, sessionKey);
   const body = useRef<HTMLDivElement>(null);
@@ -180,8 +158,8 @@ export function History({ station, sessionKey, head, summary, details, focus, ti
             <p className={css.historyEdge}>{history.edge}</p>
             {items.map((item, i) => (
               // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
-              <HistoryRow key={item.key} item={item} at={i} enter={(item.entries[0] ?? 0) > seen.current && item.body.kind !== "text"} where={stableWhere}
-                copy={title !== undefined && item.entries[0] !== undefined ? copyItem : undefined} />
+              <HistoryRow key={item.key} item={item} at={i} enter={(item.entries[0] ?? 0) > seen.current && item.body.kind !== "text"}
+                station={station} session={sessionKey} title={title} />
             ))}
             {/* Only thinking and the reply stream here; a tool call shows once it is done, from the transcript. */}
             {history.live.map((s) => <div key={s.id} className={css.hLiveThinking}>{s.text}</div>)}
@@ -236,18 +214,33 @@ function filling(all: HistoryItem[], pane: { width: number; height: number } | n
 }
 
 /** An item and its link's button, drawn again only when the item changes (or its place in the list). */
-const HistoryRow = memo(function HistoryRow({ item, at, enter, where, copy }: {
-  item: HistoryItem; at: number; enter: boolean; where(place: Place | null): ReactNode; copy: ((item: HistoryItem) => void) | undefined;
+const HistoryRow = memo(function HistoryRow({ item, at, enter, station, session, title }: {
+  item: HistoryItem; at: number; enter: boolean; station: string; session: string;
+  /** Its chat's title: with it, the item offers its link (opening the history there), to paste into another chat. */
+  title: string | undefined;
 }) {
+  const copyLink = useCopyChatLink(useToast());
+  const entry = item.entries[0];
   return (
     <div className={css.hItem} data-item={at} data-enter={enter || undefined}>
-      <HistoryItemView item={item} where={where} />
-      {copy && <IconButton className={css.hItemLink} label={t("web-main.history.copyLink")} icon={Copy} onClick={() => copy(item)} />}
+      <HistoryItemView item={item} />
+      {title !== undefined && entry !== undefined && <IconButton className={css.hItemLink} label={t("web-main.history.copyLink")} icon={Copy}
+        onClick={() => copyLink({ station, session, id: session, title }, { key: session, entry })} />}
     </div>
   );
 });
 
-const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: HistoryItem; where(place: Place | null): ReactNode }) {
+/** A place as its platform's mark and its name: a Slack thread opens in Slack; a still.fail chat, its agent's page. */
+function Where({ place }: { place: Place }) {
+  const link = useLink();
+  const inner = <>{(place.surface === "ember" || place.surface === "stillfail") ? <Mark size={12} /> : <SlackLogo size={12} />}<span className={css.hPlaceName}>{place.name}</span></>;
+  if (place.url) return <a className={css.hPlace} href={place.url} target="_blank" rel="noopener">{inner}</a>;
+  return place.session
+    ? <Link className={css.hPlace} to={link(`/chats/${encodeURIComponent(place.session)}`)}>{inner}</Link>
+    : <span className={css.hPlace}>{inner}</span>;
+}
+
+const HistoryItemView = memo(function HistoryItemView({ item }: { item: HistoryItem }) {
   const body = item.body;
   switch (body.kind) {
     case "received":
@@ -255,7 +248,7 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
         <>
           {body.content.note && <Received from="ember" text={body.content.note} />}
           {body.content.messages.map((m) => (
-            <Received key={m.key} text={m.text} place={where(m.place ?? null)}
+            <Received key={m.key} text={m.text} place={m.place ? <Where place={m.place} /> : null}
               from={m.from.slackUser ? <SlackName user={m.from.slackUser} name={m.from.name} bound={m.from.bound} /> : m.from.name} />
           ))}
         </>
@@ -268,7 +261,7 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
         <div className={`${css.hReceived} ${css.hPost}`} data-failed={body.content.failed}>
           <div className={css.hLabel}>
             <Send {...ICON} size={14} />
-            {t("web-main.history.sentTo")}{where(body.content.place ?? null) ?? <span className={css.hPlace}><SlackLogo size={12} />Slack</span>}
+            {t("web-main.history.sentTo")}{body.content.place ? <Where place={body.content.place} /> : <span className={css.hPlace}><SlackLogo size={12} />Slack</span>}
             {body.content.block && <Pill tone="blue">Block</Pill>}
             {body.content.failed && <Pill tone="red">{t("web-main.history.sendFailed")}</Pill>}
           </div>

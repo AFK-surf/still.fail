@@ -99,7 +99,12 @@ export type SidebarMode = ChatFilter | "decisions";
 export function useSidebarMode(): [SidebarMode, (value: SidebarMode) => void] {
   const workspace = useWorkspaceId();
   const mode: SidebarMode = usePrefs((p) => p.listFilter[workspace] ?? (p.onlyDecisions ? "decisions" : p.onlyWatching ? "watching" : p.onlyMine ? "mine" : "all"));
-  return [mode, (value) => setPrefs({ listFilter: { [workspace]: value } })];
+  return [mode, (value) => setSidebarMode(workspace, value)];
+}
+
+/** Sets what the sidebar (the phone's list) shows in `workspace`, kept on this device. */
+export function setSidebarMode(workspace: string, value: SidebarMode): void {
+  setPrefs({ listFilter: { [workspace]: value } });
 }
 
 /** People by email, from still.fail cloud's member list. */

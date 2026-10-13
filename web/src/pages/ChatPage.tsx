@@ -8,13 +8,13 @@ import { CreatorText, EdgeChip, MeterChips, PeopleStack } from "../components.ts
 import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { PENDING } from "../lastChat.ts";
 import { ownOrigin } from "../stillfailLink.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
 import type { ChatJobsView, ChatShare, Host, StationView } from "../core/shapes.ts";
-import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
+import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
@@ -30,7 +30,7 @@ import { animate, EASE_OUT, LOCAL_MS, reducedMotion, type AnimationPlaybackContr
 import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useReady, useTopicSelect } from "../core/react.ts";
-import { useEvent } from "../event.ts";
+import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { failure, useAct, useToast } from "../toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
@@ -79,7 +79,7 @@ export function ChatPage() {
   // once there is one, at the same address). A chat made here keeps the page it opened with under the core's key
   // when its address becomes its station's.
   const opened = renamed.get(chat) ?? chat;
-  return <ChatScreen key={opened} of={{ session: opened }} />;
+  return <ChatScreen key={opened} session={opened} />;
 }
 
 /** Chats made here, by the key their station gave them: the core's key their page was opened with. */
@@ -98,7 +98,8 @@ function useChatOpened(chat: ChatView | undefined): void {
   }, [chat, opening]);
 }
 
-function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
+function ChatScreen({ session: chatSession }: { session: string }) {
+  const of: { thread: number } | { session: string } = { session: chatSession };
   const station = useStation();
   const link = useLink();
   const navigate = useNavigate();
@@ -118,7 +119,6 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     navigate(`${link(`/chats/${encodeURIComponent(stationKey)}`)}${location.search}`, { replace: true });
   }, [made, stationKey]);
   const agents = chatView.value?.agents ?? [];
-  const lives = useLives(station.address, agents.map((a) => a.session.key));
   // One history tab per agent, by its session's key (a chat may have several agents, each with its own): opened from
   // the agent (its avatar, its name, a row of what it does), closed alone, and with no tab open the panel goes away.
   // Each chat keeps its own tabs. One not opened before opens none (its agents' histories open from them when wanted),
@@ -296,17 +296,17 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
   }, [navigate]);
-  // What the chat and the bar are handed stays the same function: they are not drawn again because this page was.
-  const openHistory = useEvent((key: string, entry?: number) => {
+  const openHistory = (key: string, entry?: number) => {
     if (entry === undefined) return toggleHistory(key);
     openTab(key);
     setFocus({ key, entry, n: Date.now() });
-  });
-  const onHistory = useEvent(toggleHistory);
-  const onService = useEvent((job: string) => openTab(`service:${job}`));
-  const onJobs = useEvent(openJobs);
-  const openFile = useEvent((session: string, file: { path: string; name: string }) => openTab(fileTab(session, file.path, file.name)));
-  const archiveAsked = useEvent(() => { if (chatView.value?.watch) setAskArchive(true); else void archive(); });
+  };
+  // A chat keeping watch is archived only once asked.
+  const archiveAsked = () => { if (chatView.value?.watch) setAskArchive(true); else void archive(); };
+  // What is in the page (its messages, its bar, its tabs) does these by the chat's key: it is handed none of them.
+  useChatPageActions(chatKey, { history: openHistory, tab: openTab, jobs: openJobs, archive: archiveAsked });
+  // A visualization in a message opens in a tab of the side panel: the same function while the page is this chat's.
+  const [openFile] = useState(() => (session: string, file: { path: string; name: string }) => chatPage.tab(chatKey, fileTab(session, file.path, file.name)));
   const api = stationApi(call);
   const toast = useToast();
   const running = agents.filter((a) => a.status === "running" || a.status === "queued");
@@ -385,14 +385,14 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           {agents.length === 0 && <ChatStation />}
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a, i) => (
-            <AgentButton key={a.session.key} agent={a} marked={agents.length > 1 && shown === a.session.key} onHistory={onHistory} station={i === 0} />
+            <AgentButton key={a.session.key} station={station.address} chat={chatKey} session={chatSession} agent={a.session.key} marked={agents.length > 1 && shown === a.session.key} first={i === 0} />
           ))}
         </div>
         <div className={css.pageBarActions}>
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
           {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
-          <JobsPanel station={station.address} view={jobsView} onService={onService} onTab={onJobs} />
-          {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
+          <JobsPanel station={station.address} session={chatSession} chat={chatKey} />
+          {chat.thread && <ChatInfo station={station.address} session={chatSession} />}
           {slackUrl && (
             <Tip label={t("web-pages.chat.openInSlack")}>
               <a className={pagesCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
@@ -404,7 +404,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
       {/* A visualization in a message opens on its own in a tab of the side panel, beside the chat. */}
       <OpenFile.Provider value={openFile}>
-        <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} onArchive={chat.archivable && keeper ? archiveAsked : undefined} {...(sendTo ? { made: sendTo } : {})} />
+        <ChatPanel session={chatSession} draftKey={chatKey} made={sendTo} />
       </OpenFile.Provider>
       </div>
         {side && (
@@ -466,7 +466,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               if (key === JOBS) {
                 return (
                   <SidePane key={key} of={key} shown={side.shown}>
-                    <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} onService={onService} />
+                    <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} chat={chatKey} />
                   </SidePane>
                 );
               }
@@ -494,7 +494,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               if (!a) return <SidePane key={key} of={key} shown={side.shown} />;
               return (
                 <SidePane key={key} of={key} shown={side.shown}>
-                  <AgentHistory station={station.address} agent={a} title={view?.title} focus={focus?.key === key ? focus : null} />
+                  <AgentHistory station={station.address} session={chatSession} agent={key} focusEntry={focus?.key === key ? focus.entry : null} focusN={focus?.key === key ? focus.n : 0} />
                 </SidePane>
               );
             })}
@@ -509,9 +509,19 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
  * hover, its card (AgentCard.tsx), the one its avatar beside its messages has. Those whose history shows are marked,
  * among several.
  */
-const AgentButton = memo(function AgentButton({ agent, marked, onHistory: toggle, station = false }: { agent: ChatAgent; marked: boolean; onHistory(key: string): void; station?: boolean }) {
+const AgentButton = memo(function AgentButton({ station: address, chat, session: of, agent: key, marked, first }: {
+  station: string; chat: string; session: string; agent: string; marked: boolean;
+  /** The chat's first agent: one tile with the station it runs on. */
+  first: boolean;
+}) {
+  const agent = useChatAgent(address, of, key);
+  if (!agent) return null;
+  return <AgentTile agent={agent} chat={chat} marked={marked} station={first} />;
+});
+
+function AgentTile({ agent, chat, marked, station }: { agent: ChatAgent; chat: string; marked: boolean; station: boolean }) {
   const { session } = agent;
-  const onHistory = () => toggle(session.key);
+  const onHistory = () => chatPage.history(chat, session.key);
   const where = useChatStation();
   const label = t("web-pages.chat.historyOf", { agent: session.agentText });
   // With the station it runs on, one tile: the maker opens the history and has
@@ -533,20 +543,33 @@ const AgentButton = memo(function AgentButton({ agent, marked, onHistory: toggle
       </button>
     </Hover>
   );
-});
+}
 
 /**
  * An agent's execution history in its tab, with its head (how it runs), what needs seeing to and its details: drawn
  * again only when the agent, the chat's title or the entry asked for changes, not with the rest of the chat's page.
  */
-const AgentHistory = memo(function AgentHistory({ station, agent, title, focus }: { station: string; agent: ChatAgent; title: string | undefined; focus: { entry: number; n: number } | null }) {
+const AgentHistory = memo(function AgentHistory({ station, session, agent: key, focusEntry, focusN }: {
+  station: string; session: string; agent: string;
+  /** An entry to bring into view (`focusN` changes each time it is asked for); null: none. */
+  focusEntry: number | null; focusN: number;
+}) {
+  const agent = useChatAgent(station, session, key);
+  const title = useTopicSelect<ChatView, string | undefined>({ topic: "chat", station, session }, (s) => s.value?.title);
+  const focus = useMemo(() => (focusEntry === null ? null : { entry: focusEntry, n: focusN }), [focusEntry, focusN]);
+  if (!agent) return null;
   return (
-    <History station={station} sessionKey={agent.session.key} title={title} focus={focus}
+    <History station={station} sessionKey={key} title={title} focus={focus}
       head={<SessionHead agent={agent} />}
       summary={agent.attention.length > 0 ? <HistorySummary agent={agent} /> : null}
       details={<SessionDetails agent={agent} />} />
   );
 });
+
+/** One of a chat's agents, by its key: the same object while it is. */
+function useChatAgent(station: string, session: string, key: string): ChatAgent | undefined {
+  return useTopicSelect<ChatView, ChatAgent | undefined>({ topic: "chat", station, session }, (s) => s.value?.agents.find((a) => a.session.key === key));
+}
 
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";
@@ -575,7 +598,8 @@ function serviceOf(key: string): string | null {
 }
 
 /** The chat's web services and background jobs, from the title bar: what matters now, the rest in the 任务 tab. */
-function JobsPanel({ station, view, onService, onTab }: { station: string; view: ChatJobsView; onService: (job: string) => void; onTab: (job?: string) => void }) {
+function JobsPanel({ station, session, chat }: { station: string; session: string; chat: string }) {
+  const view = useChatJobs(station, { session }).value ?? NO_JOBS;
   const [open, setOpen] = useState(false);
   const alarm = view.alarm;
   const close = (then: () => void) => { setOpen(false); then(); };
@@ -588,7 +612,7 @@ function JobsPanel({ station, view, onService, onTab }: { station: string; view:
       </Tip>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css.jobsPanel}`} align="end" sideOffset={6} collisionPadding={8}>
-          <JobsPopover station={station} view={view} onService={(job) => close(() => onService(job))} onTab={(job) => close(() => onTab(job))} />
+          <JobsPopover station={station} view={view} onService={(job) => close(() => chatPage.tab(chat, `service:${job}`))} onTab={(job) => close(() => chatPage.jobs(chat, job))} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -601,14 +625,9 @@ function slackConnect(chat: ChatView) {
 }
 
 /** The chat itself: where it came from, who started it and takes part, its agents. Opens from the title bar. */
-function ChatInfo({ chat, thread }: { chat: ChatView; thread: ChatThread }) {
-  const link = useLink();
-  const connect = slackConnect(chat);
-  const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
-  const where = chat.place;
+function ChatInfo({ station, session }: { station: string; session: string }) {
   const [open, setOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const share = chat.xshare;
   return (
     <>
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -619,25 +638,48 @@ function ChatInfo({ chat, thread }: { chat: ChatView; thread: ChatThread }) {
       </Tip>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css.chatInfo}`} align="end" sideOffset={6} collisionPadding={8}>
-          <dl className={css.details}>
-            {row(t("web-pages.chat.info.from"), where
-              ? <span className={css.detailInline}><SlackLogo size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : "Slack"} · {where}</span>
-              : t("web-pages.chat.info.native", { name: NAME }))}
-            {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb="started" /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
-            {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
-            {row(t("web-pages.chat.info.created"), <Time stamp={thread.time?.createdAt} />)}
-            {thread.lastMessage && row(t("web-pages.chat.info.lastMessage"), <Time stamp={thread.lastMessage.time?.createdAt} />)}
-          </dl>
-          {chat.agents.length > 0 && (
-            <ul className={css.detailsList}>
-              {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
-            </ul>
-          )}
-          {share && <ShareRow share={share} onOpen={() => { setOpen(false); setSharing(true); }} />}
+          <ChatInfoBody station={station} session={session} onShare={() => { setOpen(false); setSharing(true); }} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
-    {share && sharing && <ShareDialog share={share} thread={thread.id} onClose={() => setSharing(false)} />}
+    {sharing && <ShareOf station={station} session={session} onClose={() => setSharing(false)} />}
+    </>
+  );
+}
+
+/** The chat's sharing dialog, as the chat is now (read while it is open). */
+function ShareOf({ station, session, onClose }: { station: string; session: string; onClose(): void }) {
+  const chat = useChat(station, { session }).value;
+  return chat?.xshare && chat.thread ? <ShareDialog share={chat.xshare} thread={chat.thread.id} onClose={onClose} /> : null;
+}
+
+/** What the chat's info says, as the chat is now: read only while it shows. */
+function ChatInfoBody({ station, session, onShare }: { station: string; session: string; onShare(): void }) {
+  const chat = useChat(station, { session }).value;
+  const link = useLink();
+  if (!chat?.thread) return null;
+  const thread = chat.thread;
+  const connect = slackConnect(chat);
+  const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
+  const where = chat.place;
+  const share = chat.xshare;
+  return (
+    <>
+      <dl className={css.details}>
+        {row(t("web-pages.chat.info.from"), where
+          ? <span className={css.detailInline}><SlackLogo size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : "Slack"} · {where}</span>
+          : t("web-pages.chat.info.native", { name: NAME }))}
+        {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb="started" /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
+        {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
+        {row(t("web-pages.chat.info.created"), <Time stamp={thread.time?.createdAt} />)}
+        {thread.lastMessage && row(t("web-pages.chat.info.lastMessage"), <Time stamp={thread.lastMessage.time?.createdAt} />)}
+      </dl>
+      {chat.agents.length > 0 && (
+        <ul className={css.detailsList}>
+          {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
+        </ul>
+      )}
+      {share && <ShareRow share={share} onOpen={onShare} />}
     </>
   );
 }

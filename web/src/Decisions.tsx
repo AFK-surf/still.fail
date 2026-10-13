@@ -393,11 +393,11 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
 
 /** Who has to decide, then the decision's post and what came just before it, as its chat draws them. */
 export function DecisionMessages({ d, inline }: { d: DecisionItem; inline: boolean }) {
-  const owner = () => d.message.by.agent ?? d.session;
+  const keeper = d.message.by.agent ?? d.session;
   return <>
     {d.card?.assigneeText && <p className={css.settledLine}>{d.card.assigneeText}</p>}
     <div className={`${chatCss.chatMessages} ${inline ? chatCss.inlineHeads : ""}`} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {[...d.before, d.message].map((m) => <StaticMessage key={m.seq} message={m} owner={owner} />)}
+      {[...d.before, d.message].map((m) => <StaticMessage key={m.seq} message={m} keeper={keeper} />)}
     </div>
   </>;
 }

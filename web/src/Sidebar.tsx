@@ -5,8 +5,9 @@ import { stationBase, useSidebarMode, type ChatFilter } from "./station.tsx";
 import { SidebarActions } from "./SidebarActions.tsx";
 import { NavLink, useLocation } from "react-router";
 import { useGo, useHere } from "./go.ts";
-import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
-import { prime } from "./core/react.ts";
+import { stationApi, useStationCall, useStatus, type ChatItem, type ChatsView } from "./api.ts";
+import { prime, useTopic, useTopicSelect } from "./core/react.ts";
+import type { Topic } from "./core/client.ts";
 import { RowAside } from "./RowPicture.tsx";
 import { Retry, Waiting, WaitingItems } from "./Status.tsx";
 import { failure, useToast } from "./toast.tsx";
@@ -44,10 +45,8 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
   const [mode] = useSidebarMode();
   useShortcut("chat.prev", () => goToNeighbour(-1));
   useShortcut("chat.next", () => goToNeighbour(1));
-  // The lists are followed at once, side by side: switching slides from one to another with nothing to wait for.
-  const all = useChats(scope, false);
-  const mine = useChats(scope, true);
-  const watching = useChats(scope, false, true);
+  // No station at all: nothing to filter (the lists themselves follow their own topics, ChatPane).
+  const none = useTopicSelect<ChatsView, boolean>(chatsTopic(scope, "all"), (s) => !!s.value && !s.value.loading && s.value.stations.length === 0);
   // To 奏 from its row in the sidebar's foot, its rows come out of that row (DecisionDesk.tsx): no sliding then.
   const was = useRef(mode);
   const instant = useRef(false);
@@ -61,14 +60,15 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
       <div className={nav.navTop}>
         {top}
         <SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`}
-          showFilter={!(all.value && !all.value.loading && all.value.stations.length === 0)} />
+          showFilter={!none} />
         {below}
       </div>
       <div className={nav.navSlider}>
         <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined}>
-          <ChatPane chats={all} scope={scope} filter="all" stationsPage={stationsPage} hidden={mode !== "all"} />
-          <ChatPane chats={mine} scope={scope} filter="mine" stationsPage={stationsPage} hidden={mode !== "mine"} />
-          <ChatPane chats={watching} scope={scope} filter="watching" stationsPage={stationsPage} hidden={mode !== "watching"} />
+          {/* Followed at once, side by side: switching slides from one to another with nothing to wait for. */}
+          <ChatPane scope={scope} filter="all" stationsPage={stationsPage} hidden={mode !== "all"} />
+          <ChatPane scope={scope} filter="mine" stationsPage={stationsPage} hidden={mode !== "mine"} />
+          <ChatPane scope={scope} filter="watching" stationsPage={stationsPage} hidden={mode !== "watching"} />
           <DecisionRows active={mode === "decisions"} page={decisions} />
         </div>
       </div>
@@ -111,7 +111,9 @@ export function useGlassBands(): (el: HTMLElement | null) => (() => void) | void
  * sleep. Cloud not reached, it offers to try again at once; a station down does not.
  */
 export function StationTrouble({ scope, to }: { scope: string; to: string }) {
-  const view = useChats(scope, false).value;
+  // Only what it shows (the stations, their glyph and trouble): not each change of the list's rows.
+  const view = useTopicSelect<ChatsView, ChatsView | undefined>(chatsTopic(scope, "all"), (s) => s.value,
+    (a, b) => a?.stations === b?.stations && a?.glyph === b?.glyph && a?.trouble === b?.trouble);
   const status = useStatus(scope);
   if (!view || view.stations.length === 0) return status?.state ? <Waiting status={status} /> : null;
   const counts = glyphCounts(view, status?.state === "trouble");
@@ -155,7 +157,8 @@ export function DecisionsEntry({ scope, to }: { scope: string; to: string }) {
  * filter shown): the sidebar around it drawing again (a page's change elsewhere, a side panel opening) left its every
  * row drawn and measured again (listMotion), all three lists of them.
  */
-const ChatPane = memo(function ChatPane({ chats, scope, filter, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; filter: ChatFilter; stationsPage: string; hidden: boolean }) {
+const ChatPane = memo(function ChatPane({ scope, filter, stationsPage, hidden }: { scope: string; filter: ChatFilter; stationsPage: string; hidden: boolean }) {
+  const chats = useTopic<ChatsView>(chatsTopic(scope, filter));
   const view = chats.value;
   const stations = view?.stations ?? [];
   const [over, pointer] = usePointerOver();
@@ -184,7 +187,7 @@ const ChatPane = memo(function ChatPane({ chats, scope, filter, stationsPage, hi
       {days.map((day) => (
         <section key={day.daysAgo} aria-label={day.label}>
           <div className={nav.navHeading} data-flip={`day:${day.daysAgo}`}>{day.label}</div>
-          {day.items.map((item) => <ChatRow key={rowKey(item)} item={item} lead={lead} />)}
+          {day.items.map((item) => <ChatRow key={rowKey(item)} scope={scope} filter={filter} row={rowKey(item)} lead={lead} />)}
         </section>
       ))}
     </div>
@@ -221,7 +224,30 @@ function useScrolling() {
  * dot before its title (ChatMark.tsx), who is in it small at the second line's end. While a piece of work in it waits,
  * the second line says on whom and what; with all its work over, the row is faded.
  */
-const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
+const ChatRow = memo(function ChatRow({ scope, filter, row: key, lead }: { scope: string; filter: ChatFilter; row: string; lead: "agents" | "people" }) {
+  const item = useTopicSelect<ChatsView, ChatItem | undefined>(chatsTopic(scope, filter), (s) => rowsOf(s.value).get(key));
+  return item ? <ChatRowOf item={item} lead={lead} /> : null;
+});
+
+/** A list's rows by their key, made once for each value of its topic. */
+const indexed = new WeakMap<ChatsView, Map<string, ChatItem>>();
+function rowsOf(view: ChatsView | undefined): Map<string, ChatItem> {
+  if (!view) return NO_ROWS;
+  let rows = indexed.get(view);
+  if (!rows) {
+    rows = new Map(view.days.flatMap((d) => d.items.map((item) => [rowKey(item), item] as const)));
+    indexed.set(view, rows);
+  }
+  return rows;
+}
+const NO_ROWS = new Map<string, ChatItem>();
+
+/** The topic of one of the lists, all, the viewer's or the watching ones (as useChats subscribes to it). */
+function chatsTopic(scope: string, filter: ChatFilter): Topic {
+  return { topic: "chats", scope, mine: filter === "mine", ...(filter === "watching" ? { watching: true } : {}) };
+}
+
+function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const { connect } = item;
   const to = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const move = useComposerMove();
@@ -307,7 +333,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
       onConfirm={() => { setAsking(false); void archive(); }} onClose={() => setAsking(false)} />}
     </div>
   );
-});
+}
 
 /**
  * Puts a chat's row in the archive (its session with it when it is that session's own), leaving its page if open. The

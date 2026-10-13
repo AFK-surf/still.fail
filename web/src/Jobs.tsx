@@ -2,6 +2,7 @@
 // followed, a deploy kept an eye on): what matters is whether each is still alive and what it last said
 // (`ember-job notify`), not how long it took. Status is a small dot before the name and a word on the line under it;
 // the title bar's popover shows what matters now, the 任务 tab beside the chat shows everything.
+import { chatPage } from "./chatPage.ts";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ChatJobsView, Job, JobLogView } from "./core/shapes.ts";
 import { stationApi, useStationCall } from "./api.ts";
@@ -188,8 +189,10 @@ export function JobsPopover({ station, view, onService, onTab }:
  * The 任务 tab beside the chat: every service and job (those over faded, last); a job picked shows what it said, or
  * its output as it grows, under its name, state and command.
  */
-export function JobsTab({ station, view, picked, onPick, onService }:
-  { station: string; view: ChatJobsView; picked: string | null; onPick: (id: string) => void; onService: (id: string) => void }) {
+export function JobsTab({ station, view, picked, onPick, chat }:
+  { station: string; view: ChatJobsView; picked: string | null; onPick: (id: string) => void;
+    /** Its chat's key: a service's row opens the service's tab on its page (chatPage.ts). */
+    chat: string }) {
   const stop = useStopJob(station);
   const clear = useClearEnded(station);
   const [tab, setTab] = useState<"notices" | "output">("notices");
@@ -205,7 +208,7 @@ export function JobsTab({ station, view, picked, onPick, onService }:
           <section className={css.jobsGroup}>
             <div className={css.jobsHead}>{t("web-main.jobs.services")}</div>
             {services.map((j) => (
-              <JobRow key={j.id} job={j} onClick={j.tone === "up" || j.tone === "restart" ? () => onService(j.id) : undefined}
+              <JobRow key={j.id} job={j} onClick={j.tone === "up" || j.tone === "restart" ? () => chatPage.tab(chat, `service:${j.id}`) : undefined}
                 end={j.tone === "up" || j.tone === "restart" ? <ArrowRight size={16} /> : undefined} />
             ))}
           </section>

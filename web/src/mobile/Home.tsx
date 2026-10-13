@@ -3,7 +3,6 @@
 // at the bottom. The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with nothing to wait for.
 import { StationMark } from "../StationMark.tsx";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { useEvent } from "../event.ts";
 import { motionValue } from "motion";
 import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
 import { stationApi, useChats, useChatSearch, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
@@ -14,7 +13,7 @@ import { useWorkspaces } from "../cloud/api.ts";
 import { Archive, Check, Copy, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Refresh, Search, Settings, Unplug, Zou } from "../icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
-import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
+import { setSidebarMode, stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { FailedMark, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark, chatTone, jumpFromLine, stateLine, WaitingText } from "../ChatMark.tsx";
@@ -43,7 +42,7 @@ export function Home() {
   const all = useChats(scope, false);
   const mine = useChats(scope, true);
   const watching = useChats(scope, false, true);
-  const [filter, setFilter] = useChatFilter();
+  const [filter] = useChatFilter();
   const invited = useWorkspaces().value?.some((a) => a.invitations.length > 0) ?? false;
   // The other workspaces have something waiting: its dot by the name, before an invitation's.
   const marks = useWorkspaceMarks(scope);
@@ -55,7 +54,6 @@ export function Home() {
   // The lists away while it is open; back as it starts to close, with its field.
   const [away, setAway] = useState(false);
   const search = useCallback((at: DOMRect) => { setSearching(at); setAway(true); }, []);
-  const changeFilter = useEvent(setFilter);
   // Pulled down from its top, a list loads the page again (./pull.ts).
   const pull = usePullToReload(css.mHomePane);
   return (
@@ -72,7 +70,7 @@ export function Home() {
       <div ref={pull.mark} className={`${css.mPull} ${pagesCss.mFloating}`} aria-hidden="true"><Refresh size={18} /></div>
       {/* The lists run under both bars, which are frosted glass over them. */}
       <HomeBar others={marks?.others} othersLabel={marks?.othersLabel} invited={invited} filtering={(all.value?.stations.length ?? 0) > 0}
-        filter={filter} setFilter={changeFilter} glyph={all.value?.glyph} trouble={all.value?.trouble} />
+        filter={filter} glyph={all.value?.glyph} trouble={all.value?.trouble} />
       {/* The new-chat button alone, floating over the list at the bottom right: a disc in the accent. */}
       {!none && <HomeToolbar decisions={decisions} />}
       {searching && <SearchPage from={searching} onLeave={() => setAway(false)} onClose={() => setSearching(null)} />}
@@ -84,9 +82,9 @@ export function Home() {
  * The list's top bar: the viewer's settings, the workspace (and whether others have something waiting), the filter and
  * the stations at a glance. Drawn again only when what it shows changes, not with each change of the lists under it.
  */
-const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering, filter, setFilter, glyph, trouble }: {
+const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering, filter, glyph, trouble }: {
   others: string | null | undefined; othersLabel: string | null | undefined; invited: boolean; filtering: boolean;
-  filter: ChatFilter; setFilter: (value: ChatFilter) => void; glyph: ChatsView["glyph"]; trouble: ChatsView["trouble"];
+  filter: ChatFilter; glyph: ChatsView["glyph"]; trouble: ChatsView["trouble"];
 }) {
   const app = useApp();
   return (
@@ -102,7 +100,7 @@ const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering,
         <ChevronDown size={16} />
       </button>
       {/* The filter, and the archive in its menu, as on the wide screen: nothing to narrow or look back on with no station. */}
-      {filtering && <FilterButton filter={filter} setFilter={setFilter} />}
+      {filtering && <FilterButton filter={filter} />}
       {/* The stations at a glance (../StationGlyph.tsx); its page says which is which. */}
       <StationButton glyph={glyph} trouble={trouble} />
     </header>
@@ -261,8 +259,9 @@ export function Recent() {
 }
 
 /** 全部, 我参与的 or 监控中, and the archive, from a menu under it; marked in the accent while it narrows the list. */
-const FilterButton = memo(function FilterButton({ filter, setFilter }: { filter: ChatFilter; setFilter: (value: ChatFilter) => void }) {
+const FilterButton = memo(function FilterButton({ filter }: { filter: ChatFilter }) {
   const app = useApp();
+  const setFilter = (value: ChatFilter) => setSidebarMode(app.entry.id, value);
   const mark = (on: boolean) => on ? <Check size={16} /> : <span style={{ width: 16 }} />;
   return (
     <button type="button" className={`${barsCss.mNavButton} ${css.mFilter}`} data-on={filter !== "all" || undefined}

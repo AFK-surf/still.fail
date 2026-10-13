@@ -247,11 +247,12 @@ export interface Shown { sessionKey: string; file: Attachment }
 export const Gallery = createContext<(() => Shown[]) | null>(null);
 
 /** A chat's images for its Gallery, as its messages show them: an agent's named in its text first, then those below it. */
-export function chatImages(messages: { authorKind?: string; text: string; attachments?: Attachment[] | undefined }[], owner: (file: Attachment) => string | null): Shown[] {
+export function chatImages(messages: { authorKind?: string; text: string; attachments?: Attachment[] | undefined }[]): Shown[] {
   return messages.flatMap((m) => {
     const { placed, rest } = m.authorKind === "person" ? { placed: new Map<string, Attachment>(), rest: m.attachments ?? [] } : placeFiles(m.text, m.attachments);
     return [...placed.values(), ...rest].flatMap((file) => {
-      const sessionKey = isImage(file.name) ? owner(file) : null;
+      // Through the session that keeps it (the core says which, `owner`).
+      const sessionKey = isImage(file.name) ? file.owner ?? null : null;
       return sessionKey === null ? [] : [{ sessionKey, file }];
     });
   });

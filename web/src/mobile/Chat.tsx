@@ -13,7 +13,8 @@ import { OpenFile } from "../Viz.tsx";
 import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
-import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
+import { useChatPageActions } from "../chatPage.ts";
+import { ChatRows, historyLinkClicked, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
 import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Stop, Users, Web } from "../icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
@@ -225,20 +226,24 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
   const [turn, setTurn] = useState(0);
   // Sent to by the page's key until its thread is known (a chat made here, or the agent's: useComposer).
   const to = view.thread?.id ?? here.key;
-  const images = () => chatImages([...rows.messages, ...view.outbox.map((o) => ({ authorKind: "person", ...o }))], (f) => ownerIn(view, f));
+  const images = () => chatImages([...rows.messages, ...view.outbox.map((o) => ({ authorKind: "person", ...o }))]);
   // The messages are kept as they are while nothing they show changes: what they are handed stays the same function,
   // the latest one behind it.
   const archive = useArchiveChat(here, view, view.thread ?? null);
-  const latest = useRef({ here, draft, images, app, archive });
-  latest.current = { here, draft, images, app, archive };
+  const latest = useRef({ here, draft, images, app });
+  latest.current = { here, draft, images, app };
+  // What is in the list (an agent's name, its activity, 归档) does these by the chat's key (../chatPage.ts).
+  const chatKey = draftKeyOf(here.station, here.key);
+  useChatPageActions(chatKey, {
+    history: (key, entry) => openHistory(app, here.station, here.key, key, entry),
+    agent: (key) => agentCard(app, here, key),
+    tab: (key) => { if (key.startsWith("service:")) app.push(servicePath(here.station, here.key, key.slice("service:".length))); },
+    archive,
+  });
   const [stable] = useState(() => ({
-    owner: (file: Parameters<typeof ownerIn>[1]) => ownerIn(latest.current.here.view, file),
-    open: (key: string) => { const { app, here } = latest.current; openHistory(app, here.station, here.key, key); },
-    agent: (key: string) => { const { app, here } = latest.current; agentCard(app, here, key); },
     quote: (q: Omit<Quote, "comment">) => latest.current.draft.current.quote(q),
     images: () => latest.current.images(),
     hold: (ts: string) => { const { app, here } = latest.current; app.push(annotatePath(here.station, here.key, ts)); },
-    archive: () => latest.current.archive(),
     file: (session: string, file: { path: string; name: string }) => {
       const { app, here } = latest.current;
       app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })));
@@ -247,7 +252,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
   // Words selected with a mouse inside one message offer to quote them; a finger holds a message for its menu.
   const quoting = useSelectionQuote(list, stable.quote);
   const hold = useHold(list, rows.messages, stable.hold);
-  const askedFile = useAskedFile(list, rows.messages, (f) => ownerIn(view, f));
+  const askedFile = useAskedFile(list, rows.messages);
   // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them; a chat's page, as a reference is
   // written), on any of its cloud's hosts, open here, as pages over this one (the chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
   // link to an agent's execution history opens it.
@@ -281,8 +286,8 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
       {askedFile}
       <Gallery.Provider value={stable.images}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
-        <DraftKey.Provider value={draftKeyOf(here.station, here.key)}>
-          <ChatRows chat={view} rows={rows} to={to} owners={ownersOf(view)} owner={stable.owner} onOpenHistory={stable.open} onOpenAgent={stable.agent} onArchive={view.thread ? stable.archive : undefined} />
+        <DraftKey.Provider value={chatKey}>
+          <ChatRows chat={view} rows={rows} to={to} />
         </DraftKey.Provider>
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>

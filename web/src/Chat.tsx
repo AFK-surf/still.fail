@@ -6,16 +6,16 @@ import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 import { sentImage, sentImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "./icons.tsx";
-import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { createContext, Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
-import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
+import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
 import { PathSession } from "./Peeks.tsx";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
-import { useEvent } from "./event.ts";
+import { chatPage } from "./chatPage.ts";
 import { placeFiles, Prose, withBareLinks } from "./Prose.tsx";
 import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
@@ -84,19 +84,21 @@ export function toMadeChat(go: () => void): void {
 }
 
 /**
- * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
- * `ensureChat` makes the chat with the first message, which `onSent` then follows.
+ * A chat's messages and its composer, by the chat's key (its agent's session; `draftKey`: whose draft the composer
+ * shows, the page's own key, which what is in it does the page's things by: chatPage.ts). Drawn again only when what it
+ * is given changes, or the chat does.
  */
-export const ChatPanel = memo(function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, onSent, made, onArchive }: {
-  /** Whose draft the composer shows here. */
-  chat: ChatView; draftKey: string; lives: ReadonlyMap<string, Live>; onOpenHistory(key: string, entry?: number): void;
-  ensureChat?: () => Promise<{ key: string; thread: ChatTo }>; onSent?: (to: ChatTo) => void;
+export const ChatPanel = memo(function ChatPanel({ session, draftKey, made }: {
+  session: string; draftKey: string;
   /** What is sent to until its thread is known: the core's key of a chat made here (`chat.create`), or the agent's
    *  whose page it is (the core has the station make its chat behind what is sent). */
-  made?: string;
-  /** Archives the chat, as its bar's 归档 does: offered under the agent's last post once it is all done (ChatRows). */
-  onArchive?: (() => void) | undefined;
+  made?: string | undefined;
 }) {
+  const chat = useChat(useStation().address, { session }).value;
+  return chat ? <ChatShown chat={chat} draftKey={draftKey} made={made} /> : null;
+});
+
+function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string; made: string | undefined }) {
   const station = useStation();
   const list = useRef<HTMLDivElement>(null);
   const composerHeight = useComposerHeight();
@@ -108,19 +110,17 @@ export const ChatPanel = memo(function ChatPanel({ chat, draftKey, lives, onOpen
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const quoteFocused = useCallback(() => setFocusQuote(null), []);
+  const lives = useLives(station.address, chat.agents.map((a) => a.session.key));
   const rows = useMessageList(list, floor, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives);
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
   const keeper = chat.agents[0]?.session.key ?? null;
-  const ownerOf = (file: Attachment) => ownerIn(chat, file);
-  // The messages are kept as they are while nothing they show changes (MessageRow): what they are handed stays the same
-  // function, the latest one behind it, and `owners` says when whose files are whose has changed.
-  const images = () => chatImages([...rows.messages, ...outbox.map((o) => ({ authorKind: "person", ...o }))], ownerOf);
-  const latest = useRef({ ownerOf, onOpenHistory, images, onArchive });
-  latest.current = { ownerOf, onOpenHistory, images, onArchive };
-  const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key), images: () => latest.current.images(),
-    archive: () => latest.current.onArchive?.() }));
+  // The images a preview steps through: the same function (the context's value), the latest messages behind it.
+  const images = () => chatImages([...rows.messages, ...outbox.map((o) => ({ authorKind: "person", ...o }))]);
+  const latest = useRef(images);
+  latest.current = images;
+  const [gallery] = useState(() => () => latest.current());
   useShortcut("chat.latest", rows.toEnd);
-  const askedFile = useAskedFile(list, rows.messages, ownerOf);
+  const askedFile = useAskedFile(list, rows.messages);
   useLaidOutOnce(list);
   // What waits to be decided here and does not show: a button over the list leads to it.
   const asks = useAsksShown(list, chat);
@@ -137,15 +137,15 @@ export const ChatPanel = memo(function ChatPanel({ chat, draftKey, lives, onOpen
       <div className={sessionCss.chatPane}>
       {rows.away && <ToLatest station={station.address} thread={id} waiting={rows.waiting} onClick={rows.toEnd} />}
       {asks.length > 0 && id !== null && <ToAsk station={station.address} thread={id} asks={asks} above={rows.away} />}
-      <Gallery.Provider value={stable.images}>
+      <Gallery.Provider value={gallery}>
       <div className={`${sessionCss.chatList} ${css.chatMessages}`} ref={list} {...quoting.listProps}
         onClick={(e) => {
           const to = historyLinkClicked(e);
           // At the entry it names (else its start); opened, not toggled. Another chat's agent's opens with its chat (ChatPage).
-          if (to && chat.agents.some((a) => a.session.key === to.key)) { e.preventDefault(); onOpenHistory(to.key, to.entry); }
+          if (to && chat.agents.some((a) => a.session.key === to.key)) { e.preventDefault(); chatPage.history(draftKey, to.key, to.entry); }
         }}>
         <DraftKey.Provider value={draftKey}>
-          <ChatRows chat={chat} rows={rows} to={to} owners={ownersOf(chat)} owner={stable.owner} onOpenHistory={stable.open} onArchive={onArchive ? stable.archive : undefined} />
+          <ChatRows chat={chat} rows={rows} to={to} />
         </DraftKey.Provider>
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
@@ -157,10 +157,10 @@ export const ChatPanel = memo(function ChatPanel({ chat, draftKey, lives, onOpen
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused}
-        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
+        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} />
     </section>
   );
-});
+}
 
 /**
  * 忽略 under a post that asks what no one has decided: the viewer lets it go (`decision.dismiss`: their lists and
@@ -255,48 +255,27 @@ export function useAsksShown(list: RefObject<HTMLElement | null>, chat: ChatView
   return asks.length > 0 && asks.every(shows) ? NO_ASKS : asks;
 }
 
-/** The session of a chat that keeps a file: the agent whose workspace holds it, else the first (what is sent goes there). */
-export function ownerIn(chat: ChatView, file: Attachment): string | null {
-  return chat.agents.find((a) => file.path.startsWith(`${a.session.workspace}/`))?.session.key ?? chat.agents[0]?.session.key ?? null;
-}
+/** The session that keeps a file shown out of its chat (the decisions page), where the core does not say (`owner`). */
+export const FileKeeper = createContext<string | null>(null);
 
-/** Whose files are whose in a chat, in a word: when it changes, its messages' files are drawn again. */
-export function ownersOf(chat: ChatView): string {
-  return `${chat.agents[0]?.session.key ?? ""} ${chat.agents.map((a) => `${a.session.key}=${a.session.workspace}`).join(" ")}`;
+/** The session whose workspace keeps a file, which its preview goes through: the core's word, else FileKeeper's. */
+function useKeeper(): (file: Attachment) => string | null {
+  const keeper = useContext(FileKeeper);
+  return (file) => file.owner ?? keeper;
 }
 
 /**
  * What a chat's list holds, the same on both screens (this page; the phone's, mobile/Chat.tsx): older pages loading, its
  * messages with the unread line, what is sent from here on its way (`to`: where it goes), and its agents at work.
- * `owner`, `onOpenHistory` and `onOpenAgent` stay the same functions while the page lasts; `owners` says when whose files are whose
- * has changed.
+ * What is done from it (an agent's history or card opened, the chat archived) is done on the page by the chat's key
+ * (chatPage.ts); what each message shows beside it (whether its agent is the chat's, 归档, what was sent to Slack after
+ * it) the core says on the message.
  */
-export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onOpenAgent, onArchive }: {
-  chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null; owners: string;
-  owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
-  /** What an agent's name beside its messages opens, where it is not its history (the phone: its card in a sheet). */
-  onOpenAgent?: ((key: string) => void) | undefined;
-  /** Archives the chat (its page's 归档). */
-  onArchive?: (() => void) | undefined;
-}) {
+export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null }) {
   const { messages, divider, shown, rowOf, caughtAgent, poseOf } = rows;
-  const api = useApi();
-  const act = useAct();
-  const here = (key: string | undefined) => key !== undefined && chat.agents.some((a) => a.session.key === key);
   // Where a decision's options answer: none while nothing can be sent.
   const thread = chat.offline || chat.archived ? null : chat.thread?.id ?? null;
-  // Nothing left in it (the core's `archivable`) and its agent's last post said it is all done: 归档 right under that
-  // post, as a decision's options are (only at the chat's end, not in an older window).
-  const last = chat.newer ? undefined : messages.findLast((m) => m.authorKind === "agent" && !m.system);
-  const archiveAt = onArchive && chat.archivable && !chat.offline && last?.ending === "all_done" ? last.seq : null;
-  // What the archive check made of it, under the same post (in words: the option it picked and what came of it).
-  const checkAt = chat.archiveCheck && last?.ending === "all_done" ? last.seq : null;
-  // What its agents sent to Slack meanwhile, each after the message it followed (0: before the first).
-  const sentAfter = new Map<number, ChatSentElsewhere[]>();
-  for (const s of chat.elsewhere ?? []) sentAfter.set(s.after, [...(sentAfter.get(s.after) ?? []), s]);
-  // An agent's name opens its history, or what the page has for it; its activity always its history.
-  const onName = onOpenAgent ?? onOpenHistory;
-  const sent = (after: number) => sentAfter.get(after)?.map((s) => <SentElsewhere key={s.key} sent={s} agentHere={here(s.by.agent ?? undefined)} onOpenHistory={onName} />);
+  const sent = (list: ChatSentElsewhere[] | undefined) => list?.map((s) => <SentElsewhere key={s.key} sent={s} />);
   return (
     <ChatAgents.Provider value={chat.agents}>
     <ChatAgentKeys.Provider value={chat.agents.map((a) => a.session.key).join("\n")}>
@@ -306,7 +285,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onOpenA
           <p>{t("web-main.chat.empty")}</p>
         </div>
       )}
-      {sent(0)}
+      {sent(chat.elsewhere)}
       {messages.map((m) => {
         const line = m.seq === divider ? <div className={css.chatUnreadLine} data-unread-line role="separator"><span>{t("web-main.chat.unreadLine")}</span></div> : null;
         const { enter, emitted, caught } = rowOf(m);
@@ -315,20 +294,17 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onOpenA
         return (
           <Fragment key={m.seq}>
             {line}
-            <MessageRow message={m} enter={enter} emitted={emitted} caught={caught} thread={thread}
-              agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onName}
-              {...(archiveAt === m.seq ? { archive: onArchive } : {})} {...(checkAt === m.seq ? { check: chat.archiveCheck } : {})} />
-            {sent(m.seq)}
+            <MessageRow message={m} enter={enter} emitted={emitted} caught={caught} thread={thread} />
+            {sent(m.elsewhere)}
           </Fragment>
         );
       })}
       {/* The page after the window shown, while it is short of the chat's end (`chat.newer`), loading as the reader nears it. */}
       {chat.newer && <div className={css.chatNewer} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
-      {chat.outbox.map((o) => <OutboxRow key={o.id} o={o} to={to} locked={chat.offline || !!chat.archived} owner={owner} />)}
+      {chat.outbox.map((o) => <OutboxRow key={o.id} o={o} to={to} locked={chat.offline || !!chat.archived} />)}
       {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
       {shown.map(({ agent, leaving }) => (
-        <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)}
-          {...(chat.agents.length > 1 ? { onStop: () => act(api.stop(agent.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked")) } : {})} />
+        <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} stoppable={chat.agents.length > 1} />
       ))}
     </ChatAgentKeys.Provider>
     </ChatAgents.Provider>
@@ -358,7 +334,7 @@ function ToLatest({ station, thread, waiting, onClick }: { station: string; thre
 const SENDING_SHOWS_MS = 800;
 
 /** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
-function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; locked: boolean; owner: (file: Attachment) => string | null }) {
+function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: boolean }) {
   const sending = useChatSend();
   const station = useStation().address;
   const toast = useToast();
@@ -374,7 +350,7 @@ function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; l
   const [delay] = useState(() => `${Math.max(0, showsAt - Date.now())}ms`);
   return (
     <MineMessage data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
-      <MineWords message={o} owner={owner} />
+      <MineWords message={o} />
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
@@ -1022,24 +998,18 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
  * One message of the chat. It is drawn again only when something it shows changes: an agent at work makes the chat
  * draw again many times a second (its activity), and every message's Markdown would be laid out anew each time.
  */
-const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true, archive, check }: {
-  message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined; agentHere: boolean;
+const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, thread, options = true }: {
+  message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined;
   /** Its chat's thread, where a decision's options answer (Decisions.tsx); null while nothing can be sent there. */
   thread: number | null;
   /** A decision's options under it (the decisions page has them at its foot instead). */
   options?: boolean;
-  /** Whose files are whose, in a word: when it changes, the files are drawn again. */
-  owners: string;
-  owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
-  /** Its chat is all done: 归档 under it (ArchiveOption). */
-  archive?: (() => void) | undefined;
-  /** What the archive check made of its chat, under its all-done post. */
-  check?: ArchiveCheck | undefined;
 }) {
+  const chat = useContext(DraftKey);
   if (m.mine) {
     return (
       <MineMessage data-author={t("web-main.chat.you")} data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
-        <MineWords message={m} owner={owner} />
+        <MineWords message={m} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
         {m.waiting
           ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.chat.waitingAgent")}</span>
@@ -1050,38 +1020,38 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   // What still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message.
   if (m.system) return <SystemNotice text={m.text} profile={m.profile} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
-  const agent = agentHere ? m.by.agent : undefined;
+  const agent = m.by.here ? m.by.agent : undefined;
   return (
     <OthersMessage data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
       data-enter={enter} data-caught={caught} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
       avatar={<MessageAvatar message={m} name={who} agent={agent} />} time={m.time?.createdAt}
       name={agent
-        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{who}</button>
+        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{who}</button>
         // Another chat's agent: its name opens that chat (its link, as the chat pages open still.fail's links).
         : m.by.from ? <a href={m.by.from} className={`${css.msgName} ${css.msgAgent}`}>{who}</a>
         : <span className={css.msgName}>{who}</span>}>
-      <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
+      <Quotes quotes={m.quotes} files={m.attachments} />
       {m.authorKind === "person"
-        ? <>{m.text && <PersonWords text={m.text} />}<Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} /></>
-        : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}
+        ? <>{m.text && <PersonWords text={m.text} />}<Files files={besideQuotes(m.quotes, m.attachments)} /></>
+        : <ProseWithFiles text={m.text} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
       {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
       {/* It asks what no one has decided (the core's `asked`): letting it go, right under it. */}
       {options && m.asked && thread !== null && <AskDismiss thread={thread} seq={m.seq} />}
-      {check && <p className={css.archiveCheck} data-failed={check.failed || undefined}>{check.text}</p>}
-      {archive && <ArchiveOption thread={m.thread} onArchive={archive} />}
+      {m.archiveCheck && <p className={css.archiveCheck} data-failed={m.archiveCheck.failed || undefined}>{m.archiveCheck.text}</p>}
+      {options && m.archive && chat && <ArchiveOption thread={m.thread} chat={chat} />}
     </OthersMessage>
   );
-}, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && a.thread === b.thread
-  && a.options === b.options && a.archive === b.archive && a.check?.text === b.check?.text && a.check?.failed === b.check?.failed && sameMessage(a.message, b.message));
+}, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.thread === b.thread && a.options === b.options && sameMessage(a.message, b.message));
 
 /**
  * What an agent of the chat said in Slack rather than here, or a person's Slack message it was given (the core reads
  * them from its transcript; the chat does not keep them): drawn as a message of theirs, Slack's mark on the avatar, with
  * where it went or came from after its name, and its words beside a bar, as the execution history has them.
  */
-const SentElsewhere = memo(function SentElsewhere({ sent: s, agentHere, onOpenHistory }: { sent: ChatSentElsewhere; agentHere: boolean; onOpenHistory: (key: string) => void }) {
-  const agent = agentHere ? s.by.agent : undefined;
+const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentElsewhere }) {
+  const chat = useContext(DraftKey);
+  const agent = s.by.here ? s.by.agent : undefined;
   const received = s.received === true;
   const place = s.place
     ? <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
@@ -1092,7 +1062,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s, agentHere, onOpenHi
         ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><SlackLogo size={9} /></span></span>
         : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack agent={agent} />}
       name={agent
-        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{s.by.name}</button>
+        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{s.by.name}</button>
         : <span className={css.msgName}>{s.by.name}</span>}
       route={
         <span className={css.msgRoute}>
@@ -1109,13 +1079,13 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s, agentHere, onOpenHi
       </div>
     </OthersMessage>
   );
-}, (a, b) => a.agentHere === b.agentHere && a.onOpenHistory === b.onOpenHistory && JSON.stringify(a.sent) === JSON.stringify(b.sent));
+}, (a, b) => JSON.stringify(a.sent) === JSON.stringify(b.sent));
 
 /**
  * 归档这个 chat, under the agent's post that said it is all done, while nothing is left in the chat: as wide as the
  * message, in the accent. Turns while the archive is under way (doing.ts).
  */
-function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () => void }) {
+function ArchiveOption({ thread, chat }: { thread: number; chat: string }) {
   const station = useStation().address;
   const busy = useDoing("chat.archive", { station, thread, archived: true });
   const keepState = useDoingState("chat.keep", { station, thread });
@@ -1130,7 +1100,7 @@ function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () =>
         <DoingShown state={keepState} className={decisionsCss.optionSpinner} />
       </button>
       <button type="button" className={decisionsCss.option} data-recommended="" data-busy={busy || undefined} disabled={busy || keeping}
-        aria-busy={busy || undefined} onClick={onArchive}>
+        aria-busy={busy || undefined} onClick={() => chatPage.archive(chat)}>
         <span className={decisionsCss.optionLabel}>{t("web-main.chat.archiveThis")}</span>
         {busy && <span className={`${waitingCss.spinner} ${decisionsCss.optionSpinner}`} aria-hidden="true" />}
       </button>
@@ -1139,11 +1109,13 @@ function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () =>
 }
 
 /** A message as a chat draws it, out of its chat (the decisions page): still, its name plain, no options under it. */
-export function StaticMessage({ message, owner }: { message: ChatMessage; owner: (file: Attachment) => string | null }) {
-  return <MessageRow message={message} enter={undefined} emitted={null} caught={undefined} agentHere={false} thread={null} options={false}
-    owners="" owner={owner} onOpenHistory={noHistory} />;
+export function StaticMessage({ message, keeper }: { message: ChatMessage; /** The session that keeps its files. */ keeper: string }) {
+  return (
+    <FileKeeper.Provider value={keeper}>
+      <MessageRow message={message} enter={undefined} emitted={null} caught={undefined} thread={null} options={false} />
+    </FileKeeper.Provider>
+  );
 }
-const noHistory = () => {};
 
 type Data = { [key: `data-${string}`]: string | number | boolean | undefined };
 
@@ -1154,12 +1126,12 @@ export function MineMessage({ children, ...data }: Data & { children: ReactNode 
 
 /** What a viewer's own message says, its quotes and files with it: the same whether the station has it yet (a
  * MessageRow) or it is still on its way (an OutboxRow), so it does not change as the one takes the other's place. */
-function MineWords({ message: m, owner }: { message: Pick<ChatMessage, "text" | "quotes" | "attachments">; owner: (file: Attachment) => string | null }) {
+function MineWords({ message: m }: { message: Pick<ChatMessage, "text" | "quotes" | "attachments"> }) {
   return (
     <>
-      <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
+      <Quotes quotes={m.quotes} files={m.attachments} />
       <MineBubble text={m.text} />
-      <Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} />
+      <Files files={besideQuotes(m.quotes, m.attachments)} />
     </>
   );
 }
@@ -1262,7 +1234,8 @@ function MessageAvatar({ message, name, agent }: { message: ChatMessage; name: s
  * part on a warm ground (whose message, the passage) leading back to it, then
  * what was said about it.
  */
-function Quotes({ quotes, files, owner }: { quotes: Quote[] | undefined; files: Attachment[] | undefined; owner: (file: Attachment) => string | null }) {
+function Quotes({ quotes, files }: { quotes: Quote[] | undefined; files: Attachment[] | undefined }) {
+  const owner = useKeeper();
   if (!quotes?.length) return null;
   // In the list the card is in: each screen's (and the phone's pages under the one on top) has its own.
   const jump = (from: Element, ts: string, text: string) => {
@@ -1330,8 +1303,8 @@ function QuoteCard({ quote, onJump, comment, onRemove, picture }: { quote: Quote
 // ── files ───────────────────────────────────────────────────────────────
 
 /** An agent's Markdown with its files: those its text names shown there, the rest below it. */
-function ProseWithFiles({ owner, text, files, session = null, from }: {
-  owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined;
+function ProseWithFiles({ text, files, session = null, from }: {
+  text: string; files: Attachment[] | undefined;
   /** Its agent's: the files its paths name are that session's (Peeks.tsx). */ session?: string | null;
   /** Another chat's agent wrote it (session_send): its link, whose session (and station) the paths are of. */ from?: string | undefined;
 }) {
@@ -1343,15 +1316,16 @@ function ProseWithFiles({ owner, text, files, session = null, from }: {
     // A local page knows only its own station: the link's station is taken to be it.
     return of ? { key: of.id, ...(here.includes("/") && of.station !== here ? { station: of.station } : {}) } : null;
   }, [session, from, here]);
-  // The same function while `owner` is: a new one each render would have Prose parse the text again whenever this
+  // The same function while the keeper is: a new one each render would have Prose parse the text again whenever this
   // draws (its station's context changing draws every message's).
-  const file = useCallback((f: Attachment, as: "shown" | "link", words?: ReactNode) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />, [owner]);
+  const keeper = useContext(FileKeeper);
+  const file = useCallback((f: Attachment, as: "shown" | "link", words?: ReactNode) => as === "link" ? <FileLink sessionKey={f.owner ?? keeper} file={f}>{words}</FileLink> : <PlacedFile sessionKey={f.owner ?? keeper} file={f} />, [keeper]);
   return (
     <>
       <div className={conversationCss.markdown}>
         <PathSession.Provider value={paths}><Prose files={placed} file={file}>{text}</Prose></PathSession.Provider>
       </div>
-      <Files owner={owner} files={rest} />
+      <Files files={rest} />
     </>
   );
 }
@@ -1370,7 +1344,7 @@ function PlacedFile({ sessionKey, file }: { sessionKey: string | null; file: Att
  * latest one of that name opens on its own (OpenFile: beside the chat, or over it on a phone), its message brought
  * into view. Anything else that name opens in a preview.
  */
-export function useAskedFile(list: RefObject<HTMLDivElement | null>, messages: ChatMessage[], owner: (file: Attachment) => string | null): ReactNode {
+export function useAskedFile(list: RefObject<HTMLDivElement | null>, messages: ChatMessage[]): ReactNode {
   const [search, setSearch] = useSearchParams();
   const open = useContext(OpenFile);
   const asked = search.get("file");
@@ -1378,11 +1352,11 @@ export function useAskedFile(list: RefObject<HTMLDivElement | null>, messages: C
     if (!asked) return null;
     for (let i = messages.length - 1; i >= 0; i--) {
       const file = messages[i]!.attachments?.find((f) => f.name === asked);
-      const key = file ? owner(file) : null;
+      const key = file?.owner ?? null;
       if (file && key !== null) return { file, key, ts: messages[i]!.ts };
     }
     return null;
-  }, [asked, messages]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [asked, messages]);
   const drawn = !!found && !!open && kindOf(found.file.name).kind === "html";
   const done = () => setSearch((now) => { now.delete("file"); return now; }, { replace: true });
   useEffect(() => {
@@ -1395,8 +1369,9 @@ export function useAskedFile(list: RefObject<HTMLDivElement | null>, messages: C
   return <FilePreview open onClose={done} sessionKey={found.key} file={found.file} />;
 }
 
-/** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */
-function Files({ owner, files }: { owner: (file: Attachment) => string | null; files: Attachment[] | undefined }) {
+/** A message's files, each through the session that keeps it (none: it cannot show). */
+function Files({ files }: { files: Attachment[] | undefined }) {
+  const owner = useKeeper();
   if (!files?.length) return null;
   return <div className={css.msgFiles}>{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} />)}</div>;
 }
@@ -1599,7 +1574,6 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   const hint = useSpaceHint(locked);
   useShortcut("composer.file", locked ? null : () => { picker.current?.click(); });
   const ready = draft.ready && !locked;
-  const onFiles = useEvent(add);
   const submit = () => {
     if (ready) void send();
   };
@@ -1625,7 +1599,8 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); if (!locked) add(e.dataTransfer.files); } }}>
         <ComposerExtras draft={draft} focusQuote={focusQuote} onFocused={onFocused} onDone={() => input.current?.focus()} />
         {field}
-        <ComposerTools picker={picker} onFiles={onFiles} locked={locked} toolbar={toolbar} uploading={draft.uploading} ready={ready} starting={draft.starting} />
+        <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
+        <ComposerTools picker={picker} locked={locked} toolbar={toolbar} uploading={draft.uploading} ready={ready} starting={draft.starting} />
       </form>
       {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
     </div>
@@ -1636,12 +1611,12 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
  * The composer's foot: a file to send, what the page puts there (`toolbar`), and send. Drawn again only when what it
  * shows changes, not at every key typed.
  */
-const ComposerTools = memo(function ComposerTools({ picker, onFiles, locked, toolbar, uploading, ready, starting }: {
-  picker: RefObject<HTMLInputElement | null>; onFiles(files: FileList): void; locked: boolean; toolbar: ReactNode; uploading: boolean; ready: boolean; starting: boolean;
+const ComposerTools = memo(function ComposerTools({ picker, locked, toolbar, uploading, ready, starting }: {
+  /** The composer's file field, which the attach button opens. */
+  picker: RefObject<HTMLInputElement | null>; locked: boolean; toolbar: ReactNode; uploading: boolean; ready: boolean; starting: boolean;
 }) {
   return (
     <div className={css.composerToolbar}>
-      <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) onFiles(e.target.files); e.target.value = ""; }} />
       <Tip label={t("web-main.composer.attach")} shortcut="composer.file">
         <button type="button" className={css.attachBtn} aria-label={t("web-main.composer.attach")} disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
           <Plus size={18} />
@@ -2324,7 +2299,13 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
  * in, the line growing from its avatar; it leaves fading and folding its room away; for a message to come out of its
  * avatar the line folds to the avatar. Each of these goes from wherever it shows, cut off by the next or not.
  */
-function Activity({ agent, leaving, caught, pose, onOpen, onStop }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean }; onOpen(): void; onStop?: () => void }) {
+function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean };
+  /** Stopped alone, from its row (the chat has other agents). */
+  stoppable: boolean;
+}) {
+  const chat = useContext(DraftKey);
+  const api = useApi();
+  const act = useAct();
   const wait = agent.wait;
   const now = useSteady(wait ? { key: "wait", text: wait.text ?? t("web-main.activity.waiting") } : agent.activity?.now ?? { key: "busy", text: t("web-main.activity.busy") });
   const row = useRef<HTMLDivElement>(null);
@@ -2356,7 +2337,7 @@ function Activity({ agent, leaving, caught, pose, onOpen, onStop }: { agent: Age
   return (
     <div ref={row} className={`${conversationCss.msg} ${css.agentActivity}`} data-transient="" data-agent={agent.key} data-caught={caught} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
       <div className={css.activityRow}>
-      <button ref={line} type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
+      <button ref={line} type="button" className={css.activityLine} onClick={() => { if (chat) chatPage.history(chat, agent.key); }} aria-label={`${agent.who}：${now.current.text}`}>
         <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span></span>
         <span ref={tail} className={css.activityTail}>
           <span className={css.activityNow}>
@@ -2368,9 +2349,9 @@ function Activity({ agent, leaving, caught, pose, onOpen, onStop }: { agent: Age
             : agent.since ? <span className={css.activityElapsed}><Elapsed since={agent.since} /></span> : null}
         </span>
       </button>
-      {onStop && (
+      {stoppable && (
         <Tip label={t("web-main.activity.stop", { who: agent.who })}>
-          <button type="button" className={css.activityStop} aria-label={t("web-main.activity.stop", { who: agent.who })} onClick={onStop}><Stop size={12} fill="currentColor" /></button>
+          <button type="button" className={css.activityStop} aria-label={t("web-main.activity.stop", { who: agent.who })} onClick={() => act(api.stop(agent.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"))}><Stop size={12} fill="currentColor" /></button>
         </Tip>
       )}
       </div>
