@@ -38,7 +38,7 @@ export function StationMark({ emoji, icon, size = 14, className }: { emoji?: str
   if (isPicture(icon)) return <img src={icon} alt="" width={size} height={size} className={`${css.picture}${more}`} draggable={false} />;
   if (!emoji) return <Server size={size} className={className} />;
   return (
-    <span className={`${css.emoji}${more}`} style={{ width: size, height: size, fontSize: Math.round(size * 0.9) }} aria-hidden="true"><Glyph emoji={emoji} /></span>
+    <span className={`${css.emoji}${WINDOWS ? ` ${css.windowsEmoji}` : ""}${more}`} style={{ width: size, height: size, fontSize: Math.round(size * 0.9) }} aria-hidden="true"><Glyph emoji={emoji} /></span>
   );
 }
 

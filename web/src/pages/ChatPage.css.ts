@@ -5,6 +5,7 @@ import { sessionPage } from "../styles/session.css.ts";
 import { pageBarTitle } from "../styles/conversation.css.ts";
 import { resizeHandle } from "../ui.css.ts";
 import { sessionMain } from "../styles/jobs.css.ts";
+import { windowsEmoji } from "../StationMark.css.ts";
 
 export const agentMarkBtn = style({
   display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer",
@@ -34,6 +35,8 @@ export const agentStationPart = style({
   cursor: "default", outline: "none",
   selectors: {
     "&[data-name]": { display: "block", lineHeight: "var(--mark)" },
+    // Segoe's wider emoji gets the same square as its provider. Keep the existing layout for other platforms/marks.
+    [`&&:not([data-name]):has(${windowsEmoji})`]: { width: "var(--mark)", paddingInline: "0", justifyContent: "center", flex: "none" },
     "&:hover, &[data-state=open], &:focus-visible": { color: vars.text, background: vars.hover },
   },
 });
