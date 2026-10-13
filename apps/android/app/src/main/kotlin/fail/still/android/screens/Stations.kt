@@ -330,11 +330,12 @@ internal fun ChatStationChip(address: String) {
 
 /**
  * A chat's first agent in its bar with the station it runs on, one tile (web ui.tsx AgentMark with children, as the phone
- * web's bar): the maker's square, then the station's icon, or its name where it has none. A tap on the maker opens the
- * agent's card, on the station's part the station's. Until the station is known, the agent's mark alone.
+ * web's bar): the maker's square, then the station's icon, or its name where it has none. One tap for all of it (halves
+ * this small are not told apart under a finger): the agent's card, which leads on to the station's. Until the station
+ * is known, the agent's mark alone.
  */
 @Composable
-internal fun AgentStationMark(address: String, maker: Maker?, runtime: String, state: ChatState?, onAgent: () -> Unit) {
+internal fun AgentStationMark(address: String, who: String, maker: Maker?, runtime: String, state: ChatState?, onAgent: () -> Unit) {
     val app = LocalApp.current
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(address.substringBefore('/')))
     val s = stations.value?.firstOrNull { it.station == address }
@@ -344,15 +345,13 @@ internal fun AgentStationMark(address: String, maker: Maker?, runtime: String, s
         return
     }
     val shape = Smooth(6.dp)
-    Box {
-        // The border drawn over both parts, so a press tints a part up to it.
-        Row(Modifier.height(22.dp).clip(shape).background(C.surface).border(1.dp, C.line, shape), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(22.dp).clickable(onClick = onAgent), contentAlignment = Alignment.Center) { MakerIcon(maker, runtime, 13.2.dp) }
-            Box(
-                Modifier.fillMaxHeight().widthIn(max = 96.dp).clickable { openStationPeek(app, address) }.padding(horizontal = 5.dp)
-                    .semantics { contentDescription = s.name },
-                contentAlignment = Alignment.Center,
-            ) {
+    Box(Modifier.semantics(mergeDescendants = true) { contentDescription = "$who · ${s.name}" }) {
+        Row(
+            Modifier.height(22.dp).clip(shape).background(C.surface).border(1.dp, C.line, shape).clickable(onClick = onAgent),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { MakerIcon(maker, runtime, 13.2.dp) }
+            Box(Modifier.widthIn(max = 96.dp).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
                 if (hasStationMark(s.emoji, s.icon)) StationMark(s.emoji, s.icon, 13.dp, C.muted)
                 else Text(s.name, fontSize = 12.sp, lineHeight = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

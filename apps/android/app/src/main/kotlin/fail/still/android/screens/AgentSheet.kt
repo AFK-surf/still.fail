@@ -1,8 +1,8 @@
 // An agent of the chat in brief: a sheet over the chat, opened from its name beside its messages, its mark in the
 // chat's bar or its row in the chat's own sheet (web mobile/AgentSheet.tsx; the wide screen's card over its avatar,
 // web AgentCard.tsx). What it runs and where it stands (with a stop while it works), its latest lines, the figures
-// that say most (the core's `agentCard` view, client/core-ts/src/views/brief.ts), then where to go on: its account
-// (how it runs), its history, its jobs. Only what is worth a look is coloured. The same parts head its history's
+// that say most (the core's `agentCard` view, client/core-ts/src/views/brief.ts), then where to go on: the station it
+// runs on, its account (how it runs), its history, its jobs. Only what is worth a look is coloured. The same parts head its history's
 // details (History.kt).
 package fail.still.android.screens
 
@@ -47,6 +47,7 @@ import fail.still.android.data.AgentCardView
 import fail.still.android.data.ChatAgent
 import fail.still.android.data.ChatOf
 import fail.still.android.data.ChatView
+import fail.still.android.data.StationView
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
 import fail.still.android.data.state
@@ -59,6 +60,8 @@ import fail.still.android.ui.QuotaRings
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.StationMark
+import fail.still.android.ui.hasStationMark
 import kotlinx.coroutines.delay
 
 private val ChatAgent.working get() = status == "running" || status == "queued"
@@ -66,13 +69,15 @@ private val ChatAgent.working get() = status == "running" || status == "queued"
 /** Opens `agent`'s card over its chat, as tall as what it shows (its lines' and figures' room kept while they are read). */
 fun openAgent(app: AppState, station: String, of: ChatOf, agent: ChatAgent) {
     val key = agent.session.key
-    val rows = 2 + if (agent.jobs.isNotEmpty()) 1 else 0
+    val rows = 3 + if (agent.jobs.isNotEmpty()) 1 else 0
     // What is wrong, a line each but a quota's (its account's windows say that).
     val notes = agent.attention.count { it.kind != "quota" }
     val tall = 22 + 52 + (if (agent.turns.isNotEmpty()) 72 + 76 else 0) + (if (notes > 0) 8 + notes * 20 else 0) + 12 + rows * 40 + 24
     app.sheet = SheetSpec(0.55f, fit = tall.dp) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
         val card by rememberTopic<AgentCardView>(app.core, Topics.agentCard(station, key))
+        val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(station.substringBefore('/')))
+        val here = stations.value?.firstOrNull { it.station == station }
         val a = chat.value?.agents?.firstOrNull { it.session.key == key } ?: agent
         val s = a.session
         // The account it runs on now, with what is left of it.
@@ -93,6 +98,15 @@ fun openAgent(app: AppState, station: String, of: ChatOf, agent: ChatAgent) {
             Box(Modifier.height(12.dp))
             // Each row leaves the sheet for where it leads.
             InfoList {
+                // The station's card in place of this one.
+                if (here != null) InfoRow(onClick = { openStationPeek(app, station) }) {
+                    Text(t("android-chat.agent.station"), fontSize = 14.sp, color = C.muted)
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (hasStationMark(here.emoji, here.icon)) StationMark(here.emoji, here.icon, 15.dp, C.ink)
+                        Text(here.name, fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                }
                 AgentRow(t("android-chat.agent.account"), account?.first?.let { if (s.profilePinned == true) it else t("android-chat.agent.account.auto", "name" to it) } ?: t("android-chat.agent.account.none"), { QuotaRings(account?.second) }) {
                     app.sheet = null; app.push(Screen.RunSettings(station, of, key))
                 }

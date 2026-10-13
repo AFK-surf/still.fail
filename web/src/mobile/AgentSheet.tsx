@@ -1,13 +1,15 @@
 // An agent of the chat in brief, on the phone: a sheet over the chat, opened from its name beside its messages or its
 // mark in the chat's bar (the wide screen's card over its avatar, ../AgentCard.tsx; the Android app's AgentSheet.kt).
 // What it runs and where it stands (with a stop while it works), its latest lines, the figures that say most (the
-// `agentCard` view, views/brief.ts), then where to go on: its account (how it runs), its history, its jobs. Only what
+// `agentCard` view, views/brief.ts), then where to go on: the station it runs on, its account (how it runs), its history,
+// its jobs. Only what
 // is worth a look is coloured. The same parts head its history's details (History.tsx).
-import { stationApi, useAgentCard, useChat, useStationCall, type ChatAgent } from "../api.ts";
+import { stationApi, useAgentCard, useChat, useStationCall, useStationLook, type ChatAgent } from "../api.ts";
 import type { AgentCardView } from "../core/shapes.ts";
 import { Elapsed, Waited } from "../Chat.tsx";
 import { ChevronRight, Stop } from "../icons.tsx";
 import { stationBase } from "../station.tsx";
+import { StationMark } from "../StationMark.tsx";
 import { useDoing } from "../doing.ts";
 import { t } from "../i18n.ts";
 import { SheetGrab, useApp, type MobileApp } from "./app.tsx";
@@ -18,14 +20,14 @@ import * as css from "./AgentSheet.css.ts";
 
 /** Whose card: the chat's page (its address) and the agent's session. */
 export interface AgentAt { station: string; chat: string; key: string }
-/** Where its rows lead from the page that opened it. */
-export interface AgentGo { history(): void; jobs(): void }
+/** Where its rows lead from the page that opened it; `station`, the card of the station it runs on, in its place. */
+export interface AgentGo { history(): void; jobs(): void; station?: () => void }
 
 const working = (agent: ChatAgent) => agent.status === "running" || agent.status === "queued";
 
 /** As tall as what it shows: its head, its lines, its figures and its rows (their room kept while they are read). */
-function tall(agent: ChatAgent): number {
-  const rows = 2 + (agent.jobs.length > 0 ? 1 : 0);
+function tall(agent: ChatAgent, go: AgentGo): number {
+  const rows = 2 + (go.station ? 1 : 0) + (agent.jobs.length > 0 ? 1 : 0);
   // What is wrong, a line each but a quota's (its account's windows say that).
   const notes = agent.attention.filter((a) => a.kind !== "quota").length;
   const px = 25 + 44 + (agent.turns.length > 0 ? 75 + 76 : 0) + (notes > 0 ? 10 + notes * 20 : 0) + 12 + rows * 41 + 28;
@@ -34,7 +36,7 @@ function tall(agent: ChatAgent): number {
 
 /** Opens `at`'s card over its chat. */
 export function openAgent(app: MobileApp, at: AgentAt, agent: ChatAgent, go: AgentGo) {
-  app.sheet({ height: tall(agent), content: () => <AgentSheet at={at} go={go} /> });
+  app.sheet({ height: tall(agent, go), content: () => <AgentSheet at={at} go={go} /> });
 }
 
 function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
@@ -44,6 +46,7 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
   // A sheet lies over the page, outside its station's context: the API by the station's address.
   const call = useStationCall(at.station);
   const stopping = useDoing("session.stop", { station: at.station, key: at.key });
+  const station = useStationLook(at.station);
   if (!agent) return <SheetGrab />;
   const s = agent.session;
   const account = agent.account ?? agent.profile;
@@ -71,6 +74,15 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
         <AgentNotes card={card} />
         <div className={css.mAgentRows}>
           <InfoList>
+            {go.station && station && (
+              <InfoRow onClick={go.station}>
+                <span className={css.mAgentRowLabel}>{t("web-mobile.agent.station")}</span>
+                <span className={`${css.mAgentRowValue} ${css.mAgentStation}`}>
+                  {(station.emoji || station.icon) && <StationMark emoji={station.emoji} icon={station.icon} size={14} />}<span>{station.name}</span>
+                </span>
+                <ChevronRight size={14} className={partsCss.mSubtle} />
+              </InfoRow>
+            )}
             <InfoRow onClick={leave(() => app.push(`${stationBase(at.station)}/chats/${encodeURIComponent(at.chat)}/run/${encodeURIComponent(s.key)}`))}>
               <span className={css.mAgentRowLabel}>{t("web-mobile.history.account")}</span>
               <span className={css.mAgentRowValue}>{account ? (s.profilePinned ? account.name : t("web-mobile.agent.accountAuto", { name: account.name })) : t("web-mobile.history.auto")}</span>

@@ -1,5 +1,6 @@
-// The phone's agent card and the chat's own sheet (web/src/mobile/AgentSheet.tsx, Chat.tsx): an agent's name beside
-// its messages opens its card over the chat (where it stands, its figures, the rows that lead on), whose history row
+// The phone's agent card and the chat's own sheet (web/src/mobile/AgentSheet.tsx, Chat.tsx): the first agent's tile in
+// the bar, carrying its station, opens the agent's card with one tap, whose station row opens the station's card; an
+// agent's name beside its messages opens its card over the chat (where it stands, its figures, the rows that lead on), whose history row
 // opens its execution history, its details headed with the same; "…" opens the chat's sheet, whose agent row opens the
 // card. Runs its own Vite fixture with the demo core, without a station or network data.
 // PLAYWRIGHT_MODULE selects Playwright; SHOTS optionally keeps pictures.
@@ -47,6 +48,23 @@ createRoot(root).render(<DemoApp phone />);
   const name = page.locator('[data-role="agent"] button').first();
   await name.waitFor({ timeout: 30000 });
   await rest();
+
+  // The bar's tile of the agent and its station: one control, the agent's card; its station row, the station's card.
+  const tile = page.locator('header').getByRole('button', { name: /的名片/ }).first();
+  assert.ok(await tile.getByText('Studio', { exact: true }).isVisible(), 'the tile names its station');
+  if (out) await page.locator('header').first().screenshot({ path: `${out}/bar.png` });
+  await tile.tap();
+  await rest();
+  const station = page.getByText('Station', { exact: true });
+  await station.waitFor();
+  if (out) await page.screenshot({ path: `${out}/bar-agent-card.png` });
+  await station.tap();
+  await page.getByText('机器详情', { exact: true }).waitFor();
+  await rest();
+  if (out) await page.screenshot({ path: `${out}/bar-station-card.png` });
+  await page.touchscreen.tap(195, 120);
+  await rest();
+  assert.equal(await page.getByText('机器详情', { exact: true }).count(), 0, 'the station card went');
 
   // Its name: its card over the chat, not its history.
   await name.tap();

@@ -58,3 +58,6 @@ globalStyle(`${mAgentNotes} > span[data-level=red]`, { color: "var(--m-red)" });
 export const mAgentRows = style({ marginTop: "12px" });
 export const mAgentRowLabel = style({ flex: "none", color: "var(--m-muted)" });
 export const mAgentRowValue = style({ flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** The station it runs on: its mark before its name, the name cut short as a value is. */
+export const mAgentStation = style({ display: "flex", alignItems: "center", gap: "6px" });
+globalStyle(`${mAgentStation} > span:last-child`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });

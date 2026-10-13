@@ -618,6 +618,7 @@
   "web-mobile.history.stepUnread": "没读到：{error}",
   "web-mobile.agent.card": "{agent} 的名片",
   "web-mobile.agent.accountAuto": "{name} · 自动",
+  "web-mobile.agent.station": "Station",
   "web-mobile.agent.history": "历史",
   "web-mobile.agent.noTurns": "还没跑过",
   "web-mobile.agent.jobs": "后台",

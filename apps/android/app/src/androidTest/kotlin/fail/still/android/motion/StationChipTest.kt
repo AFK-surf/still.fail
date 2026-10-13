@@ -32,8 +32,8 @@ import java.io.FileOutputStream
 
 /**
  * A chat's bar names the station it runs on: on its first agent's tile (the station's icon, or its name where it has
- * none), or as a tag of its own while the chat has no agent; a tap on it opens the station's card. `shots` pictures them
- * (light and dark) into files/shots.
+ * none), one tap opening the agent's card whose station row opens the station's; or as a tag of its own while the chat
+ * has no agent, a tap opening the station's card. `shots` pictures them (light and dark) into files/shots.
  */
 class StationChipTest {
     @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
@@ -69,9 +69,11 @@ class StationChipTest {
         return h
     }
 
+    private val tile = "Claude · Studio"
+
     @Test fun theAgentsTileCarriesIt() {
         open(listOf(studio))
-        assertEquals(1, rule.onAllNodesWithContentDescription("Studio").fetchSemanticsNodes().size)
+        assertEquals(1, rule.onAllNodesWithContentDescription(tile).fetchSemanticsNodes().size)
         // Its icon only: the name is not written out beside it.
         assertTrue(rule.onAllNodesWithText("Studio").fetchSemanticsNodes().isEmpty())
     }
@@ -90,7 +92,10 @@ class StationChipTest {
 
     @Test fun tapOpensTheCard() {
         val h = open(listOf(studio, mini))
-        rule.onNodeWithContentDescription("Studio").performClick()
+        rule.onNodeWithContentDescription(tile).performClick()
+        h.settle()
+        rule.onNodeWithText("Station").assertExists()
+        rule.onNodeWithText("Studio").performClick()
         h.settle()
         rule.onNodeWithText("1 个 agent 在跑").assertExists()
         rule.onNodeWithText("机器详情").performClick()
@@ -105,7 +110,10 @@ class StationChipTest {
         val h = open(listOf(studio, mini), dark)
         val tag = if (dark) "dark" else "light"
         shot("station-tile-$tag")
-        rule.onNodeWithContentDescription("Studio").performClick()
+        rule.onNodeWithContentDescription(tile).performClick()
+        h.settle()
+        shot("agent-card-$tag")
+        rule.onNodeWithText("Studio").performClick()
         h.settle()
         shot("station-peek-$tag")
         rule.runOnUiThread { h.app.sheet = null; h.fake.put(Topics.stations(Fixtures.WS), listOf(studio.copy(emoji = null, icon = null), mini)) }

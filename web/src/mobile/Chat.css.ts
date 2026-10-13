@@ -55,14 +55,10 @@ globalStyle(`${mBarStation} > span:last-child`, { minWidth: "0", overflow: "hidd
 /** Its card in a sheet: the card's own lines, as wide as the sheet's rows. */
 export const mStationSheet = style({ padding: "4px 20px 24px" });
 export const mBarAgent = style({ flex: "none", display: "grid", padding: "0", border: "0", background: "none", cursor: "pointer" });
-/** The first agent's tile with the station it runs on (../ui.tsx AgentMark): the maker's square, then the station's part. */
-export const mBarJoinedAgent = style({
-  display: "grid", placeItems: "center", width: "var(--mark)", height: "var(--mark)", padding: "0", border: "0",
-  background: "none", color: "inherit", cursor: "pointer",
-});
+/** The first agent's tile with the station it runs on (../ui.tsx AgentMark), one control: the maker's square, then the station's part. */
+export const mBarJoinedAgent = style({ display: "grid", placeItems: "center", width: "var(--mark)", height: "var(--mark)" });
 export const mBarJoinedStation = style({
-  display: "inline-flex", alignItems: "center", height: "var(--mark)", maxWidth: "96px", padding: "0", border: "0",
-  background: "none", color: "inherit", font: "inherit", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis",
+  display: "inline-flex", alignItems: "center", height: "var(--mark)", maxWidth: "96px", overflow: "hidden", textOverflow: "ellipsis",
   selectors: { "&[data-name]": { display: "block", lineHeight: "var(--mark)" } },
 });
 /** A message held for its menu (a long press): its words marked while the menu is open; the system's own menu never comes. */

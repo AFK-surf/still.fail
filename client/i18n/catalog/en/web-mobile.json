@@ -651,6 +651,7 @@
   "web-mobile.history.stepUnread": "Couldn't load: {error}",
   "web-mobile.agent.card": "{agent} in brief",
   "web-mobile.agent.accountAuto": "{name} · auto",
+  "web-mobile.agent.station": "Station",
   "web-mobile.agent.history": "History",
   "web-mobile.agent.noTurns": "No turns yet",
   "web-mobile.agent.jobs": "Jobs",

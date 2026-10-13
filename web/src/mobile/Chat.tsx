@@ -165,24 +165,21 @@ const ChatBar = memo(function ChatBar({ station: address, session }: { station: 
       <StationUpdate station={address} notice={bar.stationUpdate} />
       <PeopleStack people={bar.people} max={5} />
       {bar.agents.map((a, i) => {
-        const history = () => { const h = here(); if (h) agentCard(app, h, a.key); };
+        const card = () => { const h = here(); if (h) agentCard(app, h, a.key); };
         const label = t("web-mobile.agent.card", { agent: a.agentText });
-        // The first shares its tile with the station it runs on: its icon, or its
-        // name where it has none; tapped, the station's card.
-        if (i === 0 && station) {
-          return (
-            <AgentMark key={a.key} maker={a.maker} runtime={a.runtime} badge={a.badge} badgeText={a.badgeText} size={22}
-              wrap={(logo) => <button type="button" className={css.mBarJoinedAgent} onClick={history} aria-label={label}>{logo}</button>}>
-              <button type="button" className={css.mBarJoinedStation} data-name={station.emoji || station.icon ? undefined : true} aria-label={station.name}
-                onClick={() => app.sheet({ height: 0.55, content: () => <StationSheet station={address} /> })}>
-                {station.emoji || station.icon ? <StationMark emoji={station.emoji} icon={station.icon} size={13} /> : station.name}
-              </button>
-            </AgentMark>
-          );
-        }
+        // The first shares its tile with the station it runs on: its icon, or its name where it has none. One tap for
+        // the whole tile (two halves are too small to tell apart under a finger): the agent's card, which leads on to
+        // the station's.
         return (
-          <button key={a.key} type="button" className={css.mBarAgent} onClick={history} aria-label={label}>
-            <AgentMark maker={a.maker} runtime={a.runtime} badge={a.badge} badgeText={a.badgeText} size={22} />
+          <button key={a.key} type="button" className={css.mBarAgent} onClick={card} aria-label={label}>
+            {i === 0 && station ? (
+              <AgentMark maker={a.maker} runtime={a.runtime} badge={a.badge} badgeText={a.badgeText} size={22}
+                wrap={(logo) => <span className={css.mBarJoinedAgent}>{logo}</span>}>
+                <span className={css.mBarJoinedStation} data-name={station.emoji || station.icon ? undefined : true}>
+                  {station.emoji || station.icon ? <StationMark emoji={station.emoji} icon={station.icon} size={13} /> : station.name}
+                </span>
+              </AgentMark>
+            ) : <AgentMark maker={a.maker} runtime={a.runtime} badge={a.badge} badgeText={a.badgeText} size={22} />}
           </button>
         );
       })}
@@ -199,7 +196,7 @@ function StationChip({ station }: { station: string }) {
   const s = useChatStation(station);
   if (!s) return null;
   return (
-    <button type="button" className={css.mBarStation} aria-label={s.name} onClick={() => app.sheet({ height: 0.55, content: () => <StationSheet station={station} /> })}>
+    <button type="button" className={css.mBarStation} aria-label={s.name} onClick={() => openStationSheet(app, station)}>
       {(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={12} />}<span>{s.name}</span>
     </button>
   );
@@ -208,6 +205,11 @@ function StationChip({ station }: { station: string }) {
 /** How the station the chat runs on looks: followed alone, not each change of the stations' views. */
 function useChatStation(station: string) {
   return useStationLook(station);
+}
+
+/** The card of the station a chat runs on, in a sheet (in place of any open: the agent's card leads to it). */
+function openStationSheet(app: MobileApp, station: string) {
+  app.sheet({ height: 0.55, content: () => <StationSheet station={station} /> });
 }
 
 function StationSheet({ station }: { station: string }) {
@@ -533,6 +535,7 @@ function agentCard(app: MobileApp, here: Here, key: string) {
   openAgent(app, { station: here.station, chat: here.key, key }, agent, {
     history: () => openHistory(app, here.station, here.key, key),
     jobs: () => openJobs(app, here),
+    station: () => openStationSheet(app, here.station),
   });
 }
 
