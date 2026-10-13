@@ -142,6 +142,10 @@ export const fpImage = style({
   position: "absolute", left: "50%", top: "50%", maxWidth: "none", transformOrigin: "center",
   boxShadow: "0 1px 3px rgba(0, 0, 0, .08), 0 8px 28px rgba(0, 0, 0, .10)", WebkitUserDrag: "none",
 });
+// Around an image, a click closes it (`data-closes`): the image zooms, not what is around it.
+globalStyle(`${fpStage}[data-closes]:not([data-pan])`, { cursor: "default" });
+globalStyle(`${fpStage}[data-closes]:not([data-pan]) ${fpImage}`, { cursor: "zoom-in" });
+globalStyle(`${fpStage}[data-closes][data-zoomed]:not([data-pan]) ${fpImage}`, { cursor: "zoom-out" });
 export const fpProgress = style({
   display: "grid", gap: "8px", width: "220px", padding: "12px 14px", borderRadius: `calc(14px * ${vars.cornerScale})`,
   cornerShape: vars.cornerShape, background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`,
