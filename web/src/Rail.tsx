@@ -118,7 +118,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       );
       case "archive": return link(item, `/w/${scope}/archive`);
       case "attention": return <AttentionEntry key={item} scope={scope} rail={{ item: css.item, count: css.count, label: railLabel(item) }} />;
-      case "workspaces": return <RailWorkspaces key={item} scope={scope} />;
+      case "workspaces": return <RailWorkspaces key={item} scope={scope} current={workspace} />;
       case "files": return link(item, `/w/${scope}/files`);
       case "stations": return <RailStations key={item} scope={scope} to={`${settings}/stations`} on={on(item)} className={css.item} />;
       case "profiles": return link(item, `${settings}/profiles`);
@@ -143,17 +143,18 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       <Tip label={t("web-pages.settings.title")} side="right">
         <NavLink className={css.item} to={settings} data-on={place === "settings" || (place !== "chats" && !items.includes(place as RailItem)) || undefined} aria-label={t("web-pages.settings.title")}><Settings size={20} /></NavLink>
       </Tip>
-      {workspace}
+      {/* Among the workspaces when they are in the rail. */}
+      {!items.includes("workspaces") && workspace}
     </nav>
   );
 }
 
 /**
- * Every workspace of the viewer's accounts, each its first letter, the one in view marked; the others with what waits in
+ * Every workspace of the viewer's accounts, each its first letter, the one in view its switcher; the others with what waits in
  * them (the core's marks: red, something went wrong; amber, someone waits for them; blue, new), its words on hover.
  * Pressed, the chat last open there.
  */
-function RailWorkspaces({ scope }: { scope: string }) {
+function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode }) {
   const all = (useWorkspaces().value ?? []).flatMap(({ account, workspaces }) => workspaces.map((w) => ({ account, w })));
   const marks = useWorkspaceMarks(scope);
   const navigate = useNavigate();
@@ -161,6 +162,8 @@ function RailWorkspaces({ scope }: { scope: string }) {
     <div className={css.workspaces}>
       {all.map(({ account, w }) => {
         const here = w.id === scope;
+        // The one in view is the switcher (its menu: making one, another account, invitations).
+        if (here) return <span key={`${account.sub}/${w.id}`} className={css.workspaceHere}>{current}</span>;
         const mark = marks?.workspaces[w.id];
         return (
           <Tip key={`${account.sub}/${w.id}`} label={!here && mark?.label ? `${w.name} · ${mark.label}` : w.name} side="right">

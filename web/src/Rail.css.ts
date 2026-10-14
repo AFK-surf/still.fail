@@ -55,6 +55,9 @@ export const workspaceItem = style({
     "&[data-on]": { background: vars.text, color: vars.sidebar },
   },
 });
+/** The switcher among them: no room above it there. */
+export const workspaceHere = style({ display: "contents" });
+globalStyle(`${workspaceHere} > button`, { marginTop: 0 });
 /** The workspace in view, its first letter; its menu is the switcher's (cloud/workspace.tsx). */
 export const workspace = style({
   position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, marginTop: 4, padding: 0, border: 0,
