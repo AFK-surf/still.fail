@@ -30,7 +30,7 @@ export const code = style({
   fontFamily: vars.fontMono, fontWeight: "600", letterSpacing: "1px", padding: "3px 9px", borderRadius: "8px",
   background: `color-mix(in oklab, ${vars.text} 6%, transparent)`, fontSize: vars.textBody,
 });
-export const bigCode = style({ fontFamily: vars.fontMono, fontSize: "40px", lineHeight: "52px", letterSpacing: "6px", fontWeight: "600", textAlign: "center", margin: "6px 0" });
+export const bigCode = style({ fontFamily: vars.fontMono, fontSize: vars.textDisplay, lineHeight: "1.3", letterSpacing: "6px", fontWeight: "600", textAlign: "center", margin: "6px 0" });
 export const count = style({ fontSize: vars.textMeta, padding: "0 7px", borderRadius: "10px", background: vars.accentBg, color: vars.accentText, fontWeight: "500" });
 /** The one-line notice at the top of the settings pages while the lock is off (the owner's). */
 export const banner = style({
