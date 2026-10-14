@@ -58,6 +58,8 @@ export const workspaceItem = style({
 /** The switcher among them: no room above it there. */
 export const workspaceHere = style({ display: "contents" });
 globalStyle(`${workspaceHere} > button`, { marginTop: 0 });
+// What waits in the others is on each of them there, not on it too.
+globalStyle(`${workspaceHere} > button > span`, { display: "none" });
 /** The workspace in view, its first letter; its menu is the switcher's (cloud/workspace.tsx). */
 export const workspace = style({
   position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, marginTop: 4, padding: 0, border: 0,
