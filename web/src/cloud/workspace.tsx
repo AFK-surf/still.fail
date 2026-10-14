@@ -4,14 +4,15 @@
 // station the item belongs to (StationContext).
 import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
 import { NewChat } from "../NewChat.tsx";
-import { useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
+import { lastChatOf, useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { useChats, useStationViews, useStations } from "../api.ts";
 import { useGo } from "../go.ts";
 import type { Topic } from "../core/client.ts";
-import { useTopics } from "../core/react.ts";
+import { useReady, useTopics } from "../core/react.ts";
+import { LOCAL_MS } from "../motion.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { DrivePage, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
@@ -69,6 +70,9 @@ interface InvitationEntry extends PendingInvitation { account: Account }
  * opening does not draw the sidebar and the page again from here.
  */
 export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
+  // Come from another workspace (a navigation, so a transition), the one left stays until this one's stations are
+  // known, as a chat's page waits for its chat: not a page of nothing first.
+  useReady({ topic: "stations", scope: entry.id }, LOCAL_MS);
   const known = useStationViews(entry.id);
   const stations = useStationList(known, entry.id) ?? NO_STATIONS;
   const path = useLocation().pathname;
@@ -292,15 +296,19 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
   // What the others have waiting, as the core counts it: one dot on the trigger, one by each in the menu.
   const marks = useWorkspaceMarks(current.id);
   const othersTone = marks?.others;
+  // Straight to the chat last open there (WorkspaceHome would go on to it after drawing a page of its own first).
+  const to = (id: string) => lastChatOf(marks, id) ?? `/w/${id}`;
   const allRef = useRef(all);
   allRef.current = all;
+  const toRef = useRef(to);
+  toRef.current = to;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const i = workspaceIndexOf(e);
       const to = i === null ? undefined : allRef.current[i];
       if (!to) return;
       e.preventDefault();
-      if (!isCurrent(to.account.sub, to.w.id)) navigate(`/w/${to.w.id}`);
+      if (!isCurrent(to.account.sub, to.w.id)) navigate(toRef.current(to.w.id));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -362,7 +370,7 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
             {all.map(({ account, w }, i) => {
               const here = isCurrent(account.sub, w.id);
               return (
-              <DropdownMenu.Item key={`${account.sub}/${w.id}`} className={controlsCss.menuItem} aria-current={here || undefined} onSelect={() => { if (!here) navigate(`/w/${w.id}`); }}>
+              <DropdownMenu.Item key={`${account.sub}/${w.id}`} className={controlsCss.menuItem} aria-current={here || undefined} onSelect={() => { if (!here) navigate(to(w.id)); }}>
                 <span className={css.menuCheck}>{here && <Check {...ICON} size={14} />}</span>
                 <span className={css.menuWorkspace}>
                   <span className={css.menuWorkspaceName}>
