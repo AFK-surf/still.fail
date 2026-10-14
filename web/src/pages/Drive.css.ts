@@ -18,6 +18,8 @@ globalStyle(`${crumbs} button`, {
   textDecoration: "underline", textDecorationColor: "transparent", textUnderlineOffset: "3px",
 });
 globalStyle(`${crumbs} button:hover`, { color: vars.text, textDecorationColor: "currentColor" });
+/** Under the folder's name: whose it is, what is in it. */
+export const headMeta = style({ margin: "0", color: vars.muted, fontSize: vars.textMeta });
 export const actions = style({ flex: "none", display: "flex", alignItems: "center", gap: "6px" });
 const turn = keyframes({ to: { transform: "rotate(360deg)" } });
 /** Refresh turns while the folder is read again. */

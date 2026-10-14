@@ -7,7 +7,7 @@
 // chat's preview over the page. The phone's pages are ../mobile/Drive.tsx, with the same parts under them.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate, useSearchParams } from "react-router";
-import { ContextMenu, DropdownMenu } from "radix-ui";
+import { ContextMenu } from "radix-ui";
 import { stationBase, useStation } from "../station.tsx";
 import { useStations } from "../api.ts";
 import { useGo } from "../go.ts";
@@ -164,31 +164,25 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
     <>
       <header className={pagesCss.pageHead}>
         <div className={css.headText}>
-          <span className={css.crumbs}>
-            <span>{station.name}</span>
-            <ChevronRight size={12} />
-            {/* With one folder lent, the drive's page is that folder: the trail starts at it. */}
-            {d.roots.length > 1 ? <button type="button" onClick={() => go(drivePath(station.base, null))}>{t("web-pages.drive.title")}</button> : <span>{t("web-pages.drive.title")}</span>}
-            {trail.length > 0 && <span className={css.crumb}><ChevronRight size={12} /><button type="button" onClick={() => go(drivePath(station.base, root))}>{rootLabel(d.roots, root)}</button></span>}
-            {trail.slice(0, -1).map((p, i) => (
-              <span key={i} className={css.crumb}><ChevronRight size={12} /><button type="button" onClick={() => go(drivePath(station.base, root, trail.slice(0, i + 1).join("/")))}>{p}</button></span>
-            ))}
-          </span>
+          {/* Inside a folder lent: the way back up to it (the folder lent itself, and whose it is, are the sidebar's). */}
+          {trail.length > 0 && (
+            <span className={css.crumbs}>
+              <button type="button" onClick={() => go(drivePath(station.base, root))}>{rootLabel(d.roots, root)}</button>
+              {trail.slice(0, -1).map((p, i) => (
+                <span key={i} className={css.crumb}><ChevronRight size={12} /><button type="button" onClick={() => go(drivePath(station.base, root, trail.slice(0, i + 1).join("/")))}>{p}</button></span>
+              ))}
+            </span>
+          )}
           <h1>{name}</h1>
+          <p className={css.headMeta}>
+            {station.name}
+            {folder.value && <> · {folder.value.countText}{folder.value.truncated ? ` · ${t("web-pages.drive.truncated")}` : ""}</>}
+          </p>
         </div>
         <div className={css.actions}>
+          {d.write && <IconButton label={t("web-pages.drive.upload")} icon={Upload} onClick={() => files.current?.click()} />}
+          {d.write && <IconButton label={t("web-pages.drive.mkdir")} icon={FolderPlus} onClick={() => setNaming({ entry: null })} />}
           <span className={css.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
-          {d.write && (
-            <DropdownMenu.Root modal={false}>
-              <DropdownMenu.Trigger asChild><Button variant="primary" icon={Plus}>{t("web-pages.drive.new")}</Button></DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} align="end" sideOffset={4} collisionPadding={8}>
-                  <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => files.current?.click()}><Upload {...ICON} />{t("web-pages.drive.upload")}</DropdownMenu.Item>
-                  <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setNaming({ entry: null })}><FolderPlus {...ICON} />{t("web-pages.drive.mkdir")}</DropdownMenu.Item>
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Root>
-          )}
           {d.manage && <Menu items={[{ label: t("web-pages.drive.manage"), icon: Folder, onSelect: manage.open }]} />}
         </div>
       </header>
@@ -200,7 +194,6 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
           <div className={css.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>
         ) : !folder.value ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p> : (
           <>
-            <p className={css.count}>{folder.value.countText}{folder.value.truncated ? ` · ${t("web-pages.drive.truncated")}` : ""}{d.write ? ` · ${t("web-pages.drive.dropHint")}` : ""}</p>
             {uploads.map((u) => <UploadRow key={u.key} u={u} />)}
             {entries.length === 0 && uploads.length === 0 && <Empty text={t("web-pages.drive.emptyFolder")} action={d.write ? <Button icon={Upload} onClick={() => files.current?.click()}>{t("web-pages.drive.upload")}</Button> : undefined} />}
             {entries.map((e) => <EntryRow key={e.name} at={at} entry={e} items={items(e)} onOpen={() => open(e)} />)}
