@@ -87,7 +87,7 @@ globalStyle(`input${input}`, { borderRadius: "999px", paddingLeft: "16px", paddi
  * `--panel-in` to that; one wanting more room sets `--panel-pad`. By default the menus' corner, as it was.
  */
 export const popover = style({
-  ...surface(6, `calc(${vars.rMenu} - 6px)`),
+  ...surface(6, `calc(${vars.rMenu} - 6px)`, vars.cornerShape),
   zIndex: "60", ...panel,
   boxShadow: `0 12px 32px ${vars.shadow}`, transformOrigin: "var(--radix-popper-transform-origin, top)",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`, cornerShape: vars.cornerShape,

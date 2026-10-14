@@ -8,6 +8,7 @@ import { pageBar } from "./styles/sidebar.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
 import { card, listRow } from "./styles/pages.css.ts";
 import { outsetStart } from "./styles/align.ts";
+import { innerOr, innerShape } from "./styles/align.ts";
 
 export const firstOneTitle = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "12px 0 0", fontSize: vars.textTitle,
@@ -434,3 +435,30 @@ export const panelRowLabel = style({
 });
 export const panelRowEnd = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0, color: vars.subtle, flex: "0 1 auto" });
 export const panelFoot = style({ display: "flex", justifyContent: "flex-end", gap: 6, paddingTop: 4 });
+
+// ── a small panel's buttons (notices, popovers, cards): its corner less its padding, never a pill of their own ──
+/**
+ * Words to press in a small panel: 28 high, rounded as what sits in the panel is (its corner less its padding:
+ * styles/align.ts `inner`), in its corners' shape; a ground only while pointed at. `data-tone`: accent (the one thing
+ * to do), quiet (a lesser one), filled (the accent's ground always, for one that must be seen).
+ */
+export const panelButton = style({
+  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, height: 28, padding: "0 10px", border: 0,
+  borderRadius: innerOr("14px"), cornerShape: innerShape, background: "none", color: vars.text, font: "inherit",
+  fontSize: vars.textUi, fontWeight: 500, lineHeight: "28px", textDecoration: "none", whiteSpace: "nowrap", cursor: "pointer", flex: "none",
+  selectors: {
+    "&:hover:not(:disabled)": { background: vars.hover },
+    '&[data-tone="accent"]': { color: vars.accentText },
+    '&[data-tone="quiet"]': { color: vars.muted },
+    '&[data-tone="quiet"]:hover:not(:disabled)': { color: vars.text },
+    '&[data-tone="filled"]': { background: vars.accentBg, color: vars.accentText },
+    '&[data-tone="filled"]:hover:not(:disabled)': { background: `color-mix(in srgb, ${vars.accent} 22%, transparent)` },
+    "&:disabled": { opacity: .5, cursor: "default" },
+  },
+});
+/** An icon to press in a small panel (close, stop, step): 28 square, rounded as panelButton. */
+export const panelIcon = style({
+  display: "grid", placeItems: "center", width: 28, height: 28, padding: 0, border: 0, flex: "none",
+  borderRadius: innerOr("14px"), cornerShape: innerShape, background: "none", color: vars.muted, cursor: "pointer",
+  selectors: { "&:hover:not(:disabled)": { background: vars.hover, color: vars.text }, "&:disabled": { opacity: .35, cursor: "default" } },
+});

@@ -3,12 +3,13 @@ import { vars } from "./styles/tokens.css.ts";
 import { panel } from "./styles/glass.ts";
 import { inLine } from "./styles/align.ts";
 import { surface } from "./styles/align.ts";
+import { panelButton, panelIcon } from "./ui.css.ts";
 
 const sweep = keyframes({ from: { transform: "translateX(-100%)" }, to: { transform: "translateX(250%)" } });
 
 export const trigger = style({ display: "inline-flex", alignItems: "center", gap: "5px", flexShrink: 0, padding: "6px 0", border: 0, background: "none", color: vars.accentText, fontSize: vars.textMeta, lineHeight: "18px", cursor: "pointer", whiteSpace: "nowrap", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, outline: "none", selectors: { "&:focus-visible": { boxShadow: `0 0 0 2px ${vars.fieldFocus}` }, '&[data-tone="trouble"]': { color: vars.red } } });
 export const dot = style({ width: "6px", height: "6px", borderRadius: "50%", background: "currentColor", flexShrink: 0 });
-export const popover = style({ display: "flex", flexDirection: "column", gap: "8px", width: "min(288px, calc(100vw - 24px))", boxSizing: "border-box", ...surface(12, `calc(${vars.rMenu} - 12px)`), cornerShape: vars.cornerShape, zIndex: 100, ...panel, boxShadow: `0 12px 32px ${vars.shadow}`, color: vars.text, fontSize: vars.textUi, lineHeight: "19px", outline: "none" });
+export const popover = style({ display: "flex", flexDirection: "column", gap: "8px", width: "min(288px, calc(100vw - 24px))", boxSizing: "border-box", ...surface(12, `calc(${vars.rMenu} - 12px)`, vars.cornerShape), zIndex: 100, ...panel, boxShadow: `0 12px 32px ${vars.shadow}`, color: vars.text, fontSize: vars.textUi, lineHeight: "19px", outline: "none" });
 export const head = style({ display: "flex", alignItems: "flex-start", gap: "8px" });
 export const words = style({ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, flex: 1 });
 export const title = style({ display: "flex", alignItems: "baseline", gap: "8px", minWidth: 0 });
@@ -20,5 +21,6 @@ export const fill = style({ position: "absolute", inset: "0 auto 0 0", borderRad
 export const sweeping = style({ width: "40%", animation: `${sweep} 1.4s ease-in-out infinite`, "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", width: "100%", opacity: .35 } } });
 export const foot = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", minHeight: "24px", marginRight: "4px" });
 export const versions = style({ color: vars.muted, fontFamily: vars.fontMono, fontSize: vars.textCaption, lineHeight: "16px", fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 });
-export const update = style({ display: "inline-flex", alignItems: "center", gap: "4px", marginLeft: "auto", padding: "4px 10px", border: 0, borderRadius: "999px", background: vars.accentBg, font: "inherit", fontSize: vars.textMeta, lineHeight: "16px", color: vars.accentText, fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", flexShrink: 0, selectors: { "&:disabled": { opacity: .6, cursor: "default" } } });
-export const dismiss = style({ display: "grid", placeItems: "center", width: "24px", height: "24px", marginInline: 0, ...inLine(6), padding: 0, border: 0, borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", color: vars.muted, cursor: "pointer", flexShrink: 0, selectors: { "&:hover": { background: vars.fieldHover, color: vars.text } } });
+/** Its one thing to do, filled (it must be seen); its close an icon: a small panel's (ui.css.ts). */
+export const update = style([panelButton, { marginLeft: "auto" }]);
+export const dismiss = style([panelIcon, inLine(10)]);

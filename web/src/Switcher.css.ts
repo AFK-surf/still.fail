@@ -19,7 +19,7 @@ export const overlay = style({
 export const switcher = style({
   position: "fixed", top: "14vh", zIndex: "50", ...centredX,
   display: "flex", flexDirection: "column", width: "min(560px, calc(100vw - 32px))", maxHeight: "min(480px, 72vh)",
-  ...surface(EDGE, `calc(${DIALOG_PAD + 18}px * ${vars.cornerScale} - ${EDGE}px)`), color: vars.text, ...panel,
+  ...surface(EDGE, `calc(${DIALOG_PAD + 18}px * ${vars.cornerScale} - ${EDGE}px)`, vars.cornerShape), color: vars.text, ...panel,
   boxShadow: `0 24px 64px ${vars.shadow}`, transformOrigin: "top", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
   cornerShape: vars.cornerShape, outline: "none",
 });

@@ -39,7 +39,7 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
         </div>}
         {(notice.from || notice.to || notice.canUpdate) && <div className={css.foot}>
           {(notice.from || notice.to) && <span className={css.versions}>{[notice.from, notice.to].filter(Boolean).join(" → ")}</span>}
-          {notice.canUpdate && <button className={css.update} disabled={busy} onClick={update}>
+          {notice.canUpdate && <button className={css.update} data-tone="filled" disabled={busy} onClick={update}>
             <DoingMark calls="software.update" on={{ station, id: "station" }} size={12} />{busy ? t("web-main.stationUpdate.updating") : notice.tone === "trouble" ? t("common.retry") : t("web-main.stationUpdate.updateNow")}
           </button>}
         </div>}

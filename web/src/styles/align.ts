@@ -19,18 +19,24 @@ const px = (v: number | string) => (typeof v === "number" ? `${v}px` : v);
 /** The padding of the surface something sits in, and the corner of what sits in it (the popover's names, kept). */
 export const PAD = "--panel-pad";
 export const IN = "--panel-in";
+export const SHAPE = "--panel-shape";
 /** What sits at a surface's corner: its corner, concentric with the surface's. */
 export const inner = `var(${IN})`;
+/** The same where it may stand outside any surface: `fallback` there. */
+export const innerOr = (fallback: string) => `var(${IN}, ${fallback})`;
+/** The shape of a surface's corners (round, or the app's squarer one), which what sits in it takes too. */
+export const innerShape = `var(${SHAPE}, round)`;
 
 /**
  * A surface: `pad` its padding, `innerCorner` the corner of what sits in it (a pill: its half height; a row: what it
- * has). Its own corner is the two together.
+ * has). Its own corner is the two together; `shape` its corners' shape (round when not said), what sits in it the same.
  */
-export function surface(pad: number | string, innerCorner: number | string) {
+export function surface(pad: number | string, innerCorner: number | string, shape?: string) {
   return {
-    vars: { [PAD]: px(pad), [IN]: px(innerCorner) },
+    vars: { [PAD]: px(pad), [IN]: px(innerCorner), ...(shape ? { [SHAPE]: shape } : {}) },
     padding: `var(${PAD})`,
     borderRadius: `calc(var(${IN}) + var(${PAD}))`,
+    ...(shape ? { cornerShape: `var(${SHAPE})` } : {}),
   } as const;
 }
 
