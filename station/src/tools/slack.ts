@@ -9,7 +9,7 @@ import type { Tool } from "./mcp.ts";
 export const SLACK_API = {
   name: "slack_api",
   description:
-    "Call any Slack Web API method as your Slack bot, e.g. conversations.history, users.info, reactions.add, chat.update, conversations.open then chat.postMessage for a direct message. Writes in a thread another session takes part in are refused; posting in a thread nobody else is in, or a new message, makes that thread one of your conversations (its replies come to you; answer there with chat_post). Prefer chat_post to answer the thread you are working in. connect= calls as another of the station's Slack bots: how a still.fail chat's session writes in Slack.",
+    "Call any Slack Web API method as your Slack bot, e.g. conversations.history, users.info, reactions.add, chat.update, conversations.open then chat.postMessage for a direct message. Writes in a thread another session takes part in are refused; posting in a thread nobody else is in, or a new message, makes that thread one of your conversations (its replies come to you; answer there with chat_post). Prefer chat_post to answer the thread you are working in. connect= calls as another of the station's Slack bots: how a still.fail chat's session writes in Slack. Through it, a write outside your own threads of that bot (a new message, a thread you are not in) waits for a person's approval: a card in your still.fail chat; you are told when they choose.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -49,7 +49,7 @@ export function slackTools(hub: Hub): Tool[] {
         const to = typeof args.to === "string" && args.to !== "" ? args.to : null;
         if (named !== null && to !== null) throw new Error("give connect= or to=, not both");
         const via = named !== null ? slackConnect(hub, named) : to !== null ? target(hub, key, to).connect : null;
-        return slackApi(hub, key, method, params, via);
+        return slackApi(hub, key, method, params, via, named !== null);
       },
     },
   ];

@@ -34,6 +34,7 @@ import { dir as thumbsDir, keep } from "./thumbs.ts";
 import { INTERNAL_CONNECT } from "./internal.ts";
 import { prepare } from "./local-links.ts";
 import { suggestArchive } from "./review.ts";
+import { holdForApproval } from "./slack-hold.ts";
 import { nameChat } from "./titles.ts";
 
 type Json = any;
@@ -293,8 +294,9 @@ export function slackConnect(hub: Hub, named: string): string {
 
 /// slack_api: a Slack Web API call from session `key`, as the bot of `via` (else the session's own connect). Writes keep
 /// to the threads rule: not in a thread another session of the same bot takes part in; one it writes in becomes its own,
-/// through `via`: a session of the station's own chats starts a Slack conversation so.
-export async function slackApi(hub: Hub, key: string, method: string, params: Record<string, Json>, via: string | null): Promise<string> {
+/// through `via`: a session of the station's own chats starts a Slack conversation so. `approve` (connect=): a write
+/// outside the session's own threads of that bot waits for a person (slack-hold.ts).
+export async function slackApi(hub: Hub, key: string, method: string, params: Record<string, Json>, via: string | null, approve = false): Promise<string> {
   const { store } = hub;
   if (!isSlackMethod(method)) throw new Error(`not a Slack method: ${JSON.stringify(method)}`);
   if (["admin.", "apps.", "oauth."].some((p) => method.startsWith(p)) || method === "auth.revoke") throw new Error(`${method} is not for agents: it manages the Slack app itself`);
@@ -316,7 +318,9 @@ export async function slackApi(hub: Hub, key: string, method: string, params: Re
     if (known && store.threadSessions(known.id).some((m) => m.session !== key && m.connect === connect)) {
       throw new Error(`${channel}/${threadTs ?? ""} is another session's conversation: this session cannot write there`);
     }
-  }
+    const own = known !== null && store.threadSessions(known.id).some((m) => m.session === key && m.connect === connect);
+    if (approve && !own) return holdForApproval(hub, key, connect, method, params, channel, threadTs);
+  } else if (approve && write) throw new Error(`${method} through connect= names its channel (channel or channel_id)`);
   const postedText = textOf("text") ?? "";
   const result = await callApi(chat, method, params);
   if (write && channel !== null) {

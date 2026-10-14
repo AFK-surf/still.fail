@@ -20,6 +20,7 @@ import { roomOf } from "../src/sessions/footprint.ts";
 import { Refused } from "../src/sessions/neighbours.ts";
 import { archive, newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { review, reviewUndecided } from "../src/sessions/review.ts";
+import { answerHold } from "../src/sessions/slack-hold.ts";
 import { cleanTitle } from "../src/sessions/titles.ts";
 import { adbTools } from "../src/tools/adb.ts";
 import { archiveTools } from "../src/tools/archive.ts";
@@ -618,7 +619,7 @@ test("slack_api calls Slack as the session's bot; a thread it writes in becomes 
   await r.close();
 });
 
-test("a still.fail chat's session writes in Slack through connect=, and the thread it starts is its own", async () => {
+test("a still.fail chat's session writes in Slack through connect= once a person approves; the thread is its own then", async () => {
   const r = new Rig();
   const theirs = say("<@UBOT> something else");
   await r.accept(theirs);
@@ -626,28 +627,55 @@ test("a still.fail chat's session writes in Slack through connect=, and the thre
   const [key, thread] = newSession(r.hub, web());
   sayIn(r.hub, thread.id, "ada@x.com", "去 #ops 说一声");
   await settle();
+  const home = `EMBER/${thread.threadTs}`;
   // No Slack connect of its own: told which the station has.
   const none = await r.refused(key, "slack_api", { method: "chat.postMessage", params: { channel: "C2", text: "hi" } });
   assert.ok(none.includes("connect=") && none.includes("cl (Claude bot)"), none);
   assert.ok((await r.refused(key, "slack_api", { method: "auth.test", connect: "nope" })).includes("cl (Claude bot)"));
-  assert.ok((await r.refused(key, "slack_api", { method: "auth.test", connect: "cl", to: `EMBER/${thread.threadTs}` })).includes("not both"));
+  assert.ok((await r.refused(key, "slack_api", { method: "auth.test", connect: "cl", to: home })).includes("not both"));
   // Still not in a thread a session of that bot has.
   assert.ok((await r.refused(key, "slack_api", { method: "chat.postMessage", connect: "Claude bot", params: { channel: "C1", thread_ts: theirs.threadTs, text: "hi" } })).includes("another session's"));
+  // Reads go through at once.
+  r.chat.answers.set("conversations.history", { ok: true, messages: [] });
+  await r.call(key, "slack_api", { method: "conversations.history", connect: "cl", params: { channel: "C2" } });
+  assert.deepEqual(r.chat.calls.at(-1), ["conversations.history", { channel: "C2" }]);
+  // A new message waits: a card in its chat, nothing in Slack yet.
+  const ask = (text: string) => r.call(key, "slack_api", { method: "chat.postMessage", connect: "Claude bot", params: { channel: "C2", text } });
+  assert.ok((await ask("1400 今晚发")).startsWith("Not sent yet"));
+  assert.equal(r.chat.calls.filter(([m]) => m === "chat.postMessage").length, 0);
+  const card = r.store.pendingCard(thread.id)!;
+  assert.deepEqual([card[0].author, card[0].text.includes("> 1400 今晚发"), card[1].options.map((o: any) => o.label)], [key, true, ["发送", "不发"]]);
+  const agent = r.claude.sessions.find((s) => s.options.route === key)!;
+  await r.call(key, "chat_state", { kind: "need_human", need: "批准发到 #ops" });
+  agent.complete();
+  await settle();
+  // Not sent: nothing goes to Slack, and the agent is told.
+  assert.equal((await answerHold(r.hub, thread.id, "不发"))!.notice.startsWith("Not sent"), true);
+  sayIn(r.hub, thread.id, "ada@x.com", "不发");
+  assert.equal(r.chat.calls.filter(([m]) => m === "chat.postMessage").length, 0);
+  assert.equal(await answerHold(r.hub, thread.id, "发送"), null, "answered: no hold waits any more");
+  await settle();
+  // Asked again and sent: the call goes as the session, and its thread is the session's.
+  await ask("1400 今晚发");
   r.chat.answers.set("chat.postMessage", { ok: true, ts: "8888.1" });
-  await r.call(key, "slack_api", { method: "chat.postMessage", connect: "Claude bot", params: { channel: "C2", text: "1400 今晚发" } });
+  const held = (await answerHold(r.hub, thread.id, "发送"))!;
+  assert.deepEqual([held.session, held.notice.includes("C2/8888.1")], [key, true]);
   assert.deepEqual(r.chat.calls.at(-1), ["chat.postMessage", { channel: "C2", text: "1400 今晚发" }]);
   const started = r.thread("C2", "8888.1");
   assert.deepEqual(r.store.threadSessions(started.id).map((m) => [m.session, m.connect]), [[key, "cl"]]);
-  // Its reply goes there with chat_post, and a reply there comes to it.
+  // In its own thread now: written at once, and with chat_post.
+  r.chat.answers.set("reactions.add", { ok: true });
+  await r.call(key, "slack_api", { method: "reactions.add", connect: "cl", params: { channel: "C2", timestamp: "8888.1", name: "eyes" } });
+  assert.deepEqual(r.chat.calls.at(-1)![0], "reactions.add");
   await r.call(key, "chat_post", { to: "C2/8888.1", text: "补一句" });
   assert.deepEqual(r.chat.posts.at(-1)![0], { channel: "C2", threadTs: "8888.1" });
-  const agent = r.claude.sessions.find((s) => s.options.route === key)!;
+  // A reply there comes to it.
   await r.call(key, "chat_state", { kind: "final" });
   agent.complete();
   await settle();
   await r.accept(say("收到", { channel: "C2", threadTs: "8888.1", ts: "8888.2", addressed: false }));
   await settle();
-  assert.ok(agent.prompts.at(-1)!.includes("收到"));
+  assert.ok(agent.prompts.some((p) => p.includes("收到")));
   await r.close();
 });
 
