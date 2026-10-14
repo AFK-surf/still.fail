@@ -165,5 +165,6 @@
   "core-misc.wake.gone": "Back in foreground; reconnecting",
   "core-misc.wake.network": "Network changed; reconnecting",
   "core-misc.composer.too_big": "Over 1 GB",
+  "core-misc.composer.upload_missing": "The upload source for {name} is no longer available. Attach the file again in a new message.",
   "core-misc.composer.upload_failed": "Upload failed"
 }

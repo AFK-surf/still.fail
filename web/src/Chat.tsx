@@ -322,6 +322,7 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
   return (
     <MineMessage data-vk={`o:${o.id}`} data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
       <MineWords message={o} />
+      {o.uploads?.map((f) => <FileCard key={f.id} file={f} pending={o.state !== "failed"} error={o.state === "failed" ? o.error ?? null : null} />)}
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
@@ -335,7 +336,7 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
               onClick={() => { if (to !== null) sending.discard(to, o.id).catch((e: unknown) => toast(t("web-main.chat.deleteFailed", { error: failure(e) }))); }}>
               <DoingShown state={drop} className={css.msgUnsentSpinner} idle={<Trash size={12} strokeWidth={2} />} />{t("common.delete")}</button>
           </div>
-        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.chat.sending")}</span>}
+        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><span className={waitingCss.spinner} aria-hidden="true" />{o.uploads?.length ? t("web-main.file.uploading") : t("web-main.chat.sending")}</span>}
     </MineMessage>
   );
 }
@@ -1523,7 +1524,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
         <ComposerExtras draft={draft} focusQuote={focusQuote} onFocused={onFocused} onDone={() => input.current?.focus()} />
         {field}
         <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
-        <ComposerTools picker={picker} locked={locked} toolbar={toolbar} uploading={draft.uploading} ready={ready} starting={draft.starting} />
+        <ComposerTools picker={picker} locked={locked} toolbar={toolbar} ready={ready} starting={draft.starting} />
       </form>
       {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
     </div>
@@ -1534,9 +1535,9 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
  * The composer's foot: a file to send, what the page puts there (`toolbar`), and send. Drawn again only when what it
  * shows changes, not at every key typed.
  */
-const ComposerTools = memo(function ComposerTools({ picker, locked, toolbar, uploading, ready, starting }: {
+const ComposerTools = memo(function ComposerTools({ picker, locked, toolbar, ready, starting }: {
   /** The composer's file field, which the attach button opens. */
-  picker: RefObject<HTMLInputElement | null>; locked: boolean; toolbar: ReactNode; uploading: boolean; ready: boolean; starting: boolean;
+  picker: RefObject<HTMLInputElement | null>; locked: boolean; toolbar: ReactNode; ready: boolean; starting: boolean;
 }) {
   return (
     <div className={css.composerToolbar}>
@@ -1546,7 +1547,7 @@ const ComposerTools = memo(function ComposerTools({ picker, locked, toolbar, upl
         </button>
       </Tip>
       {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
-      <Tip label={uploading ? t("web-main.composer.stillUploading") : t("web-main.composer.send")}>
+      <Tip label={t("web-main.composer.send")}>
         <button type="submit" className={css.sendBtn} disabled={!ready} aria-label={t("web-main.composer.send")} aria-busy={starting || undefined}>
           {starting ? <span className={waitingCss.spinner} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
         </button>
