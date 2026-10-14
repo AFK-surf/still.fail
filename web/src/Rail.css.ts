@@ -12,9 +12,9 @@ export const rail = style({
   WebkitUserSelect: "none", userSelect: "none",
   // In the closed bar (shell.css.ts dock), as narrow as it, at the same pace.
   transition: `width 380ms ${vars.easeOut}, padding 380ms ${vars.easeOut}`,
-  // In the closed bar its places' ground 7 px from its every edge (4 of it within the place), the bar's corner
-  // concentric with theirs.
-  selectors: { '[data-sidebar="closed"] &': { width: 44, paddingTop: 3, paddingBottom: 3 } },
+  // In the closed bar (42 wide) its places' ground 6 px from its every edge (4 of it within the place), the bar's
+  // corner concentric with theirs.
+  selectors: { '[data-sidebar="closed"] &': { width: 42, paddingTop: 2, paddingBottom: 2 } },
   "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 /**

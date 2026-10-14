@@ -31,8 +31,8 @@ export const dock = style({
       position: "relative", display: "flex", minWidth: 0, minHeight: 0, overflow: "hidden", background: vars.sidebar, margin: 0, borderRadius: 0,
       cornerShape: vars.cornerShape, transition: `margin 380ms ${vars.easeOut}, border-radius 380ms ${vars.easeOut}`,
       selectors: {
-        // Concentric with what is lit in it (the rail's places' ground, its 9 px corner 7 px in from its sides).
-        '[data-sidebar="closed"] &': { margin: "8px 6px", borderRadius: `calc(9px * ${vars.cornerScale} + 7px)` },
+        // Concentric with what is lit in it (the rail's places' ground, its 9 px corner 6 px in from its every edge).
+        '[data-sidebar="closed"] &': { margin: "8px 7px", borderRadius: `calc(9px * ${vars.cornerScale} + 6px)` },
         '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { marginTop: 44 },
       },
     },
