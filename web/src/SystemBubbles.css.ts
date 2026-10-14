@@ -35,7 +35,7 @@ export const action = style({
   selectors: { "&:hover": { background: vars.hover } },
 });
 export const close = style({
-  gridArea: "close", alignSelf: "start", display: "grid", placeItems: "center", width: 28, height: 28, padding: 0, border: 0, borderRadius: "50%",
+  gridArea: "close", alignSelf: "start", justifySelf: "end", display: "grid", placeItems: "center", width: 28, height: 28, padding: 0, border: 0, borderRadius: "50%",
   background: "none", color: vars.muted, cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
