@@ -12,7 +12,8 @@ export const rail = style({
   WebkitUserSelect: "none", userSelect: "none",
   // In the closed bar (shell.css.ts dock), as narrow as it, at the same pace.
   transition: `width 380ms ${vars.easeOut}, padding 380ms ${vars.easeOut}`,
-  // In the closed bar its places 3 px from its every edge, the bar's corner concentric with theirs.
+  // In the closed bar its places' ground 7 px from its every edge (4 of it within the place), the bar's corner
+  // concentric with theirs.
   selectors: { '[data-sidebar="closed"] &': { width: 44, paddingTop: 3, paddingBottom: 3 } },
   "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
@@ -64,13 +65,23 @@ export const edge = style({
 globalStyle(`${dock}:hover ~ ${edge}::after`, { opacity: 1 });
 export const grow = style({ flex: 1 });
 
+/**
+ * A place: 38 to press, its ground (hovered, lit) as large as a workspace's square (30, the same corner) and drawn
+ * under the icon.
+ */
 export const item = style({
   position: "relative", display: "grid", placeItems: "center", width: 38, height: 38, padding: 0, border: 0,
-  borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", color: vars.muted,
-  cursor: "pointer", transition: `background ${vars.dur} ${vars.easeOut}, color ${vars.dur} ${vars.easeOut}`,
+  background: "none", color: vars.muted, cursor: "pointer", isolation: "isolate",
+  transition: `color ${vars.dur} ${vars.easeOut}`,
   selectors: {
-    "&:hover": { background: vars.hover, color: vars.text },
-    "&[data-on]": { background: vars.selected, color: vars.text },
+    "&::before": {
+      content: '""', position: "absolute", inset: 4, zIndex: -1, borderRadius: `calc(9px * ${vars.cornerScale})`,
+      cornerShape: vars.cornerShape, transition: `background ${vars.dur} ${vars.easeOut}`,
+    },
+    "&:hover": { color: vars.text },
+    "&:hover::before": { background: vars.hover },
+    "&[data-on]": { color: vars.text },
+    "&[data-on]::before": { background: vars.selected },
   },
 });
 /** 奏, the word, its size the icons' (vars.textTitle is the nearest of the type sizes). */
