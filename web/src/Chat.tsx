@@ -51,6 +51,7 @@ import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast, useAct } from "./toast.tsx";
 import { MessageDecision } from "./Decisions.tsx";
+import { Settles } from "./settling.tsx";
 import { AgentHover, ChatAgentKeys, ChatAgents } from "./AgentCard.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
@@ -158,20 +159,21 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
 }
 
 /**
- * 忽略 under a post that asks what no one has decided: the viewer lets it go (`decision.dismiss`: their lists and
- * the bell say nothing of it any more), gone at once and back if that fails.
+ * 忽略 under a post that asks what no one has decided (the core's `asked`): the viewer lets it go (`decision.dismiss`:
+ * their lists and the bell say nothing of it any more), going at once (settling.tsx) and back if that fails.
  */
-function AskDismiss({ thread, seq }: { thread: number; seq: number }) {
+function AskDismiss({ thread, seq, asked }: { thread: number; seq: number; asked: boolean }) {
   const station = useStation().address;
   const call = useCall();
   const act = useAct();
   const [gone, setGone] = useState(false);
-  if (gone) return null;
   return (
-    <button type="button" className={css.askDismiss} onClick={() => {
-      setGone(true);
-      act(call("decision.dismiss", { station, thread, seq }).catch((e: unknown) => { setGone(false); throw e; }), t("web-main.decisions.dismissWhat"));
-    }}>{t("web-main.chat.asks.dismiss")}</button>
+    <Settles shown={asked && !gone}>
+      <button type="button" className={css.askDismiss} onClick={() => {
+        setGone(true);
+        act(call("decision.dismiss", { station, thread, seq }).catch((e: unknown) => { setGone(false); throw e; }), t("web-main.decisions.dismissWhat"));
+      }}>{t("web-main.chat.asks.dismiss")}</button>
+    </Settles>
   );
 }
 
@@ -970,9 +972,10 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
       {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
       {/* It asks what no one has decided (the core's `asked`): letting it go, right under it. */}
-      {options && m.asked && thread !== null && <AskDismiss thread={thread} seq={m.seq} />}
+      {options && thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} />}
       {m.archiveCheck && <p className={css.archiveCheck} data-failed={m.archiveCheck.failed || undefined}>{m.archiveCheck.text}</p>}
-      {options && m.archive && chat && <ArchiveOption thread={m.thread} chat={chat} />}
+      {/* Coming and going in one motion (settling.tsx), as the phone's does. */}
+      {options && chat && <Settles shown={!!m.archive}><ArchiveOption thread={m.thread} chat={chat} /></Settles>}
     </OthersMessage>
   );
 }, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.thread === b.thread && a.options === b.options && sameMessage(a.message, b.message));

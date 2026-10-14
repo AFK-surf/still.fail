@@ -11,7 +11,7 @@
 //
 // Everything said goes through the core's calls (decision.answer / reply / defer / dismiss); what is under way shows
 // on its button (doing.ts), what failed in a toast (useAct).
-import { useLayoutEffect, useMemo, useRef, useState, type RefObject, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { ChatMessage, DecisionItem, DecisionOption, DecisionsView, MessageCard } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
 import { CoreError, useApi, useStationViews } from "./api.ts";
@@ -19,6 +19,7 @@ import { StationContext, stationBase, useStation, type Station } from "./station
 import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { useAct } from "./toast.tsx";
 import { reducedMotion } from "./motion.ts";
+import { useSettling } from "./settling.tsx";
 import { ComposerView, StaticMessage } from "./Chat.tsx";
 import { DecisionsIdle } from "./DecisionsIdle.tsx";
 import { useDraft, type Draft } from "./draft.ts";
@@ -139,7 +140,7 @@ export function MessageDecision({ message: m, thread }: { message: ChatMessage; 
   // they are back at once.
   const [drawnOpen, setDrawnOpen] = useState(open);
   const shown = open || drawnOpen;
-  useSettling(box, open, drawnOpen, setDrawnOpen);
+  useSettling(box, open, drawnOpen, setDrawnOpen, { arriving: `.${css.settledLine}` });
   if (!m.card && !m.options?.length) return null;
   return (
     <div ref={box} className={css.decision}>
@@ -150,49 +151,6 @@ export function MessageDecision({ message: m, thread }: { message: ChatMessage; 
       </> : d?.text ? <p className={css.settledLine}>{d.text}</p> : null}
     </div>
   );
-}
-
-/**
- * A decision in its chat settling, in one motion rather than its options vanishing: what was there (read on the last
- * commit that drew it) leaves as a copy, shrinking a little and fading where it was, as the box closes to the quiet
- * line that takes its place; the line comes in once the copy has nearly gone.
- */
-function useSettling(box: RefObject<HTMLDivElement | null>, open: boolean, drawnOpen: boolean, setDrawnOpen: (open: boolean) => void) {
-  const leaving = useRef<{ height: number; copy: HTMLElement; at: DOMRect } | null>(null);
-  useLayoutEffect(() => {
-    if (open) {
-      if (!drawnOpen) setDrawnOpen(true);
-      return;
-    }
-    if (!drawnOpen) return;
-    const el = box.current;
-    leaving.current = null;
-    if (el && el.childElementCount > 0 && !reducedMotion() && document.visibilityState === "visible") {
-      const rect = el.getBoundingClientRect();
-      leaving.current = { height: rect.height, copy: el.cloneNode(true) as HTMLElement, at: rect };
-    }
-    setDrawnOpen(false);
-  }, [box, open, drawnOpen, setDrawnOpen]);
-  useLayoutEffect(() => {
-    const was = leaving.current;
-    const el = box.current;
-    if (drawnOpen || !was || !el) return;
-    leaving.current = null;
-    const timing = { duration: 320, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" };
-    const now = el.getBoundingClientRect();
-    el.animate([{ height: `${was.height}px`, overflow: "clip" }, { height: `${now.height}px`, overflow: "clip" }], timing);
-    const { copy } = was;
-    copy.removeAttribute("class");
-    copy.setAttribute("aria-hidden", "true");
-    copy.inert = true;
-    Object.assign(copy.style, { position: "absolute", left: "0", top: `${was.at.top - now.top}px`, width: `${was.at.width}px`, pointerEvents: "none", transformOrigin: "50% 0" });
-    el.append(copy);
-    void copy.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.98)" }], { ...timing, duration: 160, fill: "forwards" })
-      .finished.then(() => copy.remove(), () => copy.remove());
-    // The line comes as what was there has nearly gone, rather than over it.
-    el.querySelector<HTMLElement>(`:scope > .${css.settledLine}`)
-      ?.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { ...timing, duration: 220, delay: 120, fill: "backwards" });
-  }, [box, drawnOpen]);
 }
 
 export const keyOf = (d: DecisionItem) => `${d.station}/${d.thread}/${d.seq}`;

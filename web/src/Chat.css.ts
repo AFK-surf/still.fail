@@ -632,6 +632,9 @@ export const askDismiss = style({
   color: vars.subtle, cursor: "pointer", selectors: { "&:hover": { color: vars.text, textDecoration: "underline" } },
 });
 
+/** What comes and goes under a message (settling.tsx Settles): what leaves is placed over it; its children's margins kept in. */
+export const settles = style({ position: "relative", display: "flow-root" });
+
 /** The way to what waits to be decided (Chat.tsx ToAsk), as the way to the chat's end (chatToBottom) and over it when both show. */
 export const chatToAsk = style({
   selectors: {
