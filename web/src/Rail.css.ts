@@ -30,6 +30,8 @@ export const rail = style({
  */
 export const top = style({
   flex: "none", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", height: 48, marginBottom: 6,
+  // Its height follows the sidebar closing as the rounded block does (rail ::before): the places glide, not jump.
+  transition: `height 240ms ${vars.easeOut}`,
   selectors: {
     "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
     '[data-desktop="inset"]:not([data-fullscreen]) &': { height: 88, alignItems: "flex-end" },
