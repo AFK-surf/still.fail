@@ -280,7 +280,9 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
   }
 
   return (
-    <div ref={root} className={`${vvCss.vv} ${css.player}`} data-narrow={narrow || undefined} data-list={(desk && listing && list.length > 1) || undefined}
+    // With a mouse, out of full screen, it sits in the app's page in the app's colours: only the picture and what floats
+    // over it are dark. On a phone, and full screen, it is all the viewer's dark.
+    <div ref={root} className={`${desk && !full ? css.inPage : vvCss.vv} ${css.player}`} data-narrow={narrow || undefined} data-list={(desk && listing && list.length > 1) || undefined}
       onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); }}
       onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; clearTimeout(resting.current); if (!onControls.current && playing) setAwake(false); }}
       onPointerDown={(e) => { tapAt.current = { x: e.clientX, y: e.clientY }; }}
@@ -293,12 +295,12 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
         else if (awake) { clearTimeout(resting.current); setAwake(false); } else wake(TAP_REST_MS);
       }}
       onDoubleClick={(e) => { if (!(e.target as Element).closest("button, [role=slider]")) void turn(); }}>
-      <div className={css.stage}>
+      <div className={`${css.stage} ${css.dark}`}>
         {audio && source.state === "ready" && <div className={css.cover}><FileAudio size={72} strokeWidth={1.2} /><span>{entry.name}</span></div>}
         {body}
         {waiting && source.state === "ready" && !failed && <span className={css.spinner} aria-hidden="true" />}
       </div>
-      {captions && cue && <div className={css.cue} data-awake={awake || undefined}><span>{cue.replace(/<[^>]+>/g, "")}</span></div>}
+      {captions && cue && <div className={`${css.cue} ${css.dark}`} data-awake={awake || undefined}><span>{cue.replace(/<[^>]+>/g, "")}</span></div>}
       <header className={css.head} data-awake={awake || undefined} {...keep}>
         <Tip label={backLabel}><button type="button" className={`${pagesCss.iconBtn} ${css.bright}`} aria-label={backLabel} onClick={onBack}><ChevronLeft size={20} /></button></Tip>
         <span className={css.name}><b>{entry.name}</b>{list.length > 1 && index >= 0 && <small>{index + 1} / {list.length}</small>}</span>
@@ -323,7 +325,7 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
           </div>
         </aside>
       )}
-      <div className={vvCss.vvBar} data-floats data-awake={awake || source.state !== "ready" || undefined} {...keep}>
+      <div className={`${vvCss.vvBar} ${css.dark}`} data-floats data-awake={awake || source.state !== "ready" || undefined} {...keep}>
         {/* On a phone the time goes over the timeline: the buttons take the row. */}
         <span className={css.timeTop}><b>{clock(time)}</b> / {clock(duration)}</span>
         <Timeline duration={duration} now={time} buffered={buffered} onSeek={seek} />

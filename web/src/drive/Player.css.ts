@@ -1,7 +1,8 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
-import { glass } from "../FilePreview.css.ts";
+import { dark as darkVars, glass } from "../FilePreview.css.ts";
 import { vvBar } from "../VideoViewer.css.ts";
+import { iconBtn } from "../styles/pages.css.ts";
 import { spinner as turning } from "../styles/waiting.css.ts";
 
 /** The player fills its page (the phone's, or the desktop's main pane), dark as the chat's video viewer. */
@@ -68,11 +69,11 @@ const desk = `${player}:not([data-narrow]):not(:fullscreen)`;
 /** The toolbar over the picture, always there (out of full screen): the way back, the name, 选集. */
 globalStyle(`${desk} ${head}`, {
   top: "0", left: "0", right: "0", transform: "none", width: "auto", maxWidth: "none", height: `${BAR}px`, padding: "0 12px 0 8px",
-  borderRadius: "0", background: "#000", WebkitBackdropFilter: "none", backdropFilter: "none", boxShadow: "inset 0 -1px 0 rgba(255, 255, 255, .08)",
+  borderRadius: "0", background: vars.canvas, WebkitBackdropFilter: "none", backdropFilter: "none", boxShadow: `inset 0 -1px 0 ${vars.line}`,
   opacity: "1", pointerEvents: "auto",
 });
 globalStyle(`${desk} ${name}`, { flex: "1" });
-export const listButton = style({ flex: "none", selectors: { '&[aria-pressed="true"]': { background: "rgba(255, 255, 255, .12)", color: `${vars.text} !important` } } });
+export const listButton = style({ flex: "none", selectors: { '&[aria-pressed="true"]': { background: vars.selected, color: `${vars.text} !important` } } });
 /** The picture under it, clear of the list docked at the right; the controls and a subtitle over the picture's middle. */
 globalStyle(`${desk} ${stage}`, { top: `${BAR}px` });
 globalStyle(`${desk}[data-list] ${stage}`, { right: `${LIST}px` });
@@ -81,7 +82,7 @@ globalStyle(`${desk}[data-list] ${vvBar}, ${desk}[data-list] ${cue}`, { left: `c
 /** The folder's others, docked at the right under the toolbar. */
 export const list = style({
   position: "absolute", zIndex: "3", top: `${BAR}px`, right: "0", bottom: "0", width: `${LIST}px`, display: "flex", flexDirection: "column",
-  background: "#111", boxShadow: "inset 1px 0 0 rgba(255, 255, 255, .08)", color: vars.text,
+  background: vars.canvas, boxShadow: `inset 1px 0 0 ${vars.line}`, color: vars.text,
 });
 export const listHead = style({ display: "flex", alignItems: "center", gap: "8px", padding: "12px 10px 6px 18px" });
 globalStyle(`${listHead} b`, { fontSize: vars.textTitle, fontWeight: "600" });
@@ -91,7 +92,7 @@ export const listRow = style({
   display: "grid", gridTemplateColumns: "28px minmax(0, 1fr) auto", alignItems: "center", gap: "4px", width: "100%", minHeight: "40px",
   padding: "8px 10px", border: "0", borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none",
   color: vars.text, fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
-  selectors: { "&:hover": { background: "rgba(255, 255, 255, .07)" }, "&[data-current]": { background: "rgba(255, 255, 255, .1)", fontWeight: "500" } },
+  selectors: { "&:hover": { background: vars.hover }, "&[data-current]": { background: vars.selected, fontWeight: "500" } },
 });
 globalStyle(`${listRow} small`, { color: vars.muted, fontSize: vars.textCaption, fontVariantNumeric: "tabular-nums" });
 globalStyle(`${listRow} span`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
@@ -111,3 +112,10 @@ export const pointed = style({
   background: "rgba(0, 0, 0, .75)", color: "#fff", fontFamily: vars.fontMono, fontSize: vars.textCaption, fontVariantNumeric: "tabular-nums",
   pointerEvents: "none", whiteSpace: "nowrap",
 });
+
+/** In the page (with a mouse, out of full screen): the app's own colours; the picture on black. */
+export const inPage = style({ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: vars.canvas, color: vars.text });
+/** The picture and what floats over it: the viewer's dark, whatever the app's. */
+export const dark = style({ vars: darkVars, color: vars.text });
+globalStyle(`${inPage} ${stage}`, { background: "#000" });
+globalStyle(`${dark} ${iconBtn}:disabled`, { opacity: ".35", cursor: "default", background: "none" });
