@@ -102,7 +102,7 @@ export const remove = style({
 /** The panel beside the rail of what can be added (ui.tsx Panel* parts), with more room than a menu. */
 export const adder = style({
   width: 248, display: "grid", gap: 8,
-  // Over the popover's own padding, whichever of the two style sheets comes first.
-  selectors: { "&[data-side]": { vars: { "--panel-pad": "12px" } } },
+  // More room than a menu, and 完成 (a pill 36 high) in its corner: over the popover's own, whichever sheet comes first.
+  selectors: { "&[data-side]": { vars: { "--panel-pad": "12px", "--panel-in": "18px" } } },
 });
 export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fontWeight: 600 });

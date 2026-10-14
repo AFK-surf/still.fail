@@ -402,7 +402,7 @@ export const panelNote = style({ margin: 0, fontSize: vars.textMeta, lineHeight:
 export const panelGroup = style({ display: "grid", gap: 2 });
 export const panelLabel = style({ padding: "6px 4px 2px", fontSize: vars.textMeta, color: vars.muted });
 export const panelRow = style({
-  display: "flex", alignItems: "center", gap: 10, minHeight: 34, padding: "0 8px", border: 0, borderRadius: vars.rOption,
+  display: "flex", alignItems: "center", gap: 10, minHeight: 34, padding: "0 8px", border: 0, borderRadius: "var(--panel-in)",
   cornerShape: vars.cornerShape, background: "none", color: vars.text, fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover } },
 });
