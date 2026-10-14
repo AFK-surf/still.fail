@@ -94,24 +94,24 @@ export const count = style({
 });
 
 /**
- * The workspaces to switch to (Rail.tsx RailWorkspaces), each its mark or first letter; the one in view is filled with
- * the words' colour, or (one with a mark of its own, whose colours are its own) ringed with it.
+ * The workspaces to switch to (Rail.tsx RailWorkspaces), each on a square as large as the places' ground above them: a
+ * letter on one of its own, a mark (an icon, an emoji, a picture a little smaller) on nothing. Under the pointer and the
+ * one in view, the places' own grounds (a ground under a mark at rest greyed an icon's colours and showed round a picture).
  */
 export const workspaces = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "4px 0" });
 export const workspaceItem = style({
   position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, padding: 0, border: 0,
   borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.hover, color: vars.muted,
-  fontSize: vars.textUi, fontWeight: 600, cursor: "pointer",
+  fontSize: vars.textUi, fontWeight: 600, cursor: "pointer", transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&:hover": { color: vars.text },
-    "&[data-on]": { background: vars.text, color: vars.sidebar },
-    "&[data-marked]": { color: vars.text },
-    "&[data-on][data-marked]": { background: vars.hover, boxShadow: `0 0 0 2px ${vars.sidebar}, 0 0 0 3.5px ${vars.text}` },
-    // A picture is the square itself.
-    "&[data-picture]": { overflow: "hidden" },
+    "&[data-marked]": { background: "none", color: vars.text },
+    "&[data-marked]:hover": { background: vars.hover },
+    "&[data-on], &[data-on]:hover": { background: vars.selected, color: vars.text },
   },
 });
-globalStyle(`${workspaceItem}[data-picture] img`, { borderRadius: 0 });
+// A picture inside the square as an icon is, rounded as the square is.
+globalStyle(`${workspaceItem}[data-picture] img`, { borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape });
 /** Over the workspaces: making one, another account, invitations (its menu), a ＋ alone (no frame), seen as the pointer comes. */
 export const workspaceAdd = style({
   position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, padding: 0, border: 0,

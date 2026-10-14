@@ -272,7 +272,7 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
           <Tip key={`${account.sub}/${w.id}`} label={!here && mark?.label ? `${w.name} · ${mark.label}` : w.name} side="right">
             <button type="button" className={css.workspaceItem} data-on={here || undefined} data-marked={marked(w) || undefined} data-picture={isPicture(w.icon) || undefined}
               aria-current={here || undefined} aria-label={w.name} onClick={() => { if (!here) navigate(lastChatOf(marks, w.id) ?? `/w/${w.id}`); }}>
-              <WorkspaceMark w={w} size={18} picture={30} />
+              <WorkspaceMark w={w} size={18} picture={22} />
               {!here && mark?.tone && <span className={css.mark}><span className={chatMarkCss.chatMarkInline} data-tone={mark.tone} /></span>}
             </button>
           </Tip>
