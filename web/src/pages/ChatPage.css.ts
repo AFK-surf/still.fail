@@ -171,8 +171,11 @@ export const detailRow = style({
   display: "grid", gridTemplateColumns: "6em minmax(0, 1fr)", gap: "12px", fontSize: vars.textUi, alignItems: "center",
 });
 export const detailInline = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
-/** Last in the chat's info: its sharing with other workspaces, then its public links, as a menu's rows. */
-export const infoRows = style({ display: "grid", margin: "8px -8px -4px" });
+/**
+ * Last in the chat's info: its sharing with other workspaces, then its public links, as a menu's rows. They sit at the
+ * panel's padding on every side, so their corner (`--panel-in`) is concentric with the panel's.
+ */
+export const infoRows = style({ display: "grid", marginTop: "8px" });
 /** The chat's sharing with other workspaces, or making it public: a row as a menu's, where it is shared at its end. */
 export const shareRow = style({
   color: vars.text,
