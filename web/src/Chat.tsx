@@ -1456,6 +1456,9 @@ export function Composer(props: ComposerProps) {
   return <ComposerView {...props} draft={draft} />;
 }
 
+/** How long the composer stays a box after it loses the cursor, for the cursor to come back without it shrinking. */
+const LET_GO_MS = 300;
+
 /** The chat's composer, also used where a page sends its draft as a reply to a decision. */
 export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = draft.focusQuote, onFocused = draft.quoteFocused, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
   draft: Draft; submitDraft?: (draft: Draft) => void;
@@ -1495,7 +1498,6 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   // before it is first drawn: it never shows unfocused first.
   useLayoutEffect(() => {
     if (window.matchMedia("(pointer: fine)").matches) input.current?.focus();
-    if (document.activeElement !== input.current) setFocused(false);
   }, [thread]);
   // Space with nothing that takes keys focused (the cursor lost to a click on the messages, a closed menu…) puts it
   // back in the composer, rather than scrolling the page.
@@ -1519,21 +1521,22 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   const box = useRef<HTMLFormElement>(null);
   // What it is laid out by: any change of it may change its height (a line more or less, capsule ⇄ box, files).
   useMorph(box, `${multiline}|${text}|${files.length}|${quotes.length}`, roomy);
-  // Its cursor lost to a click on what takes none (the messages, read or selected), it stays a box: a capsule again
-  // only once the focus goes into something else (a field, a button), or another chat opens.
-  useEffect(() => {
-    if (!focused) return;
-    const moved = (e: FocusEvent) => { if (!box.current?.contains(e.target as Node)) setFocused(false); };
-    document.addEventListener("focusin", moved);
-    return () => document.removeEventListener("focusin", moved);
-  }, [focused]);
+  // A box while it has the cursor; lost, a capsule a moment later, so that a cursor gone and back at once (a click
+  // that hands it back) does not shrink and grow it.
+  const letGo = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(letGo.current), []);
   return (
     <div className={cloudCss.composerWrap}>
       {outside.node}
       {menu}
       {above && <div className={css.composerAbove}>{above}</div>}
       <form ref={box} className={`${composerCss.composerBox} ${refCss.refHost}`} data-multiline={multiline || undefined} data-dragging={dragging || undefined}
-        onFocus={() => setFocused(true)}
+        onFocus={() => { clearTimeout(letGo.current); setFocused(true); }}
+        onBlur={(e) => {
+          if (e.currentTarget.contains(e.relatedTarget)) return;
+          clearTimeout(letGo.current);
+          letGo.current = setTimeout(() => setFocused(false), LET_GO_MS);
+        }}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
         // Locked (its station offline), no file is taken in.
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) { e.preventDefault(); setDragging(true); } }}
