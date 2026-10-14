@@ -28,7 +28,7 @@ export const dock = style({
   "@media": {
     "(max-width: 700px)": { display: "contents" },
     "(min-width: 701px)": {
-      display: "flex", minWidth: 0, minHeight: 0, overflow: "hidden", background: vars.sidebar, margin: 0, borderRadius: 0,
+      position: "relative", display: "flex", minWidth: 0, minHeight: 0, overflow: "hidden", background: vars.sidebar, margin: 0, borderRadius: 0,
       cornerShape: vars.cornerShape, transition: `margin 380ms ${vars.easeOut}, border-radius 380ms ${vars.easeOut}`,
       selectors: {
         // Concentric with what is lit in it (the rail's items, their 12 px corner 3 px in from its sides).

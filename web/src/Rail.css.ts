@@ -15,23 +15,22 @@ export const rail = style({
   "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 /**
- * Level with the sidebar's top row, the sidebar's opening and closing in it. In the desktop app the row drags the window;
- * on macOS its buttons are in it (main.ts puts them 16 px in, reaching past the rail), and the toggle comes under them.
+ * Level with the sidebar's top row (empty: its brand is gone beside the rail). In the desktop app the row drags the
+ * window; on macOS its buttons are in it (main.ts puts them 16 px in, reaching past the rail). In the closed bar (shell.css.ts
+ * dock), which starts under that row, no more than a margin; it shrinks with the bar, as long and eased.
  */
 export const top = style({
-  flex: "none", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", height: 48, marginBottom: 6,
-  // Its height follows the closing bar (shell.css.ts dock), as long and eased: the places glide, not jump.
-  transition: `height 380ms ${vars.easeOut}`,
+  flex: "none", alignSelf: "stretch", height: 48, transition: `height 380ms ${vars.easeOut}`,
   selectors: {
     "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
-    '[data-desktop="inset"]:not([data-fullscreen]) &': { height: 88, alignItems: "flex-end" },
-    // The closed bar starts under the window's buttons: no room for them in it.
-    '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { height: 48 },
+    '[data-sidebar="closed"] &': { height: 6 },
   },
 });
-globalStyle(`[data-desktop] ${top} > *`, { WebkitAppRegion: "no-drag" });
-/** The panel icons are drawn for a panel at the right: turned round for the sidebar at the left. */
-export const mirrored = style({ transform: "scaleX(-1)" });
+/** The block's right edge (ui.tsx ResizeHandle): inside it, as the block cuts what is past its edge. */
+export const edge = style({
+  selectors: { '&[data-edge="right"]': { right: 0, width: 8 } },
+});
+globalStyle(`${edge}::after`, { left: "auto", right: 0 });
 export const grow = style({ flex: 1 });
 
 export const item = style({

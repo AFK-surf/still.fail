@@ -11,7 +11,7 @@ import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
 } from "radix-ui";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router";
 import { forwardRef, Fragment, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import * as controlsCss from "./styles/controls.css.ts";
@@ -571,7 +571,17 @@ export function keptWidth(variable: string, min: number, max: number): number | 
   return px;
 }
 
-export function ResizeHandle({ variable, edge, min, max, label }: { variable: string; edge: "left" | "right"; min: number; max: number; label: string }) {
+/**
+ * A column's edge, as Cue's: a hairline fading toward both ends, shown while the pointer is on it or it is dragged (that
+ * one alone, not every edge of the page), with a tip that follows the pointer along it. Dragged, the column takes the
+ * width (`offset`: what of the column the width leaves out, the rail before the sidebar); double-clicked, its own width
+ * again. With `toggle`, a press that does not move is its other use (the sidebar closing or opening); `closed`, that is
+ * all it does.
+ */
+export function ResizeHandle({ variable, edge, min, max, label, offset = 0, toggle, closed = false, className }: {
+  variable: string; edge: "left" | "right"; min: number; max: number; label: string; offset?: number;
+  toggle?: { label: string; run(): void }; closed?: boolean; className?: string;
+}) {
   const storage = `stillfail.width.${variable}`;
   const set = (px: number | null) => {
     if (px === null) {
@@ -584,30 +594,65 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
   };
   // Each time its column comes (a chat's side panel opening).
   useEffect(() => { keptWidth(variable, min, max); }, [variable, min, max]);
+  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const words = closed && toggle ? toggle.label : toggle ? `${label} · ${toggle.label}` : label;
   return (
-    <div className={css.resizeHandle} data-edge={edge} role="separator" aria-orientation="vertical" aria-label={label}
-      onDoubleClick={() => set(null)}
-      onPointerDown={(e) => {
-        const column = e.currentTarget.parentElement!.getBoundingClientRect();
-        const handle = e.currentTarget;
-        handle.setPointerCapture(e.pointerId);
-        document.body.dataset.resizing = "true";
-        const move = (ev: PointerEvent) => {
-          const width = edge === "right" ? ev.clientX - column.left : column.right - ev.clientX;
-          set(Math.round(Math.min(max, Math.max(min, width))));
-        };
-        const up = () => {
-          handle.removeEventListener("pointermove", move);
-          handle.removeEventListener("pointerup", up);
-          delete document.body.dataset.resizing;
-        };
-        handle.addEventListener("pointermove", move);
-        handle.addEventListener("pointerup", up);
-        e.preventDefault();
-      }} />
+    <>
+      <div className={className ? `${css.resizeHandle} ${className}` : css.resizeHandle} data-edge={edge} data-active={dragging || undefined}
+        role="separator" aria-orientation="vertical" aria-label={words} tabIndex={toggle ? 0 : undefined}
+        onKeyDown={(e) => { if (toggle && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle.run(); } }}
+        onDoubleClick={() => { if (!toggle) set(null); }}
+        onPointerEnter={(e) => {
+          if (e.pointerType !== "mouse") return;
+          const at = { x: e.clientX, y: e.clientY };
+          clearTimeout(timer.current);
+          timer.current = setTimeout(() => setTip(at), 300);
+        }}
+        onPointerMove={(e) => { if (tip) setTip({ x: e.clientX, y: e.clientY }); }}
+        onPointerLeave={() => { clearTimeout(timer.current); setTip(null); }}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          clearTimeout(timer.current);
+          setTip(null);
+          const column = e.currentTarget.parentElement!.getBoundingClientRect();
+          const handle = e.currentTarget;
+          const from = e.clientX;
+          let moved = false;
+          handle.setPointerCapture(e.pointerId);
+          const move = (ev: PointerEvent) => {
+            if (closed) return;
+            if (!moved && Math.abs(ev.clientX - from) < 3) return;
+            if (!moved) { moved = true; setDragging(true); document.body.dataset.resizing = "true"; }
+            const width = (edge === "right" ? ev.clientX - column.left : column.right - ev.clientX) - offset;
+            set(Math.round(Math.min(max, Math.max(min, width))));
+          };
+          const up = () => {
+            handle.removeEventListener("pointermove", move);
+            handle.removeEventListener("pointerup", up);
+            delete document.body.dataset.resizing;
+            setDragging(false);
+            if (!moved) toggle?.run();
+          };
+          handle.addEventListener("pointermove", move);
+          handle.addEventListener("pointerup", up);
+          e.preventDefault();
+        }} />
+      {tip && !dragging && onPage(
+        <div className={css.edgeTip} style={{ transform: `translate3d(${edge === "right" ? tip.x + 14 : tip.x - 14}px, ${tip.y}px, 0)` }} data-edge={edge} aria-hidden="true">
+          <div className={css.tooltip}>{words}</div>
+        </div>,
+      )}
+    </>
   );
 }
 
+/** Put on the page itself (a column cuts what is in it). */
+function onPage(node: ReactNode): ReactNode {
+  return typeof document === "undefined" ? null : createPortal(node, document.body);
+}
 
 /**
  * The mark of the company that made a model (the core says which); the runtime's mark when it does not know. No tip of

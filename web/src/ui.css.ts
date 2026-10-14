@@ -308,15 +308,17 @@ export const skeletonRow = style({
 });
 export const runtimeLogo = style({ flex: "none", display: "block" });
 export const resizeHandle = style({
+  outline: "none", WebkitAppRegion: "no-drag",
   selectors: {
     "&[data-edge=\"right\"]": { right: "-4px" },
     "&[data-edge=\"left\"]": { left: "-4px" },
+    // As Cue's: a hairline on the column's edge, short of its ends and fading toward them, only on the edge in hand.
     "&::after": {
-      content: "\"\"", position: "absolute", top: "0", bottom: "0", left: "3px", width: "1px",
-      background: "transparent", transition: `background ${vars.dur} ${vars.easeOut}`,
+      content: "\"\"", position: "absolute", top: "8px", bottom: "8px", left: "3px", width: "1px", borderRadius: "999px",
+      background: `linear-gradient(to bottom, transparent 10%, ${vars.fieldHover} 50%, transparent 90%)`,
+      opacity: 0, transition: `opacity 140ms ${vars.easeOut}`,
     },
-    "&:hover::after": { background: vars.fieldFocus },
-    "body[data-resizing] &::after": { background: vars.fieldFocus },
+    "&:hover::after, &:focus-visible::after, &[data-active]::after": { opacity: 1 },
   },
   "@media": {
     "(max-width: 700px)": {
@@ -324,6 +326,12 @@ export const resizeHandle = style({
     },
   },
 });
+/** A handle's tip, following the pointer along it (ui.tsx ResizeHandle): beside it, its middle level with the pointer. */
+export const edgeTip = style({
+  position: "fixed", top: 0, left: 0, zIndex: 70, pointerEvents: "none", willChange: "transform",
+  selectors: { "&[data-edge=\"left\"]": { translate: "-100% 0" } },
+});
+globalStyle(`${edgeTip} > *`, { transform: "translateY(-50%)" });
 export const modelLogo = style({
   flex: "none", display: "inline-block", verticalAlign: "-2px",
   selectors: {

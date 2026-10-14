@@ -1,20 +1,21 @@
-// The rail at the wide screen's left, of the sidebar's own ground: at its top what opens and closes the sidebar (under
-// the window's buttons in the desktop app on macOS), then the places the person chose for it on this device (prefs
-// `rail`, 外观's 侧边条: which, in what order; RAIL_DEFAULT when none was chosen): 对话 and the lists of chats beside it
-// (我参与的, 监控中, the archive), 奏 (the word, as the desktop has always had it, with how many wait for the viewer),
-// 待处理 (what wants them in every workspace, as the sidebar's top has it), 文件, the stations' glyph, Profile, 连接, 用量;
-// at its foot every workspace to switch to (each with what waits in it; a ＋ over them, as the pointer comes, for making
-// one, another account, invitations) and under them the settings, which are not among what is chosen. It is changed where it is: its menu's 自定义侧边条 (or 外观's) has its places
-// dragged up and down, taken out with their −, added from a panel beside it by kind; a place's own menu takes it out.
-// Station, Profile, 连接 and 用量 in it are pages of their own beside the chats; left out of it, they are among the settings.
-// The sidebar beside shows the chats (or 奏, one of their lists), the folders the stations lend (FilesNav,
-// cloud/workspace.tsx) or the settings; coming to the last two with it closed opens it. On a narrow screen there is
-// none: the sidebar's foot keeps the switcher and the settings.
+// The rail at the wide screen's left, in one block with the sidebar (styles/shell.css.ts dock), whose right edge drags
+// the sidebar's width and, pressed, closes or opens it (no button for it; its shortcut still). In it the places the
+// person chose on this device (prefs `rail`, 外观's 侧边条: which, in what order; RAIL_DEFAULT when none was chosen):
+// 对话 and the lists of chats beside it (我参与的, 监控中, the archive), 奏 (the word, as the desktop has always had it,
+// a dot while some wait for the viewer), 待处理 (what wants them in every workspace), 文件, the stations' glyph, Profile,
+// 连接, 用量; at its foot every workspace to switch to (each with what waits in it; a ＋ over them, as the pointer comes,
+// for making one, another account, invitations) and under them the settings, which are not among what is chosen. It is
+// changed where it is: its menu's 自定义侧边条 (or 外观's) has its places dragged up and down, taken out with their −,
+// added from a panel beside it by kind; a place's own menu takes it out. Station, Profile, 连接 and 用量 in it are pages
+// of their own beside the chats; left out of it, they are among the settings. The sidebar beside shows the chats (or 奏,
+// one of their lists), the folders the stations lend (FilesNav, cloud/workspace.tsx) or the settings; coming to the
+// last two with it closed opens it. On a narrow screen there is none: the sidebar's foot keeps the switcher and the
+// settings.
 import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { ContextMenu, Popover } from "radix-ui";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { Archive, Bell, Chart, Chats, Folder, Im, Minus, PanelClose, Plus, PanelOpen, Quota, Settings, User, Watch, type IconProps } from "./icons.tsx";
-import { PanelGroup, PanelHead, PanelNote, PanelRow, Tip } from "./ui.tsx";
+import { Archive, Bell, Chart, Chats, Folder, Im, Minus, Plus, Quota, Settings, User, Watch, type IconProps } from "./icons.tsx";
+import { PanelGroup, PanelHead, PanelNote, PanelRow, ResizeHandle, Tip } from "./ui.tsx";
 import { lastChatOf, useLastChat, useWorkspaceMarks } from "./lastChat.ts";
 import { useSidebarMode, type SidebarMode } from "./station.tsx";
 import { AttentionEntry } from "./Attention.tsx";
@@ -185,19 +186,11 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       case "usage": return link(item, `${settings}/usage`);
     }
   };
-  // The panel icons are drawn for a panel at the right: turned round for the sidebar at the left.
-  const Panel = sidebar.closed ? PanelOpen : PanelClose;
   const hidden = KINDS.map((k) => ({ ...k, items: k.items.filter((i) => !items.includes(i)) })).filter((k) => k.items.length > 0);
   const rail = (
     <nav className={css.rail} aria-label={t("web-main.rail.label")} data-editing={changing || undefined}
       onContextMenu={(e) => setPointed(((e.target as HTMLElement).closest("[data-rail-item]")?.getAttribute("data-rail-item") as RailItem | null) ?? null)}>
-      <div className={css.top}>
-        <Tip label={sidebar.label} side="right">
-          <button type="button" className={css.item} onClick={sidebar.toggle} aria-label={sidebar.closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}>
-            <Panel size={20} className={css.mirrored} />
-          </button>
-        </Tip>
-      </div>
+      <div className={css.top} />
       {(dragged?.order ?? items).map((item) => changing ? (
         <div key={item} ref={(el) => { if (el) slots.current.set(item, el); else slots.current.delete(item); }} className={css.editing}
           data-dragged={dragged?.item === item || undefined} onPointerDown={drag(item)} title={railLabel(item)}>
@@ -215,6 +208,9 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       <Tip label={t("web-pages.settings.title")} side="right">
         <NavLink className={css.item} to={settings} data-on={place === "settings" || (place !== "chats" && !items.includes(place as RailItem)) || undefined} aria-label={t("web-pages.settings.title")}><Settings size={20} /></NavLink>
       </Tip>
+      {/* The sidebar's edge, on the block's (styles/shell.css.ts dock): dragged, its width; pressed, it closes or opens. */}
+      <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} offset={56} className={css.edge} label={t("web-pages.workspace.resizeSidebar")}
+        toggle={{ label: sidebar.closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close"), run: sidebar.toggle }} closed={sidebar.closed} />
     </nav>
   );
   return (
