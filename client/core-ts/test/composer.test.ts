@@ -399,6 +399,28 @@ test("an_image_sent_while_going_up_keeps_its_shape_and_its_message_says_which_up
   t.core.close();
 });
 
+test("an_image_sent_before_the_page_heard_its_size_goes_with_its_size_all_the_same", async () => {
+  const t = await queuedUpload();
+  // A PNG: its size is read from its header as it is added.
+  const head = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0x0b, 0x40, 0, 0, 0x07, 0x08]);
+  const png = { id: "png", name: "shot.png", size: head.length, blob: new Blob([head], { type: "image/png" }) };
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [png] });
+  await t.settle();
+  assert.deepEqual(v(t.values, 1).files.find((f: J) => f.id === "png").width, 2880);
+  // The page sent it as it knew it, without its size: the outbox has it.
+  t.send(501, { uploads: [{ id: png.id, name: png.name, size: png.size }] });
+  await t.settle();
+  const [up] = t.local.outbox("ws/st", 7)[0].uploads;
+  assert.deepEqual([up.id, up.width, up.height], ["png", 2880, 1800]);
+  // Read after it was sent: the waiting message takes it there.
+  t.send(502);
+  await t.settle();
+  assert.equal(t.local.outbox("ws/st", 7)[1].uploads[0].width, undefined);
+  t.local.uploadSized("slow", { width: 640, height: 480 });
+  assert.deepEqual([t.local.outbox("ws/st", 7)[1].uploads[0].width, t.local.outbox("ws/st", 7)[1].uploads[0].height], [640, 480]);
+  t.core.close();
+});
+
 test("later_messages_wait_behind_uploads_but_other_chats_are_free", async () => {
   const t = await queuedUpload();
   t.send(501);

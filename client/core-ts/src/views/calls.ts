@@ -39,6 +39,8 @@ const parse = (station: string) => Effect.try({ try: () => StationAddr.parse(sta
 function outgoing(inner: Inner, station: string, text: string, attachments: unknown, quotes: unknown, client: string | null, uploads: { id: string; name: string; size: number; width?: number; height?: number }[] = []): J {
   const key = new Uint8Array(16);
   inner.host.randomBytes(key);
+  // An image's size the page had not heard of yet when it sent it: as the core has read it since.
+  uploads = uploads.map((u) => u.width && u.height ? u : { ...u, ...inner.composers.sizeOf(u.id) });
   const message: J = { text: refs.expand(inner.data, station, text), attachments, quotes, queued: true, ...(uploads.length ? { uploads } : {}), idem: hex(key) };
   const from = client ?? prefs.sentFrom(inner.data);
   if (from !== null && from !== "") message.client = from;

@@ -19,6 +19,7 @@ import { draftAt } from "./refs.ts";
 import { StationAddr } from "./station/addr.ts";
 import { isObject } from "./util.ts";
 import { FileSource } from "./file-source.ts";
+import { headerSize } from "./imageSize.ts";
 
 type J = any;
 
@@ -70,6 +71,9 @@ export class Composers {
   #edits = 0;
   #keptId = 0;
   #uploads = new Map<string, { station: string; file: FileIn | null; done: Deferred.Deferred<J, CoreError>; error: boolean }>();
+  /// Images' sizes as read here, by upload id, until the upload is let go: a message the page sent before it heard of
+  /// one is given it all the same (`sizeOf`).
+  #sizes = new Map<string, { width: number; height: number }>();
 
   constructor(inner: Inner) {
     this.#inner = inner;
@@ -330,10 +334,21 @@ export class Composers {
       }
     };
     // An image's size, read while it goes up: every page holds its place from the first (the outbox's row too, before it
-    // is up), and it travels with the file.
+    // is up, even when it was sent before its size was read), and it travels with the file.
     const blob = f.blob;
-    const sizing: Promise<{ width: number; height: number } | null> = blob instanceof Blob && blob.type.startsWith("image/") && typeof createImageBitmap === "function"
-      ? createImageBitmap(blob).then((b) => { const s = { width: b.width, height: b.height }; b.close(); change(s); return s; }, () => null)
+    // Its header first (a few bytes, at once); decoded only when that does not say.
+    const decoded = (b: Blob) => typeof createImageBitmap === "function"
+      ? createImageBitmap(b).then((m) => { const s = { width: m.width, height: m.height }; m.close(); return s; })
+      : null;
+    const sizing: Promise<{ width: number; height: number } | null> = blob instanceof Blob && blob.type.startsWith("image/")
+      ? blob.slice(0, 64).arrayBuffer().then((head) => headerSize(new Uint8Array(head)) ?? decoded(blob)).then((s) => {
+        if (s) {
+          if (this.#uploads.get(f.id) === upload) this.#sizes.set(f.id, s);
+          change(s);
+          inner.views.local.uploadSized(f.id, s);
+        }
+        return s;
+      }, () => null)
       : Promise.resolve(null);
     const run = Effect.gen(function* () {
       const addr = yield* Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
@@ -382,8 +397,14 @@ export class Composers {
     }));
   }
 
+  /// An image's size as read here (`{}` while it is not), for a message that takes it.
+  sizeOf(id: string): { width?: number; height?: number } {
+    return this.#sizes.get(id) ?? {};
+  }
+
   release(files: { id: string }[]): void {
     for (const f of files) {
+      this.#sizes.delete(f.id);
       const source = this.#uploads.get(f.id)?.file?.blob;
       if (source instanceof FileSource) source.close();
       this.#uploads.delete(f.id);

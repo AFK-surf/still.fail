@@ -483,6 +483,41 @@ export class Local {
     this.onChange({ kind: "outbox", station, thread });
   }
 
+  /// An image's size, read only after the message it goes with was sent (a big one takes a while to read): that
+  /// message's upload takes it wherever it waits, so its row holds the image's own shape before it is up, not a fixed
+  /// box that changes once it is.
+  uploadSized(upload: string, size: { width: number; height: number }): void {
+    const sized = (list: J[]): J[] | null => {
+      if (!list.some((m) => arr(get(m, "uploads")).some((u) => get(u, "id") === upload && get(u, "width") === undefined))) return null;
+      return list.map((m) => arr(get(m, "uploads")).some((u) => get(u, "id") === upload)
+        ? { ...m, uploads: arr(get(m, "uploads")).map((u) => get(u, "id") === upload ? { ...u, ...size } : u) }
+        : m);
+    };
+    for (const [k, list] of this.#outbox) {
+      const next = sized(list);
+      if (!next) continue;
+      const at = k.indexOf(SEP);
+      const [station, thread] = [k.slice(0, at), Number(k.slice(at + 1))];
+      this.#outboxPut(station, thread, next);
+      this.onChange({ kind: "outbox", station, thread });
+    }
+    for (const [key, chat] of this.#pending) {
+      const next = sized(chat.queue);
+      if (!next) continue;
+      chat.queue = next;
+      this.#savePending(key);
+      this.onChange({ kind: "pending", key });
+    }
+    for (const [k, first] of this.#firsts) {
+      const next = sized(first.queue);
+      if (!next) continue;
+      first.queue = next;
+      this.#saveFirst(k);
+      const at = k.indexOf(SEP);
+      this.onChange({ kind: "first", station: k.slice(0, at), key: k.slice(at + 1) });
+    }
+  }
+
   /// Whether the card at `seq` in a chat is answered from here: something sent is on its way into it (not failed), or
   /// went in after the card.
   answered(station: string, thread: number, seq: number): boolean {
