@@ -321,14 +321,16 @@ export function PanelHead({ title, note }: { title: ReactNode; note?: ReactNode 
 export function PanelGroup({ label, children }: { label?: ReactNode; children: ReactNode }) {
   return <div className={css.panelGroup}>{label && <div className={css.panelLabel}>{label}</div>}{children}</div>;
 }
-export function PanelRow({ icon, label, end, onClick }: { icon?: ReactNode; label: ReactNode; end?: ReactNode; onClick(): void }) {
-  return (
-    <button type="button" className={css.panelRow} onClick={onClick}>
+/** A row to press; without `onClick` one only to read (as for a read-only member), the same but for the pointer. */
+export function PanelRow({ icon, label, end, onClick }: { icon?: ReactNode; label: ReactNode; end?: ReactNode; onClick?: (() => void) | undefined }) {
+  const body = (
+    <>
       {icon && <span className={css.panelRowIcon}>{icon}</span>}
       <span className={css.panelRowLabel}>{label}</span>
       {end && <span className={css.panelRowEnd}>{end}</span>}
-    </button>
+    </>
   );
+  return onClick ? <button type="button" className={css.panelRow} onClick={onClick}>{body}</button> : <div className={css.panelRow}>{body}</div>;
 }
 export function PanelNote({ children }: { children: ReactNode }) {
   return <p className={css.panelNote}>{children}</p>;

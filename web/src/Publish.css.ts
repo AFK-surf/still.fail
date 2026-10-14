@@ -49,9 +49,12 @@ export const madeLink = style({
   display: "block", minWidth: "0", height: "40px", padding: "0 18px", borderRadius: "999px", background: cardLook.background,
   fontSize: vars.textUi, lineHeight: "40px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", userSelect: "all",
 });
-/** A chat's public links in its info: a row each under 「公开分享」, when and by whom, 复制 and 撤销 at its end. */
+/**
+ * A chat's public links in its info: a row each under 「公开分享」, when and by whom, 复制 and 撤销 at its end; its words
+ * under the row's (ui.css.ts panelRow: 8 in, a 20 icon, 10 between).
+ */
 export const link = style({
-  display: "flex", alignItems: "center", gap: "8px", minHeight: "30px", padding: "2px 10px 2px 32px",
+  display: "flex", alignItems: "center", gap: "8px", minHeight: "30px", padding: "2px 8px 2px 38px",
   fontSize: vars.textMeta, color: vars.muted,
 });
 export const linkText = style({ flex: "1 1 0", width: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });

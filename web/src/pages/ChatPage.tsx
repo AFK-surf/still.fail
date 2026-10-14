@@ -35,7 +35,7 @@ import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { failure, useAct, useToast } from "../toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
-import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, keptWidth, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, SwitchRow, Time, Tip } from "../ui.tsx";
+import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, keptWidth, Loading, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
 import { TitleInput, useRenaming } from "../Rename.tsx";
 import * as renameCss from "../Rename.css.ts";
@@ -718,10 +718,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { stat
  * (not a read-only member), its links under it (PublishedLinks).
  */
 function PublishRow({ publish, onOpen }: { publish: ChatPublish; onOpen(): void }) {
-  const body = <><Web size={14} /><span className={css.shareLabel}>{t("web-pages.chat.publish")}</span></>;
-  return publish.may
-    ? <button type="button" className={`${controlsCss.menuItem} ${css.shareRow}`} data-may="" onClick={onOpen}>{body}</button>
-    : <div className={`${controlsCss.menuItem} ${css.shareRow}`}>{body}</div>;
+  return <PanelRow icon={<Web size={14} />} label={t("web-pages.chat.publish")} onClick={publish.may ? onOpen : undefined} />;
 }
 
 /**
@@ -731,16 +728,13 @@ function PublishRow({ publish, onOpen }: { publish: ChatPublish; onOpen(): void 
 function ShareRow({ share, onOpen }: { share: ChatShare; onOpen(): void }) {
   const station = useStation().address;
   const state = useDoingState("chat.xshare", { station, session: share.session });
-  const body = (
+  const end = (
     <>
-      <Users size={14} /><span className={css.shareLabel}>{t("web-pages.chat.xshare")}</span>
       <span className={css.shareText}>{share.text}</span>
       <DoingShown state={state} className={controlsCss.iconSpinner} size={12} label={t("web-pages.chat.xshare.saving")} />
     </>
   );
-  return share.may
-    ? <button type="button" className={`${controlsCss.menuItem} ${css.shareRow}`} data-may="" onClick={onOpen}>{body}</button>
-    : <div className={`${controlsCss.menuItem} ${css.shareRow}`}>{body}</div>;
+  return <PanelRow icon={<Users size={14} />} label={t("web-pages.chat.xshare")} end={end} onClick={share.may ? onOpen : undefined} />;
 }
 
 /**

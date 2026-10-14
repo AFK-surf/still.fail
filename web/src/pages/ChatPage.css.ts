@@ -172,22 +172,13 @@ export const detailRow = style({
 });
 export const detailInline = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 /**
- * Last in the chat's info: its sharing with other workspaces, then its public links, as a menu's rows. They sit at the
- * panel's padding on every side, so their corner (`--panel-in`) is concentric with the panel's.
+ * Last in the chat's info: its sharing with other workspaces, then its public links, as the panel's rows (ui.tsx
+ * PanelRow) at its padding on every side, their corner (`--panel-in`) concentric with the panel's.
  */
-export const infoRows = style({ display: "grid", marginTop: "8px" });
-/** The chat's sharing with other workspaces, or making it public: a row as a menu's, where it is shared at its end. */
-export const shareRow = style({
-  color: vars.text,
-  selectors: {
-    "&[data-may]:hover": { background: vars.hover },
-    "&:not([data-may])": { cursor: "default" },
-  },
-});
-export const shareLabel = style({ flex: "none", whiteSpace: "nowrap" });
+export const infoRows = style({ display: "grid", gap: "2px", marginTop: "8px" });
+/** Where the chat is shared, at the end of its row. */
 export const shareText = style({
-  flex: "1 1 0", width: "0", textAlign: "right", color: vars.muted, fontSize: vars.textMeta,
-  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  minWidth: "0", color: vars.muted, fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** In its dialog, the workspaces to tick, then whether their agents may send. */
 export const shareList = style({ margin: "0 -12px", padding: "0", listStyle: "none" });

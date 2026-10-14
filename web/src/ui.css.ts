@@ -423,9 +423,10 @@ export const panelLabel = style({ padding: "6px 4px 2px", fontSize: vars.textMet
 export const panelRow = style({
   display: "flex", alignItems: "center", gap: 10, minHeight: 34, padding: "0 8px", border: 0, borderRadius: "var(--panel-in)",
   cornerShape: vars.cornerShape, background: "none", color: vars.text, fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
-  selectors: { "&:hover": { background: vars.hover } },
+  selectors: { "&:is(button):hover": { background: vars.hover }, "&:not(button)": { cursor: "default" } },
 });
 export const panelRowIcon = style({ display: "grid", placeItems: "center", width: 20, color: vars.muted, flex: "none" });
-export const panelRowLabel = style({ flex: 1, minWidth: 0 });
-export const panelRowEnd = style({ display: "flex", color: vars.subtle, flex: "none" });
+// The words and what is at the end share the row, each cut short by its own width when both do not fit.
+export const panelRowLabel = style({ flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const panelRowEnd = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0, color: vars.subtle, flex: "0 1 auto" });
 export const panelFoot = style({ display: "flex", justifyContent: "flex-end", gap: 6, paddingTop: 4 });
