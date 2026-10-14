@@ -5,7 +5,8 @@ import { redact } from "../publish/redact.ts";
 import type { Draft, DraftFile } from "../publish/snapshot.ts";
 import type { Lang } from "../ops/i18n.ts";
 import * as store from "./store.ts";
-import type { Store } from "./store.ts";
+import type { AuthorKind, MessageRow, Store } from "./store.ts";
+import { modelName } from "../ops/model-name.ts";
 import { setLang, tr } from "./spoken.ts";
 import { HttpError, apiOf, authorNames, chatTitle, useNames } from "./views.ts";
 import { mime } from "./sessions.ts";
@@ -20,6 +21,21 @@ function personName(email: string, names: Record<string, string>, known: Map<str
   if (given !== undefined && given.trim() !== "" && given !== email) return given;
   const at = email.indexOf("@");
   return at > 0 ? email.slice(0, at) : email;
+}
+
+/// Who said a message, as the snapshot names them: a person of a still.fail chat as `personName`, one of a Slack thread
+/// by their Slack name; an agent by the model it ran on, as the chat shows it (else its connect's name); never by a
+/// session's key or an address (one with no model of its own: by its runtime).
+function authorOf(s: Store, m: MessageRow, names: Record<string, string>, known: Map<string, string>, said: (kind: AuthorKind, author: string) => string | null): string {
+  if (m.authorKind === "person") return m.author.includes("@") ? personName(m.author, names, known) : (said("person", m.author) ?? m.author);
+  if (m.authorKind === "agent") {
+    const model = typeof m.agentIdentity?.model === "string" && m.agentIdentity.model !== "" ? m.agentIdentity.model : null;
+    if (model !== null) return modelName(model);
+    const name = said("agent", m.author);
+    if (name !== null && name !== m.author) return name;
+    return store.getSession(s, m.author)?.runtime === "codex" ? "Codex" : "Claude Code";
+  }
+  return said(m.authorKind, m.author) ?? "still.fail";
 }
 
 /// The chat `thread` as published up to message n = `upto` (its latest without it), read by `viewer`.
@@ -37,8 +53,7 @@ export function publishDraft(s: Store, a: { thread: number; upto: number | null;
   const entries = messages.map((m) => {
     const hidden = redact(m.text, mark);
     if (hidden.count > 0) redacted.push({ n: m.n, count: hidden.count });
-    // A person of a Slack thread goes by their Slack name (their id when none is known), as the chat shows them.
-    const author = m.authorKind === "person" && m.author.includes("@") ? personName(m.author, a.names, s.names) : (names(m.authorKind, m.author) ?? m.author);
+    const author = authorOf(s, m, a.names, s.names, names);
     const own = m.attachments.map((f) => {
       const k = `f${files.length}`;
       const file: DraftFile = { k, name: f.name, size: f.size, type: mime(f.name), n: m.n, path: f.path };

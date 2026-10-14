@@ -126,6 +126,8 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     mkdirSync(join(workspace, "uploads"), { recursive: true });
     writeFileSync(join(workspace, "uploads/shot.png"), "png bytes");
     writeFileSync(join(workspace, "uploads/notes.txt"), "plain notes");
+    // The model it runs on: what its messages are said by.
+    store.db.prepare("UPDATE sessions SET model = ?, effort = ? WHERE key = ?").run("claude-opus-4-1", "high", made.key);
     store.insertMessage(newMessage(thread, "1.1", "person", "alice@acme.dev", "deploy with token: abc123def456ghi"));
     store.insertMessage({ ...newMessage(thread, "1.2", "agent", made.key, "done ![](shot.png)"), attachments: [
       { name: "shot.png", path: join(workspace, "uploads/shot.png"), size: 9, width: 4, height: 3 },
@@ -139,7 +141,7 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     const preview = await ask(alice, "POST", `/threads/${thread}/publish/preview`, { names: { "alice@acme.dev": "Alice Liddell" } });
     assert.equal(preview.status, 200, JSON.stringify(preview.body));
     const p = preview.body;
-    assert.deepEqual(p.entries.map((e: any) => e.author), ["Alice Liddell", p.entries[1].author, "carol"], "people by name, never by address");
+    assert.deepEqual(p.entries.map((e: any) => e.author), ["Alice Liddell", "Opus 4.1", "carol"], "people by name, agents by model, never by address or key");
     assert.ok(!JSON.stringify(p).includes("@acme.dev") && !JSON.stringify(p).includes("@elsewhere.org"), "no address in the snapshot");
     assert.equal(p.entries[0].text, "deploy with token: [hidden]");
     assert.equal(p.title, "deploy with token: [hidden]", "its name, the first thing said, hidden alike");
