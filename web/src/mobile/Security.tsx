@@ -30,20 +30,23 @@ function useRun() {
 export function SecurityScreen() {
   const app = useApp();
   const lock = useLock(app.entry.id);
+  const turnOn = lock?.available && !lock.locked && lock.owner && lock.canSign;
   return (
-    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
-      <LargeTitle small="" big={t("web-pages.security.title")} />
-      {!lock ? <Loading text={t("web-pages.settings.reading")} /> : !lock.available
-        ? <ListCard><div className={css.mBody}><span className={partsCss.mSubtle}>{t("web-pages.security.unavailable")}</span></div></ListCard>
-        : lock.locked ? <On lock={lock} /> : <Off lock={lock} />}
-      <div style={{ height: 30 }} />
+    <div className={pagesCss.mScreen}>
+      <div className={pagesCss.mScroll}>
+        <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
+        <LargeTitle small="" big={t("web-pages.security.title")} />
+        {!lock ? <Loading text={t("web-pages.settings.reading")} /> : !lock.available
+          ? <ListCard><div className={css.mBody}><span className={partsCss.mSubtle}>{t("web-pages.security.unavailable")}</span></div></ListCard>
+          : lock.locked ? <On lock={lock} /> : <Off lock={lock} />}
+        <div style={{ height: 30 }} />
+      </div>
+      {turnOn && <div className={css.mFoot}><Button primary label={t("web-pages.security.turnOn")} onClick={() => app.push(app.at("/settings/security/open"))} /></div>}
     </div>
   );
 }
 
 function Off({ lock }: { lock: LockView }) {
-  const app = useApp();
   return (
     <>
       <ListCard><div className={css.mBody}>
@@ -52,8 +55,7 @@ function Off({ lock }: { lock: LockView }) {
         <div>{t("web-pages.security.then")}</div>
         <div>{t("web-pages.security.newDevices")}<span className={css.mSub}>{t("web-pages.security.newDevicesHow")}</span></div>
         {!lock.owner ? <span className={css.mNote}>{t("web-pages.security.ownerOnly")}</span>
-          : lock.canSign ? <Button primary label={t("web-pages.security.turnOn")} onClick={() => app.push(app.at("/settings/security/open"))} />
-          : <span className={css.mNote}>{t("web-pages.security.webCannotSign")}</span>}
+          : !lock.canSign && <span className={css.mNote}>{t("web-pages.security.webCannotSign")}</span>}
       </div></ListCard>
       <SectionHeader title={t("web-pages.security.signing")} start={24} />
       <ListCard><div className={css.mBody}><span className={partsCss.mSubtle}>{t("web-pages.security.signingWho")}</span></div></ListCard>
@@ -147,8 +149,10 @@ function ConfirmSheet({ r }: { r: LockRequest }) {
       <span className={partsCss.mSubtle}>{t("web-pages.security.confirmBody", { device: deviceName(r), name: r.name || r.email })}</span>
       <div className={css.mBigCode}>{r.code}</div>
       <span className={css.mNote}>{r.kind === "web" ? t("web-pages.security.confirmWeb") : t("web-pages.security.confirmApp")}</span>
-      <Button primary label={t("web-pages.security.confirm")} onClick={close(() => void run("lock.confirm", { workspace: ws, device: r.device, code: r.code }, t("web-pages.security.confirm"), t("web-pages.security.confirmed")))} />
-      <Button primary={false} label={t("web-pages.security.deny")} onClick={close(() => void run("lock.deny", { workspace: ws, device: r.device }, t("web-pages.security.deny")))} />
+      <div className={css.mPair}>
+        <Button primary={false} label={t("web-pages.security.deny")} onClick={close(() => void run("lock.deny", { workspace: ws, device: r.device }, t("web-pages.security.deny")))} />
+        <Button primary label={t("web-pages.security.confirm")} onClick={close(() => void run("lock.confirm", { workspace: ws, device: r.device, code: r.code }, t("web-pages.security.confirm"), t("web-pages.security.confirmed")))} />
+      </div>
     </div>
   );
 }
@@ -162,7 +166,8 @@ export function SecurityOpenScreen() {
   const opening = useDoing("lock.open", { workspace: app.entry.id });
   const toggle = (id: string) => void call("lock.toggle", { workspace: app.entry.id, id });
   return (
-    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
+    <div className={pagesCss.mScreen}>
+      <div className={pagesCss.mScroll}>
       <TopBack label={t("web-pages.security.title")} onBack={app.pop} />
       <LargeTitle small="" big={t("web-pages.security.openTitle")} />
       {!draft || draft.loading ? <Loading text={t("web-pages.settings.reading")} /> : <>
@@ -179,12 +184,17 @@ export function SecurityOpenScreen() {
           <PickRow key={s.id} label={s.name} sub={s.state === "ok" ? (s.version ?? undefined) : s.state === "asking" ? t("web-pages.security.asking") : s.state === "old" ? t("web-pages.security.tooOld") : t("web-pages.security.offline")}
             checked={s.on} enabled={!s.fixed} onClick={() => toggle(s.id)} />
         ))}</ListCard>
-        <p className={css.mLead}>{t("web-pages.security.unprotectedNote")} · {draft.canSign ? t("web-pages.security.webExpiry") : t("web-pages.security.webCannotSign")}</p>
-        <div className={css.mActions}>
+        <p className={css.mLead}>{t("web-pages.security.unprotectedNote")}</p>
+        <div style={{ height: 24 }} />
+      </>}
+      </div>
+      {draft && !draft.loading && (
+        <div className={css.mFoot}>
+          <div className={css.mFootNote}>{draft.canSign ? t("web-pages.security.webExpiry") : t("web-pages.security.webCannotSign")}</div>
           <Button primary busy={opening} enabled={draft.ready && draft.owner && draft.canSign} label={t("web-pages.security.signAndTurnOn")}
             onClick={() => void run("lock.open", { workspace: app.entry.id }, t("web-pages.security.turnOn"), t("web-pages.security.turnedOn")).then(() => app.pop())} />
         </div>
-      </>}
+      )}
     </div>
   );
 }

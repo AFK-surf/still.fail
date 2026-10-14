@@ -4,6 +4,10 @@
 package fail.still.android.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -84,37 +88,60 @@ private fun Para(main: String, sub: String? = null) = Column {
 @Composable
 private fun Note(text: String) = Text(text, fontSize = 12.sp, lineHeight = 18.sp, color = C.subtle)
 
+/** A main action as wide as where it is (the screen's foot, a sheet's half). */
+@Composable
+private fun WideButton(label: String, primary: Boolean, modifier: Modifier = Modifier, busy: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+    val on = enabled && !busy
+    Row(
+        modifier.height(46.dp).clip(RoundedCornerShape(23.dp)).background(if (primary) (if (!enabled) C.line else C.ink) else C.chip).clickable(enabled = on, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+    ) {
+        if (busy) { Spinner(14.dp); Spacer(Modifier.width(8.dp)) }
+        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (primary) C.bg else C.ink)
+    }
+}
+
+/** The page's main action along the bottom of the screen, as wide as it; the page scrolls above it. */
+@Composable
+private fun Foot(note: String? = null, content: @Composable () -> Unit) = Column(
+    Modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 16.dp, vertical = 10.dp),
+    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
+) {
+    if (note != null) Note(note)
+    content()
+}
+
 @Composable
 fun SecurityScreen(current: WorkspaceEntry) {
     val app = LocalApp.current
     val topic by rememberTopic<LockView>(app.core, Topics.lock(current.workspace.id))
     val lock = topic.value
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack(t("android-settings.title"), app::pop)
-        LargeTitle("", t("web-pages.security.title"))
-        when {
-            lock == null -> Note(t("web-pages.settings.reading"))
-            !lock.available -> ListCard { Body { Note(t("web-pages.security.unavailable")) } }
-            lock.locked -> On(current, lock)
-            else -> Off(lock)
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+            TopBack(t("android-settings.title"), app::pop)
+            LargeTitle("", t("web-pages.security.title"))
+            when {
+                lock == null -> Note(t("web-pages.settings.reading"))
+                !lock.available -> ListCard { Body { Note(t("web-pages.security.unavailable")) } }
+                lock.locked -> On(current, lock)
+                else -> Off(lock)
+            }
+            Spacer(Modifier.height(30.dp))
         }
-        Spacer(Modifier.height(30.dp))
+        if (lock != null && lock.available && !lock.locked && lock.owner && lock.canSign) Foot {
+            WideButton(t("web-pages.security.turnOn"), primary = true, modifier = Modifier.fillMaxWidth()) { app.push(Screen.SecurityOpen) }
+        }
     }
 }
 
 @Composable
 private fun Off(lock: LockView) {
-    val app = LocalApp.current
     ListCard { Body {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Dot(false); Text(t("web-pages.security.off"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
         Para(t("web-pages.security.now"), t("web-pages.security.nowRisk"))
         Para(t("web-pages.security.then"))
         Para(t("web-pages.security.newDevices"), t("web-pages.security.newDevicesHow"))
-        when {
-            !lock.owner -> Note(t("web-pages.security.ownerOnly"))
-            lock.canSign -> Row(Modifier.fillMaxWidth()) { Button(t("web-pages.security.turnOn"), primary = true) { app.push(Screen.SecurityOpen) } }
-            else -> Note(t("web-pages.security.webCannotSign"))
-        }
+        if (!lock.owner) Note(t("web-pages.security.ownerOnly")) else if (!lock.canSign) Note(t("web-pages.security.webCannotSign"))
     } }
     SectionHeader(t("web-pages.security.signing"), start = 24.dp)
     ListCard { Body { Note(t("web-pages.security.signingWho")) } }
@@ -198,9 +225,9 @@ private fun confirmSheet(app: AppState, ws: String, r: LockRequest) {
             Text(t("web-pages.security.confirmBody", "device" to deviceName(r.kind, r.label), "name" to who), fontSize = 14.sp, color = C.muted)
             Text(r.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, letterSpacing = 5.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Note(if (r.kind == "web") t("web-pages.security.confirmWeb") else t("web-pages.security.confirmApp"))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(t("web-pages.security.deny"), primary = false) { app.sheet = null; app.lockCall(ws, "deny", t("web-pages.security.deny"), null, "device" to r.device) }
-                Button(t("web-pages.security.confirm"), primary = true) { app.sheet = null; app.lockCall(ws, "confirm", t("web-pages.security.confirm"), t("web-pages.security.confirmed"), "device" to r.device, "code" to r.code) }
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                WideButton(t("web-pages.security.deny"), primary = false, modifier = Modifier.weight(1f)) { app.sheet = null; app.lockCall(ws, "deny", t("web-pages.security.deny"), null, "device" to r.device) }
+                WideButton(t("web-pages.security.confirm"), primary = true, modifier = Modifier.weight(1f)) { app.sheet = null; app.lockCall(ws, "confirm", t("web-pages.security.confirm"), t("web-pages.security.confirmed"), "device" to r.device, "code" to r.code) }
             }
         }
     }
@@ -215,7 +242,8 @@ fun SecurityOpenScreen(current: WorkspaceEntry) {
     val draft = topic.value
     val opening = app.isDoing("lock.open", "workspace" to ws)
     val toggle = { id: String -> app.act(t("web-pages.security.turnOn")) { app.core.call("lock.toggle", buildJsonObject { put("workspace", ws); put("id", id) }) } }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
+    Column(Modifier.fillMaxSize()) {
+      Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
         TopBack(t("web-pages.security.title"), app::pop)
         LargeTitle("", t("web-pages.security.openTitle"))
         if (draft == null || draft.loading) { Note(t("web-pages.settings.reading")); return@Column }
@@ -244,15 +272,17 @@ fun SecurityOpenScreen(current: WorkspaceEntry) {
                     checked = s.on, enabled = !s.fixed) { toggle(s.id) }
             }
         }
-        PageNote("${t("web-pages.security.unprotectedNote")} · ${if (draft.canSign) t("web-pages.security.webExpiry") else t("web-pages.security.webCannotSign")}")
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 16.dp)) {
-            Button(t("web-pages.security.signAndTurnOn"), primary = true, busy = opening, enabled = draft.ready && draft.owner && draft.canSign) {
-                app.act(t("web-pages.security.turnOn"), t("web-pages.security.turnedOn")) {
-                    app.core.call("lock.open", buildJsonObject { put("workspace", ws) })
-                    app.pop()
-                }
-            }
-        }
+        PageNote(t("web-pages.security.unprotectedNote"))
+        Spacer(Modifier.height(24.dp))
+      }
+      if (draft != null && !draft.loading) Foot(if (draft.canSign) t("web-pages.security.webExpiry") else t("web-pages.security.webCannotSign")) {
+          WideButton(t("web-pages.security.signAndTurnOn"), primary = true, modifier = Modifier.fillMaxWidth(), busy = opening, enabled = draft.ready && draft.owner && draft.canSign) {
+              app.act(t("web-pages.security.turnOn"), t("web-pages.security.turnedOn")) {
+                  app.core.call("lock.open", buildJsonObject { put("workspace", ws) })
+                  app.pop()
+              }
+          }
+      }
     }
 }
 

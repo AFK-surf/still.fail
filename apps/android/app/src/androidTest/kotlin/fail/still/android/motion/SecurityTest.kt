@@ -7,7 +7,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import fail.still.android.Screen
 import fail.still.android.data.LockDevice
 import fail.still.android.data.LockDraftDevice
@@ -75,7 +74,7 @@ class SecurityTest {
         h.settle()
         rule.onNodeWithText("安全模式未开启").assertIsDisplayed()
         picture(h, "security-off")
-        rule.onNodeWithText("开启安全模式").performScrollTo().performClick()
+        rule.onNodeWithText("开启安全模式").performClick()
         h.settle()
         rule.runOnIdle { assertEquals(Screen.SecurityOpen, h.app.stack.last()) }
     }
@@ -89,7 +88,7 @@ class SecurityTest {
         rule.onNodeWithText("李二 · still.fail 网页版 · Firefox · Windows").performClick()
         h.settle()
         assertTrue(h.fake.calls.any { it.first == "lock.toggle" && it.second["id"]!!.jsonPrimitive.content == "dd".repeat(32) })
-        rule.onNodeWithText("签名并开启").performScrollTo().performClick()
+        rule.onNodeWithText("签名并开启").performClick()
         h.settle()
         assertTrue(h.fake.calls.any { it.first == "lock.open" })
     }

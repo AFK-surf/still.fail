@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 
 /** Words on a card, a paragraph each. */
@@ -20,3 +20,14 @@ export const mSheet = style({ display: "grid", gap: "12px", padding: "8px 20px 2
 export const mSheetTitle = style({ fontSize: vars.textTitle });
 export const mWaiting = style({ minHeight: "100%", display: "grid", alignContent: "center", justifyItems: "center", textAlign: "center", gap: "14px", padding: "0 28px", color: "var(--m-ink)" });
 export const mWaitingTitle = style({ fontSize: vars.textHeading, lineHeight: vars.leadingHeading });
+/** The page's main action, along the bottom of the screen, as wide as it: the page scrolls above it. */
+export const mFoot = style({
+  flex: "none", padding: "10px 16px calc(10px + env(safe-area-inset-bottom))", display: "grid",
+  background: "color-mix(in srgb, var(--m-bg) 80%, transparent)", WebkitBackdropFilter: "blur(24px)", backdropFilter: "blur(24px)",
+  boxShadow: "inset 0 0.5px 0 var(--m-line)",
+});
+globalStyle(`${mFoot} > button`, { height: "46px", borderRadius: "23px", justifyContent: "center", fontSize: `${vars.textBody} !important` });
+export const mFootNote = style({ textAlign: "center", fontSize: vars.textMeta, color: "var(--m-subtle)", marginBottom: "8px" });
+/** Two answers side by side, as wide as the sheet. */
+export const mPair = style({ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "4px" });
+globalStyle(`${mPair} > button`, { height: "46px", borderRadius: "23px", justifyContent: "center" });
