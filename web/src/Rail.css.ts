@@ -8,7 +8,8 @@ const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
 
 export const rail = style({
-  display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 0 12px", flex: "none", width: 56,
+  // Its last place's ground (30 in 38) as far from its foot as from its sides: 13.
+  display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 0 9px", flex: "none", width: 56,
   WebkitUserSelect: "none", userSelect: "none",
   // In the closed bar (shell.css.ts dock), as narrow as it, at the same pace.
   transition: `width 380ms ${vars.easeOut}, padding 380ms ${vars.easeOut}`,
@@ -65,6 +66,8 @@ export const edge = style({
   },
   "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { selectors: { "&::after": { transition: "none" } } } },
 });
+// A scrollbar in the sidebar (scrollbars.ts) a pixel clear of the edge's line, not on it.
+globalStyle(`${dock} *`, { "@media": { [wide]: { scrollPaddingRight: 1 } } });
 // The pointer over the sidebar (its block, before the page): the bar is there to find.
 globalStyle(`${dock}:hover ~ ${edge}::after`, { opacity: 1 });
 export const grow = style({ flex: 1 });

@@ -32,6 +32,12 @@ function startOf(el: Element): number {
   const s = getComputedStyle(el);
   return Math.max(parseFloat(s.scrollPaddingTop) || 0, radius(s.borderTopRightRadius));
 }
+/** How far from the pane's right the vertical thumb stands beyond its inset: what lies along that edge (the
+ * sidebar's edge line), said with `scroll-padding-right`. */
+function rightOf(el: Element): number {
+  if (el === document.scrollingElement) return 0;
+  return parseFloat(getComputedStyle(el).scrollPaddingRight) || 0;
+}
 /** How much of the pane's width the horizontal track leaves free at its left and right: the rounding of those corners. */
 function sidesOf(el: Element): [number, number] {
   if (el === document.scrollingElement) return [0, 0];
@@ -134,7 +140,7 @@ export function startScrollbars(): void {
       const at = start + INSET + Math.min(1, Math.max(0, scrolled / (content - size))) * (track - INSET * 2 - length);
       place(thumb, el);
       if (axis === "y") {
-        put(thumb, left + el.clientWidth - SIZE - INSET, top + at);
+        put(thumb, left + el.clientWidth - SIZE - INSET - rightOf(el), top + at);
         thumb.style.height = `${length}px`;
       } else {
         put(thumb, left + at, top + el.clientHeight - SIZE - INSET);
