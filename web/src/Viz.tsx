@@ -231,9 +231,21 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
 }
 
 /** An HTML file's content drawn as a visualization, where its file is not read through a station's session (the share
- * page has it already): its frame alone, its height kept by `heightKey`. */
-export function VizHtml({ html, title, heightKey }: { html: string; title: string; heightKey: string }) {
-  return <div className={css.viz}><Frame html={html} title={title} heightKey={heightKey} /></div>;
+ * page has it already): its frame, its height kept by `heightKey`; `onOpen`, if given, opens it over the whole window
+ * (its bar's button, as VizFile's). */
+export function VizHtml({ html, title, heightKey, onOpen }: { html: string; title: string; heightKey: string; onOpen?: () => void }) {
+  return (
+    <div className={css.viz}>
+      <Frame html={html} title={title} heightKey={heightKey} />
+      {onOpen && (
+        <div className={css.vizBar}>
+          <Tip label={t("web-main.viz.fullscreen")}><button type="button" className={css.vizOpen} aria-label={t("web-main.viz.fullscreen")} onClick={onOpen}>
+            <Expand size={14} strokeWidth={1.75} />
+          </button></Tip>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**

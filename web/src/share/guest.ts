@@ -3,7 +3,7 @@
 // `{get, key, file}` for one of its attachments; the answer a JSON line, `{ok: true, size, type}` and then exactly
 // `size` bytes, or `{error, code: "gone" | "busy"}`. The relays carrying it are everyone's (the cloud's limits.ts), so
 // a visit reads the snapshot and what shows at once, its images, and goes (iroh.ts closes it); any other file is read
-// when asked for, on a visit of its own. Over any stream that reads and writes: the tests' are in memory.
+// when it is opened, on a visit of its own (guestFiles). Over any stream that reads and writes: the tests' are in memory.
 import { isImage, placeFiles } from "../../../client/core-ts/src/placed.ts";
 import type { ShareLink } from "./link.ts";
 
@@ -20,9 +20,6 @@ export type Got = { type: string; bytes: Uint8Array };
 
 /** The snapshot's format this page reads. */
 export const SNAPSHOT_VERSION = 1;
-/** The most a station hands out (station/src/publish/index.ts): a snapshot, an attachment. */
-export const MOST_SNAPSHOT = 20 * 1024 * 1024;
-export const MOST_FILE = 10 * 1024 * 1024;
 /** Streams read at once on one connection: as many as the station answers at once (its LIMITS.streams). */
 export const STREAMS = 4;
 /** An answer's head is a short line: longer, it is not one. */
@@ -48,8 +45,14 @@ function joined(a: Uint8Array, b: Uint8Array): Uint8Array {
   return out;
 }
 
-/** One request on a stream of its own: its answer, whole. `most`: the most bytes taken for it. */
-export async function ask(conn: GuestConnection, request: { get: string; key: string; file?: string }, most: number): Promise<Got> {
+/** How much of an answer has come, of how much (FilePreview.tsx's FileProgress). */
+export type Progress = { loaded: number; total: number | null };
+
+/**
+ * One request on a stream of its own: its answer, whole, however big (a station caps nothing it publishes). `most`:
+ * the most bytes taken for it, if any; `progress` hears how much has come as it comes.
+ */
+export async function ask(conn: GuestConnection, request: { get: string; key: string; file?: string }, { most = Infinity, progress }: { most?: number; progress?: (got: Progress) => void } = {}): Promise<Got> {
   const stream = await conn.openBi();
   await stream.write(encoder.encode(`${JSON.stringify(request)}\n`));
   await stream.finish();
@@ -80,12 +83,14 @@ export async function ask(conn: GuestConnection, request: { get: string; key: st
   const rest = carry.subarray(end + 1, end + 1 + size);
   bytes.set(rest);
   let got = rest.length;
+  progress?.({ loaded: got, total: size });
   while (got < size) {
     const more = await stream.read();
     if (more === null) throw new GuestError("broken", `the answer ended after ${got} of its ${size} bytes`);
     const part = more.subarray(0, size - got);
     bytes.set(part, got);
     got += part.length;
+    progress?.({ loaded: got, total: size });
   }
   return { type: typeof head.type === "string" ? head.type : "application/octet-stream", bytes };
 }
@@ -154,10 +159,34 @@ async function inTurn<T>(items: T[], at: number, each: (item: T) => Promise<void
  * failure fails it.
  */
 export async function readShared(conn: GuestConnection, link: ShareLink, on: { snapshot(s: Snapshot): void; file(k: string, got: Got | null): void }): Promise<Snapshot> {
-  const snapshot = parseSnapshot((await ask(conn, { get: link.id, key: link.key }, MOST_SNAPSHOT)).bytes);
+  const snapshot = parseSnapshot((await ask(conn, { get: link.id, key: link.key })).bytes);
   on.snapshot(snapshot);
   await inTurn(shownAtOnce(snapshot), STREAMS, async (f) => {
-    on.file(f.k, await ask(conn, { get: link.id, key: link.key, file: f.k }, MOST_FILE).catch(() => null));
+    on.file(f.k, await ask(conn, { get: link.id, key: link.key, file: f.k }).catch(() => null));
   });
   return snapshot;
+}
+
+/** A visit to the station, to be closed once it has read what it came for (iroh.ts `visit`). */
+export type Visiting = { conn: GuestConnection; close(): unknown };
+
+/**
+ * Where the share page's file preview reads a file (web/src/FilePreview.tsx FileSource): what the page has read
+ * already as it is (`have`: the images, the HTML placed), any other on a visit of its own (`open`), closed once it is
+ * read; how far it has come said as it comes. By the file's number in the snapshot (an Attachment's `path` there).
+ */
+export function guestFiles(link: ShareLink, have: (k: string) => Got | null | undefined, open: () => Promise<Visiting>) {
+  return {
+    async file(_sessionKey: string, file: { path: string }, _thumb: boolean, onProgress?: (got: Progress) => void): Promise<Blob> {
+      const got = have(file.path) ?? await (async () => {
+        const visited = await open();
+        try {
+          return await ask(visited.conn, { get: link.id, key: link.key, file: file.path }, onProgress ? { progress: onProgress } : {});
+        } finally {
+          void visited.close();
+        }
+      })();
+      return new Blob([got.bytes as Uint8Array<ArrayBuffer>], { type: got.type });
+    },
+  };
 }

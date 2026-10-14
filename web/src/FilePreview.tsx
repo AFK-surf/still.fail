@@ -9,7 +9,7 @@ import { useTopic } from "./core/react.ts";
 import type { ImageNear } from "./core/shapes.ts";
 import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, Minus, Plus } from "./icons.tsx";
 import { Prose } from "./Prose.tsx";
-import { isFragment, vizDocument } from "./Viz.tsx";
+import { FrameHost, isFragment, vizDocument } from "./Viz.tsx";
 import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
@@ -95,10 +95,14 @@ const coming = new Map<string, { got: FileProgress | null; watchers: Set<(got: F
 const fileId = (station: string, sessionKey: string, file: Attachment, thumb: boolean) => `${station}/${sessionKey}/${file.path}${thumb ? "#thumb" : ""}`;
 
 /**
- * Where the files a preview shows come from when they are not a chat's (a station's drive, drive/): `file` reads one
- * whole (`thumb`: as a list would show it; the same is fine), saying how far it has come.
+ * Where the files a preview shows come from when they are not a chat's (a station's drive, drive/; a published chat,
+ * share/): `file` reads one whole (`thumb`: as a list would show it; the same is fine), saying how far it has come.
+ * `save`, if given, is how one is downloaded (else a link to its blob: the share page never has one opened as a page).
  */
-export interface FileSourceOf { file(sessionKey: string, file: Attachment, thumb: boolean, onProgress?: (got: FileProgress) => void): Promise<Blob> }
+export interface FileSourceOf {
+  file(sessionKey: string, file: Attachment, thumb: boolean, onProgress?: (got: FileProgress) => void): Promise<Blob>;
+  save?(file: Attachment, blob: Blob): void;
+}
 export const FileSource = createContext<FileSourceOf | null>(null);
 
 function fetchFile(api: Api, station: string, sessionKey: string, file: Attachment, thumb = false, source: FileSourceOf | null = null): Promise<Blob> {
@@ -465,7 +469,9 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
       case "pdf": body = <PdfViewer blob={blob} />; break;
       case "markdown": case "csv": case "html": case "code": case "text":
         body = <TextViewer blob={blob} kind={kind} language={known.language} name={file.name} setControls={setControls} onMove={wake} />; break;
-      default: body = <div className={css2.fpNote}>{t("web-main.preview.unsupported")}<a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />{t("web-main.preview.download")}</a></div>;
+      default: body = <div className={css2.fpNote}>{t("web-main.preview.unsupported")}{source?.save
+        ? <button type="button" className={controlsCss.btn} onClick={() => source.save?.(file, blob)}><Download size={16} />{t("web-main.preview.download")}</button>
+        : <a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />{t("web-main.preview.download")}</a>}</div>;
     }
   }
   return (
@@ -494,7 +500,9 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
           ? <CopyImage key={file.path} image={loaded.blob} />
           : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Copy size={18} /></span>)}
         {marking ? null : loaded.state === "ready"
-          ? <Tip label={t("web-main.preview.download")}><a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label={t("web-main.preview.download")}><Download size={18} /></a></Tip>
+          ? <Tip label={t("web-main.preview.download")}>{source?.save
+            ? <button type="button" className={pagesCss.iconBtn} onClick={() => source.save?.(file, loaded.blob)} aria-label={t("web-main.preview.download")}><Download size={18} /></button>
+            : <a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label={t("web-main.preview.download")}><Download size={18} /></a>}</Tip>
           // Its place kept until it comes.
           : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Download size={18} /></span>}
         <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pagesCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
@@ -941,6 +949,7 @@ function TextViewer({ blob, kind, language, name, setControls, onMove }: {
   blob: Blob; kind: PreviewKind; language: string | undefined; name: string; setControls(c: ReactNode): void; onMove(): void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const host = useContext(FrameHost);
   const moved = useRef(onMove);
   moved.current = onMove;
   useEffect(() => {
@@ -973,7 +982,10 @@ function TextViewer({ blob, kind, language, name, setControls, onMove }: {
     // Its scripts run, but in an origin of its own: nothing of still.fail's is reachable from it.
     // A fragment an agent wrote to be drawn in a message (Viz.tsx) is shown the same way, in still.fail's stylesheet.
     // A mouse moving over it is the frame's, not the preview's: the frame tells, so the bars wake as they do over an image.
-    content = <iframe ref={frame} className={`${css2.fpFrame} fp-html`} sandbox="allow-scripts" srcDoc={(isFragment(text) ? vizDocument(text) : text) + TELL_MOVES} title={name} />;
+    // On a page whose CSP its frames would inherit, from the page's frame host, sandboxed the same (Viz.tsx FrameHost).
+    const doc = (isFragment(text) ? vizDocument(text) : text) + TELL_MOVES;
+    const from = host === null ? { srcDoc: doc } : { src: host, onLoad: () => frame.current?.contentWindow?.postMessage({ stillfailVizDocument: doc }, "*") };
+    content = <iframe ref={frame} className={`${css2.fpFrame} fp-html`} sandbox="allow-scripts" {...from} title={name} />;
     return <div className={`${css2.fpPage} ${css2.fpPageFrame}`}>{content}</div>;
   }
   if (kind === "markdown" && !source) content = <div className={`${conversationCss.markdown} ${css2.fpMarkdown}`}><Prose>{text}</Prose></div>;

@@ -9,8 +9,5 @@
   "web-share.broken": "读不了这台 station 给的内容：{error}",
   "web-share.published": "{by} 发布于 {time}",
   "web-share.redacted": { "one": "隐藏了 1 处疑似机密", "other": "隐藏了 {n} 处疑似机密" },
-  "web-share.from": "用 still.fail 分享",
-  "web-share.download": "下载 {name}",
-  "web-share.downloadFailed": "没能下载 {name}：{error}",
-  "web-share.view": "查看 {name}"
+  "web-share.from": "用 still.fail 分享"
 }

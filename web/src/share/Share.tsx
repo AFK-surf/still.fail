@@ -2,19 +2,25 @@
 // drawn as the chat draws it (Chat.tsx's message rows and their styles, Prose.tsx's Markdown, Viz.tsx's
 // visualizations), read-only. The link says which station, which snapshot and its key (link.ts); the cloud says which
 // relays (/v1/relays); a visit to the station reads the snapshot and its images and goes (guest.ts, iroh.ts). A file
-// that is not shown is read when asked for, on a visit of its own, and saved, never opened here. Each way it can fail
-// is a line of its own: the link cut short, still.fail or the station out of reach, the link gone, the station busy.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+// opens as it does in the chat, in its preview over the page (FilePreview.tsx): read from what this page has, or on a
+// visit of its own when it has not (guestFiles). Nothing the station sends is opened as a page here: an HTML file is
+// drawn only in the host's sandboxed /frame (FrameHost), an SVG only as an image, and a download is saved as bytes.
+// Each way it can fail is a line of its own: the link cut short, still.fail or the station out of reach, the link
+// gone, the station busy.
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { placeFiles } from "../../../client/core-ts/src/placed.ts";
 import type { Attachment } from "../core/shapes.ts";
 import { Avatar } from "../Avatar.tsx";
+import { FilePreview, FileSource, Gallery, type FileSourceOf, type GalleryOf } from "../FilePreview.tsx";
 import { fileSize } from "../fileSize.ts";
 import { Read } from "../icons.tsx";
 import { imageBox } from "../imageBox.ts";
 import { Prose, withBareLinks } from "../Prose.tsx";
 import { thumbhashUrl } from "../thumbhash.ts";
 import { FrameHost, VizHtml } from "../Viz.tsx";
-import { failure, useToast } from "../toast.tsx";
+import { useStation } from "../station.tsx";
+import { thumbId } from "../viewerFlight.ts";
+import { failure } from "../toast.tsx";
 import { lang, t } from "../i18n.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
@@ -23,7 +29,7 @@ import * as waitingCss from "../styles/waiting.css.ts";
 import * as vizCss from "../Viz.css.ts";
 import * as msgCss from "../Chat.css.ts";
 import * as css from "./share.css.ts";
-import { GuestError, MOST_FILE, ask, isAgent, isHtml, isShownImage, readShared, type Got, type SharedEntry, type SharedFile, type Snapshot } from "./guest.ts";
+import { GuestError, guestFiles, isAgent, isHtml, isShownImage, readShared, type Got, type SharedEntry, type SharedFile, type Snapshot } from "./guest.ts";
 import { Unreachable, visit } from "./iroh.ts";
 import { parseLink, type ShareLink } from "./link.ts";
 import mark16 from "../../public/mark-16.svg";
@@ -60,10 +66,10 @@ function loaded(f: SharedFile, got: Got | null): Loaded {
   return { got };
 }
 
-/** Saves bytes as a file named `name`: downloaded, never opened as a page here (an HTML or SVG file would run as this
- * page's), whatever they are. */
-function save(name: string, bytes: Uint8Array) {
-  const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: "application/octet-stream" }));
+/** Saves a file as `name`: downloaded, never opened as a page here (an HTML or SVG file would run as this page's),
+ * whatever it is: the preview's download (FileSource `save`). */
+function save(name: string, blob: Blob) {
+  const url = URL.createObjectURL(new Blob([blob], { type: "application/octet-stream" }));
   const a = document.createElement("a");
   a.href = url;
   a.download = name;
@@ -178,58 +184,66 @@ function StateLine({ picture, line, action }: { picture: "idle" | "offline"; lin
   );
 }
 
-/** What the page does with a file: shows an image over it, saves anything else (reading it first when it was not). */
-type Files = { loaded: Map<string, Loaded>; reading: boolean; view(url: string, name: string): void; save(f: SharedFile): void; saving: Set<string>; id: string };
+/** Why reading a file failed, as the preview says it (`web-main.preview.loadFailed`). */
+function why(e: unknown): string {
+  if (e instanceof Unreachable) return t("web-share.offline");
+  if (e instanceof GuestError && e.kind !== "broken") return t(`web-share.${e.kind}`);
+  return failure(e);
+}
+
+/** What the page has of its files, and how one is opened: in the preview, over the page. */
+type Files = { loaded: Map<string, Loaded>; reading: boolean; open(f: SharedFile): void; id: string };
 /** Through context, not props: Prose draws a message's placed files once and keeps them, and they change as they come. */
 const FilesContext = createContext<Files | null>(null);
 const useFiles = () => useContext(FilesContext)!;
 
 function Shown({ state }: { state: Extract<State, { at: "shown" }> }) {
   const { snapshot, link, relays, files } = state;
-  const toast = useToast();
-  const [viewing, setViewing] = useState<{ url: string; name: string } | null>(null);
-  const [saving, setSaving] = useState<Set<string>>(() => new Set());
-  useEffect(() => {
-    if (!viewing) return;
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setViewing(null); };
-    addEventListener("keydown", key);
-    return () => removeEventListener("keydown", key);
-  }, [viewing]);
-  const saveFile = useCallback((f: SharedFile) => {
-    const have = files.get(f.k);
-    if (have) return save(f.name, have.got.bytes);
-    setSaving((s) => new Set(s).add(f.k));
-    void (async () => {
-      const visited = await visit(link.station, relays);
-      try {
-        save(f.name, (await ask(visited.conn, { get: link.id, key: link.key, file: f.k }, MOST_FILE)).bytes);
-      } finally {
-        void visited.close();
-      }
-    })().catch((e: unknown) => toast(t("web-share.downloadFailed", { name: f.name, error: e instanceof Unreachable ? t("web-share.offline") : failure(e) })))
-      .finally(() => setSaving((s) => { const next = new Set(s); next.delete(f.k); return next; }));
-  }, [files, link, relays, toast]);
-  const ctx: Files = { loaded: files, reading: state.reading, view: (url, name) => setViewing({ url, name }), save: saveFile, saving, id: link.id };
+  const [opened, setOpened] = useState<Attachment | null>(null);
+  // The preview reads what the page has already as it is; anything else on a visit of its own. One source for good:
+  // a new one would have the preview read its file again.
+  const have = useRef(files);
+  have.current = files;
+  const source = useMemo<FileSourceOf>(() => {
+    const read = guestFiles(link, (k) => have.current.get(k)?.got, () => visit(link.station, relays));
+    return {
+      file: (key, file, thumb, onProgress) => read.file(key, file, thumb, onProgress).catch((e: unknown) => { throw new Error(why(e)); }),
+      save: (file, blob) => save(file.name, blob),
+    };
+  }, [link, relays]);
+  // An image open steps through the snapshot's images, as one in the chat does through the chat's: in the order the
+  // page shows them (what an agent's words place first, where they place it; the rest below).
+  const gallery = useMemo<GalleryOf>(() => ({
+    list: () => snapshot.entries.flatMap((e) => {
+      const { placed, rest } = isAgent(e) ? placeFiles(e.text, e.files) : { placed: new Map<string, SharedFile>(), rest: e.files };
+      return [...placed.values(), ...rest].filter(isShownImage).map((f) => ({ sessionKey: link.id, file: attachment(f) }));
+    }),
+  }), [snapshot, link.id]);
+  const ctx: Files = { loaded: files, reading: state.reading, open: (f) => setOpened(attachment(f)), id: link.id };
   const meta = [snapshot.station, t("web-share.published", { by: snapshot.by, time: when(snapshot.at) }), ...(snapshot.redacted > 0 ? [t("web-share.redacted", { n: snapshot.redacted })] : [])];
   return (
     <FrameHost.Provider value="/frame">
-      <FilesContext.Provider value={ctx}>
-        <main className={css.page}>
-          <header className={css.head}>
-            <h1 className={css.title}>{snapshot.title || t("web-share.title")}</h1>
-            <p className={css.meta}>{meta.filter(Boolean).join(" · ")}</p>
-          </header>
-          <div className={css.list}>
-            {snapshot.entries.map((e) => <Entry key={e.n} entry={e} />)}
-          </div>
-          <footer className={css.foot}>
-            <a className={css.footLink} href="https://still.fail" target="_blank" rel="noopener noreferrer">
-              <Themed light={mark16} dark={mark16Dark} size={16} />{t("web-share.from")}
-            </a>
-          </footer>
-        </main>
-      </FilesContext.Provider>
-      {viewing && <div className={css.viewer} role="dialog" aria-label={viewing.name} onClick={() => setViewing(null)}><img src={viewing.url} alt={viewing.name} /></div>}
+      <FileSource.Provider value={source}>
+        <Gallery.Provider value={gallery}>
+          <FilesContext.Provider value={ctx}>
+            <main className={css.page}>
+              <header className={css.head}>
+                <h1 className={css.title}>{snapshot.title || t("web-share.title")}</h1>
+                <p className={css.meta}>{meta.filter(Boolean).join(" · ")}</p>
+              </header>
+              <div className={css.list}>
+                {snapshot.entries.map((e) => <Entry key={e.n} entry={e} />)}
+              </div>
+              <footer className={css.foot}>
+                <a className={css.footLink} href="https://still.fail" target="_blank" rel="noopener noreferrer">
+                  <Themed light={mark16} dark={mark16Dark} size={16} />{t("web-share.from")}
+                </a>
+              </footer>
+            </main>
+          </FilesContext.Provider>
+          {opened && <FilePreview open onClose={() => setOpened(null)} sessionKey={link.id} file={opened} />}
+        </Gallery.Provider>
+      </FileSource.Provider>
     </FrameHost.Provider>
   );
 }
@@ -279,11 +293,10 @@ function FileList({ list }: { list: SharedFile[] }) {
   return <div className={msgCss.msgFiles}>{list.map((f) => <FileShown key={f.k} file={f} />)}</div>;
 }
 
-/** A link in an agent's words naming one of its files: the image shown, any other file saved. */
+/** A link in an agent's words naming one of its files: it opens the file, as in the chat. */
 function FileLink({ file: f, children }: { file: SharedFile; children: ReactNode }) {
   const files = useFiles();
-  const url = files.loaded.get(f.k)?.url;
-  return <a href={`#${f.k}`} onClick={(e) => { e.preventDefault(); if (url) files.view(url, f.name); else files.save(f); }}>{children}</a>;
+  return <a href={`#${f.k}`} onClick={(e) => { e.preventDefault(); files.open(f); }}>{children}</a>;
 }
 
 /** A file where it is shown: an image, an HTML file placed in an agent's words as its visualization, else its card. */
@@ -291,20 +304,23 @@ function FileShown({ file: f }: { file: SharedFile }) {
   const files = useFiles();
   const got = files.loaded.get(f.k);
   if (isShownImage(f)) return <Image file={f} url={got?.url} failed={got === null || (got === undefined && !files.reading)} />;
-  if (isHtml(f) && got?.html !== undefined) return <VizHtml html={got.html} title={f.name} heightKey={`share\n${files.id}\n${f.k}`} />;
-  if (isHtml(f) && got === undefined && files.reading) return <div className={vizCss.viz} aria-busy="true"><div className={vizCss.vizWait} style={{ height: 120 }} /></div>;
+  if (isHtml(f) && got?.html !== undefined) return <VizHtml html={got.html} title={f.name} heightKey={`share\n${files.id}\n${f.k}`} onOpen={() => files.open(f)} />;
+  if (isHtml(f) && got === undefined && files.reading) return <div className={vizCss.viz} aria-busy="true"><div className={vizCss.vizWait} style={{ height: 120 }} /><div className={vizCss.vizBar} /></div>;
   return <FileCard file={f} />;
 }
 
 /** An image as the chat has it (Chat.tsx FileItem): its box set from its size, its likeness until it comes. */
 function Image({ file: f, url, failed }: { file: SharedFile; url: string | undefined; failed: boolean }) {
   const files = useFiles();
+  const station = useStation();
   const [shown, setShown] = useState(false);
   const { letterbox, ...size } = imageBox(attachment(f));
   const likeness = thumbhashUrl(f.thumbhash);
   return (
-    <button type="button" className={msgCss.msgImage} style={size} aria-label={t("web-share.view", { name: f.name })} onClick={() => url && files.view(url, f.name)}
-      data-letterbox={letterbox ? "" : undefined} data-loaded={shown ? "reveal" : undefined} data-failed={failed || undefined} data-near="">
+    <button type="button" className={msgCss.msgImage} style={size} aria-label={t("web-main.file.view", { name: f.name })} onClick={() => (url || failed) && files.open(f)}
+      data-letterbox={letterbox ? "" : undefined} data-loaded={shown ? "reveal" : undefined} data-failed={failed || undefined} data-near=""
+      // The preview opens out of it and closes back into it (viewerFlight.ts).
+      data-viewer-thumb={url ? thumbId(station.address, files.id, f.k) : undefined}>
       {!shown && (likeness
         ? <span className={msgCss.msgImageWait} style={{ ...letterbox, backgroundImage: `url(${likeness})` }} data-likeness="" aria-hidden="true" />
         : <span className={msgCss.msgImageWait} style={letterbox} aria-hidden="true"><i /><i /><i /></span>)}
@@ -314,14 +330,13 @@ function Image({ file: f, url, failed }: { file: SharedFile; url: string | undef
   );
 }
 
-/** A file's card (Chat.tsx FileCard): its name and size; a click saves it. */
+/** A file's card (Chat.tsx FileCard): its name and size; a click opens it. */
 function FileCard({ file: f }: { file: SharedFile }) {
   const files = useFiles();
-  const saving = files.saving.has(f.k);
   return (
-    <button type="button" className={msgCss.fileCardOpen} onClick={() => files.save(f)} disabled={saving} aria-busy={saving || undefined} aria-label={t("web-share.download", { name: f.name })}>
+    <button type="button" className={msgCss.fileCardOpen} onClick={() => files.open(f)} aria-label={t("web-main.file.view", { name: f.name })}>
       <span className={msgCss.fileCard}>
-        {saving ? <span className={`${waitingCss.spinner} ${css.fetching}`} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
+        <Read size={16} aria-hidden="true" />
         <span className={msgCss.fileCardText}>
           <span className={msgCss.fileCardName}>{f.name}</span>
           <span className={msgCss.fileCardMeta}>{fileSize(f.size)}</span>

@@ -57,6 +57,9 @@ test("the page talks to the cloud and the relays it was built for, a dev cloud's
   assert.match(csp, /connect-src 'self' http:\/\/127\.0\.0\.1:8877 http:\/\/127\.0\.0\.1:3340 ws:\/\/127\.0\.0\.1:3340 https:\/\/cn\.example wss:\/\/cn\.example;/);
   // Images it read from the station are blob: URLs; frames come only from its own /frame.
   assert.match(csp, /img-src 'self' blob: data:;/);
+  // The file preview's video and audio play from blob: URLs too; nothing runs from one.
+  assert.match(csp, /media-src blob:;/);
+  assert.doesNotMatch(csp, /script-src[^;]*blob:/);
   assert.match(csp, /frame-src 'self';/);
   assert.doesNotMatch(csp, /script-src[^;]*unsafe-inline/);
   // The frame writes in only what its parent posts, once.

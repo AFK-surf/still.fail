@@ -41,13 +41,13 @@ id TEXT PRIMARY KEY, thread INTEGER, key TEXT, title TEXT, created_by TEXT, by_n
 
 | 请求 | 回答 |
 |---|---|
-| `POST /threads/:thread/publish/preview {names}` | `{upto, title, entries, redacted: [{n, count}], files: [{k, name, size, type, n, width?, height?, thumbhash?}], most: {bytes, file}}`：照现在的样子拼一份，不存；`entries` 和快照里的一样，只是 `files` 是 `k` 的列表 |
+| `POST /threads/:thread/publish/preview {names}` | `{upto, title, entries, redacted: [{n, count}], files: [{k, name, size, type, n, width?, height?, thumbhash?, path, owner}]}`：照现在的样子拼一份，不存；`entries` 和快照里的一样，只是 `files` 是 `k` 的列表；`path`、`owner`（附件现在在哪、哪个会话的）只给成员的预览，让它照 chat 的样子画 |
 | `POST /threads/:thread/publish {upto, files: [k], names}` | `{published: Published}`：按 `upto` 再拼一次，只带勾上的附件，存下 |
 | `DELETE /published/:id` | `{ok: true}` |
 
 - `names`：`{email: 名字}`，客户端从 workspace 成员名单给。快照里人的名字按它换，不在里面的用邮箱 @ 前面那段；快照里不出现邮箱。agent 用它在 chat 里的名字。
 - `Published = {id, key, title, at, by, byName, size, upto}`（`by` 是邮箱，只给成员看）；thread 视图（`GET /threads/:id`、`/threads`、`changed/threads`）多一个可选字段 `published: Published[]`（没有时不给）。发布、撤销后 thread 照常推变化。
-- 上限：快照（含附件）20 MB，单个附件 10 MB，超了的附件在预览里标出、不能勾。
+- 没有大小上限（2026-10-15 用户定）：快照和附件多大都能发布，查看页也照单全收。
 
 **快照**（`snapshot.json`，也是预览里的 `snapshot`）：
 
@@ -79,9 +79,12 @@ id TEXT PRIMARY KEY, thread INTEGER, key TEXT, title TEXT, created_by TEXT, by_n
 
 1. 从 `#` 读出 station、id、口令；问 `/v1/relays`。
 2. 用一把随机的临时密钥起只走中继的 iroh endpoint（`client/iroh-wasm`），连 station 的 `stillfail/guest/1`。
-3. 读快照，再读图片附件，读完关连接。其他附件点了才再连一次去读。
+3. 读快照，再读图片附件（和消息里放的 HTML），读完关连接。
 4. 用 web 的 Markdown 渲染（`Prose.tsx`）画消息；消息里的 HTML 照 `Viz.tsx` 放进 `sandbox="allow-scripts"` 的 iframe。
-5. station 离线、链接失效、忙，各给一句话。
+5. 附件点开和 chat 里一样，用 chat 自己的预览（`FilePreview.tsx`：文本、代码、Markdown、CSV、PDF、图片、视频、音频、HTML），图片可以左右翻快照里的其他图。预览经 `FileSource`（`guest.ts` 的 `guestFiles`）读文件：页面已经读到的（图片、放进消息的 HTML）直接用，别的再连一次 station 读完就关。下载只在预览里（它自己的下载按钮，或者预览显示不了的类型给的下载）。`vite.share.config.ts` 把预览用到的 core 部分换成 `web/src/share/stand-ins/` 里的替身（`station.tsx`、`core/react.ts`、`annotate/ImageMarks.tsx` 等），页面里没有 core。
+6. station 离线、链接失效、忙，各给一句话。
+
+station 给的东西都不会在 share 的源上当页面打开：HTML 只进 share host 自己的 `/frame`（`sandbox="allow-scripts"`，没有 allow-same-origin；srcdoc 的 frame 会继承页面的 CSP，所以不用），SVG 只放进 `<img>`，下载存成 `application/octet-stream` 的文件，预览里没有指向 blob 的链接。页面的 CSP 为预览只加了 `media-src blob:`（视频、音频）；pdf.js 的 worker 和代码分片都是 share host 自己的脚本，已在 `script-src 'self'` 里。
 
 ## 兼容
 

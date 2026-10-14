@@ -44,14 +44,3 @@ export const state = style({
   textAlign: "center", color: vars.muted, fontSize: vars.textUi, lineHeight: vars.leadingUi,
 });
 export const stateLine = style({ margin: "0", display: "inline-flex", alignItems: "center", gap: "8px", maxWidth: "360px" });
-
-/** A file being fetched to download: its card's icon a ring. */
-export const fetching = style({ width: "16px", height: "16px", flex: "none" });
-
-/** An image on its own over the page, whole; a click or Escape puts it away. */
-export const viewer = style({
-  position: "fixed", inset: "0", zIndex: "10", display: "grid", placeItems: "center", padding: "24px",
-  background: "rgb(0 0 0 / .86)", cursor: "zoom-out",
-  "@media": { [phone]: { padding: "8px" } },
-});
-globalStyle(`${viewer} img`, { maxWidth: "100%", maxHeight: "calc(100dvh - 48px)", objectFit: "contain", display: "block" });

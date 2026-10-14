@@ -1,15 +1,23 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { GuestError, STREAMS, ask, parseSnapshot, readShared, shownAtOnce, type GuestConnection, type Snapshot } from "../web/src/share/guest.ts";
+import { GuestError, STREAMS, ask, guestFiles, parseSnapshot, readShared, shownAtOnce, type GuestConnection, type Progress, type Snapshot } from "../web/src/share/guest.ts";
 
 // Reading a published chat from its station (web/src/share/guest.ts) over streams in memory: a request a stream, a JSON
-// line, then exactly as many bytes as it said; refusals; what is not an answer. Each answer comes cut at several sizes.
+// line, then exactly as many bytes as it said, however many; refusals; what is not an answer; a file the preview opens,
+// read from what the page has or on a visit of its own. Each answer comes cut at several sizes.
 
 const encode = (s: string) => new TextEncoder().encode(s);
 const link = { station: "00".repeat(32), id: "AbCdEfGhIjKlMn_-", key: "k".repeat(43) };
 
 /** An answer as a station writes it: its head line, then its bytes (and what a test puts after them). */
-const answer = (head: unknown, body: Uint8Array = new Uint8Array(0), after = new Uint8Array(0)) => Uint8Array.from([...encode(`${JSON.stringify(head)}\n`), ...body, ...after]);
+const answer = (head: unknown, body: Uint8Array = new Uint8Array(0), after = new Uint8Array(0)) => {
+  const line = encode(`${JSON.stringify(head)}\n`);
+  const out = new Uint8Array(line.length + body.length + after.length);
+  out.set(line);
+  out.set(body, line.length);
+  out.set(after, line.length + body.length);
+  return out;
+};
 
 /**
  * A station in memory: `serve` answers each request (its line, parsed) with bytes, handed out `cut` at a time. What
@@ -63,19 +71,34 @@ test("an answer is its head and exactly as many bytes as it says, however it com
   for (const cut of CUTS) {
     // What comes after its bytes is not its: not taken, not waited for.
     const s = station(() => answer({ ok: true, size: body.length, type: "image/png" }, body, encode("more")), cut);
-    const got = await ask(s.conn, { get: link.id, key: link.key, file: "f0" }, 1000);
+    const heard: Progress[] = [];
+    const got = await ask(s.conn, { get: link.id, key: link.key, file: "f0" }, { progress: (p) => heard.push(p) });
     assert.equal(got.type, "image/png", `cut ${cut}`);
     assert.deepEqual(got.bytes, body, `cut ${cut}`);
     assert.deepEqual(s.sent, [`{"get":"${link.id}","key":"${link.key}","file":"f0"}\n`]);
+    // How far it has come, as it comes: never back, all of it at the end.
+    assert.ok(heard.length >= 1 && heard.every((p, i) => p.total === body.length && (i === 0 || p.loaded >= heard[i - 1]!.loaded)), `cut ${cut}: ${JSON.stringify(heard)}`);
+    assert.equal(heard.at(-1)!.loaded, body.length);
     // Nothing: none.
     const empty = station(() => answer({ ok: true, size: 0 }), cut);
-    assert.deepEqual(await ask(empty.conn, { get: link.id, key: link.key }, 10), { type: "application/octet-stream", bytes: new Uint8Array(0) });
+    assert.deepEqual(await ask(empty.conn, { get: link.id, key: link.key }), { type: "application/octet-stream", bytes: new Uint8Array(0) });
+  }
+});
+
+test("an answer is taken however big it is: nothing caps what a station publishes", async () => {
+  // Past the 10 MB an attachment could once be, and the 20 MB a snapshot could.
+  const body = new Uint8Array(24 * 1024 * 1024);
+  for (let i = 0; i < body.length; i += 4093) body[i] = i % 251;
+  for (const cut of [1 << 16, 1 << 20]) {
+    const got = await ask(station(() => answer({ ok: true, size: body.length, type: "application/pdf" }, body), cut).conn, { get: link.id, key: link.key, file: "f0" });
+    assert.equal(got.bytes.length, body.length, `cut ${cut}`);
+    assert.ok(Buffer.from(got.bytes).equals(Buffer.from(body)), `cut ${cut}`);
   }
 });
 
 test("a refusal says why: gone or busy; anything else that is not an answer is broken", async () => {
-  const kind = async (bytes: Uint8Array, cut: number, most = 100) => {
-    const err = await ask(station(() => bytes, cut).conn, { get: link.id, key: link.key }, most).then(() => null, (e: unknown) => e);
+  const kind = async (bytes: Uint8Array, cut: number, most?: number) => {
+    const err = await ask(station(() => bytes, cut).conn, { get: link.id, key: link.key }, most === undefined ? {} : { most }).then(() => null, (e: unknown) => e);
     assert.ok(err instanceof GuestError, String(err));
     return err.kind;
   };
@@ -91,7 +114,7 @@ test("a refusal says why: gone or busy; anything else that is not an answer is b
     assert.equal(await kind(answer({ ok: true, size: -1 }), cut), "broken");
     assert.equal(await kind(answer({ ok: true, size: 1.5 }), cut), "broken");
     assert.equal(await kind(answer({ ok: true, size: 5 }, encode("abc")), cut), "broken", "ended short");
-    assert.equal(await kind(answer({ ok: true, size: 101 }, new Uint8Array(101)), cut), "broken", "more than it takes");
+    assert.equal(await kind(answer({ ok: true, size: 101 }, new Uint8Array(101)), cut, 100), "broken", "more than it was asked to take");
     assert.equal(await kind(encode("x".repeat(20 * 1024)), cut), "broken", "a head that never ends");
   }
 });
@@ -157,4 +180,55 @@ test("a visit whose snapshot is refused fails as it was refused, asking nothing 
     assert.ok(err instanceof GuestError && err.kind === code, String(err));
     assert.equal(s.sent.length, 1);
   }
+});
+
+test("the preview's files: what the page has read as it is, any other on a visit of its own, closed once read", async () => {
+  const have = new Map([["f2", { type: "image/png", bytes: encode("png bytes") }]]);
+  for (const cut of CUTS) {
+    const visits: { closed: boolean; sent: string[] }[] = [];
+    const log = encode("vitest run\n ✓ 16 passed\n");
+    const files = guestFiles(link, (k) => have.get(k), async () => {
+      const s = station((r) => {
+        if (r.get !== link.id || r.key !== link.key) return answer({ error: "no", code: "gone" });
+        if (r.file === "f4") return answer({ ok: true, size: log.length, type: "text/plain" }, log);
+        if (r.file === "f7") return answer({ error: "busy", code: "busy" });
+        return answer({ error: "no such file", code: "gone" });
+      }, cut);
+      const visit = { closed: false, sent: s.sent };
+      visits.push(visit);
+      return { conn: s.conn, close: async () => { visit.closed = true; } };
+    });
+    // An image the page has: no visit.
+    const image = await files.file(link.id, { path: "f2" }, true);
+    assert.equal(image.type, "image/png");
+    assert.equal(await image.text(), "png bytes");
+    assert.equal(visits.length, 0, `cut ${cut}`);
+    // A log it has not: one visit, the one request, closed once read; how far it came, said.
+    const heard: Progress[] = [];
+    const read = await files.file(link.id, { path: "f4" }, false, (p) => heard.push(p));
+    assert.equal(read.type, "text/plain");
+    assert.deepEqual(new Uint8Array(await read.arrayBuffer()), log);
+    assert.equal(visits.length, 1);
+    assert.deepEqual(visits[0]!.sent, [`{"get":"${link.id}","key":"${link.key}","file":"f4"}\n`]);
+    assert.ok(visits[0]!.closed, "the visit closed once read");
+    assert.deepEqual(heard.at(-1), { loaded: log.length, total: log.length });
+    // Refused: it says why, and the visit closes all the same.
+    const err = await files.file(link.id, { path: "f7" }, false).then(() => null, (e: unknown) => e);
+    assert.ok(err instanceof GuestError && err.kind === "busy", String(err));
+    assert.equal(visits.length, 2);
+    assert.ok(visits[1]!.closed, "a refused visit closed too");
+  }
+});
+
+test("the preview's file from a station out of reach fails as the visit did, with nothing to close", async () => {
+  const files = guestFiles(link, () => undefined, async () => { throw new Error("no answer"); });
+  await assert.rejects(files.file(link.id, { path: "f4" }, false), /no answer/);
+  // One the page could not read (null) is read again, not taken as read.
+  let visited = 0;
+  const again = guestFiles(link, () => null, async () => {
+    visited++;
+    return { conn: station(() => answer({ ok: true, size: 2, type: "image/png" }, encode("ok")), 16).conn, close: () => {} };
+  });
+  assert.equal(await (await again.file(link.id, { path: "f7" }, false)).text(), "ok");
+  assert.equal(visited, 1);
 });

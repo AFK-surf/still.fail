@@ -9,8 +9,5 @@
   "web-share.broken": "Can't read what this station sent: {error}",
   "web-share.published": "Published by {by}, {time}",
   "web-share.redacted": { "one": "1 likely secret hidden", "other": "{n} likely secrets hidden" },
-  "web-share.from": "Shared with still.fail",
-  "web-share.download": "Download {name}",
-  "web-share.downloadFailed": "Couldn't download {name}: {error}",
-  "web-share.view": "View {name}"
+  "web-share.from": "Shared with still.fail"
 }

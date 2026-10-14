@@ -21,8 +21,9 @@ function withSockets(url: string): string[] {
   return [origin, `${protocol === "http:" ? "ws:" : "wss:"}//${host}`];
 }
 
-/** The page's policy: its own scripts (and wasm), styles (Shiki writes its colours in style attributes) and images
- * (blob: the files read from the station), the cloud and the relays to talk to, /frame to frame. */
+/** The page's policy: its own scripts (and wasm; pdf.js's worker is one of them), styles (Shiki writes its colours in
+ * style attributes), images, video and audio (blob: the files read from the station, shown in the file preview), the
+ * cloud and the relays to talk to, /frame to frame. */
 export function pageCsp({ cloud, relays }: ShareHosts): string {
   const connect = [...new Set(["'self'", ...withSockets(cloud).slice(0, 1), ...relays.flatMap(withSockets)])];
   return [
@@ -30,6 +31,7 @@ export function pageCsp({ cloud, relays }: ShareHosts): string {
     "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data:",
+    "media-src blob:",
     "font-src 'self'",
     `connect-src ${connect.join(" ")}`,
     "frame-src 'self'",
