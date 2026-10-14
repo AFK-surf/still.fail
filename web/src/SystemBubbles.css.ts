@@ -32,12 +32,13 @@ export const line = style({
   color: vars.muted, fontSize: vars.textMeta, lineHeight: "18px", overflow: "hidden",
   display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2,
 });
-/** Its one thing to do: words in the accent, no ground, by the last line of the words. */
+/** Its one thing to do: words in the accent, a link's, by the last line of the words: never a button's ground, underlined
+ * while pointed at (its padding only room to press, its words' end under the close's mark). */
 export const action = style({
-  gridArea: "act", alignSelf: "end", height: 28, padding: "0 8px", border: 0, borderRadius: 14, background: "none",
+  gridArea: "act", alignSelf: "end", height: 28, padding: "0 8px", border: 0, background: "none",
   color: vars.accentText, font: "inherit", fontWeight: 600, lineHeight: "28px", textDecoration: "none", whiteSpace: "nowrap",
-  cursor: "pointer",
-  selectors: { "&:hover": { background: vars.hover } },
+  textUnderlineOffset: "3px", cursor: "pointer",
+  selectors: { "&:hover, &:focus-visible": { textDecoration: "underline" }, "&:focus-visible": { outline: "none" } },
 });
 export const close = style({
   gridArea: "close", alignSelf: "start", justifySelf: "end", display: "grid", placeItems: "center", width: 28, height: 28, padding: 0, border: 0, borderRadius: "50%",

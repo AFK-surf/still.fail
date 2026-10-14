@@ -24,7 +24,7 @@ export const buttonText = style({
 export const buttonScale = style({ color: vars.muted, fontWeight: "400" });
 
 export const popover = style({
-  zIndex: "60", width: "256px", ...surface(6, `calc(${vars.rMenu} - 6px)`),
+  zIndex: "60", width: "256px", ...surface(6, `calc(${vars.rMenu} - 6px)`), cornerShape: vars.cornerShape,
   ...ground, boxShadow: `0 12px 32px ${vars.shadow}`,
   transformOrigin: "var(--radix-popper-transform-origin, top right)", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
   outline: "none",
