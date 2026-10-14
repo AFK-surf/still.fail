@@ -1,9 +1,11 @@
-// ⌘K's switcher (Switcher.tsx): a dialog high on the window (ui.css.ts dialog's padding and corner, its rows rounded as
-// its cards), the search on top, the chats under it.
+// ⌘K's switcher (Switcher.tsx): a dialog high on the window, the search on top, the chats under it. Its corner and its
+// words' place are a dialog's (ui.css.ts: 42, 24 in); a row's ground reaches to 12 from its edge, rounded 30 to follow it.
 import { style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel } from "./styles/glass.ts";
-import { DIALOG_INNER, DIALOG_PAD } from "./ui.css.ts";
+import { DIALOG_PAD } from "./ui.css.ts";
+
+const EDGE = 12;
 import { fadeKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
@@ -15,7 +17,7 @@ export const overlay = style({
 export const switcher = style({
   position: "fixed", left: "50%", top: "14vh", zIndex: "50", marginLeft: "calc(min(560px, 100vw - 32px) / -2)",
   display: "flex", flexDirection: "column", width: "min(560px, calc(100vw - 32px))", maxHeight: "min(480px, 72vh)",
-  padding: `${DIALOG_PAD}px`, borderRadius: `calc(${DIALOG_PAD + 18}px * ${vars.cornerScale})`, color: vars.text, ...panel,
+  padding: `${EDGE}px`, borderRadius: `calc(${DIALOG_PAD + 18}px * ${vars.cornerScale})`, color: vars.text, ...panel,
   boxShadow: `0 24px 64px ${vars.shadow}`, transformOrigin: "top", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
   cornerShape: vars.cornerShape, outline: "none",
 });
@@ -27,7 +29,7 @@ export const search = style({
 });
 export const results = style({ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0" });
 export const row = style({
-  display: "flex", alignItems: "center", gap: 10, minHeight: 38, padding: "8px 12px", borderRadius: DIALOG_INNER,
+  display: "flex", alignItems: "center", gap: 10, minHeight: 38, padding: `8px ${DIALOG_PAD - EDGE}px`, borderRadius: `calc(${DIALOG_PAD + 18 - EDGE}px * ${vars.cornerScale})`,
   fontSize: vars.textUi, cursor: "pointer", userSelect: "none", cornerShape: vars.cornerShape,
   // A shade of the text, as the menus' rows are lit.
   selectors: { '&[aria-selected="true"]': { background: `color-mix(in srgb, ${vars.text} 7%, transparent)` } },
