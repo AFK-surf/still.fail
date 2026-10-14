@@ -411,7 +411,12 @@ class OverMotionTest {
         rule.onNodeWithText("a.png").assertExists()
         val w = rule.onRoot().fetchSemanticsNode().size.width.toFloat()
         val y = rule.onRoot().fetchSemanticsNode().size.height / 2f
-        rule.onRoot().performTouchInput { swipe(Offset(w * 0.8f, y), Offset(w * 0.2f, y), 200) }
+        val next = h.record("viewer-placed-swipe")
+        next.frame { rule.onRoot().performTouchInput { down(Offset(w * 0.8f, y)) } }
+        repeat(12) { next.frame { rule.onRoot().performTouchInput { moveBy(Offset(-w / 36f, 0f)) } } }
+        next.frame { rule.onRoot().performTouchInput { up() } }
+        next.frames(36)
+        next.end()
         h.settle(1500)
         rule.onNodeWithText("b.png").assertExists()
         rule.onRoot().performTouchInput { swipe(Offset(w * 0.8f, y), Offset(w * 0.2f, y), 200) }
