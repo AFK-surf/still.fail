@@ -18,7 +18,9 @@ import * as css from "./Security.css.ts";
 export type { LockDevice, LockRequest, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
 import type { LockDevice, LockRequest, LockStation, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
 
-const ROLE: Record<string, string> = { owner: "Owner", admin: "Admin", member: t("web-pages.roles.member"), viewer: t("web-pages.security.viewer") };
+// A function, not a table made as the module loads: words are the page's language when shown (and the site's
+// prerender loads this module before any language is set).
+const roleName = (role: string): string => ({ owner: "Owner", admin: "Admin", member: t("web-pages.roles.member"), viewer: t("web-pages.security.viewer") })[role] ?? role;
 
 export function useLock(workspace: string): LockView | undefined {
   return useTopic<LockView>({ topic: "lock", workspace }).value;
@@ -110,7 +112,7 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
         <div className={pagesCss.card}><div className={css.rows}>
           {lock.members.map((m) => (
             <div key={m.sub} className={css.rows}>
-              <div className={css.row}><div className={css.rowText}><span className={css.rowName}>{m.name || m.email}</span><span className={css.rowMeta}>{ROLE[m.role] ?? m.role}</span></div></div>
+              <div className={css.row}><div className={css.rowText}><span className={css.rowName}>{m.name || m.email}</span><span className={css.rowMeta}>{roleName(m.role)}</span></div></div>
               {m.devices.length > 0 && <div className={css.devices}>
                 {m.devices.map((d) => <DeviceRow key={d.id} entry={entry} d={d} canRenew={lock.signs} />)}
               </div>}
@@ -215,7 +217,7 @@ export function SecurityOpen({ entry }: { entry: WorkspaceEntry }) {
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.security.openTitle")}</h1><p className={css.sub}>{t("web-pages.security.openLead")}</p></div></header>
       <Section title={t("web-pages.security.members")} actions={<span className={css.rowMeta}>{t("web-pages.security.peopleCount", { n: draft.members.length })}</span>}>
         <div className={pagesCss.card}><div className={css.rows}>
-          {draft.members.map((m) => <div key={m.sub} className={css.row}><div className={css.rowText}><span className={css.rowName}>{m.name || m.email}</span><span className={css.rowMeta}>{m.email}</span></div><span className={css.rowMeta}>{ROLE[m.role] ?? m.role}</span></div>)}
+          {draft.members.map((m) => <div key={m.sub} className={css.row}><div className={css.rowText}><span className={css.rowName}>{m.name || m.email}</span><span className={css.rowMeta}>{m.email}</span></div><span className={css.rowMeta}>{roleName(m.role)}</span></div>)}
         </div></div>
       </Section>
       <Section title={t("web-pages.security.devices")} actions={<span className={css.rowMeta}>{t("web-pages.security.devicesWhich")}</span>}>
