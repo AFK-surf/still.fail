@@ -65,8 +65,7 @@ export const workspaceFacts = style({
 });
 globalStyle(`${workspaceFacts} > span + span::before`, { content: "\"·\"", margin: "0 8px", color: vars.subtle });
 /**
- * Its name, renamed where it is: the title's own words; a field's ground only under the pointer or while typed in (the
- * page's head), or a quiet field at the end of its row (the form's).
+ * Its name, renamed where it is: the title's own words, a field's ground only under the pointer or while typed in.
  */
 export const titleField = style({
   width: "calc(100% + 8px)", minWidth: "0", margin: "0 0 0 -8px", padding: "0 8px", border: "0", outline: "none", background: "none", color: vars.text,
@@ -75,17 +74,9 @@ export const titleField = style({
   selectors: {
     "&:not(:disabled):hover": { background: vars.hover },
     "&:focus": { background: vars.hover, boxShadow: `inset 0 0 0 1.5px ${vars.fieldHover}` },
-    "&[data-variant=b]": { flex: "1", width: "auto", margin: "0 -8px 0 0", fontSize: vars.textUi, fontWeight: "500", lineHeight: "32px", height: "32px", textAlign: "right" },
-    "&[data-variant=b]:focus": { textAlign: "left" },
   },
 });
 /** How many, after a section's title. */
 export const titleCount = style({ marginLeft: "8px", color: vars.subtle, fontWeight: "500" });
 /** Leaving and deleting on the page's own ground. */
 export const dangerList = style({ display: "grid", gap: "18px", padding: "4px 0" });
-/** The form's rows (the other look): its words at the start, what it is at the end. */
-export const formCard = style({ gap: "0", padding: "6px 20px", marginBottom: "28px" });
-export const formRow = style({
-  display: "flex", alignItems: "center", gap: "16px", minHeight: "48px", fontSize: vars.textUi,
-});
-export const formLabel = style({ flex: "1", fontWeight: "500" });

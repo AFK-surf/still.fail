@@ -246,13 +246,8 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
   if (!view) return <Loading label={t("web-pages.settings.workspace.loading")} />;
   const keep = () => { const to = name.trim(); if (!to) setName(view.name); else if (to !== view.name && !rename.busy) rename.run(to); };
   const shown = rename.busy ? rename.arg! : view.name;
-  const variant = new URLSearchParams(location.search).get("v") === "b" ? "b" : "a";
-  const markPick = (large: boolean) => (
-    <MarkPick emoji={mark.busy ? mark.arg!.emoji : view.emoji} icon={mark.busy ? mark.arg!.icon : view.icon} name={view.name} editable={manager} busy={mark.busy} large={large}
-      empty={<WorkspaceMark w={{ name: shown }} />} onPick={(m) => { if (!same(m, view.emoji, view.icon)) void mark.run(m); }} />
-  );
   const nameField = (
-    <input className={css.titleField} data-variant={variant} value={name} maxLength={80} disabled={!manager} aria-label={t("web-pages.settings.workspace.nameLabel")}
+    <input className={css.titleField} value={name} maxLength={80} disabled={!manager} aria-label={t("web-pages.settings.workspace.nameLabel")}
       onChange={(e) => setName(e.target.value)} onBlur={keep}
       onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur(); if (e.key === "Escape") { setName(view.name); e.currentTarget.blur(); } }} />
   );
@@ -262,30 +257,20 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={`/w/${entry.id}/settings`} label={t("web-pages.settings.title")} />
       <SecurityNotice entry={entry} />
-      {variant === "a" ? (
-        <header className={css.workspaceHead}>
-          {markPick(true)}
-          <div className={pagesCss.identityText}>
-            {nameField}
-            <p className={css.workspaceFacts}>{facts.map((f) => <span key={f}>{f}</span>)}</p>
-          </div>
-        </header>
-      ) : (
-        <>
-          <header className={pagesCss.pageHead}><div><h1>Workspace</h1></div></header>
-          <div className={`${pagesCss.card} ${css.formCard}`}>
-            <div className={css.formRow}><span className={css.formLabel}>{t("web-pages.settings.workspace.icon")}</span>{markPick(false) ?? <span className={shellCss.muted}>{t("web-pages.settings.workspace.noIcon")}</span>}</div>
-            <div className={css.formRow}><span className={css.formLabel}>{t("web-pages.settings.workspace.name")}</span>{nameField}</div>
-            <div className={css.formRow}><span className={css.formLabel}>{t("web-pages.settings.workspace.you")}</span><span className={shellCss.muted}>{t("web-pages.settings.workspace.youAreShort", { role: ROLE_LABEL[view.role], email: account.email })}</span></div>
-          </div>
-        </>
-      )}
+      <header className={css.workspaceHead}>
+        <MarkPick emoji={mark.busy ? mark.arg!.emoji : view.emoji} icon={mark.busy ? mark.arg!.icon : view.icon} name={view.name} editable={manager} busy={mark.busy} large
+          empty={<WorkspaceMark w={{ name: shown }} />} onPick={(m) => { if (!same(m, view.emoji, view.icon)) void mark.run(m); }} />
+        <div className={pagesCss.identityText}>
+          {nameField}
+          <p className={css.workspaceFacts}>{facts.map((f) => <span key={f}>{f}</span>)}</p>
+        </div>
+      </header>
       {failed && <p className={controlsCss.fieldError} role="alert">{failed}</p>}
       <Members view={view} account={account} manager={manager} />
       <Relays view={view} account={account} manager={manager} />
       <Section title={t("web-pages.settings.workspace.leaveDelete")}>
         {/* Rows of their own, each asked again before it is done: leaving, and (the owner) deleting. */}
-        <div className={variant === "a" ? css.dangerList : pagesCss.card}>
+        <div className={css.dangerList}>
           <div className={pagesCss.cardRow}>
             <div className={pagesCss.cardRowText}><strong>{t("web-pages.settings.workspace.leave")}</strong><span className={shellCss.muted}>{t("web-pages.settings.workspace.leaveBody")}</span></div>
             <Button variant="danger" icon={LogOut} onClick={() => setLeaving(true)}>{t("web-pages.settings.workspace.leaveAction")}</Button>
