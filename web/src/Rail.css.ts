@@ -88,14 +88,14 @@ export const workspaceItem = style({
   },
 });
 globalStyle(`${workspaceItem}[data-picture] img`, { borderRadius: 0 });
-/** Over the workspaces: making one, another account, invitations (its menu), a dashed square seen as the pointer comes. */
+/** Over the workspaces: making one, another account, invitations (its menu), a ＋ alone (no frame), seen as the pointer comes. */
 export const workspaceAdd = style({
-  position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, padding: 0,
-  border: `1.5px dashed ${vars.lineStrong}`, borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, padding: 0, border: 0,
+  borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "none", color: vars.muted, cursor: "pointer",
   opacity: 0, transition: `opacity ${vars.dur} ${vars.easeOut}`,
   selectors: {
-    "&:hover, &[data-state=open]": { color: vars.text, borderColor: vars.fieldHover },
+    "&:hover, &[data-state=open]": { color: vars.text, background: vars.hover },
     // Out of sight until the pointer is over the workspaces (or it is reached by keys, open, or an invitation waits).
     [`${workspaces}:hover &, &:focus-visible, &[data-state=open], &:has([role=img])`]: { opacity: 1 },
   },
