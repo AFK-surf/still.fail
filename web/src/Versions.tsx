@@ -1,11 +1,12 @@
 // A station's software and whether newer versions are out (the station's updates.rs): the station itself, Claude Code
 // and Codex, each updated (or a runtime installed) from here by whoever may. Grey but for what wants doing.
+import type { ReactNode } from "react";
 import type { SoftwareVersion } from "./core/shapes.ts";
 import { stationApi, useAction, useStationCall } from "./api.ts";
 import { useDoing } from "./doing.ts";
 import { DoingMark } from "./DoingMark.tsx";
 import { EdgeChip } from "./components.tsx";
-import { Button, Switch, SwitchRow, Tip } from "./ui.tsx";
+import { Button, Switch, Tip } from "./ui.tsx";
 import { ProviderLogo } from "./ui.tsx";
 import { Mark } from "./brand.tsx";
 import { Server } from "./icons.tsx";
@@ -153,11 +154,11 @@ function SoftwareMark({ id }: { id: string }) {
 }
 
 /**
- * A station's software on its own page (cloud/StationPage.tsx), as a settings card: a row each, its mark, name and
- * version (the test channel's tagged), what is newer and updating it at the row's end; then the test channel and
- * updating by itself as switches, and when it was last checked with checking again. Grey but for what wants doing.
+ * A station's software on its own page (cloud/StationPage.tsx), a row each as the page's other lists (no card round them), its mark, name and
+ * version (the test channel's tagged), what is newer and updating it at the row's end, the station's own switches (its
+ * channel, updating by itself) under its version; then when it was last checked, with checking again. Grey but for what wants doing.
  */
-export function SoftwareCard({ station, updates, manager, beta = false }: { station: string; updates: SoftwareVersion[] | undefined; manager: boolean; beta?: boolean }) {
+export function SoftwareList({ station, updates, manager, beta = false }: { station: string; updates: SoftwareVersion[] | undefined; manager: boolean; beta?: boolean }) {
   const { update, check, channel, auto } = useSoftware(station);
   const batch = useDoing("software.updateAll", { station });
   if (!updates?.length) return null;
@@ -167,16 +168,30 @@ export function SoftwareCard({ station, updates, manager, beta = false }: { stat
   const idle = updates.find((v) => v.id === "station")?.idleOnly;
   const error = update.error ?? channel.error ?? auto.error ?? (check.error && new Error(t("web-main.versions.checkFailedWhy", { error: check.error.message })));
   return (
-    <div className={pagesCss.card}>
-      {updates.map((v) => <SoftwareRow key={v.id} v={v} manager={manager} busy={batch || (update.busy && update.args?.[0] === v.id)} onUpdate={() => void update.run(v.id)} />)}
-      {beta && manager && on != null && (
-        <SwitchRow title={t("web-main.versions.betaStation")} description={t("web-main.versions.betaNote")} checked={on} disabled={batch || channel.busy} busy={channel.busy}
-          onChange={(next) => void channel.run(next ? "beta" : "stable")} />
-      )}
-      {manager && autoOn != null && (
-        <SwitchRow title={t("web-main.versions.auto")} description={idle ? t("web-main.versions.autoIdleTip") : t("web-main.versions.autoTip")} checked={autoOn} disabled={batch || auto.busy} busy={auto.busy}
-          onChange={(next) => void auto.run(next)} />
-      )}
+    <div className={pagesCss.list}>
+      {updates.map((v) => (
+        <SoftwareRow key={v.id} v={v} manager={manager} busy={batch || (update.busy && update.args?.[0] === v.id)} onUpdate={() => void update.run(v.id)}>
+          {/* The station's own: which releases it takes, and whether it takes them by itself. */}
+          {v.id === "station" && manager && ((beta && on != null) || autoOn != null) && (
+            <span className={css.softSwitches}>
+              {beta && on != null && (
+                <Tip label={t("web-main.versions.betaNote")}>
+                  <label className={css.channel}>{t("web-main.versions.beta")}
+                    <Switch small checked={on} disabled={batch || channel.busy} busy={channel.busy} label={t("web-main.versions.betaStation")} onChange={(next) => void channel.run(next ? "beta" : "stable")} />
+                  </label>
+                </Tip>
+              )}
+              {autoOn != null && (
+                <Tip label={idle ? t("web-main.versions.autoIdleTip") : t("web-main.versions.autoTip")}>
+                  <label className={css.channel}>{t("web-main.versions.auto")}
+                    <Switch small checked={autoOn} disabled={batch || auto.busy} busy={auto.busy} label={t("web-main.versions.auto")} onChange={(next) => void auto.run(next)} />
+                  </label>
+                </Tip>
+              )}
+            </span>
+          )}
+        </SoftwareRow>
+      ))}
       <div className={css.cardFoot}>
         <span>{checked == null ? t("web-main.versions.checkingVersions") : t("web-main.versions.lastChecked", { time: new Date(checked).toLocaleString() })}</span>
         {error && <span className={css.failed} role="alert">{error.message}</span>}
@@ -186,7 +201,8 @@ export function SoftwareCard({ station, updates, manager, beta = false }: { stat
   );
 }
 
-function SoftwareRow({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: boolean; busy: boolean; onUpdate(): void }) {
+/** `children`: what is set of it, under its version (the station's channel and updating by itself). */
+function SoftwareRow({ v, manager, busy, onUpdate, children }: { v: SoftwareVersion; manager: boolean; busy: boolean; onUpdate(): void; children?: ReactNode }) {
   const { shown, failed, tip, updating, beta } = describe(v);
   const button = (label: string, primary: boolean) => manager && v.updatable && (
     <Button variant={primary ? "primary" : "secondary"} disabled={busy} onClick={onUpdate}>{label}</Button>
@@ -199,11 +215,12 @@ function SoftwareRow({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manag
   else if (v.downgrade && v.latest) rest = <><span className={css.newer}>{v.latest}</span>{button(t("web-main.versions.backToStable"), false)}</>;
   else if (v.done) rest = <span className={css.newer}>{v.done}</span>;
   return (
-    <div className={css.softRow}>
+    <div className={`${pagesCss.listRow} ${css.softRow}`}>
       <span className={`${pagesCss.mark} ${css.softMark}`}>{<SoftwareMark id={v.id} />}</span>
       <span className={pagesCss.cardRowText}>
-        <strong className={css.softName}>{v.name}{beta && <span className={css.betaTag}>{t("web-main.versions.beta")}</span>}</strong>
+        <strong className={css.softName}>{v.name}{beta && !children && <span className={css.betaTag}>{t("web-main.versions.beta")}</span>}</strong>
         <Tip label={tip}><span className={css.softVersion}>{shown}</span></Tip>
+        {children}
       </span>
       {rest && <span className={css.softRest}>{rest}</span>}
     </div>

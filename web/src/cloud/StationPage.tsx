@@ -16,7 +16,7 @@ import { stationBase } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { same } from "../stationPick.ts";
 import { BackLink, Button, ICON, Loading, Menu, MobileBack, Pill, Section, StatusDot, Time } from "../ui.tsx";
-import { SoftwareCard } from "../Versions.tsx";
+import { SoftwareList } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, Net, problems, state, useLong } from "./StationCards.tsx";
 import { MarkPick } from "./MarkPick.tsx";
@@ -245,7 +245,7 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
         </Section>
       )}
       <Section title={t("web-pages.stations.software")}>
-        {s.online ? <SoftwareCard station={s.station} updates={o?.updates} manager={manager} beta={s.betaOffered ?? false} /> : <p className={css.note}>{t("web-pages.stations.softwareOffline")}</p>}
+        {s.online ? <SoftwareList station={s.station} updates={o?.updates} manager={manager} beta={s.betaOffered ?? false} /> : <p className={css.note}>{t("web-pages.stations.softwareOffline")}</p>}
         {!o?.updates?.length && s.version && <p className={css.note}>Station {s.version}</p>}
       </Section>
       <Section title={t("web-pages.stations.device")}>

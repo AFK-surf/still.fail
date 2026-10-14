@@ -28,11 +28,13 @@ export const summary = style({ display: "flex", alignItems: "baseline", justifyC
 export const summaryText = style({ display: "flex", flexWrap: "wrap", gap: "4px 12px", minWidth: 0 });
 export const summaryAction = style({ display: "inline-flex", alignItems: "center", gap: "6px", flexShrink: 0 });
 
-/** The station's page: a row each, its mark in a square as a profile's is (ProfileCard). */
-export const softRow = style({ display: "flex", alignItems: "center", gap: "12px", minHeight: "40px" });
+/** The station's page: a row each, as its lists' rows (not pressed: no ground on hover), its mark in a square as a profile's is (ProfileCard). */
+export const softRow = style({ selectors: { "&:hover": { background: "none" } } });
 export const softMark = style({ width: "36px", height: "36px" });
 export const softName = style({ display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: "500", color: vars.text });
 export const softVersion = style({ color: vars.muted, fontVariantNumeric: "tabular-nums" });
+/** The station's switches under its version, side by side. */
+export const softSwitches = style({ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: "4px", fontSize: vars.textMeta, color: vars.muted });
 export const softRest = style({ display: "inline-flex", alignItems: "center", gap: "10px", flex: "none", fontSize: vars.textUi });
 /** When it was last checked and checking again, quiet, under the rest. */
-export const cardFoot = style({ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "4px 12px", fontSize: vars.textMeta, color: vars.muted });
+export const cardFoot = style({ padding: "4px 12px 0", display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "4px 12px", fontSize: vars.textMeta, color: vars.muted });
