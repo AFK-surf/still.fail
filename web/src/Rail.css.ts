@@ -143,10 +143,10 @@ export const wideOnly = style({ "@media": { [narrow]: { display: "none" } } });
 /** What the rail holds, on a narrow screen (no rail there) in the sidebar's foot as before. */
 export const narrowOnly = style({ "@media": { [wide]: { display: "none" } } });
 
-/** The places the stations lend (FilesNav): under each station's name, its folders. */
+/** A folder lent (FilesNav): whose it is, at its row's end. */
 export const station = style({
-  display: "flex", alignItems: "center", gap: 6, margin: "14px 10px 4px", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted,
-  selectors: { "&:first-child": { marginTop: 6 } },
+  flex: "none", display: "flex", alignItems: "center", gap: 5, marginLeft: "auto", maxWidth: "45%", overflow: "hidden",
+  fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap",
 });
 export const dot = style({
   width: 6, height: 6, borderRadius: "50%", background: vars.subtle, flex: "none",

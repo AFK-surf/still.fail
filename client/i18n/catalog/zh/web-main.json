@@ -640,7 +640,6 @@
   "web-main.rail.chats": "对话",
   "web-main.rail.decisions": "奏",
   "web-main.rail.filesNone": "还没有 station 借出文件夹",
-  "web-main.rail.filesAll": "所有 station",
   "web-main.rail.lendsNone": "还没有借出文件夹",
   "web-main.rail.title": "侧边条",
   "web-main.rail.lead": "左边那一列放什么、按什么顺序，只在这台设备上",

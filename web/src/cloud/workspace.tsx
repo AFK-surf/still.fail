@@ -23,7 +23,7 @@ import { SystemBubbles } from "../SystemBubbles.tsx";
 import { usePrefs } from "../prefs.ts";
 import * as railCss from "../Rail.css.ts";
 import { drivePath } from "../drive/useDrive.ts";
-import { Boxes, Folder } from "../icons.tsx";
+import { Folder } from "../icons.tsx";
 import { AttentionEntry } from "../Attention.tsx";
 import { DecisionDeskProvider, DecisionPage } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
@@ -336,33 +336,26 @@ function FilesSidebar({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** All the stations' folders (DriveHome), then each station with a drive (docs/drive.md), online or not, and the folders it lends. */
+/** Every folder the stations lend (docs/drive.md), one list, each with whose it is at its end (quiet; its dot grey while the
+ * station is away). */
 function FilesNav({ scope }: { scope: string }) {
   const stations = useStations(scope).value ?? [];
   const where = useLocation();
   const root = new URLSearchParams(where.search).get("root");
-  const lending = stations.filter((s) => s.overview?.drive);
+  const folders = stations.flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => ({ s, r })));
   return (
     <div className={nav.navScroll}>
-      <Link className={nav.navRow} to={`/w/${scope}/files`} aria-current={where.pathname === `/w/${scope}/files` ? "page" : undefined}>
-        <Boxes {...ICON} />{t("web-main.rail.filesAll")}
-      </Link>
-      {lending.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
-      {lending.map((s) => {
+      {folders.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
+      {folders.map(({ s, r }) => {
         const base = stationBase(s.station);
         const roots = s.overview?.drive?.roots ?? [];
-        const here = where.pathname.startsWith(`${base}/files`);
+        const here = where.pathname.startsWith(`${base}/files`) && (root === r.path || (!root && roots.length === 1));
+        // A Link, not a NavLink: they differ in their query alone, which a NavLink does not look at.
         return (
-          <div key={s.station}>
-            <Link className={railCss.station} to={drivePath(base, null)}><span className={railCss.dot} data-online={s.online || undefined} />{s.name}</Link>
-            {/* Links, not NavLinks: they differ in their query alone, which a NavLink does not look at. */}
-            {roots.map((r) => (
-              <Link key={r.path} className={nav.navRow} to={drivePath(base, r.path)}
-                aria-current={here && (root === r.path || (!root && roots.length === 1)) ? "page" : undefined}>
-                <Folder {...ICON} /><span className={nav.navText}>{r.name}</span>
-              </Link>
-            ))}
-          </div>
+          <Link key={`${s.station} ${r.path}`} className={nav.navRow} to={drivePath(base, r.path)} title={r.path} aria-current={here ? "page" : undefined}>
+            <Folder {...ICON} /><span className={nav.navText}>{r.name}</span>
+            <span className={railCss.station}><span className={railCss.dot} data-online={s.online || undefined} />{s.name}</span>
+          </Link>
         );
       })}
     </div>

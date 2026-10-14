@@ -6,7 +6,7 @@
 // The reader and the player are pages of their own (`files/read`, `files/play`); images, PDFs and code open in the
 // chat's preview over the page. The phone's pages are ../mobile/Drive.tsx, with the same parts under them.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router";
+import { Navigate, useSearchParams } from "react-router";
 import { ContextMenu, DropdownMenu } from "radix-ui";
 import { stationBase, useStation } from "../station.tsx";
 import { useStations } from "../api.ts";
@@ -44,28 +44,15 @@ export function DrivePage() {
   );
 }
 
-/** 文件 in the rail (`/w/<ws>/files`): every station that lends folders, its folders under its name; one opens. */
+/** 文件 in the rail (`/w/<ws>/files`): the first folder any station lends (the sidebar lists them all); none, says so. */
 export function DriveHome({ scope }: { scope: string }) {
   const stations = useStations(scope).value;
-  const go = useGo();
-  const lending = (stations ?? []).filter((s) => s.overview?.drive);
+  const first = (stations ?? []).flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => drivePath(stationBase(s.station), r.path)))[0];
+  if (first) return <Navigate to={first} replace />;
   return (
     <div className={`${pagesCss.page} ${css.page}`}>
       <header className={pagesCss.pageHead}><div className={css.headText}><h1>{t("web-pages.drive.title")}</h1></div></header>
-      {!stations ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p>
-        : lending.length === 0 ? <Empty text={t("web-main.rail.filesNone")} />
-        : lending.map((s) => {
-          const roots = s.overview?.drive?.roots ?? [];
-          return (
-            <section key={s.station} className={css.station}>
-              <h2 className={css.stationName}><span className={css.stationDot} data-online={s.online || undefined} />{s.name}</h2>
-              <div className={css.list}>
-                {roots.length === 0 && <p className={css.count}>{t("web-main.rail.lendsNone")}</p>}
-                {roots.map((r) => <RootRow key={r.path} root={r} onOpen={() => go(drivePath(stationBase(s.station), r.path))} />)}
-              </div>
-            </section>
-          );
-        })}
+      {!stations ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p> : <Empty text={t("web-main.rail.filesNone")} />}
     </div>
   );
 }
@@ -114,11 +101,10 @@ function Roots({ d }: { d: DriveState }) {
 function RootRow({ root, onOpen }: { root: DriveRoot; onOpen: () => void }) {
   const trouble = rootTrouble(root);
   return (
-    <button type="button" className={css.row} onClick={onOpen}>
+    <button type="button" className={css.row} title={root.path} onClick={onOpen}>
       <Folder size={20} strokeWidth={1.6} className={css.icon} />
       <span className={css.text}>
         <span className={css.name}>{root.name}</span>
-        <span className={css.meta}>{root.path}</span>
         {trouble && <span className={css.trouble}><b>{trouble.text}</b> · {trouble.hint}</span>}
       </span>
       <ChevronRight {...ICON} className={shellCss.muted} />
