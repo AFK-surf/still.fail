@@ -46,4 +46,4 @@ export const close = style({
 
 // With words under its title: its close at the top right and what can be done under it, at the right of the last line.
 globalStyle(`${bubble}:has(${line})`, { gridTemplateColumns: "auto minmax(0, 1fr) auto", gridTemplateAreas: '"icon text close" "icon text act"' });
-globalStyle(`${bubble}:has(${line}) > ${action}`, { justifySelf: "end", marginRight: -2 });
+globalStyle(`${bubble}:has(${line}) > ${action}`, { justifySelf: "end" });
