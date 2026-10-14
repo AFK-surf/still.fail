@@ -1,8 +1,9 @@
-// The releases bucket keeps, of the desktop and Android apps, only the installers that can still be downloaded: the one
-// each feed names and any newer (a release whose files are put but whose feed is not yet, scripts/release-put.sh).
-// Older installers (zip, exe, apk) are deleted; their .blockmap and .sig stay (a few hundred KB each), since a desktop
-// app updates from the version it runs by fetching that version's blockmap (when it has not kept it) and the new
-// file's changed blocks: no old installer is needed. The stations', Node and the feeds are never touched.
+// The releases bucket keeps, of the desktop and Android apps, the installer each feed names and any newer (a release
+// whose files are put but whose feed is not yet, scripts/release-put.sh); of the betas also the newest 5 installers
+// (zip, exe, apk) and 30 .blockmap/.sig. Older installers are deleted, and older beta blockmaps; a stable release's
+// blockmaps all stay (a few hundred KB each). A desktop app updates from the version it runs by fetching that
+// version's blockmap (when it has not kept it) and the new file's changed blocks: no old installer is needed, so a beta
+// up to 30 releases behind still updates by difference. The stations', Node and the feeds are never touched.
 // CI runs it after `put` (.github/workflows/pipeline.yml).
 //   node scripts/release-prune.ts [--dry-run]
 // Needs CLOUDFLARE_API_TOKEN (and CLOUDFLARE_ACCOUNT_ID, else the token's first account).
@@ -12,8 +13,11 @@ const FEEDS = [
   "desktop/stillfail-beta-mac.yml", "desktop/stillfail-beta.yml", "android/beta/latest.json",
   "desktop/stillfail-mac.yml", "desktop/stillfail.yml", "android/latest.json",
 ];
-/** An installer: its name before and after the version, and the version. */
-const INSTALLER = /^((?:desktop|android)\/stillfail-(?:beta-)?)(\d+(?:\.\d+\.\d+)?)(-[\w-]+\.(?:zip|exe)|\.apk)$/;
+/** An installer: its name before and after the version, and the version; then .blockmap or .sig when it is one. */
+const INSTALLER = /^((?:desktop|android)\/stillfail-(?:beta-)?)(\d+(?:\.\d+\.\d+)?)(-[\w-]+\.(?:zip|exe)|\.apk)(\.blockmap|\.sig)?$/;
+/** How many of a beta's newest installers, and of its blockmaps, stay. */
+const BETA_INSTALLERS = 5;
+const BETA_BLOCKMAPS = 30;
 
 const dryRun = process.argv.includes("--dry-run");
 const token = process.env.CLOUDFLARE_API_TOKEN;
@@ -50,10 +54,10 @@ const older = (a: string, b: string) => {
   for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0);
   return false;
 };
-/** An installer's group (its name without the version) and version. */
+/** An installer's group (its name without the version), version, and whether it is the installer's blockmap or .sig. */
 const installer = (key: string) => {
   const m = key.match(INSTALLER);
-  return m ? { group: m[1]! + m[3]!, version: m[2]! } : null;
+  return m ? { group: m[1]! + m[3]!, version: m[2]!, beta: m[1]!.endsWith("beta-"), map: !!m[4] } : null;
 };
 
 // The version each feed names, by group. The desktop's feeds name the file without its directory.
@@ -68,13 +72,24 @@ for (const feed of FEEDS) {
   }
 }
 
+// The versions of each kind of file (an installer, its blockmap, its .sig), newest first.
+const kind = (key: string, file: { group: string }) => file.group + (key.match(/\.(blockmap|sig)$/)?.[0] ?? "");
+const versions = new Map<string, string[]>();
+for (const key of keys) {
+  const file = installer(key);
+  if (file) versions.set(kind(key, file), [...(versions.get(kind(key, file)) ?? []), file.version]);
+}
+for (const list of versions.values()) list.sort((a, b) => (older(a, b) ? 1 : older(b, a) ? -1 : 0));
+
 const doomed = keys.filter((key) => {
   const file = installer(key);
   const named = file && current.get(file.group);
-  return !!named && older(file!.version, named);
+  if (!file || !named || !older(file.version, named)) return false;
+  if (!file.beta) return !file.map;
+  return versions.get(kind(key, file))!.indexOf(file.version) >= (file.map ? BETA_BLOCKMAPS : BETA_INSTALLERS);
 });
 
-console.log(`${keys.length} files, ${doomed.length} installers older than their feed's to delete`);
+console.log(`${keys.length} files, ${doomed.length} old installers and blockmaps to delete`);
 if (dryRun) {
   for (const key of doomed) console.log(`  ${key}`);
   process.exit(0);
