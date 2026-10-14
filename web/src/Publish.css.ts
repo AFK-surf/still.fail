@@ -1,7 +1,7 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { cardLook } from "./styles/pages.css.ts";
-import { DIALOG_INNER, dialogTall } from "./ui.css.ts";
+import { DIALOG_INNER } from "./ui.css.ts";
 
 /** What a public snapshot would hold, as the chat draws it (its messages' heads in line, the phone's way), on a card. */
 export const preview = style({
@@ -10,8 +10,6 @@ export const preview = style({
     // In the dialog its corners follow the dialog's (ui.css.ts DIALOG_INNER); on the phone's sheet, the cards' own.
     "&:not([data-whole])": { borderRadius: DIALOG_INNER },
     "&[data-whole]": { maxHeight: "none", minHeight: "auto", overflowY: "visible" },
-    // In the tall dialog: all the room its body has, scrolling in itself.
-    [`${dialogTall} &`]: { maxHeight: "none", flex: "1 1 0" },
   },
 });
 /** Under a message: how many things in it were hidden (as looking secret), or its attachments' names. */
@@ -27,10 +25,15 @@ export const file = style({
   selectors: { "&[data-off]": { opacity: "0.45" } },
 });
 export const tick = style({ position: "absolute", top: "8px", right: "8px" });
-/** In the footer, on the buttons' left: how many things were hidden in all. */
-export const footNote = style({
-  display: "flex", alignItems: "center", gap: "6px", marginRight: "auto", fontSize: vars.textMeta, color: vars.muted, minWidth: "0",
+/** Over the whole window (as a file's preview, FilePreview.css.ts fpMarkdown): the chat's width, below the bar. */
+export const page = style({
+  maxWidth: "760px", margin: "0 auto", padding: "84px 32px 96px", display: "grid", gap: "16px",
+  "@media": { "(max-width: 640px)": { padding: "64px 18px 64px" } },
 });
+/** Who can read it, over the messages. */
+export const lead = style({ margin: "0", fontSize: vars.textUi, color: vars.muted });
+/** In the bar, after its name: how many things were hidden in all. */
+export const headNote = style({ display: "inline-flex", alignItems: "center", gap: "4px", alignSelf: "center" });
 /** What went wrong (the preview not read, the ticked too big together), in red. */
 export const problem = style({ margin: "0", fontSize: vars.textUi, color: vars.red });
 /** The link once published, as a one-line field shows it (a pill, as the buttons under it): cut short at its end. */
@@ -52,3 +55,5 @@ export const linkAction = style({
     "&:disabled": { cursor: "default", opacity: "0.5" },
   },
 });
+/** The messages there are the page's, not on a card of their own. */
+globalStyle(`${page} > ${preview}`, { background: "none", padding: "0", borderRadius: "0" });

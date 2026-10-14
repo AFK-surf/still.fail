@@ -262,16 +262,15 @@ export function StatusDot({ state, label }: { state: Presence; label?: string })
 // A lettered tile (Avatar.tsx): here too, where the app has always had it.
 export { Avatar } from "./Avatar.tsx";
 
-/** `wide`: for more than a form; `tall`: wider still and the window's height, its body filling it (what is read in it). */
-export function Dialog({ open, title, description, onClose, children, footer, wide, tall }:
-  { open: boolean; title: ReactNode; description?: ReactNode; onClose(): void; children: ReactNode; footer?: ReactNode; wide?: boolean; tall?: boolean }) {
+export function Dialog({ open, title, description, onClose, children, footer, wide }:
+  { open: boolean; title: ReactNode; description?: ReactNode; onClose(): void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   useBackClose(open, onClose);
   return (
     <RDialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <RDialog.Portal>
         <RDialog.Overlay className={css.overlay} />
         {/* Focus the dialog itself rather than its first button, so the close button's tooltip does not pop up on open. */}
-        <RDialog.Content className={`${css.dialog}${tall ? ` ${css.dialogTall}` : wide ? ` ${css.dialogWide}` : ""}`} tabIndex={-1}
+        <RDialog.Content className={`${css.dialog}${wide ? ` ${css.dialogWide}` : ""}`} tabIndex={-1}
           onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}>
           <div className={css.dialogHead}>
             <RDialog.Title className={css.dialogTitle}>{title}</RDialog.Title>

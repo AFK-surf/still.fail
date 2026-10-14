@@ -6,8 +6,13 @@ import { stationApi, useStationCall } from "./api.ts";
 import type { ChatPublished, PublishFile, PublishMessage, PublishPreview } from "./core/shapes.ts";
 import { AgentAvatar, FileLook, MessageName, OthersMessage, PersonWords } from "./Chat.tsx";
 import { Prose } from "./Prose.tsx";
-import { Avatar, Button, Confirm, Dialog, Loading, Time } from "./ui.tsx";
-import { Copy, ShieldCheck } from "./icons.tsx";
+import { Dialog as RDialog } from "radix-ui";
+import { Avatar, Button, Confirm, Dialog, Time, Tip } from "./ui.tsx";
+import { Close, Copy, ShieldCheck } from "./icons.tsx";
+import { useBackClose } from "./backClose.ts";
+import * as fpCss from "./FilePreview.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
+import * as waitingCss from "./styles/waiting.css.ts";
 import { useDoing } from "./doing.ts";
 import { failure, useAct, useToast } from "./toast.tsx";
 import * as css from "./Publish.css.ts";
@@ -103,8 +108,9 @@ function FileToggle({ file: f, ticking }: { file: PublishFile; ticking: Ticking 
 }
 
 /**
- * Publishes the chat (wide screen): what it would hold, its attachments ticked in their messages (all at first), who
- * can read it, 「发布」. Published, its link with a way to copy it; the info lists it from then on.
+ * Publishes the chat (wide screen), as a file is previewed (FilePreview.tsx): over the whole window, what it would hold
+ * laid out as the chat lays it out, its attachments ticked in their messages (all at first), a bar floating on top with
+ * how much was hidden, 「发布」 and close. Published, a small dialog has its link to copy; the info lists it from then on.
  */
 export function PublishDialog({ station, thread, onClose }: { station: string; thread: number; onClose(): void }) {
   const api = stationApi(useStationCall(station));
@@ -114,36 +120,53 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
   const ticking = useTicking();
   const [made, setMade] = useState<ChatPublished | null>(null);
   const publishing = useDoing("chat.publish", { station, thread });
+  useBackClose(made === null, onClose);
   const p = "ok" in preview ? preview.ok : null;
-  const ticked = p ? tickedOf(p, ticking.off) : null;
   const go = () => {
-    if (!p || !ticked) return;
-    api.publish(thread, p.upto, ticked).then(setMade, (e: unknown) => toast(t("web-main.act.failed", { what: t("web-pages.chat.publish.verb"), error: failure(e) })));
+    if (!p) return;
+    api.publish(thread, p.upto, tickedOf(p, ticking.off)).then(setMade, (e: unknown) => toast(t("web-main.act.failed", { what: t("web-pages.chat.publish.verb"), error: failure(e) })));
   };
+  if (made) {
+    return (
+      <Dialog open wide onClose={onClose} title={t("web-pages.chat.publish.made")} description={t("web-pages.chat.publish.lead")}
+        footer={<>
+          <Button variant="ghost" onClick={onClose}>{t("common.done")}</Button>
+          <Button variant="primary" icon={Copy} onClick={() => copy(made.link)}>{t("web-pages.chat.publish.copyLink")}</Button>
+        </>}>
+        <span className={css.madeLink} title={made.link}>{made.link}</span>
+      </Dialog>
+    );
+  }
   let body: ReactNode;
-  if (made) body = <span className={css.madeLink} title={made.link}>{made.link}</span>; else if ("reading" in preview) body = <Loading label={t("web-pages.chat.publish.reading")} fill={false} />;
-  else if ("error" in preview) body = <p className={css.problem} role="alert">{preview.error}</p>;
-  else if (p!.messages.length === 0) body = <p className={css.note}>{t("web-pages.chat.publish.empty")}</p>;
+  if ("reading" in preview) body = <div className={fpCss.fpNote}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-pages.chat.publish.reading")}</div>;
+  else if ("error" in preview) body = <div className={fpCss.fpNote}><span className={css.problem} role="alert">{preview.error}</span></div>;
+  else if (p!.messages.length === 0) body = <div className={fpCss.fpNote}>{t("web-pages.chat.publish.empty")}</div>;
   else {
     body = (
-      <>
-        <PublishMessages messages={p!.messages} ticking={ticking} />
-      </>
+      <div className={fpCss.fpPage}>
+        <div className={css.page}>
+          <p className={css.lead}>{t("web-pages.chat.publish.lead")}</p>
+          <PublishMessages messages={p!.messages} ticking={ticking} whole />
+        </div>
+      </div>
     );
   }
   return (
-    <Dialog open wide tall={made === null} onClose={onClose} title={made ? t("web-pages.chat.publish.made") : t("web-pages.chat.publish")} description={t("web-pages.chat.publish.lead")}
-      footer={made
-        ? <>
-            <Button variant="ghost" onClick={onClose}>{t("common.done")}</Button>
-            <Button variant="primary" icon={Copy} onClick={() => copy(made.link)}>{t("web-pages.chat.publish.copyLink")}</Button>
-          </>
-        : <>
-            {p?.hiddenText && <span className={css.footNote}><ShieldCheck size={14} />{p.hiddenText}</span>}
+    <RDialog.Root open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <RDialog.Portal>
+        <RDialog.Content className={fpCss.fp} aria-describedby={undefined} data-awake="">
+          <header className={fpCss.fpHead}>
+            <div className={fpCss.fpTitle}>
+              <RDialog.Title className={fpCss.fpName}>{t("web-pages.chat.publish")}</RDialog.Title>
+              {p?.hiddenText && <span className={`${fpCss.fpMeta} ${css.headNote}`}><ShieldCheck size={14} />{p.hiddenText}</span>}
+            </div>
             <Button variant="primary" busy={publishing} disabled={!p || p.messages.length === 0} onClick={go}>{t("web-pages.chat.publish.go")}</Button>
-          </>}>
-      {body}
-    </Dialog>
+            <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pagesCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
+          </header>
+          <div className={fpCss.fpBody}>{body}</div>
+        </RDialog.Content>
+      </RDialog.Portal>
+    </RDialog.Root>
   );
 }
 
