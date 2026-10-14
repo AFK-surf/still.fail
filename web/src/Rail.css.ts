@@ -43,7 +43,9 @@ export const edge = style({
   padding: 0, border: 0, background: "none",
   cursor: "col-resize", touchAction: "none", outline: "none", WebkitAppRegion: "no-drag",
   selectors: {
-    "&[data-closed]": { cursor: "pointer", left: 47 },
+    // By the page's root, not its own data-closed (set a render later): the sidebar's toggle reads its end in the same
+    // frame it closes the sidebar, and moves it there with the column (brand.tsx moveState), not after it, at once.
+    '[data-sidebar="closed"] &': { cursor: "pointer", left: 47 },
     "&::after": {
       // Odd widths on whole pixels, the bar's middle and the line's one (left 6, 1 wide; left 4, 5 wide).
       content: '""', position: "absolute", top: "50%", left: 4, width: 5, height: 24, borderRadius: 999,
