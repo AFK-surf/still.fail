@@ -1,8 +1,10 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
-import { pageNarrow } from "../styles/pages.css.ts";
+import { page as settingsPage, pageHead, pageNarrow } from "../styles/pages.css.ts";
 
-export const page = style({ position: "relative" });
+/** Not a settings page: its head up by the window's top, its name level with the sidebar's first row, the files close under it. */
+export const page = style({ position: "relative", selectors: { [`${settingsPage}&`]: { paddingTop: "12px" } } });
+globalStyle(`${page} > ${pageHead}`, { marginBottom: "12px" });
 // As wide as the page, up to where a row's name and its size and time still read as one line.
 globalStyle(`${page} > *`, { maxWidth: "1120px" });
 
