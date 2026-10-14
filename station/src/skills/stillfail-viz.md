@@ -48,7 +48,7 @@ Light and dark follow the viewer's theme. Never hard-code colours (no `#fff`, `b
 - Surfaces and text: `--background`, `--foreground`, `--card`, `--muted`, `--muted-foreground`, `--border`,
   `--border-strong`, `--primary` / `--primary-foreground` (ink buttons), `--accent` / `--accent-foreground` (still.fail's
   orange, tinted ground and text), `--brand` (the orange itself), `--destructive`.
-- Status and series: `--blue`, `--green`, `--orange`, `--red`, `--purple`, `--yellow`, each of the first five with a
+- Status and series: `--blue`, `--green`, `--orange`, `--red`, `--purple`, `--yellow`, each with a
   `-bg` ground (`--blue-bg`…); `--chart-1` … `--chart-6` in order for chart series. Tell series apart by label or
   shape too. In SVG use `currentColor` or `var(--…)`; for a canvas or a library that needs real colours, read them
   with `getComputedStyle(document.documentElement).getPropertyValue("--chart-1")` and redraw on the
@@ -61,7 +61,7 @@ Light and dark follow the viewer's theme. Never hard-code colours (no `#fff`, `b
 
 - Layout: `.card`, `.widget` (a column with gaps), `.viz-grid` (auto columns), `.viz-row`, `.viz-controls`.
 - Figures: `.viz-stat` with `.viz-stat-label` and `.viz-stat-value`; `.viz-badge` (add `.is-blue`, `.is-green`,
-  `.is-orange`, `.is-red`, `.is-yellow`).
+  `.is-orange`, `.is-red`, `.is-yellow`, `.is-purple`).
 - Diagrams: `.viz-flow` (add `.is-vertical`) of `.viz-node` boxes (`.viz-node-title`, `.viz-node-body`; `.is-active`
   or a colour as above) with `.viz-arrow` between them (its text is the arrow's label); `.viz-note` for an aside.
   For anything a flow of boxes cannot draw (cycles, curves), use inline SVG with the variables.
