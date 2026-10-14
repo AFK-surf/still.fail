@@ -8,6 +8,8 @@ import fail.still.android.data.t
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
 import androidx.compose.ui.layout.boundsInRoot
 import fail.still.android.ui.MenuItem
 import fail.still.android.ui.MenuSpec
@@ -382,6 +384,7 @@ private fun Empty(current: WorkspaceEntry, view: ChatsView, filter: String) {
 private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motion: ListMotion? = null) {
     val app = LocalApp.current
     val haptics = LocalHapticFeedback.current
+    val context = LocalContext.current
     var held by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var bounds by remember { mutableStateOf(Rect.Zero) }
@@ -400,7 +403,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
                 held = true
                 // Held long, what can be done to the chat, as the wide screen's right click: always just below the row (over it
                 // when there is no room below), centred on the finger across (the menu is 180 wide, Sheet.kt MenuHost, which keeps it on the screen).
-                val items = rowMenu(app, item) ?: return@detectTapGestures
+                val items = rowMenu(app, context, item) ?: return@detectTapGestures
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 menuOpen = true
                 val x = bounds.left + at.x - 90.dp.toPx()
@@ -516,10 +519,10 @@ private fun SwipeToArchive(item: ChatItem, motion: ListMotion?, content: @Compos
 }
 
 /**
- * What can be done to a chat from its row (web mobile/Home.tsx useRowMenu): pin it, rename it, archive it. None for a
+ * What can be done to a chat from its row (web mobile/Home.tsx useRowMenu): pin it, rename it, copy its link, archive it. None for a
  * new chat its station has not made yet, or one on a station offline.
  */
-private fun rowMenu(app: AppState, item: ChatItem): List<MenuItem>? {
+private fun rowMenu(app: AppState, context: Context, item: ChatItem): List<MenuItem>? {
     // Pinning or archiving under way (a spinner on the row): not asked again meanwhile.
     if (item.offline != null || item.pending == true || rowBusy(app, item)) return null
     val api = app.api(item.station)
@@ -528,6 +531,7 @@ private fun rowMenu(app: AppState, item: ChatItem): List<MenuItem>? {
         // A station from before pins says nothing of them: its chats are not pinned from here.
         item.pinned?.let { pinned -> MenuItem(if (pinned) t("android-chat.unpin") else t("android-chat.pin"), Icons.Pin) { run(if (pinned) t("android-chat.unpin.verb") else t("android-chat.pin.verb")) { api.setPinned(item.session, !pinned) } } },
         MenuItem(t("android-chat.rename"), Icons.Edit) { askTitle(app, item.station, item.thread, item.session, item.title) },
+        chatLink(app.cloudOrigin, item.station, item.session)?.let { link -> MenuItem(t("web-main.chat.copyLink"), Icons.Copy) { copyChatLink(app, context, item.title, link) } },
         MenuItem(t("android-chat.archive"), Icons.Archive) { archiveRow(app, item) },
     )
 }
